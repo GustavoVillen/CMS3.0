@@ -1,0 +1,1104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Platform / Auth enums ────────────────────────────────────────────────────
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum LocaleCode {
+  es
+  en
+  pt
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum PlatformRole {
+  SUPERADMIN
+  SUPPORT
+}
+
+enum TenantRole {
+  TENANT_ADMIN
+  MAINTENANCE_MANAGER
+  TECHNICIAN_OPERATOR
+  INSPECTOR_COMPLIANCE
+  PROCUREMENT_STORE
+  AUDITOR_READONLY
+}
+
+enum AuditActorType {
+  PLATFORM_USER
+  TENANT_USER
+  SYSTEM
+}
+
+// ─── Operational enums (Blocks 05-07) ────────────────────────────────────────
+
+enum VesselStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AssetCriticality {
+  A
+  B
+  C
+}
+
+enum AssetStatus {
+  OPERATIONAL
+  DEGRADED
+  OUT_OF_SERVICE
+}
+
+enum MaintenancePlanTrigger {
+  HOURS
+  MONTHS
+  CONDITION
+  EVENT
+}
+
+enum MaintenancePlanStatus {
+  ACTIVE
+  DUE_SOON
+  OVERDUE
+  INACTIVE
+}
+
+enum WorkOrderType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  DEFERRED
+  CLOSED
+  CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DefectStatus {
+  OPEN
+  UNDER_REVIEW
+  IN_PROGRESS
+  DEFERRED
+  RESOLVED
+  CLOSED
+}
+
+enum DefectSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DefectOperationalState {
+  NORMAL
+  DEGRADED
+  RESTRICTED
+  NO_GO
+}
+
+enum DeferralSourceType {
+  DEFECT
+  WORK_ORDER
+  MAINTENANCE_PLAN
+}
+
+enum DeferralStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  EXPIRED
+  CLOSED
+}
+
+enum RcaStatus {
+  DRAFT
+  UNDER_ANALYSIS
+  COMPLETED
+  APPROVED
+  CLOSED
+}
+
+enum RcaMethodology {
+  FIVE_WHYS
+  FISHBONE
+  FTA
+  BARRIER_ANALYSIS
+}
+
+enum CapaSourceType {
+  RCA
+  DEFECT
+  WORK_ORDER
+  INSPECTION
+}
+
+enum CapaStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  CLOSED
+  CANCELLED
+}
+
+enum CapaPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InspectionType {
+  SAFETY
+  TECHNICAL
+  REGULATORY
+  CLASS
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionResult {
+  PASS
+  FAIL
+  CONDITIONAL
+}
+
+enum InspectionLogEntryType {
+  FINDING
+  ACTION
+  NOTE
+}
+
+enum InspectionLogSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  SUSPENDED
+  CLOSED
+}
+
+enum DailyReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  CLOSED
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SpareStatus {
+  ACTIVE
+  OBSOLETE
+}
+
+enum SpareOrderStatus {
+  DRAFT
+  REQUESTED
+  APPROVED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum SpareOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MovementType {
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+  TRANSFER
+}
+
+enum MovementRefType {
+  SPARE_ORDER
+  WORK_ORDER
+  DEFECT
+  ADJUSTMENT
+}
+
+enum EvaluationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum EvaluationRating {
+  A
+  B
+  C
+  D
+}
+
+enum NcStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum NcSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DomainEventKind {
+  STATE_CHANGED
+  RECORD_CREATED
+  RECORD_UPDATED
+  RECORD_DELETED
+}
+
+enum AttachmentTarget {
+  DEFECT
+  WORK_ORDER
+  MAINTENANCE_PLAN
+  INSPECTION
+  CERTIFICATE
+  DAILY_REPORT
+  RCA
+  CAPA
+  SPARE_ORDER
+}
+
+enum AttachmentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// ─── Platform / Auth models ───────────────────────────────────────────────────
+
+model Tenant {
+  id            String             @id @default(cuid())
+  slug          String             @unique
+  status        TenantStatus       @default(ACTIVE)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  domains       TenantDomain[]
+  settings      TenantSetting?
+  memberships   TenantMembership[]
+  invitations   UserInvitation[]
+  refreshTokens RefreshToken[]
+  auditEvents   AuditEvent[]
+}
+
+model TenantDomain {
+  id         String   @id @default(cuid())
+  tenantId    String
+  host       String   @unique
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model TenantSetting {
+  tenantId        String       @id
+  displayName     String
+  logoUrl         String?
+  primaryColor    String?
+  supportEmail    String
+  defaultLocale   LocaleCode   @default(es)
+  enabledLocales  LocaleCode[] @default([es])
+  timezone        String
+  currency        String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model PlatformUser {
+  id            String            @id @default(cuid())
+  email         String            @unique
+  passwordHash  String
+  role          PlatformRole
+  status        UserStatus        @default(ACTIVE)
+  firstName     String?
+  lastName      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  sessions      PlatformSession[]
+  auditEvents   AuditEvent[]      @relation("AuditPlatformUser")
+}
+
+model PlatformSession {
+  id               String       @id @default(cuid())
+  platformUserId   String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime     @default(now())
+
+  platformUser     PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([platformUserId])
+  @@index([expiresAt])
+}
+
+model User {
+  id               String             @id @default(cuid())
+  email            String             @unique
+  legacyUserId     String?            @unique
+  passwordHash     String
+  status           UserStatus         @default(INVITED)
+  preferredLocale  LocaleCode?
+  firstName        String?
+  lastName         String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  memberships      TenantMembership[]
+  invitations      UserInvitation[]   @relation("InvitationAcceptedBy")
+  refreshTokens    RefreshToken[]
+  auditEvents      AuditEvent[]       @relation("AuditTenantUser")
+}
+
+model TenantMembership {
+  id                   String           @id @default(cuid())
+  tenantId              String
+  userId                String           @unique
+  role                  TenantRole
+  status                MembershipStatus @default(INVITED)
+  assignedVesselCodes   String[]         @default([])
+  joinedAt              DateTime?
+  invitedAt             DateTime         @default(now())
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([role])
+}
+
+model UserInvitation {
+  id                 String      @id @default(cuid())
+  tenantId           String
+  email              String
+  role               TenantRole
+  locale             LocaleCode?
+  tokenHash          String      @unique
+  expiresAt          DateTime
+  acceptedAt         DateTime?
+  acceptedByUserId   String?
+  createdAt          DateTime    @default(now())
+
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  acceptedByUser     User?       @relation("InvitationAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model RefreshToken {
+  id               String    @id @default(cuid())
+  userId           String
+  tenantId         String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([expiresAt])
+}
+
+model AuditEvent {
+  id                   String          @id @default(cuid())
+  tenantId             String?
+  actorType            AuditActorType
+  actorUserId          String?
+  actorPlatformUserId  String?
+  action               String
+  entityType           String
+  entityId             String?
+  metadata             Json?
+  createdAt            DateTime        @default(now())
+
+  tenant               Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actorUser            User?           @relation("AuditTenantUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorPlatformUser    PlatformUser?   @relation("AuditPlatformUser", fields: [actorPlatformUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Domain Event (append-only) ───────────────────────────────────────────────
+
+model DomainEvent {
+  id          String          @id @default(cuid())
+  tenantId    String
+  vesselCode  String?
+  entityType  String
+  entityId    String
+  eventKind   DomainEventKind
+  actorUserId String?
+  payload     Json
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Block 05: Core Functional Modules ───────────────────────────────────────
+
+model Vessel {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String
+  name             String
+  status           VesselStatus  @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  createdByUserId  String
+  updatedAt        DateTime      @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  assets           Asset[]
+  maintenancePlans MaintenancePlan[]
+  workOrders       WorkOrder[]
+  defects          Defect[]
+  deferrals        Deferral[]
+  rcaRecords       RcaRecord[]
+  capaRecords      CapaRecord[]
+  inspections      Inspection[]
+  inspectionLogs   InspectionLog[]
+  certificates     Certificate[]
+  dailyReports     DailyReport[]
+  providers        Provider[]
+  spares           Spare[]
+  spareOrders      SpareOrder[]
+  stockMovements   StockMovement[]
+  providerEvals    ProviderEvaluation[]
+  providerNcs      ProviderNonconformity[]
+  attachments      Attachment[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+model Asset {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetCode        String
+  sfiCode          String?
+  name             String
+  criticality      AssetCriticality @default(B)
+  status           AssetStatus      @default(OPERATIONAL)
+  manufacturer     String?
+  model            String?
+  serialNumber     String?
+  installationDate DateTime?
+  lastOverhaulDate DateTime?
+  replacementDate  DateTime?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, assetCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model MaintenancePlan {
+  id                   String                 @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  taskCode             String
+  title                String
+  description          String?
+  triggerType          MaintenancePlanTrigger
+  frequencyHours       Float?
+  frequencyMonths      Int?
+  responsible          String?
+  acceptanceCriteria   String?
+  evidenceRequired     String?
+  status               MaintenancePlanStatus  @default(ACTIVE)
+  lastExecutionDate    DateTime?
+  nextDueDate          DateTime?
+  lastExecutionHours   Float?
+  nextDueHours         Float?
+  createdAt            DateTime               @default(now())
+  createdByUserId      String
+  updatedAt            DateTime               @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, taskCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model WorkOrder {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String
+  maintenancePlanId   String?
+  workOrderCode       String
+  type                WorkOrderType
+  status              WorkOrderStatus   @default(PLANNED)
+  priority            WorkOrderPriority @default(MEDIUM)
+  criticality         AssetCriticality  @default(B)
+  openDate            DateTime
+  startDate           DateTime?
+  dueDate             DateTime?
+  completedDate       DateTime?
+  holdReason          String?
+  cancelReason        String?
+  closeNotes          String?
+  independentVerifier String?
+  testResult          String?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, workOrderCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model Defect {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  assetId           String
+  workOrderId       String?
+  defectCode        String
+  status            DefectStatus           @default(OPEN)
+  severity          DefectSeverity         @default(MEDIUM)
+  operationalState  DefectOperationalState @default(NORMAL)
+  classification    String
+  reportedAt        DateTime
+  description       String
+  immediateAction   String?
+  correctiveAction  String?
+  createdAt         DateTime               @default(now())
+  createdByUserId   String
+  updatedAt         DateTime               @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, defectCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model Deferral {
+  id                   String             @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  sourceType           DeferralSourceType
+  sourceId             String
+  deferralCode         String
+  status               DeferralStatus     @default(REQUESTED)
+  requestedAt          DateTime
+  requestedByUserId    String
+  targetDate           DateTime?
+  justification        String?
+  compensatoryMeasures String?
+  reviewNotes          String?
+  decisionAt           DateTime?
+  decidedByUserId      String?
+  activeSince          DateTime?
+  expiredAt            DateTime?
+  closedAt             DateTime?
+  closeNotes           String?
+  rejectionReason      String?
+  createdAt            DateTime           @default(now())
+  createdByUserId      String
+  updatedAt            DateTime           @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel             @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, deferralCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model RcaRecord {
+  id                 String         @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  assetId            String
+  defectId           String?
+  workOrderId        String?
+  rcaCode            String
+  status             RcaStatus      @default(DRAFT)
+  methodology        RcaMethodology
+  analysisSummary    String?
+  immediateCause     String?
+  contributingCause  String?
+  rootCause          String?
+  correctiveActions  String?
+  preventiveActions  String?
+  completedAt        DateTime?
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  closedAt           DateTime?
+  createdAt          DateTime       @default(now())
+  createdByUserId    String
+  updatedAt          DateTime       @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  vessel             Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, rcaCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model CapaRecord {
+  id               String         @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetId          String
+  sourceType       CapaSourceType
+  sourceId         String
+  capaCode         String
+  status           CapaStatus     @default(OPEN)
+  priority         CapaPriority   @default(MEDIUM)
+  title            String
+  description      String?
+  owner            String?
+  dueDate          DateTime?
+  completedAt      DateTime?
+  verificationNote String?
+  cancelReason     String?
+  createdAt        DateTime       @default(now())
+  createdByUserId  String
+  updatedAt        DateTime       @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, capaCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+// ─── Block 06: Compliance & Operations ───────────────────────────────────────
+
+model Inspection {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetId          String?
+  inspectionCode   String
+  type             InspectionType
+  status           InspectionStatus @default(SCHEDULED)
+  result           InspectionResult?
+  providerId       String?
+  scheduledAt      DateTime?
+  completedAt      DateTime?
+  inspectorName    String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  logs             InspectionLog[]
+
+  @@unique([tenantId, vesselCode, inspectionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model InspectionLog {
+  id               String                 @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  inspectionId     String
+  logCode          String
+  entryType        InspectionLogEntryType
+  severity         InspectionLogSeverity  @default(LOW)
+  observedAt       DateTime
+  summary          String
+  recommendation   String?
+  createdAt        DateTime               @default(now())
+  createdByUserId  String
+
+  vessel           Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  inspection       Inspection             @relation(fields: [inspectionId], references: [id])
+
+  @@index([tenantId])
+  @@index([inspectionId])
+}
+
+model Certificate {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String?
+  certificateCode     String
+  name                String
+  issuingAuthority    String
+  status              CertificateStatus @default(ACTIVE)
+  issueDate           DateTime
+  expiryDate          DateTime
+  lastInspectionDate  DateTime?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, certificateCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([expiryDate])
+}
+
+model DailyReport {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  reportDate          DateTime          @db.Date
+  status              DailyReportStatus @default(DRAFT)
+  summary             String?
+  positionLat         Float?
+  positionLon         Float?
+  engineHoursMain     Float?
+  generatorHours      Float?
+  fuelConsumedLiters  Float?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, reportDate])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+// ─── Block 07: Procurement & Stock ───────────────────────────────────────────
+
+model Provider {
+  id               String         @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  providerCode     String
+  name             String
+  category         String?
+  status           ProviderStatus @default(ACTIVE)
+  contactName      String?
+  contactEmail     String?
+  contactPhone     String?
+  location         String?
+  createdAt        DateTime       @default(now())
+  createdByUserId  String
+  updatedAt        DateTime       @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel                  @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  spareOrders      SpareOrder[]
+  evaluations      ProviderEvaluation[]
+  nonconformities  ProviderNonconformity[]
+  inspections      Inspection[]
+
+  @@unique([tenantId, vesselCode, providerCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model Spare {
+  id               String       @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  sku              String
+  name             String
+  category         String?
+  criticality      AssetCriticality @default(B)
+  manufacturer     String?
+  model            String?
+  unit             String
+  currentStock     Float        @default(0)
+  minStock         Float        @default(0)
+  reorderPoint     Float        @default(0)
+  status           SpareStatus  @default(ACTIVE)
+  location         String?
+  createdAt        DateTime     @default(now())
+  createdByUserId  String
+  updatedAt        DateTime     @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  stockMovements   StockMovement[]
+
+  @@unique([tenantId, vesselCode, sku])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model SpareOrder {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  orderCode            String
+  status               SpareOrderStatus @default(DRAFT)
+  priority             SpareOrderPriority @default(MEDIUM)
+  providerId           String?
+  requestedByUserId    String
+  requestedAt          DateTime
+  expectedDeliveryDate DateTime?
+  totalLines           Int              @default(0)
+  totalCost            Float?
+  currency             String?
+  notes                String?
+  createdAt            DateTime         @default(now())
+  createdByUserId      String
+  updatedAt            DateTime         @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider             Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, vesselCode, orderCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model StockMovement {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  spareId          String
+  movementCode     String
+  movementType     MovementType
+  quantity         Float
+  unit             String
+  occurredAt       DateTime
+  referenceType    MovementRefType?
+  referenceId      String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  spare            Spare            @relation(fields: [spareId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([spareId])
+}
+
+model ProviderEvaluation {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  providerId       String
+  evaluationCode   String
+  status           EvaluationStatus @default(DRAFT)
+  score            Float
+  rating           EvaluationRating
+  evaluatedAt      DateTime
+  evaluatorName    String
+  summary          String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider         @relation(fields: [providerId], references: [id])
+
+  @@unique([tenantId, vesselCode, evaluationCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([providerId])
+}
+
+model ProviderNonconformity {
+  id                String     @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  providerId        String
+  nonconformityCode String
+  status            NcStatus   @default(OPEN)
+  severity          NcSeverity @default(MEDIUM)
+  reportedAt        DateTime
+  description       String
+  correctiveAction  String?
+  closedAt          DateTime?
+  createdAt         DateTime   @default(now())
+  createdByUserId   String
+  updatedAt         DateTime   @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel     @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider          Provider   @relation(fields: [providerId], references: [id])
+
+  @@unique([tenantId, vesselCode, nonconformityCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([providerId])
+}
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+model Attachment {
+  id                String           @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  targetType        AttachmentTarget
+  targetId          String
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  status            AttachmentStatus @default(ACTIVE)
+  uploadedAt        DateTime
+  uploadedByUserId  String
+  description       String?
+  createdAt         DateTime         @default(now())
+  createdByUserId   String
+  updatedAt         DateTime         @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([targetType, targetId])
+}

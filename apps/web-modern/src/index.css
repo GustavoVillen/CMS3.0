@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-bg: #0B132B;
+  --color-surface: #1C2541;
+  --color-accent: #FF9F1C;
+  --color-text-industrial: #E0E1DD;
+  --color-success-sea: #06D6A0;
+  
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  background-color: var(--color-primary-bg);
+  color: var(--color-text-industrial);
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Glassmorphism Utility */
+.glass {
+  background: rgba(28, 37, 65, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-glow {
+  box-shadow: 0 0 20px rgba(255, 159, 28, 0.1);
+}
+
+/* Bento Item Styles - Fixed @apply issue */
+.bento-card {
+  /* Copying .glass properties because @apply cannot apply custom CSS classes in TW4 */
+  background: rgba(28, 37, 65, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  
+  @apply rounded-2xl p-6 transition-all duration-300 hover:scale-[1.02];
+}
+
+.bento-card:hover {
+  border-color: rgba(255, 159, 28, 0.4);
+}

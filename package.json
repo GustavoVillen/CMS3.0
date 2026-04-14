@@ -1,0 +1,32 @@
+{
+  "name": "pms-saas-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "@prisma/adapter-pg": "7",
+    "@prisma/config": "7",
+    "@types/node": "^24.3.0",
+    "prisma": "^7.7.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "prisma:generate": "pnpm exec prisma generate --schema prisma/schema.prisma",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:logs": "docker compose -f infra/docker-compose.yml logs -f postgres",
+    "db:migrate": "pnpm exec prisma migrate dev --schema prisma/schema.prisma",
+    "db:push": "pnpm exec prisma db push --schema prisma/schema.prisma",
+    "db:seed": "pnpm exec tsx --env-file .env prisma/seed.ts",
+    "dev:api": "pnpm --filter @pms-saas/api dev",
+    "start:api": "pnpm --filter @pms-saas/api start",
+    "build:api": "pnpm --filter @pms-saas/api build",
+    "dev:web-legacy": "pnpm --filter @pms-saas/web-legacy dev"
+  },
+  "dependencies": {
+    "@prisma/client": "7.7.0"
+  }
+}

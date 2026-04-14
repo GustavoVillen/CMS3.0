@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noEmitOnError": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pms-saas/shared-types": ["packages/shared-types/src"],
+      "@pms-saas/i18n": ["packages/i18n/src"],
+      "@pms-saas/config": ["packages/config/src"]
+    }
+  }
+}

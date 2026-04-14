@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @pms-saas/api typecheck)",
+      "Bash(pnpm --filter @pms-saas/api build)",
+      "Bash(node -e ':*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(cmd /c \"start /B node apps/api/dist/server.js > api-dev.log 2>&1\")",
+      "Bash(curl -s http://localhost:3105/health)",
+      "Bash(cmd /c \"start /B node apps/api/dist/apps/api/src/server.js > api-dev.log 2>&1\")",
+      "Bash(netstat -ano)",
+      "Bash(wmic process:*)",
+      "Bash(taskkill /F /PID 20544)",
+      "Bash(cmd /c \"start /B pnpm --filter @pms-saas/api start > api-dev.log 2>&1\")",
+      "Bash(taskkill /F /T /PID 20544)",
+      "Bash(kill -9 20544)",
+      "Bash(powershell -Command \"Stop-Process -Id 20544 -Force\")",
+      "Bash(cmd /c \"start /B node_modules/.bin/tsx src/server.ts > ../../api-dev.log 2>&1\")",
+      "Bash(cmd /c \"start /B ..\\\\..\\\\node_modules\\\\.bin\\\\tsx src/server.ts > ..\\\\..\\\\api-dev.log 2>&1\")",
+      "Bash(cmd /c \"start /B ..\\\\..\\\\node_modules\\\\.bin\\\\tsx.cmd src/server.ts > ..\\\\..\\\\api-dev.log 2>&1\")",
+      "Bash(powershell -Command \"Start-Process -WindowStyle Hidden node -ArgumentList '--require','C:/NPMS/GPMS/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/preflight.cjs','--import','file:///C:/NPMS/GPMS/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/loader.mjs','src/server.ts' -WorkingDirectory 'C:/NPMS/GPMS/apps/api' -RedirectStandardOutput 'C:/NPMS/GPMS/api-dev.log' -RedirectStandardError 'C:/NPMS/GPMS/api-dev.log'\")",
+      "Bash(powershell -Command \"Start-Process -WindowStyle Hidden node -ArgumentList '--require','C:/NPMS/GPMS/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/preflight.cjs','--import','file:///C:/NPMS/GPMS/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/loader.mjs','src/server.ts' -WorkingDirectory 'C:/NPMS/GPMS/apps/api' -RedirectStandardOutput 'C:/NPMS/GPMS/api-dev.log' -RedirectStandardError 'C:/NPMS/GPMS/api-dev-err.log'\")",
+      "Bash(curl -s \"http://localhost:3105/app/inspections?tenant=demo\" -H \"Authorization: Bearer demo-tenant-token-admin\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const j=JSON.parse\\(d\\);console.log\\('inspections total:',j.total\\)\")",
+      "Bash(curl -s \"http://localhost:3105/app/certificates?tenant=demo\" -H \"Authorization: Bearer demo-tenant-token-admin\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const j=JSON.parse\\(d\\);console.log\\('certificates total:',j.total\\)\")",
+      "Bash(curl -s \"http://localhost:3105/app/daily-reports?tenant=demo\" -H \"Authorization: Bearer demo-tenant-token-admin\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const j=JSON.parse\\(d\\);console.log\\('daily-reports total:',j.total\\)\")",
+      "Bash(curl -s \"http://localhost:3105/app/attachments?tenant=demo\" -H \"Authorization: Bearer demo-tenant-token-admin\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const j=JSON.parse\\(d\\);console.log\\('attachments total:',j.total\\)\")",
+      "Bash(powershell -Command ':*)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest 'http://localhost:3105/app/inspections?tenant=demo' -Headers @{Authorization='Bearer demo-tenant-token-admin'} -UseBasicParsing\\).Content\")",
+      "Read(//c/Users/gvill/.claude/**)"
+    ]
+  }
+}

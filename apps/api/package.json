@@ -1,0 +1,19 @@
+{
+  "name": "@pms-saas/api",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm exec tsx watch src/server.ts",
+    "start": "pnpm exec tsx src/server.ts",
+    "build": "pnpm exec tsc --project tsconfig.json",
+    "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^6.16.2",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
+  }
+}

@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>
+    <?= appTitle ?>
+  </title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Google Material Symbols -->
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin="" />
+
+  <!-- Dynamic Styles from GAS -->
+  <?!= include('Styles'); ?>
+
+  <!-- Google API for Picker -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+</head>
+
+<body>
+  <script>
+    window.__FORCE_LOGIN__ = <?= forceLogin ? 'true' : 'false' ?>;
+    window.__CURRENT_USER_ID__ = <?= JSON.stringify(currentUserId || '') ?>;
+    window.__CURRENT_USER_ROLE__ = <?= JSON.stringify(currentUserRole || '') ?>;
+    window.__CURRENT_USER_ASSIGNED_VESSEL__ = <?= JSON.stringify(currentUserAssignedVessel || '') ?>;
+    window.__CURRENT_USER_ASSIGNED_VESSELS__ = <?= JSON.stringify(currentUserAssignedVessels || '') ?>;
+  </script>
+  <div id="login-overlay" style="display:none; position:fixed; inset:0; z-index:5000; background:rgba(5,10,20,0.92); backdrop-filter: blur(8px); align-items:center; justify-content:center; padding:20px;">
+    <div style="width:min(420px, calc(100vw - 32px)); background:linear-gradient(180deg, rgba(19,35,58,0.98), rgba(13,25,44,0.98)); border:1px solid rgba(51,214,255,0.25); border-radius:18px; padding:28px; box-shadow:0 24px 80px rgba(0,0,0,0.35); color:#eef6ff;">
+      <div style="color:#18c7e6; font-size:12px; letter-spacing:.18em; text-transform:uppercase; margin-bottom:10px;">Mercurio PMS</div>
+      <h1 style="margin:0 0 8px; font-size:28px;">Ingreso seguro</h1>
+      <p style="margin:0 0 20px; color:#8aa3bf; line-height:1.5;">Ingresá con tu <strong>USER_ID</strong> y contraseña. El acceso depende de la hoja <code>_USERS</code>.</p>
+      <label for="login-user-id" style="display:block; margin:14px 0 8px; font-size:13px; color:#8aa3bf; font-weight:600;">USER_ID</label>
+      <input id="login-user-id" type="text" autocomplete="username" style="width:100%; border:1px solid rgba(255,255,255,0.12); background:rgba(5,13,25,0.75); color:#eef6ff; border-radius:12px; padding:14px 15px; font-size:15px; outline:none;">
+      <label for="login-password" style="display:block; margin:14px 0 8px; font-size:13px; color:#8aa3bf; font-weight:600;">Contraseña</label>
+      <input id="login-password" type="password" autocomplete="current-password" style="width:100%; border:1px solid rgba(255,255,255,0.12); background:rgba(5,13,25,0.75); color:#eef6ff; border-radius:12px; padding:14px 15px; font-size:15px; outline:none;">
+      <button id="login-submit-btn" type="button" onclick="submitInlineLogin()" style="width:100%; margin-top:20px; border:0; border-radius:12px; padding:14px 16px; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:linear-gradient(90deg, #18c7e6, #10b3de); color:#04101d; cursor:pointer;">Ingresar</button>
+      <div id="login-inline-error" style="margin-top:14px; color:#ff6b6b; min-height:18px; font-size:13px;"></div>
+    </div>
+  </div>
+  <script>console.log("DIAGNÓSTICO: Cargando versión del 24 de Marzo (23:30)...");</script>
+  <div class="app-layout">
+
+    <!-- LEFT SIDEBAR MINI -->
+    <aside class="sidebar-mini">
+      <div class="brand-logo">
+        <span class="material-symbols-outlined icon-brand">sailing</span>
+      </div>
+
+      <nav class="nav-mini" id="nav-mini">
+        <a href="#" id="nav-home" class="nav-item active" title="Inicio" onclick="showDashboard()"><span
+            class="material-symbols-outlined">home</span></a>
+
+        <a href="#" id="nav-fleet" class="nav-item" title="Flota" onclick="showModule('FLOTA'); return false;"><span
+            class="material-symbols-outlined">directions_boat</span></a>
+
+        <a href="#" id="nav-route" class="nav-item" title="Recorrido" onclick="showVoyageRouteView(); return false;"><span
+            class="material-symbols-outlined">route</span></a>
+
+        <div style="margin: 1rem 0; height: 1px; background: rgba(255,165,0,0.15); width: 60%;"></div>
+
+        <!-- Botón Mercurio -->
+        <button class="nav-item btn-ai-sidebar" onclick="toggleSidebarAI()" title="Asistente Mercurio">
+          <span class="material-symbols-outlined ai-pulse-icon">support_agent</span>
+        </button>
+
+        <div style="margin: 1rem 0; height: 1px; background: rgba(255,165,0,0.15); width: 60%;"></div>
+
+        <a href="#" class="nav-item" title="Ajustes"><span class="material-symbols-outlined">settings</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div style="display:flex; justify-content:center; width:100%;">
+          <div class="avatar-mini" title="Usuario activo">
+            <span id="sidebar-user-initial">N</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER DASHBOARD -->
+    <main class="dashboard-main">
+
+      <header class="dashboard-header">
+        <div class="d-flex align-center gap-4">
+          <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" style="display: none;">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
+          <div class="header-title-box" onclick="refreshDashboardHome()" style="cursor: pointer;">
+            <span class="material-symbols-outlined title-icon">directions_boat</span>
+            <h1>FLEET DASHBOARD</h1>
+          </div>
+        </div>
+        <div class="d-flex align-center gap-3">
+          <div style="display:flex; align-items:center; gap:0.7rem; padding:0.45rem 0.85rem; border:1px solid rgba(255,255,255,0.1); border-radius:999px; background:rgba(255,255,255,0.03); min-width:220px;">
+            <div class="avatar-mini" style="width:28px; height:28px; font-size:0.75rem; flex:0 0 auto;">
+              <span id="header-user-initial">N</span>
+            </div>
+            <div style="display:flex; flex-direction:column; min-width:0; line-height:1.1;">
+              <span id="header-user-id" style="font-size:0.76rem; font-weight:700; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">-</span>
+              <span id="header-user-role" style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">-</span>
+            </div>
+          </div>
+          <button class="btn-cyan-outline" onclick="logoutApp()" style="display:flex; align-items:center; gap:0.4rem; padding: 0.45rem 0.85rem; text-transform: uppercase; font-size: 0.75rem;">
+            <span class="material-symbols-outlined" style="font-size:1rem;">logout</span> Cerrar sesión
+          </button>
+          <button class="btn-icon-subtle" onclick="showDashboard()"><span
+              class="material-symbols-outlined">menu</span></button>
+        </div>
+      </header>
+
+      <!-- Content Wrapper -->
+      <div class="content-wrapper" id="content-wrapper">
+
+        <div id="dashboard-view" style="display: flex; flex-direction: column; gap: 1.5rem;">
+          <div class="dashboard-grid-3">
+            <div class="chart-card pie-card">
+              <h3 class="chart-title">ESTADO ÓRDENES DE TRABAJO</h3>
+              <div class="pie-container">
+                <div id="work-orders-pie-chart" class="pie-chart-mock"></div>
+                <div id="work-orders-pie-legend" class="pie-legend">
+                  <div class="legend-item" style="color:var(--text-muted); font-size: 0.7rem;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-card pie-card">
+              <h3 class="chart-title">ESTADO PLAN DE MANTENIMIENTO</h3>
+              <div class="pie-container">
+                <div id="plan-pie-chart" class="pie-chart-mock"></div>
+                <div id="plan-pie-legend" class="pie-legend">
+                  <div class="legend-item" style="color:var(--text-muted); font-size: 0.7rem;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-card pie-card">
+              <h3 class="chart-title">INSPECCIONES PERIÓDICAS</h3>
+              <div class="pie-container">
+                <div id="inspections-pie-chart" class="pie-chart-mock"></div>
+                <div id="inspections-pie-legend" class="pie-legend">
+                  <div class="legend-item" style="color:var(--text-muted); font-size: 0.7rem;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid-3">
+            <div class="chart-card pie-card">
+              <h3 class="chart-title">ESTADO DE LOS EQUIPOS CRÍTICOS</h3>
+              <div class="pie-container">
+                <div id="critical-pie-chart" class="pie-chart-mock"></div>
+                <div id="critical-pie-legend" class="pie-legend">
+                  <div class="legend-item" style="color:var(--text-muted); font-size: 0.7rem;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-card pie-card">
+              <h3 class="chart-title">REPUESTOS CRÍTICOS</h3>
+              <div class="pie-container">
+                <div id="spares-pie-chart" class="pie-chart-mock"></div>
+                <div id="spares-pie-legend" class="pie-legend">
+                  <div class="legend-item" style="color:var(--text-muted); font-size: 0.7rem;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+            <div class="snapshot-card">
+              <div class="snapshot-card-header">
+                <span class="material-symbols-outlined icon-cyan fs-md">shopping_cart</span>
+                <span>PEDIDOS DE REPUESTOS</span>
+              </div>
+              <div class="snapshot-card-body" id="snapshot-pedidos">
+                <div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem;">Calculando...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid-3">
+            <div class="snapshot-card">
+              <div class="snapshot-card-header">
+                <span class="material-symbols-outlined icon-cyan fs-md">notification_important</span>
+                <span>VENCIMIENTOS CERTIFICADOS</span>
+              </div>
+              <div class="snapshot-card-body" id="snapshot-certificados">
+                <div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem;">Calculando...</div>
+              </div>
+            </div>
+            <div class="snapshot-card">
+              <div class="snapshot-card-header">
+                <span class="material-symbols-outlined icon-cyan fs-md">widgets</span>
+                <span>MÉTRICA 3</span>
+              </div>
+              <div class="snapshot-card-body">
+                <div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem;">Próximamente...</div>
+              </div>
+            </div>
+            <div class="snapshot-card">
+              <div class="snapshot-card-header">
+                <span class="material-symbols-outlined icon-cyan fs-md">query_stats</span>
+                <span>MÉTRICA 4</span>
+              </div>
+              <div class="snapshot-card-body">
+                <div style="text-align:center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem;">Próximamente...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-section-divider"></div>
+
+          <!-- Modules Grid -->
+          <div class="modules-grid" id="modules-grid-container">
+            <!-- Injectado via Script -->
+          </div>
+
+        </div> <!-- END dashboard-view -->
+
+        <div id="route-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">route</span> RECORRIDO REPORTADO DE LA EMBARCACION
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-route" class="form-control"
+                style="width: 220px; background: var(--bg-main); border-color: var(--accent-cyan-dim); margin-bottom: 0;"
+                onchange="renderVoyageRouteView()">
+                <option value="">Selecciona embarcacion</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="showVoyageRouteView(true, true)" title="Actualizar recorrido"><span
+                  class="material-symbols-outlined">sync</span></button>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div id="route-view-content" class="table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando recorrido...</div>
+          </div>
+        </div>
+
+        <div id="vessels-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title" id="vessels-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">directions_boat</span>Listado de Flota
+            </h2>
+            <div class="header-actions">
+              <button class="btn-primary" onclick="openVesselModal()"
+                style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.2rem; text-transform: uppercase;">
+                <span class="material-symbols-outlined fs-sm">add</span>
+                NUEVA EMBARCACIÓN
+              </button>
+              <select id="vessel-filter-vessels" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-cyan-dim); margin-bottom: 0;"
+                onchange="filterVesselsTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="vessels-table-container" style="flex: 1; overflow: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando
+              flota...</div>
+          </div>
+        </div>
+
+        <div id="inventory-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 id="inventory-title-h2" class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-orange); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">inventory_2</span>Gestión de Repuestos e Inventario
+            </h2>
+            <div class="header-actions">
+              <button id="inventory-primary-action" class="btn-primary" onclick="openInventoryModal()"
+                style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.2rem; text-transform: uppercase; background: var(--accent-orange);">
+                <span class="material-symbols-outlined fs-sm">add_circle</span>
+                REGISTRAR NUEVO INVENTARIO
+              </button>
+              <select id="vessel-filter-inventory" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-orange-dim); margin-bottom: 0;"
+                onchange="filterInventoryTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div id="inventory-sfi-bar" class="sfi-filter-bar d-flex gap-2 wrap"
+            style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <button class="btn-sfi-grp active" id="btn-sfi-all" onclick="setSFIFilter(null)">TODOS</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('0')">G0</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('1')">G1</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('2')">G2</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('3')">G3</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('4')">G4</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('5')">G5</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('6')">G6</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('7')">G7</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('8')">G8</button>
+            <button class="btn-sfi-grp" onclick="setSFIFilter('9')">G9</button>
+            <button class="btn-sfi-grp" id="btn-sfi-ex" onclick="setSFIFilter('EX')"
+              style="background-color: var(--accent-red-dim); color: var(--text-main); border-color: var(--accent-red); margin-left: 1rem;">🔥
+              Equipos EX</button>
+          </div>
+          <div class="table-container" id="inventory-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando
+              inventario...</div>
+          </div>
+        </div>
+
+        <!-- CAPA MODULE VIEW -->
+        <div id="capa-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">security</span> REGISTRO CENTRAL FLOTA CAPA (PROC-MAN-19)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-capa" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-cyan-dim); margin-bottom: 0;"
+                onchange="filterCapaTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="capa-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando base
+              de datos CAPA...</div>
+          </div>
+        </div>
+
+        <!-- RCA MODULE VIEW -->
+        <div id="rca-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-orange); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">search_insights</span> ANÁLISIS DE CAUSA RAÍZ RCA
+              (PROC-MAN-18)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-rca" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-orange-dim); margin-bottom: 0;"
+                onchange="filterRcaTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="rca-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando base
+              de datos RCA...</div>
+          </div>
+        </div>
+
+        <!-- WORK ORDERS VIEW -->
+        <div id="work-orders-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-blue); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">build_circle</span> PLAN DE MANTENIMIENTO (PROC-MAN-01)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-work-orders" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: rgba(59,130,246,0.3); margin-bottom: 0;"
+                onchange="filterWorkOrdersTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div id="wo-kpi-container" style="display: none;"></div>
+          <!-- Maintenance SFI Filter -->
+          <div class="sfi-filter-bar d-flex gap-2 wrap" id="maintenance-sfi-bar"
+            style="display: flex; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <button class="btn-sfi-grp-maint active" id="btn-maint-sfi-all" onclick="setMaintenanceSFIFilter(null)">TODOS</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('0')">G0</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('1')">G1</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('2')">G2</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('3')">G3</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('4')">G4</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('5')">G5</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('6')">G6</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('7')">G7</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('8')">G8</button>
+            <button class="btn-sfi-grp-maint" onclick="setMaintenanceSFIFilter('9')">G9</button>
+            <button class="btn-sfi-grp-maint" id="btn-maint-sfi-ex" onclick="setMaintenanceSFIFilter('EX')"
+              style="background-color: var(--accent-red-dim); color: var(--text-main); border-color: var(--accent-red); margin-left: 1rem;">🔥 Equipos EX</button>
+          </div>
+          <div class="table-container" id="work-orders-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando base
+              de Mantenimiento...</div>
+          </div>
+        </div>
+
+        <!-- DEFECT LOG VIEW -->
+        <div id="defect-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-red); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">report</span> REGISTRO DE FALLAS Y DEFECTOS (PROC-MAN-15)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-defect" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-red-dim); margin-bottom: 0;"
+                onchange="filterDefectTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="defect-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando base
+              de datos Defect Log...</div>
+          </div>
+        </div>
+
+        <!-- DIFERIMIENTOS Y BACKLOG VIEW (PROC-MAN-03) -->
+        <div id="deferrals-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-yellow); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">update</span> DIFERIMIENTOS Y BACKLOG OPERATIVO (PROC-MAN-03)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-deferrals" class="form-control"
+                style="width: 160px; background: var(--bg-main); border-color: rgba(234,179,8,0.3); margin-bottom: 0;"
+                onchange="filterDeferralsView()">
+                <option value="">Flota Completa</option>
+              </select>
+              <select id="status-filter-deferrals" class="form-control"
+                style="width: 140px; background: var(--bg-main); border-color: rgba(234,179,8,0.3); margin-bottom: 0;"
+                onchange="filterDeferralsView()">
+                <option value="">Todos los Estados</option>
+                <option value="REQUESTED">Solicitados</option>
+                <option value="APPROVED">Aprobados</option>
+                <option value="ACTIVE">Activos</option>
+                <option value="EXPIRED">Vencidos</option>
+                <option value="CLOSED">Cerrados</option>
+              </select>
+              <select id="criticidad-filter-deferrals" class="form-control"
+                style="width: 120px; background: var(--bg-main); border-color: rgba(234,179,8,0.3); margin-bottom: 0;"
+                onchange="filterDeferralsView()">
+                <option value="">Criticidad</option>
+                <option value="A">Clase A</option>
+                <option value="B">Clase B</option>
+                <option value="C">Clase C</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <!-- Sub-tabs -->
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+            <button id="tab-btn-deferrals" onclick="switchDeferralTab('deferrals')"
+              style="background: var(--accent-yellow); color: #000; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+              <span class="material-symbols-outlined" style="font-size: 1rem;">schedule_send</span> DIFERIMIENTOS
+            </button>
+            <button id="tab-btn-backlog" onclick="switchDeferralTab('backlog')"
+              style="background: var(--bg-card-hover); color: var(--text-muted); border: 1px solid var(--border-color); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+              <span class="material-symbols-outlined" style="font-size: 1rem;">assignment_late</span> BACKLOG OPERATIVO
+            </button>
+          </div>
+          <div id="deferrals-tab-content" class="table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando diferimientos...</div>
+          </div>
+          <div id="backlog-tab-content" class="table-container" style="flex: 1; overflow-y: auto; display: none;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Calculando backlog...</div>
+          </div>
+        </div>
+
+        <!-- CERTIFICATES VIEW -->
+        <div id="certificates-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">card_membership</span> MAESTRO DE CERTIFICADOS (REG-MAN-08)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-certificates" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-cyan-dim); margin-bottom: 0;"
+                onchange="renderCertificatesTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="certificates-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando base
+              de datos Certificados...</div>
+          </div>
+        </div>
+
+        <!-- DAILY REPORTS VIEW -->
+        <div id="daily-reports-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">description</span> REPORTE DIARIO DE OPERACIONES (REG-OPS-01)
+            </h2>
+            <div class="header-actions">
+              <select id="vessel-filter-daily" class="form-control"
+                style="width: 200px; background: var(--bg-main); border-color: var(--accent-cyan-dim); margin-bottom: 0;"
+                onchange="filterDailyReportsTable()">
+                <option value="">Todas las Embarcaciones</option>
+              </select>
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="daily-reports-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando reportes diarios...</div>
+          </div>
+        </div>
+
+        <!-- PROVEEDORES VIEW -->
+        <div id="proveedores-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">store</span> PROVEEDORES APROBADOS (PROC-MAN-13)
+            </h2>
+            <div class="header-actions">
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="proveedores-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando proveedores...</div>
+          </div>
+        </div>
+
+        <!-- EVAL PROVEEDORES VIEW -->
+        <div id="eval-proveedores-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">rate_review</span> POST-JOB REVIEWS (PROC-MAN-13)
+            </h2>
+            <div class="header-actions">
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="eval-proveedores-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando evaluaciones...</div>
+          </div>
+        </div>
+
+        <!-- NC PROVEEDORES VIEW -->
+        <div id="nc-proveedores-view"
+          style="display: none; flex-direction: column; flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 1.5rem; overflow: hidden;">
+          <div class="view-header">
+            <h2 class="chart-title"
+              style="margin:0; font-size: 1rem; color: var(--accent-red); display: flex; align-items: center; gap: 0.5rem;">
+              <span class="material-symbols-outlined fs-md">warning</span> NC PROVEEDORES (PROC-MAN-13)
+            </h2>
+            <div class="header-actions">
+              <button class="btn-icon-subtle" onclick="closeCurrentView()"><span
+                  class="material-symbols-outlined">close</span></button>
+            </div>
+          </div>
+          <div class="table-container" id="nc-proveedores-table-container" style="flex: 1; overflow-y: auto;">
+            <div class="loading-state" style="padding: 2rem; text-align: center; color: var(--text-muted);"><span
+                class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span> Cargando no conformidades...</div>
+          </div>
+        </div>
+
+
+        <!-- Footer Caption -->
+        <div class="dashboard-footer">
+          <span class="material-symbols-outlined fs-sm">copyright</span>
+          SOURCE: G-VRT. ENTIDAD/MERCURIO_SYS
+        </div>
+      </div>
+
+    </main>
+
+    <!-- AI MODAL WINDOW -->
+    <div class="modal-overlay" id="ai-modal-overlay">
+      <div class="modal ai-window">
+        <div class="ai-header">
+          <span class="material-symbols-outlined icon-brand">support_agent</span>
+          <div class="ai-title-wrap" style="flex: 1;">
+            <h2>ASISTENTE MERCURIO</h2>
+            <span>INTELIGENCIA M3M-01</span>
+          </div>
+          <button class="btn-icon-subtle" onclick="toggleSidebarAI()"><span
+              class="material-symbols-outlined">close</span></button>
+        </div>
+
+        <div class="ai-chat" id="ai-chat-container">
+          <div class="ai-msg ai-msg-bot">Hola, soy el Asistente Mercurio. ¿En qué puedo ayudarte?</div>
+
+          <!-- Sugerencias iniciales accesibles -->
+          <div class="ai-prompts" id="ai-prompts-container" style="margin-top: 1rem;">
+            <p class="ai-caption" style="margin-bottom: 0.5rem; text-align: center;">Hazle una pregunta o usa una
+              sugerencia:</p>
+            <button class="ai-btn-prompt" onclick="askSuggestion(this)">¿Qué requiere diferir un equipo Nivel
+              B?</button>
+            <button class="ai-btn-prompt" onclick="askSuggestion(this)">¿Cuál es el procedimiento ante un defecto Nivel
+              A?</button>
+            <button class="ai-btn-prompt" onclick="askSuggestion(this)">¿Qué dice el manual sobre equipos SFI?</button>
+          </div>
+        </div>
+
+        <div class="ai-inputbox">
+          <input type="text" id="ai-input" placeholder="Pregunta algo aquí..." onkeypress="handleAIPress(event)" />
+          <button class="btn-send" id="ai-send-btn" onclick="sendToAssistant()"><span
+              class="material-symbols-outlined">send</span></button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Reusable Modal Form -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button class="btn-icon-subtle" id="btn-close-modal"><span
+            class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Contenido dinámico del formulario -->
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAILED DAILY REPORT MODAL (REG-OPS-01) -->
+  <div class="modal-overlay" id="daily-modal-overlay">
+    <div class="modal" style="max-width: 900px; box-shadow: 0 0 40px rgba(0,255,255,0.15); border: 1px solid var(--accent-cyan); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+      <div class="modal-header" style="background: var(--bg-main); border-bottom: 1px solid var(--border-color); padding: 1rem 1.5rem; flex-shrink: 0;">
+        <h3 id="daily-modal-title" style="margin: 0; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;">
+          <span class="material-symbols-outlined">description</span> REPORTE DIARIO DE OPERACIONES
+        </h3>
+        <button class="btn-icon-subtle" onclick="closeDailyModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div id="daily-modal-body" style="padding: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-card);">
+        <!-- Tabbed Content Injected Here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- BARRIER ASSESSMENT WIZARD MODAL -->
+  <div class="modal-overlay" id="barrier-modal-overlay">
+    <div class="modal" style="max-width: 600px; box-shadow: 0 0 40px rgba(0,255,255,0.15); border: 1px solid rgba(0,255,255,0.2);">
+      <div class="modal-header" style="background: var(--bg-main); border-bottom: 1px solid var(--border-color); padding: 1rem 1.5rem;">
+        <h3 id="barrier-modal-title" style="margin: 0; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;">
+          <span class="material-symbols-outlined">security</span> EVALUACIÓN DE BARRERAS IA
+        </h3>
+        <button class="btn-icon-subtle" onclick="closeBarrierModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div id="barrier-modal-body" style="padding: 1.5rem; min-height: 250px; display: flex; flex-direction: column;">
+        <!-- dynamic interview -->
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pdf-preview-overlay">
+    <div class="modal" style="max-width: 1100px; width: 92vw; max-height: 92vh; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="modal-header" style="padding: 1rem 1.25rem;">
+        <h3 id="pdf-preview-title" style="margin: 0; color: var(--accent-cyan);">Vista previa PDF</h3>
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <a id="pdf-preview-open-link" href="#" target="_blank" rel="noopener" class="btn-cyan-outline" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.4rem; padding: 6px 12px;">
+            <span class="material-symbols-outlined" style="font-size:1rem;">open_in_new</span> ABRIR
+          </a>
+          <button class="btn-icon-subtle" onclick="closePdfPreviewModal()"><span class="material-symbols-outlined">close</span></button>
+        </div>
+      </div>
+      <div style="background:#0b1220; padding: 0; flex: 1; min-height: 70vh;">
+        <iframe id="pdf-preview-frame" title="Vista previa PDF OT" style="width:100%; height:100%; min-height:70vh; border:0; background:#fff;"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plantilla de Impresión de Reportes Oculta -->
+  <div id="printable-report-template" style="display: none;">
+    <div class="report-header">
+      <div class="report-logo">
+        <h2>MERCURIO PMS</h2>
+      </div>
+      <div class="report-title">
+        <h1>REPORTE DE INVESTIGACIÓN</h1>
+        <h3 id="print-report-id">RCA-YYYYMMDD</h3>
+      </div>
+    </div>
+    <div class="report-body" id="print-report-body">
+      <!-- Contenido dinámico del reporte -->
+    </div>
+    <div class="report-footer">
+      <div class="footer-sign">
+        <div class="sign-line"></div>
+        <p>Firma Líder Investigación</p>
+      </div>
+      <div class="footer-sign">
+        <div class="sign-line"></div>
+        <p>Firma Aprobador (DPA/Gerencia)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIELD GUIDE / STATUS BAR -->
+  <div id="field-guide-bar" class="field-guide"
+    style="position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: 0.5rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; z-index: 9999; pointer-events: none;">
+    <span class="material-symbols-outlined fs-md" style="color: var(--accent-orange); font-size: 1.2rem;">info</span>
+    <span id="guide-text"
+      style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.03em;">Pase el mouse
+      sobre un elemento para obtener información...</span>
+  </div>
+
+  <!-- Dynamic Scripts from GAS -->
+  <?!= include('Script'); ?>
+</body>
+
+</html>
