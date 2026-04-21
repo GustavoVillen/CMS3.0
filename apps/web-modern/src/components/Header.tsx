@@ -1,37 +1,68 @@
-import { Search, Bell, User } from 'lucide-react';
+import React, { useState } from "react";
+import { Bell, User, LogOut, ChevronDown } from "lucide-react";
+import { useAuth } from "../lib/auth";
+import { useNavigate } from "react-router-dom";
 
 export const Header: React.FC<{ title: string }> = ({ title }) => {
+  const { user, tenant, logout } = useAuth();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
-    <header className="h-16 border-b border-white/10 flex items-center justify-between px-8 bg-primary-bg/30 backdrop-blur-md">
+    <header className="h-16 border-b border-white/10 flex items-center justify-between px-8 bg-primary-bg/30 backdrop-blur-md shrink-0 relative z-50">
       <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-white">{title}</h1>
+        {tenant && (
+          <span className="text-xs text-text-industrial/40 border border-white/10 rounded-full px-3 py-0.5">
+            {tenant.name}
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-6">
-        <div className="relative group">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-industrial/40 group-focus-within:text-accent transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar en la flota..." 
-            className="bg-white/5 border border-white/10 rounded-full py-1.5 pl-10 pr-4 text-sm focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 w-64 transition-all"
-          />
-        </div>
+      <div className="flex items-center gap-4">
+        <button className="relative p-2 rounded-full hover:bg-white/5 transition-colors">
+          <Bell className="w-5 h-5 text-text-industrial/60" />
+        </button>
 
-        <div className="flex items-center gap-3 border-l border-white/10 pl-6">
-          <button className="relative p-2 rounded-full hover:bg-white/5 transition-colors">
-            <Bell className="w-5 h-5 text-text-industrial/60" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full border-2 border-primary-bg" />
+        {/* User menu */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            className="flex items-center gap-3 hover:bg-white/5 p-1 pr-3 rounded-full transition-all"
+          >
+            <div className="w-8 h-8 rounded-full bg-linear-to-br from-accent/30 to-white/5 border border-accent/20 flex items-center justify-center">
+              <User className="w-4 h-4 text-accent" />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-bold text-white leading-tight">
+                {user?.name ?? user?.identifier ?? "Usuario"}
+              </span>
+              <span className="text-[10px] text-text-industrial/50 leading-tight">
+                {user?.role?.replace(/_/g, " ") ?? ""}
+              </span>
+            </div>
+            <ChevronDown className={`w-3 h-3 text-text-industrial/40 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
           </button>
-          
-          <div className="flex items-center gap-3 ml-2 cursor-pointer hover:bg-white/5 p-1 pr-3 rounded-full transition-all">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/20 to-white/5 border border-white/10 flex items-center justify-center">
-              <User className="w-4 h-4 text-white" />
+
+          {menuOpen && (
+            <div className="absolute right-0 top-12 w-48 bg-surface border border-white/10 rounded-xl shadow-2xl overflow-hidden z-200">
+              <div className="px-4 py-3 border-b border-white/10">
+                <p className="text-xs text-text-industrial/50 uppercase tracking-wider">Sesión activa</p>
+                <p className="text-sm font-medium text-white mt-0.5">{tenant?.name}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Cerrar sesión
+              </button>
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-white leading-tight">Super Admin</span>
-              <span className="text-[10px] text-text-industrial/50 leading-tight">Master Admin</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </header>

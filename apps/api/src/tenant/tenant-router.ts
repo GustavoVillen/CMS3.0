@@ -1,0 +1,889 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { AppEnv } from "../config/env";
+import { sendJson } from "../http/json-response";
+import { readJsonBody } from "../http/read-json-body";
+import { RouteError } from "../http/route-error";
+import { resolveTenantSlugFromRequest } from "./bootstrap/public-bootstrap-route";
+import { loginTenantUser, refreshTenantSession } from "./auth/tenant-auth-service";
+import { registerTenantAccessSession } from "./auth/session-store";
+import { requireTenantAccessSession } from "./auth/tenant-route-auth";
+import { acceptTenantInvitation } from "./invitations/tenant-invitations-service";
+import { generateInsightsForTenant } from "./ai-insights/insight-generator";
+import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
+import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
+import { listTenantAssets } from "./assets/assets-service";
+import { listTenantAttachments } from "./attachments/attachments-service";
+import { saveAttachment } from "./attachments/attachment-uploads-service";
+import { listTenantCapas } from "./capa/capa-service";
+import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
+import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
+import { listTenantDailyReports, createTenantDailyReport, updateTenantDailyReport } from "./daily-reports/daily-reports-service";
+import {
+  confirmAndIntegrateDailyReport,
+  getDailyReportWithSubEntities,
+  upsertDailyEquipmentHours,
+  upsertDailyMaintenanceEntries,
+  upsertDailyDefectEntries,
+  upsertDailySpareUsages,
+} from "./daily-reports/daily-report-integration-service";
+import { listTenantDeferrals } from "./deferrals/deferrals-service";
+import { listTenantDefects } from "./defects/defects-service";
+import { listTenantDomainEvents } from "./domain-events/domain-events-service";
+import { listTenantMaintenancePlans } from "./maintenance-plans/maintenance-plans-service";
+import { listTenantInspectionLogs } from "./inspection-logs/inspection-logs-service";
+import { listTenantInspections } from "./inspections/inspections-service";
+import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
+import { listTenantProviderEvaluations } from "./provider-evaluations/provider-evaluations-service";
+import { listTenantProviderNonconformities } from "./provider-nonconformities/provider-nonconformities-service";
+import { listTenantRcas } from "./rca/rca-service";
+import { listTenantSpares } from "./spares/spares-service";
+import { listTenantSpareOrders } from "./spare-orders/spare-orders-service";
+import { listTenantStockMovements } from "./stock-movements/stock-movements-service";
+import { listTenantVessels, getTenantVesselById, createTenantVessel, updateTenantVessel, deleteTenantVessel } from "./vessels/vessels-service";
+import { getCrewCredentials, setCrewPassword } from "./vessels/vessel-crew-credentials-service";
+import { listTenantWorkOrders } from "./work-orders/work-orders-service";
+import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
+import { generateTemplate } from "./excel/excel-template";
+import { previewImport, confirmImport } from "./excel/excel-import-service";
+import { exportModule } from "./excel/excel-export-service";
+import {
+  listTenantAiDocuments, getTenantAiDocument, createTenantAiDocument,
+  createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument,
+} from "./ai-documents/ai-documents-service";
+import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
+import { handleTeamRoutes } from "./team/team-router";
+import { handleProfileRoutes } from "./profile/profile-router";
+import { listTenantAuditLog, type AuditLogItem } from "./audit/audit-log-service";
+import ExcelJS from "exceljs";
+
+async function buildAuditExcel(items: AuditLogItem[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "GPMS";
+  const sheet = workbook.addWorksheet("Bitácora");
+
+  sheet.columns = [
+    { key: "fecha",      header: "Fecha",      width: 12 },
+    { key: "hora",       header: "Hora",        width: 8 },
+    { key: "tipo",       header: "Tipo",        width: 20 },
+    { key: "referencia", header: "Referencia",  width: 22 },
+    { key: "vessel",     header: "Vessel",      width: 14 },
+    { key: "accion",     header: "Acción",      width: 24 },
+    { key: "actor",      header: "Actor",        width: 24 },
+    { key: "detalle",    header: "Detalle",      width: 50 },
+    { key: "entityId",   header: "Entity ID",    width: 30 },
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8E8E8" } };
+  headerRow.commit();
+
+  const refCode = (m: Record<string, unknown> | null): string => {
+    if (!m) return "";
+    const c = [m.workOrderCode, m.taskCode, m.defectCode, m.deferralCode, m.rcaCode, m.capaCode, m.orderCode, m.certificateCode, m.assetCode, m.sku, m.code];
+    const v = c.find(x => typeof x === "string" && (x as string).length > 0);
+    return typeof v === "string" ? v : "";
+  };
+
+  const detailLine = (m: Record<string, unknown> | null): string => {
+    if (!m) return "";
+    const t = m.holdReason ?? m.cancelReason ?? m.closeNotes ?? m.rejectionReason ?? m.title ?? m.name ?? m.notes ?? m.type;
+    return typeof t === "string" ? t.trim() : "";
+  };
+
+  for (const item of items) {
+    const d = new Date(item.createdAt);
+    sheet.addRow({
+      fecha:      d.toLocaleDateString("es-AR"),
+      hora:       d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+      tipo:       item.entityType,
+      referencia: refCode(item.metadata),
+      vessel:     typeof item.metadata?.vesselCode === "string" ? item.metadata.vesselCode : "",
+      accion:     item.action,
+      actor:      item.actorName ?? item.actorUserId ?? "",
+      detalle:    detailLine(item.metadata),
+      entityId:   item.entityId ?? "",
+    });
+  }
+
+  const buf = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buf);
+}
+
+// Helper: resolve tenant slug or throw
+function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
+  const slug = resolveTenantSlugFromRequest(request, env);
+  if (!slug) throw new RouteError(400, "TENANT_UNRESOLVED", "Unable to resolve tenant.");
+  return slug;
+}
+
+export async function handleTenantRoutes(
+  method: string,
+  url: URL,
+  request: IncomingMessage,
+  response: ServerResponse,
+  env: AppEnv,
+): Promise<boolean> {
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/auth/login") {
+    const slug = requireTenantSlug(request, env);
+    const payload = await readJsonBody<{ identifier: string; password: string; locale?: string | null }>(request);
+    const result = await loginTenantUser(slug, payload);
+    registerTenantAccessSession({
+      kind: "tenant",
+      tenantSlug: slug,
+      accessToken: result.session.accessToken,
+      refreshToken: result.session.refreshToken,
+      accessTokenExpiresAt: result.session.accessTokenExpiresAt,
+      user: result.user,
+    });
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/auth/refresh") {
+    const slug = requireTenantSlug(request, env);
+    const payload = await readJsonBody<{ refreshToken: string }>(request);
+    const result = await refreshTenantSession(slug, payload);
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/invitations/accept") {
+    const slug = requireTenantSlug(request, env);
+    const payload = await readJsonBody<{
+      token: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+      legacyUserId?: string | null;
+      preferredLocale?: "es" | "en" | "pt";
+    }>(request);
+    const result = await acceptTenantInvitation(slug, payload);
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  // ── /app/me ────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/me") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    sendJson(response, 200, { tenant: { slug: session.tenantSlug }, user: session.user });
+    return true;
+  }
+
+  // ── Fleet Superintendents ──────────────────────────────────────────────────
+  if (url.pathname.startsWith("/app/superintendents")) {
+    if (await handleSuperintendentRoutes(method, url, request, response, env)) return true;
+  }
+
+  if (url.pathname.startsWith("/app/team")) {
+    if (await handleTeamRoutes(method, url, request, response, env)) return true;
+  }
+
+  if (url.pathname.startsWith("/app/profile")) {
+    if (await handleProfileRoutes(method, url, request, response, env)) return true;
+  }
+
+  // ── Vessels ────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/vessels") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantVessels(session);
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/vessels") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden crear vessels.");
+    const body = await readJsonBody<any>(request);
+    sendJson(response, 201, await createTenantVessel(session, body));
+    return true;
+  }
+  if (/^\/app\/vessels\/[^/]+\/crew-credentials$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[3];
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (method === "GET") {
+      sendJson(response, 200, await getCrewCredentials(session, id));
+      return true;
+    }
+    if (method === "PUT") {
+      const body = await readJsonBody<{ vesselCode: string; password: string }>(request);
+      sendJson(response, 200, await setCrewPassword(session, id, body.vesselCode, body.password));
+      return true;
+    }
+  }
+
+  if (/^\/app\/vessels\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (method === "GET") {
+      const vessel = await getTenantVesselById(session, id);
+      if (!vessel) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
+      sendJson(response, 200, vessel);
+      return true;
+    }
+    if (method === "PUT") {
+      if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden editar vessels.");
+      const body = await readJsonBody<any>(request);
+      sendJson(response, 200, await updateTenantVessel(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden eliminar vessels.");
+      await deleteTenantVessel(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Assets ─────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/assets") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantAssets(session, { vesselCode: url.searchParams.get("vesselCode") });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Maintenance Plans ──────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/maintenance-plans") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantMaintenancePlans(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      triggerType: url.searchParams.get("triggerType"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Work Orders ────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/work-orders") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantWorkOrders(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      type:       url.searchParams.get("type"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Defects ────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/defects") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantDefects(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      severity:   url.searchParams.get("severity"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Deferrals ──────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/deferrals") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantDeferrals(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      sourceType:  url.searchParams.get("sourceType"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── RCA ────────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/rca") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantRcas(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      methodology: url.searchParams.get("methodology"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── CAPA ───────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/capa") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantCapas(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      priority:    url.searchParams.get("priority"),
+      sourceType:  url.searchParams.get("sourceType"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Spares ─────────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/spares") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantSpares(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      criticality: url.searchParams.get("criticality"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Providers ──────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/providers") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantProviders(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      category:   url.searchParams.get("category"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/providers") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createProvider>[1];
+    sendJson(response, 201, await createProvider(session, body));
+    return true;
+  }
+
+  if (/^\/app\/providers\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (method === "GET") {
+      sendJson(response, 200, await getTenantProvider(session, id));
+      return true;
+    }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateProvider>[2];
+      sendJson(response, 200, await updateProvider(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteProvider(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Spare Orders ───────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/spare-orders") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantSpareOrders(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      priority:   url.searchParams.get("priority"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Inspections ────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/inspections") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantInspections(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      result:     url.searchParams.get("result"),
+      type:       url.searchParams.get("type"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Certificates ───────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/certificates") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantCertificates(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/certificates") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden crear certificados.");
+    const body = await readJsonBody<any>(request);
+    sendJson(response, 201, await createTenantCertificate(session, body));
+    return true;
+  }
+  if (/^\/app\/certificates\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (method === "GET") {
+      const cert = await getTenantCertificateById(session, id);
+      if (!cert) throw new RouteError(404, "NOT_FOUND", "Certificado no encontrado.");
+      sendJson(response, 200, cert);
+      return true;
+    }
+    if (method === "PATCH") {
+      if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden editar certificados.");
+      const body = await readJsonBody<any>(request);
+      sendJson(response, 200, await updateTenantCertificate(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden eliminar certificados.");
+      await deleteTenantCertificate(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Certificate source file upload ─────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/certificates/upload-source") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden subir archivos.");
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    const result = await saveCertificateSourceFile(session.tenantSlug, originalName, buffer);
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  // ── Daily Reports ──────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/daily-reports") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantDailyReports(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      reportDate:  url.searchParams.get("reportDate"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/daily-reports") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createTenantDailyReport>[1];
+    sendJson(response, 201, await createTenantDailyReport(session, body));
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/daily-reports\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/").pop()!;
+    const body = await readJsonBody(request) as Parameters<typeof updateTenantDailyReport>[2];
+    sendJson(response, 200, await updateTenantDailyReport(session, id, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/daily-reports\/[^/]+\/full$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await getDailyReportWithSubEntities(session, id));
+    return true;
+  }
+
+  if (method === "POST" && /^\/app\/daily-reports\/[^/]+\/confirm-and-integrate$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await confirmAndIntegrateDailyReport(session, id));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/daily-reports\/[^/]+\/equipment-hours$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertDailyEquipmentHours>[2] };
+    sendJson(response, 200, await upsertDailyEquipmentHours(session, id, body.entries ?? []));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/daily-reports\/[^/]+\/maintenance-entries$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertDailyMaintenanceEntries>[2] };
+    sendJson(response, 200, await upsertDailyMaintenanceEntries(session, id, body.entries ?? []));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/daily-reports\/[^/]+\/defect-entries$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertDailyDefectEntries>[2] };
+    sendJson(response, 200, await upsertDailyDefectEntries(session, id, body.entries ?? []));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/daily-reports\/[^/]+\/spare-usages$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertDailySpareUsages>[2] };
+    sendJson(response, 200, await upsertDailySpareUsages(session, id, body.entries ?? []));
+    return true;
+  }
+
+  // ── Attachments ────────────────────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/attachments/upload") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const entityType = url.searchParams.get("entityType") ?? "generic";
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    const result = await saveAttachment(session.tenantSlug, entityType, originalName, buffer);
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/attachments") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantAttachments(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      targetType:  url.searchParams.get("targetType"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Inspection Logs ────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/inspection-logs") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantInspectionLogs(session, {
+      vesselCode:   url.searchParams.get("vesselCode"),
+      inspectionId: url.searchParams.get("inspectionId"),
+      entryType:    url.searchParams.get("entryType"),
+      severity:     url.searchParams.get("severity"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Stock Movements ────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/stock-movements") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantStockMovements(session, {
+      vesselCode:   url.searchParams.get("vesselCode"),
+      movementType: url.searchParams.get("movementType"),
+      spareId:      url.searchParams.get("spareId"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Provider Evaluations ───────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/provider-evaluations") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantProviderEvaluations(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      rating:     url.searchParams.get("rating"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Provider Nonconformities ───────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/provider-nonconformities") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantProviderNonconformities(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      severity:   url.searchParams.get("severity"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── Domain Events ──────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/domain-events") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantDomainEvents(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      entityType:  url.searchParams.get("entityType"),
+      eventKind:   url.searchParams.get("eventKind"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  // ── AI Insights ────────────────────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/ai-insights/refresh") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden regenerar insights.");
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+    const tenant = await prisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+    const generated = await generateInsightsForTenant(tenant.id);
+    sendJson(response, 200, { generated });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/ai-insights") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listTenantAiInsights(session, {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      insightType: url.searchParams.get("insightType"),
+      targetType:  url.searchParams.get("targetType"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+  if (method === "PATCH" && /^\/app\/ai-insights\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { status: "DISMISSED" | "RESOLVED" };
+    sendJson(response, 200, await updateTenantAiInsightStatus(session, id, body.status));
+    return true;
+  }
+
+  // ── AI Documents ───────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/ai-documents") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await listTenantAiDocuments(session));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/ai-documents") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 201, await createTenantAiDocument(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/ai-documents\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getTenantAiDocument(session, id));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/ai-documents\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await archiveTenantAiDocument(session, id));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/ai-documents\/[\w-]+\/versions$/.test(url.pathname)) {
+    const documentId = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 201, await createTenantAiDocumentVersion(session, documentId, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/ai-documents\/[\w-]+\/versions\/[\w-]+\/activate$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await activateTenantAiDocumentVersion(session, parts[3]!, parts[5]!));
+    return true;
+  }
+
+  // ── Excel ──────────────────────────────────────────────────────────────────
+  if (method === "GET" && /^\/app\/excel\/template\/[\w_]+$/.test(url.pathname)) {
+    const mod = url.pathname.split("/").pop()!;
+    if (!isValidModule(mod)) throw new RouteError(400, "INVALID_MODULE", `Módulo desconocido: ${mod}`);
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (!canExport(mod, session.user.role)) throw new RouteError(403, "FORBIDDEN", "Sin permiso.");
+    const buffer = await generateTemplate(mod);
+    response.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="template_${mod}.xlsx"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+  if (method === "POST" && /^\/app\/excel\/preview\/[\w_]+$/.test(url.pathname)) {
+    const mod = url.pathname.split("/").pop()!;
+    if (!isValidModule(mod)) throw new RouteError(400, "INVALID_MODULE", `Módulo desconocido: ${mod}`);
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (!canImport(mod, session.user.role)) throw new RouteError(403, "FORBIDDEN", "Sin permiso.");
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El cuerpo está vacío.");
+    sendJson(response, 200, await previewImport(session, mod, buffer));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/excel\/import\/[\w_]+$/.test(url.pathname)) {
+    const mod = url.pathname.split("/").pop()!;
+    if (!isValidModule(mod)) throw new RouteError(400, "INVALID_MODULE", `Módulo desconocido: ${mod}`);
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (!canImport(mod, session.user.role)) throw new RouteError(403, "FORBIDDEN", "Sin permiso.");
+    const body = await readJsonBody(request) as { rows: unknown[] };
+    if (!body?.rows || !Array.isArray(body.rows)) throw new RouteError(400, "INVALID_BODY", "Se esperaba { rows: [...] }");
+    sendJson(response, 200, await confirmImport(session, mod, body.rows as any));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/excel\/export\/[\w_]+$/.test(url.pathname)) {
+    const mod = url.pathname.split("/").pop()!;
+    if (!isValidModule(mod)) throw new RouteError(400, "INVALID_MODULE", `Módulo desconocido: ${mod}`);
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (!canExport(mod, session.user.role)) throw new RouteError(403, "FORBIDDEN", "Sin permiso.");
+    const filters: Record<string, string | null> = {
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      criticality: url.searchParams.get("criticality"),
+      triggerType: url.searchParams.get("triggerType"),
+      category:    url.searchParams.get("category"),
+      priority:    url.searchParams.get("priority"),
+      type:        url.searchParams.get("type"),
+    };
+    const buffer = await exportModule(session, mod, filters);
+    response.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="export_${mod}.xlsx"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  // ── Copiloto (SSE streaming) ───────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/copiloto/chat") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    const body = await readJsonBody(request) as {
+      capability?: string; locale?: string;
+      messages: ChatMessage[]; vesselCode?: string | null;
+      screenContext?: Record<string, unknown> | null;
+    };
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+    const tenant = await prisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    try {
+      await streamCopilotoChat(
+        {
+          capability:    body.capability    ?? "knowledge_assistant",
+          locale:        body.locale        ?? "es",
+          messages:      body.messages      ?? [],
+          vesselCode:    body.vesselCode    ?? null,
+          tenantId:      tenant.id,
+          tenantSlug:    slug,
+          screenContext: body.screenContext ?? null,
+        },
+        (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
+      );
+      response.write("data: [DONE]\n\n");
+    } catch (e: any) {
+      const raw: string = e.message ?? "Error";
+      let friendly = raw;
+      if (raw.includes("credit balance") || raw.includes("billing")) {
+        friendly = "El servicio de IA no tiene créditos disponibles.";
+      } else if (raw.includes("API_NOT_CONFIGURED") || raw.includes("not configured")) {
+        friendly = "La API de IA no está configurada en el servidor.";
+      } else if (raw.includes("429") || raw.includes("rate limit") || raw.includes("quota")) {
+        friendly = "Límite de uso de IA alcanzado. Intentá de nuevo en unos minutos.";
+      } else if (raw.length > 200) {
+        friendly = raw.slice(0, 200) + "…";
+      }
+      response.write(`data: ${JSON.stringify({ error: friendly })}\n\n`);
+    } finally {
+      response.end();
+    }
+    return true;
+  }
+
+  // ── Copiloto one-shot analysis endpoints ─────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/copiloto/analyze-deficiency") {
+    const slug = requireTenantSlug(request, env);
+    requireTenantAccessSession(request, slug);
+    const body = await readJsonBody(request) as {
+      planTitle?: string; vesselCode?: string; deficienciesNotes?: string;
+    };
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+    const tenant = await prisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+    const prompt = [
+      `Sos experto en mantenimiento naval. Se ejecutó una tarea de mantenimiento en el buque "${body.vesselCode ?? "desconocido"}" y se encontraron deficiencias.`,
+      `Tarea: "${body.planTitle ?? "sin título"}"`,
+      `Deficiencias encontradas: ${body.deficienciesNotes ?? "sin detalle"}`,
+      "",
+      "Evaluá brevemente si corresponde abrir un registro de Defecto formal en el sistema.",
+      "Considerá: gravedad aparente, riesgo operativo, si podría afectar la operatividad del buque.",
+      "Respondé en 2-3 oraciones concisas, en español, sin JSON.",
+    ].join("\n");
+    let output = "";
+    await streamCopilotoChat(
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug },
+      (chunk) => { output += chunk; },
+    );
+    sendJson(response, 200, { suggestion: output.trim() });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/copiloto/analyze-postponement") {
+    const slug = requireTenantSlug(request, env);
+    requireTenantAccessSession(request, slug);
+    const body = await readJsonBody(request) as {
+      planTitle?: string; vesselCode?: string; triggerType?: string;
+      justification?: string; newDueDate?: string | null; newDueHours?: string | null;
+    };
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+    const tenant = await prisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+    const prompt = [
+      `Sos experto en gestión de mantenimiento naval. Se solicita postergar una tarea de mantenimiento.`,
+      `Buque: ${body.vesselCode ?? "desconocido"} | Tarea: "${body.planTitle ?? "sin título"}"`,
+      `Trigger: ${body.triggerType ?? "N/A"}`,
+      `Justificación: ${body.justification ?? "sin justificación"}`,
+      body.newDueDate ? `Nueva fecha propuesta: ${body.newDueDate}` : "",
+      body.newDueHours ? `Nuevas horas propuestas: ${body.newDueHours}h` : "",
+      "",
+      "Evaluá la justificación y sugerí mejoras si corresponde. Indicá si las medidas compensatorias propuestas son suficientes.",
+      "Si la postergación parece improcedente desde el punto de vista de seguridad marítima, advertilo claramente.",
+      "Respondé en 2-4 oraciones en español.",
+    ].filter(Boolean).join("\n");
+    let output = "";
+    await streamCopilotoChat(
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug },
+      (chunk) => { output += chunk; },
+    );
+    sendJson(response, 200, { suggestion: output.trim() });
+    return true;
+  }
+
+  // ── Audit Log (TENANT_ADMIN only) ─────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/audit/log") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden ver la bitácora.");
+    const entityType = url.searchParams.get("entityType") ?? undefined;
+    const action = url.searchParams.get("action") ?? undefined;
+    const from = url.searchParams.get("from") ?? undefined;
+    const to = url.searchParams.get("to") ?? undefined;
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? "100"), 200);
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+    const result = await listTenantAuditLog(session, { entityType, action, from, to, limit, offset });
+    sendJson(response, 200, result);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/audit/log/export") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden exportar la bitácora.");
+    const entityType = url.searchParams.get("entityType") ?? undefined;
+    const from = url.searchParams.get("from") ?? undefined;
+    const to = url.searchParams.get("to") ?? undefined;
+    const { items } = await listTenantAuditLog(session, { entityType, from, to, limit: 5000 });
+    const buffer = await buildAuditExcel(items);
+    response.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="bitacora_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  return false;
+}

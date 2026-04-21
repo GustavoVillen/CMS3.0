@@ -43,7 +43,7 @@ export async function listPlatformAuditEvents(
 
   const records = await prisma.auditEvent.findMany({
     where: {
-      actorType: filters.actorType || undefined,
+      actorType: filters.actorType ? (filters.actorType as any) : undefined,
       action: filters.action || undefined,
       entityType: filters.entityType || undefined,
       tenant: filters.tenantSlug ? { slug: filters.tenantSlug } : undefined,

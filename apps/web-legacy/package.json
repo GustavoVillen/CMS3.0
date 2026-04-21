@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "esbuild src/index.ts --bundle --outfile=public/bundle.js --watch --platform=browser --format=iife --sourcemap",
+    "dev": "esbuild src/index.ts --bundle --outfile=public/bundle.js --watch=forever --platform=browser --format=iife --sourcemap",
     "build": "esbuild src/index.ts --bundle --outfile=public/bundle.js --platform=browser --format=iife --minify",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },

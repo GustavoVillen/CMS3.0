@@ -9,8 +9,13 @@
     "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.89.0",
+    "@google/generative-ai": "^0.24.1",
     "@prisma/adapter-pg": "^7.7.0",
-    "@prisma/client": "^6.16.2",
+    "@prisma/client": "^7.7.0",
+    "@types/pdfkit": "^0.17.6",
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.18.0",
     "pg": "^8.20.0"
   },
   "devDependencies": {

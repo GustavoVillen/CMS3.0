@@ -127,6 +127,13 @@ export function createDevTenantUser(input: DevTenantUserCreateInput): DevTenantU
   return record;
 }
 
+export function deleteDevTenantUser(id: string): boolean {
+  const idx = DEV_TENANT_USERS.findIndex(u => u.id === id);
+  if (idx < 0) return false;
+  DEV_TENANT_USERS.splice(idx, 1);
+  return true;
+}
+
 export function updateDevTenantUser(id: string, input: DevTenantUserUpdateInput): DevTenantUserRecord | null {
   const record = DEV_TENANT_USERS.find((user) => user.id === id);
   if (!record) return null;

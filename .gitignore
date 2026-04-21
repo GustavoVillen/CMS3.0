@@ -10,3 +10,6 @@ coverage/
 *.log
 tmp/
 temp/
+
+# Prisma generated client
+generated/

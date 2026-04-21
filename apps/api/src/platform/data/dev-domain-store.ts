@@ -4,6 +4,21 @@ export interface DevVesselRecord {
   tenantSlug: string;
   code: string;
   name: string;
+  owner?: string;
+  vesselType?: string;
+  imo?: string;
+  registration?: string;
+  powerHp?: number;
+  dwtTons?: number;
+  lengthM?: number;
+  beamM?: number;
+  depthM?: number;
+  trnTn?: number;
+  trbTn?: number;
+  buildYear?: number;
+  buildCountry?: string;
+  incorporationDate?: string;
+  incorporationType?: string;
   status: "ACTIVE" | "INACTIVE";
   createdAt: string;
   createdByUserId: string;
@@ -45,6 +60,10 @@ export interface DevMaintenancePlanRecord {
   responsible?: string;
   acceptanceCriteria?: string;
   evidenceRequired?: string;
+  sfiGroupNumber?: number;
+  sfiSubgroupCode?: string;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  riskAnalysisResult?: string;
   status: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   lastExecutionDate?: string;
   nextDueDate?: string;
@@ -281,6 +300,9 @@ export interface DevCertificateRecord {
   expiryDate: string;
   lastInspectionDate?: string;
   notes?: string;
+  originalSourceLink?: string;
+  originalSourceName?: string;
+  originalSourceMimeOrExt?: string;
   createdAt: string;
   createdByUserId: string;
   updatedAt: string;
@@ -594,6 +616,10 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     responsible: "Chief Engineer",
     acceptanceCriteria: "No leaks, stable oil pressure, clean filter replacement confirmed.",
     evidenceRequired: "Photos and service checklist",
+    sfiGroupNumber: 7,
+    sfiSubgroupCode: "710",
+    riskLevel: "HIGH",
+    riskAnalysisResult: "Riesgo alto por impacto directo en propulsión. Ejecutar mantenimiento en la primera ventana operativa.",
     status: "DUE_SOON",
     lastExecutionDate: "2026-02-20",
     nextDueDate: "2026-04-20",
@@ -617,6 +643,10 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     responsible: "Chief Engineer",
     acceptanceCriteria: "Engine parameters within standard operating range after maintenance.",
     evidenceRequired: "Checklist, readings, and signed verification",
+    sfiGroupNumber: 7,
+    sfiSubgroupCode: "720",
+    riskLevel: "CRITICAL",
+    riskAnalysisResult: "Riesgo crítico por condición degradada y vencimiento del plan. Prioridad inmediata con monitoreo continuo.",
     status: "OVERDUE",
     lastExecutionDate: "2025-12-15",
     nextDueDate: "2026-03-15",
@@ -640,6 +670,10 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     responsible: "Engine Officer",
     acceptanceCriteria: "Stable load acceptance and no alarm condition during test.",
     evidenceRequired: "Functional test report",
+    sfiGroupNumber: 7,
+    sfiSubgroupCode: "740",
+    riskLevel: "MEDIUM",
+    riskAnalysisResult: "Riesgo medio; mantener la periodicidad mensual para evitar escalamiento.",
     status: "ACTIVE",
     lastExecutionDate: "2026-04-05",
     nextDueDate: "2026-05-05",
@@ -2597,15 +2631,18 @@ export function listDevMaintenancePlansForTenant(
     status?: string | null;
     triggerType?: string | null;
   } = {},
-): DevMaintenancePlanRecord[] {
-  return DEV_MAINTENANCE_PLANS.filter((item) => {
-    if (item.tenantSlug !== tenantSlug) return false;
-    if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
-    if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
-    if (filters.status && item.status !== filters.status) return false;
-    if (filters.triggerType && item.triggerType !== filters.triggerType) return false;
-    return true;
-  });
+): (DevMaintenancePlanRecord & { assetName: string | null })[] {
+  const assetMap = new Map(DEV_ASSETS.map(a => [a.id, a.name ?? null]));
+  return DEV_MAINTENANCE_PLANS
+    .filter((item) => {
+      if (item.tenantSlug !== tenantSlug) return false;
+      if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
+      if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
+      if (filters.status && item.status !== filters.status) return false;
+      if (filters.triggerType && item.triggerType !== filters.triggerType) return false;
+      return true;
+    })
+    .map(item => ({ ...item, assetName: assetMap.get(item.assetId) ?? null }));
 }
 
 export function listDevWorkOrdersForTenant(
@@ -2617,7 +2654,8 @@ export function listDevWorkOrdersForTenant(
     status?: string | null;
     type?: string | null;
   } = {},
-): DevWorkOrderRecord[] {
+): (DevWorkOrderRecord & { assetName: string | null; assignedToUserName: string | null })[] {
+  const assetMap = new Map(DEV_ASSETS.map(a => [a.id, a.name ?? null]));
   return DEV_WORK_ORDERS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2625,7 +2663,7 @@ export function listDevWorkOrdersForTenant(
     if (filters.status && item.status !== filters.status) return false;
     if (filters.type && item.type !== filters.type) return false;
     return true;
-  });
+  }).map(item => ({ ...item, assetName: assetMap.get(item.assetId) ?? null, assignedToUserName: null }));
 }
 
 export function listDevDefectsForTenant(

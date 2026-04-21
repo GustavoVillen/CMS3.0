@@ -48,3 +48,39 @@ body {
 .bento-card:hover {
   border-color: rgba(255, 159, 28, 0.4);
 }
+
+.input-field {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: #E0E1DD;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input-field::placeholder {
+  color: #555;
+}
+.input-field:focus {
+  border-color: rgba(255, 159, 28, 0.5);
+}
+.input-field option {
+  background: #1C2541;
+}
+
+/* Native select contrast fix (notably on Windows dropdown list rendering) */
+select {
+  color: #ffffff;
+}
+
+select option {
+  background-color: #0D1B2A;
+  color: #E0E1DD;
+}
+
+select option:checked {
+  background: linear-gradient(#2563EB, #2563EB);
+  color: #ffffff;
+}

@@ -1,0 +1,191 @@
+import PDFDocument from "pdfkit";
+import type { TenantAccessSession } from "../auth/session-store";
+import { getDefect } from "./defects-service";
+
+function fmt(d: Date | string | null | undefined): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("es-AR");
+}
+
+function val(v: string | null | undefined): string {
+  return v?.trim() || "—";
+}
+
+// Strip markdown syntax so it renders as clean plain text in the PDF
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")                               // headings → plain text
+    .replace(/^\|[-:\s|]+\|$/gm, "")                           // table separator rows
+    .replace(/^\|(.*)\|$/gm, (_, c: string) =>                 // table rows → bullet list
+      c.split("|").map(s => s.trim()).filter(Boolean).join("  ·  ")
+    )
+    .replace(/\[CLOSE\]\s*/g, "")                              // close note prefix
+    .replace(/^---+$/gm, "")                                   // horizontal rules
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")                  // bold/italic
+    .replace(/\n{3,}/g, "\n\n")                                // collapse blank lines
+    .trim();
+}
+
+const SEVERITY_COLOR: Record<string, string> = {
+  LOW: "#16a34a", MEDIUM: "#b45309", HIGH: "#b91c1c", CRITICAL: "#7f1d1d",
+};
+const STATUS_COLOR: Record<string, string> = {
+  OPEN: "#0369a1", UNDER_REVIEW: "#6d28d9", IN_PROGRESS: "#b45309",
+  DEFERRED: "#475569", RESOLVED: "#0f766e", CLOSED: "#166534",
+};
+
+const PAGE_H      = 841.89;            // A4 height pts
+const CM          = 72 / 2.54;         // pts per cm
+const MARGIN_V    = Math.round(1.5 * CM); // 1.5cm ≈ 43pts
+const FOOTER_SIZE = 40;                // footer block height
+// content must stop this far from the bottom (footer + bottom margin)
+const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
+
+export async function buildDefectPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  const defect = await getDefect(session, id);
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 0,
+      info: { Title: `${defect.defectCode}-${defect.vesselCode}` },
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const ML     = 48;
+    const MR     = 48;
+    const PW     = 595.28;
+    const W      = PW - ML - MR;
+    const black  = "#0f172a";
+    const gray   = "#64748b";
+    const border = "#e2e8f0";
+    const bgBox  = "#f8fafc";
+
+    let y = ML;
+
+    // When PDFKit auto-creates a page during a long .text() call it starts at y=0.
+    // Override with MARGIN_V so pages 2+ always start with the correct top margin.
+    doc.on("pageAdded", () => {
+      (doc as unknown as { y: number }).y = MARGIN_V;
+      y = MARGIN_V;
+    });
+
+    function ensureSpace(needed: number) {
+      if (y + needed > CONTENT_BOTTOM) {
+        doc.addPage();
+        y = MARGIN_V; // top margin from page 2 onward
+      }
+    }
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    doc.fontSize(22).font("Helvetica-Bold").fillColor(black)
+      .text("REPORTE DE DEFECTO", ML, y, { width: W * 0.6 });
+    doc.fontSize(9).font("Helvetica").fillColor(gray)
+      .text("Sistema de Gestión de Mantenimiento Naval — GPMS", ML, y + 26, { width: W * 0.6 });
+
+    const metaX = ML + W * 0.6;
+    doc.fontSize(8).font("Helvetica").fillColor(gray).text("Código:", metaX, y, { width: W * 0.4, align: "right" });
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(black).text(defect.defectCode, metaX, y + 10, { width: W * 0.4, align: "right" });
+    doc.fontSize(8).font("Helvetica").fillColor(gray).text("Vessel:", metaX, y + 22, { width: W * 0.4, align: "right" });
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(black).text(defect.vesselCode, metaX, y + 32, { width: W * 0.4, align: "right" });
+    doc.fontSize(8).font("Helvetica").fillColor(gray).text(`Generado: ${new Date().toLocaleString("es-AR")}`, metaX, y + 44, { width: W * 0.4, align: "right" });
+
+    y += 62;
+    doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
+    y += 14;
+
+    // ── Labeled compact box ───────────────────────────────────────────────────
+    function labeledBox(bx: number, by: number, bw: number, bh: number, label: string, value: string, valueColor = black) {
+      doc.roundedRect(bx, by, bw, bh, 4).strokeColor(border).lineWidth(1).stroke().fillColor(bgBox).fill();
+      doc.roundedRect(bx, by, bw, bh, 4).strokeColor(border).lineWidth(1).stroke();
+      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+        .text(label.toUpperCase(), bx + 10, by + 8, { width: bw - 20, characterSpacing: 0.5 });
+      doc.fontSize(11).font("Helvetica-Bold").fillColor(valueColor)
+        .text(value, bx + 10, by + 20, { width: bw - 20 });
+    }
+
+    // ── Text section with page-break awareness ────────────────────────────────
+    function textSection(label: string, rawText: string) {
+      const text  = rawText === "—" ? "—" : stripMarkdown(rawText);
+      const color = text === "—" ? gray : black;
+
+      // Measure cleaned text
+      doc.fontSize(10).font("Helvetica");
+      const textH = doc.heightOfString(text, { width: W - 20, lineGap: 2 });
+      const boxH  = Math.max(44, textH + 20);
+
+      // If the whole section fits on remaining page, render in one go
+      if (y + 14 + boxH <= CONTENT_BOTTOM) {
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(gray)
+          .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.8 });
+        y += 14;
+        doc.roundedRect(ML, y, W, boxH, 4).strokeColor(border).lineWidth(1).stroke().fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, W, boxH, 4).strokeColor(border).lineWidth(1).stroke();
+        doc.fontSize(10).font("Helvetica").fillColor(color)
+          .text(text, ML + 10, y + 10, { width: W - 20, lineGap: 2 });
+        y = Math.max(y + boxH, doc.y) + 14;
+        return;
+      }
+
+      // Content too long for current page: render label + text without a fixed box,
+      // letting PDFKit auto-paginate the text naturally.
+      ensureSpace(30); // at least label + a few lines
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(gray)
+        .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.8 });
+      y += 14;
+
+      // Light left-border accent instead of a full box
+      doc.fontSize(10).font("Helvetica").fillColor(color)
+        .text(text, ML + 10, y, { width: W - 20, lineGap: 3 });
+      y = doc.y + 14;
+    }
+
+    // ── Row 1: Fecha + Clasificación ──────────────────────────────────────────
+    const half = (W - 8) / 2;
+    labeledBox(ML,            y, half, 44, "Fecha de Reporte", fmt(defect.reportedAt));
+    labeledBox(ML + half + 8, y, half, 44, "Clasificación",    val(defect.classification));
+    y += 58;
+
+    // ── Row 2: Severidad + Estado Operacional + Estado ────────────────────────
+    const third = (W - 16) / 3;
+    labeledBox(ML,                   y, third, 44, "Severidad",          defect.severity,        SEVERITY_COLOR[defect.severity] ?? black);
+    labeledBox(ML + third + 8,       y, third, 44, "Estado Operacional", defect.operationalState);
+    labeledBox(ML + (third + 8) * 2, y, third, 44, "Estado",            defect.status,           STATUS_COLOR[defect.status] ?? black);
+    y += 58;
+
+    // ── Text sections ─────────────────────────────────────────────────────────
+    textSection("Descripción",    val(defect.description));
+    textSection("Acción Inmediata", val(defect.immediateAction));
+    textSection("Análisis RCA",   val(defect.rcaAnalysis));
+    textSection("CAPA",           val(defect.capaDescription));
+
+    // Repair type & WO
+    if (defect.repairType) {
+      ensureSpace(58);
+      const repairLabel = defect.repairType === "PERMANENTE" ? "Permanente" : "Temporaria";
+      const repairColor = defect.repairType === "PERMANENTE" ? "#16a34a" : "#b45309";
+      labeledBox(ML, y, W / 3, 44, "Tipo de Reparación", repairLabel, repairColor);
+      y += 58;
+    }
+
+    if (defect.workOrderId) {
+      ensureSpace(58);
+      labeledBox(ML, y, W / 3, 44, "Work Order Vinculada", defect.workOrderId, "#0369a1");
+      y += 58;
+    }
+
+    // ── Footer (last page) ────────────────────────────────────────────────────
+    const footerY = PAGE_H - FOOTER_SIZE;
+    doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
+    doc.fontSize(8).font("Helvetica").fillColor(gray)
+      .text("GPMS — Reporte generado automáticamente", ML, footerY, { width: W / 2 });
+    doc.fontSize(8).font("Helvetica").fillColor(gray)
+      .text(`${defect.defectCode} · ${defect.vesselCode} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
+
+    doc.end();
+  });
+}

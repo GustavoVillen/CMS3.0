@@ -24,7 +24,10 @@
     "dev:api": "pnpm --filter @pms-saas/api dev",
     "start:api": "pnpm --filter @pms-saas/api start",
     "build:api": "pnpm --filter @pms-saas/api build",
-    "dev:web-legacy": "pnpm --filter @pms-saas/web-legacy dev"
+    "dev:web-legacy": "pnpm --filter @pms-saas/web-legacy dev",
+    "dev:web-modern": "pnpm --filter web-modern dev",
+    "dev:desktop": "pnpm --filter @pms-saas/desktop dev",
+    "start:desktop": "pnpm --filter @pms-saas/desktop start"
   },
   "dependencies": {
     "@prisma/client": "7.7.0"

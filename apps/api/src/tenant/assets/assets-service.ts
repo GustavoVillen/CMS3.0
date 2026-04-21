@@ -1,25 +1,349 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevAssetsForTenant } from "../../platform/data/dev-domain-store";
+import { RouteError } from "../../http/route-error";
+import { publishAudit } from "../../platform/audit/audit-publisher";
 
 export interface AssetListFilters {
   vesselCode?: string | null;
+  status?: string | null;
+  criticality?: string | null;
+  trackDailyReport?: boolean | null;
+}
+
+export interface CreateAssetInput {
+  vesselCode: string;
+  assetCode: string;
+  name: string;
+  sfiCode?: string | null;
+  criticality?: "A" | "B" | "C";
+  status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
+  trackDailyReport?: boolean;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  installationDate?: string | Date | null;
+  lastOverhaulDate?: string | Date | null;
+  replacementDate?: string | Date | null;
+  equipmentClassId?: string | null;
+  parentAssetId?: string | null;
+}
+
+export interface UpdateAssetInput {
+  vesselCode?: string;
+  assetCode?: string;
+  name?: string;
+  sfiCode?: string | null;
+  criticality?: "A" | "B" | "C";
+  status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
+  trackDailyReport?: boolean;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  installationDate?: string | Date | null;
+  lastOverhaulDate?: string | Date | null;
+  replacementDate?: string | Date | null;
+  equipmentClassId?: string | null;
+  parentAssetId?: string | null;
+}
+
+interface AssetRecord {
+  id: string;
+  tenantId: string;
+  vesselCode: string;
+  assetCode: string;
+  sfiCode: string | null;
+  name: string;
+  criticality: string;
+  status: string;
+  trackDailyReport: boolean;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  installationDate: Date | null;
+  lastOverhaulDate: Date | null;
+  replacementDate: Date | null;
+  equipmentClassId: string | null;
+  parentAssetId: string | null;
+  createdAt: Date;
+  createdByUserId: string;
+  updatedAt: Date;
+  updatedByUserId: string;
+  deletedAt: Date | null;
+  currentHours: number | null;
+}
+
+function canManageAssets(session: TenantAccessSession): boolean {
+  return session.user.role === "TENANT_ADMIN" || session.user.role === "FLEET_SUPERINTENDENT" || session.user.role === "MAINTENANCE_MANAGER";
+}
+
+function ensureCanManageAssets(session: TenantAccessSession): void {
+  if (!canManageAssets(session)) {
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para crear/editar/eliminar assets.");
+  }
+}
+
+function normalizeRequiredText(value: unknown, field: string): string {
+  const text = String(value ?? "").trim();
+  if (!text) throw new RouteError(400, "VALIDATION_ERROR", `El campo ${field} es requerido.`);
+  return text;
+}
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function parseOptionalDate(value: unknown, field: string): Date | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    throw new RouteError(400, "VALIDATION_ERROR", `Fecha inválida en ${field}.`);
+  }
+  return parsed;
+}
+
+function applyVesselScope(
+  session: TenantAccessSession,
+  where: Record<string, unknown>,
+  requestedVesselCode?: string | null,
+  forbidOutOfScope = false,
+): void {
+  if (session.user.role === "TENANT_ADMIN") {
+    if (requestedVesselCode) where.vesselCode = requestedVesselCode;
+    return;
+  }
+
+  if (requestedVesselCode) {
+    if (!session.user.assignedVesselCodes.includes(requestedVesselCode)) {
+      if (forbidOutOfScope) throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel solicitado.");
+      where.vesselCode = "__NO_ASSIGNED_VESSEL__";
+      return;
+    }
+    where.vesselCode = requestedVesselCode;
+    return;
+  }
+
+  if (session.user.assignedVesselCodes.length === 0) {
+    where.vesselCode = "__NO_ASSIGNED_VESSEL__";
+    return;
+  }
+  where.vesselCode = { in: session.user.assignedVesselCodes };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  if (!("code" in error)) return false;
+  return (error as { code?: unknown }).code === "P2002";
+}
+
+async function resolveTenantId(session: TenantAccessSession): Promise<string | null> {
+  const prisma = getPrismaClient();
+  if (!prisma) return null;
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  return tenant?.id ?? null;
 }
 
 export async function listTenantAssets(session: TenantAccessSession, filters: AssetListFilters = {}) {
   const prisma = getPrismaClient();
   if (!prisma) {
-    return listDevAssetsForTenant(session.tenantSlug, session.user.role, session.user.assignedVesselCodes, filters.vesselCode);
+    return listDevAssetsForTenant(session.tenantSlug, session.user.role, session.user.assignedVesselCodes, filters.vesselCode)
+      .filter((item) => {
+        if (filters.status && item.status !== filters.status) return false;
+        if (filters.criticality && item.criticality !== filters.criticality) return false;
+        return true;
+      });
   }
 
   const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
   if (!tenant) return [];
 
-  const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  const conditions: string[] = [`"tenantId" = $1`, `"deletedAt" IS NULL`];
+  const params: unknown[] = [tenant.id];
 
-  return prisma.asset.findMany({ where, orderBy: [{ vesselCode: "asc" }, { assetCode: "asc" }] });
+  const addParam = (col: string, val: unknown) => { params.push(val); conditions.push(`"${col}" = $${params.length}`); };
+
+  const vesselScope = filters.vesselCode ?? null;
+  if (vesselScope) addParam("vesselCode", vesselScope.toUpperCase());
+  else if (session.user.role === "TECHNICIAN_OPERATOR" || session.user.role === "FLEET_SUPERINTENDENT") {
+    if (session.user.assignedVesselCodes?.length) {
+      const placeholders = session.user.assignedVesselCodes.map((_: string, i: number) => `$${params.length + i + 1}`).join(", ");
+      session.user.assignedVesselCodes.forEach((c: string) => params.push(c));
+      conditions.push(`"vesselCode" IN (${placeholders})`);
+    }
+  }
+
+  if (filters.status) addParam("status", filters.status);
+  if (filters.criticality) addParam("criticality", filters.criticality);
+  if (filters.trackDailyReport != null) addParam("trackDailyReport", filters.trackDailyReport);
+
+  return prisma.$queryRawUnsafe<AssetRecord[]>(
+    `SELECT a.*, (
+      SELECT deh."runningHoursTotal"
+      FROM "DailyEquipmentHours" deh
+      WHERE deh."assetId" = a."id"
+        AND deh."runningHoursTotal" IS NOT NULL
+      ORDER BY deh."createdAt" DESC
+      LIMIT 1
+    ) AS "currentHours"
+    FROM "Asset" a WHERE ${conditions.join(" AND ")} ORDER BY a."vesselCode" ASC, a."assetCode" ASC`,
+    ...params,
+  );
+}
+
+export async function getTenantAsset(session: TenantAccessSession, id: string): Promise<AssetRecord> {
+  const prisma = getPrismaClient();
+  if (!prisma) {
+    const items = listDevAssetsForTenant(session.tenantSlug, session.user.role, session.user.assignedVesselCodes);
+    const record = items.find((item) => item.id === id);
+    if (!record) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
+    return record as unknown as AssetRecord;
+  }
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const rows = await prisma.$queryRawUnsafe<AssetRecord[]>(
+    `SELECT a.*, (
+      SELECT deh."runningHoursTotal"
+      FROM "DailyEquipmentHours" deh
+      WHERE deh."assetId" = a."id"
+        AND deh."runningHoursTotal" IS NOT NULL
+      ORDER BY deh."createdAt" DESC
+      LIMIT 1
+    ) AS "currentHours"
+    FROM "Asset" a
+    WHERE a."id" = $1 AND a."tenantId" = $2 AND a."deletedAt" IS NULL LIMIT 1`,
+    id, tenantId,
+  );
+  if (!rows.length) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
+  return rows[0];
+}
+
+export async function createTenantAsset(session: TenantAccessSession, payload: CreateAssetInput): Promise<AssetRecord> {
+  ensureCanManageAssets(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
+  applyVesselScope(session, {}, vesselCode, true);
+
+  const data: Record<string, unknown> = {
+    tenantId,
+    vesselCode,
+    assetCode: normalizeRequiredText(payload.assetCode, "assetCode").toUpperCase(),
+    sfiCode: normalizeOptionalText(payload.sfiCode),
+    name: normalizeRequiredText(payload.name, "name"),
+    criticality: payload.criticality ?? "B",
+    status: payload.status ?? "OPERATIONAL",
+    trackDailyReport: payload.trackDailyReport ?? false,
+    manufacturer: normalizeOptionalText(payload.manufacturer),
+    model: normalizeOptionalText(payload.model),
+    serialNumber: normalizeOptionalText(payload.serialNumber),
+    installationDate: parseOptionalDate(payload.installationDate, "installationDate"),
+    lastOverhaulDate: parseOptionalDate(payload.lastOverhaulDate, "lastOverhaulDate"),
+    replacementDate: parseOptionalDate(payload.replacementDate, "replacementDate"),
+    createdByUserId: session.user.id,
+    updatedByUserId: session.user.id,
+  };
+
+  try {
+    const created = await (prisma as unknown as {
+      asset: { create(args: { data: Record<string, unknown> }): Promise<AssetRecord> };
+    }).asset.create({ data });
+    void publishAudit(prisma, {
+      tenantId,
+      actorUserId: session.user.id,
+      action: "Asset.created",
+      entityType: "Asset",
+      entityId: created.id,
+      metadata: { assetCode: created.assetCode, name: created.name, vesselCode: created.vesselCode },
+    });
+    return created as unknown as AssetRecord;
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error)) {
+      throw new RouteError(409, "DUPLICATE_ASSET_CODE", "Ya existe un asset con ese código en el vessel.");
+    }
+    throw error;
+  }
+}
+
+export async function updateTenantAsset(
+  session: TenantAccessSession,
+  id: string,
+  payload: UpdateAssetInput,
+): Promise<AssetRecord> {
+  ensureCanManageAssets(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const current = await getTenantAsset(session, id);
+
+  const setClauses: string[] = [`"updatedByUserId" = $1`, `"updatedAt" = NOW()`];
+  const params: unknown[] = [session.user.id];
+
+  const push = (col: string, val: unknown) => { params.push(val); setClauses.push(`"${col}" = $${params.length}`); };
+
+  if (payload.vesselCode !== undefined) push("vesselCode", normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase());
+  if (payload.assetCode !== undefined) push("assetCode", normalizeRequiredText(payload.assetCode, "assetCode").toUpperCase());
+  if (payload.name !== undefined) push("name", normalizeRequiredText(payload.name, "name"));
+  if (payload.sfiCode !== undefined) push("sfiCode", normalizeOptionalText(payload.sfiCode));
+  if (payload.criticality !== undefined) push("criticality", payload.criticality);
+  if (payload.status !== undefined) push("status", payload.status);
+  if (payload.trackDailyReport !== undefined) push("trackDailyReport", payload.trackDailyReport);
+  if (payload.manufacturer !== undefined) push("manufacturer", normalizeOptionalText(payload.manufacturer));
+  if (payload.model !== undefined) push("model", normalizeOptionalText(payload.model));
+  if (payload.serialNumber !== undefined) push("serialNumber", normalizeOptionalText(payload.serialNumber));
+  if (payload.installationDate !== undefined) push("installationDate", parseOptionalDate(payload.installationDate, "installationDate"));
+  if (payload.lastOverhaulDate !== undefined) push("lastOverhaulDate", parseOptionalDate(payload.lastOverhaulDate, "lastOverhaulDate"));
+  if (payload.replacementDate !== undefined) push("replacementDate", parseOptionalDate(payload.replacementDate, "replacementDate"));
+
+  params.push(current.id);
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Asset" SET ${setClauses.join(", ")} WHERE "id" = $${params.length}`,
+    ...params,
+  );
+
+  const rows = await prisma.$queryRawUnsafe<AssetRecord[]>(
+    `SELECT * FROM "Asset" WHERE "id" = $1`,
+    current.id,
+  );
+  const updated = rows[0];
+  void publishAudit(prisma, {
+    tenantId: updated.tenantId,
+    actorUserId: session.user.id,
+    action: "Asset.updated",
+    entityType: "Asset",
+    entityId: updated.id,
+    metadata: { assetCode: updated.assetCode, name: updated.name, vesselCode: updated.vesselCode },
+  });
+  return updated;
+}
+
+export async function deleteTenantAsset(session: TenantAccessSession, id: string): Promise<void> {
+  ensureCanManageAssets(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const current = await getTenantAsset(session, id);
+  await prisma.asset.update({
+    where: { id: current.id },
+    data: {
+      deletedAt: new Date(),
+      deletedByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    },
+  });
+  void publishAudit(prisma, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "Asset.deleted",
+    entityType: "Asset",
+    entityId: current.id,
+    metadata: { assetCode: current.assetCode, name: current.name, vesselCode: current.vesselCode },
+  });
 }

@@ -17,7 +17,9 @@ type: project
 
 **Shared packages:** `packages/shared-types`, `packages/i18n`, `packages/config`
 
-**Database:** PostgreSQL on port 5433 (Docker). Prisma schema at `prisma/schema.prisma`.
+**Database:** PostgreSQL on port **5434** (Docker). Prisma schema at `prisma/schema.prisma`.
+- IMPORTANT: native Windows PostgreSQL 18 (service `postgresql-x64-18`) owns port 5433. Docker was moved to 5434 to avoid conflict.
+- IMPORTANT: @prisma/client must be v7.7.0 in apps/api (to match adapter-pg@7 peer dep). Prisma generate must be run with `pnpm --filter @pms-saas/api exec prisma generate --schema ../../prisma/schema.prisma`, then copy .prisma/client to the 54p6... pnpm instance.
 - `pnpm db:up` → start Docker
 - `pnpm db:migrate` → run migrations
 - `pnpm db:seed` → seed data

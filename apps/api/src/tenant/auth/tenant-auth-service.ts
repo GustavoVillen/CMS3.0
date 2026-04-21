@@ -70,6 +70,67 @@ function loginTenantUserFromDevelopmentFallback(
   };
 }
 
+async function loginVesselCrew(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenant: { id: string; slug: string; settings: any },
+  vesselCode: string,
+  password: string,
+  requestedLocale?: string | null,
+): Promise<TenantLoginResponse> {
+  const rows = await prisma.$queryRawUnsafe<Array<{
+    id: string; code: string; name: string; crewPasswordHash: string | null;
+  }>>(
+    `SELECT "id", "code", "name", "crewPasswordHash" FROM "Vessel"
+     WHERE "tenantId" = $1 AND UPPER("code") = UPPER($2) AND "deletedAt" IS NULL LIMIT 1`,
+    tenant.id, vesselCode,
+  );
+
+  if (!rows.length || !rows[0].crewPasswordHash) {
+    throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
+  }
+
+  if (!verifyPassword(password, rows[0].crewPasswordHash)) {
+    throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
+  }
+
+  const vessel = rows[0];
+  const locale = resolveActiveSessionLocale({
+    requestedLocale: requestedLocale,
+    preferredLocale: null,
+    defaultLocale: tenant.settings?.defaultLocale ?? "es",
+    enabledLocales: tenant.settings?.enabledLocales ?? ["es"],
+  });
+
+  const tokens = issueOpaqueSessionTokens();
+
+  return {
+    session: tokens,
+    user: {
+      id: `crew-${vessel.code}`,
+      email: `tripulacion@${vessel.code.toLowerCase()}.vessel`,
+      firstName: `Tripulación`,
+      lastName: vessel.name,
+      role: "TECHNICIAN_OPERATOR",
+      assignedVesselCodes: [vessel.code],
+      locale,
+    },
+    bootstrap: buildTenantBootstrapPayload(
+      {
+        slug: tenant.slug,
+        displayName: tenant.settings?.displayName ?? tenant.slug,
+        logoUrl: tenant.settings?.logoUrl ?? null,
+        primaryColor: tenant.settings?.primaryColor ?? "#2563eb",
+        supportEmail: tenant.settings?.supportEmail ?? "",
+        defaultLocale: tenant.settings?.defaultLocale ?? "es",
+        enabledLocales: tenant.settings?.enabledLocales ?? ["es"],
+        timezone: tenant.settings?.timezone ?? "UTC",
+        currency: tenant.settings?.currency ?? "USD",
+      },
+      { requestedLocale: locale, preferredLocale: locale },
+    ),
+  };
+}
+
 export async function loginTenantUser(tenantSlug: string, request: TenantLoginRequest): Promise<TenantLoginResponse> {
   const prisma = getPrismaClient();
   if (!prisma) {
@@ -110,12 +171,13 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       },
     });
 
+    // Try vessel crew login if no user membership found
     if (!membership || membership.user.status !== "ACTIVE") {
-      throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
+      return await loginVesselCrew(prisma, tenant, identifier, password, request.locale);
     }
 
     if (!verifyPassword(password, membership.user.passwordHash)) {
-      throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
+      return await loginVesselCrew(prisma, tenant, identifier, password, request.locale);
     }
 
     const locale = resolveActiveSessionLocale({

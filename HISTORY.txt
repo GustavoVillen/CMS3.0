@@ -1,5 +1,414 @@
 HISTORY.txt
 
+[2026-04-21] Spares + Providers: Full CRUD + Modals + Filters
+Agent: Claude Sonnet 4.6
+
+SCOPE — Spares:
+- Rewrote Spares.tsx: row click opens SpareModal (create + edit).
+- SpareModal: all fields (SKU, nombre, categoría, criticidad A/B/C, fabricante, modelo, unidad, niveles de stock con colores de alerta, ubicación, estado). Delete con confirmación.
+- Stock levels section with inline color coding (stock < minStock = rojo, stock <= reorderPoint = amarillo).
+- Filters: vessel (texto + Enter), criticidad (A/B/C), estado (Activo/Obsoleto), toggle "Alertas reorden" (belowReorder=true).
+- "Nuevo repuesto" button in header.
+
+SCOPE — Providers:
+- Added createProvider, updateProvider, deleteProvider (soft delete) to providers-service.ts with publishAudit.
+- providerCode auto-generated as PRV-{VESSEL}-{NNNN} if not provided.
+- Added POST /app/providers, PATCH /app/providers/:id, DELETE /app/providers/:id to tenant-router.ts.
+- Rewrote Providers.tsx: row click opens ProviderModal (create + edit).
+- ProviderModal: all fields (vessel, código, nombre, categoría, estado, sección contacto con nombre/email/teléfono, ubicación). Email link clickable but stops propagation.
+- Category filter dynamically derived from loaded data (no hardcoded list). Vessel + status filters.
+- "Nuevo proveedor" button in header.
+
+[2026-04-21] SpareOrders: Full CRUD + Lines + Filters + Workflow
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Added SpareOrderLine model to prisma/schema.prisma with cascade-delete on spareOrder and SetNull on spare. Added orderLines relation to Spare. Ran db push + prisma generate.
+- Created spare-order-lines-service.ts with listOrderLines (enriched with spareSku/spareName), addOrderLine, updateOrderLine, deleteOrderLine. syncTotalLines() keeps SpareOrder.totalLines in sync.
+- Updated spares-router.ts: imported line service, added GET/POST /spare-orders/:id/lines and PATCH/DELETE /spare-orders/:id/lines/:lineId.
+- Enriched listTenantSpareOrders and getTenantSpareOrder in spare-orders-service.ts to include providerName from Provider table.
+- Rewrote SpareOrders.tsx:
+  • DataTable: row click opens modal; new columns: proveedor, entrega estimada, líneas count, monto.
+  • Filters: vessel (text + Enter), status (7 states), priority.
+  • "Nueva orden" button → create modal.
+  • SpareOrderModal: tabs Datos / Líneas; full field editing; workflow buttons (Enviar → Aprobar → Ordenar → Recepción parcial / Recibir completo); cancel + delete (DRAFT only).
+  • Lines tab: inline table with Trash per line; "Agregar línea" form with spare selector, description, part number, qty, unit, unit price.
+  • Provider dropdown fetched from /app/providers; spare selector from /app/pms/spares.
+  • useCopilotEmitter in modal for SPARE_ORDERS context.
+
+[2026-04-21] Copilot: Deferral Analysis Enhancement
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Added "Analizar aplazamiento" quick-action button in CopilotoPanel for DEFERRALS module (purple, always visible when deferral is open). Sends a structured prompt evaluating justification, compensatory measures, risk gaps, and suggests improvements.
+- Expanded DEFERRALS heuristics in computeSuggestions: now also checks for missing compensatoryMeasures (HIGH priority when APPROVED/ACTIVE, MEDIUM otherwise) and missing targetDate (MEDIUM). Previously only checked justification.
+- Improved buildPendingItemsPrompt for DEFERRALS to include current workflow stage and context on naval risk management.
+- Added targetDate to useCopilotEmitter fieldValues in Deferrals.tsx so heuristics and prompts have access to it.
+
+[2026-04-21] Dashboard: Deferrals Widget + getDeferral Asset Name Enrichment
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Added "Aplazamientos" donut-chart widget to Dashboard showing counts by status (REQUESTED/UNDER_REVIEW/APPROVED/ACTIVE/REJECTED), excluding CLOSED. Clicking a category navigates to /deferrals?status=<STATUS>.
+- Shows empty state with Clock icon when no active deferrals.
+- Fixed getDeferral() in pms/deferrals-service.ts to enrich assetName (same pattern as listDeferrals), so the Deferrals detail modal shows the asset name instead of the raw ID.
+
+[2026-04-21] Defect: Fix Permanent Repair WO Creation Flow
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Fixed bug where WO was never created when user clicked "Sí, crear OT permanente" from the DefectModal.
+- Root cause: both DefectModal and CreateWorkOrderModal had z-50 and rendered simultaneously; user was clicking DefectModal's "Guardar" button (visually overlapping) instead of CreateWorkOrderModal's "Crear OT", retriggering patchDefect and re-setting postSaveStep.
+- Fix: when showCreateWo=true, DefectModal returns early rendering ONLY the CreateWorkOrderModal (defect was already saved in previous step). Removed the duplicate {showCreateWo && <CreateWorkOrderModal />} block at the bottom.
+- onClose of CreateWorkOrderModal now calls both setShowCreateWo(false) and onClose() to properly close everything if user cancels.
+
+[2026-04-21] WO Cancel → Restore Maintenance Plan Status
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- When a WO is cancelled, if it was opened from a maintenance plan (maintenancePlanId is set), the plan's executionStatus is restored to its correct derived value (OVERDUE/DUE/UPCOMING/FUTURE based on nextDueDate/nextDueHours).
+- Added restorePlanAfterWoCancellation() to maintenance-plans-service.ts; calls deriveExecutionStatus with executionStatus=null to bypass the IN_WINDOW short-circuit.
+- cancelWorkOrder() in work-orders-service.ts calls this async (fire-and-forget with error logging) after the WO update succeeds.
+- nextDueDate/nextDueHours are unchanged — only executionStatus reverts.
+
+[2026-04-21] WO Postpone → Deferral Auto-creation + "Postergada" Status
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- When a Work Order is put ON_HOLD (Postergar), it now shows "Postergada" in the frontend (WoStatusBadge, DataTable, modal header).
+- HoldModal now includes "Fecha estimada de reanudación" (targetDate) field, sent to the backend.
+- Backend holdWorkOrder auto-creates a Deferral record (sourceType=WORK_ORDER, sourceId=WO.id, justification=holdReason, targetDate) using createDeferralInternal (bypasses role check).
+- Refactored deferrals-service.ts: extracted createDeferralCore, added createDeferralInternal export, fixed DeferralDelegate missing count() type.
+- Dashboard WO widget now shows a third "Postergadas" category (yellow) for ON_HOLD WOs, separate from Abiertas/Vencidas.
+- WorkOrders page visibleItems filter handles "postponed" view key (from Dashboard navigation).
+
+[2026-04-18] Excel Export Completeness
+Agent: Codex (GPT-5)
+
+SCOPE:
+- Fixed Excel export to include all DB-returned fields, not only template columns.
+- Export now builds columns as:
+  template columns + dynamic detected fields + audit fields (id/createdAt/updatedAt).
+- Fixed Excel parser/import typing gaps by always returning `fixes` in error paths.
+- TypeScript checks now pass for API and web-modern.
+
+UPDATE:
+- Improved dynamic export column ordering by module-specific functional priorities
+  (e.g., SFI/risk/lifecycle fields grouped coherently instead of raw detection order).
+
+[2026-04-18] Maintenance Plans - SFI Group/Subgroup
+Agent: Codex (GPT-5)
+
+SCOPE:
+- Added SFI selector support in Maintenance Plans (create/edit):
+  - `sfiGroupNumber` (Grupo SFI)
+  - `sfiSubgroupCode` (Subgrupo SFI)
+- Frontend now loads `/app/pms/sfi` catalog and renders dependent dropdowns.
+- Backend maintenance-plan service now accepts/persists both fields in create/update.
+- Prisma schema and migration added for MaintenancePlan SFI fields.
+- Dev data interfaces/samples updated.
+
+[2026-04-18] Maintenance Plans - Risk Fields
+Agent: Codex (GPT-5)
+
+SCOPE:
+- Added maintenance plan risk fields end-to-end:
+  - `riskLevel` (LOW | MEDIUM | HIGH | CRITICAL)
+  - `riskAnalysisResult` (short operational conclusion)
+- Updated Maintenance Plan modal (create/edit) with:
+  - Colored risk selector (Low/Medium/High/Critical)
+  - Risk analysis result textarea
+- Wired frontend payloads to API create/update.
+- Updated backend service validation/mapping for new fields.
+- Updated Prisma schema + migration:
+  - `prisma/migrations/20260418_maintenance_plan_risk_fields/migration.sql`
+- Updated dev dataset typings/sample values.
+
+[2026-04-18] Certificates Original Source (Desktop Real Path)
+Agent: Codex (GPT-5)
+
+SCOPE:
+- Added desktop bridge support to capture and open real local file paths for certificate original sources.
+- Added new Electron desktop app scaffold at `apps/desktop` with secure preload bridge:
+  - `desktop:pick-original-file` (OS file picker, returns real path/name/ext)
+  - `desktop:open-original-file` (opens local/UNC/file/http/smb references)
+- Updated `apps/web-modern/src/pages/Certificates.tsx`:
+  - Folder button now uses native desktop picker when available and stores real path in `originalSourceLink`.
+  - Open button uses desktop bridge for reliable open operation.
+  - Browser fallback remains explicit (metadata only, no fake path persistence).
+- Added root scripts:
+  - `pnpm dev:desktop`
+  - `pnpm start:desktop`
+
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 13: Super Admin Panel
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE — API fixes:
+- platform-tenants-service.ts: filtro status null → undefined para Prisma
+- platform-users-service.ts: toSummaryFromPrisma tipado con string + cast a dev types
+- platform-audit-service.ts: actorType filter cast a any para evitar enum mismatch
+- maintenance-plans-service.ts: nextDue → nextDueDate (campo correcto en schema)
+- excel-export-service.ts: nextDue → nextDueDate
+- server.ts: capability any cast para createPlatformPrompt
+
+SCOPE — Frontend:
+- src/lib/platform-auth.tsx: PlatformAuthProvider, usePlatformAuth, platformFetch, platformPost
+- src/pages/platform/PlatformLogin.tsx: login form (email + password, estilo rojo)
+- src/components/PlatformLayout.tsx: sidebar rojo, nav Tenants/Users/Audit/Prompts, logout
+- src/pages/platform/PlatformTenants.tsx: tabla de tenants desde /platform/tenants
+- src/pages/platform/PlatformUsers.tsx: tabla de platform users
+- src/pages/platform/PlatformAudit.tsx: tabla de audit events
+- src/pages/platform/PlatformPrompts.tsx: cards con botón Publicar/Revertir
+- App.tsx: rutas /platform/* con PlatformAuthProvider separado de AuthProvider
+
+RUTAS:
+- /platform/login → PlatformLogin
+- /platform/tenants → PlatformTenantsPage
+- /platform/users → PlatformUsersPage
+- /platform/audit → PlatformAuditPage
+- /platform/prompts → PlatformPromptsPage
+
+CREDENCIALES: email=admin@localhost, password=admin123
+
+VALIDATION:
+- tsc --noEmit: 0 errors
+- vite build: clean, 696 kB
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 12: Módulos Restantes + Excel UI
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- src/pages/MaintenancePlans.tsx: tabla con filtro status + botón Excel
+- src/pages/DailyReports.tsx: tabla con filtro vessel
+- src/pages/Deferrals.tsx: tabla con filtro status
+- src/pages/Capa.tsx: tabla RCA & CAPA con filtro status
+- src/pages/SpareOrders.tsx: tabla con filtro status + monto/moneda
+- src/pages/Providers.tsx: tabla con filtro status + link email
+- src/components/ExcelPanel.tsx: modal completo con 3 secciones:
+    • Exportar (fetch blob → download)
+    • Descargar template
+    • Importar: upload .xlsx → preview (CREATE/UPDATE/ERROR/CONFLICT) → confirm
+- Excel integrado en 6 módulos: vessels, assets, maintenance_plans, spares, providers, certificates
+- App.tsx: todas las rutas placeholder reemplazadas por páginas reales
+
+VALIDATION:
+- tsc --noEmit: 0 errors
+- vite build: clean, 678 kB (1.02s)
+
+RESULT: Todos los módulos del sidebar tienen páginas reales con datos de la API.
+6 módulos con flujo completo de importación/exportación Excel.
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 11: Frontend Integration (web-modern)
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Vite proxy configured (/auth, /app → http://localhost:3105)
+- src/lib/api.ts: fetch wrapper with Bearer token + X-Tenant-Slug headers
+- src/lib/auth.tsx: AuthProvider context, login/logout, localStorage persistence
+- src/lib/hooks.ts: useFetch<T> hook with reload
+- src/pages/Login.tsx: tenant slug + identifier + password form
+- src/App.tsx: RequireAuth guard, full route table (15 routes)
+- src/components/Layout.tsx: updated title map
+- src/components/Header.tsx: real user/tenant display, logout menu
+- src/components/Sidebar.tsx: full nav (15 items per doc 11)
+- src/components/PageHeader.tsx: reusable header with reload button
+- src/components/DataTable.tsx: generic table + StatusBadge + PriorityBadge + fmtDate
+- src/pages/Dashboard.tsx: KPI cards + WO bar chart + AI Insights panel + fleet grid (all from real API)
+- src/pages/Vessels.tsx: vessels table with status filter
+- src/pages/WorkOrders.tsx: work orders table with status filter
+- src/pages/Assets.tsx: assets table with status filter
+- src/pages/Spares.tsx: spares table with stock color-coded (red/yellow/green)
+- src/pages/Certificates.tsx: certificates table with expiry highlighting
+- src/pages/Inspections.tsx: inspections table with result badge
+- src/pages/Defects.tsx: defects table with severity badge
+- src/pages/AiInsights.tsx: insight cards grid + regenerate button (admin only)
+
+VALIDATION:
+- tsc --noEmit: 0 errors
+- vite build: clean, 653 kB bundle (2307 modules transformed)
+
+RESULT: Full frontend connected to real API with auth flow, 8 functional module
+pages, and AI Insights panel with regeneration support.
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 10: AI Runtime, Insights, And Dashboard
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Added AiInsight Prisma model with 19 InsightType enums
+- Migrated ai-insights-service and domain-events-service from dev-store to Prisma
+- Implemented deterministic insight generator (10 threshold rules)
+- Seeded 5 DomainEvents; generator auto-runs at seed time
+- Cross-vessel insight rule: non-admin users see FLEET insights + their vessel insights
+
+FILES CREATED:
+- apps/api/src/tenant/ai-insights/insight-generator.ts
+  generateInsightsForTenant(tenantId): evaluates thresholds and upserts AiInsight records.
+  Rules: stock_below_minimum, stock_below_reorder_point, certificate_expiring,
+  certificate_expired, overdue_work_order, overdue_capa, backlog_risk,
+  repeated_failure, repeated_deferral, inspection_failure_pattern.
+  Deduplication via @@unique([tenantId, insightType, targetType, targetId]).
+
+FILES MODIFIED:
+- prisma/schema.prisma — added InsightType (19 values), InsightStatus, InsightPriority,
+  InsightTargetType enums + AiInsight model
+- apps/api/src/tenant/ai-insights/ai-insights-service.ts — Prisma + dev-store fallback.
+  Cross-vessel: non-admin users see { OR: [vesselCode: { in: assigned }, targetType: FLEET] }
+- apps/api/src/tenant/domain-events/domain-events-service.ts — Prisma + fallback.
+  Filters: vesselCode, entityType, eventKind (renamed from category/eventType).
+- apps/api/src/server.ts — new endpoint:
+  POST /app/ai-insights/refresh (TENANT_ADMIN): runs generator, returns { generated: N }
+  Updated domain-events route filter params to entityType/eventKind.
+  Added await to listTenantAiInsights call.
+- prisma/seed.ts — 5 DomainEvents seeded + generateInsightsForTenant() called at end.
+
+VERIFIED:
+- pnpm db:seed: "AI insights generated: 1" (certificate_expiring for demo data)
+- GET /app/ai-insights: total=1, id=cuid, insightType=certificate_expiring, status=OPEN
+- GET /app/domain-events: total=5, real DB records (Inspection, Spare, Certificate, etc.)
+- POST /app/ai-insights/refresh: {"generated":1} (deduplication working — upserts existing)
+- TypeScript typecheck: 0 new errors
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 09: AI Documents And Prompt Governance
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Added Prisma models: PromptTemplate, AiDocument, AiDocumentVersion + enums
+- Migrated platform-prompts-service from dev-store to Prisma (corrected inverted Prisma condition)
+- Implemented tenant AI document lifecycle: create, version, activate, archive
+- Added 6 tenant endpoints for AI documents
+- Applied migration 20260414_ai_documents via Docker psql workaround
+
+FILES CREATED:
+- apps/api/src/tenant/ai-documents/ai-documents-service.ts
+  listTenantAiDocuments, getTenantAiDocument, createTenantAiDocument,
+  createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument
+  Access: TENANT_ADMIN for mutations, all roles for reads.
+
+FILES MODIFIED:
+- prisma/schema.prisma — added PromptCapability, PromptStatus, AiDocumentStatus,
+  AiDocumentVersionStatus enums; PromptTemplate, AiDocument, AiDocumentVersion models
+- apps/api/src/platform/prompts/platform-prompts-service.ts — inverted Prisma condition
+  (was: if(prisma) throw, now: if(!prisma) fallback). Full Prisma CRUD with versioning,
+  publish (archives previous PUBLISHED), rollback (ARCHIVED → PUBLISHED).
+- apps/api/src/server.ts — 6 new AI document endpoints:
+  GET  /app/ai-documents                         (all roles)
+  GET  /app/ai-documents/:id                     (all roles)
+  POST /app/ai-documents                         (TENANT_ADMIN)
+  DELETE /app/ai-documents/:id                   (TENANT_ADMIN, soft-delete)
+  POST /app/ai-documents/:id/versions            (TENANT_ADMIN)
+  POST /app/ai-documents/:id/versions/:vid/activate (TENANT_ADMIN)
+
+VERIFIED:
+- Platform prompt create: cuid ID, version=1, status=DRAFT
+- Platform prompt publish: status=PUBLISHED, publishedAt set, prior PUBLISHED archived
+- List platform prompts: returns { items, total } from DB (not dev-store)
+- Tenant AI doc create: id=cmnyjksp9..., version 1 auto-created as DRAFT
+- Tenant AI doc activate: status=ACTIVE, activatedAt set, prior ACTIVE archived
+- TypeScript typecheck: 0 new errors
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCK 08: Excel Import / Export
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Implemented full Excel import/export feature for 6 modules:
+  vessels, assets, maintenance_plans, spares, providers, certificates
+- Covers: template download, preview, confirm import, filtered export
+
+FILES CREATED:
+- apps/api/src/tenant/excel/excel-permissions.ts
+  Permission helpers: canImport(), canExport(), isValidModule(), VALID_MODULES
+- apps/api/src/tenant/excel/excel-template.ts
+  generateTemplate(module) → Buffer. Columns per module, bold styled headers.
+- apps/api/src/tenant/excel/excel-parser.ts
+  parseExcelBuffer(buffer, module) → ParseResult. Validates required headers,
+  detects duplicate matching keys, normalizes date cells to YYYY-MM-DD.
+- apps/api/src/tenant/excel/excel-import-service.ts
+  previewImport() → PreviewRow[] with statuses CREATE/UPDATE/ERROR/CONFLICT_SOFT_DELETED
+  confirmImport() → ImportResult with created/updated/rejected counts.
+  Supports RESTORE_AND_UPDATE action for soft-deleted conflict resolution.
+- apps/api/src/tenant/excel/excel-export-service.ts
+  exportModule() with tenant/role scoping + filter params → Buffer.
+  Exports template columns + id/createdAt/updatedAt for audit.
+
+FILES MODIFIED:
+- apps/api/package.json — added exceljs dependency
+- apps/api/src/server.ts — 4 new endpoints:
+  GET  /app/excel/template/:module  (auth: export permission)
+  POST /app/excel/preview/:module   (body: raw xlsx bytes, Content-Type: application/octet-stream)
+  POST /app/excel/import/:module    (body: JSON { rows: ConfirmRow[] })
+  GET  /app/excel/export/:module    (query params: vesselCode, status, criticality, etc.)
+
+PERMISSION MATRIX:
+  Import vessels/assets/maintenance_plans: TENANT_ADMIN, MAINTENANCE_MANAGER
+  Import spares/providers: TENANT_ADMIN, PROCUREMENT_STORE
+  Import certificates: TENANT_ADMIN, INSPECTOR_COMPLIANCE
+  Export all modules: above roles + AUDITOR_READONLY
+
+VERIFIED:
+- Template GET /app/excel/template/vessels → HTTP 200, 6537 bytes, valid xlsx
+- Export GET /app/excel/export/vessels → HTTP 200, 6754 bytes, returns LATERE + GLT001 from DB
+- Preview POST /app/excel/preview/vessels (empty template) → {"rows":[],"parseErrors":[]}
+- Preview POST /app/excel/preview/vessels (export file) → 2 rows status=UPDATE with cuid existingIds
+- Confirm POST /app/excel/import/vessels CREATE → {"created":1,"updated":0,"rejected":0,"rowErrors":[]}
+  Verified new record appears in GET /app/vessels with real cuid id
+- TypeScript typecheck: 0 new errors (only pre-existing TS5101/TS5107 deprecation warnings)
+
+────────────────────────────────────────────────────────────────────────────
+[2026-04-14] BLOCKS 04-07: Operational schema + Prisma service migration
+────────────────────────────────────────────────────────────────────────────
+Agent: Claude Sonnet 4.6
+
+MAJOR CHANGES INTRODUCED:
+
+Infrastructure fixes:
+- infra/docker-compose.yml: changed host port from 5433 to 5434 to avoid
+  conflict with native Windows PostgreSQL 18 (postgresql-x64-18 service).
+- .env: DATABASE_URL updated to port 5434.
+- apps/api/package.json: upgraded @prisma/client from ^6.16.2 to ^7.7.0 to
+  match @prisma/adapter-pg@7.7.0 peer dependency (avoids pnpm instance mismatch).
+
+Schema (prisma/schema.prisma):
+- Added ~35 new enums (VesselStatus, WorkOrderStatus, DefectSeverity, etc.)
+- Added 20 new operational models: Vessel, Asset, MaintenancePlan, WorkOrder,
+  Defect, Deferral, RcaRecord, CapaRecord, Inspection, InspectionLog,
+  Certificate, DailyReport, Spare, StockMovement, Provider, SpareOrder,
+  ProviderEvaluation, ProviderNonconformity, DomainEvent, Attachment.
+- All models carry tenantId, createdAt, createdByUserId, updatedAt,
+  updatedByUserId, deletedAt?, deletedByUserId? (append-only tables excluded).
+- Applied migration via docker exec psql workaround (Windows schema-engine bug).
+
+Seed (prisma/seed.ts):
+- Full operational seed: 2 vessels (LATERE, GLT001), 4 assets, 2 maintenance
+  plans, 3 work orders, 1 defect, 1 provider, 1 spare + stock movement,
+  1 inspection, 2 certificates (one EXPIRING_SOON), 1 daily report, 1 spare order.
+- Uses @prisma/adapter-pg for seed (bypasses native query engine Windows bug).
+
+Service migration (20 tenant services):
+- vessels, assets, maintenance-plans, work-orders, defects, deferrals, rca,
+  capa, inspections, inspection-logs, certificates, daily-reports, spares,
+  stock-movements, providers, spare-orders, provider-evaluations,
+  provider-nonconformities, attachments: all migrated from dev-store to Prisma.
+- Pattern: getPrismaClient() → if null, fall back to dev-store.
+- All service functions made async; server.ts updated with await on all calls.
+- Vessel scope enforcement: non-TENANT_ADMIN users filtered by assignedVesselCodes.
+
+Verified: all endpoints return real DB data (cuid IDs, real tenantId) via:
+  GET /app/vessels, /app/work-orders, /app/defects, /app/certificates,
+  /app/spares, /app/inspections, /app/providers.
+
 ────────────────────────────────────────────────────────────────────────────
 [2026-04-13] BLOCK: web-legacy — 12 tenant read-only pages
 ────────────────────────────────────────────────────────────────────────────
@@ -8029,3 +8438,439 @@ Shell/i18n updates:
 
 Typecheck: PASS
 Build: PASS
+
+---
+2026-04-14: Block 09 — AI Insights + Domain Events (Prisma)
+Closed the AI data cycle end-to-end:
+- Added AiInsight model to Prisma schema with enums (InsightType, InsightStatus, InsightPriority, InsightTargetType)
+- Migration: prisma/migrations/20260414_ai_insights/
+- Migrated domain-events-service to Prisma (with dev-store fallback)
+- Migrated ai-insights-service to Prisma (with dev-store fallback, cross-vessel scoping)
+- Implemented deterministic insight generator (insight-generator.ts) with MVP thresholds:
+  stock_below_minimum, stock_below_reorder_point, certificate_expiring/expired,
+  overdue_work_order, overdue_capa, backlog_risk, repeated_failure, repeated_deferral,
+  inspection_failure_pattern
+- Added POST /app/ai-insights/refresh endpoint (TENANT_ADMIN only)
+- Seed calls generateInsightsForTenant at the end
+- Fixed Vite proxy: added bypass: apiOnly to all /platform/* routes so browser nav gets index.html
+
+Typecheck: PASS
+
+---
+2026-04-14: Block 10 — AI Runtime, Insights & Dashboard (Completo)
+Completed the full AI cycle end-to-end with three sub-features:
+
+1. Copiloto runtime (SSE streaming chat):
+   - Installed @anthropic-ai/sdk in apps/api
+   - Created copiloto-service.ts: builds prompt context (guardrails + published template + active docs + open insights) and streams from Claude Haiku via SSE
+   - Added getPublishedPrompt() to platform-prompts-service.ts (with dev-store fallback)
+   - Added getActiveTenantAiDocumentsContent() to ai-documents-service.ts
+   - Added POST /app/copiloto/chat endpoint (SSE, text/event-stream)
+   - Added api.stream() to web-modern/src/lib/api.ts
+   - Created CopilotoPanel.tsx: floating bottom-right chat widget with capability selector, message history, streaming indicators, clear button
+   - Mounted CopilotoPanel in Layout.tsx (persists across all tenant pages)
+   - Added ANTHROPIC_API_KEY to .env.example
+
+2. Background insight scheduler:
+   - Added setTimeout (30s delay) + setInterval (6h) in server.ts
+   - Runs generateInsightsForTenant for all ACTIVE tenants automatically
+
+3. Dismiss / Resolve insights:
+   - Added updateTenantAiInsightStatus() to ai-insights-service.ts
+   - Added PATCH /app/ai-insights/:id endpoint in server.ts
+   - Added Resolver / Descartar buttons to InsightCard in AiInsights.tsx
+
+Typecheck API: PASS
+Typecheck web-modern: PASS
+
+---
+2026-04-17: Ajustes PMS UI/API (Assets, SFI, RCA IA, Inspections guard, Certificates auto-status, Vessels layout)
+
+Resumen agrupado (normalizado):
+
+Backend:
+- SFI fallback robusto en `apps/api/src/tenant/pms/sfi-service.ts` con parser de `Manual/SFI Codes.xlsx`, filtro `groupNumber` y guard para ausencia de delegate `sfiNode`.
+- Hardening en `apps/api/src/tenant/pms/inspection-executions-service.ts` y `apps/api/src/tenant/pms/inspection-templates-service.ts` para evitar crash por delegates ausentes (`[]` en listas y `503 INSPECTION_MODEL_UNAVAILABLE` en operaciones).
+- Nuevo endpoint RCA IA `POST /app/pms/rca/:id/ai-assist` integrado en `quality-router.ts` + `rca-service.ts` (`generateRcaAssistance`) con locale de sesion.
+- En certificados, `status` calculado automaticamente desde `expiryDate` en `apps/api/src/tenant/certificates/certificates-service.ts`, preservando estados manuales `SUSPENDED` y `CLOSED`.
+
+Frontend:
+- `apps/web-modern/src/pages/Assets.tsx`: vessel dropdown, SFI cascada (grupo/subgrupo), nombre sugerido por SFI editable, sugerencia/reasignacion automatica de `assetCode` y validacion de unicidad.
+- `apps/web-modern/src/pages/Rca.tsx`: metodologia traducida por locale, filtro/dropdown traducidos y boton "Asistir con IA" para sugerencias RCA.
+- `apps/web-modern/src/lib/i18n.tsx`: ampliacion de keys RCA/metodologia/asistencia IA.
+- `apps/web-modern/src/pages/platform/PlatformPrompts.tsx`: capacidades reales expuestas a superadmin (incluye `rca_assistant`).
+- `apps/web-modern/src/pages/Certificates.tsx`: estado en solo lectura, sin `status` en payload create/update, filtro limitado a estados automaticos.
+
+UX:
+- `apps/web-modern/src/pages/Vessels.tsx`: primera fila alineada con `CODIGO_EMBARCACION` + `VESSELNAME` (1/8 y 7/8), grilla de 3 columnas desde `TIPO` y ajuste de labels/hints para evitar saltos.
+- Se elimina error visible de Inspecciones: "Cannot read properties of undefined (reading 'findMany')".
+
+---
+2026-04-15: Block 11 — Docker + DB + Seed + Frontend fixes
+
+Infrastructure:
+- Created docker-compose.yml (postgres:16-alpine, port 5434, volume gpms_pgdata)
+- Confirmed existing container pms-saas-postgres already running on 5434 with pms_saas DB
+- Confirmed 4 migrations already applied (20260413_initial, 20260413_operational, 20260414_ai_documents, 20260414_ai_insights)
+- Added seed command to prisma.config.ts: "tsx prisma/seed.ts"
+- Ran seed successfully: platform user admin@localhost, tenant user admin@demo.local/demo123, vessels LATERE+GLT001, operational data seeded
+
+Seed idempotency fix:
+- Changed stockMovement.create+catch to findFirst+create guard (prevents duplicates on re-run)
+- Added ProviderEvaluation upserts (EVAL-2026-001 APPROVED score:88, EVAL-2026-002 DRAFT)
+- Added ProviderNonconformity upsert (NC-2026-001 OPEN MEDIUM severity)
+- Fixed field names: nonconformityCode (not ncCode), reportedAt (not detectedAt)
+
+API validation (all routes 200 with DB data):
+- vessels:2, assets:4, maintenance-plans:2, work-orders:3, defects:1, deferrals:0, rca:0, capa:0
+- spares:1, spare-orders:1, providers:1, inspections:1, certificates:2, daily-reports:2, attachments:0
+- stock-movements:7, provider-evaluations:2, provider-nonconformities:1, ai-insights:1, ai-documents:1
+- copiloto/chat: 200 streaming OK
+- excel/template/maintenance_plans: 200, 6628 bytes XLSX
+
+Frontend fixes:
+- Fixed crash: DataTable.tsx missing fmtDate export → added re-export from lib/utils
+- Created Rca.tsx page (was missing, /rca route was incorrectly using CapaPage)
+- Updated App.tsx: separate /rca → RcaPage, /capa → CapaPage routes
+- Updated Sidebar: split "RCA & CAPA" into separate RCA and CAPA nav entries
+- Fixed Inspections.tsx: field mismatch inspectionType→type, inspector→inspectorName
+
+Auth: tenant login via Prisma DB working (admin@demo.local/demo123 → DB path)
+
+CURRENT BUILD STATUS:
+- API: running tsx on port 3105, all 20+ routes tested and passing
+- Web: Vite dev server on port 5173, HMR active, no blocking errors
+- DB: PostgreSQL on port 5434, 4 migrations applied, seeded
+- Frontend: all pages render, data flows from API via Vite proxy
+
+---
+2026-04-14: Frontend follow-up — AI Documents UI + web-modern validation
+
+Reviewed the current monorepo state to identify the next incomplete implementation slice after Blocks 09/10:
+- Confirmed backend already exposes tenant AI document CRUD/version/activation routes
+- Detected missing tenant-facing UI for `ai-documents` in `apps/web-modern`
+
+Frontend implementation:
+- Added `apps/web-modern/src/pages/AiDocuments.tsx`
+- Implemented tenant AI Documents screen with:
+  - list of documents and versions
+  - create document modal
+  - create draft version modal
+  - activate version action
+  - archive document action
+- Wired route in `apps/web-modern/src/App.tsx`
+- Added navigation entry in `apps/web-modern/src/components/Sidebar.tsx`
+- Added page title mapping in `apps/web-modern/src/components/Layout.tsx`
+
+Stability fixes discovered during validation:
+- Updated `apps/web-modern/src/lib/api.ts` to remove constructor parameter properties blocked by current TS config (`erasableSyntaxOnly`)
+- Removed unused symbols blocking typecheck in:
+  - `apps/web-modern/src/pages/Dashboard.tsx`
+  - `apps/web-modern/src/pages/platform/PlatformAudit.tsx`
+  - `apps/web-modern/src/pages/platform/PlatformPrompts.tsx`
+- Fixed `apps/web-modern/src/pages/platform/PlatformTenants.tsx` to consume `{ items, total }` response shape instead of treating `/platform/tenants` as a raw array
+
+Validation:
+- `cmd /c node_modules\.bin\tsc.cmd -p apps\web-modern\tsconfig.app.json --noEmit` → PASS
+- `cmd /c "node_modules\.bin\tsc.CMD -b && node_modules\.bin\vite.CMD build"` in `apps/web-modern` → PASS
+- Build warning remains: main JS chunk is larger than 500 kB after minification
+
+Result:
+- `web-modern` now exposes the AI document governance path that the backend already supported
+- Frontend typecheck/build is green after the follow-up fixes
+
+---
+2026-04-15: Block Superadmin — Platform Admin Console con acciones CRUD completas
+
+Implementación del bloque superadmin con UI completamente funcional para los 3 módulos de plataforma:
+
+1. PlatformTenants (apps/web-modern/src/pages/platform/PlatformTenants.tsx):
+   - Botón "Nuevo Tenant" → modal con campos: slug, displayName, supportEmail, locale, timezone, currency
+   - Botón "Editar" por fila → modal con todos los campos editables incluyendo status (ACTIVE/SUSPENDED/PROVISIONING/DISABLED)
+   - Botón "Detalle" por fila → drawer lateral con 3 tabs:
+     · Dominios: lista + agregar dominio + marcar como primario (PATCH)
+     · Usuarios: lista + crear usuario de tenant con email/password/nombre/rol
+     · Invitaciones: lista + crear invitación (muestra token generado para copiar)
+
+2. PlatformUsers (apps/web-modern/src/pages/platform/PlatformUsers.tsx):
+   - Botón "Nuevo Usuario" → modal con campos: email, password, nombre, apellido, rol (SUPERADMIN/SUPPORT), estado
+   - Botón "Editar" por fila → modal con nombre, rol, estado, contraseña opcional
+
+3. PlatformPrompts (apps/web-modern/src/pages/platform/PlatformPrompts.tsx):
+   - Botón "Nuevo Prompt" → modal con campos: capability, locale, título, contenido (textarea monospace)
+   - Botón "Editar" en cada card → modal con título y contenido completo editable
+   - Se mantienen los botones Publicar/Revertir existentes
+
+4. platform-auth.tsx — agregado helper platformPatch<T>() para llamadas PATCH autenticadas
+
+Typecheck web-modern: PASS
+Build web-modern: PASS (EXIT:0)
+
+---
+2026-04-15: I18n — Sistema de traducciones es/en/pt conectado al locale del tenant
+
+Problema: el tenant tenía defaultLocale=pt pero la UI mostraba todo en español (textos hardcodeados).
+
+Solución:
+- Creado apps/web-modern/src/lib/i18n.tsx:
+  · Diccionario con claves tipadas (TranslationKey) para es/en/pt
+  · I18nProvider (React context) que recibe el locale activo
+  · useT() hook que devuelve función t(key) bound al locale
+  · useLocale() hook para leer el locale actual
+  · translate(key, locale) función standalone (para useMemo con dependencia de locale)
+  · Claves cubiertas: nav.*, dashboard.*, wo.*, common.*
+
+- App.tsx: agregado TenantI18nWrapper que lee tenant.locale del auth context
+  y envuelve todas las rutas de tenant con I18nProvider
+
+- Dashboard.tsx: todos los strings hardcodeados reemplazados por t(key)
+  · KPI labels, títulos de sección, labels del gráfico de barras, botones
+  · statusCounts incluye locale como dependencia de useMemo
+
+- Sidebar.tsx: NAV_ITEMS ahora usa labelKey: TranslationKey en lugar de label: string
+  · Todos los nombres de sección traducidos al locale activo
+  · "Sistemas OK" y "Status" también traducidos
+
+Comportamiento: al cambiar defaultLocale del tenant (via superadmin) y reloguearse,
+toda la UI cambia al idioma correspondiente (es/en/pt).
+
+Typecheck web-modern: PASS
+
+---
+2026-04-21: Session — Fixes, Dashboard Charts y Copilot Context completo
+Agent: Claude Sonnet 4.6
+
+════════════════════════════════════════════════════════════════════════════
+FIX: Campos no heredados al abrir OT desde Plan de Mantenimiento
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/web-modern/src/pages/MaintenancePlans.tsx
+
+Problema: Al abrir CreateWorkOrderModal desde MaintenancePlanModal, los campos
+acceptanceCriteria, LOTO (evidenceRequired), riskLevel y riskAnalysisResult
+no se heredaban al formulario de OT.
+
+Causa: El prefill usaba plan.XXX (prop original) en vez del estado local del formulario.
+
+Fix: Prefill usa estado local || plan.prop:
+  acceptanceCriteria: acceptanceCriteria || plan.acceptanceCriteria,
+  loto:               loto               || plan.evidenceRequired,
+  riskLevel:          riskLevel          || plan.riskLevel,
+  riskAnalysisResult: riskAnalysisResult || plan.riskAnalysisResult,
+
+════════════════════════════════════════════════════════════════════════════
+FIX: Badge EQUIPO en OT mostraba ID del Asset en vez del nombre
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/api/src/tenant/work-orders/work-orders-service.ts
+
+Problema: getTenantWorkOrder (GET individual) no buscaba el nombre del asset.
+Solo listTenantWorkOrders (lista) lo hacia.
+
+Fix: Agregado lookup de asset.name en getTenantWorkOrder via prisma.asset.findFirst
+y retornado como campo adicional { ...record, assetName }.
+
+════════════════════════════════════════════════════════════════════════════
+FIX: "No route matches POST /app/attachments/upload"
+════════════════════════════════════════════════════════════════════════════
+Archivo nuevo: apps/api/src/tenant/attachments/attachment-uploads-service.ts
+
+Implementacion:
+- saveAttachment(tenantSlug, entityType, originalName, buffer): guarda archivo en
+  uploads/attachments/{tenantSlug}/{entityType}/ con nombre UUID.
+- serveAttachment(response, tenantSlug, entityType, filename): sirve el archivo.
+
+Ruta agregada en apps/api/src/tenant/tenant-router.ts:
+  POST /app/attachments/upload?entityType=WorkOrder
+  - Lee raw binary body, encabezado X-Filename (URL-encoded)
+  - Retorna { url, name }
+
+════════════════════════════════════════════════════════════════════════════
+FIX: Solo TENANT_ADMIN puede editar Vessel y Asset Code en modal de Asset
+════════════════════════════════════════════════════════════════════════════
+Archivos: apps/web-modern/src/pages/Assets.tsx
+          apps/api/src/tenant/assets/assets-service.ts
+
+Frontend:
+- Prop isAdmin pasada a AssetModal desde AssetsPage (user.role === "TENANT_ADMIN")
+- vesselCode select: disabled={isEdit && !isAdmin}
+- assetCode input:  disabled={(isEdit && !isAdmin) || (!isEdit && Boolean(selectedNameOption))}
+- Payload de edicion solo incluye vesselCode/assetCode si isAdmin
+
+Backend:
+- Agregado vesselCode? y assetCode? a UpdateAssetInput
+- updateTenantAsset ahora acepta y aplica ambos campos en el UPDATE SQL
+
+════════════════════════════════════════════════════════════════════════════
+UI: Eliminado titulo duplicado en Planes de Mantenimiento
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/web-modern/src/components/Header.tsx
+
+Removido el h1 del titulo de pagina del Header bar.
+El titulo solo se muestra ahora en PageHeader de cada pagina.
+
+════════════════════════════════════════════════════════════════════════════
+UI: Columna Embarcacion en Planes de Mantenimiento muestra NOMBRE no codigo
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/web-modern/src/pages/MaintenancePlans.tsx
+
+- Fetch adicional a /app/vessels para construir vesselNameMap (Map<code, name>)
+- Columna EMBARCACION/TASKID/SFI usa vesselNameMap.get(row.vesselCode) ?? row.vesselCode
+- Filtro de buque reemplazado por select dropdown con nombres de vessels
+
+════════════════════════════════════════════════════════════════════════════
+FIX: Planes mostrando "VALIDO" cuando nextDueDate ya esta vencida
+════════════════════════════════════════════════════════════════════════════
+Archivos:
+  apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts
+  apps/web-modern/src/pages/MaintenancePlans.tsx
+
+Servidor: Agregada funcion deriveExecutionStatus() que recalcula el status
+dinamicamente basado en nextDueDate/nextDueHours vs fecha/horas actuales.
+Aplicada en listTenantMaintenancePlans (Prisma path y dev path).
+
+Cliente: Agregada funcion computeStatus(plan) en StatusBadgeInline que:
+- Preserva IN_WINDOW (requiere conocimiento de OT activa del servidor)
+- Para planes por fecha: calcula dias restantes vs Date.now()
+- Para planes por horas: usa plan.assetCurrentHours vs plan.nextDueHours
+- Reemplaza plan.executionStatus en el render del badge
+
+════════════════════════════════════════════════════════════════════════════
+FEATURE: Horas acumuladas del asset en columna Frecuencia (Planes de Mant.)
+════════════════════════════════════════════════════════════════════════════
+Archivos:
+  apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts
+  apps/web-modern/src/pages/MaintenancePlans.tsx
+
+Backend:
+- En listTenantMaintenancePlans, fetch adicional de DailyEquipmentHours usando
+  ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) con
+  placeholders individuales $1,$2,... para compatibilidad con $queryRawUnsafe.
+- Construido assetCurrentHoursMap y expuesto como assetCurrentHours en cada plan.
+
+Frontend:
+- Columna FRECUENCIA muestra para planes por horas:
+    500 h
+    Acum: 2550 hs
+- computeStatus() usa plan.assetCurrentHours para detectar vencimiento por horas.
+
+════════════════════════════════════════════════════════════════════════════
+FEATURE: Dashboard — Donut chart OT por Status
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/web-modern/src/pages/Dashboard.tsx
+
+- Reemplazado BarChart por PieChart (donut) de Recharts
+- Segmentos: PLANNED (naranja), IN_PROGRESS (verde), CANCELLED (rojo)
+  Completadas excluidas del chart
+- Centro muestra total de OTs
+- Leyenda compacta con barra de porcentaje por status
+- Cada item de leyenda navega a /work-orders?status=XXX
+- WorkOrders.tsx ya lee ?status= del searchParam => filtro aplicado automaticamente
+
+════════════════════════════════════════════════════════════════════════════
+FEATURE: Dashboard — Donut chart Planes de Mantenimiento por ExecutionStatus
+════════════════════════════════════════════════════════════════════════════
+Archivo: apps/web-modern/src/pages/Dashboard.tsx
+
+- Fetch de /app/pms/maintenance-plans en el Dashboard
+- Calculo client-side de executionStatus por fecha (mismo algoritmo de computeStatus)
+- Segmentos: Vencidas (rojo), Por Vencer (naranja), En Proceso (verde),
+             Proximas (amarillo), Al Dia (blanco/muted)
+- Cada item navega a /maintenance-plans?executionStatus=XXX
+
+Archivo: apps/web-modern/src/pages/MaintenancePlans.tsx
+- Agregado soporte para ?executionStatus= en URL params
+- updateFilters() acepta executionStatus
+- Filtro client-side en data memo usando computeStatus(p) === executionFilter
+
+Layout Dashboard:
+- Tres cards en una fila: WO chart | MP chart | AI Insights (cada uno col-span-1)
+- Cards de 260px altura, donuts de 160x160px, leyenda con texto 13px
+- Cada item de leyenda hover muestra color y navega al modulo correspondiente
+
+════════════════════════════════════════════════════════════════════════════
+FEATURE: Copilot — Deteccion de ventana activa y registro abierto (cobertura completa)
+════════════════════════════════════════════════════════════════════════════
+Contexto: El copiloto ya tenia soporte para emitir contexto desde modales (RCA, Defects,
+Deferrals, Capa, WorkOrders, MaintenancePlans) pero sin contexto de pagina cuando no
+habia ningun modal abierto.
+
+Patron implementado:
+- useCopilotEmitter({ module, screen }) a nivel de pagina cuando ningun modal esta abierto
+- Cuando modal abre, emite contexto enriquecido (entityId, entityCode, vesselCode,
+  workflowStage, fieldValues)
+- Al cerrar modal, contexto limpiado automaticamente (useEffect cleanup)
+- La pagina re-emite su contexto de lista cuando editing/formXxx vuelve a null/undefined
+
+Paginas con page-level emitter agregado (ya tenian modal emitter):
+  apps/web-modern/src/pages/WorkOrders.tsx     => WO_LIST / WO_EDIT
+  apps/web-modern/src/pages/MaintenancePlans.tsx => MP_LIST / MP_EDIT
+  apps/web-modern/src/pages/Defects.tsx        => DEFECT_LIST / DEFECT_EDIT
+  apps/web-modern/src/pages/Deferrals.tsx      => DEFERRAL_LIST / DEFERRAL_EDIT
+  apps/web-modern/src/pages/Rca.tsx            => RCA_LIST / RCA_EDIT
+  apps/web-modern/src/pages/Capa.tsx           => CAPA_LIST / CAPA_EDIT
+
+Paginas nuevas (sin emitter previo):
+  apps/web-modern/src/pages/Assets.tsx
+    - ASSET_LIST (pagina lista)
+    - ASSET_EDIT/CREATE (AssetModal: assetCode, name, criticality, status, manufacturer, etc.)
+
+  apps/web-modern/src/pages/Vessels.tsx
+    - VESSEL_LIST (pagina lista)
+    - VESSEL_EDIT/CREATE (formVessel: name, vesselType, status, imo)
+
+  apps/web-modern/src/pages/Certificates.tsx
+    - CERT_LIST (pagina lista)
+    - CERT_EDIT/CREATE (CertificateForm: name, certCode, authority, expiryDate, issueDate)
+
+  apps/web-modern/src/pages/DailyReports.tsx
+    - DAILY_REPORT_LIST (pagina lista)
+    - DAILY_REPORT_EDIT/CREATE (entityCode=reportDate, vesselCode, workflowStage=status)
+
+  apps/web-modern/src/pages/SpareOrders.tsx
+    - SPARE_ORDER_LIST (solo lectura, sin modal de edicion)
+
+  apps/web-modern/src/pages/Dashboard.tsx
+    - DASHBOARD (contexto permanente mientras el dashboard esta activo)
+
+Resultado: el copiloto detecta en todo momento:
+  - Que modulo/ventana esta abierto
+  - Que registro especifico esta siendo visualizado/editado
+  - Estado del workflow, vessel y campos del formulario en tiempo real
+  - Puede responder preguntas sobre el registro actual sin pedir aclaraciones
+
+================================================================================
+2026-04-21 — Eliminar Vessel-Plan (continuacion de sesion)
+Agent: Claude Sonnet 4.6
+================================================================================
+
+FEATURE REMOVED: Vessel-Plan eliminado completamente
+
+Archivos modificados:
+  - apps/web-modern/src/App.tsx: eliminado import VesselPlanPage y ruta /vessel-plan
+  - apps/web-modern/src/components/Sidebar.tsx: eliminado Anchor icon e item nav.vesselPlan
+  - apps/web-modern/src/pages/VesselPlan.tsx: ELIMINADO
+  - apps/web-modern/src/lib/i18n.tsx: eliminadas claves nav.vesselPlan, page.vesselPlan,
+    empty.vesselPlan y toda la seccion vp.* (~30 claves)
+
+
+================================================================================
+2026-04-21 — Copiloto: imprimir/PDF del ultimo reporte + fix login (Anchor)
+Agent: Claude Sonnet 4.6
+================================================================================
+
+FIX: Login no funcionaba por ReferenceError en Sidebar.tsx
+  - Causa: la entrada { icon: Anchor, ... } habia quedado en MAIN_ITEMS aunque
+    Anchor fue eliminado de los imports en la sesion anterior
+  - Solucion: eliminada la linea restante de MAIN_ITEMS en Sidebar.tsx
+
+FIX: DailyReports.tsx usaba clave i18n "vp.currentPort" (eliminada con VesselPlan)
+  - Reemplazado por string literal "Puerto actual"
+
+FEATURE: Copiloto puede imprimir/generar PDF del ultimo reporte
+  - Archivos modificados: apps/web-modern/src/components/CopilotoPanel.tsx
+  - Detecta keywords: "pdf", "imprimir", "imprimí", "generame un pdf", etc.
+  - Intercepta antes de llamar a la API, no consume tokens
+  - Convierte el markdown del ultimo mensaje del asistente a HTML limpio
+  - Abre ventana emergente con CSS print-friendly y llama window.print()
+  - Si no hay reporte previo, responde pidiendo que genere uno primero
+  - Funciones agregadas: isPrintRequest(), inlineFormat(), markdownToHtml(), printReport()
+

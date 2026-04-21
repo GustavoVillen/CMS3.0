@@ -89,8 +89,8 @@ function toSummaryFromDev(record: {
 function toSummaryFromPrisma(record: {
   id: string;
   email: string;
-  role: DevPlatformUserRole;
-  status: DevPlatformUserStatus;
+  role: string;
+  status: string;
   firstName: string | null;
   lastName: string | null;
   createdAt: Date;
@@ -99,8 +99,8 @@ function toSummaryFromPrisma(record: {
   return {
     id: record.id,
     email: record.email,
-    role: record.role,
-    status: record.status,
+    role: record.role as DevPlatformUserRole,
+    status: record.status as DevPlatformUserStatus,
     firstName: record.firstName,
     lastName: record.lastName,
     createdAt: record.createdAt.toISOString(),
@@ -121,8 +121,8 @@ export async function listPlatformUsers(filters: PlatformUserListFilters = {}): 
 
   const records = await prisma.platformUser.findMany({
     where: {
-      status: filters.status as DevPlatformUserStatus | undefined,
-      role: filters.role as DevPlatformUserRole | undefined,
+      status: filters.status ? (filters.status as DevPlatformUserStatus) : undefined,
+      role: filters.role ? (filters.role as DevPlatformUserRole) : undefined,
       email: normalizedEmail || undefined,
     },
     orderBy: { createdAt: "asc" },

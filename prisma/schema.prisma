@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -41,6 +42,7 @@ enum PlatformRole {
 
 enum TenantRole {
   TENANT_ADMIN
+  FLEET_SUPERINTENDENT
   MAINTENANCE_MANAGER
   TECHNICIAN_OPERATOR
   INSPECTOR_COMPLIANCE
@@ -78,6 +80,10 @@ enum MaintenancePlanTrigger {
   MONTHS
   CONDITION
   EVENT
+  CALENDAR       // alias semántico de MONTHS
+  RUNNING_HOURS  // alias semántico de HOURS
+  DAY
+  WEEK
 }
 
 enum MaintenancePlanStatus {
@@ -174,8 +180,16 @@ enum CapaStatus {
   OPEN
   IN_PROGRESS
   PENDING_VERIFICATION
+  EFFECTIVENESS_REVIEW
+  VERIFIED_EFFECTIVE
   CLOSED
   CANCELLED
+}
+
+enum EffectivenessOutcome {
+  EFFECTIVE
+  PARTIALLY_EFFECTIVE
+  INEFFECTIVE
 }
 
 enum CapaPriority {
@@ -319,11 +333,139 @@ enum AttachmentTarget {
   RCA
   CAPA
   SPARE_ORDER
+  INSPECTION_EXECUTION
+  WORK_LOG
 }
 
 enum AttachmentStatus {
   ACTIVE
   ARCHIVED
+}
+
+// ─── PMS enums (Block 11) ─────────────────────────────────────────────────────
+
+enum TaskType {
+  MAINTENANCE
+  INSPECTION
+}
+
+enum TriggerResultMode {
+  DUE_ONLY
+  AUTO_WO
+  APPROVAL_WO
+  CHECKLIST
+}
+
+enum ExecutionWindowMode {
+  AUTO
+  MANUAL
+}
+
+enum ExecutionStatus {
+  FUTURE
+  UPCOMING
+  IN_WINDOW
+  DUE
+  OVERDUE
+  COMPLETED
+}
+
+enum ChecklistItemType {
+  BOOLEAN_OK_NOK
+  PASS_FAIL_NA
+  NUMERIC_READING
+  SHORT_TEXT
+  TECHNICAL_NOTES
+  PHOTO_REQUIRED
+}
+
+enum InspectionExecutionResult {
+  SATISFACTORY
+  SATISFACTORY_WITH_OBSERVATIONS
+  UNSATISFACTORY_FOLLOW_UP_REQUIRED
+  CRITICAL_DEFICIENCY_IMMEDIATE_ACTION
+}
+
+enum DeficiencySeverity {
+  OBSERVATION
+  DEFICIENCY
+  CRITICAL
+}
+
+enum CriteriaSource {
+  MAKER_MANUAL
+  COMPANY_STANDARD
+  CLASS_REQUIREMENT
+  STATUTORY
+  ENGINEERING_CRITERION
+}
+
+enum WorkLogResult {
+  COMPLETED
+  COMPLETED_WITH_OBSERVATIONS
+  NOT_COMPLETED
+  FOLLOW_UP_REQUIRED
+}
+
+enum PortCallType {
+  LOADING
+  DISCHARGING
+  BUNKERING
+  ANCHORAGE
+  WAITING
+  REPAIR
+  OTHER
+}
+
+enum MaintenanceOpportunity {
+  YES
+  LIMITED
+  NO
+  UNKNOWN
+}
+
+enum SparesReceiptPossible {
+  YES
+  NO
+  UNKNOWN
+}
+
+// ─── New PMS extension enums ──────────────────────────────────────────────────
+
+enum SuperintendentAssignmentType {
+  PRIMARY
+  SECONDARY
+}
+
+enum DailyReportType {
+  NOON
+  DEPARTURE
+  ARRIVAL
+  WEEKLY
+  OTHER
+}
+
+enum VesselOperationalStatus {
+  AT_SEA
+  IN_PORT
+  ANCHORED
+  MANOEUVRING
+  DRY_DOCK
+  LAID_UP
+}
+
+enum DeferralType {
+  OPERATIONAL_CONSTRAINT
+  NO_PORT_OPPORTUNITY
+  SPARES_MISSING
+  CONTRACTOR_REQUIRED
+  SAFETY_CONSTRAINT
+  WEATHER_CONSTRAINT
+  EQUIPMENT_CANNOT_BE_STOPPED
+  PERMIT_NOT_AVAILABLE
+  CREW_LIMITATION
+  LOW_RISK_RESCHEDULE
+  OTHER
 }
 
 // ─── Platform / Auth models ───────────────────────────────────────────────────
@@ -341,6 +483,7 @@ model Tenant {
   invitations   UserInvitation[]
   refreshTokens RefreshToken[]
   auditEvents   AuditEvent[]
+  aiDocuments   AiDocument[]
 }
 
 model TenantDomain {
@@ -365,6 +508,13 @@ model TenantSetting {
   enabledLocales  LocaleCode[] @default([es])
   timezone        String
   currency        String
+  // Automation policies
+  autoUpdateCountersFromDailyReport     Boolean  @default(false)
+  autoCreateFindingDrafts               Boolean  @default(false)
+  autoCreateWoDrafts                    Boolean  @default(false)
+  requireApprovalForCriticalCorrectives Boolean  @default(true)
+  requireApprovalForComplianceTasks     Boolean  @default(true)
+  autoConsumeNonCriticalSpares          Boolean  @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -414,10 +564,11 @@ model User {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
-  memberships      TenantMembership[]
-  invitations      UserInvitation[]   @relation("InvitationAcceptedBy")
-  refreshTokens    RefreshToken[]
-  auditEvents      AuditEvent[]       @relation("AuditTenantUser")
+  memberships                  TenantMembership[]
+  invitations                  UserInvitation[]   @relation("InvitationAcceptedBy")
+  refreshTokens                RefreshToken[]
+  auditEvents                  AuditEvent[]       @relation("AuditTenantUser")
+  superintendentAssignments    VesselSuperintendentAssignment[]
 }
 
 model TenantMembership {
@@ -477,6 +628,28 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
+model VesselSuperintendentAssignment {
+  id                    String                      @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  userId                String
+  assignmentType        SuperintendentAssignmentType @default(PRIMARY)
+  isActive              Boolean                     @default(true)
+  assignedAt            DateTime                    @default(now())
+  assignedByUserId      String
+  deactivatedAt         DateTime?
+  deactivatedByUserId   String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, vesselCode, userId])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([userId])
+}
+
 model AuditEvent {
   id                   String          @id @default(cuid())
   tenantId             String?
@@ -525,8 +698,25 @@ model Vessel {
   tenantId         String
   code             String
   name             String
-  status           VesselStatus  @default(ACTIVE)
-  createdAt        DateTime      @default(now())
+  owner            String?
+  vesselType       String?
+  imo              String?
+  registration     String?
+  powerHp          Float?
+  dwtTons          Float?
+  lengthM          Float?
+  beamM            Float?
+  depthM           Float?
+  trnTn            Float?
+  trbTn            Float?
+  buildYear        Int?
+  buildCountry     String?
+  incorporationDate DateTime?
+  incorporationType String?
+  status                VesselStatus  @default(ACTIVE)
+  crewPasswordHash      String?
+  crewPasswordUpdatedAt DateTime?
+  createdAt             DateTime      @default(now())
   createdByUserId  String
   updatedAt        DateTime      @updatedAt
   updatedByUserId  String
@@ -572,6 +762,10 @@ model Asset {
   installationDate DateTime?
   lastOverhaulDate DateTime?
   replacementDate  DateTime?
+  trackDailyReport Boolean          @default(false)
+  // PMS extensions
+  equipmentClassId String?
+  parentAssetId    String?
   createdAt        DateTime         @default(now())
   createdByUserId  String
   updatedAt        DateTime         @updatedAt
@@ -580,6 +774,10 @@ model Asset {
   deletedByUserId  String?
 
   vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  equipmentClass   EquipmentClass?  @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  children         Asset[]          @relation("AssetHierarchy")
+  inspectionExecs  InspectionExecution[]
 
   @@unique([tenantId, vesselCode, assetCode])
   @@index([tenantId])
@@ -600,11 +798,27 @@ model MaintenancePlan {
   responsible          String?
   acceptanceCriteria   String?
   evidenceRequired     String?
+  sfiGroupNumber       Int?
+  sfiSubgroupCode      String?
+  riskLevel            String?
+  riskAnalysisResult   String?
+  taskType             TaskType               @default(MAINTENANCE)
   status               MaintenancePlanStatus  @default(ACTIVE)
   lastExecutionDate    DateTime?
   nextDueDate          DateTime?
   lastExecutionHours   Float?
   nextDueHours         Float?
+  // PMS extensions
+  taskMasterId         String?
+  triggerResultMode    TriggerResultMode      @default(DUE_ONLY)
+  checklistTemplate    String?
+  windowMode           ExecutionWindowMode    @default(AUTO)
+  windowLeadDays       Int?
+  windowLeadHours      Float?
+  windowLeadPercent    Float?
+  windowOpenDate       DateTime?
+  windowOpenHours      Float?
+  executionStatus      ExecutionStatus        @default(FUTURE)
   createdAt            DateTime               @default(now())
   createdByUserId      String
   updatedAt            DateTime               @updatedAt
@@ -613,6 +827,8 @@ model MaintenancePlan {
   deletedByUserId      String?
 
   vessel               Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  taskMaster           TaskMaster?            @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
+  workLogs             WorkLog[]
 
   @@unique([tenantId, vesselCode, taskCode])
   @@index([tenantId])
@@ -640,6 +856,23 @@ model WorkOrder {
   closeNotes          String?
   independentVerifier String?
   testResult          String?
+  // PMS extensions
+  title               String?
+  description         String?
+  assignedToUserId    String?
+  estimatedHours      Float?
+  taskMasterId        String?
+  // Plan fields
+  acceptanceCriteria  String?
+  loto                String?
+  riskLevel           String?
+  riskAnalysisResult  String?
+  checklistDocUrl     String?
+  // Result fields
+  woResult            String?
+  executedByName      String?
+  observations        String?
+  supportingDocUrl    String?
   createdAt           DateTime          @default(now())
   createdByUserId     String
   updatedAt           DateTime          @updatedAt
@@ -648,6 +881,7 @@ model WorkOrder {
   deletedByUserId     String?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  workLogs            WorkLog[]
 
   @@unique([tenantId, vesselCode, workOrderCode])
   @@index([tenantId])
@@ -670,6 +904,9 @@ model Defect {
   description       String
   immediateAction   String?
   correctiveAction  String?
+  rcaAnalysis       String?
+  capaDescription   String?
+  repairType        String?
   createdAt         DateTime               @default(now())
   createdByUserId   String
   updatedAt         DateTime               @updatedAt
@@ -694,9 +931,11 @@ model Deferral {
   sourceId             String
   deferralCode         String
   status               DeferralStatus     @default(REQUESTED)
+  deferralType         DeferralType?
   requestedAt          DateTime
   requestedByUserId    String
   targetDate           DateTime?
+  targetPort           String?
   justification        String?
   compensatoryMeasures String?
   reviewNotes          String?
@@ -772,8 +1011,11 @@ model CapaRecord {
   owner            String?
   dueDate          DateTime?
   completedAt      DateTime?
-  verificationNote String?
-  cancelReason     String?
+  verificationNote          String?
+  effectivenessCriteria     String?
+  effectivenessReviewDate   DateTime?
+  effectivenessOutcome      EffectivenessOutcome?
+  cancelReason              String?
   createdAt        DateTime       @default(now())
   createdByUserId  String
   updatedAt        DateTime       @updatedAt
@@ -851,6 +1093,9 @@ model Certificate {
   certificateCode     String
   name                String
   issuingAuthority    String
+  originalSourceLink  String?
+  originalSourceName  String?
+  originalSourceMimeOrExt String?
   status              CertificateStatus @default(ACTIVE)
   issueDate           DateTime
   expiryDate          DateTime
@@ -885,6 +1130,25 @@ model DailyReport {
   generatorHours      Float?
   fuelConsumedLiters  Float?
   notes               String?
+  // Report context
+  reportType              DailyReportType?
+  operationalStatus       VesselOperationalStatus?
+  currentPort             String?
+  timezone                String?
+  submittedByUserId       String?
+  verifiedByUserId        String?
+  verifiedAt              DateTime?
+  integratedAt            DateTime?
+  // PMS / logistic extensions
+  nextPort                String?
+  etaNextPort             DateTime?
+  etdNextPort             DateTime?
+  portCallType            PortCallType?
+  estimatedStayHours      Float?
+  maintenanceOpportunity  MaintenanceOpportunity  @default(UNKNOWN)
+  sparesReceiptPossible   SparesReceiptPossible   @default(UNKNOWN)
+  operationalRemarks      String?
+  reportCode          String?
   createdAt           DateTime          @default(now())
   createdByUserId     String
   updatedAt           DateTime          @updatedAt
@@ -892,10 +1156,98 @@ model DailyReport {
   deletedAt           DateTime?
   deletedByUserId     String?
 
-  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  vessel              Vessel                @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  equipmentHours      DailyEquipmentHours[]
+  maintenanceEntries  DailyMaintenanceEntry[]
+  spareUsages         DailySpareUsage[]
+  defectEntries       DailyDefectEntry[]
 
-  @@unique([tenantId, vesselCode, reportDate])
   @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, reportDate])
+}
+
+// ─── Daily Report sub-entities ───────────────────────────────────────────────
+
+model DailyEquipmentHours {
+  id                  String      @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  dailyReportId       String
+  assetId             String?
+  equipmentLabel      String
+  runningHoursTotal   Float?
+  inService           Boolean?
+  standby             Boolean?
+  remarks             String?
+  createdAt           DateTime    @default(now())
+
+  dailyReport         DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model DailyMaintenanceEntry {
+  id                  String        @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  dailyReportId       String
+  assetId             String?
+  equipmentLabel      String
+  taskTitle           String
+  taskType            TaskType
+  shortDescription    String?
+  performedBy         String?
+  maintenancePlanId   String?
+  workOrderId         String?
+  resultStatus        WorkLogResult
+  followUpRequired    Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+
+  dailyReport         DailyReport   @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model DailySpareUsage {
+  id                       String      @id @default(cuid())
+  tenantId                 String
+  vesselCode               String
+  dailyReportId            String
+  spareId                  String?
+  spareName                String
+  quantity                 Float
+  unit                     String
+  linkedEquipmentId        String?
+  linkedMaintenanceEntryId String?
+  notes                    String?
+  createdAt                DateTime    @default(now())
+
+  dailyReport              DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model DailyDefectEntry {
+  id                     String         @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  dailyReportId          String
+  affectedEquipmentId    String?
+  affectedEquipmentLabel String?
+  description            String
+  severitySuggested      DefectSeverity?
+  immediateActionTaken   String?
+  followUpRequired       Boolean        @default(false)
+  defectId               String?
+  createdAt              DateTime       @default(now())
+
+  dailyReport            DailyReport    @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
   @@index([tenantId, vesselCode])
 }
 
@@ -956,6 +1308,7 @@ model Spare {
 
   vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   stockMovements   StockMovement[]
+  orderLines       SpareOrderLine[]
 
   @@unique([tenantId, vesselCode, sku])
   @@index([tenantId])
@@ -986,11 +1339,34 @@ model SpareOrder {
 
   vessel               Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   provider             Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  lines                SpareOrderLine[]
 
   @@unique([tenantId, vesselCode, orderCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
+}
+
+model SpareOrderLine {
+  id              String     @id @default(cuid())
+  spareOrderId    String
+  spareId         String?
+  description     String
+  partNumber      String?
+  quantity        Float
+  unit            String?
+  unitPrice       Float?
+  currency        String?
+  notes           String?
+  createdAt       DateTime   @default(now())
+  createdByUserId String
+  updatedAt       DateTime   @updatedAt
+  updatedByUserId String
+
+  spareOrder      SpareOrder @relation(fields: [spareOrderId], references: [id], onDelete: Cascade)
+  spare           Spare?     @relation(fields: [spareId], references: [id], onDelete: SetNull)
+
+  @@index([spareOrderId])
 }
 
 model StockMovement {
@@ -1101,4 +1477,435 @@ model Attachment {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([targetType, targetId])
+}
+
+// ─── Block 09: AI Documents & Prompt Governance ───────────────────────────────
+
+enum PromptCapability {
+  knowledge_assistant
+  rca_assistant
+  defect_assistant
+  deferral_analysis
+  barrier_interviewer
+  maintenance_insights
+  daily_executive_summary
+  document_summarizer
+  evidence_link_assistant
+}
+
+enum PromptStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model PromptTemplate {
+  id          String           @id @default(cuid())
+  capability  PromptCapability
+  locale      String
+  version     Int
+  status      PromptStatus     @default(DRAFT)
+  title       String
+  content     String           @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  publishedAt DateTime?
+  createdById String?
+
+  @@unique([capability, locale, version])
+  @@index([capability, locale, status])
+}
+
+enum AiDocumentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AiDocumentVersionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model AiDocument {
+  id              String           @id @default(cuid())
+  tenantId        String
+  name            String
+  description     String?
+  status          AiDocumentStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+  updatedAt       DateTime         @updatedAt
+  updatedByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  versions        AiDocumentVersion[]
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+}
+
+model AiDocumentVersion {
+  id                String                  @id @default(cuid())
+  documentId        String
+  tenantId          String
+  version           Int
+  status            AiDocumentVersionStatus @default(DRAFT)
+  content           String                  @db.Text
+  mimeType          String                  @default("text/plain")
+  sizeBytes         Int                     @default(0)
+  activatedAt       DateTime?
+  activatedByUserId String?
+  archivedAt        DateTime?
+  archivedByUserId  String?
+  createdAt         DateTime                @default(now())
+  createdByUserId   String
+
+  document          AiDocument              @relation(fields: [documentId], references: [id])
+
+  @@unique([documentId, version])
+  @@index([tenantId, status])
+}
+
+// ─── Block 10: AI Insights ────────────────────────────────────────────────────
+
+enum InsightType {
+  backlog_risk
+  repeated_failure
+  repeated_deferral
+  pm_frequency_review
+  stock_below_minimum
+  stock_below_reorder_point
+  certificate_expiring
+  certificate_expired
+  inspection_failure_pattern
+  overdue_capa
+  overdue_work_order
+  documentation_gap
+  operational_anomaly
+  recurring_asset_downtime
+  trend_based_maintenance_improvement
+  cross_vessel_spare_availability
+  fleet_repeated_failure_pattern
+  fleet_known_fix_suggestion
+  fleet_shared_operational_experience
+}
+
+enum InsightStatus {
+  OPEN
+  DISMISSED
+  RESOLVED
+}
+
+enum InsightPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InsightTargetType {
+  VESSEL
+  ASSET
+  WORK_ORDER
+  DEFECT
+  CAPA
+  SPARE
+  CERTIFICATE
+  INSPECTION
+  FLEET
+}
+
+model AiInsight {
+  id             String            @id @default(cuid())
+  tenantId       String
+  insightCode    String
+  insightType    InsightType
+  status         InsightStatus     @default(OPEN)
+  priority       InsightPriority   @default(MEDIUM)
+  targetType     InsightTargetType
+  targetId       String?
+  vesselCode     String?
+  title          String
+  summary        String
+  recommendation String
+  detectedAt     DateTime          @default(now())
+  resolvedAt     DateTime?
+  dismissedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  createdByUserId String
+  updatedAt      DateTime          @updatedAt
+  updatedByUserId String
+
+  @@unique([tenantId, insightType, targetType, targetId])
+  @@index([tenantId, status])
+  @@index([tenantId, vesselCode, status])
+}
+
+// ─── Block 11: PMS — Catálogos globales ──────────────────────────────────────
+
+model SfiNode {
+  id          String   @id @default(cuid())
+  code        String   // "610", "710", etc.
+  description String
+  groupNumber Int      // 0-9
+  groupName   String
+  isGlobal    Boolean  @default(true)
+  tenantId    String?  // null = global; set = extensión de tenant
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([groupNumber])
+}
+
+model EquipmentClass {
+  id                 String            @id @default(cuid())
+  tenantId           String?           // null = global
+  code               String
+  name               String
+  description        String?
+  defaultSfiCode     String?
+  defaultCriticality AssetCriticality?
+  isGlobal           Boolean           @default(true)
+  status             String            @default("ACTIVE")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  assets              Asset[]
+  taskTemplates       ClassTaskTemplate[]
+  spareLinks          SpareLink[]
+  inspectionTemplates InspectionTemplate[]
+
+  @@index([tenantId])
+}
+
+model TaskMaster {
+  id                  String                 @id @default(cuid())
+  tenantId            String?                // null = global
+  code                String
+  title               String
+  taskType            TaskType
+  triggerType         MaintenancePlanTrigger
+  triggerResultMode   TriggerResultMode      @default(DUE_ONLY)
+  frequencyDays       Int?
+  frequencyHours      Float?
+  estimatedHours      Float?
+  procedure           String?                @db.Text
+  procedureReference  String?
+  acceptanceCriteria  String?
+  evidenceRequired    Boolean                @default(false)
+  isGlobal            Boolean                @default(true)
+  status              String                 @default("ACTIVE")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  classTemplates      ClassTaskTemplate[]
+  maintenancePlans    MaintenancePlan[]
+  spareLinks          SpareLink[]
+
+  @@index([tenantId])
+  @@index([taskType])
+}
+
+model ClassTaskTemplate {
+  id               String         @id @default(cuid())
+  equipmentClassId String
+  taskMasterId     String
+  isDefault        Boolean        @default(true)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+
+  equipmentClass   EquipmentClass @relation(fields: [equipmentClassId], references: [id], onDelete: Cascade)
+  taskMaster       TaskMaster     @relation(fields: [taskMasterId], references: [id], onDelete: Cascade)
+
+  @@unique([equipmentClassId, taskMasterId])
+  @@index([equipmentClassId])
+  @@index([taskMasterId])
+}
+
+// ─── Block 11: PMS — Inspecciones ────────────────────────────────────────────
+
+model InspectionTemplate {
+  id                String                 @id @default(cuid())
+  tenantId          String?                // null = global
+  code              String
+  title             String
+  description       String?
+  equipmentClassId  String?
+  sfiCode           String?
+  triggerType       MaintenancePlanTrigger
+  triggerResultMode TriggerResultMode      @default(DUE_ONLY)
+  frequencyDays     Int?
+  windowMode        ExecutionWindowMode    @default(AUTO)
+  windowLeadDays    Int?
+  evidenceRequired  Boolean                @default(false)
+  isGlobal          Boolean                @default(true)
+  status            String                 @default("ACTIVE")
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  equipmentClass    EquipmentClass?        @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  checklistItems    InspectionChecklistItem[]
+  executions        InspectionExecution[]
+
+  @@index([tenantId])
+}
+
+model InspectionChecklistItem {
+  id                     String              @id @default(cuid())
+  templateId             String
+  sortOrder              Int                 @default(0)
+  description            String
+  itemType               ChecklistItemType
+  acceptanceCriteria     String?
+  nominalValue           Float?
+  minValue               Float?
+  maxValue               Float?
+  unit                   String?
+  requiresInstrument     Boolean             @default(false)
+  requiredInstrumentType String?
+  evidenceRequired       Boolean             @default(false)
+  deficiencySeverity     DeficiencySeverity?
+  criteriaSource         CriteriaSource?
+  isOptional             Boolean             @default(false)
+
+  template               InspectionTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  itemResults            InspectionItemResult[]
+
+  @@index([templateId])
+}
+
+model InspectionExecution {
+  id                  String                     @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String?
+  templateId          String
+  executionCode       String
+  status              InspectionStatus           @default(SCHEDULED)
+  result              InspectionExecutionResult?
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  inspectorUserId     String?
+  inspectorName       String?
+  generalObservations String?
+  nextScheduledDate   DateTime?
+  createdAt           DateTime                   @default(now())
+  createdByUserId     String
+  updatedAt           DateTime                   @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  template            InspectionTemplate         @relation(fields: [templateId], references: [id])
+  asset               Asset?                     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  itemResults         InspectionItemResult[]
+
+  @@unique([tenantId, vesselCode, executionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model InspectionItemResult {
+  id                 String                  @id @default(cuid())
+  executionId        String
+  checklistItemId    String
+  resultValue        String?
+  numericValue       Float?
+  isConforming       Boolean?
+  deficiencySeverity DeficiencySeverity?
+  instrumentId       String?
+  notes              String?
+  createdAt          DateTime                @default(now())
+
+  execution          InspectionExecution     @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  checklistItem      InspectionChecklistItem @relation(fields: [checklistItemId], references: [id])
+  instrument         Instrument?             @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+
+  @@unique([executionId, checklistItemId])
+  @@index([executionId])
+}
+
+// ─── Block 11: PMS — Instrumentos ────────────────────────────────────────────
+
+model Instrument {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  vesselCode          String?
+  code                String
+  name                String
+  instrumentType      String
+  serialNumber        String?
+  calibrationRequired Boolean    @default(false)
+  calibrationDate     DateTime?
+  calibrationDueDate  DateTime?
+  status              String     @default("ACTIVE")
+  notes               String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+
+  itemResults         InspectionItemResult[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ─── Block 11: PMS — Work Logs ───────────────────────────────────────────────
+
+model WorkLog {
+  id                      String        @id @default(cuid())
+  tenantId                String
+  vesselCode              String
+  workOrderId             String?
+  maintenancePlanId       String?
+  assetId                 String
+  logCode                 String
+  taskType                TaskType
+  result                  WorkLogResult
+  startedAt               DateTime
+  completedAt             DateTime?
+  executedByUserId        String?
+  executedByName          String
+  hoursWorked             Float?
+  runningHoursAtExecution Float?
+  notes                   String?       @db.Text
+  followUpRequired        Boolean       @default(false)
+  createdAt               DateTime      @default(now())
+  createdByUserId         String
+
+  workOrder               WorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  maintenancePlan         MaintenancePlan? @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, vesselCode, logCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([workOrderId])
+  @@index([maintenancePlanId])
+}
+
+// ─── Block 11: PMS — Repuestos sugeridos ─────────────────────────────────────
+
+model SpareLink {
+  id               String          @id @default(cuid())
+  tenantId         String?
+  equipmentClassId String?
+  taskMasterId     String?
+  spareSku         String?
+  spareName        String
+  isConsumable     Boolean         @default(false)
+  estimatedQty     Float           @default(1)
+  unit             String?
+  notes            String?
+  createdAt        DateTime        @default(now())
+
+  equipmentClass   EquipmentClass? @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  taskMaster       TaskMaster?     @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
+
+  @@index([equipmentClassId])
+  @@index([taskMasterId])
 }

@@ -154,7 +154,7 @@ export async function listPlatformTenants(filters: PlatformTenantListFilters = {
 
   const tenants = await prisma.tenant.findMany({
     where: {
-      status: filters.status as DevTenantStatus | undefined,
+      status: filters.status ? (filters.status as DevTenantStatus) : undefined,
       slug: normalizedSlug,
     },
     include: { settings: true },
