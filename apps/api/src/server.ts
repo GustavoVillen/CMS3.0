@@ -5,7 +5,7 @@ import { sendHtml } from "./http/html-response";
 import { sendJson } from "./http/json-response";
 import { toErrorPayload } from "./http/route-error";
 import { getRequestUrl } from "./http/request-url";
-import { serveStaticFile, serveSpaHtml } from "./http/static-files";
+import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa } from "./http/static-files";
 import { serveCertificateUpload } from "./tenant/certificates/cert-uploads-service";
 import { serveChecklistUpload } from "./tenant/pms/checklist-uploads-service";
 import { buildHealthcheckPayload } from "./health/health-route";
@@ -96,6 +96,25 @@ const server = createServer(async (request, response) => {
     }
     const handled = toErrorPayload(error);
     sendJson(response, handled.statusCode, handled.payload);
+    return;
+  }
+
+  // ── web-modern SPA (React/Vite production build) ───────────────────────────
+  // Serve hashed assets (JS/CSS/fonts) with immutable cache.
+  if (method === "GET" && url.pathname.startsWith("/assets/")) {
+    const served = serveWebModernAsset(response, url.pathname.slice(1));
+    if (served) return;
+  }
+
+  // Serve other Vite static files (favicon, manifest, etc.)
+  if (method === "GET" && (url.pathname === "/favicon.ico" || url.pathname === "/manifest.json")) {
+    const served = serveWebModernAsset(response, url.pathname.slice(1));
+    if (served) return;
+  }
+
+  // Catch-all: any GET not matched above → serve the React SPA shell.
+  if (method === "GET") {
+    serveWebModernSpa(response);
     return;
   }
 

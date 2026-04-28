@@ -11,6 +11,9 @@ import type { ServerResponse } from "node:http";
 // Resolve public dir relative to this file: apps/api/src/http → apps/web-legacy/public
 const WEB_LEGACY_PUBLIC = join(__dirname, "../../../web-legacy/public");
 
+// web-modern Vite build output
+const WEB_MODERN_DIST = join(__dirname, "../../../web-modern/dist");
+
 function mimeFor(filename: string): string {
   const ext = extname(filename).toLowerCase();
   const map: Record<string, string> = {
@@ -43,6 +46,45 @@ export function serveStaticFile(response: ServerResponse, relativePath: string):
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Serve a static asset from the web-modern Vite dist folder.
+ * Returns true if served, false if not found (caller falls through to SPA html).
+ */
+export function serveWebModernAsset(response: ServerResponse, relativePath: string): boolean {
+  try {
+    const filePath = join(WEB_MODERN_DIST, relativePath);
+    const content  = readFileSync(filePath);
+    const mime     = mimeFor(relativePath);
+    const isImmutable = relativePath.startsWith("assets/");
+    response.writeHead(200, {
+      "Content-Type":  mime,
+      "Cache-Control": isImmutable ? "public, max-age=31536000, immutable" : "no-cache",
+    });
+    response.end(content);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Serve the web-modern SPA index.html (React app entry point).
+ * Used as catch-all for any browser navigation not handled by the API.
+ */
+export function serveWebModernSpa(response: ServerResponse): void {
+  try {
+    const html = readFileSync(join(WEB_MODERN_DIST, "index.html"));
+    response.writeHead(200, {
+      "Content-Type":  "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+    });
+    response.end(html);
+  } catch {
+    response.writeHead(503, { "Content-Type": "text/plain" });
+    response.end("Frontend not built. Run: pnpm build:web\n");
   }
 }
 
