@@ -3,18 +3,12 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getTenantMaintenancePlan } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo } from "./pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 
 function fmt(d: unknown): string {
   if (!d) return "—";
   const dt = new Date(d as string);
   return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("es-AR");
-}
-
-// Replace any checkbox-like Unicode characters (ð U+00F0, ☐ U+2610, ☑ U+2611, ☒ U+2612, etc.)
-// with a plain text marker so PDFKit's Helvetica can render them (drawn as boxes separately).
-function sanitizePdfText(s: string): string {
-  return s.replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]");
 }
 
 function val(v: unknown): string {
@@ -160,10 +154,11 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     }
 
     function textBox(label: string, text: string, span = 1, totalCols = 3) {
+      const clean = text === "—" ? text : sanitizePdfText(text);
       const innerW = (W / totalCols) * span - 20;
-      const contentH = text === "—"
+      const contentH = clean === "—"
         ? 14
-        : doc.fontSize(9.5).font("Helvetica").heightOfString(text, { width: innerW, lineGap: 2 });
+        : doc.fontSize(9.5).font("Helvetica").heightOfString(clean, { width: innerW, lineGap: 2 });
       const boxH = Math.max(38, contentH + 22);
       ensureSpace(boxH);
       const boxW = (W / totalCols) * span;
@@ -171,8 +166,8 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       doc.roundedRect(ML, y, boxW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
       doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
         .text(label.toUpperCase(), ML + 10, y + 6, { width: innerW, characterSpacing: 0.5 });
-      doc.fontSize(9.5).font("Helvetica").fillColor(text === "—" ? gray : black)
-        .text(text, ML + 10, y + 18, { width: innerW, lineGap: 2 });
+      doc.fontSize(9.5).font("Helvetica").fillColor(clean === "—" ? gray : black)
+        .text(clean, ML + 10, y + 18, { width: innerW, lineGap: 2 });
       y += boxH;
     }
 

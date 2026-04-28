@@ -30,6 +30,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { RichTextArea } from "../components/RichTextArea";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1718,7 +1719,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             {/* Description */}
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>TAREAS A REALIZAR</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className={inputCls} />
+              <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
             </div>
 
             {/* Trigger + Frequency + Mode */}
@@ -1771,7 +1772,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
                 {t("mp.acceptanceCriteria")}
                 {loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
-              <textarea value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} rows={2} className={inputCls} disabled={loadingCriteria} />
+              <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
             </div>
 
             {/* LOTO */}
@@ -1785,7 +1786,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
                 {t("mp.loto")}
                 {loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
-              <textarea value={loto} onChange={e => setLoto(e.target.value)} rows={2} className={inputCls} disabled={loadingLoto} />
+              <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
             </div>
 
             {/* Risk level */}
@@ -1813,7 +1814,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             {/* Risk analysis */}
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>{t("mp.riskAnalysisResult")}</label>
-              <textarea value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} rows={2} className={inputCls} disabled={loadingRisk} />
+              <RichTextArea value={riskAnalysisResult} onChange={setRiskAnalysisResult} rows={2} className={inputCls} disabled={loadingRisk} />
             </div>
 
             {/* Checklist upload — CHECKLIST mode only */}

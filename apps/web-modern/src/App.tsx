@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
 import { I18nProvider, type Locale } from "./lib/i18n";
 import { Layout } from "./components/Layout";
+import { MobileLayout } from "./components/MobileLayout";
 import { PlatformLayout } from "./components/PlatformLayout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
@@ -75,6 +76,9 @@ export default function App() {
               <Route path="audit"   element={<PlatformAuditPage />} />
               <Route path="prompts" element={<PlatformPromptsPage />} />
             </Route>
+
+            {/* ── Tenant mobile ── */}
+            <Route path="/m" element={<RequireAuth><TenantI18nWrapper><MobileLayout /></TenantI18nWrapper></RequireAuth>} />
 
             {/* ── Tenant ── */}
             <Route path="/login" element={<TenantLoginRedirect />} />

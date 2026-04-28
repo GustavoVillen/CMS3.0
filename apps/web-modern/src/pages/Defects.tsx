@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Download, Loader2, Maximize2, Minimize2, Plus, X } from "lucide-react";
+import { AlertTriangle, Bot, Download, Loader2, Maximize2, Minimize2, Plus, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
@@ -9,6 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { RichTextArea } from "../components/RichTextArea";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -205,6 +206,26 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
       .catch(() => {});
   }, []);
 
+  const selectedAsset = assets.find(a => a.id === assetId);
+
+  useCopilotEmitter({
+    module: "DEFECTS",
+    screen: "DEFECT_CREATE",
+    vesselCode: vesselCode || undefined,
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      assetCode: selectedAsset?.assetCode ?? null,
+      assetName: selectedAsset?.name ?? null,
+      classification: classification || null,
+      description: description || null,
+      severity,
+      operationalState,
+      immediateAction: immediateAction || null,
+    },
+    relatedEntities: { assetId: assetId || null },
+  });
+
   useEffect(() => {
     if (!vesselCode) { setAssets([]); setAssetId(""); return; }
     setLoadingAssets(true);
@@ -340,7 +361,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [rcaRootCause, setRcaRootCause]                 = useState(defect.rcaRootCause ?? "");
   const [rcaPreventiveActions, setRcaPreventiveActions] = useState(defect.rcaPreventiveActions ?? "");
   const [rcaApprovedAt, setRcaApprovedAt]               = useState<string | null>(defect.rcaApprovedAt);
-  const [capaDescription, setCapaDescription] = useState(defect.capaDescription ?? "");
   const [repairType, setRepairType]           = useState<"TEMPORARIA" | "PERMANENTE" | null>(
     defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null,
   );
@@ -349,6 +369,8 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [closing, setClosing]         = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded]       = useState(true);
+  const [rcaAnalyzing, setRcaAnalyzing]       = useState(false);
+  const [rcaAnalysisError, setRcaAnalysisError] = useState<string | null>(null);
 
   // Post-save flow state
   const [postSaveStep, setPostSaveStep] = useState<null | "ask-permanent-wo">(null);
@@ -369,7 +391,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     setRcaRootCause(defect.rcaRootCause ?? "");
     setRcaPreventiveActions(defect.rcaPreventiveActions ?? "");
     setRcaApprovedAt(defect.rcaApprovedAt);
-    setCapaDescription(defect.capaDescription ?? "");
     setRepairType(defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null);
     setActionError(null);
     setPostSaveStep(null);
@@ -400,10 +421,95 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
       rcaContributingCause:  rcaContributingCause  || null,
       rcaRootCause:          rcaRootCause          || null,
       rcaPreventiveActions:  rcaPreventiveActions  || null,
-      capaDescription:       capaDescription       || null,
     },
     relatedEntities: { workOrderId: defect.workOrderId, assetId: defect.assetId },
   });
+
+  const analyzeRca = useCallback(async () => {
+    if (rcaAnalyzing) return;
+    setRcaAnalyzing(true);
+    setRcaAnalysisError(null);
+
+    const prompt = [
+      `[MODO ANÁLISIS AUTOMÁTICO — No hagas preguntas previas. Procedé directamente al análisis completo y completá los campos faltantes del RCA con un bloque [CAMPOS].]`,
+      ``,
+      `Completá los campos faltantes del RCA para el defecto ${defect.defectCode} del buque ${defect.vesselCode}.`,
+      ``,
+      `Datos del defecto:`,
+      `- Descripción: ${description || defect.description}`,
+      `- Severidad: ${severity}`,
+      `- Estado operacional: ${operationalState}`,
+      immediateAction ? `- Acción inmediata: ${immediateAction}` : null,
+      ``,
+      `Instrucciones:`,
+      `1. Consultá query_defects (assetId: "${defect.assetId}") y query_work_orders para identificar patrones o fallas recurrentes en este equipo.`,
+      `2. Elegí la metodología más adecuada: FIVE_WHYS, FISHBONE, FTA o BARRIER_ANALYSIS.`,
+      `3. Identificá causa inmediata, causa contribuyente y causa raíz.`,
+      `4. Proponé acciones preventivas concretas.`,
+      `5. Devolvé TODO en un único bloque [CAMPOS]{"rcaMethodology":"...","rcaAnalysis":"...","rcaImmediateCause":"...","rcaContributingCause":"...","rcaRootCause":"...","rcaPreventiveActions":"..."}[/CAMPOS]`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const reader = await api.stream("/app/copiloto/chat", {
+        capability: "defect_assistant",
+        locale: navigator.language?.split("-")[0] ?? "es",
+        messages: [{ role: "user", content: prompt }],
+        screenContext: {
+          module: "DEFECTS",
+          screen: "DEFECT_EDIT",
+          entityId: defect.id,
+          entityCode: defect.defectCode,
+          vesselCode: defect.vesselCode,
+          fieldValues: {
+            description: description || null,
+            severity,
+            operationalState,
+            immediateAction: immediateAction || null,
+          },
+          relatedEntities: { assetId: defect.assetId },
+        },
+      });
+
+      let fullResponse = "";
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of value.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break outer;
+          try {
+            const parsed = JSON.parse(data) as { text?: string; error?: string };
+            if (parsed.error) { setRcaAnalysisError(parsed.error); break outer; }
+            if (parsed.text) fullResponse += parsed.text;
+          } catch { /* partial SSE chunk */ }
+        }
+      }
+
+      const match = fullResponse.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
+      if (match) {
+        try {
+          const fields = JSON.parse(match[1].trim()) as Record<string, string>;
+          if (fields.rcaMethodology && ["FIVE_WHYS", "FISHBONE", "FTA", "BARRIER_ANALYSIS"].includes(fields.rcaMethodology)) {
+            setRcaMethodology(fields.rcaMethodology as RcaMethodology);
+          }
+          if (fields.rcaAnalysis)          setRcaAnalysis(fields.rcaAnalysis);
+          if (fields.rcaImmediateCause)    setRcaImmediateCause(fields.rcaImmediateCause);
+          if (fields.rcaContributingCause) setRcaContributingCause(fields.rcaContributingCause);
+          if (fields.rcaRootCause)         setRcaRootCause(fields.rcaRootCause);
+          if (fields.rcaPreventiveActions) setRcaPreventiveActions(fields.rcaPreventiveActions);
+        } catch {
+          setRcaAnalysisError("No se pudieron parsear los campos del análisis.");
+        }
+      } else {
+        setRcaAnalysisError("La IA no devolvió un análisis estructurado. Intentá de nuevo.");
+      }
+    } catch (e: any) {
+      setRcaAnalysisError(e?.message ?? "Error al conectar con el copiloto.");
+    } finally {
+      setRcaAnalyzing(false);
+    }
+  }, [defect, description, severity, operationalState, immediateAction, rcaAnalyzing]);
 
   useCopilotApplyFields(!isClosed ? (fields) => {
     if (fields.description          !== undefined) setDescription(fields.description);
@@ -416,7 +522,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     if (fields.rcaContributingCause !== undefined) setRcaContributingCause(fields.rcaContributingCause);
     if (fields.rcaRootCause         !== undefined) setRcaRootCause(fields.rcaRootCause);
     if (fields.rcaPreventiveActions !== undefined) setRcaPreventiveActions(fields.rcaPreventiveActions);
-    if (fields.capaDescription      !== undefined) setCapaDescription(fields.capaDescription);
   } : null);
 
   const patchDefect = useCallback(async () => {
@@ -437,7 +542,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         rcaContributingCause: normalizeOptionalText(rcaContributingCause),
         rcaRootCause: normalizeOptionalText(rcaRootCause),
         rcaPreventiveActions: normalizeOptionalText(rcaPreventiveActions),
-        capaDescription: normalizeOptionalText(capaDescription),
         repairType: repairType ?? null,
         status,
       });
@@ -448,7 +552,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     } finally {
       setSaving(false);
     }
-  }, [capaDescription, classification, correctiveAction, defect.id, description, immediateAction, operationalState, rcaAnalysis, rcaMethodology, rcaImmediateCause, rcaContributingCause, rcaRootCause, rcaPreventiveActions, repairType, severity, status, t]);
+  }, [classification, correctiveAction, defect.id, description, immediateAction, operationalState, rcaAnalysis, rcaMethodology, rcaImmediateCause, rcaContributingCause, rcaRootCause, rcaPreventiveActions, repairType, severity, status, t]);
 
   const closeDefectAndWo = useCallback(async () => {
     setClosing(true);
@@ -464,7 +568,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         }).catch(() => {}); // WO might already be closed — ignore
       }
       await api.post(`/app/pms/defects/${defect.id}/close`, {
-        closeNotes: `Reparación permanente completada.${capaDescription ? ` CAPA: ${capaDescription}` : ""}`,
+        closeNotes: `Reparación permanente completada.`,
       });
       onSaved();
     } catch (err) {
@@ -472,7 +576,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     } finally {
       setClosing(false);
     }
-  }, [capaDescription, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved]);
+  }, [defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved]);
 
   const handleSave = useCallback(async () => {
     if (!await patchDefect()) return;
@@ -623,11 +727,26 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">Análisis de causa raíz (RCA)</p>
-                {rcaApprovedAt && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
-                    {t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {rcaApprovedAt && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
+                      {t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}
+                    </span>
+                  )}
+                  {!isClosed && (
+                    <button
+                      type="button"
+                      onClick={() => { void analyzeRca(); }}
+                      disabled={rcaAnalyzing}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 text-accent border border-accent/30 text-[10px] font-bold hover:bg-accent/20 disabled:opacity-50 transition-colors"
+                    >
+                      {rcaAnalyzing
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Bot className="w-3 h-3" />}
+                      {rcaAnalyzing ? "Analizando…" : "Analizar con IA"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -645,27 +764,27 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>Resumen del análisis</label>
-                <textarea rows={2} value={rcaAnalysis} onChange={e => setRcaAnalysis(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Resumen ejecutivo del análisis…" />
+                <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder="Resumen ejecutivo del análisis…" />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaImmediateCause")}</label>
-                <textarea rows={2} value={rcaImmediateCause} onChange={e => setRcaImmediateCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Fallo observable inmediato…" />
+                <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder="Fallo observable inmediato…" />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaContributingCause")}</label>
-                <textarea rows={2} value={rcaContributingCause} onChange={e => setRcaContributingCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Factores que contribuyeron…" />
+                <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder="Factores que contribuyeron…" />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaRootCause")}</label>
-                <textarea rows={2} value={rcaRootCause} onChange={e => setRcaRootCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Causa raíz identificada…" />
+                <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder="Causa raíz identificada…" />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaPreventiveActions")}</label>
-                <textarea rows={2} value={rcaPreventiveActions} onChange={e => setRcaPreventiveActions(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Acciones para evitar recurrencia…" />
+                <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder="Acciones para evitar recurrencia…" />
               </div>
 
               {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
@@ -697,11 +816,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               )}
             </div>
 
-            {/* CAPA */}
-            <div className="space-y-1.5">
-              <label className={fldLabel}>CAPA</label>
-              <textarea rows={3} value={capaDescription} onChange={e => setCapaDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Acción correctiva y preventiva (CAPA) — medidas para evitar recurrencia…" />
-            </div>
+            {rcaAnalysisError && (
+              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{rcaAnalysisError}</p>
+            )}
 
             {/* Tipo de reparación — último campo */}
             {!isClosed && (
