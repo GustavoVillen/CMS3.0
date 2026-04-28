@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "pnpm-9_x", "openssl"]
+nixPkgs = ["nodejs_24", "pnpm-9_x", "openssl"]
