@@ -682,10 +682,7 @@ async function main(): Promise<void> {
   } catch (e) {
     process.stdout.write(`Demo data skipped (schema mismatch): ${e instanceof Error ? e.message : String(e)}\n`);
   }
-  process.stdout.write("Vessels: LATERE, GLT001\n");
-  process.stdout.write("Operational data seeded: assets, work orders, defects, deferrals, capa, spares, inspection, certificates, daily report, provider evaluations/NCs\n");
-  process.stdout.write(`Domain events seeded: 5\n`);
-  process.stdout.write(`AI insights generated: ${insightsGenerated}\n`);
+  process.stdout.write("Seed complete.\n");
 }
 
 main()
