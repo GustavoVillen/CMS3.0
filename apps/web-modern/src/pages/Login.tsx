@@ -22,7 +22,7 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background image */}
       <div className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/login-bg.png')" }}
+        style={{ backgroundImage: "url('/login-bg.jpg')" }}
       />
       {/* Dark overlay so the form stays readable */}
       <div className="absolute inset-0 bg-primary-bg/70" />
