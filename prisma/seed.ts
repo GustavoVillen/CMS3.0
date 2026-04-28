@@ -257,7 +257,7 @@ async function main(): Promise<void> {
         movementCode: "MOV-2026-001", movementType: "RECEIPT",
         quantity: 6, unit: "UND",
         occurredAt: new Date(Date.now() - 10 * 86400000),
-        referenceType: "SPARE_ORDER", notes: "Recepción inicial de stock",
+        referenceType: "SPARE_REQUEST", notes: "Recepción inicial de stock",
         createdByUserId: uid,
       },
     });
