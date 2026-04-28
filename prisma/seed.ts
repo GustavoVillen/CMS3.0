@@ -4,7 +4,7 @@ import {
   PrismaClient,
   TenantRole,
   UserStatus,
-} from "@prisma/client";
+} from "../generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { hashPassword } from "../apps/api/src/platform/auth/passwords";
