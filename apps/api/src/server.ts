@@ -112,9 +112,10 @@ const server = createServer(async (request, response) => {
     if (served) return;
   }
 
-  // Catch-all: any GET not matched above → serve the React SPA shell.
+  // Catch-all: any GET not matched above → try static asset first, then SPA shell.
   if (method === "GET") {
-    serveWebModernSpa(response);
+    const served = serveWebModernAsset(response, url.pathname.slice(1));
+    if (!served) serveWebModernSpa(response);
     return;
   }
 
