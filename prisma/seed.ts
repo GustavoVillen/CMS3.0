@@ -78,6 +78,12 @@ async function main(): Promise<void> {
   const tid = demoTenant.id;
   const uid = tenantUser.id;
 
+  process.stdout.write("Platform user: admin@localhost / admin123\n");
+  process.stdout.write("Tenant user: admin@demo.local / demo123\n");
+
+  // ── Demo operational data (non-critical — wrapped in try/catch) ────────────
+  try {
+
   // ── Vessels ────────────────────────────────────────────────────────────────
   const vesselLatere = await prisma.vessel.upsert({
     where: { tenantId_code: { tenantId: tid, code: "LATERE" } },
@@ -673,8 +679,9 @@ async function main(): Promise<void> {
   const insightsGenerated = await generateInsightsForTenant(tid);
 
   process.stdout.write("Seed completed.\n");
-  process.stdout.write("Platform user: admin@localhost / admin123\n");
-  process.stdout.write("Tenant user: admin@demo.local / demo123\n");
+  } catch (e) {
+    process.stdout.write(`Demo data skipped (schema mismatch): ${e instanceof Error ? e.message : String(e)}\n`);
+  }
   process.stdout.write("Vessels: LATERE, GLT001\n");
   process.stdout.write("Operational data seeded: assets, work orders, defects, deferrals, capa, spares, inspection, certificates, daily report, provider evaluations/NCs\n");
   process.stdout.write(`Domain events seeded: 5\n`);
