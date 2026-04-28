@@ -30,8 +30,6 @@ const ENTITY_LABELS: Record<string, string> = {
   Deferral:            "Aplazamiento",
   Certificate:         "Certificado",
   Spare:               "Repuesto",
-  SpareOrder:          "Pedido Repuesto",
-  Rca:                 "RCA",
   Capa:                "CAPA",
   InspectionExecution: "Inspección",
 };
@@ -41,11 +39,9 @@ const ENTITY_ROUTE: Record<string, string> = {
   WorkOrder:           "/work-orders",
   Defect:              "/defects",
   Deferral:            "/deferrals",
-  Rca:                 "/rca",
   Capa:                "/capa",
   Certificate:         "/certificates",
   Spare:               "/spares",
-  SpareOrder:          "/spare-orders",
   Vessel:              "/vessels",
   Asset:               "/assets",
   InspectionExecution: "/inspections",
@@ -89,9 +85,9 @@ function refCode(metadata: Record<string, unknown> | null): string {
   if (!metadata) return "—";
   const val = [
     metadata.workOrderCode, metadata.taskCode, metadata.defectCode,
-    metadata.deferralCode, metadata.rcaCode, metadata.capaCode,
+    metadata.deferralCode, metadata.capaCode,
     metadata.orderCode, metadata.certificateCode, metadata.assetCode,
-    metadata.executionCode, metadata.sku, metadata.code,
+    metadata.executionCode, metadata.requestCode, metadata.sku, metadata.code,
   ].find(v => typeof v === "string" && v.length > 0);
   return typeof val === "string" ? val : "—";
 }
@@ -101,32 +97,130 @@ function vesselCode(metadata: Record<string, unknown> | null): string | null {
   return typeof metadata.vesselCode === "string" ? metadata.vesselCode : null;
 }
 
+function s(v: unknown): string { return typeof v === "string" ? v : ""; }
+function n(v: unknown): number { return typeof v === "number" ? v : 0; }
+
 function detailLine(item: AuditLogItem): string {
   const m = item.metadata;
   if (!m) return "";
 
-  // Execution result
-  if (typeof m.result === "string") {
-    const resultMap: Record<string, string> = {
-      SATISFACTORIO: "Resultado: Satisfactorio",
-      CON_DEFICIENCIAS: "Resultado: Con deficiencias",
-      COMPLETED: "Completado",
-      COMPLETED_WITH_OBSERVATIONS: "Completado con observaciones",
-      NOT_COMPLETED: "No completado",
-      FOLLOW_UP_REQUIRED: "Requiere seguimiento",
-    };
-    const suffix = typeof m.executedByName === "string" ? ` — Por: ${m.executedByName}` : "";
-    return (resultMap[m.result] ?? m.result) + suffix;
+  // Explicit detail always wins
+  if (typeof m.detail === "string" && m.detail.trim()) return m.detail.trim();
+
+  const action = item.action;
+  const entity = item.entityType;
+
+  // ── Stock adjustment ────────────────────────────────────────────────────────
+  if (action === "STOCK_ADJUSTED") {
+    const sku   = s(m.sku);
+    const prev  = n(m.previousQty);
+    const next  = n(m.newQty);
+    const delta = n(m.delta);
+    const unit  = s(m.unit);
+    const sign  = delta >= 0 ? `+${delta}` : String(delta);
+    const note  = s(m.notes);
+    return [
+      sku ? `[${sku}]` : "",
+      `Stock ajustado: ${prev} → ${next} ${unit}`.trim(),
+      `(${sign})`,
+      note ? `— ${note}` : "",
+    ].filter(Boolean).join(" ");
   }
 
-  // Title / description
-  const text = m.holdReason ?? m.cancelReason ?? m.closeNotes ?? m.rejectionReason ?? m.title ?? m.name ?? m.notes;
-  if (typeof text === "string" && text.trim()) return text.trim();
+  // ── Maintenance plan ────────────────────────────────────────────────────────
+  if (entity === "MaintenancePlan") {
+    const code  = s(m.taskCode);
+    const title = s(m.title);
+    if (action.includes("deleted"))   return `Plan eliminado: ${code} — ${title}`.replace(/ —\s*$/, "");
+    if (action.includes("created"))   return `Plan creado: ${code} — ${title}`.replace(/ —\s*$/, "");
+    if (action.includes("postponed") || action.includes("deferred"))
+      return `Plan postergado: ${code}${s(m.newDueDate) ? ` → nuevo vencimiento: ${m.newDueDate}` : ""}`;
+    if (action.includes("executed") || action.includes("closed"))
+      return `Ejecución registrada: ${code}${s(m.result) ? ` — Resultado: ${m.result}` : ""}`;
+    if (action === "OPENEDFROMPLAN" || action.includes("opened"))
+      return `OT abierta desde plan ${code}${s(m.workOrderCode) ? ` → ${m.workOrderCode}` : ""}`;
+    // updated (default)
+    return `Plan modificado: ${code}${title ? ` — ${title}` : ""}`;
+  }
 
-  // Severity / status changes
-  if (typeof m.severity === "string") return `Severidad: ${m.severity}`;
-  if (typeof m.status === "string")   return `Estado: ${m.status}`;
-  if (typeof m.type === "string")     return m.type;
+  // ── Work order ───────────────────────────────────────────────────────────────
+  if (entity === "WorkOrder") {
+    const code  = s(m.workOrderCode ?? m.code);
+    const title = s(m.title);
+    const note  = s(m.holdReason ?? m.cancelReason ?? m.closeNotes ?? m.notes);
+    if (action.includes("started"))   return `OT iniciada: ${code}${title ? ` — ${title}` : ""}`;
+    if (action.includes("held"))      return `OT en espera: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("cancelled")) return `OT cancelada: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("closed"))    return `OT cerrada: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("created") || action === "OPENEDFROMPLAN")
+      return `OT creada: ${code}${title ? ` — ${title}` : ""}`;
+    return `OT modificada: ${code}${title ? ` — ${title}` : ""}`;
+  }
+
+  // ── Spare ────────────────────────────────────────────────────────────────────
+  if (entity === "Spare") {
+    const sku  = s(m.sku);
+    const name = s(m.name);
+    if (action.includes("deleted")) return `Repuesto eliminado: ${sku}${name ? ` — ${name}` : ""}`;
+    if (action.includes("created")) return `Repuesto dado de alta: ${sku}${name ? ` — ${name}` : ""}`;
+    return `Repuesto modificado: ${sku}${name ? ` — ${name}` : ""}`;
+  }
+
+  // ── Asset ────────────────────────────────────────────────────────────────────
+  if (entity === "Asset") {
+    const code = s(m.assetCode);
+    const name = s(m.name);
+    if (action.includes("deleted")) return `Activo eliminado: ${code}${name ? ` — ${name}` : ""}`;
+    if (action.includes("created")) return `Activo creado: ${code}${name ? ` — ${name}` : ""}`;
+    return `Activo modificado: ${code}${name ? ` — ${name}` : ""}`;
+  }
+
+  // ── Defect ───────────────────────────────────────────────────────────────────
+  if (entity === "Defect") {
+    const code = s(m.defectCode ?? m.code);
+    const desc = s(m.description ?? m.title ?? m.name);
+    const sev  = s(m.severity);
+    return [
+      action.includes("created") ? "Defecto registrado" : action.includes("closed") ? "Defecto cerrado" : "Defecto modificado",
+      code ? `: ${code}` : "",
+      desc ? ` — ${desc}` : "",
+      sev  ? ` (${sev})` : "",
+    ].join("");
+  }
+
+  // ── Deferral ─────────────────────────────────────────────────────────────────
+  if (entity === "Deferral") {
+    const code   = s(m.deferralCode ?? m.code);
+    const reason = s(m.reason ?? m.notes);
+    return `Diferimiento${code ? ` ${code}` : ""}${reason ? `: ${reason}` : ""}`;
+  }
+
+  // ── Certificate ──────────────────────────────────────────────────────────────
+  if (entity === "Certificate") {
+    const code = s(m.certificateCode ?? m.code);
+    const name = s(m.name ?? m.title);
+    return `Certificado${code ? ` ${code}` : ""}${name ? ` — ${name}` : ""}`;
+  }
+
+  // ── Execution result (generic) ───────────────────────────────────────────────
+  if (typeof m.result === "string") {
+    const resultMap: Record<string, string> = {
+      SATISFACTORIO:                "Satisfactorio",
+      CON_DEFICIENCIAS:             "Con deficiencias",
+      COMPLETED:                    "Completado",
+      COMPLETED_WITH_OBSERVATIONS:  "Completado con observaciones",
+      NOT_COMPLETED:                "No completado",
+      FOLLOW_UP_REQUIRED:           "Requiere seguimiento",
+    };
+    const suffix = s(m.executedByName) ? ` — Por: ${m.executedByName}` : "";
+    return `Resultado: ${resultMap[m.result] ?? m.result}${suffix}`;
+  }
+
+  // ── Fallback ─────────────────────────────────────────────────────────────────
+  const text = s(m.holdReason ?? m.cancelReason ?? m.closeNotes ?? m.rejectionReason ?? m.title ?? m.name ?? m.notes);
+  if (text.trim()) return text.trim();
+  if (s(m.severity)) return `Severidad: ${m.severity}`;
+  if (s(m.status))   return `Estado: ${m.status}`;
   return "";
 }
 
@@ -180,8 +274,18 @@ export const BitacoraPage: React.FC = () => {
   const handleRefClick = (e: React.MouseEvent, item: AuditLogItem) => {
     e.stopPropagation();
     const route = ENTITY_ROUTE[item.entityType];
-    if (route && item.entityId) {
-      navigate(`${route}?openId=${item.entityId}`);
+    if (!route) return;
+    const code = refCode(item.metadata);
+    // Each page uses a different auto-open param
+    if (item.entityType === "WorkOrder" && code !== "—") {
+      navigate(`${route}?autoCode=${encodeURIComponent(code)}`);
+    } else if (item.entityType === "Deferral" && code !== "—") {
+      navigate(`${route}?autoCode=${encodeURIComponent(code)}`);
+    } else if (item.entityType === "Defect" && item.entityId) {
+      navigate(`${route}?defectId=${encodeURIComponent(item.entityId)}`);
+    } else if (item.entityId) {
+      // MaintenancePlan, Certificate, Spare, etc. — openId pattern
+      navigate(`${route}?openId=${encodeURIComponent(item.entityId)}`);
     }
   };
 
@@ -246,29 +350,21 @@ export const BitacoraPage: React.FC = () => {
 
                   return (
                     <tr key={item.id} className="border-b border-white/5 hover:bg-white/3 transition-colors">
-
-                      {/* Fecha */}
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-text-industrial/50">
                         <div className="text-xs">{new Date(item.createdAt).toLocaleDateString("es-AR")}</div>
                         <div className="text-[10px] text-text-industrial/30">
                           {new Date(item.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </td>
-
-                      {/* Tipo */}
                       <td className="px-4 py-3 text-text-industrial/60 whitespace-nowrap">
                         {ENTITY_LABELS[item.entityType] ?? item.entityType}
                       </td>
-
-                      {/* Buque */}
                       <td className="px-4 py-3">
                         {vessel
                           ? <span className="font-mono text-[10px] text-accent/80 bg-accent/5 border border-accent/10 rounded px-1.5 py-0.5">{vessel}</span>
                           : <span className="text-text-industrial/20">—</span>
                         }
                       </td>
-
-                      {/* Referencia */}
                       <td className="px-4 py-3">
                         {code !== "—" ? (
                           canNav ? (
@@ -287,20 +383,14 @@ export const BitacoraPage: React.FC = () => {
                           <span className="text-text-industrial/20">—</span>
                         )}
                       </td>
-
-                      {/* Acción */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold ${actionBadgeCls(item.action)}`}>
                           {actionLabel(item.action)}
                         </span>
                       </td>
-
-                      {/* Detalle */}
                       <td className="px-4 py-3 text-text-industrial/50 max-w-[280px]">
                         <span className="line-clamp-2 text-[11px] leading-relaxed">{detail || "—"}</span>
                       </td>
-
-                      {/* Actor */}
                       <td className="px-4 py-3 text-text-industrial/40 whitespace-nowrap">
                         {item.actorName ?? item.actorUserId ?? "—"}
                       </td>

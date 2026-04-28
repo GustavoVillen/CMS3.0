@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Download, Loader2, Plus, X } from "lucide-react";
+import { AlertTriangle, Download, Loader2, Maximize2, Minimize2, Plus, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+
+type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
 interface Defect {
   id: string;
@@ -26,6 +28,14 @@ interface Defect {
   immediateAction: string | null;
   correctiveAction: string | null;
   rcaAnalysis: string | null;
+  rcaMethodology: RcaMethodology | null;
+  rcaImmediateCause: string | null;
+  rcaContributingCause: string | null;
+  rcaRootCause: string | null;
+  rcaPreventiveActions: string | null;
+  rcaCompletedAt: string | null;
+  rcaApprovedAt: string | null;
+  rcaApprovedByUserId: string | null;
   capaDescription: string | null;
   repairType: string | null;
   createdAt: string;
@@ -64,64 +74,6 @@ function extractCloseNotes(correctiveAction: string | null): string | null {
   return last || correctiveAction.trim();
 }
 
-interface CloseDefectModalProps {
-  defectId: string;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const CloseDefectModal: React.FC<CloseDefectModalProps> = ({ defectId, onClose, onSuccess }) => {
-  const t = useT();
-  const [closeNotes, setCloseNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  const onSave = useCallback(async () => {
-    setSaving(true);
-    setActionError(null);
-    try {
-      await api.post(`/app/pms/defects/${defectId}/close`, {
-        closeNotes: closeNotes.trim() || undefined,
-      });
-      onSuccess();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : t("common.saveError"));
-    } finally {
-      setSaving(false);
-    }
-  }, [closeNotes, defectId, onSuccess, t]);
-
-  return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("def.close")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
-        </div>
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def.closeNotes")}</label>
-            <textarea
-              rows={4}
-              value={closeNotes}
-              onChange={e => setCloseNotes(e.target.value)}
-              placeholder="Notas de cierre (opcional)"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
-            />
-          </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
-        </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 async function downloadDefectPdf(defect: Defect) {
   const token = localStorage.getItem("gpms_token") ?? "";
   const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
@@ -139,6 +91,82 @@ async function downloadDefectPdf(defect: Defect) {
 }
 
 
+// ─── AssetLiveSearch ──────────────────────────────────────────────────────────
+
+interface AssetLiveSearchProps {
+  assets: { id: string; assetCode: string; name: string | null }[];
+  loading: boolean;
+  disabled: boolean;
+  value: string;
+  onChange: (id: string) => void;
+}
+
+const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disabled, value, onChange }) => {
+  const [query, setQuery]   = useState("");
+  const [open, setOpen]     = useState(false);
+  const ref                 = React.useRef<HTMLDivElement>(null);
+
+  const selected = assets.find(a => a.id === value);
+  const filtered = query.trim()
+    ? assets.filter(a =>
+        a.assetCode.toLowerCase().includes(query.toLowerCase()) ||
+        (a.name ?? "").toLowerCase().includes(query.toLowerCase())
+      )
+    : assets;
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (a: { id: string; assetCode: string; name: string | null }) => {
+    onChange(a.id);
+    setQuery("");
+    setOpen(false);
+  };
+
+  const displayValue = selected ? `${selected.assetCode}${selected.name ? ` — ${selected.name}` : ""}` : "";
+
+  return (
+    <div ref={ref} className="relative">
+      <label className={labelCls}>Equipo *</label>
+      <input
+        value={open ? query : displayValue}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => { if (!disabled) { setQuery(""); setOpen(true); } }}
+        disabled={disabled || loading}
+        placeholder={loading ? "Cargando equipos…" : disabled ? "Primero seleccioná un buque" : "Buscar equipo…"}
+        className={inputCls}
+        autoComplete="off"
+      />
+      {open && !disabled && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+          {filtered.map(a => (
+            <button
+              key={a.id}
+              type="button"
+              onMouseDown={() => pick(a)}
+              className="w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+            >
+              <span className="font-mono text-accent shrink-0">{a.assetCode}</span>
+              {a.name && <span className="text-text-industrial/60 truncate">{a.name}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && !disabled && !loading && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-lg px-3 py-2 text-xs text-text-industrial/40">
+          Sin resultados
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── CreateDefectModal ────────────────────────────────────────────────────────
 
 interface CreateDefectModalProps {
@@ -153,7 +181,11 @@ const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreated }) => {
+  const [vessels, setVessels]                 = useState<{ code: string; name: string }[]>([]);
+  const [assets, setAssets]                   = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
+  const [loadingAssets, setLoadingAssets]     = useState(false);
   const [vesselCode, setVesselCode]           = useState("");
+  const [assetId, setAssetId]                 = useState("");
   const [classification, setClassification]   = useState("");
   const [description, setDescription]         = useState("");
   const [severity, setSeverity]               = useState("MEDIUM");
@@ -161,16 +193,41 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
   const [immediateAction, setImmediateAction] = useState("");
   const [saving, setSaving]                   = useState(false);
   const [err, setErr]                         = useState<string | null>(null);
+  const [expanded, setExpanded]               = useState(true);
+
+  useEffect(() => {
+    api.get<{ items: { code: string; name: string }[] }>("/app/vessels")
+      .then(r => {
+        const list = r.items ?? [];
+        setVessels(list);
+        if (list.length === 1 && list[0]) setVesselCode(list[0].code);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!vesselCode) { setAssets([]); setAssetId(""); return; }
+    setLoadingAssets(true);
+    setAssetId("");
+    api.get<{ items: { id: string; assetCode: string; name: string | null }[] }>(
+      `/app/pms/assets?vesselCode=${encodeURIComponent(vesselCode)}&limit=200`
+    )
+      .then(r => setAssets(r.items ?? []))
+      .catch(() => setAssets([]))
+      .finally(() => setLoadingAssets(false));
+  }, [vesselCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vesselCode.trim())    { setErr("El código de buque es requerido."); return; }
+    if (!vesselCode)           { setErr("Seleccionar un buque es requerido."); return; }
+    if (!assetId)              { setErr("Seleccionar un equipo es requerido."); return; }
     if (!classification.trim()) { setErr("La clasificación es requerida."); return; }
     if (!description.trim())   { setErr("La descripción es requerida."); return; }
     setSaving(true); setErr(null);
     try {
       const defect = await api.post<Defect>("/app/pms/defects", {
-        vesselCode: vesselCode.trim().toUpperCase(),
+        vesselCode,
+        assetId,
         classification: classification.trim(),
         description: description.trim(),
         severity,
@@ -187,16 +244,26 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <h2 className="text-base font-bold text-white">Nuevo Defecto</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button type="button" onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          </div>
         </div>
-        <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Buque *</label>
-              <input value={vesselCode} onChange={e => setVesselCode(e.target.value.toUpperCase())} className={inputCls} placeholder="ej. LATERE" />
+              <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls + " appearance-none"} required>
+                <option value="">— Seleccionar buque —</option>
+                {vessels.map(v => (
+                  <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className={labelCls}>Severidad</label>
@@ -205,6 +272,13 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               </select>
             </div>
           </div>
+          <AssetLiveSearch
+            assets={assets}
+            loading={loadingAssets}
+            disabled={!vesselCode}
+            value={assetId}
+            onChange={setAssetId}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Estado operacional</label>
@@ -260,6 +334,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [immediateAction, setImmediateAction] = useState(defect.immediateAction ?? "");
   const [correctiveAction, setCorrectiveAction] = useState(defect.correctiveAction ?? "");
   const [rcaAnalysis, setRcaAnalysis]         = useState(defect.rcaAnalysis ?? "");
+  const [rcaMethodology, setRcaMethodology]   = useState<RcaMethodology | "">(defect.rcaMethodology ?? "");
+  const [rcaImmediateCause, setRcaImmediateCause]       = useState(defect.rcaImmediateCause ?? "");
+  const [rcaContributingCause, setRcaContributingCause] = useState(defect.rcaContributingCause ?? "");
+  const [rcaRootCause, setRcaRootCause]                 = useState(defect.rcaRootCause ?? "");
+  const [rcaPreventiveActions, setRcaPreventiveActions] = useState(defect.rcaPreventiveActions ?? "");
+  const [rcaApprovedAt, setRcaApprovedAt]               = useState<string | null>(defect.rcaApprovedAt);
   const [capaDescription, setCapaDescription] = useState(defect.capaDescription ?? "");
   const [repairType, setRepairType]           = useState<"TEMPORARIA" | "PERMANENTE" | null>(
     defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null,
@@ -268,6 +348,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [saving, setSaving]           = useState(false);
   const [closing, setClosing]         = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expanded, setExpanded]       = useState(true);
 
   // Post-save flow state
   const [postSaveStep, setPostSaveStep] = useState<null | "ask-permanent-wo">(null);
@@ -282,6 +363,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     setImmediateAction(defect.immediateAction ?? "");
     setCorrectiveAction(defect.correctiveAction ?? "");
     setRcaAnalysis(defect.rcaAnalysis ?? "");
+    setRcaMethodology(defect.rcaMethodology ?? "");
+    setRcaImmediateCause(defect.rcaImmediateCause ?? "");
+    setRcaContributingCause(defect.rcaContributingCause ?? "");
+    setRcaRootCause(defect.rcaRootCause ?? "");
+    setRcaPreventiveActions(defect.rcaPreventiveActions ?? "");
+    setRcaApprovedAt(defect.rcaApprovedAt);
     setCapaDescription(defect.capaDescription ?? "");
     setRepairType(defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null);
     setActionError(null);
@@ -291,7 +378,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
   const isClosed = defect.status === "CLOSED";
   const closeNotes = extractCloseNotes(defect.correctiveAction);
-  const { setRequestMessage } = useCopilotScreenContext();
 
   useCopilotEmitter({
     module: "DEFECTS",
@@ -302,25 +388,35 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     workflowStage: defect.status,
     canEdit: !isClosed,
     fieldValues: {
-      description:      description      || null,
-      classification:   classification   || null,
-      severity:         severity         || null,
-      operationalState: operationalState || null,
-      immediateAction:  immediateAction  || null,
-      correctiveAction: correctiveAction || null,
-      rcaAnalysis:      rcaAnalysis      || null,
-      capaDescription:  capaDescription  || null,
+      description:           description           || null,
+      classification:        classification        || null,
+      severity:              severity              || null,
+      operationalState:      operationalState      || null,
+      immediateAction:       immediateAction       || null,
+      correctiveAction:      correctiveAction      || null,
+      rcaAnalysis:           rcaAnalysis           || null,
+      rcaMethodology:        rcaMethodology        || null,
+      rcaImmediateCause:     rcaImmediateCause     || null,
+      rcaContributingCause:  rcaContributingCause  || null,
+      rcaRootCause:          rcaRootCause          || null,
+      rcaPreventiveActions:  rcaPreventiveActions  || null,
+      capaDescription:       capaDescription       || null,
     },
-    relatedEntities: { workOrderId: defect.workOrderId },
+    relatedEntities: { workOrderId: defect.workOrderId, assetId: defect.assetId },
   });
 
   useCopilotApplyFields(!isClosed ? (fields) => {
-    if (fields.description      !== undefined) setDescription(fields.description);
-    if (fields.classification   !== undefined) setClassification(fields.classification);
-    if (fields.immediateAction  !== undefined) setImmediateAction(fields.immediateAction);
-    if (fields.correctiveAction !== undefined) setCorrectiveAction(fields.correctiveAction);
-    if (fields.rcaAnalysis      !== undefined) setRcaAnalysis(fields.rcaAnalysis);
-    if (fields.capaDescription  !== undefined) setCapaDescription(fields.capaDescription);
+    if (fields.description          !== undefined) setDescription(fields.description);
+    if (fields.classification       !== undefined) setClassification(fields.classification);
+    if (fields.immediateAction      !== undefined) setImmediateAction(fields.immediateAction);
+    if (fields.correctiveAction     !== undefined) setCorrectiveAction(fields.correctiveAction);
+    if (fields.rcaAnalysis          !== undefined) setRcaAnalysis(fields.rcaAnalysis);
+    if (fields.rcaMethodology       !== undefined && (["FIVE_WHYS", "FISHBONE", "FTA", "BARRIER_ANALYSIS", ""].includes(fields.rcaMethodology))) setRcaMethodology(fields.rcaMethodology as RcaMethodology | "");
+    if (fields.rcaImmediateCause    !== undefined) setRcaImmediateCause(fields.rcaImmediateCause);
+    if (fields.rcaContributingCause !== undefined) setRcaContributingCause(fields.rcaContributingCause);
+    if (fields.rcaRootCause         !== undefined) setRcaRootCause(fields.rcaRootCause);
+    if (fields.rcaPreventiveActions !== undefined) setRcaPreventiveActions(fields.rcaPreventiveActions);
+    if (fields.capaDescription      !== undefined) setCapaDescription(fields.capaDescription);
   } : null);
 
   const patchDefect = useCallback(async () => {
@@ -336,6 +432,11 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         immediateAction: normalizeOptionalText(immediateAction),
         correctiveAction: normalizeOptionalText(correctiveAction),
         rcaAnalysis: normalizeOptionalText(rcaAnalysis),
+        rcaMethodology: rcaMethodology || null,
+        rcaImmediateCause: normalizeOptionalText(rcaImmediateCause),
+        rcaContributingCause: normalizeOptionalText(rcaContributingCause),
+        rcaRootCause: normalizeOptionalText(rcaRootCause),
+        rcaPreventiveActions: normalizeOptionalText(rcaPreventiveActions),
         capaDescription: normalizeOptionalText(capaDescription),
         repairType: repairType ?? null,
         status,
@@ -347,7 +448,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     } finally {
       setSaving(false);
     }
-  }, [capaDescription, classification, correctiveAction, defect.id, description, immediateAction, operationalState, rcaAnalysis, repairType, severity, status, t]);
+  }, [capaDescription, classification, correctiveAction, defect.id, description, immediateAction, operationalState, rcaAnalysis, rcaMethodology, rcaImmediateCause, rcaContributingCause, rcaRootCause, rcaPreventiveActions, repairType, severity, status, t]);
 
   const closeDefectAndWo = useCallback(async () => {
     setClosing(true);
@@ -371,7 +472,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     } finally {
       setClosing(false);
     }
-  }, [capaDescription, defect.defectCode, defect.id, defect.workOrderId, onSaved]);
+  }, [capaDescription, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved]);
 
   const handleSave = useCallback(async () => {
     if (!await patchDefect()) return;
@@ -442,16 +543,21 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+        <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-white">{t("page.defects")}</h2>
               <p className="text-[11px] text-text-industrial/50 font-mono">{defect.defectCode} · {defect.vesselCode}</p>
             </div>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+                {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+            </div>
           </div>
 
-          <div className="p-6 space-y-4 max-h-[72vh] overflow-y-auto">
+          <div className="p-6 space-y-4 flex-1 overflow-y-auto">
             {/* Meta info */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
@@ -513,10 +619,82 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               <textarea rows={2} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Medidas tomadas de inmediato…" />
             </div>
 
-            {/* Análisis RCA */}
-            <div className="space-y-1.5">
-              <label className={fldLabel}>Análisis RCA</label>
-              <textarea rows={3} value={rcaAnalysis} onChange={e => setRcaAnalysis(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Causa raíz identificada, metodología aplicada (5 Por qués, Fishbone, etc.)…" />
+            {/* Análisis RCA estructurado */}
+            <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">Análisis de causa raíz (RCA)</p>
+                {rcaApprovedAt && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
+                    {t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={fldLabel}>{t("def.rcaMethodology")}</label>
+                  <select value={rcaMethodology} onChange={e => setRcaMethodology(e.target.value as RcaMethodology | "")} disabled={isClosed} className={fldCls}>
+                    <option value="">—</option>
+                    <option value="FIVE_WHYS">{t("def.method.fiveWhys")}</option>
+                    <option value="FISHBONE">{t("def.method.fishbone")}</option>
+                    <option value="FTA">{t("def.method.fta")}</option>
+                    <option value="BARRIER_ANALYSIS">{t("def.method.barrierAnalysis")}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={fldLabel}>Resumen del análisis</label>
+                <textarea rows={2} value={rcaAnalysis} onChange={e => setRcaAnalysis(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Resumen ejecutivo del análisis…" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={fldLabel}>{t("def.rcaImmediateCause")}</label>
+                <textarea rows={2} value={rcaImmediateCause} onChange={e => setRcaImmediateCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Fallo observable inmediato…" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={fldLabel}>{t("def.rcaContributingCause")}</label>
+                <textarea rows={2} value={rcaContributingCause} onChange={e => setRcaContributingCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Factores que contribuyeron…" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={fldLabel}>{t("def.rcaRootCause")}</label>
+                <textarea rows={2} value={rcaRootCause} onChange={e => setRcaRootCause(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Causa raíz identificada…" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={fldLabel}>{t("def.rcaPreventiveActions")}</label>
+                <textarea rows={2} value={rcaPreventiveActions} onChange={e => setRcaPreventiveActions(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Acciones para evitar recurrencia…" />
+              </div>
+
+              {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm("¿Aprobar el análisis RCA? Esta acción se registra con tu usuario y la fecha actual.")) return;
+                    try {
+                      const now = new Date().toISOString();
+                      await api.patch(`/app/pms/defects/${defect.id}`, {
+                        rcaAnalysis: normalizeOptionalText(rcaAnalysis),
+                        rcaMethodology: rcaMethodology || null,
+                        rcaImmediateCause: normalizeOptionalText(rcaImmediateCause),
+                        rcaContributingCause: normalizeOptionalText(rcaContributingCause),
+                        rcaRootCause: normalizeOptionalText(rcaRootCause),
+                        rcaPreventiveActions: normalizeOptionalText(rcaPreventiveActions),
+                        rcaApprovedAt: now,
+                      });
+                      setRcaApprovedAt(now);
+                      onSaved();
+                    } catch (err) {
+                      setActionError(err instanceof ApiError ? err.message : "Error al aprobar el RCA.");
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
+                >
+                  {t("def.rcaApprove")}
+                </button>
+              )}
             </div>
 
             {/* CAPA */}
@@ -527,7 +705,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
             {/* Tipo de reparación — último campo */}
             {!isClosed && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+              <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
                 <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">¿La acción fue una corrección temporaria o permanente?</p>
                 <div className="flex gap-2">
                   {(["TEMPORARIA", "PERMANENTE"] as const).map(rt => (
@@ -672,7 +850,14 @@ export const DefectsPage: React.FC = () => {
     {
       key: "classification",
       header: t("def.classification"),
-      render: row => <span className="font-medium text-white line-clamp-1">{row.classification}</span>,
+      render: row => (
+        <div className="space-y-0.5">
+          <div className="font-medium text-white line-clamp-1">{row.classification}</div>
+          {row.description && (
+            <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: "vesselCode",

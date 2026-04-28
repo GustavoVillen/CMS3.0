@@ -123,6 +123,14 @@ export async function confirmImport(
     }
 
     try {
+      if (module === "maintenance_plans" && row.data.assetCode && !row.data.assetId) {
+        const asset = await prisma.asset.findFirst({
+          where: { tenantId: tenant.id, vesselCode: String(row.data.vesselCode ?? ""), assetCode: String(row.data.assetCode) },
+          select: { id: true },
+        });
+        if (asset) row.data.assetId = asset.id;
+      }
+
       const rawData = buildModelData(module, row.data, tenant.id);
       // Strip server-managed fields — never trust values from the file
       const { id: _id, createdAt: _ca, updatedAt: _ua, ...baseData } = rawData;
@@ -183,6 +191,7 @@ async function findExistingRecord(
     case "spares":            return prisma.spare.findFirst({ where, select: { id: true, deletedAt: true } });
     case "providers":         return prisma.provider.findFirst({ where, select: { id: true, deletedAt: true } });
     case "certificates":      return prisma.certificate.findFirst({ where, select: { id: true, deletedAt: true } });
+    case "work_orders":       return null;
   }
 }
 
@@ -288,16 +297,38 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         lastOverhaulDate: d.lastOverhaulDate ? new Date(String(d.lastOverhaulDate)) : null,
         replacementDate:  d.replacementDate  ? new Date(String(d.replacementDate))  : null,
       };
-    case "maintenance_plans":
-      return {
+    case "maintenance_plans": {
+      const r: Record<string, unknown> = {
         tenantId,
-        vesselCode:  d.vesselCode,
-        taskCode:    d.taskCode,
-        title:       d.title ?? null,
-        triggerType: d.triggerType ?? "MONTHS",
-        frequency:   d.frequency ? Number(d.frequency) : null,
-        status:      d.status ?? "ACTIVE",
+        vesselCode:        d.vesselCode,
+        assetId:           d.assetId ?? "",
+        taskCode:          d.taskCode,
+        title:             d.title             ?? "",
+        taskType:          d.taskType          ?? "MAINTENANCE",
+        triggerType:       d.triggerType       ?? "MONTHS",
+        triggerResultMode: d.triggerResultMode ?? "DUE_ONLY",
+        windowMode:        d.windowMode        ?? "AUTO",
+        status:            d.status            ?? "ACTIVE",
       };
+      if ("sfiGroupNumber"    in d) r.sfiGroupNumber    = d.sfiGroupNumber ? Number(d.sfiGroupNumber) : null;
+      if ("sfiCode"           in d) r.sfiSubgroupCode   = d.sfiCode != null ? String(d.sfiCode) : null;
+      if ("description"       in d) r.description       = d.description       ?? null;
+      if ("responsible"       in d) r.responsible       = d.responsible       ?? null;
+      if ("acceptanceCriteria" in d) r.acceptanceCriteria = d.acceptanceCriteria ?? null;
+      if ("loto"             in d) r.loto             = d.loto             ?? null;
+      if ("riskLevel"         in d) r.riskLevel         = d.riskLevel         ?? null;
+      if ("riskAnalysisResult" in d) r.riskAnalysisResult = d.riskAnalysisResult ?? null;
+      if ("frequencyMonths"   in d) r.frequencyMonths   = d.frequencyMonths   ? Number(d.frequencyMonths) : null;
+      if ("frequencyHours"    in d) r.frequencyHours    = parseNumeric(d.frequencyHours);
+      if ("windowLeadDays"    in d) r.windowLeadDays    = d.windowLeadDays    ? Number(d.windowLeadDays) : null;
+      if ("windowLeadHours"   in d) r.windowLeadHours   = parseNumeric(d.windowLeadHours);
+      if ("lastExecutionDate" in d) r.lastExecutionDate = d.lastExecutionDate ? new Date(String(d.lastExecutionDate)) : null;
+      if ("nextDueDate"       in d) r.nextDueDate       = d.nextDueDate       ? new Date(String(d.nextDueDate)) : null;
+      if ("lastExecutionHours" in d) r.lastExecutionHours = parseNumeric(d.lastExecutionHours);
+      if ("nextDueHours"      in d) r.nextDueHours      = parseNumeric(d.nextDueHours);
+      if ("checklistTemplate" in d) r.checklistTemplate = d.checklistTemplate ?? null;
+      return r;
+    }
     case "spares":
       return {
         tenantId,
@@ -339,6 +370,8 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         issueDate:         d.issueDate  ? new Date(String(d.issueDate))  : null,
         expiryDate:        d.expiryDate ? new Date(String(d.expiryDate)) : null,
       };
+    case "work_orders":
+      return { tenantId };
   }
 }
 

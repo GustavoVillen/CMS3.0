@@ -44,7 +44,6 @@ export interface PlatformPromptUpdateRequest {
 
 const CAPABILITIES: DevPromptCapability[] = [
   "knowledge_assistant",
-  "rca_assistant",
   "defect_assistant",
   "deferral_analysis",
   "barrier_interviewer",

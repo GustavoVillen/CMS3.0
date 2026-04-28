@@ -21,6 +21,7 @@ import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-serv
 import { getActiveTenantAiDocumentsContent } from "../ai-documents/ai-documents-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import type { FileContent } from "./file-parser-service";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -39,10 +40,28 @@ Immutable rules:
 - If the user asks for a specific vessel/asset, include filters in the link query string when applicable. Example: [Abrir Certificados de LATERE](/certificates?vesselCode=LATERE).
 - If the user asks for expiring/expired/valid certificates, include status filter when applicable. Example: [Abrir Certificados por vencer](/certificates?status=EXPIRING).
 - Apply the same pattern for other modules when applicable. Examples: [Abrir Ordenes de trabajo](/work-orders?vesselCode=LATERE&status=IN_PROGRESS), [Abrir Defectos abiertos](/defects?vesselCode=LATERE&status=OPEN).
+- When referencing a specific maintenance plan from query results, always include a direct link using its taskCode: [TASKCODE](/maintenance-plans?openId=PLAN_ID). Use the "id" field as PLAN_ID and "taskCode" as the display text.
+- When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
 - IMPORTANT: Before asking the user a question that can be answered by querying the system (e.g. "Does a maintenance plan exist?", "Are there open work orders?"), ALWAYS use the available query tools to look it up yourself first.
+- RCA / DEFECT PROACTIVE SEARCH: When you are in DEFECTS or RCA module and you are about to ask the user ANY question about maintenance history, previous work orders, last service date, last fluid/filter/component change, inspection records, or any operational record related to the asset — STOP before asking. First call query_maintenance_plans and query_work_orders using the assetId and vesselCode from the screen context (relatedEntities.assetId). Then in your response: (1) explicitly state what you found — plan name, last execution date/hours, or work orders — or state "No encontré registros de [X] para este activo en el sistema"; (2) only ask the user for additional context if the records were insufficient or absent. Never ask "¿Cuándo fue el último cambio de X?" without first querying the system yourself.
+- RCA USER HYPOTHESIS FIRST: When you are about to start or guide an RCA (root cause analysis) — triggered by the user asking to "analizar la causa", "hacer el RCA", "iniciar RCA", "investigar el defecto", or any similar phrase — ALWAYS start with ONE single question before any analysis: "¿Ya tenés alguna hipótesis sobre la posible causa de este defecto?" Wait for the user's answer before proceeding. If the user already provided a hypothesis in their message, do NOT ask again — instead, critically evaluate it before incorporating it: check if it (1) identifies a specific, actionable cause (not just a symptom), (2) is technically plausible given the defect description and any maintenance records found, (3) is falsifiable — i.e., there is a way to confirm or rule it out. If the hypothesis is vague, symptom-level, or incomplete, point it out respectfully and help the user refine it to a proper root cause before proceeding with the full RCA. If the hypothesis is well-formed, confirm it explicitly and build the analysis from there.
 - FILL FIELDS: When the user asks to "completar campos faltantes", "complete missing fields", "fill the form", "llenar campos", "rellenar campos", or any similar phrase, analyze the screen context fieldValues (provided in ACTIVE RECORD above), identify fields whose value is null or empty, and propose expert-quality values for them based on domain knowledge and any already-filled fields. Embed the proposed values at the END of your response using EXACTLY this format with no spaces between the markers and the JSON:
 [CAMPOS]{"fieldKey": "proposed value", "fieldKey2": "proposed value 2"}[/CAMPOS]
 Use the exact key names from the fieldValues object in the screen context. Only include fields that were null/empty and that you can confidently propose — omit already-filled fields. After the block, briefly explain what you filled and why.
+- LOTO FIELD FORMAT: When proposing or generating a value for the "loto" field (inside [CAMPOS] or in plain text), you MUST ALWAYS use EXACTLY this three-section structure — no exceptions:
+
+LOTO:
+- [cada punto de aislación eléctrica, mecánica o de fluidos requerido]
+
+INSTRUMENTOS NECESARIOS:
+- [cada instrumento de medición y herramienta requerida]
+
+EQUIPOS DE PROTECCIÓN PERSONAL NECESARIOS:
+- [cada EPP requerido]
+
+If LOTO does not apply, still include all three sections and write "No aplica" under each. Be specific to the task. NEVER write "LOTO no aplica a este plan" as a single sentence — that is WRONG.
+When embedding this value inside [CAMPOS] JSON, use \n for newlines so the full structure is preserved in the string value. Example:
+[CAMPOS]{"loto": "LOTO:\n- Desconectar breaker X\n\nINSTRUMENTOS NECESARIOS:\n- Multímetro\n\nEQUIPOS DE PROTECCIÓN PERSONAL NECESARIOS:\n- Guantes dieléctricos"}[/CAMPOS]
 
 RESPONSE STYLE — always apply unless the user explicitly asks for more detail:
 - No greetings, no introductions, no "of course", no "I'll analyze", no preamble of any kind.
@@ -68,7 +87,10 @@ Available tenant module routes:
 - Pedidos de repuestos: /spare-orders
 - Proveedores: /providers
 - Insights IA: /ai-insights
-- Base documental IA: /ai-documents`.trim();
+- Base documental IA: /ai-documents
+
+DOMAIN TERMINOLOGY (tenant-specific):
+- "Luz de válvulas" = "huelgo de válvulas" (valve clearance). When the user or any document mentions "luz de válvulas", interpret and respond using the correct technical term "huelgo de válvulas".`.trim();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,6 +114,12 @@ export interface CopilotoRequest {
    * Sanitised: only string/null leaf values, no circular refs, no sensitive secrets.
    */
   screenContext?: Record<string, unknown> | null;
+  /**
+   * Optional file attachment parsed by file-parser-service.
+   * Injected as a multimodal content block into the last user message.
+   * Sent once; subsequent turns carry context through conversation history.
+   */
+  fileAttachment?: FileContent | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +130,7 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_maintenance_plans",
     description:
-      "Query maintenance plans for the current tenant/vessel. Use this when you need to check if a maintenance plan exists, find its status, due date, frequency, or responsible party. Always prefer calling this tool over asking the user.",
+      "Query maintenance plans for the current tenant/vessel. Use this when you need to check if a maintenance plan exists, find its status, due date, frequency, responsible party, or verify whether a specific task/inspection is being performed. Always prefer calling this tool over asking the user. When searching for a specific activity (e.g. 'termografía', 'alineación', 'cambio de aceite'), use textSearch to search across both title AND the task description ('Tareas a realizar') field simultaneously.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -112,8 +140,8 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
           type: "string",
           description: "Filter by plan status: ACTIVE | DUE_SOON | OVERDUE | INACTIVE (optional)",
         },
-        titleContains: { type: "string", description: "Case-insensitive substring search in title (optional)" },
-        limit: { type: "number", description: "Max results to return (default 10, max 20)" },
+        textSearch: { type: "string", description: "Case-insensitive substring search across both title AND description/tasks fields simultaneously (optional). Use this to find plans related to a specific activity, inspection, or procedure." },
+        limit: { type: "number", description: "Max results to return (default 20, max 50)" },
       },
       required: ["vesselCode"],
     },
@@ -156,25 +184,6 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
         severity: {
           type: "string",
           description: "Filter by severity: LOW | MEDIUM | HIGH | CRITICAL (optional)",
-        },
-        limit: { type: "number", description: "Max results to return (default 10, max 20)" },
-      },
-      required: ["vesselCode"],
-    },
-  },
-  {
-    name: "query_rca_records",
-    description:
-      "Query RCA (Root Cause Analysis) records for the current tenant/vessel. Use this to check if an RCA already exists for a defect/work order, find RCA status, or review analysis history.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        vesselCode: { type: "string", description: "Filter by vessel code (required)" },
-        defectId: { type: "string", description: "Filter by related defect ID (optional)" },
-        workOrderId: { type: "string", description: "Filter by related work order ID (optional)" },
-        status: {
-          type: "string",
-          description: "Filter by status: DRAFT | UNDER_ANALYSIS | COMPLETED | APPROVED | CLOSED (optional)",
         },
         limit: { type: "number", description: "Max results to return (default 10, max 20)" },
       },
@@ -228,22 +237,31 @@ async function executeCopilotTool(
       };
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
-      if (input.titleContains) where.title = { contains: input.titleContains as string, mode: "insensitive" };
+      if (input.textSearch) {
+        where.OR = [
+          { title:       { contains: input.textSearch as string, mode: "insensitive" } },
+          { description: { contains: input.textSearch as string, mode: "insensitive" } },
+        ];
+      }
 
       const rows = await prisma.maintenancePlan.findMany({
         where,
-        take: limit,
+        take: Math.min(Number(input.limit ?? 20), 50),
         orderBy: { nextDueDate: "asc" },
         select: {
+          id: true,
           taskCode: true,
           title: true,
+          description: true,
           status: true,
           executionStatus: true,
           triggerType: true,
           frequencyHours: true,
           frequencyMonths: true,
           nextDueDate: true,
+          nextDueHours: true,
           lastExecutionDate: true,
+          lastExecutionHours: true,
           responsible: true,
         },
       });
@@ -313,37 +331,6 @@ async function executeCopilotTool(
 
       return JSON.stringify(
         rows.length > 0 ? rows : { message: "No defects found matching the given criteria." },
-      );
-    }
-
-    if (name === "query_rca_records") {
-      const where: Record<string, unknown> = {
-        tenantId,
-        vesselCode: input.vesselCode,
-        deletedAt: null,
-      };
-      if (input.defectId) where.defectId = input.defectId;
-      if (input.workOrderId) where.workOrderId = input.workOrderId;
-      if (input.status) where.status = input.status;
-
-      const rows = await prisma.rcaRecord.findMany({
-        where,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        select: {
-          rcaCode: true,
-          status: true,
-          methodology: true,
-          analysisSummary: true,
-          rootCause: true,
-          correctiveActions: true,
-          completedAt: true,
-          approvedAt: true,
-        },
-      });
-
-      return JSON.stringify(
-        rows.length > 0 ? rows : { message: "No RCA records found matching the given criteria." },
       );
     }
 
@@ -477,10 +464,43 @@ export async function streamCopilotoChat(
   const client = new Anthropic({ apiKey });
   const systemPrompt = systemParts.join("\n\n");
 
-  const baseMessages: Anthropic.MessageParam[] = req.messages.map(m => ({
-    role: m.role,
-    content: m.content,
-  }));
+  const baseMessages: Anthropic.MessageParam[] = req.messages.map((m, i) => {
+    // Inject file attachment as multimodal block into the last user message
+    if (
+      i === req.messages.length - 1 &&
+      m.role === "user" &&
+      req.fileAttachment
+    ) {
+      const fa = req.fileAttachment;
+      const contentBlocks: Anthropic.ContentBlockParam[] = [];
+
+      if (fa.type === "text") {
+        contentBlocks.push({
+          type: "text",
+          text: `Archivo adjunto — ${fa.fileName}:\n\n${fa.text}`,
+        });
+      } else if (fa.type === "image") {
+        contentBlocks.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: fa.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+            data: fa.base64,
+          },
+        });
+      } else if (fa.type === "document") {
+        // PDF — Claude native document reading (claude-3-5+)
+        contentBlocks.push({
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: fa.base64 },
+        } as unknown as Anthropic.ContentBlockParam);
+      }
+
+      contentBlocks.push({ type: "text", text: m.content });
+      return { role: "user" as const, content: contentBlocks };
+    }
+    return { role: m.role, content: m.content };
+  });
 
   // ── Phase 1: stream with tools enabled ──────────────────────────────────────
   const phase1Stream = client.messages.stream({

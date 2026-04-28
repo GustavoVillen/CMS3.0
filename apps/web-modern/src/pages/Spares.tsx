@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { AlertTriangle, FileSpreadsheet, Package, Plus, X } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { AlertTriangle, ChevronDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
@@ -7,6 +8,7 @@ import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "..
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,23 +18,28 @@ interface Spare {
   id: string; sku: string; name: string; vesselCode: string;
   category: string | null; criticality: string; status: string;
   manufacturer: string | null; model: string | null;
-  unit: string; currentStock: number; minStock: number; reorderPoint: number;
+  unit: string; minStock: number; reorderPoint: number; targetStock: number | null;
   location: string | null; createdAt: string;
+  // Calculated stock (from stock-calc-service, never from Spare.currentStock)
+  onHand: number; available: number;
+  // Extended fields (Fase 2)
+  internalPartNumber: string | null; manufacturerPartNumber: string | null;
+  longDescription: string | null; sfiCode: string | null; leadTimeDays: number | null;
 }
 interface ListResponse { items: Spare[]; total: number; }
 
 // ---------------------------------------------------------------------------
-// Stock level indicator
+// Stock level indicator (uses onHand from calculation service)
 // ---------------------------------------------------------------------------
 
 function StockCell({ spare }: { spare: Spare }) {
-  const critical = spare.currentStock < spare.minStock;
-  const warning  = !critical && spare.currentStock <= spare.reorderPoint;
+  const critical = spare.onHand < spare.minStock;
+  const warning  = !critical && spare.onHand <= spare.reorderPoint;
   return (
     <div className="flex items-center gap-1.5">
       {critical && <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />}
       <span className={`font-bold text-xs ${critical ? "text-red-400" : warning ? "text-yellow-400" : "text-emerald-400"}`}>
-        {spare.currentStock}
+        {spare.onHand}
       </span>
       <span className="text-white/20 text-[10px]">{spare.unit}</span>
     </div>
@@ -40,9 +47,89 @@ function StockCell({ spare }: { spare: Spare }) {
 }
 
 function CriticalityBadge({ value }: { value: string }) {
-  const colors: Record<string, string> = { A: "bg-red-500/10 text-red-400 border-red-500/20", B: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20", C: "bg-white/5 text-white/40 border-white/10" };
+  const colors: Record<string, string> = {
+    A: "bg-red-500/10 text-red-400 border-red-500/20",
+    B: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    C: "bg-white/5 text-white/40 border-white/10",
+  };
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${colors[value] ?? colors.C}`}>{value}</span>;
 }
+
+// ---------------------------------------------------------------------------
+// Stock movement history panel
+// ---------------------------------------------------------------------------
+
+interface StockMovement {
+  id: string; movementCode: string; movementType: string;
+  quantity: number; unit: string; occurredAt: string; vesselCode: string;
+  referenceType: string | null; referenceId: string | null; referenceCode: string | null;
+  notes: string | null;
+}
+
+const MOV_LABEL: Record<string, string> = {
+  RECEIPT: "Ingreso", ISSUE: "Egreso", ADJUSTMENT: "Ajuste",
+  TRANSFER_IN: "Transfer +", TRANSFER_OUT: "Transfer −",
+  RETURN_IN: "Devolución", ADJUSTMENT_PLUS: "Ajuste +", ADJUSTMENT_MINUS: "Ajuste −",
+};
+const NEGATIVE_TYPES = new Set(["ISSUE", "TRANSFER_OUT", "ADJUSTMENT_MINUS"]);
+
+function MovBadge({ type }: { type: string }) {
+  const neg = NEGATIVE_TYPES.has(type);
+  const cls = neg
+    ? "bg-red-500/10 text-red-400 border-red-500/20"
+    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold ${cls}`}>{MOV_LABEL[type] ?? type}</span>;
+}
+
+const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
+  const { data, loading } = useFetch<{ items: StockMovement[] }>(`/app/pms/stock-movements?spareId=${spareId}`);
+  const movements = data?.items ?? [];
+
+  if (loading) return (
+    <div className="px-4 pb-4 flex items-center gap-2 text-xs text-white/30">
+      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando...
+    </div>
+  );
+  if (movements.length === 0) return (
+    <p className="px-4 pb-4 text-xs text-white/20">Sin movimientos registrados.</p>
+  );
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-[10px] text-white/30 border-b border-white/10">
+            <th className="text-left px-4 py-2">Fecha</th>
+            <th className="text-left px-4 py-2">Tipo</th>
+            <th className="text-right px-4 py-2">Cantidad</th>
+            <th className="text-left px-4 py-2">Buque</th>
+            <th className="text-left px-4 py-2">OT / Referencia</th>
+            <th className="text-left px-4 py-2">Notas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {movements.map(m => (
+            <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+              <td className="px-4 py-2 text-white/50 whitespace-nowrap">{fmtDate(m.occurredAt)}</td>
+              <td className="px-4 py-2"><MovBadge type={m.movementType} /></td>
+              <td className="px-4 py-2 text-right font-mono">
+                <span className={NEGATIVE_TYPES.has(m.movementType) ? "text-red-400" : "text-emerald-400"}>
+                  {NEGATIVE_TYPES.has(m.movementType) ? "−" : "+"}{m.quantity} {m.unit}
+                </span>
+              </td>
+              <td className="px-4 py-2 font-mono text-accent text-[10px]">{m.vesselCode}</td>
+              <td className="px-4 py-2">
+                {m.referenceCode
+                  ? <span className="font-mono text-white/70">{m.referenceCode}</span>
+                  : <span className="text-white/20">—</span>}
+              </td>
+              <td className="px-4 py-2 text-white/40 max-w-[160px] truncate" title={m.notes ?? undefined}>{m.notes ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Input style helpers
@@ -63,42 +150,62 @@ interface SpareModalProps {
 
 const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const isNew = spare === null;
+  const { user } = useAuth();
+  const canAdjustStock = !isNew && (user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT");
 
-  const [vesselCode,    setVesselCode]    = useState(spare?.vesselCode    ?? "");
-  const [sku,           setSku]           = useState(spare?.sku           ?? "");
-  const [name,          setName]          = useState(spare?.name          ?? "");
-  const [category,      setCategory]      = useState(spare?.category      ?? "");
-  const [criticality,   setCriticality]   = useState(spare?.criticality   ?? "B");
-  const [manufacturer,  setManufacturer]  = useState(spare?.manufacturer  ?? "");
-  const [model,         setModel]         = useState(spare?.model         ?? "");
-  const [unit,          setUnit]          = useState(spare?.unit          ?? "");
-  const [currentStock,  setCurrentStock]  = useState(String(spare?.currentStock  ?? 0));
-  const [minStock,      setMinStock]      = useState(String(spare?.minStock      ?? 0));
-  const [reorderPoint,  setReorderPoint]  = useState(String(spare?.reorderPoint  ?? 0));
-  const [location,      setLocation]      = useState(spare?.location      ?? "");
-  const [status,        setStatus]        = useState(spare?.status        ?? "ACTIVE");
+  const [vesselCode,              setVesselCode]              = useState(spare?.vesselCode              ?? "");
+  const [sku,                     setSku]                     = useState(spare?.sku                     ?? "");
+  const [name,                    setName]                    = useState(spare?.name                    ?? "");
+  const [category,                setCategory]                = useState(spare?.category                ?? "");
+  const [criticality,             setCriticality]             = useState(spare?.criticality             ?? "B");
+  const [manufacturer,            setManufacturer]            = useState(spare?.manufacturer            ?? "");
+  const [model,                   setModel]                   = useState(spare?.model                   ?? "");
+  const [unit,                    setUnit]                    = useState(spare?.unit                    ?? "");
+  const [minStock,                setMinStock]                = useState(String(spare?.minStock         ?? 0));
+  const [reorderPoint,            setReorderPoint]            = useState(String(spare?.reorderPoint     ?? 0));
+  const [targetStock,             setTargetStock]             = useState(String(spare?.targetStock      ?? ""));
+  const [location,                setLocation]                = useState(spare?.location                ?? "");
+  const [status,                  setStatus]                  = useState(spare?.status                  ?? "ACTIVE");
+  const [internalPartNumber,      setInternalPartNumber]      = useState(spare?.internalPartNumber      ?? "");
+  const [manufacturerPartNumber,  setManufacturerPartNumber]  = useState(spare?.manufacturerPartNumber  ?? "");
+  const [longDescription,         setLongDescription]         = useState(spare?.longDescription         ?? "");
+  const [sfiCode,                 setSfiCode]                 = useState(spare?.sfiCode                 ?? "");
+  const [leadTimeDays,            setLeadTimeDays]            = useState(String(spare?.leadTimeDays     ?? ""));
 
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [expanded,    setExpanded]    = useState(true);
+
+  const [adjQty,     setAdjQty]     = useState(String(spare?.available ?? spare?.onHand ?? 0));
+  const [adjNotes,   setAdjNotes]   = useState("");
+  const [adjSaving,  setAdjSaving]  = useState(false);
+  const [adjError,   setAdjError]   = useState<string | null>(null);
+  const [adjSuccess, setAdjSuccess] = useState(false);
 
   const handleSave = async () => {
     setError(null);
     setSaving(true);
     try {
       const payload = {
-        vesselCode:   vesselCode.trim().toUpperCase(),
-        sku:          sku.trim().toUpperCase(),
-        name:         name.trim(),
-        category:     category.trim() || null,
-        criticality:  criticality as "A" | "B" | "C",
-        manufacturer: manufacturer.trim() || null,
-        model:        model.trim() || null,
-        unit:         unit.trim(),
-        currentStock: parseFloat(currentStock) || 0,
-        minStock:     parseFloat(minStock)     || 0,
-        reorderPoint: parseFloat(reorderPoint) || 0,
-        location:     location.trim() || null,
-        status:       status as "ACTIVE" | "OBSOLETE",
+        vesselCode:             vesselCode.trim().toUpperCase(),
+        sku:                    sku.trim().toUpperCase(),
+        name:                   name.trim(),
+        category:               category.trim() || null,
+        criticality:            criticality as "A" | "B" | "C",
+        manufacturer:           manufacturer.trim() || null,
+        model:                  model.trim() || null,
+        unit:                   unit.trim(),
+        minStock:               parseFloat(minStock) || 0,
+        reorderPoint:           parseFloat(reorderPoint) || 0,
+        targetStock:            targetStock.trim() ? parseFloat(targetStock) : null,
+        location:               location.trim() || null,
+        status:                 status as "ACTIVE" | "OBSOLETE",
+        internalPartNumber:     internalPartNumber.trim() || null,
+        manufacturerPartNumber: manufacturerPartNumber.trim() || null,
+        longDescription:        longDescription.trim() || null,
+        sfiCode:                sfiCode.trim() || null,
+        leadTimeDays:           leadTimeDays.trim() ? parseInt(leadTimeDays, 10) : null,
       };
       if (!payload.vesselCode) { setError("Vessel es requerido."); setSaving(false); return; }
       if (!payload.sku)        { setError("SKU es requerido.");    setSaving(false); return; }
@@ -127,12 +234,12 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
     }
   };
 
-  const isCriticalStock = !isNew && spare.currentStock < spare.minStock;
-  const isWarnStock     = !isNew && !isCriticalStock && spare.currentStock <= spare.reorderPoint;
+  const isCriticalStock = !isNew && spare.onHand < spare.minStock;
+  const isWarnStock     = !isNew && !isCriticalStock && spare.onHand <= spare.reorderPoint;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
@@ -150,7 +257,12 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
               </div>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+          </div>
         </div>
 
         {/* Body */}
@@ -173,6 +285,13 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
             <label className={labelCls}>Nombre *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del repuesto" className={inputCls} />
           </div>
+
+          {longDescription !== undefined && (
+            <div>
+              <label className={labelCls}>Descripción larga</label>
+              <textarea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder="Descripción técnica detallada…" rows={2} className={`${inputCls} resize-none`} />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -200,7 +319,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Unidad *</label>
               <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="ud, m, kg, L…" className={inputCls} />
@@ -209,16 +328,39 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
               <label className={labelCls}>Ubicación en bodega</label>
               <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Rack A-3…" className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>Código SFI</label>
+              <input value={sfiCode} onChange={e => setSfiCode(e.target.value)} placeholder="710, 720…" className={inputCls} />
+            </div>
           </div>
 
-          {/* Stock levels */}
+          {/* Part numbers */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Part Number interno</label>
+              <input value={internalPartNumber} onChange={e => setInternalPartNumber(e.target.value)} placeholder="IPN-001" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Part Number fabricante</label>
+              <input value={manufacturerPartNumber} onChange={e => setManufacturerPartNumber(e.target.value)} placeholder="OEM-12345" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Stock thresholds — no currentStock field, only policy levels */}
           <div className="border border-white/10 rounded-xl p-4 space-y-3">
             <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Niveles de stock</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelCls}>Stock actual</label>
-                <input type="number" min="0" step="0.01" value={currentStock} onChange={e => setCurrentStock(e.target.value)} className={`${inputCls} ${parseFloat(currentStock) < parseFloat(minStock) ? "border-red-500/40 text-red-300" : parseFloat(currentStock) <= parseFloat(reorderPoint) ? "border-yellow-500/40 text-yellow-300" : ""}`} />
+            {!isNew && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-white/40">Stock actual (calculado):</span>
+                <span className={`font-bold ${isCriticalStock ? "text-red-400" : isWarnStock ? "text-yellow-400" : "text-emerald-400"}`}>
+                  {spare.onHand} {spare.unit}
+                </span>
+                {spare.available !== spare.onHand && (
+                  <span className="text-white/30 text-[10px]">Disponible: {spare.available}</span>
+                )}
               </div>
+            )}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Stock mínimo</label>
                 <input type="number" min="0" step="0.01" value={minStock} onChange={e => setMinStock(e.target.value)} className={inputCls} />
@@ -227,18 +369,106 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
                 <label className={labelCls}>Punto de reorden</label>
                 <input type="number" min="0" step="0.01" value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} className={inputCls} />
               </div>
+              <div>
+                <label className={labelCls}>Stock objetivo</label>
+                <input type="number" min="0" step="0.01" value={targetStock} onChange={e => setTargetStock(e.target.value)} placeholder="Opcional" className={inputCls} />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className={labelCls}>Estado</label>
-            <select value={status} onChange={e => setStatus(e.target.value)} className={inputCls}>
-              <option value="ACTIVE">Activo</option>
-              <option value="OBSOLETE">Obsoleto</option>
-            </select>
+          {/* Manual stock adjustment — ADMIN / FLEET_SUPERINTENDENT only */}
+          {canAdjustStock && (
+            <div className="border border-yellow-500/20 rounded-xl p-4 space-y-3 bg-yellow-500/5">
+              <p className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-wider">Ajuste manual de stock</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Nueva cantidad</label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={adjQty}
+                    onChange={e => { setAdjQty(e.target.value); setAdjSuccess(false); setAdjError(null); }}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Motivo (opcional)</label>
+                  <input
+                    type="text"
+                    value={adjNotes}
+                    onChange={e => setAdjNotes(e.target.value)}
+                    placeholder="Ej: inventario físico, corrección…"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              {adjError   && <p className="text-xs text-red-400">{adjError}</p>}
+              {adjSuccess  && <p className="text-xs text-emerald-400">Stock actualizado y registrado en bitácora.</p>}
+              <button
+                disabled={adjSaving}
+                onClick={async () => {
+                  const newQty = parseFloat(adjQty);
+                  if (isNaN(newQty) || newQty < 0) { setAdjError("Cantidad inválida."); return; }
+                  setAdjSaving(true); setAdjError(null); setAdjSuccess(false);
+                  try {
+                    const currentOnHand = spare.onHand;
+                    const delta = newQty - currentOnHand;
+                    if (delta !== 0) {
+                      const movementType = delta > 0 ? "ADJUSTMENT_PLUS" : "ADJUSTMENT_MINUS";
+                      await api.post(`/app/pms/stock-movements`, {
+                        vesselCode:    spare.vesselCode,
+                        spareId:       spare.id,
+                        movementType,
+                        quantity:      Math.abs(delta),
+                        unit:          spare.unit,
+                        occurredAt:    new Date().toISOString(),
+                        referenceType: "ADJUSTMENT",
+                        notes:         adjNotes.trim() || `Ajuste manual de stock`,
+                      });
+                    }
+                    setAdjSuccess(true);
+                    setAdjNotes("");
+                    onSaved({ ...spare, onHand: newQty, available: newQty });
+                  } catch (e) {
+                    setAdjError(e instanceof Error ? e.message : "Error al ajustar stock.");
+                  } finally { setAdjSaving(false); }
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all disabled:opacity-50"
+              >
+                {adjSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Aplicar ajuste
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Lead time (días)</label>
+              <input type="number" min="0" step="1" value={leadTimeDays} onChange={e => setLeadTimeDays(e.target.value)} placeholder="Tiempo de entrega…" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Estado</label>
+              <select value={status} onChange={e => setStatus(e.target.value)} className={inputCls}>
+                <option value="ACTIVE">Activo</option>
+                <option value="OBSOLETE">Obsoleto</option>
+              </select>
+            </div>
           </div>
 
           {!isNew && <p className="text-[10px] text-white/20">Alta: {fmtDate(spare.createdAt)}</p>}
+
+          {!isNew && (
+            <div className="border border-white/10 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowHistory(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+              >
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Historial de movimientos</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform ${showHistory ? "rotate-180" : ""}`} />
+              </button>
+              {showHistory && <SpareHistoryPanel spareId={spare.id} />}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -271,12 +501,14 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
 
 export const SparesPage: React.FC = () => {
   const t = useT();
+  const [searchParams] = useSearchParams();
 
   const [vesselInput,      setVesselInput]      = useState("");
   const [vesselFilter,     setVesselFilter]      = useState("");
   const [statusFilter,     setStatusFilter]      = useState("");
-  const [criticalityFilter,setCriticalityFilter] = useState("");
+  const [criticalityFilter,setCriticalityFilter] = useState(() => searchParams.get("criticality") ?? "");
   const [belowReorder,     setBelowReorder]      = useState(false);
+  const [stockStatusFilter,setStockStatusFilter] = useState<string>(() => searchParams.get("stockStatus") ?? "");
   const [showExcel,        setShowExcel]         = useState(false);
   const [selected,         setSelected]          = useState<Spare | null | "new">(null);
 
@@ -292,6 +524,17 @@ export const SparesPage: React.FC = () => {
 
   const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [vesselFilter, statusFilter, criticalityFilter, belowReorder]);
 
+  const filteredItems = (() => {
+    const items = data?.items ?? null;
+    if (!items || !stockStatusFilter) return items;
+    return items.filter(s => {
+      if (stockStatusFilter === "sin_stock")    return s.available <= 0;
+      if (stockStatusFilter === "bajo_reorden") return s.available > 0 && s.available < s.reorderPoint;
+      if (stockStatusFilter === "ok")           return s.available >= s.reorderPoint;
+      return true;
+    });
+  })();
+
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
 
   const COLUMNS: Column<Spare>[] = [
@@ -300,7 +543,7 @@ export const SparesPage: React.FC = () => {
     { key: "vesselCode",   header: t("col.vessel"),        render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span> },
     { key: "category",     header: t("col.category"),      render: r => <span className="text-xs text-white/60">{r.category ?? "—"}</span> },
     { key: "criticality",  header: t("col.criticality"),   render: r => <CriticalityBadge value={r.criticality} /> },
-    { key: "currentStock", header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },
+    { key: "onHand",       header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },
     { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-white/50">{r.minStock}</span> },
     { key: "reorderPoint", header: t("col.reorder"),       render: r => <span className="text-xs text-white/50">{r.reorderPoint}</span> },
     { key: "status",       header: t("col.status"),        render: r => <StatusBadge status={r.status} /> },
@@ -349,6 +592,16 @@ export const SparesPage: React.FC = () => {
           <option value="OBSOLETE">Obsoleto</option>
         </select>
 
+        {/* Stock status filter chip (from Dashboard navigation) */}
+        {stockStatusFilter && (
+          <button onClick={() => setStockStatusFilter("")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all bg-accent/15 border-accent/30 text-accent">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {stockStatusFilter === "sin_stock" ? "Sin stock" : stockStatusFilter === "bajo_reorden" ? "Bajo reorden" : "Stock OK"}
+            <X className="w-3 h-3 ml-0.5" />
+          </button>
+        )}
+
         {/* Below reorder toggle */}
         <button
           onClick={() => setBelowReorder(v => !v)}
@@ -366,7 +619,7 @@ export const SparesPage: React.FC = () => {
 
       <DataTable
         columns={COLUMNS}
-        data={data?.items ?? null}
+        data={filteredItems}
         loading={loading}
         error={error}
         keyFn={r => r.id}

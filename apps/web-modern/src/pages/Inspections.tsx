@@ -820,7 +820,7 @@ export const InspectionsPage: React.FC = () => {
       key: "isGlobal",
       header: t("insp.isGlobal"),
       render: row => (row.isGlobal ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("insp.isGlobal")}</span> : <span className="text-text-industrial/30 text-xs">—</span>),
-      sortable: false,
+      sortValue: row => row.isGlobal ? 1 : 0,
     },
   ], [t]);
 

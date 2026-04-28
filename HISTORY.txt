@@ -1,5 +1,297 @@
 HISTORY.txt
 
+[2026-04-25] Copiloto: click en "Criterios de aceptación" para análisis experto — FIXED
+Agent: Claude Haiku 4.5
+
+SCOPE:
+- apps/web-modern/src/pages/MaintenancePlans.tsx
+
+CAMBIOS:
+1. Click en label "Criterios de aceptación" en modal de edición de planes dispara análisis experto del copiloto:
+   - Lee el activo (asset) y la tarea (descripción/título)
+   - Analiza como experto en mantenimiento de máquinas navales
+   - Sugiere criterios de aceptación técnicos y verificables
+   - Retorna resultado en bloque [CAMPOS] con campo "acceptanceCriteria"
+   - Se aplica automáticamente al campo mediante useCopilotApplyFields
+2. Label tiene visual feedback: cursor pointer + hover con color accent + tooltip
+3. Fix: setRequestMessage se obtiene en MaintenancePlansPage y se pasa como prop al modal (el contexto no era accesible dentro del modal)
+
+[2026-04-25] PDFs: logos de tenant + Copiloto scroll fix
+Agent: Claude Haiku 4.5
+
+SCOPE:
+- apps/api/src/tenant/pms/maintenance-plan-pdf-service.ts
+- apps/api/src/tenant/pms/work-order-pdf-service.ts
+- apps/api/src/tenant/pms/spare-request-pdf-service.ts
+- apps/api/src/tenant/pms/defect-pdf-service.ts
+- apps/web-modern/src/components/CopilotoPanel.tsx
+
+CAMBIOS:
+1. PDFs: reemplazado "Copilot Management System" por logo del tenant en todos los 4 servicios de PDF (maintenance-plan, work-order, spare-request, defect). Se obtiene el tenant logo preferentemente `logoUrlLight`, fallback a `logoUrl`. Si no hay logo, muestra el nombre del tenant. Descarga asincrónica con timeout de 5s.
+2. Copiloto: fix scroll — cuando responde el copiloto, ahora solo scroll dentro del panel, no afecta el documento principal. Cambio: de `scrollIntoView()` a `container.scroll()` directo.
+
+[2026-04-25] Logos de tenant, fix Excel parser, seed DONCHI Assets+Planes
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- packages/shared-types/src/index.ts
+- apps/api/src/tenant/bootstrap/public-bootstrap.ts
+- apps/api/src/tenant/auth/tenant-auth-service.ts
+- apps/web-modern/src/lib/auth.tsx
+- apps/web-modern/src/components/Header.tsx
+- apps/web-modern/src/components/Sidebar.tsx
+- apps/web-modern/src/pages/Team.tsx
+- apps/web-modern/src/pages/platform/PlatformTenants.tsx
+- apps/api/src/tenant/excel/excel-parser.ts
+- scripts/seed-donchi.js (nuevo, ejecutado y eliminado post-ejecución)
+- prisma/schema.prisma (logoUrlLight en TenantSetting — sesión anterior)
+
+CAMBIOS:
+1. Logo de tenant en Header y Sidebar: propagado `logoUrlLight` por toda la cadena de bootstrap (shared-types → bootstrap → auth-service → auth.tsx → Header/Sidebar). Se muestra preferentemente `logoUrlLight` (logo blanco para fondos oscuros), fallback a `logoUrl`.
+2. Fix PlatformTenants: `logoUrlLight` faltaba en la interfaz `Tenant` local — causaba error de tipado en `EditTenantModal`.
+3. Team.tsx (FleetAssignmentPanel): mensaje de estado vacío mejorado con link clickeable a `/vessels` para orientar al usuario.
+4. Wipe operacional de DB: TRUNCATE de todas las tablas operacionales (Vessel, Asset, MaintenancePlan, WorkOrder, DailyReport, Defect, etc.) respetando configuración de tenant, usuarios y SFI nodes.
+5. Fix crítico excel-parser.ts: ExcelJS retorna celdas richText como `{ richText: [{text}...] }` y fórmulas como `{ formula, result }`. El parser solo manejaba `{ text }` (hipervínculos), causando que la clave de deduplicación fuera `"[object Object]"`. Fix: handlers explícitos para los 4 tipos de objeto ExcelJS (richText, text/hyperlink, result/formula, unknown→null).
+6. Seed DONCHI: insertados 1 vessel (DONCHI), 27 equipos en Assets y 28 planes de mantenimiento para el tenant Mercurio (ID: cmodx8zt6007o3g38sevvp09y), basados en REGISTRO DE PRUEBA de seguridad marítima. Equipos organizados por categoría: Navegación, Contraincendios, Alarmas, Antiderrames, Tanques, Seguridades de maquinaria, Comunicaciones, Ventilación, Gobierno.
+
+[2026-04-25] Platform Admin: múltiples mejoras en gestión de tenants y usuarios
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/web-modern/src/pages/platform/PlatformTenants.tsx
+- apps/api/src/platform/tenants/platform-tenants-service.ts
+- apps/api/src/platform/tenants/platform-tenant-users-service.ts
+- apps/api/src/platform/data/dev-tenant-store.ts
+- prisma/schema.prisma (campo logoUrlLight en TenantSetting)
+
+CAMBIOS:
+1. Moneda PYG y timezone America/Asuncion añadidos a los selects del modal de Tenant.
+2. Dual logo upload: carga una imagen, se generan automáticamente 2 versiones (dark/fondo blanco + white/fondo oscuro) con fondo transparente via Canvas flood-fill. Campo logoUrlLight añadido a schema Prisma + servicio + store.
+3. Fix drawer TenantDetail: estaba oculto detrás del header fijo. Reposicionado con `fixed inset-0 top-12 left-56` para quedar debajo del header y sidebar.
+4. Fix crítico listado de usuarios: `url.searchParams.get()` devuelve null cuando el param no existe. Prisma recibía `role: null` causando `PrismaClientValidationError`. Fix: construir where object dinámicamente (solo añadir filtros cuando tienen valor truthy).
+5. Cambiar contraseña de usuarios: botón KeyRound en cada fila de usuario abre ChangePasswordModal. Hace PATCH /platform/tenants/:slug/users/:id con { password }. Validación local: min 6 chars, confirmación coincidente. Muestra success state.
+6. Dashboard: colores ajustados — "Al Día" (FUTURE) → verde (#06D6A0), "En Proceso" (IN_WINDOW) → amarillo (#EAB308).
+
+[2026-04-25] Bulk update MaintenancePlan: lastExecutionHours y nextDueHours
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Todos los registros activos de MaintenancePlan (208 registros) actualizados vía script raw pg.
+
+CAMBIOS:
+1. lastExecutionHours = 11100 para todos los planes.
+2. nextDueHours = 11100 + frequencyHours para planes HOURS (51 registros). Ejemplo: fh=250 → nextH=11350; fh=500 → nextH=11600.
+3. nextDueHours = NULL para planes CALENDAR/MONTHS (157 registros — no aplica horas a planes de calendario).
+
+RESULTADO FINAL:
+- 0 registros con lastExecutionHours NULL
+- 51 planes por horas con nextDueHours calculado correctamente
+
+[2026-04-25] Bulk update MaintenancePlan: lastExecutionDate, nextDueDate, executionStatus
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Todos los registros activos de MaintenancePlan (208 registros) actualizados vía script raw pg.
+
+CAMBIOS:
+1. lastExecutionDate = hoy (2026-04-25) para todos los planes sin excepción.
+2. nextDueDate = lastExecutionDate + frequencyMonths para planes CALENDAR y MONTHS (157 registros).
+3. nextDueDate = NULL para planes HOURS (51 registros — no es posible derivar fecha sin horas de motor actuales).
+4. executionStatus calculado según nextDueDate:
+   - NULL → FUTURE (planes por horas)
+   - <= CURRENT_DATE + 30 días → IN_WINDOW (3 registros: mensual LATERE-1-001, MP-FILTER-1M, LATERE-6-001)
+   - <= CURRENT_DATE + 90 días → UPCOMING
+   - else → FUTURE (205 registros, principalmente semestral y anual)
+
+RESULTADO FINAL:
+- 0 registros con lastExecutionDate NULL
+- 205 FUTURE, 3 IN_WINDOW, 0 OVERDUE, 0 DUE
+
+[2026-04-25] Daily Reports: tab Consumos, PDF, fix columnas COMB/ACEITE
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/web-modern/src/pages/DailyReports.tsx
+- apps/api/src/tenant/daily-reports/daily-reports-service.ts
+- prisma/schema.prisma (campo oilConsumedLiters)
+
+CAMBIOS:
+1. Campo oilConsumedLiters Float? añadido a DailyReport en schema Prisma y service (create + update).
+2. Botón "Submit" reemplazado por "Generar PDF" (print-ready HTML via window.open/print).
+3. Tab "Consumos" añadida entre "Horas equipo" y "Mantenimiento" para registrar combustible y aceite a nivel buque.
+4. Columnas COMB (L) y ACEITE (L) deshabilitadas del tab "Horas equipo" (se registran ahora en Consumos).
+
+[2026-04-25] Corrección SFI y auditoría de base de datos
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Base de datos directamente vía queries pg (seed falla por error previo en stockMovement).
+
+CAMBIOS:
+1. Descripciones SFI corregidas: 140→"Ballast and structural tanks", 370→"Cargo lashing and securing equipment",
+   380→"Cargo hold equipment", 740→"Starting air systems", 770→"Service compressed air",
+   860→"Fire and safety alarm systems", 910→"Process alarm systems".
+2. sfiCode de activos corregido: LAT-ME-001: 700→610, LAT-GEN-001: 710→810, LAT-FWC-001: 721→730, GLT-ME-001: 700→610.
+3. sfiCode de 248 repuestos derivado del patrón SKU (LAT-{SFI}-...): actualización masiva via SUBSTRING.
+4. Activos LAT-910-FIRE-PANEL y LAT-910-FIRE-DET movidos de código 910 a 860 (fire detection ≠ process alarms).
+5. Dimensiones de buques corregidas: MA01 L=24.8m B=8.25m, MG04 L=61.5m B=16.6m (faltaban decimales).
+6. SFI 660 revertido a "Reduction gears" (los reductores de LATERE son propulsión principal, no auxiliares).
+
+[2026-04-23] Fix endpoint /period-suggestions: status enum inválido
+Agent: Claude Sonnet 4.6
+
+PROBLEMA:
+- El endpoint fallaba con `PrismaClientValidationError: Invalid value for argument in. Expected WorkOrderStatus` al buscar work orders completadas en el período. Resultado: la query crasheaba silenciosamente antes de alcanzar el console.error en el frontend, dejando `suggestions.maintenance` vacío.
+
+FIX:
+- apps/api/src/tenant/daily-reports/daily-report-suggestions-service.ts: reemplazado `status: { in: ["COMPLETED", "CLOSED"] }` por `status: "CLOSED"`. El enum WorkOrderStatus no tiene el valor "COMPLETED" — las OTs se cierran directamente con CLOSED. Removidos los try/catch de diagnóstico y console.log.
+
+[2026-04-23] Auto-populate de Daily Report desde último reporte hasta hoy
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/web-modern/src/pages/DailyReports.tsx: las tabs Mantenimiento, Repuestos y Defectos ahora cargan automáticamente las filas apenas se abren, en lugar del flujo banner + botón "Importar". Al abrir un nuevo reporte (o uno existente sin entradas guardadas) las filas aparecen pre-pobladas con lo ocurrido entre la fecha del reporte anterior y la del reporte actual (o desde el principio si nunca hubo reporte previo para ese buque).
+- Prioridad: entradas ya guardadas > sugerencias del período (endpoint /period-suggestions) > copia del reporte anterior.
+- Banner accent indica el origen ("X cargadas automáticamente del período {from → to}") con botón "Limpiar" si el usuario prefiere descartar.
+- Removido el flujo banner-amarillo + "Importar" (innecesario ahora que todo es automático). Removido `Download` icon import (no usado).
+- Tab Diferimientos ya listaba automáticamente los diferimientos activos del buque — sin cambios.
+- Backend endpoint `GET /app/daily-reports/:id/period-suggestions` (daily-report-suggestions-service.ts) ya existía; ahora es el camino principal en lugar de opt-in.
+
+[2026-04-23] Fix fecha de Daily Report respetando timezone del tenant
+Agent: Claude Sonnet 4.6
+
+PROBLEMA:
+- Al crear un Daily Report con fecha 23/04/2026, se mostraba como 22/04/2026 en la lista.
+- Causa raíz (el bug real): `reportDate` está declarado como `@db.Date` en Prisma (sólo fecha). Postgres guarda la fecha correctamente (2026-04-23), pero al leerla Prisma la hidrata como `"2026-04-23T00:00:00.000Z"` (UTC midnight). El frontend `fmtDate` la convertía a Argentina (UTC-3), quedando 22/04 21:00 → mostraba 22/04.
+
+FIX PRINCIPAL (frontend):
+- apps/web-modern/src/lib/utils.ts: `fmtDate` ahora detecta datetimes a UTC midnight (patrón típico de campos `@db.Date` serializados) y los formatea como fecha pura sin convertir de timezone. Evita el shift de día para cualquier campo `@db.Date` del sistema (no sólo reportDate).
+
+FIX SECUNDARIO (backend, defensivo):
+- apps/api/src/tenant/daily-reports/daily-reports-service.ts: agregado helper `parseTenantLocalDate(dateStr, tenantTz)` que interpreta YYYY-MM-DD como mediodía en el TZ del tenant antes de pasarlo a Prisma. Leído desde `tenant.settings.timezone`. Aplicado en create y en el filtro de list. Redundante con el fix de frontend para `@db.Date`, pero consolida el patrón por si el campo cambiara a Timestamp.
+
+[2026-04-22] Copiloto: upload de archivos para completar formularios
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Backend: nuevo `file-parser-service.ts` — parsea PDF (base64 para Claude), imágenes (vision), Excel (ExcelJS → texto), CSV/texto plano. Límite 10 MB.
+- Backend: nueva ruta `POST /app/copiloto/parse-file` — recibe binario, devuelve FileContent estructurado.
+- Backend: `copiloto-service.ts` — acepta `fileAttachment?: FileContent` en CopilotoRequest; inyecta como bloque multimodal (image/document/text) en el último mensaje del usuario hacia Claude.
+- Frontend: `CopilotoPanel.tsx` — botón paperclip abre file picker; muestra chip con nombre del archivo y botón X; al enviar, incluye el archivo una sola vez y lo limpia (contexto queda en historial del chat).
+- Formatos: PDF, PNG, JPG, WEBP, GIF, XLSX, XLS, CSV, TXT.
+
+[2026-04-22] Agente de voz para Copiloto — ElevenLabs TTS + Web Speech API
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- Backend: nuevo `apps/api/src/tenant/copiloto/tts-service.ts` — summarización vía Claude Haiku (max 250 chars) + síntesis de voz via ElevenLabs (eleven_turbo_v2_5).
+- Backend: nueva ruta `POST /app/copiloto/tts` en tenant-router.ts — recibe texto completo, devuelve { summary, audioBase64 }.
+- Frontend: CopilotoPanel.tsx — añadido botón de micrófono (Web Speech API, es-AR, gratuito) y botón "Escuchar" por mensaje del asistente.
+- Costo optimizado: voz solo recibe el resumen (120-250 chars), nunca el texto completo. API key ElevenLabs nunca expuesta al cliente.
+- Variables de entorno usadas: ELEVENLABS_API_KEY (ya presente en .env), ELEVENLABS_VOICE_ID (opcional, default EXAVITQu4vr4xnSDxMaL).
+
+[2026-04-22] Eliminación de PurchaseOrders, SpareOrders y ReorderAlerts + Bitácora narrativa
+Agent: Claude Sonnet 4.6
+
+SCOPE — Eliminaciones:
+- Módulos eliminados: PurchaseOrders, SpareOrders, ReorderAlerts (frontend + backend + schema).
+- Schema: eliminados modelos PurchaseOrder, PurchaseOrderItem, SpareOrder, SpareOrderLine y enums PurchaseOrderStatus, PurchaseOrderItemStatus, SpareOrderStatus, SpareOrderPriority. Removido SPARE_ORDER y PURCHASE_ORDER de MovementRefType. DB sincronizada (existían 7 StockMovements con esos tipos → migrados a ADJUSTMENT antes del push). Relaciones huérfanas removidas de Provider, Spare, SpareRequest, Vessel.
+- Backend: eliminados directorios purchase-orders/ y spare-orders/ del API. Removidas sus rutas e imports de spares-router.ts y tenant-router.ts.
+- Frontend: eliminadas PurchaseOrders.tsx, SpareOrders.tsx, ReorderAlerts.tsx. Removidas rutas, imports, títulos y nav items de App.tsx, Layout.tsx, Sidebar.tsx. Removidas keys po.*, ra.*, nav.spareOrders, nav.purchaseOrders, nav.reorderAlerts de i18n.tsx.
+
+SCOPE — Bitácora narrativa (rediseño completo):
+- Concepto: journal técnico-operativo, NO auditoría del sistema. Para novedades técnicas, observaciones operativas, eventos importantes, instrucciones recibidas, seguimiento, anotaciones generales.
+- Schema: nuevo enum BitacoraCategory (6 valores) + modelo BitacoraEntry (tenantId, vesselCode, entryCode, entryDate, category, title, body text, relatedAssetId?, isMonitoring, monitoringClosedAt, soft delete). DB push OK.
+- Backend: NUEVO apps/api/src/tenant/bitacora/bitacora-service.ts. Rutas GET/POST /app/bitacora y PATCH/DELETE /app/bitacora/:id en tenant-router.ts. Todos los roles pueden leer y escribir excepto AUDITOR_READONLY (solo lectura, enforced en frontend).
+- Frontend: reescritura completa de Bitacora.tsx. Layout two-column (formulario sticky izquierda + timeline derecha). Formulario: vessel, fecha, categoría (6 opciones), título, descripción libre, checkbox "bajo monitoreo". Cards con badge de categoría (color por tipo), badge "Bajo monitoreo" (orange), botón "Cerrar monitoreo". Filtros por vessel, categoría, rango de fechas, solo-monitoreo.
+- Sidebar: Bitácora ahora visible para todos los roles (antes solo TENANT_ADMIN).
+- La auditoría del sistema (AuditEvent) sigue capturándose en DB pero su UI fue removida de Bitácora.
+
+[2026-04-21] Flujo completo de control de stock de repuestos
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- SpareRequests/ItemsTab: botón "+ Registrar repuesto nuevo" al agregar ítems. Si el repuesto no está en el catálogo del vessel, abre mini-form para crearlo con stock 0 (POST /app/pms/spares) y lo vincula automáticamente al ítem. Mismo patrón replicado en SpareReceipts.
+- WorkOrders/Resultado: nueva sección "Repuestos utilizados" en el panel de cierre de OT. Carga repuestos del vessel (destacando criticidad A), permite agregar N ítems con cantidad. Al confirmar "Cerrar OT", crea un StockMovement ISSUE por cada repuesto utilizado (referenceType: WORK_ORDER).
+- NUEVO apps/web-modern/src/pages/SpareReceipts.tsx: módulo de Recepción de Repuestos en el buque. Formulario con vessel + fecha + lista de ítems recibidos. Al confirmar crea StockMovements RECEIPT sumando al stock. Incluye panel de historial de recepciones recientes. Permite registrar repuestos nuevos (stock 0) desde el mismo formulario.
+- App.tsx: +ruta /spare-receipts.
+- Layout.tsx: +título "Recepción de Repuestos".
+- Sidebar.tsx: +item PackagePlus → /spare-receipts, +import PackagePlus.
+- i18n.tsx: +nav.spareReceipts.
+
+[2026-04-21] Fase 4 MVP Repuestos: PurchaseOrders + ReorderAlerts
+Agent: Claude Sonnet 4.6
+
+SCOPE — Schema:
+- Nuevos enums: PurchaseOrderStatus (DRAFT/SENT/CONFIRMED/PARTIALLY_RECEIVED/RECEIVED/CANCELLED), PurchaseOrderItemStatus (PENDING/PARTIALLY_RECEIVED/RECEIVED/CANCELLED).
+- Enum MovementRefType: +PURCHASE_ORDER.
+- Nuevo modelo PurchaseOrder: tenant-level, orderCode auto-generado PO-NNNNN, workflow DRAFT→SENT→CONFIRMED→RECEIVED, FK opcional a Provider y SpareRequest.
+- Nuevo modelo PurchaseOrderItem: líneas de la OC, link opcional a Spare, quantityReceived acumulado, status propio.
+- Relaciones inversas en Provider (purchaseOrders), SpareRequest (purchaseOrders), Spare (purchaseOrderItems).
+- db push + prisma generate OK.
+
+SCOPE — Backend:
+- NUEVO apps/api/src/tenant/purchase-orders/purchase-orders-service.ts: CRUD + workflow (send, confirm, cancel, delete). Roles: canManage (TENANT_ADMIN, MAINTENANCE_MANAGER, PROCUREMENT_STORE); canApprove (+FLEET_SUPERINTENDENT).
+- NUEVO apps/api/src/tenant/purchase-orders/purchase-order-items-service.ts: add/update/delete items (solo DRAFT), receivePurchaseOrderItem (crea StockMovement RECEIPT automático si hay spareId, sincroniza status OC), syncOrderStatus.
+- spares-router.ts: +15 nuevas rutas bajo /app/pms/purchase-orders con prefijo guard actualizado.
+
+SCOPE — Frontend:
+- NUEVA apps/web-modern/src/pages/PurchaseOrders.tsx: lista con filtro de estado, modal Datos/Ítems, workflow buttons (Enviar OC, Confirmar, Cancelar OC), sub-modal de recepción de ítems, onRowClick para edición.
+- NUEVA apps/web-modern/src/pages/ReorderAlerts.tsx: dashboard de repuestos bajo punto de reorden, badges Crítico/Reposición, filtro por vessel, KPIs de count.
+- i18n: +35 claves po.* y ra.*, nav.purchaseOrders, nav.reorderAlerts.
+- App.tsx: +2 rutas /purchase-orders y /reorder-alerts.
+- Layout.tsx: +2 entradas en TITLES.
+- Sidebar.tsx: +2 items (ShoppingCart para OC, PackageSearch para alertas).
+
+[2026-04-21] Fase 3 MVP Repuestos: SpareRequest + SpareRequestItem + StockReservation
+Agent: Claude Sonnet 4.6
+
+SCOPE — Schema:
+- Nuevos enums: SpareRequestStatus (DRAFT/SUBMITTED/APPROVED/REJECTED/PARTIALLY_FULFILLED/FULFILLED/CANCELLED), SpareRequestPriority, SpareRequestItemStatus (PENDING/RESERVED/PARTIALLY_RESERVED/FULFILLED/CANCELLED), StockReservationStatus (ACTIVE/RELEASED/CONSUMED).
+- Nuevo modelo SpareRequest: tenant-level (sin vesselCode requerido), requestCode auto-generado REQ-NNNNN, workflow completo, campos opcionales requestedForVesselCode/AssetId/LocationId.
+- Nuevo modelo SpareRequestItem: líneas de la solicitud, link opcional a Spare (spareid), quantityReserved/quantityFulfilled, cascade delete en spareRequest.
+- Nuevo modelo StockReservation: vincula SpareRequestItem con Spare + StockLocation opcional, signo positivo fija stock como reservado.
+- Relaciones inversas agregadas a Spare (requestItems, reservations) y StockLocation (reservations).
+- db push + prisma generate OK.
+
+SCOPE — Backend:
+- NUEVO apps/api/src/tenant/spare-requests/spare-requests-service.ts: CRUD + workflow (submit, approve, reject, cancel, delete). Roles: canManage incluye TECHNICIAN_OPERATOR; canApprove incluye FLEET_SUPERINTENDENT.
+- NUEVO apps/api/src/tenant/spare-requests/spare-request-items-service.ts: CRUD de ítems (solo en DRAFT). Enriquece con spareSku/spareName.
+- NUEVO apps/api/src/tenant/spare-requests/stock-reservations-service.ts: createReservationsForRequest (batch, respeta available = onHand - reserved), releaseReservation, consumeReservation (crea StockMovement ISSUE automáticamente), syncRequestStatus, getReservedMap.
+- stock-calc-service.ts: +getReservedMapFromCalc, getAvailableQty ya no es placeholder.
+- spares-service.ts: listTenantSpares ahora devuelve onHand, reserved y available reales.
+- spares-router.ts: +18 nuevas rutas bajo /app/pms/spare-requests y /app/pms/stock-reservations.
+
+SCOPE — UI:
+- NUEVA página SpareRequests.tsx: lista con ReqStatusBadge, filtros status/priority, row click abre modal.
+- Modal SpareRequestModal: tabs Datos/Ítems. Botones workflow: Enviar, Aprobar, Rechazar (con razón inline), Cancelar solicitud. Solo editable en DRAFT.
+- ItemsTab: tabla de ítems con delete, formulario "Agregar ítem" con selector de spare del catálogo (fetch /app/pms/spares), botón "Crear reservas de stock" cuando APPROVED.
+- App.tsx: +ruta /spare-requests → SpareRequestsPage.
+- Layout.tsx: +TITLE para /spare-requests.
+- Sidebar.tsx: +nav item "Sol. Repuestos" con ícono ClipboardList.
+- i18n.tsx: +nav.spareRequests.
+
+[2026-04-21] Fase 2 MVP Repuestos: StockLocation + stock-calc-service + UI sin currentStock
+Agent: Claude Sonnet 4.6
+
+SCOPE — Schema (no-breaking):
+- MovementType enum: +TRANSFER_IN, TRANSFER_OUT, RETURN_IN, ADJUSTMENT_PLUS, ADJUSTMENT_MINUS
+- Nuevo modelo StockLocation (tenantId, vesselCode?, code, name, isActive, soft-delete).
+- Spare: +internalPartNumber, manufacturerPartNumber, longDescription, defaultLocationId (FK StockLocation), sfiCode, leadTimeDays, targetStock. currentStock mantenido pero deprecado (no se escribe ni muestra).
+- StockMovement: +locationId (FK StockLocation nullable).
+- db push + prisma generate OK.
+
+SCOPE — Backend:
+- NUEVO apps/api/src/tenant/pms/stock-calc-service.ts: getOnHandQty, getOnHandMap, getAvailableQty. Lógica de signo por tipo de movimiento (RECEIPT/TRANSFER_IN/RETURN_IN/ADJUSTMENT_PLUS → +; ISSUE/TRANSFER_OUT/TRANSFER/ADJUSTMENT_MINUS → -; ADJUSTMENT → qty signed).
+- NUEVO apps/api/src/tenant/pms/stock-locations-service.ts: CRUD completo (list, get, create, update, delete) con publishAudit.
+- spares-service.ts: listTenantSpares enriquece con onHand/available desde getOnHandMap. listReorderAlerts usa onHand. create/update ya no acepta ni escribe currentStock. +targetStock, internalPartNumber, manufacturerPartNumber, longDescription, defaultLocationId, sfiCode, leadTimeDays.
+- stock-movements-service.ts: acepta nuevos movementType. createStockMovement ya NO actualiza Spare.currentStock (fuente de verdad = movimientos). +locationId en create.
+- spares-router.ts: +rutas /app/pms/stock-locations (GET list, POST, GET/:id, PATCH/:id, DELETE/:id).
+
+SCOPE — UI:
+- Spares.tsx: Tipo Spare usa onHand/available en lugar de currentStock. StockCell usa spare.onHand. Tabla muestra onHand. Modal: sin campo "Stock actual" editable. Sección de niveles muestra stock calculado read-only + campos minStock/reorderPoint/targetStock. +campos internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays.
+- i18n.tsx: +30 claves sm.* (onHand, available, reserved, targetStock, leadTimeDays, internalPn, manufacturerPn, longDescription, defaultLocation, stockLocation, movements, movType.*, etc.)
+
 [2026-04-21] Spares + Providers: Full CRUD + Modals + Filters
 Agent: Claude Sonnet 4.6
 

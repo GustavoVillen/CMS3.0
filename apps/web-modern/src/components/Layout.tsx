@@ -15,11 +15,11 @@ const TITLES: Record<string, string> = {
   "/daily-reports":     "Reportes Diarios",
   "/defects":           "Defectos",
   "/deferrals":         "Postergaciones",
-  "/rca":               "RCA & CAPA",
   "/inspections":       "Inspecciones",
   "/certificates":      "Certificados",
   "/spares":            "Repuestos & Stock",
-  "/spare-orders":      "Órdenes de Repuestos",
+  "/spare-requests":    "Solicitudes de Repuestos",
+  "/spare-receipts":    "Recepción de Repuestos",
   "/providers":         "Proveedores",
   "/ai-insights":       "Inteligencia Predictiva",
   "/ai-documents":      "AI Documents",
@@ -28,13 +28,13 @@ const TITLES: Record<string, string> = {
 
 export const Layout: React.FC = () => {
   const location = useLocation();
-  const title = TITLES[location.pathname] ?? "GPMS Naval";
+  const title = TITLES[location.pathname] ?? "CMS";
 
   return (
     <CopilotContextProvider>
       <div className="flex h-screen bg-primary-bg text-text-industrial overflow-hidden">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 transform-[translateZ(0)]">
           <Header title={title} />
           <main className="flex-1 overflow-y-auto p-6 bg-[#080D1D]">
             <Outlet />

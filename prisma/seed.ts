@@ -94,10 +94,10 @@ async function main(): Promise<void> {
   // ── Assets (LATERE) ────────────────────────────────────────────────────────
   const assetMainEngine = await prisma.asset.upsert({
     where: { tenantId_vesselCode_assetCode: { tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-ME-001" } },
-    update: { name: "Main Engine MAN B&W", status: "OPERATIONAL", updatedByUserId: uid },
+    update: { sfiCode: "610", name: "Main Engine MAN B&W", status: "OPERATIONAL", updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-ME-001",
-      sfiCode: "700", name: "Main Engine MAN B&W", criticality: "A",
+      sfiCode: "610", name: "Main Engine MAN B&W", criticality: "A",
       status: "OPERATIONAL", manufacturer: "MAN Energy Solutions", model: "6S50MC-C",
       serialNumber: "SN-ME-2018-001", installationDate: new Date("2018-03-15"),
       createdByUserId: uid, updatedByUserId: uid,
@@ -106,10 +106,10 @@ async function main(): Promise<void> {
 
   await prisma.asset.upsert({
     where: { tenantId_vesselCode_assetCode: { tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-GEN-001" } },
-    update: { name: "Generator Set #1", status: "OPERATIONAL", updatedByUserId: uid },
+    update: { sfiCode: "810", name: "Generator Set #1", status: "OPERATIONAL", updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-GEN-001",
-      sfiCode: "710", name: "Generator Set #1", criticality: "A",
+      sfiCode: "810", name: "Generator Set #1", criticality: "A",
       status: "OPERATIONAL", manufacturer: "Caterpillar", model: "C18 Marine",
       serialNumber: "SN-GEN-2018-001", installationDate: new Date("2018-03-15"),
       createdByUserId: uid, updatedByUserId: uid,
@@ -118,10 +118,10 @@ async function main(): Promise<void> {
 
   await prisma.asset.upsert({
     where: { tenantId_vesselCode_assetCode: { tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-FWC-001" } },
-    update: { name: "Fresh Water Cooling System", status: "OPERATIONAL", updatedByUserId: uid },
+    update: { sfiCode: "730", name: "Fresh Water Cooling System", status: "OPERATIONAL", updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "LATERE", assetCode: "LAT-FWC-001",
-      sfiCode: "721", name: "Fresh Water Cooling System", criticality: "B",
+      sfiCode: "730", name: "Fresh Water Cooling System", criticality: "B",
       status: "DEGRADED", createdByUserId: uid, updatedByUserId: uid,
     },
   });
@@ -129,10 +129,10 @@ async function main(): Promise<void> {
   // ── Assets (GLT001) ────────────────────────────────────────────────────────
   await prisma.asset.upsert({
     where: { tenantId_vesselCode_assetCode: { tenantId: tid, vesselCode: "GLT001", assetCode: "GLT-ME-001" } },
-    update: { name: "Main Engine Wärtsilä", status: "OPERATIONAL", updatedByUserId: uid },
+    update: { sfiCode: "610", name: "Main Engine Wärtsilä", status: "OPERATIONAL", updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "GLT001", assetCode: "GLT-ME-001",
-      sfiCode: "700", name: "Main Engine Wärtsilä", criticality: "A",
+      sfiCode: "610", name: "Main Engine Wärtsilä", criticality: "A",
       status: "OPERATIONAL", manufacturer: "Wärtsilä", model: "6L34DF",
       installationDate: new Date("2020-06-01"), createdByUserId: uid, updatedByUserId: uid,
     },
@@ -366,36 +366,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // ── RCA ────────────────────────────────────────────────────────────────────
-  const rca1 = await prisma.rcaRecord.upsert({
-    where: { tenantId_vesselCode_rcaCode: { tenantId: tid, vesselCode: "LATERE", rcaCode: "RCA-2026-001" } },
-    update: { updatedByUserId: uid },
-    create: {
-      tenantId: tid, vesselCode: "LATERE", assetId: assetMainEngine.id,
-      defectId: defect1.id,
-      rcaCode: "RCA-2026-001", status: "UNDER_ANALYSIS", methodology: "FIVE_WHYS",
-      analysisSummary: "Análisis de fuga de aceite en cárter motor principal.",
-      immediateCause: "Sello del cárter deteriorado por temperatura excesiva.",
-      contributingCause: "Filtro de aceite no reemplazado en intervalo requerido.",
-      rootCause: "Falla en seguimiento de plan de mantenimiento preventivo.",
-      createdByUserId: uid, updatedByUserId: uid,
-    },
-  });
-
-  await prisma.rcaRecord.upsert({
-    where: { tenantId_vesselCode_rcaCode: { tenantId: tid, vesselCode: "GLT001", rcaCode: "RCA-2026-002" } },
-    update: { updatedByUserId: uid },
-    create: {
-      tenantId: tid, vesselCode: "GLT001", assetId: vesselGlt.id,
-      rcaCode: "RCA-2026-002", status: "COMPLETED", methodology: "FISHBONE",
-      analysisSummary: "Vibración anormal en motor principal Wärtsilä.",
-      rootCause: "Desequilibrio en hélice por acumulación de incrustaciones marinas.",
-      correctiveActions: "Limpieza y balanceo de hélice en dique.",
-      preventiveActions: "Inspección semestral de hélice programada.",
-      completedAt: new Date(Date.now() - 2 * 86400000),
-      createdByUserId: uid, updatedByUserId: uid,
-    },
-  });
+  // ── RCA estructurado ya vive dentro del modelo Defect (rcaMethodology, rcaRootCause, etc.)
 
   // ── CAPA ───────────────────────────────────────────────────────────────────
   await prisma.capaRecord.upsert({
@@ -403,7 +374,7 @@ async function main(): Promise<void> {
     update: { updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "LATERE", assetId: assetMainEngine.id,
-      sourceType: "RCA", sourceId: rca1.id,
+      sourceType: "DEFECT", sourceId: defect1.id,
       capaCode: "CAPA-2026-001", status: "IN_PROGRESS", priority: "HIGH",
       title: "Implementar checklist de verificación de sellos antes de arranque",
       description: "Desarrollar e implementar procedimiento de inspección visual de sellos del cárter como parte del checklist de pre-arranque del motor principal.",
@@ -433,7 +404,7 @@ async function main(): Promise<void> {
     update: { updatedByUserId: uid },
     create: {
       tenantId: tid, vesselCode: "GLT001", assetId: vesselGlt.id,
-      sourceType: "RCA", sourceId: (await prisma.rcaRecord.findFirst({ where: { tenantId: tid, rcaCode: "RCA-2026-002" } }))!.id,
+      sourceType: "WORK_ORDER", sourceId: (await prisma.workOrder.findFirst({ where: { tenantId: tid, vesselCode: "GLT001", workOrderCode: "WO-2026-003" } }))!.id,
       capaCode: "CAPA-2026-003", status: "PENDING_VERIFICATION", priority: "HIGH",
       title: "Programar inspección semestral de hélice y sistema de propulsión",
       description: "Coordinar con astillero la inspección y limpieza de hélice cada 6 meses. Incluir análisis de vibraciones post-limpieza.",
@@ -546,7 +517,7 @@ async function main(): Promise<void> {
     { code: "110", description: "Shell structure",          groupNumber: 1, groupName: "Hull" },
     { code: "120", description: "Superstructure",           groupNumber: 1, groupName: "Hull" },
     { code: "130", description: "Decks",                    groupNumber: 1, groupName: "Hull" },
-    { code: "140", description: "Tanks",                    groupNumber: 1, groupName: "Hull" },
+    { code: "140", description: "Ballast and structural tanks", groupNumber: 1, groupName: "Hull" },
     { code: "150", description: "Foundations",              groupNumber: 1, groupName: "Hull" },
     { code: "160", description: "Insulation",               groupNumber: 1, groupName: "Hull" },
     { code: "170", description: "Doors and hatches",        groupNumber: 1, groupName: "Hull" },
@@ -571,8 +542,8 @@ async function main(): Promise<void> {
     { code: "340", description: "Conveyors",                groupNumber: 3, groupName: "Cargo Handling Equipment" },
     { code: "350", description: "Ro-Ro equipment",          groupNumber: 3, groupName: "Cargo Handling Equipment" },
     { code: "360", description: "Hatch covers",             groupNumber: 3, groupName: "Cargo Handling Equipment" },
-    { code: "370", description: "Mooring winches",          groupNumber: 3, groupName: "Cargo Handling Equipment" },
-    { code: "380", description: "Anchor handling",          groupNumber: 3, groupName: "Cargo Handling Equipment" },
+    { code: "370", description: "Cargo lashing and securing equipment", groupNumber: 3, groupName: "Cargo Handling Equipment" },
+    { code: "380", description: "Cargo hold equipment",     groupNumber: 3, groupName: "Cargo Handling Equipment" },
     { code: "390", description: "Special cargo handling",   groupNumber: 3, groupName: "Cargo Handling Equipment" },
     // Grupo 4 — Ship Equipment
     { code: "400", description: "Ship equipment general",   groupNumber: 4, groupName: "Ship Equipment" },
@@ -603,7 +574,7 @@ async function main(): Promise<void> {
     { code: "630", description: "Shafting",                 groupNumber: 6, groupName: "Main Components" },
     { code: "640", description: "Propeller",                groupNumber: 6, groupName: "Main Components" },
     { code: "650", description: "Thrusters",                groupNumber: 6, groupName: "Main Components" },
-    { code: "660", description: "Reduction gears",          groupNumber: 6, groupName: "Main Components" },
+    { code: "660", description: "Auxiliary reduction gears", groupNumber: 6, groupName: "Main Components" },
     { code: "670", description: "Clutches",                 groupNumber: 6, groupName: "Main Components" },
     { code: "680", description: "Couplings",                groupNumber: 6, groupName: "Main Components" },
     { code: "690", description: "Other propulsion components", groupNumber: 6, groupName: "Main Components" },
@@ -612,10 +583,10 @@ async function main(): Promise<void> {
     { code: "710", description: "Fuel oil systems",          groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "720", description: "Lubricating oil systems",   groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "730", description: "Cooling water systems",     groupNumber: 7, groupName: "Systems for Main Components" },
-    { code: "740", description: "Air systems",               groupNumber: 7, groupName: "Systems for Main Components" },
+    { code: "740", description: "Starting air systems",       groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "750", description: "Bilge and ballast systems", groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "760", description: "Fire fighting systems",     groupNumber: 7, groupName: "Systems for Main Components" },
-    { code: "770", description: "Compressed air",            groupNumber: 7, groupName: "Systems for Main Components" },
+    { code: "770", description: "Service compressed air",     groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "780", description: "Steam systems",             groupNumber: 7, groupName: "Systems for Main Components" },
     { code: "790", description: "Other machinery systems",   groupNumber: 7, groupName: "Systems for Main Components" },
     // Grupo 8 — Electrical Installations
@@ -625,13 +596,13 @@ async function main(): Promise<void> {
     { code: "830", description: "Lighting",                   groupNumber: 8, groupName: "Electrical Installations" },
     { code: "840", description: "Navigation lights",          groupNumber: 8, groupName: "Electrical Installations" },
     { code: "850", description: "Communication systems",      groupNumber: 8, groupName: "Electrical Installations" },
-    { code: "860", description: "Alarm systems",              groupNumber: 8, groupName: "Electrical Installations" },
+    { code: "860", description: "Fire and safety alarm systems", groupNumber: 8, groupName: "Electrical Installations" },
     { code: "870", description: "Battery systems",            groupNumber: 8, groupName: "Electrical Installations" },
     { code: "880", description: "Emergency power",            groupNumber: 8, groupName: "Electrical Installations" },
     { code: "890", description: "Electrical auxiliaries",     groupNumber: 8, groupName: "Electrical Installations" },
     // Grupo 9 — Automation, Control and Monitoring
     { code: "900", description: "Automation general",          groupNumber: 9, groupName: "Automation, Control and Monitoring" },
-    { code: "910", description: "Alarm systems",               groupNumber: 9, groupName: "Automation, Control and Monitoring" },
+    { code: "910", description: "Process alarm systems",        groupNumber: 9, groupName: "Automation, Control and Monitoring" },
     { code: "920", description: "Remote control",              groupNumber: 9, groupName: "Automation, Control and Monitoring" },
     { code: "930", description: "Process control",             groupNumber: 9, groupName: "Automation, Control and Monitoring" },
     { code: "940", description: "Measuring instruments",       groupNumber: 9, groupName: "Automation, Control and Monitoring" },
@@ -646,6 +617,11 @@ async function main(): Promise<void> {
     const existing = await prisma.sfiNode.findFirst({ where: { code: node.code, tenantId: null } });
     if (!existing) {
       await prisma.sfiNode.create({ data: { ...node, isGlobal: true, tenantId: null, sortOrder: parseInt(node.code) } });
+    } else {
+      await prisma.sfiNode.update({
+        where: { id: existing.id },
+        data: { description: node.description, groupNumber: node.groupNumber, groupName: node.groupName },
+      });
     }
   }
   process.stdout.write(`SFI nodes seeded: ${SFI_DATA.length}\n`);
@@ -700,7 +676,7 @@ async function main(): Promise<void> {
   process.stdout.write("Platform user: admin@localhost / admin123\n");
   process.stdout.write("Tenant user: admin@demo.local / demo123\n");
   process.stdout.write("Vessels: LATERE, GLT001\n");
-  process.stdout.write("Operational data seeded: assets, work orders, defects, deferrals, rca, capa, spares, inspection, certificates, daily report, provider evaluations/NCs\n");
+  process.stdout.write("Operational data seeded: assets, work orders, defects, deferrals, capa, spares, inspection, certificates, daily report, provider evaluations/NCs\n");
   process.stdout.write(`Domain events seeded: 5\n`);
   process.stdout.write(`AI insights generated: ${insightsGenerated}\n`);
 }

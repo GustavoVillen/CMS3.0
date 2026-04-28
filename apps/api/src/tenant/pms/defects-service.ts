@@ -24,6 +24,13 @@ export interface CreateDefectInput {
   immediateAction?: string | null;
   correctiveAction?: string | null;
   rcaAnalysis?: string | null;
+  rcaMethodology?: "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS" | null;
+  rcaImmediateCause?: string | null;
+  rcaContributingCause?: string | null;
+  rcaRootCause?: string | null;
+  rcaPreventiveActions?: string | null;
+  rcaCompletedAt?: string | Date | null;
+  rcaApprovedAt?: string | Date | null;
   capaDescription?: string | null;
   repairType?: string | null;
 }
@@ -41,6 +48,13 @@ export interface UpdateDefectInput {
   immediateAction?: string | null;
   correctiveAction?: string | null;
   rcaAnalysis?: string | null;
+  rcaMethodology?: "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS" | null;
+  rcaImmediateCause?: string | null;
+  rcaContributingCause?: string | null;
+  rcaRootCause?: string | null;
+  rcaPreventiveActions?: string | null;
+  rcaCompletedAt?: string | Date | null;
+  rcaApprovedAt?: string | Date | null;
   capaDescription?: string | null;
   repairType?: string | null;
 }
@@ -61,6 +75,14 @@ interface DefectRecord {
   immediateAction: string | null;
   correctiveAction: string | null;
   rcaAnalysis: string | null;
+  rcaMethodology: "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS" | null;
+  rcaImmediateCause: string | null;
+  rcaContributingCause: string | null;
+  rcaRootCause: string | null;
+  rcaPreventiveActions: string | null;
+  rcaCompletedAt: Date | null;
+  rcaApprovedAt: Date | null;
+  rcaApprovedByUserId: string | null;
   capaDescription: string | null;
   repairType: string | null;
   createdAt: Date;
@@ -287,6 +309,16 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
   if (payload.immediateAction !== undefined) data.immediateAction = normalizeOptionalText(payload.immediateAction);
   if (payload.correctiveAction !== undefined) data.correctiveAction = normalizeOptionalText(payload.correctiveAction);
   if (payload.rcaAnalysis !== undefined) data.rcaAnalysis = normalizeOptionalText(payload.rcaAnalysis);
+  if (payload.rcaMethodology !== undefined) data.rcaMethodology = payload.rcaMethodology || null;
+  if (payload.rcaImmediateCause !== undefined) data.rcaImmediateCause = normalizeOptionalText(payload.rcaImmediateCause);
+  if (payload.rcaContributingCause !== undefined) data.rcaContributingCause = normalizeOptionalText(payload.rcaContributingCause);
+  if (payload.rcaRootCause !== undefined) data.rcaRootCause = normalizeOptionalText(payload.rcaRootCause);
+  if (payload.rcaPreventiveActions !== undefined) data.rcaPreventiveActions = normalizeOptionalText(payload.rcaPreventiveActions);
+  if (payload.rcaCompletedAt !== undefined) data.rcaCompletedAt = parseOptionalDate(payload.rcaCompletedAt, "rcaCompletedAt");
+  if (payload.rcaApprovedAt !== undefined) {
+    data.rcaApprovedAt = parseOptionalDate(payload.rcaApprovedAt, "rcaApprovedAt");
+    data.rcaApprovedByUserId = data.rcaApprovedAt ? session.user.id : null;
+  }
   if (payload.capaDescription !== undefined) data.capaDescription = normalizeOptionalText(payload.capaDescription);
   if (payload.repairType !== undefined) data.repairType = normalizeOptionalText(payload.repairType);
 

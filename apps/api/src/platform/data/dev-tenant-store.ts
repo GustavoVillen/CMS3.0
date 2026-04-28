@@ -8,6 +8,7 @@ export interface DevTenantRecord {
   status: DevTenantStatus;
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
   defaultLocale: LocaleCode;
@@ -56,6 +57,7 @@ export interface DevTenantCreateInput {
   status: DevTenantStatus;
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
   defaultLocale: LocaleCode;
@@ -68,6 +70,7 @@ export interface DevTenantUpdateInput {
   status?: DevTenantStatus;
   displayName?: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail?: string;
   defaultLocale?: LocaleCode;
@@ -113,6 +116,7 @@ export function createDevTenant(input: DevTenantCreateInput): DevTenantRecord {
     status: input.status,
     displayName: input.displayName,
     logoUrl: input.logoUrl ?? null,
+    logoUrlLight: input.logoUrlLight ?? null,
     primaryColor: input.primaryColor ?? null,
     supportEmail: input.supportEmail,
     defaultLocale: input.defaultLocale,
@@ -138,6 +142,7 @@ export function updateDevTenant(slug: string, input: DevTenantUpdateInput): DevT
   if (input.timezone) tenant.timezone = input.timezone;
   if (input.currency) tenant.currency = input.currency;
   if (input.logoUrl !== undefined) tenant.logoUrl = input.logoUrl;
+  if (input.logoUrlLight !== undefined) tenant.logoUrlLight = input.logoUrlLight;
   if (input.primaryColor !== undefined) tenant.primaryColor = input.primaryColor;
 
   tenant.updatedAt = new Date().toISOString();

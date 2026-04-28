@@ -23,7 +23,6 @@ interface ListResponse { items: Prompt[]; total: number; }
 
 const CAPABILITIES = [
   "knowledge_assistant",
-  "rca_assistant",
   "defect_assistant",
   "deferral_analysis",
   "barrier_interviewer",

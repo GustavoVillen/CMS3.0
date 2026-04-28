@@ -16,18 +16,36 @@ import {
 } from "../spares/spares-service";
 import { createStockMovement, listTenantStockMovements } from "../stock-movements/stock-movements-service";
 import {
-  createSpareOrder,
-  deleteSpareOrder,
-  getTenantSpareOrder,
-  listTenantSpareOrders,
-  updateSpareOrder,
-} from "../spare-orders/spare-orders-service";
+  createStockLocation,
+  deleteStockLocation,
+  getStockLocation,
+  listStockLocations,
+  updateStockLocation,
+} from "./stock-locations-service";
 import {
-  addOrderLine,
-  deleteOrderLine,
-  listOrderLines,
-  updateOrderLine,
-} from "../spare-orders/spare-order-lines-service";
+  approveSpareRequest,
+  cancelSpareRequest,
+  createSpareRequest,
+  deleteSpareRequest,
+  getSpareRequest,
+  listSpareRequests,
+  rejectSpareRequest,
+  submitSpareRequest,
+  updateSpareRequest,
+} from "../spare-requests/spare-requests-service";
+import {
+  addRequestItem,
+  deleteRequestItem,
+  fulfillItem,
+  listRequestItems,
+  updateRequestItem,
+} from "../spare-requests/spare-request-items-service";
+import {
+  consumeReservation,
+  createReservationsForRequest,
+  listReservationsForRequest,
+  releaseReservation,
+} from "../spare-requests/stock-reservations-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -42,7 +60,13 @@ export async function handleSparesRoutes(
   response: ServerResponse,
   env: AppEnv,
 ): Promise<boolean> {
-  if (!url.pathname.startsWith("/app/pms/spares") && !url.pathname.startsWith("/app/pms/stock-movements") && !url.pathname.startsWith("/app/pms/spare-orders")) {
+  if (
+    !url.pathname.startsWith("/app/pms/spares") &&
+    !url.pathname.startsWith("/app/pms/stock-movements") &&
+    !url.pathname.startsWith("/app/pms/stock-locations") &&
+    !url.pathname.startsWith("/app/pms/spare-requests") &&
+    !url.pathname.startsWith("/app/pms/stock-reservations")
+  ) {
     return false;
   }
 
@@ -106,65 +130,143 @@ export async function handleSparesRoutes(
     return true;
   }
 
-  if (method === "GET" && url.pathname === "/app/pms/spare-orders") {
-    const items = await listTenantSpareOrders(session, {
+  // ── Spare Requests ───────────────────────────────────────────────────────────
+
+  if (method === "GET" && /^\/app\/pms\/spare-requests\/[^/]+\/pdf$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const { buildSpareRequestPdf } = await import("./spare-request-pdf-service");
+    const sr = await import("../spare-requests/spare-requests-service").then(m => m.getSpareRequest(session, id));
+    const filename = `${sr!.requestCode}.pdf`;
+    const buffer = await buildSpareRequestPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/spare-requests") {
+    const items = await listSpareRequests(session, {
+      status:     url.searchParams.get("status"),
+      priority:   url.searchParams.get("priority"),
       vesselCode: url.searchParams.get("vesselCode"),
-      status: url.searchParams.get("status"),
-      priority: url.searchParams.get("priority"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
   }
 
-  if (method === "POST" && url.pathname === "/app/pms/spare-orders") {
-    const body = await readJsonBody(request) as Parameters<typeof createSpareOrder>[1];
-    sendJson(response, 201, await createSpareOrder(session, body));
+  if (method === "POST" && url.pathname === "/app/pms/spare-requests") {
+    const body = await readJsonBody(request) as Parameters<typeof createSpareRequest>[1];
+    sendJson(response, 201, await createSpareRequest(session, body));
     return true;
   }
 
-  if (/^\/app\/pms\/spare-orders\/[^/]+$/.test(url.pathname)) {
+  if (/^\/app\/pms\/spare-requests\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET")    { sendJson(response, 200, await getSpareRequest(session, id));    return true; }
+    if (method === "PATCH")  { const body = await readJsonBody(request) as Parameters<typeof updateSpareRequest>[2]; sendJson(response, 200, await updateSpareRequest(session, id, body)); return true; }
+    if (method === "DELETE") { await deleteSpareRequest(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/submit$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await submitSpareRequest(session, id)); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/approve$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await approveSpareRequest(session, id)); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/reject$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as { reason?: string };
+      sendJson(response, 200, await rejectSpareRequest(session, id, body.reason ?? ""));
+      return true;
+    }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/cancel$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await cancelSpareRequest(session, id)); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/items$/.test(url.pathname)) {
+    const requestId = url.pathname.split("/")[4]!;
+    if (method === "GET")  { sendJson(response, 200, { items: await listRequestItems(session, requestId) }); return true; }
+    if (method === "POST") { const body = await readJsonBody(request) as Parameters<typeof addRequestItem>[2]; sendJson(response, 201, await addRequestItem(session, requestId, body)); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/items\/[^/]+\/fulfill$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const requestId = parts[4]!;
+    const itemId    = parts[6]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as { receivedAt?: string; receiptNotes?: string };
+      sendJson(response, 200, await fulfillItem(session, requestId, itemId, body));
+      return true;
+    }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/items\/[^/]+$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const requestId = parts[4]!;
+    const itemId    = parts[6]!;
+    if (method === "PATCH")  { const body = await readJsonBody(request) as Parameters<typeof updateRequestItem>[3]; sendJson(response, 200, await updateRequestItem(session, requestId, itemId, body)); return true; }
+    if (method === "DELETE") { sendJson(response, 200, await deleteRequestItem(session, requestId, itemId)); return true; }
+  }
+
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/reservations$/.test(url.pathname)) {
+    const requestId = url.pathname.split("/")[4]!;
+    if (method === "GET")  { sendJson(response, 200, { items: await listReservationsForRequest(session, requestId) }); return true; }
+    if (method === "POST") { sendJson(response, 201, await createReservationsForRequest(session, requestId)); return true; }
+  }
+
+  if (/^\/app\/pms\/stock-reservations\/[^/]+\/release$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await releaseReservation(session, id)); return true; }
+  }
+
+  if (/^\/app\/pms\/stock-reservations\/[^/]+\/consume$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await consumeReservation(session, id)); return true; }
+  }
+
+  // ── Stock Locations ──────────────────────────────────────────────────────────
+
+  if (method === "GET" && url.pathname === "/app/pms/stock-locations") {
+    const isActiveParam = url.searchParams.get("isActive");
+    const items = await listStockLocations(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      isActive: isActiveParam !== null ? isActiveParam === "true" : undefined,
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/stock-locations") {
+    const body = await readJsonBody(request) as Parameters<typeof createStockLocation>[1];
+    sendJson(response, 201, await createStockLocation(session, body));
+    return true;
+  }
+
+  if (/^\/app\/pms\/stock-locations\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "GET") {
-      sendJson(response, 200, await getTenantSpareOrder(session, id));
+      sendJson(response, 200, await getStockLocation(session, id));
       return true;
     }
     if (method === "PATCH") {
-      const body = await readJsonBody(request) as Parameters<typeof updateSpareOrder>[2];
-      sendJson(response, 200, await updateSpareOrder(session, id, body));
+      const body = await readJsonBody(request) as Parameters<typeof updateStockLocation>[2];
+      sendJson(response, 200, await updateStockLocation(session, id, body));
       return true;
     }
     if (method === "DELETE") {
-      await deleteSpareOrder(session, id);
+      await deleteStockLocation(session, id);
       sendJson(response, 200, { ok: true });
-      return true;
-    }
-  }
-
-  if (/^\/app\/pms\/spare-orders\/[^/]+\/lines$/.test(url.pathname)) {
-    const orderId = url.pathname.split("/")[4]!;
-    if (method === "GET") {
-      const items = await listOrderLines(session, orderId);
-      sendJson(response, 200, { items, total: items.length });
-      return true;
-    }
-    if (method === "POST") {
-      const body = await readJsonBody(request) as Parameters<typeof addOrderLine>[2];
-      sendJson(response, 201, await addOrderLine(session, orderId, body));
-      return true;
-    }
-  }
-
-  if (/^\/app\/pms\/spare-orders\/[^/]+\/lines\/[^/]+$/.test(url.pathname)) {
-    const parts = url.pathname.split("/");
-    const orderId = parts[4]!;
-    const lineId  = parts[6]!;
-    if (method === "PATCH") {
-      const body = await readJsonBody(request) as Parameters<typeof updateOrderLine>[3];
-      sendJson(response, 200, await updateOrderLine(session, orderId, lineId, body));
-      return true;
-    }
-    if (method === "DELETE") {
-      sendJson(response, 200, await deleteOrderLine(session, orderId, lineId));
       return true;
     }
   }

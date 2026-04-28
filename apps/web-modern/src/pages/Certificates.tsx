@@ -93,6 +93,20 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   const [error, setError]         = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasLink = originalSourceLink.trim() !== "";
+  const { data: vesselsData } = useFetch<{ items: { code: string; name: string }[] }>("/app/vessels?limit=200", []);
+
+  const derivedStatus = useMemo(() => {
+    const trimmed = expiryDate.trim();
+    if (!trimmed) return initial?.status ?? "ACTIVE";
+    const auto = computeAutoCertificateStatus(trimmed);
+    if ((initial?.status === "SUSPENDED" || initial?.status === "CLOSED") && isEdit) {
+      return initial.status;
+    }
+    return auto;
+  }, [expiryDate, initial?.status, isEdit]);
+
   useCopilotEmitter({
     module: "CERTIFICATES",
     screen: isEdit ? "CERT_EDIT" : "CERT_CREATE",
@@ -109,18 +123,6 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
       issueDate:    issueDate    || null,
     },
   });
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const hasLink = originalSourceLink.trim() !== "";
-
-  const derivedStatus = useMemo(() => {
-    const trimmed = expiryDate.trim();
-    if (!trimmed) return initial?.status ?? "ACTIVE";
-    const auto = computeAutoCertificateStatus(trimmed);
-    if ((initial?.status === "SUSPENDED" || initial?.status === "CLOSED") && isEdit) {
-      return initial.status;
-    }
-    return auto;
-  }, [expiryDate, initial?.status, isEdit]);
 
   const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 
@@ -212,14 +214,18 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")} *</label>
-              <input
+              <select
                 value={vesselCode}
-                onChange={e => setVessel(e.target.value.toUpperCase())}
+                onChange={e => setVessel(e.target.value)}
                 required
                 disabled={isEdit}
-                placeholder="LATERE"
                 className={`${inputCls} disabled:opacity-60 disabled:cursor-not-allowed`}
-              />
+              >
+                <option value="">Seleccionar vessel...</option>
+                {(vesselsData?.items ?? []).map(v => (
+                  <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -390,7 +396,6 @@ export const CertificatesPage: React.FC = () => {
     { key: "name",            header: t("col.name"),      render: r => <span className="font-medium text-white line-clamp-1">{r.name}</span> },
     { key: "vesselCode",      header: t("col.vessel"),    render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span> },
     { key: "issuingAuthority",header: t("col.authority"), render: r => <span className="text-text-industrial/80">{r.issuingAuthority}</span> },
-    { key: "issueDate",       header: t("col.issued"),    render: r => fmtDate(r.issueDate) },
     { key: "expiryDate",      header: t("col.expiry"),    render: r => <ExpiryCell date={r.expiryDate} /> },
     { key: "status",          header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },
     {

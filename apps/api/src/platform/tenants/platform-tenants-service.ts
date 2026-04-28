@@ -17,6 +17,7 @@ export interface PlatformTenantSummary {
   status: DevTenantStatus;
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
   defaultLocale: LocaleCode;
@@ -37,6 +38,7 @@ export interface PlatformTenantCreateRequest {
   status?: DevTenantStatus;
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
   defaultLocale: LocaleCode;
@@ -49,6 +51,7 @@ export interface PlatformTenantUpdateRequest {
   status?: DevTenantStatus;
   displayName?: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail?: string;
   defaultLocale?: LocaleCode;
@@ -96,6 +99,7 @@ function toSummaryFromDev(record: DevTenantRecord): PlatformTenantSummary {
     status: record.status,
     displayName: record.displayName,
     logoUrl: record.logoUrl ?? null,
+    logoUrlLight: record.logoUrlLight ?? null,
     primaryColor: record.primaryColor ?? null,
     supportEmail: record.supportEmail,
     defaultLocale: record.defaultLocale,
@@ -116,6 +120,7 @@ function toSummaryFromPrisma(tenant: {
   settings: {
     displayName: string;
     logoUrl: string | null;
+    logoUrlLight?: string | null;
     primaryColor: string | null;
     supportEmail: string;
     defaultLocale: LocaleCode;
@@ -134,6 +139,7 @@ function toSummaryFromPrisma(tenant: {
     status: tenant.status,
     displayName: tenant.settings.displayName,
     logoUrl: tenant.settings.logoUrl,
+    logoUrlLight: tenant.settings.logoUrlLight ?? null,
     primaryColor: tenant.settings.primaryColor,
     supportEmail: tenant.settings.supportEmail,
     defaultLocale: tenant.settings.defaultLocale,
@@ -235,6 +241,7 @@ export async function createPlatformTenant(request: PlatformTenantCreateRequest)
         create: {
           displayName,
           logoUrl: request.logoUrl ?? null,
+          logoUrlLight: request.logoUrlLight ?? null,
           primaryColor: request.primaryColor ?? null,
           supportEmail,
           defaultLocale: request.defaultLocale,
@@ -286,6 +293,7 @@ export async function updatePlatformTenant(
   const settingsData: Record<string, unknown> = {};
   if (request.displayName !== undefined) settingsData.displayName = request.displayName;
   if (request.logoUrl !== undefined) settingsData.logoUrl = request.logoUrl ?? null;
+  if (request.logoUrlLight !== undefined) settingsData.logoUrlLight = request.logoUrlLight ?? null;
   if (request.primaryColor !== undefined) settingsData.primaryColor = request.primaryColor ?? null;
   if (request.supportEmail !== undefined) settingsData.supportEmail = request.supportEmail;
   if (request.defaultLocale !== undefined) settingsData.defaultLocale = request.defaultLocale;
@@ -302,6 +310,7 @@ export async function updatePlatformTenant(
           create: {
             displayName: request.displayName || tenant.settings?.displayName || tenant.slug,
             logoUrl: request.logoUrl ?? tenant.settings?.logoUrl ?? null,
+            logoUrlLight: request.logoUrlLight ?? tenant.settings?.logoUrlLight ?? null,
             primaryColor: request.primaryColor ?? tenant.settings?.primaryColor ?? null,
             supportEmail: request.supportEmail || tenant.settings?.supportEmail || "support@example.com",
             defaultLocale: request.defaultLocale || tenant.settings?.defaultLocale || "en",

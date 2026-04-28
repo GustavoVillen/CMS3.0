@@ -304,7 +304,13 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onC
         </button>
       </div>
       {vessels.length === 0 ? (
-        <p className="text-xs text-text-industrial/30">No hay buques configurados.</p>
+        <p className="text-xs text-text-industrial/30">
+          No hay buques configurados. Agregue buques en{" "}
+          <a href="/vessels" className="text-accent underline underline-offset-2 hover:text-accent/80 transition-colors">
+            Gestión de Flota
+          </a>{" "}
+          para poder asignarlos.
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-1.5">
           {vessels.map(v => {

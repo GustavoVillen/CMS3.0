@@ -28,7 +28,51 @@ import {
   Info,
   BarChart2,
   CheckCheck,
+  Mic,
+  MicOff,
+  Volume2,
+  Square,
+  Paperclip,
+  X,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Voice summary — strip markdown, keep first ~200 chars at word boundary
+// ---------------------------------------------------------------------------
+
+function buildVoiceSummary(text: string): string {
+  const clean = text
+    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\[([^\]]+)]\([^\)]+\)/g, "$1")
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/^[-*•]\s+/gm, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (clean.length <= 200) return clean;
+
+  const cut = clean.slice(0, 200);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 100 ? cut.slice(0, lastSpace) : cut) + "…";
+}
+
+// ---------------------------------------------------------------------------
+// speechSynthesis helpers
+// ---------------------------------------------------------------------------
+
+function getSpanishVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  for (const lang of ["es-AR", "es-MX", "es-ES", "es"]) {
+    const v = voices.find(v => v.lang === lang || v.lang.startsWith(lang));
+    if (v) return v;
+  }
+  return null;
+}
 import { api } from "../lib/api";
 import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
 import { useResizable } from "../lib/hooks";
@@ -49,6 +93,14 @@ interface Suggestion {
   explanation: string;
 }
 
+type FileContent =
+  | { type: "text";     text: string;   fileName: string }
+  | { type: "image";    base64: string; mediaType: string; fileName: string }
+  | { type: "document"; base64: string; fileName: string };
+
+const ACCEPTED_FILE_TYPES = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.txt";
+const MAX_FILE_MB = 10;
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,7 +109,6 @@ interface Suggestion {
 const CAPABILITIES = [
   { value: "knowledge_assistant",    label: "Asistente de conocimiento" },
   { value: "maintenance_insights",   label: "Insights de mantenimiento" },
-  { value: "rca_assistant",          label: "Asistente RCA" },
   { value: "defect_assistant",       label: "Asistente de defectos" },
   { value: "deferral_analysis",      label: "Análisis de diferimientos" },
   { value: "daily_executive_summary", label: "Resumen ejecutivo diario" },
@@ -93,7 +144,6 @@ function stripCamposBlock(text: string): string {
 
 function capabilityForModule(module: string | undefined): string {
   switch (module) {
-    case "RCA":           return "rca_assistant";
     case "DEFECTS":       return "defect_assistant";
     case "DEFERRALS":     return "deferral_analysis";
     case "WORK_ORDERS":   return "maintenance_insights";
@@ -109,53 +159,8 @@ function computeSuggestions(ctx: CopilotScreenContext): Suggestion[] {
   const suggestions: Suggestion[] = [];
   const fv = ctx.fieldValues ?? {};
 
-  // ── RCA heuristics ──
-  if (ctx.module === "RCA") {
-    if (!fv.rootCause?.trim()) {
-      suggestions.push({
-        id: "rca-root",
-        priority: "HIGH",
-        title: "Falta causa raíz",
-        explanation: "La causa raíz está vacía. Es el campo más crítico del análisis.",
-      });
-    }
-    if (!fv.immediateCause?.trim()) {
-      suggestions.push({
-        id: "rca-imm",
-        priority: "MEDIUM",
-        title: "Falta causa inmediata",
-        explanation: "Describe el fallo observable inicial antes de llegar a la causa raíz.",
-      });
-    }
-    if (!fv.correctiveActions?.trim()) {
-      suggestions.push({
-        id: "rca-corr",
-        priority: "MEDIUM",
-        title: "Faltan acciones correctivas",
-        explanation: "¿Qué acción concreta elimina la recurrencia de esta falla?",
-      });
-    }
-    if (!fv.preventiveActions?.trim()) {
-      suggestions.push({
-        id: "rca-prev",
-        priority: "LOW",
-        title: "Faltan acciones preventivas",
-        explanation: "¿Cómo se evita que ocurra en otros activos o contextos similares?",
-      });
-    }
-    const summary = fv.analysisSummary?.trim() ?? "";
-    if (summary && summary.length > 0 && summary.length < 50) {
-      suggestions.push({
-        id: "rca-brief",
-        priority: "LOW",
-        title: "Resumen muy breve",
-        explanation: "El resumen parece insuficiente para documentar el análisis correctamente.",
-      });
-    }
-  }
-
   // ── Work Orders heuristics ──
-  if (ctx.module === "WORK_ORDERS") {
+  if (ctx.module === "WORK_ORDERS" && ctx.screen === "WO_EDIT") {
     if (!fv.title?.trim()) {
       suggestions.push({
         id: "wo-title",
@@ -175,41 +180,6 @@ function computeSuggestions(ctx: CopilotScreenContext): Suggestion[] {
     }
   }
 
-  // ── Defects heuristics ──
-  if (ctx.module === "DEFECTS") {
-    if (!fv.immediateAction?.trim()) {
-      suggestions.push({
-        id: "def-imm",
-        priority: "HIGH",
-        title: "Falta acción inmediata",
-        explanation: "Documenta qué se hizo de inmediato para contener el defecto.",
-      });
-    }
-    if (!fv.rcaAnalysis?.trim()) {
-      suggestions.push({
-        id: "def-rca",
-        priority: "HIGH",
-        title: "Falta análisis RCA",
-        explanation: "Identifica la causa raíz aplicando 5 Por qués, Fishbone u otra metodología.",
-      });
-    }
-    if (!fv.correctiveAction?.trim()) {
-      suggestions.push({
-        id: "def-corr",
-        priority: "MEDIUM",
-        title: "Falta acción correctiva",
-        explanation: "¿Qué acción elimina la causa y evita recurrencia?",
-      });
-    }
-    if (!fv.capaDescription?.trim()) {
-      suggestions.push({
-        id: "def-capa",
-        priority: "MEDIUM",
-        title: "Falta CAPA",
-        explanation: "Documenta las acciones correctivas y preventivas para evitar recurrencia.",
-      });
-    }
-  }
 
   // ── CAPA heuristics ──
   if (ctx.module === "CAPA") {
@@ -272,15 +242,6 @@ function buildPendingItemsPrompt(ctx: CopilotScreenContext, suggestions: Suggest
     .filter(([, v]) => v?.trim())
     .map(([k, v]) => `• ${k}: "${v}"`)
     .join("\n");
-
-  if (ctx.module === "RCA") {
-    return (
-      `Estoy completando el RCA${code}${vessel}.` +
-      (filledList ? `\n\nYa tengo documentado:\n${filledList}` : "") +
-      `\n\nÍtems pendientes:\n${pendingList}` +
-      `\n\nAyúdame a completar estos campos con preguntas guiadas, basándote en lo que ya tengo.`
-    );
-  }
 
   if (ctx.module === "WORK_ORDERS") {
     return (
@@ -445,7 +406,7 @@ function printReport(content: string) {
   p{margin:3px 0}
   @media print{body{margin:20px}.no-print{display:none}}
 </style></head><body>
-<div class="hdr"><span class="hdr-brand">GPMS Naval — Copiloto IA</span><span class="hdr-ts">Generado: ${ts}</span></div>
+<div class="hdr"><span class="hdr-brand">CMS — Copiloto IA</span><span class="hdr-ts">Generado: ${ts}</span></div>
 ${html}
 <script>window.onload=function(){window.print();}</script>
 </body></html>`);
@@ -548,6 +509,7 @@ export const CopilotoPanel: React.FC = () => {
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(LS_EXPANDED) !== "false"; } catch { return true; }
   });
+  const [fullscreen, setFullscreen] = useState(false);
 
   // Chat state
   const [messages, setMessages]   = useState<ChatMessage[]>([]);
@@ -557,6 +519,18 @@ export const CopilotoPanel: React.FC = () => {
   const [error, setError]         = useState<string | null>(null);
   // Pending field values proposed by the AI — shown as "Aplicar campos" button
   const [pendingFields, setPendingFields] = useState<Record<string, string> | null>(null);
+
+  // File attachment state
+  const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
+  const [uploading, setUploading]       = useState(false);
+  const fileInputRef                    = useRef<HTMLInputElement>(null);
+
+  // Voice input state
+  const [listening, setListening]   = useState(false);
+  const recognitionRef              = useRef<SpeechRecognition | null>(null);
+
+  // speechSynthesis state
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -573,9 +547,12 @@ export const CopilotoPanel: React.FC = () => {
     }
   }, [screenContext?.module]);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages — scroll only within the panel, not the document
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesEndRef.current?.parentElement;
+    if (container) {
+      container.scroll({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages, streaming]);
 
   // Focus input when expanding
@@ -586,6 +563,109 @@ export const CopilotoPanel: React.FC = () => {
   // Derived
   const suggestions    = useMemo(() => screenContext ? computeSuggestions(screenContext) : [], [screenContext]);
   const hasSuggestions = suggestions.length > 0;
+
+  // ---------------------------------------------------------------------------
+  // File attachment — upload to backend, store parsed content in state
+  // ---------------------------------------------------------------------------
+
+  const uploadFile = useCallback(async (file: File) => {
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      setError(`El archivo supera el límite de ${MAX_FILE_MB} MB.`);
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": file.type || "application/octet-stream",
+        "X-Filename": encodeURIComponent(file.name),
+      };
+      const token = localStorage.getItem("gpms_token");
+      const slug  = localStorage.getItem("gpms_tenant_slug");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (slug)  headers["X-Tenant-Slug"] = slug;
+
+      const res = await fetch("/app/copiloto/parse-file", {
+        method: "POST", headers, body: file,
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const content = await res.json() as FileContent;
+      setPendingFile(content);
+    } catch (e: unknown) {
+      setError(`No se pudo procesar el archivo: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Voice input (Web Speech API — free, no backend)
+  // ---------------------------------------------------------------------------
+
+  const startVoiceInput = useCallback(() => {
+    const SR = (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
+      ?? (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+
+    if (!SR) { alert("Tu navegador no soporta reconocimiento de voz."); return; }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SR();
+    recognition.lang = "es-AR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart  = () => setListening(true);
+    recognition.onend    = () => setListening(false);
+    recognition.onerror  = () => setListening(false);
+    recognition.onresult = (e: SpeechRecognitionEvent) => {
+      const transcript = e.results[0]?.[0]?.transcript ?? "";
+      if (transcript) setInput(transcript);
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [listening]);
+
+  // ---------------------------------------------------------------------------
+  // TTS playback — Web Speech API (speechSynthesis), free, no backend
+  // ---------------------------------------------------------------------------
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setSpeakingIdx(null);
+  }, []);
+
+  const speakMessage = useCallback((msgIdx: number, content: string) => {
+    if (speakingIdx === msgIdx) { stopSpeaking(); return; }
+    stopSpeaking();
+
+    const summary = buildVoiceSummary(content);
+    const utterance = new SpeechSynthesisUtterance(summary);
+
+    // Pick best Spanish voice available; fall back to browser default
+    const voice = getSpanishVoice();
+    if (voice) utterance.voice = voice;
+    utterance.lang = voice?.lang ?? "es-AR";
+    utterance.rate = 1.05;
+
+    utterance.onstart = () => setSpeakingIdx(msgIdx);
+    utterance.onend   = () => setSpeakingIdx(null);
+    utterance.onerror = () => setSpeakingIdx(null);
+
+    // Voices may not be loaded yet on first call — retry once after load
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.addEventListener("voiceschanged", () => {
+        const v = getSpanishVoice();
+        if (v) { utterance.voice = v; utterance.lang = v.lang; }
+        window.speechSynthesis.speak(utterance);
+      }, { once: true });
+    } else {
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [speakingIdx, stopSpeaking]);
 
   // ---------------------------------------------------------------------------
   // Message sending
@@ -648,13 +728,15 @@ export const CopilotoPanel: React.FC = () => {
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
     try {
+      const fileSnapshot = pendingFile;
+      if (pendingFile) setPendingFile(null);
+
       const reader = await api.stream("/app/copiloto/chat", {
         capability,
         locale: navigator.language?.split("-")[0] ?? "es",
-        // Context-injected messages for the API (display shows clean originals)
         messages: buildApiMessages(nextMessages),
-        // Attach live screen context so the backend can inject it into the system prompt
         screenContext: screenContext ?? undefined,
+        fileAttachment: fileSnapshot ?? undefined,
       });
 
       let assistantContent = "";
@@ -693,6 +775,7 @@ export const CopilotoPanel: React.FC = () => {
       });
     } finally {
       setStreaming(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [buildApiMessages, capability, input, messages, screenContext, streaming]);
 
@@ -715,7 +798,10 @@ export const CopilotoPanel: React.FC = () => {
 
   const handleInternalLinkClick = (path: string) => { navigate(path); };
 
-  const clearConversation = () => { setMessages([]); setError(null); setPendingFields(null); };
+  const clearConversation = () => {
+    stopSpeaking();
+    setMessages([]); setError(null); setPendingFields(null); setPendingFile(null);
+  };
 
   // ---------------------------------------------------------------------------
   // Collapsed strip
@@ -765,22 +851,28 @@ export const CopilotoPanel: React.FC = () => {
 
   return (
     <aside
-      className="relative z-55 flex flex-col h-screen border-l border-white/10 bg-[#080D1D] shrink-0"
-      style={{ width: panelWidth }}
+      className={`relative flex flex-col border-l border-white/10 bg-[#080D1D] shrink-0 ${
+        fullscreen
+          ? "fixed inset-0 z-100"
+          : "z-55 h-screen"
+      }`}
+      style={fullscreen ? undefined : { width: panelWidth }}
     >
-      {/* Resize handle — left edge */}
-      <div
-        className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 group"
-        onMouseDown={(e) => startResize(e, "left")}
-      >
-        <div className="absolute left-0 top-0 h-full w-px bg-white/10 group-hover:bg-accent/50 transition-colors duration-150" />
-      </div>
+      {/* Resize handle — left edge (hidden in fullscreen) */}
+      {!fullscreen && (
+        <div
+          className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 group"
+          onMouseDown={(e) => startResize(e, "left")}
+        >
+          <div className="absolute left-0 top-0 h-full w-px bg-white/10 group-hover:bg-accent/50 transition-colors duration-150" />
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10 shrink-0 bg-white/2">
         <div className="flex items-center gap-2 min-w-0">
           <Bot className="w-3.5 h-3.5 text-accent shrink-0" />
-          <span className="text-[11px] font-bold text-white">Copiloto GPMS</span>
+          <span className="text-[11px] font-bold text-white">Copiloto CMS</span>
           {screenContext && (
             <span className="text-[9px] text-accent/50 font-mono uppercase tracking-wider truncate">
               {screenContext.module.replace("_", " ")}
@@ -793,9 +885,14 @@ export const CopilotoPanel: React.FC = () => {
               <Trash2 className="w-3 h-3" />
             </button>
           )}
-          <button onClick={() => setExpanded(false)} title="Colapsar" className="text-text-industrial/30 hover:text-white transition-colors">
-            <ChevronRight className="w-3.5 h-3.5" />
+          <button onClick={() => setFullscreen(f => !f)} title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"} className="text-text-industrial/30 hover:text-white transition-colors">
+            {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
+          {!fullscreen && (
+            <button onClick={() => setExpanded(false)} title="Colapsar" className="text-text-industrial/30 hover:text-white transition-colors">
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -894,13 +991,13 @@ export const CopilotoPanel: React.FC = () => {
             <p className="text-[10px] leading-relaxed px-3">
               {screenContext
                 ? `Contexto: ${screenContext.module.replace("_", " ")}. Usá las acciones rápidas o escribí tu consulta.`
-                : "Preguntame sobre mantenimiento, defectos, RCA o cualquier dato operacional."}
+                : "Preguntame sobre mantenimiento, defectos o cualquier dato operacional."}
             </p>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+          <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
             <div className={`max-w-[92%] rounded-xl px-2.5 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap ${
               msg.role === "user"
                 ? "bg-accent/20 border border-accent/20 text-white"
@@ -918,6 +1015,22 @@ export const CopilotoPanel: React.FC = () => {
                 )
               }
             </div>
+            {/* TTS play button — assistant messages only, when complete */}
+            {msg.role === "assistant" && msg.content && !(streaming && i === messages.length - 1) && (
+              <div className="mt-0.5 px-1">
+                <button
+                  onClick={() => speakMessage(i, msg.content)}
+                  title={speakingIdx === i ? "Detener" : "Escuchar resumen"}
+                  className="flex items-center gap-1 text-[9px] text-text-industrial/30 hover:text-accent transition-colors"
+                >
+                  {speakingIdx === i
+                    ? <Square className="w-2.5 h-2.5 text-accent" />
+                    : <Volume2 className="w-2.5 h-2.5" />
+                  }
+                  <span>{speakingIdx === i ? "Detener" : "Escuchar"}</span>
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -931,7 +1044,51 @@ export const CopilotoPanel: React.FC = () => {
 
       {/* ── Input ── */}
       <div className="px-2 py-2 border-t border-white/10 shrink-0">
+        {/* Attachment chip */}
+        {pendingFile && (
+          <div className="flex items-center gap-1.5 mb-1.5 px-2 py-1 rounded-lg bg-accent/10 border border-accent/20">
+            <Paperclip className="w-2.5 h-2.5 text-accent shrink-0" />
+            <span className="text-[10px] text-accent truncate flex-1">{pendingFile.fileName}</span>
+            <button onClick={() => setPendingFile(null)} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0">
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </div>
+        )}
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_FILE_TYPES}
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }}
+        />
         <div className="flex items-end gap-1.5">
+          <div className="flex flex-col gap-1">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming || uploading}
+            title="Adjuntar archivo (PDF, imagen, Excel, CSV)"
+            className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all disabled:opacity-30 ${
+              pendingFile
+                ? "bg-accent/20 border-accent/40 text-accent"
+                : "bg-white/5 border-white/10 text-text-industrial/40 hover:text-accent hover:border-accent/30"
+            }`}
+          >
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={startVoiceInput}
+            disabled={streaming}
+            title={listening ? "Detener grabación" : "Hablar"}
+            className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all disabled:opacity-30 ${
+              listening
+                ? "bg-red-500/20 border-red-500/40 text-red-400 animate-pulse"
+                : "bg-white/5 border-white/10 text-text-industrial/40 hover:text-accent hover:border-accent/30"
+            }`}
+          >
+            {listening ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+          </button>
+          </div>
           <textarea
             ref={inputRef}
             value={input}

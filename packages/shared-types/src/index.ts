@@ -19,6 +19,7 @@ export interface TenantPublicIdentity {
 export interface TenantBrandingSettings {
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
 }
@@ -68,6 +69,7 @@ export interface TenantBootstrapSource {
   slug: string;
   displayName: string;
   logoUrl?: string | null;
+  logoUrlLight?: string | null;
   primaryColor?: string | null;
   supportEmail: string;
   defaultLocale: LocaleCode;

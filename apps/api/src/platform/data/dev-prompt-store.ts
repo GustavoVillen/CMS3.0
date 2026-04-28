@@ -4,7 +4,6 @@ export type DevPromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export type DevPromptCapability =
   | "knowledge_assistant"
-  | "rca_assistant"
   | "defect_assistant"
   | "deferral_analysis"
   | "barrier_interviewer"
@@ -62,18 +61,6 @@ const DEV_PROMPTS: DevPromptRecord[] = [
     createdAt: "2026-04-05T00:00:00.000Z",
     updatedAt: "2026-04-05T00:00:00.000Z",
     publishedAt: "2026-04-05T00:00:00.000Z",
-  },
-  {
-    id: "prompt-rca_assistant-es-v1",
-    capability: "rca_assistant",
-    locale: "es",
-    version: 1,
-    status: "ARCHIVED",
-    title: "RCA asistente - version previa",
-    content: "Guia el analisis RCA con enfoque en hechos verificables.",
-    createdAt: "2026-03-15T00:00:00.000Z",
-    updatedAt: "2026-04-01T00:00:00.000Z",
-    publishedAt: "2026-03-20T00:00:00.000Z",
   },
 ];
 

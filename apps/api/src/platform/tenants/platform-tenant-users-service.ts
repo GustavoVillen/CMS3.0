@@ -214,20 +214,17 @@ export async function listPlatformTenantUsers(
     }).map((record) => toSummaryFromDev(record));
   }
 
+  const membershipWhere: Record<string, unknown> = { tenantId: tenant.id };
+  if (filters.role) membershipWhere.role = filters.role;
+  if (filters.membershipStatus) membershipWhere.status = filters.membershipStatus;
+  const userWhere: Record<string, unknown> = {};
+  if (filters.userStatus) userWhere.status = filters.userStatus;
+  if (filters.email) userWhere.email = filters.email;
+  if (Object.keys(userWhere).length > 0) membershipWhere.user = userWhere;
+
   const records = await prisma.tenantMembership.findMany({
-    where: {
-      tenantId: tenant.id,
-      role: filters.role as TenantRole | undefined,
-      status: filters.membershipStatus as DevMembershipStatus | undefined,
-      user: {
-        status: filters.userStatus as DevTenantUserStatus | undefined,
-        email: filters.email || undefined,
-      },
-    },
-    include: {
-      tenant: true,
-      user: true,
-    },
+    where: membershipWhere as Parameters<typeof prisma.tenantMembership.findMany>[0]["where"],
+    include: { tenant: true, user: true },
     orderBy: { createdAt: "asc" },
   });
 

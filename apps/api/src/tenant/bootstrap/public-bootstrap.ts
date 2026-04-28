@@ -23,6 +23,7 @@ export function buildTenantBootstrapPayload(
       slug: tenant.slug,
       displayName: tenant.displayName,
       logoUrl: tenant.logoUrl ?? null,
+      logoUrlLight: tenant.logoUrlLight ?? null,
       primaryColor: tenant.primaryColor ?? null,
       supportEmail: tenant.supportEmail,
       locale,

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FileSpreadsheet, Plus, Truck, X } from "lucide-react";
+import { FileSpreadsheet, Maximize2, Minimize2, Plus, Truck, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
@@ -50,8 +50,9 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
   const [contactPhone,  setContactPhone]  = useState(provider?.contactPhone  ?? "");
   const [location,      setLocation]      = useState(provider?.location      ?? "");
 
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(true);
 
   const handleSave = async () => {
     setError(null);
@@ -106,7 +107,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
@@ -118,7 +119,12 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             </div>
             {!isNew && <StatusBadge status={provider.status} />}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+          </div>
         </div>
 
         {/* Body */}

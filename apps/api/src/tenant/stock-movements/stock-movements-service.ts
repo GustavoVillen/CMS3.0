@@ -12,7 +12,8 @@ export interface StockMovementListFilters {
 export interface CreateStockMovementInput {
   vesselCode: string;
   spareId: string;
-  movementType: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "TRANSFER";
+  locationId?: string | null;
+  movementType: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "TRANSFER" | "TRANSFER_IN" | "TRANSFER_OUT" | "RETURN_IN" | "ADJUSTMENT_PLUS" | "ADJUSTMENT_MINUS";
   quantity: number;
   unit: string;
   occurredAt: string | Date;
@@ -22,7 +23,7 @@ export interface CreateStockMovementInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"].includes(session.user.role);
+  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"].includes(session.user.role);
 }
 
 function normalizeText(value: unknown, field: string): string {
@@ -81,7 +82,32 @@ export async function listTenantStockMovements(session: TenantAccessSession, fil
   if (filters.movementType) where.movementType = filters.movementType;
   if (filters.spareId) where.spareId = filters.spareId;
 
-  return prisma.stockMovement.findMany({ where, orderBy: { occurredAt: "desc" } });
+  const movements = await prisma.stockMovement.findMany({ where, orderBy: { occurredAt: "desc" } });
+  if (movements.length === 0) return [];
+
+  const woIds  = [...new Set(movements.filter(m => m.referenceType === "WORK_ORDER" && m.referenceId).map(m => m.referenceId!))];
+  const defIds = [...new Set(movements.filter(m => m.referenceType === "DEFECT"     && m.referenceId).map(m => m.referenceId!))];
+
+  type WORow  = { id: string; workOrderCode: string };
+  type DefRow = { id: string; defectCode:    string };
+  const prismaAny = prisma as unknown as {
+    workOrder: { findMany(a: unknown): Promise<WORow[]> };
+    defect:    { findMany(a: unknown): Promise<DefRow[]> };
+  };
+
+  const [workOrders, defects] = await Promise.all([
+    woIds.length  > 0 ? prismaAny.workOrder.findMany({ where: { id: { in: woIds  } }, select: { id: true, workOrderCode: true } }) : [] as WORow[],
+    defIds.length > 0 ? prismaAny.defect.findMany(   { where: { id: { in: defIds } }, select: { id: true, defectCode:    true } }) : [] as DefRow[],
+  ]);
+
+  const codeMap = new Map<string, string>();
+  workOrders.forEach(r => codeMap.set(r.id, r.workOrderCode));
+  defects.forEach(r    => codeMap.set(r.id, r.defectCode));
+
+  return movements.map(m => ({
+    ...m,
+    referenceCode: m.referenceId ? (codeMap.get(m.referenceId) ?? null) : null,
+  }));
 }
 
 export async function createStockMovement(session: TenantAccessSession, payload: CreateStockMovementInput) {
@@ -101,47 +127,58 @@ export async function createStockMovement(session: TenantAccessSession, payload:
   }
 
   const movementType = payload.movementType;
-  if ((movementType === "RECEIPT" || movementType === "ISSUE" || movementType === "TRANSFER") && quantity < 0) {
-    throw new RouteError(400, "VALIDATION_ERROR", "Para RECEIPT/ISSUE/TRANSFER quantity debe ser positivo.");
+  const positiveOnlyTypes = ["RECEIPT", "ISSUE", "TRANSFER", "TRANSFER_IN", "TRANSFER_OUT", "RETURN_IN", "ADJUSTMENT_PLUS", "ADJUSTMENT_MINUS"];
+  if (positiveOnlyTypes.includes(movementType) && quantity < 0) {
+    throw new RouteError(400, "VALIDATION_ERROR", "La cantidad debe ser positiva para este tipo de movimiento.");
   }
 
   const occurredAt = parseDate(payload.occurredAt);
   const movementCode = `MOV-${vesselCode}-${Date.now()}`;
 
-  return prisma.$transaction(async (tx) => {
-    const spare = await tx.spare.findFirst({
-      where: { id: payload.spareId, tenantId, vesselCode, deletedAt: null },
-    });
-    if (!spare) throw new RouteError(404, "SPARE_NOT_FOUND", "Spare no encontrado.");
+  const spare = await prisma.spare.findFirst({
+    where: { id: payload.spareId, tenantId, vesselCode, deletedAt: null },
+  });
+  if (!spare) throw new RouteError(404, "SPARE_NOT_FOUND", "Spare no encontrado.");
 
-    let delta = 0;
-    if (movementType === "RECEIPT") delta = quantity;
-    if (movementType === "ISSUE") delta = -quantity;
-    if (movementType === "TRANSFER") delta = -quantity;
-    if (movementType === "ADJUSTMENT") delta = quantity;
+  const movement = await prisma.stockMovement.create({
+    data: {
+      tenantId,
+      vesselCode,
+      spareId: spare.id,
+      locationId: payload.locationId ?? null,
+      movementCode,
+      movementType,
+      quantity,
+      unit: normalizeText(payload.unit, "unit"),
+      occurredAt,
+      referenceType: payload.referenceType ?? null,
+      referenceId: payload.referenceId ? String(payload.referenceId).trim() : null,
+      notes: payload.notes ? String(payload.notes).trim() : null,
+      createdByUserId: session.user.id,
+    },
+  });
 
-    const movement = await tx.stockMovement.create({
+  // Log manual adjustments to the audit log (bitácora)
+  if (payload.referenceType === "ADJUSTMENT") {
+    await prisma.auditEvent.create({
       data: {
         tenantId,
-        vesselCode,
-        spareId: spare.id,
-        movementCode,
-        movementType,
-        quantity,
-        unit: normalizeText(payload.unit, "unit"),
-        occurredAt,
-        referenceType: payload.referenceType ?? null,
-        referenceId: payload.referenceId ? String(payload.referenceId).trim() : null,
-        notes: payload.notes ? String(payload.notes).trim() : null,
-        createdByUserId: session.user.id,
+        actorType:   "TENANT_USER",
+        actorUserId: session.user.id,
+        action:      "STOCK_ADJUSTED",
+        entityType:  "Spare",
+        entityId:    spare.id,
+        metadata: {
+          sku:         spare.sku,
+          movementType,
+          quantity,
+          unit:        normalizeText(payload.unit, "unit"),
+          notes:       payload.notes ?? null,
+          adjustedBy:  `${session.user.firstName ?? ""} ${session.user.lastName ?? ""}`.trim() || session.user.id,
+        },
       },
     });
+  }
 
-    await tx.spare.update({
-      where: { id: spare.id },
-      data: { currentStock: spare.currentStock + delta, updatedByUserId: session.user.id },
-    });
-
-    return movement;
-  });
+  return movement;
 }

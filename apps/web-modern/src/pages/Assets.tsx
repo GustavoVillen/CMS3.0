@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileSpreadsheet, Loader2, Plus, Settings, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
+import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
@@ -61,6 +61,27 @@ interface SfiNode {
 interface SfiListResponse {
   items: SfiNode[];
   total: number;
+}
+
+type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE";
+const SFI_TABS: { key: SfiTab; label: string }[] = [
+  { key: "ALL",  label: "TODOS" },
+  { key: 0,      label: "G0" },
+  { key: 1,      label: "G1" },
+  { key: 2,      label: "G2" },
+  { key: 3,      label: "G3" },
+  { key: 4,      label: "G4" },
+  { key: 5,      label: "G5" },
+  { key: 6,      label: "G6" },
+  { key: 7,      label: "G7" },
+  { key: 8,      label: "G8" },
+  { key: 9,      label: "G9" },
+];
+
+function sfiTabOfCode(sfiCode: string | null | undefined): SfiTab {
+  if (!sfiCode) return "NONE";
+  const digit = parseInt(sfiCode.trim()[0] ?? "", 10);
+  return Number.isNaN(digit) ? "NONE" : digit as SfiTab;
 }
 
 function toDateInputValue(value: string | null): string {
@@ -182,8 +203,9 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
   const [replacementDate, setReplacementDate] = useState(toDateInputValue(initial?.replacementDate ?? null));
   const [assetCodeTouched, setAssetCodeTouched] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expanded,    setExpanded]    = useState(true);
 
   useCopilotEmitter({
     module: "ASSETS",
@@ -375,6 +397,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     isEdit,
     name,
     nameOptions,
+    selectedSubgroup,
   ]);
 
   const onSave = useCallback(async () => {
@@ -452,6 +475,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     assetCode,
     criticality,
     initial,
+    isAdmin,
     installationDate,
     isEdit,
     lastOverhaulDate,
@@ -472,12 +496,17 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <h2 className="text-base font-bold text-white">{isEdit ? "Editar Asset" : "Nuevo Asset"}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
+          </div>
         </div>
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-4 flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Vessels</label>
@@ -708,7 +737,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
   }, [asset.id, onDeleted, t]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h2 className="text-base font-bold text-white">{t("common.delete")}</h2>
@@ -742,15 +771,12 @@ export const AssetsPage: React.FC = () => {
   useCopilotEmitter(editing === undefined ? { module: "ASSETS", screen: "ASSET_LIST" } : null);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE">("ALL");
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
-  const [vesselInput, setVesselInput] = useState(vesselFilter);
-
-  useEffect(() => {
-    setVesselInput(vesselFilter);
-  }, [vesselFilter]);
+  const [searchText, setSearchText] = useState("");
 
   const updateFilters = useCallback((next: { status?: string; criticality?: string; vesselCode?: string }) => {
     const params = new URLSearchParams(searchParams);
@@ -799,6 +825,35 @@ export const AssetsPage: React.FC = () => {
     void reloadTenantAssets();
   }, [reload, reloadTenantAssets]);
 
+  const filteredAssets = useMemo(() => {
+    let items = data?.items ?? null;
+    if (!items) return items;
+    if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      items = items.filter(a =>
+        a.assetCode?.toLowerCase().includes(q) ||
+        a.name?.toLowerCase().includes(q) ||
+        a.vesselCode?.toLowerCase().includes(q) ||
+        a.sfiCode?.toLowerCase().includes(q) ||
+        (a as any).description?.toLowerCase().includes(q) ||
+        (a as any).manufacturer?.toLowerCase().includes(q) ||
+        (a as any).model?.toLowerCase().includes(q) ||
+        (a as any).serialNumber?.toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [data, sfiTab, searchText]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of data?.items ?? []) {
+      const k = String(sfiTabOfCode(a.sfiCode));
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+    return counts;
+  }, [data]);
+
   const columns: Column<Asset>[] = useMemo(() => [
     { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-white text-xs">{row.assetCode}</span> },
     { key: "name", header: t("col.name"), render: row => <span className="font-medium text-white line-clamp-1">{row.name}</span> },
@@ -806,9 +861,6 @@ export const AssetsPage: React.FC = () => {
     { key: "sfiCode", header: t("col.sfiCode"), render: row => row.sfiCode ?? "—" },
     { key: "criticality", header: t("col.criticality"), render: row => row.criticality },
     { key: "status", header: t("col.status"), render: row => <StatusBadge status={row.status} /> },
-    { key: "manufacturer", header: t("col.manufacturer"), render: row => row.manufacturer ?? "—" },
-    { key: "model", header: t("col.model"), render: row => row.model ?? "—" },
-    { key: "createdAt", header: t("col.createdAt"), render: row => fmtDate(row.createdAt) },
     {
       key: "actions",
       header: "",
@@ -849,7 +901,7 @@ export const AssetsPage: React.FC = () => {
         />
       )}
       {deleteTarget && <DeleteAssetModal asset={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={onDeleted} />}
-      <PageHeader icon={Settings} title={t("page.assets")} total={data?.total} onReload={reload}>
+      <PageHeader icon={Settings} title={t("page.assets")} total={filteredAssets?.length ?? data?.total} onReload={reload}>
         <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
@@ -869,16 +921,48 @@ export const AssetsPage: React.FC = () => {
           <option value="C">C</option>
         </select>
         <div className="flex items-center gap-2">
-          <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
-          <button onClick={() => updateFilters({ vesselCode: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
-          {(statusFilter || criticalityFilter || vesselFilter) && (
-            <button onClick={() => updateFilters({ status: "", criticality: "", vesselCode: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-industrial/40 pointer-events-none" />
+            <input
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="Buscar por código, nombre, buque, SFI..."
+              className="w-64 pl-7 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+            />
+          </div>
+          {(statusFilter || criticalityFilter || vesselFilter || searchText) && (
+            <button onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); }} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
           )}
         </div>
       </PageHeader>
 
+      {/* SFI group tab bar */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {SFI_TABS.map(tab => {
+          const count = tab.key === "ALL"
+            ? (data?.items.length ?? 0)
+            : (tabCounts[String(tab.key)] ?? 0);
+          const isActive = sfiTab === tab.key;
+          if (tab.key !== "ALL" && count === 0) return null;
+          return (
+            <button
+              key={String(tab.key)}
+              onClick={() => setSfiTab(tab.key)}
+              className={[
+                "px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
+                isActive
+                  ? "bg-accent text-primary-bg border-accent"
+                  : "bg-white/5 border-white/10 text-text-industrial/60 hover:text-white hover:border-white/20",
+              ].join(" ")}
+            >
+              {tab.label}{count > 0 && <span className="ml-1.5 opacity-70">({count})</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
+      <DataTable columns={columns} data={filteredAssets} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
     </div>
   );
 };

@@ -25,7 +25,7 @@ export interface CreateMaintenancePlanInput {
   frequencyMonths?: number | null;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
-  evidenceRequired?: string | null;
+  loto?: string | null;
   sfiGroupNumber?: number | null;
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
@@ -55,7 +55,7 @@ export interface UpdateMaintenancePlanInput {
   frequencyMonths?: number | null;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
-  evidenceRequired?: string | null;
+  loto?: string | null;
   sfiGroupNumber?: number | null;
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
@@ -166,7 +166,7 @@ interface MaintenancePlanRecord {
   description: string | null;
   responsible: string | null;
   acceptanceCriteria: string | null;
-  evidenceRequired: string | null;
+  loto: string | null;
   sfiGroupNumber: number | null;
   sfiSubgroupCode: string | null;
   riskLevel: string | null;
@@ -509,6 +509,28 @@ export async function getTenantMaintenancePlan(session: TenantAccessSession, id:
 }
 
 // ---------------------------------------------------------------------------
+// Delete (soft)
+// ---------------------------------------------------------------------------
+
+export async function deleteTenantMaintenancePlan(session: TenantAccessSession, id: string) {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = maintenanceClient(prismaRaw);
+
+  const tenantId = await getTenantIdOrThrow(session);
+  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  applyVesselScope(session, where);
+
+  const record = await prisma.maintenancePlan.findFirst({ where });
+  if (!record) throw new RouteError(404, "NOT_FOUND", "Maintenance plan no encontrado.");
+
+  await prisma.maintenancePlan.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedByUserId: session.user.id },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Code generation
 // ---------------------------------------------------------------------------
 
@@ -578,7 +600,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     frequencyMonths: normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths"),
     responsible: normalizeOptionalText(payload.responsible),
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
-    evidenceRequired: normalizeOptionalText(payload.evidenceRequired),
+    loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
     sfiSubgroupCode: normalizeOptionalText(payload.sfiSubgroupCode),
     riskLevel: normalizeRiskLevel(payload.riskLevel),
@@ -657,7 +679,7 @@ export async function updateTenantMaintenancePlan(
   if (payload.frequencyMonths !== undefined) data.frequencyMonths = normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths");
   if (payload.responsible !== undefined) data.responsible = normalizeOptionalText(payload.responsible);
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
-  if (payload.evidenceRequired !== undefined) data.evidenceRequired = normalizeOptionalText(payload.evidenceRequired);
+  if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
   if (payload.sfiGroupNumber !== undefined) data.sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
   if (payload.sfiSubgroupCode !== undefined) data.sfiSubgroupCode = normalizeOptionalText(payload.sfiSubgroupCode);
   if (payload.riskLevel !== undefined) data.riskLevel = normalizeRiskLevel(payload.riskLevel);

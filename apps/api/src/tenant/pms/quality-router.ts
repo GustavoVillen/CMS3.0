@@ -14,26 +14,19 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
+import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
   approveDeferral,
+  cancelDeferral,
   closeDeferral,
   createDeferral,
   getDeferral,
   listDeferrals,
   rejectDeferral,
   reviewDeferral,
+  updateDeferral,
 } from "./deferrals-service";
-import {
-  approveRca,
-  closeRca,
-  completeRca,
-  createRcaRecord,
-  generateRcaAssistance,
-  getRcaRecord,
-  listRcaRecords,
-  updateRcaRecord,
-} from "./rca-service";
 import {
   cancelCapaRecord,
   closeCapaRecord,
@@ -65,9 +58,8 @@ export async function handleQualityRoutes(
 ): Promise<boolean> {
   const isDefectsPath = url.pathname.startsWith("/app/pms/defects");
   const isDeferralsPath = url.pathname.startsWith("/app/pms/deferrals");
-  const isRcaPath = url.pathname.startsWith("/app/pms/rca");
   const isCapaPath = url.pathname.startsWith("/app/pms/capa");
-  if (!isDefectsPath && !isDeferralsPath && !isRcaPath && !isCapaPath) return false;
+  if (!isDefectsPath && !isDeferralsPath && !isCapaPath) return false;
 
   const tenantSlug = requireTenantSlug(request, env);
   const session = requireTenantAccessSession(request, tenantSlug);
@@ -126,11 +118,26 @@ export async function handleQualityRoutes(
     }
   }
 
+  if (method === "GET" && /^\/app\/pms\/deferrals\/[^/]+\/pdf$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const deferral = await getDeferral(session, id);
+    const filename = `${deferral.deferralCode}.pdf`;
+    const buffer = await buildDeferralPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/pms/deferrals") {
     const items = await listDeferrals(session, {
       vesselCode: url.searchParams.get("vesselCode"),
       status: url.searchParams.get("status"),
       sourceType: url.searchParams.get("sourceType"),
+      sourceId: url.searchParams.get("sourceId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
@@ -163,6 +170,18 @@ export async function handleQualityRoutes(
     sendJson(response, 200, await activateDeferral(session, id));
     return true;
   }
+  if (method === "PATCH" && /^\/app\/pms\/deferrals\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof updateDeferral>[2];
+    sendJson(response, 200, await updateDeferral(session, id, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/pms\/deferrals\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    await cancelDeferral(session, id);
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
   if (method === "POST" && /^\/app\/pms\/deferrals\/[^/]+\/close$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof closeDeferral>[2];
@@ -173,56 +192,6 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await getDeferral(session, id));
     return true;
-  }
-
-  if (method === "GET" && url.pathname === "/app/pms/rca") {
-    const items = await listRcaRecords(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status: url.searchParams.get("status"),
-      methodology: url.searchParams.get("methodology"),
-      defectId: url.searchParams.get("defectId"),
-    });
-    sendJson(response, 200, { items, total: items.length });
-    return true;
-  }
-  if (method === "POST" && url.pathname === "/app/pms/rca") {
-    const body = await readJsonBody(request) as Parameters<typeof createRcaRecord>[1];
-    sendJson(response, 201, await createRcaRecord(session, body));
-    return true;
-  }
-  if (method === "POST" && /^\/app\/pms\/rca\/[^/]+\/complete$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[4]!;
-    const body = await readJsonBody(request) as Parameters<typeof completeRca>[2];
-    sendJson(response, 200, await completeRca(session, id, body));
-    return true;
-  }
-  if (method === "POST" && /^\/app\/pms\/rca\/[^/]+\/ai-assist$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[4]!;
-    const body = await readJsonBody(request) as Parameters<typeof generateRcaAssistance>[2];
-    sendJson(response, 200, await generateRcaAssistance(session, id, body));
-    return true;
-  }
-  if (method === "POST" && /^\/app\/pms\/rca\/[^/]+\/approve$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[4]!;
-    sendJson(response, 200, await approveRca(session, id));
-    return true;
-  }
-  if (method === "POST" && /^\/app\/pms\/rca\/[^/]+\/close$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[4]!;
-    sendJson(response, 200, await closeRca(session, id));
-    return true;
-  }
-  if (/^\/app\/pms\/rca\/[^/]+$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[4]!;
-    if (method === "GET") {
-      sendJson(response, 200, await getRcaRecord(session, id));
-      return true;
-    }
-    if (method === "PATCH") {
-      const body = await readJsonBody(request) as Parameters<typeof updateRcaRecord>[2];
-      sendJson(response, 200, await updateRcaRecord(session, id, body));
-      return true;
-    }
   }
 
   if (method === "GET" && url.pathname === "/app/pms/capa") {

@@ -38,7 +38,7 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "sfiSubgroupCode",
     "responsible",
     "acceptanceCriteria",
-    "evidenceRequired",
+    "loto",
     "riskLevel",
     "riskAnalysisResult",
     "frequencyHours",

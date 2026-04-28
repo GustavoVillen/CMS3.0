@@ -53,6 +53,8 @@ export interface UpdateWorkOrderInput {
   // Result fields
   woResult?: string | null;
   executedByName?: string | null;
+  completedDate?: string | Date | null;
+  runningHoursAtExecution?: number | null;
   observations?: string | null;
   supportingDocUrl?: string | null;
 }
@@ -69,6 +71,8 @@ export interface CloseWorkOrderInput {
   observations?: string | null;
   supportingDocUrl?: string | null;
   independentVerifier?: string | null;
+  runningHoursAtExecution?: number | null;
+  spareUsages?: Array<{ spareId: string; qty: number; unit: string }>;
 }
 
 export interface CancelWorkOrderInput {
@@ -381,6 +385,8 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.checklistDocUrl !== undefined) data.checklistDocUrl = normalizeOptionalText(payload.checklistDocUrl);
   if (payload.woResult !== undefined) data.woResult = normalizeOptionalText(payload.woResult);
   if (payload.executedByName !== undefined) data.executedByName = normalizeOptionalText(payload.executedByName);
+  if (payload.completedDate !== undefined) data.completedDate = parseOptionalDate(payload.completedDate, "completedDate");
+  if (payload.runningHoursAtExecution !== undefined) data.runningHoursAtExecution = payload.runningHoursAtExecution ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
 
@@ -483,6 +489,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         closeNotes: normalizeOptionalText(payload.observations),
         independentVerifier: normalizeOptionalText(payload.independentVerifier),
         supportingDocUrl: normalizeOptionalText(payload.supportingDocUrl),
+        runningHoursAtExecution: payload.runningHoursAtExecution ?? null,
         updatedByUserId: session.user.id,
       },
     });
@@ -492,6 +499,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         where: { id: current.maintenancePlanId, tenantId: current.tenantId, deletedAt: null },
       });
       if (plan) {
+        const executionHours = payload.runningHoursAtExecution ?? plan.lastExecutionHours;
         const nextDue = recalculateNextDue(
           {
             triggerType: plan.triggerType,
@@ -499,12 +507,13 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             frequencyHours: plan.frequencyHours,
           },
           completedDate,
-          plan.lastExecutionHours,
+          executionHours,
         );
         await tx.maintenancePlan.update({
           where: { id: plan.id },
           data: {
             lastExecutionDate: completedDate,
+            lastExecutionHours: payload.runningHoursAtExecution ?? plan.lastExecutionHours,
             nextDueDate: nextDue.nextDueDate,
             nextDueHours: nextDue.nextDueHours,
             executionStatus: "COMPLETED",
@@ -516,6 +525,34 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
     return closed;
   });
+  const failedMovements: string[] = [];
+  if (payload.spareUsages && payload.spareUsages.length > 0) {
+    const smDelegate = (prismaRaw as unknown as { stockMovement: { create(a: unknown): Promise<unknown> } }).stockMovement;
+    for (const usage of payload.spareUsages) {
+      try {
+        await smDelegate.create({
+          data: {
+            tenantId: current.tenantId,
+            vesselCode: current.vesselCode,
+            spareId: usage.spareId,
+            movementCode: `MOV-${current.vesselCode}-${Date.now()}`,
+            movementType: "ISSUE",
+            quantity: usage.qty,
+            unit: usage.unit,
+            occurredAt: completedDate,
+            referenceType: "WORK_ORDER",
+            referenceId: current.id,
+            notes: `Utilizado en OT ${current.workOrderCode}`,
+            createdByUserId: session.user.id,
+          },
+        });
+      } catch (err) {
+        console.error("[closeWorkOrder] stock movement failed for spare", usage.spareId, err);
+        failedMovements.push(usage.spareId);
+      }
+    }
+  }
+
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
     actorUserId: session.user.id,
@@ -524,7 +561,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     entityId: current.id,
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult },
   });
-  return closedResult;
+  return { ...closedResult, failedMovements };
 }
 
 export async function cancelWorkOrder(session: TenantAccessSession, id: string, payload: CancelWorkOrderInput) {

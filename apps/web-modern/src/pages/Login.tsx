@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Ship, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 export const Login: React.FC = () => {
@@ -19,21 +19,21 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-primary-bg flex items-center justify-center p-4">
-      {/* Background grid */}
-      <div className="absolute inset-0 opacity-[0.03]"
-        style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)", backgroundSize: "40px 40px" }}
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background image */}
+      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/login-bg.png')" }}
       />
+      {/* Dark overlay so the form stays readable */}
+      <div className="absolute inset-0 bg-primary-bg/70" />
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
-          <div className="w-12 h-12 rounded-2xl bg-accent flex items-center justify-center shadow-lg shadow-accent/20">
-            <Ship className="text-primary-bg w-7 h-7" />
-          </div>
+          <img src="/logo-white.png" alt="CMS" className="w-14 h-14 object-contain" />
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">GPMS Naval</h1>
-            <p className="text-xs text-text-industrial/40 tracking-widest uppercase">Industrial Edition</p>
+            <h1 className="text-2xl font-bold text-white tracking-widest uppercase">CMS</h1>
+            <p className="text-xs font-bold text-teal-400 tracking-widest uppercase">Copilot Management System</p>
           </div>
         </div>
 
@@ -94,7 +94,7 @@ export const Login: React.FC = () => {
         </div>
 
         <p className="text-center text-xs text-text-industrial/20 mt-6">
-          GPMS Naval Industrial · Gestión de Flota
+          Copilot Management System (CMS)
         </p>
       </div>
     </div>

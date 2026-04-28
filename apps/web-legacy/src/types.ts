@@ -42,7 +42,7 @@ export interface MaintenancePlanRecord {
   frequencyMonths?: number;
   responsible?: string;
   acceptanceCriteria?: string;
-  evidenceRequired?: string;
+  loto?: string;
   status: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   lastExecutionDate?: string;
   nextDueDate?: string;

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "pnpm exec tsx watch src/server.ts",
+    "dev": "pnpm exec nodemon --exec \"tsx src/server.ts\" --ext ts,json --watch src",
     "start": "pnpm exec tsx src/server.ts",
     "build": "pnpm exec tsc --project tsconfig.json",
     "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit"
@@ -19,6 +19,7 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "nodemon": "^3.1.14"
   }
 }

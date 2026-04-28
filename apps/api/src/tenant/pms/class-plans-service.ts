@@ -79,7 +79,7 @@ export interface MaintenancePlanRecord {
   frequencyMonths: number | null;
   responsible: string | null;
   acceptanceCriteria: string | null;
-  evidenceRequired: string | null;
+  loto: string | null;
   status: string;
   taskMasterId: string | null;
   triggerResultMode: string;
@@ -413,7 +413,7 @@ export async function instantiateClassPlans(
           frequencyMonths: taskMaster.frequencyDays ? Math.round(taskMaster.frequencyDays / 30) : null,
           responsible: null,
           acceptanceCriteria: null,
-          evidenceRequired: null,
+          loto: null,
           status: "ACTIVE",
           taskMasterId: taskMaster.id,
           triggerResultMode: taskMaster.triggerResultMode,

@@ -7,6 +7,7 @@ export interface DeferralListFilters {
   vesselCode?: string | null;
   status?: string | null;
   sourceType?: string | null;
+  sourceId?: string | null;
 }
 
 export interface CreateDeferralInput {
@@ -163,14 +164,44 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
   applyVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
+  if (filters.sourceId) where.sourceId = filters.sourceId;
 
   const records = await deferral.findMany({ where, orderBy: { requestedAt: "desc" } });
+  if (records.length === 0) return [];
+
   const assetIds = [...new Set(records.map(r => r.assetId).filter(Boolean))];
   const assetRows = assetIds.length > 0
     ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, name: true } })
     : [];
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
-  return records.map(r => ({ ...r, assetName: assetNameMap.get(r.assetId) ?? null }));
+
+  // Batch-resolve source codes by type
+  const woIds   = records.filter(r => r.sourceType === "WORK_ORDER"      ).map(r => r.sourceId);
+  const defIds  = records.filter(r => r.sourceType === "DEFECT"           ).map(r => r.sourceId);
+  const planIds = records.filter(r => r.sourceType === "MAINTENANCE_PLAN" ).map(r => r.sourceId);
+
+  const prisma = prismaRaw as unknown as {
+    workOrder:       { findMany(a: unknown): Promise<{ id: string; workOrderCode: string }[]> };
+    defect:          { findMany(a: unknown): Promise<{ id: string; defectCode:    string }[]> };
+    maintenancePlan: { findMany(a: unknown): Promise<{ id: string; taskCode:      string }[]> };
+  };
+
+  const [workOrders, defects, plans] = await Promise.all([
+    woIds.length   > 0 ? prisma.workOrder.findMany(      { where: { id: { in: woIds   } }, select: { id: true, workOrderCode: true } }) : [],
+    defIds.length  > 0 ? prisma.defect.findMany(         { where: { id: { in: defIds  } }, select: { id: true, defectCode:    true } }) : [],
+    planIds.length > 0 ? prisma.maintenancePlan.findMany({ where: { id: { in: planIds } }, select: { id: true, taskCode:      true } }) : [],
+  ]);
+
+  const codeMap = new Map<string, string>();
+  workOrders.forEach(r => codeMap.set(r.id, r.workOrderCode));
+  defects.forEach(r    => codeMap.set(r.id, r.defectCode));
+  plans.forEach(r      => codeMap.set(r.id, r.taskCode));
+
+  return records.map(r => ({
+    ...r,
+    assetName:  assetNameMap.get(r.assetId) ?? null,
+    sourceCode: codeMap.get(r.sourceId) ?? null,
+  }));
 }
 
 export async function getDeferral(session: TenantAccessSession, id: string) {
@@ -245,7 +276,11 @@ export async function createDeferral(session: TenantAccessSession, payload: Crea
   return createDeferralCore(session, payload);
 }
 
-export async function reviewDeferral(session: TenantAccessSession, id: string, payload: { reviewNotes?: string }) {
+export async function reviewDeferral(
+  session: TenantAccessSession,
+  id: string,
+  payload: { reviewNotes?: string; compensatoryMeasures?: string | null },
+) {
   ensureCanManageDeferrals(session);
 
   const prismaRaw = getPrismaClient();
@@ -255,14 +290,16 @@ export async function reviewDeferral(session: TenantAccessSession, id: string, p
   const current = await getDeferral(session, id);
   ensureStatus(current.status, "REQUESTED", "Review");
 
-  return deferral.update({
-    where: { id: current.id },
-    data: {
-      status: "UNDER_REVIEW",
-      reviewNotes: normalizeOptionalText(payload.reviewNotes),
-      updatedByUserId: session.user.id,
-    },
-  });
+  const data: Record<string, unknown> = {
+    status: "UNDER_REVIEW",
+    reviewNotes: normalizeOptionalText(payload.reviewNotes),
+    updatedByUserId: session.user.id,
+  };
+  if (payload.compensatoryMeasures !== undefined) {
+    data.compensatoryMeasures = normalizeOptionalText(payload.compensatoryMeasures);
+  }
+
+  return deferral.update({ where: { id: current.id }, data });
 }
 
 export async function approveDeferral(
@@ -354,6 +391,79 @@ export async function activateDeferral(session: TenantAccessSession, id: string)
       updatedByUserId: session.user.id,
     },
   });
+}
+
+export async function updateDeferral(
+  session: TenantAccessSession,
+  id: string,
+  payload: { justification?: string | null; compensatoryMeasures?: string | null; targetDate?: string | Date | null },
+) {
+  ensureCanManageDeferrals(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const deferral = deferralDelegate(prismaRaw);
+
+  const current = await getDeferral(session, id);
+  if (current.status !== "REQUESTED") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo se puede editar un aplazamiento en estado REQUESTED (actual: ${current.status}).`);
+  }
+
+  const data: Record<string, unknown> = { updatedByUserId: session.user.id };
+  if (payload.justification        !== undefined) data.justification        = normalizeOptionalText(payload.justification);
+  if (payload.compensatoryMeasures !== undefined) data.compensatoryMeasures = normalizeOptionalText(payload.compensatoryMeasures);
+  if (payload.targetDate           !== undefined) data.targetDate           = parseOptionalDate(payload.targetDate, "targetDate");
+
+  return deferral.update({ where: { id: current.id }, data });
+}
+
+export async function cancelDeferral(session: TenantAccessSession, id: string) {
+  ensureCanManageDeferrals(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const deferral = deferralDelegate(prismaRaw);
+
+  const current = await getDeferral(session, id);
+  ensureStatus(current.status, "REQUESTED", "Cancel");
+
+  const cancelled = await deferral.update({
+    where: { id: current.id },
+    data: { deletedAt: new Date(), deletedByUserId: session.user.id, updatedByUserId: session.user.id },
+  });
+
+  // Revert source entity status when applicable.
+  // The deferral was auto-created by holdWorkOrder which set the WO to ON_HOLD.
+  // Cancelling the deferral should restore the WO to PLANNED and clear holdReason.
+  if (current.sourceType === "WORK_ORDER") {
+    try {
+      const woClient = (prismaRaw as unknown as {
+        workOrder: {
+          findUnique(a: { where: { id: string }; select?: Record<string, boolean> }): Promise<{ status: string } | null>;
+          update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+        };
+      }).workOrder;
+      const wo = await woClient.findUnique({ where: { id: current.sourceId }, select: { status: true } });
+      if (wo?.status === "ON_HOLD") {
+        await woClient.update({
+          where: { id: current.sourceId },
+          data: { status: "PLANNED", holdReason: null, updatedByUserId: session.user.id },
+        });
+      }
+    } catch (err) {
+      console.error("[cancelDeferral] failed to revert WO status:", err);
+    }
+  }
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "Deferral.cancelled",
+    entityType: "Deferral",
+    entityId: current.id,
+    metadata: { deferralCode: current.deferralCode, vesselCode: current.vesselCode, sourceType: current.sourceType },
+  });
+  return cancelled;
 }
 
 export async function closeDeferral(session: TenantAccessSession, id: string, payload: { closeNotes?: string }) {

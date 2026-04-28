@@ -99,9 +99,37 @@ export async function parseExcelBuffer(buffer: Buffer, module: ExcelModule): Pro
         data[key] = null;
       } else if (val instanceof Date) {
         data[key] = val.toISOString().split("T")[0]; // YYYY-MM-DD
-      } else if (typeof val === "object" && "text" in val) {
-        data[key] = String((val as { text: string }).text);
         hasAnyValue = true;
+      } else if (typeof val === "object") {
+        if ("richText" in val) {
+          // Rich text cell — join all text fragments
+          const text = (val as { richText: Array<{ text: string }> }).richText
+            .map((r) => r.text)
+            .join("")
+            .trim();
+          data[key] = text || null;
+          if (text) hasAnyValue = true;
+        } else if ("text" in val) {
+          // Hyperlink cell
+          const text = String((val as { text: string }).text).trim();
+          data[key] = text || null;
+          if (text) hasAnyValue = true;
+        } else if ("result" in val) {
+          // Formula cell — use the computed result, not the formula string
+          const result = (val as { result: unknown }).result;
+          if (result === null || result === undefined || result === "") {
+            data[key] = null;
+          } else if (result instanceof Date) {
+            data[key] = result.toISOString().split("T")[0];
+            hasAnyValue = true;
+          } else {
+            data[key] = result as string | number;
+            hasAnyValue = true;
+          }
+        } else {
+          // Unknown object shape — treat as empty to avoid "[object Object]"
+          data[key] = null;
+        }
       } else {
         data[key] = val as string | number;
         hasAnyValue = true;

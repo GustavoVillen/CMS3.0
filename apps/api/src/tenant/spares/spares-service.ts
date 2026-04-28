@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { listDevSparesForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { getOnHandMap, getReservedMapFromCalc, getAvailableQty } from "../pms/stock-calc-service";
 
 export interface SpareListFilters {
   vesselCode?: string | null;
@@ -20,11 +21,17 @@ export interface CreateSpareInput {
   manufacturer?: string | null;
   model?: string | null;
   unit: string;
-  currentStock?: number;
   minStock?: number;
   reorderPoint?: number;
+  targetStock?: number | null;
   status?: "ACTIVE" | "OBSOLETE";
   location?: string | null;
+  internalPartNumber?: string | null;
+  manufacturerPartNumber?: string | null;
+  longDescription?: string | null;
+  defaultLocationId?: string | null;
+  sfiCode?: string | null;
+  leadTimeDays?: number | null;
 }
 
 export interface UpdateSpareInput {
@@ -36,11 +43,17 @@ export interface UpdateSpareInput {
   manufacturer?: string | null;
   model?: string | null;
   unit?: string;
-  currentStock?: number;
   minStock?: number;
   reorderPoint?: number;
+  targetStock?: number | null;
   status?: "ACTIVE" | "OBSOLETE";
   location?: string | null;
+  internalPartNumber?: string | null;
+  manufacturerPartNumber?: string | null;
+  longDescription?: string | null;
+  defaultLocationId?: string | null;
+  sfiCode?: string | null;
+  leadTimeDays?: number | null;
 }
 
 function canManage(session: TenantAccessSession): boolean {
@@ -131,8 +144,16 @@ export async function listTenantSpares(session: TenantAccessSession, filters: Sp
   if (filters.status) where.status = filters.status;
   if (filters.criticality) where.criticality = filters.criticality;
   const items = await prisma.spare.findMany({ where, orderBy: [{ vesselCode: "asc" }, { sku: "asc" }] });
-  if (!filters.belowReorder) return items;
-  return items.filter((item) => item.currentStock <= item.reorderPoint);
+  const ids = items.map(i => i.id);
+  const onHandMap   = await getOnHandMap(prisma, ids);
+  const reservedMap = await getReservedMapFromCalc(prisma, tenantId, ids);
+  const enriched = items.map(i => {
+    const onHand = onHandMap.get(i.id) ?? 0;
+    const reserved = reservedMap.get(i.id) ?? 0;
+    return { ...i, onHand, reserved, available: getAvailableQty(onHand, reserved) };
+  });
+  if (!filters.belowReorder) return enriched;
+  return enriched.filter(i => i.onHand <= i.reorderPoint);
 }
 
 export async function getTenantSpare(session: TenantAccessSession, id: string) {
@@ -169,11 +190,17 @@ export async function createTenantSpare(session: TenantAccessSession, payload: C
         manufacturer: normalizeOptionalText(payload.manufacturer),
         model: normalizeOptionalText(payload.model),
         unit: normalizeText(payload.unit, "unit"),
-        currentStock: payload.currentStock ?? 0,
         minStock: payload.minStock ?? 0,
         reorderPoint: payload.reorderPoint ?? 0,
+        targetStock: payload.targetStock ?? null,
         status: payload.status ?? "ACTIVE",
         location: normalizeOptionalText(payload.location),
+        internalPartNumber: normalizeOptionalText(payload.internalPartNumber),
+        manufacturerPartNumber: normalizeOptionalText(payload.manufacturerPartNumber),
+        longDescription: normalizeOptionalText(payload.longDescription),
+        defaultLocationId: payload.defaultLocationId ?? null,
+        sfiCode: normalizeOptionalText(payload.sfiCode),
+        leadTimeDays: payload.leadTimeDays ?? null,
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
       },
@@ -213,11 +240,17 @@ export async function updateTenantSpare(session: TenantAccessSession, id: string
   if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);
   if (payload.model !== undefined) data.model = normalizeOptionalText(payload.model);
   if (payload.unit !== undefined) data.unit = normalizeText(payload.unit, "unit");
-  if (payload.currentStock !== undefined) data.currentStock = normalizeOptionalNumber(payload.currentStock);
   if (payload.minStock !== undefined) data.minStock = normalizeOptionalNumber(payload.minStock);
   if (payload.reorderPoint !== undefined) data.reorderPoint = normalizeOptionalNumber(payload.reorderPoint);
+  if (payload.targetStock !== undefined) data.targetStock = payload.targetStock;
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.location !== undefined) data.location = normalizeOptionalText(payload.location);
+  if (payload.internalPartNumber !== undefined) data.internalPartNumber = normalizeOptionalText(payload.internalPartNumber);
+  if (payload.manufacturerPartNumber !== undefined) data.manufacturerPartNumber = normalizeOptionalText(payload.manufacturerPartNumber);
+  if (payload.longDescription !== undefined) data.longDescription = normalizeOptionalText(payload.longDescription);
+  if (payload.defaultLocationId !== undefined) data.defaultLocationId = payload.defaultLocationId ?? null;
+  if (payload.sfiCode !== undefined) data.sfiCode = normalizeOptionalText(payload.sfiCode);
+  if (payload.leadTimeDays !== undefined) data.leadTimeDays = payload.leadTimeDays ?? null;
 
   try {
     const updated = await prisma.spare.update({ where: { id: current.id }, data });
@@ -272,7 +305,16 @@ export async function listReorderAlerts(session: TenantAccessSession, vesselCode
     where,
     orderBy: [{ vesselCode: "asc" }, { criticality: "asc" }, { sku: "asc" }],
   });
-  return items.filter((item) => item.currentStock <= item.reorderPoint);
+  const ids = items.map(i => i.id);
+  const onHandMap   = await getOnHandMap(prisma, ids);
+  const reservedMap = await getReservedMapFromCalc(prisma, tenantId, ids);
+  return items
+    .map(i => {
+      const onHand = onHandMap.get(i.id) ?? 0;
+      const reserved = reservedMap.get(i.id) ?? 0;
+      return { ...i, onHand, reserved, available: getAvailableQty(onHand, reserved) };
+    })
+    .filter(i => i.onHand <= i.reorderPoint);
 }
 
 export function parseBelowReorderQuery(value: string | null): boolean {

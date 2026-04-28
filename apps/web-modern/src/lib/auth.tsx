@@ -17,6 +17,8 @@ export interface AuthTenant {
   locale: string;
   timezone: string;
   currency: string;
+  logoUrl?: string | null;
+  logoUrlLight?: string | null;
 }
 
 interface AuthState {
@@ -72,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.post<{
         session: { accessToken: string };
         user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[] };
-        bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string } };
+        bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null } };
       }>("/app/auth/login", { identifier, password });
 
       const u = res.user;
@@ -94,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           locale: t?.locale ?? t?.defaultLocale ?? "es",
           timezone: t?.timezone ?? "UTC",
           currency: t?.currency ?? "USD",
+          logoUrl: t?.logoUrl ?? null,
+          logoUrlLight: t?.logoUrlLight ?? null,
         },
         isAuthenticated: true,
       };

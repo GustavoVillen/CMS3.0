@@ -11,13 +11,14 @@ import { acceptTenantInvitation } from "./invitations/tenant-invitations-service
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
+import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments } from "./attachments/attachments-service";
 import { saveAttachment } from "./attachments/attachment-uploads-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
 import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
-import { listTenantDailyReports, createTenantDailyReport, updateTenantDailyReport } from "./daily-reports/daily-reports-service";
+import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport } from "./daily-reports/daily-reports-service";
 import {
   confirmAndIntegrateDailyReport,
   getDailyReportWithSubEntities,
@@ -26,6 +27,7 @@ import {
   upsertDailyDefectEntries,
   upsertDailySpareUsages,
 } from "./daily-reports/daily-report-integration-service";
+import { getDailyReportPeriodSuggestions } from "./daily-reports/daily-report-suggestions-service";
 import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
@@ -35,9 +37,8 @@ import { listTenantInspections } from "./inspections/inspections-service";
 import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
 import { listTenantProviderEvaluations } from "./provider-evaluations/provider-evaluations-service";
 import { listTenantProviderNonconformities } from "./provider-nonconformities/provider-nonconformities-service";
-import { listTenantRcas } from "./rca/rca-service";
 import { listTenantSpares } from "./spares/spares-service";
-import { listTenantSpareOrders } from "./spare-orders/spare-orders-service";
+import { listBitacoraEntries, createBitacoraEntry, updateBitacoraEntry, deleteBitacoraEntry } from "./bitacora/bitacora-service";
 import { listTenantStockMovements } from "./stock-movements/stock-movements-service";
 import { listTenantVessels, getTenantVesselById, createTenantVessel, updateTenantVessel, deleteTenantVessel } from "./vessels/vessels-service";
 import { getCrewCredentials, setCrewPassword } from "./vessels/vessel-crew-credentials-service";
@@ -49,6 +50,7 @@ import { exportModule } from "./excel/excel-export-service";
 import {
   listTenantAiDocuments, getTenantAiDocument, createTenantAiDocument,
   createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument,
+  deleteTenantAiDocumentVersion,
 } from "./ai-documents/ai-documents-service";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
@@ -293,18 +295,6 @@ export async function handleTenantRoutes(
     return true;
   }
 
-  // ── RCA ────────────────────────────────────────────────────────────────────
-  if (method === "GET" && url.pathname === "/app/rca") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const records = await listTenantRcas(session, {
-      vesselCode:  url.searchParams.get("vesselCode"),
-      status:      url.searchParams.get("status"),
-      methodology: url.searchParams.get("methodology"),
-    });
-    sendJson(response, 200, { items: records, total: records.length });
-    return true;
-  }
-
   // ── CAPA ───────────────────────────────────────────────────────────────────
   if (method === "GET" && url.pathname === "/app/capa") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
@@ -366,18 +356,6 @@ export async function handleTenantRoutes(
       sendJson(response, 200, { ok: true });
       return true;
     }
-  }
-
-  // ── Spare Orders ───────────────────────────────────────────────────────────
-  if (method === "GET" && url.pathname === "/app/spare-orders") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const records = await listTenantSpareOrders(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status:     url.searchParams.get("status"),
-      priority:   url.searchParams.get("priority"),
-    });
-    sendJson(response, 200, { items: records, total: records.length });
-    return true;
   }
 
   // ── Inspections ────────────────────────────────────────────────────────────
@@ -467,11 +445,25 @@ export async function handleTenantRoutes(
     return true;
   }
 
+  if (method === "GET" && /^\/app\/daily-reports\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/").pop()!;
+    sendJson(response, 200, await getTenantDailyReport(session, id));
+    return true;
+  }
+
   if (method === "PATCH" && /^\/app\/daily-reports\/[^/]+$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const id = url.pathname.split("/").pop()!;
     const body = await readJsonBody(request) as Parameters<typeof updateTenantDailyReport>[2];
     sendJson(response, 200, await updateTenantDailyReport(session, id, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/daily-reports\/[^/]+\/period-suggestions$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await getDailyReportPeriodSuggestions(session, id));
     return true;
   }
 
@@ -677,6 +669,12 @@ export async function handleTenantRoutes(
     sendJson(response, 200, await activateTenantAiDocumentVersion(session, parts[3]!, parts[5]!));
     return true;
   }
+  if (method === "DELETE" && /^\/app\/ai-documents\/[\w-]+\/versions\/[\w-]+$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await deleteTenantAiDocumentVersion(session, parts[3]!, parts[5]!));
+    return true;
+  }
 
   // ── Excel ──────────────────────────────────────────────────────────────────
   if (method === "GET" && /^\/app\/excel\/template\/[\w_]+$/.test(url.pathname)) {
@@ -739,6 +737,27 @@ export async function handleTenantRoutes(
     return true;
   }
 
+  // ── Copiloto file upload ───────────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/copiloto/parse-file") {
+    const slug = requireTenantSlug(request, env);
+    requireTenantAccessSession(request, slug);
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const buffer = Buffer.concat(chunks);
+    assertFileSize(buffer);
+
+    const mimeType  = (request.headers["content-type"] ?? "application/octet-stream").split(";")[0]!.trim();
+    const rawName   = request.headers["x-filename"] ?? "archivo";
+    const fileName  = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName);
+
+    const content = await parseUploadedFile(buffer, mimeType, fileName);
+    sendJson(response, 200, content);
+    return true;
+  }
+
   // ── Copiloto (SSE streaming) ───────────────────────────────────────────────
   if (method === "POST" && url.pathname === "/app/copiloto/chat") {
     const slug = requireTenantSlug(request, env);
@@ -747,6 +766,7 @@ export async function handleTenantRoutes(
       capability?: string; locale?: string;
       messages: ChatMessage[]; vesselCode?: string | null;
       screenContext?: Record<string, unknown> | null;
+      fileAttachment?: Record<string, unknown> | null;
     };
     const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
     if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -762,13 +782,14 @@ export async function handleTenantRoutes(
     try {
       await streamCopilotoChat(
         {
-          capability:    body.capability    ?? "knowledge_assistant",
-          locale:        body.locale        ?? "es",
-          messages:      body.messages      ?? [],
-          vesselCode:    body.vesselCode    ?? null,
-          tenantId:      tenant.id,
-          tenantSlug:    slug,
-          screenContext: body.screenContext ?? null,
+          capability:     body.capability    ?? "knowledge_assistant",
+          locale:         body.locale        ?? "es",
+          messages:       body.messages      ?? [],
+          vesselCode:     body.vesselCode    ?? null,
+          tenantId:       tenant.id,
+          tenantSlug:     slug,
+          screenContext:  body.screenContext ?? null,
+          fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
         },
         (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
       );
@@ -851,6 +872,43 @@ export async function handleTenantRoutes(
     );
     sendJson(response, 200, { suggestion: output.trim() });
     return true;
+  }
+
+  // ── Bitácora narrativa ────────────────────────────────────────────────────
+  if (url.pathname === "/app/bitacora") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (method === "GET") {
+      const monitoringParam = url.searchParams.get("isMonitoring");
+      const items = await listBitacoraEntries(session, {
+        vesselCode:  url.searchParams.get("vesselCode"),
+        category:    url.searchParams.get("category"),
+        isMonitoring: monitoringParam !== null ? monitoringParam === "true" : undefined,
+        from:        url.searchParams.get("from"),
+        to:          url.searchParams.get("to"),
+      });
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof createBitacoraEntry>[1];
+      sendJson(response, 201, await createBitacoraEntry(session, body));
+      return true;
+    }
+  }
+
+  if (/^\/app\/bitacora\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateBitacoraEntry>[2];
+      sendJson(response, 200, await updateBitacoraEntry(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteBitacoraEntry(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
   }
 
   // ── Audit Log (TENANT_ADMIN only) ─────────────────────────────────────────

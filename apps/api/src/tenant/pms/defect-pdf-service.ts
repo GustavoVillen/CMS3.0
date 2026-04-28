@@ -1,6 +1,9 @@
 import PDFDocument from "pdfkit";
+import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDefect } from "./defects-service";
+import { getPrismaClient } from "../../platform/data/prisma-client";
+import { LOGO_PATH, resolveTenantLogo } from "./pdf-helpers";
 
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -8,7 +11,7 @@ function fmt(d: Date | string | null | undefined): string {
 }
 
 function val(v: string | null | undefined): string {
-  return v?.trim() || "—";
+  return (v?.trim() || "—").replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]");
 }
 
 // Strip markdown syntax so it renders as clean plain text in the PDF
@@ -22,6 +25,7 @@ function stripMarkdown(text: string): string {
     .replace(/\[CLOSE\]\s*/g, "")                              // close note prefix
     .replace(/^---+$/gm, "")                                   // horizontal rules
     .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")                  // bold/italic
+    .replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]")                          // checkbox chars → plain text
     .replace(/\n{3,}/g, "\n\n")                                // collapse blank lines
     .trim();
 }
@@ -43,6 +47,38 @@ const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
 
 export async function buildDefectPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   const defect = await getDefect(session, id);
+
+  // Resolve WO code when linked
+  let linkedWoCode: string | null = null;
+  if (defect.workOrderId) {
+    const prismaRaw = getPrismaClient();
+    if (prismaRaw) {
+      try {
+        const wo = await (prismaRaw as any).workOrder.findUnique({
+          where: { id: defect.workOrderId },
+          select: { workOrderCode: true },
+        });
+        linkedWoCode = wo?.workOrderCode ?? null;
+      } catch { /* non-blocking */ }
+    }
+  }
+
+  // Get tenant logo
+  let tenant: { name?: string; logoUrl?: string | null; logoUrlLight?: string | null } | null = null;
+  let tenantLogoBuffer: Buffer | null = null;
+  const prisma = getPrismaClient();
+  if (prisma) {
+    try {
+      const tenantRow = await (prisma as any).tenant.findUnique({
+        where: { slug: session.tenantSlug },
+        select: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true } } },
+      });
+      tenant = tenantRow?.settings
+        ? { name: tenantRow.settings.displayName, logoUrl: tenantRow.settings.logoUrl, logoUrlLight: tenantRow.settings.logoUrlLight }
+        : null;
+      tenantLogoBuffer = await resolveTenantLogo(session.tenantSlug, tenant?.logoUrl, tenant?.logoUrlLight);
+    } catch { /* non-blocking */ }
+  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -82,19 +118,26 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
     }
 
     // ── Header ────────────────────────────────────────────────────────────────
+    const HEADER_H = 64;
+    const TENANT_LOGO_MAX_W = 90;
+
+    // Tenant logo — top-right, proportional to header height
+    if (tenantLogoBuffer) {
+      try {
+        doc.image(tenantLogoBuffer, ML + W - TENANT_LOGO_MAX_W, y,
+          { fit: [TENANT_LOGO_MAX_W, HEADER_H], align: "right", valign: "center" });
+      } catch {}
+    }
+
+    const titleW = W - TENANT_LOGO_MAX_W - 16;
     doc.fontSize(22).font("Helvetica-Bold").fillColor(black)
-      .text("REPORTE DE DEFECTO", ML, y, { width: W * 0.6 });
-    doc.fontSize(9).font("Helvetica").fillColor(gray)
-      .text("Sistema de Gestión de Mantenimiento Naval — GPMS", ML, y + 26, { width: W * 0.6 });
+      .text("REPORTE DE DEFECTO", ML, y + 2, { width: titleW });
+    doc.fontSize(13).font("Helvetica-Bold").fillColor(black)
+      .text(`${defect.defectCode}  ·  ${defect.vesselCode}`, ML, y + 30, { width: titleW });
+    doc.fontSize(8).font("Helvetica").fillColor(gray)
+      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML, y + 48, { width: titleW });
 
-    const metaX = ML + W * 0.6;
-    doc.fontSize(8).font("Helvetica").fillColor(gray).text("Código:", metaX, y, { width: W * 0.4, align: "right" });
-    doc.fontSize(8).font("Helvetica-Bold").fillColor(black).text(defect.defectCode, metaX, y + 10, { width: W * 0.4, align: "right" });
-    doc.fontSize(8).font("Helvetica").fillColor(gray).text("Vessel:", metaX, y + 22, { width: W * 0.4, align: "right" });
-    doc.fontSize(8).font("Helvetica-Bold").fillColor(black).text(defect.vesselCode, metaX, y + 32, { width: W * 0.4, align: "right" });
-    doc.fontSize(8).font("Helvetica").fillColor(gray).text(`Generado: ${new Date().toLocaleString("es-AR")}`, metaX, y + 44, { width: W * 0.4, align: "right" });
-
-    y += 62;
+    y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
     y += 14;
 
@@ -174,15 +217,18 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
 
     if (defect.workOrderId) {
       ensureSpace(58);
-      labeledBox(ML, y, W / 3, 44, "Work Order Vinculada", defect.workOrderId, "#0369a1");
+      labeledBox(ML, y, W / 3, 44, "Work Order Vinculada", linkedWoCode ?? defect.workOrderId, "#0369a1");
       y += 58;
     }
 
     // ── Footer (last page) ────────────────────────────────────────────────────
     const footerY = PAGE_H - FOOTER_SIZE;
     doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
+    if (existsSync(LOGO_PATH)) {
+      try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
+    }
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text("GPMS — Reporte generado automáticamente", ML, footerY, { width: W / 2 });
+      .text("Copilot Management System — Reporte generado automáticamente", ML + 18, footerY, { width: W / 2 - 18 });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
       .text(`${defect.defectCode} · ${defect.vesselCode} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
 

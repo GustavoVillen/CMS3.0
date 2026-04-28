@@ -1,14 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Clock,
+  ExternalLink,
+  FileDown,
   FileSpreadsheet,
+  FileText,
   Filter,
   Loader2,
+  Maximize2,
+  Minimize2,
   Plus,
+  Search,
+  Trash2,
   X,
   Zap,
 } from "lucide-react";
@@ -16,11 +24,11 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
+import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
-import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,7 +60,7 @@ interface MaintenancePlan {
   createdAt: string;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
-  evidenceRequired?: string | null;
+  loto?: string | null;
   sfiGroupNumber?: number | null;
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
@@ -76,19 +84,20 @@ interface SfiNode {
 
 function computeStatus(plan: MaintenancePlan): string {
   if (plan.executionStatus === "IN_WINDOW") return "IN_WINDOW";
+  if (plan.lastExecutionDate == null && plan.lastExecutionHours == null) return "NEVER_EXECUTED";
   const now = Date.now();
   if (plan.nextDueHours != null) {
     const hours = plan.assetCurrentHours ?? 0;
     const diff = plan.nextDueHours - hours;
-    if (diff <= 0) return "OVERDUE";
-    if (diff <= 50) return "DUE";
+    if (diff <= 0)   return "OVERDUE";
+    if (diff <= 50)  return "DUE";
     if (diff <= 250) return "UPCOMING";
     return "FUTURE";
   }
   if (plan.nextDueDate) {
-    const daysLeft = (new Date(plan.nextDueDate).getTime() - now) / 86_400_000;
-    if (daysLeft < 0) return "OVERDUE";
-    if (daysLeft <= 7) return "DUE";
+    const daysLeft = (parseLocalDate(plan.nextDueDate).getTime() - now) / 86_400_000;
+    if (daysLeft < 0)   return "OVERDUE";
+    if (daysLeft <= 7)  return "DUE";
     if (daysLeft <= 30) return "UPCOMING";
     return "FUTURE";
   }
@@ -115,19 +124,28 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
     );
   if (es === "IN_WINDOW")
     return (
-      <div className="flex flex-col items-start gap-0.5">
-        <button
-          type="button"
-          onClick={onClickWo}
-          disabled={!onClickWo || !plan.activeWorkOrderCode}
-          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-300 border-orange-500/20 whitespace-nowrap disabled:cursor-default enabled:hover:bg-orange-500/20 enabled:cursor-pointer transition-colors"
-        >
+      <div className="flex flex-col items-start gap-1">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-300 border-orange-500/20 whitespace-nowrap">
           <Clock className="w-2.5 h-2.5" /> EN PROCESO
-        </button>
+        </span>
         {plan.activeWorkOrderCode && (
-          <span className="text-[9px] text-orange-400/70 font-mono pl-1">OT: {plan.activeWorkOrderCode}</span>
+          <button
+            type="button"
+            onClick={onClickWo}
+            disabled={!onClickWo}
+            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-accent border-accent/30 font-mono whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-accent/10 enabled:cursor-pointer transition-colors"
+          >
+            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+            {plan.activeWorkOrderCode}
+          </button>
         )}
       </div>
+    );
+  if (es === "NEVER_EXECUTED")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-500/10 text-slate-400 border-slate-500/20 whitespace-nowrap">
+        <Clock className="w-2.5 h-2.5" /> SIN EJECUTAR
+      </span>
     );
   if (es === "UPCOMING")
     return (
@@ -215,6 +233,132 @@ function needsDateFreq(tt: string) { return needsMonths(tt) || needsDays(tt) || 
 const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const selectCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
+const sectionLabelCls = "block font-semibold uppercase tracking-wider px-2 py-1 rounded-sm";
+const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", color: "white", fontSize: "1.2rem" };
+
+// ─── Asset live-search dropdown ────────────────────────────────────────────────
+
+interface AssetOption { id: string; assetCode: string; name: string | null; }
+
+function AssetSearchDropdown({ assets, value, onChange, disabled, placeholder }: {
+  assets: AssetOption[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = assets.find(a => a.id === value) ?? null;
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    if (!q) return assets;
+    return assets.filter(a =>
+      a.assetCode.toLowerCase().includes(q) || (a.name ?? "").toLowerCase().includes(q)
+    );
+  }, [assets, query]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleOpen = () => {
+    if (disabled) return;
+    setOpen(true);
+    setQuery("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleSelect = (a: AssetOption) => {
+    onChange(a.id);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange("");
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={handleOpen}
+        disabled={disabled}
+        className={`${inputCls} flex items-center gap-2 text-left cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : "hover:border-accent/40"}`}
+      >
+        {selected ? (
+          <>
+            {selected.name
+              ? <span className="flex-1 truncate text-yellow-400 text-sm font-semibold">{selected.name}</span>
+              : <span className="flex-1 truncate font-mono text-accent text-sm">{selected.assetCode}</span>}
+            {selected.name && <span className="text-white/40 text-xs font-mono truncate max-w-[160px]">{selected.assetCode}</span>}
+            <X className="w-3.5 h-3.5 text-white/30 hover:text-white shrink-0" onClick={handleClear} />
+          </>
+        ) : (
+          <>
+            <span className="flex-1 text-white/30 text-sm">{placeholder ?? "Seleccioná un activo…"}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-white/30 shrink-0" />
+          </>
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#111827] border border-white/10 rounded-xl shadow-xl overflow-hidden">
+          {/* Search input */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+            <Search className="w-3.5 h-3.5 text-white/30 shrink-0" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") { setOpen(false); setQuery(""); }
+                if (e.key === "Enter" && filtered.length === 1) handleSelect(filtered[0]);
+              }}
+              placeholder="Buscar por código o nombre…"
+              className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none"
+            />
+          </div>
+          {/* Options */}
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-white/30 text-center">Sin resultados</div>
+            ) : filtered.map(a => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => handleSelect(a)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors ${a.id === value ? "bg-accent/10" : ""}`}
+              >
+                {a.name
+                  ? <span className="text-yellow-400 text-xs font-semibold truncate flex-1">{a.name}</span>
+                  : <span className="font-mono text-accent text-xs shrink-0">{a.assetCode}</span>}
+                {a.name && <span className="font-mono text-white/40 text-xs shrink-0">{a.assetCode}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── ExecutionModal ───────────────────────────────────────────────────────────
 
@@ -306,6 +450,35 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
 
   const handleSave = async () => {
     if (await doSave()) onSuccess();
+  };
+
+  const handleSaveAndPdf = async () => {
+    if (!await doSave()) return;
+    const token = localStorage.getItem("gpms_token");
+    const slug  = localStorage.getItem("gpms_tenant_slug");
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (slug)  headers["X-Tenant-Slug"] = slug;
+    try {
+      const res = await fetch(`/app/pms/maintenance-plans/${plan.id}/pdf`, { headers });
+      console.log("[PDF] response status:", res.status);
+      if (res.ok) {
+        const blob = await res.blob();
+        console.log("[PDF] blob size:", blob.size);
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href     = url;
+        a.download = `${plan.taskCode ?? plan.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (err) {
+      console.error("[PDF] fetch error:", err);
+      alert("Ejecución guardada, pero no se pudo generar el PDF. Intente desde el botón PDF del plan.");
+    }
+    onSuccess();
   };
 
   const handleOpenDef = async () => {
@@ -530,6 +703,14 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">Cancelar</button>
+          <button
+            onClick={() => { void handleSaveAndPdf(); }}
+            disabled={saving || uploading}
+            className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white font-bold text-xs hover:bg-white/15 disabled:opacity-50 transition-all flex items-center gap-1.5"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            Guardar y PDF
+          </button>
           <button
             onClick={() => { void handleSave(); }}
             disabled={saving || uploading}
@@ -769,11 +950,13 @@ interface MaintenancePlanModalProps {
   userId: string | null;
   userName: string;
   isAdmin: boolean;
+  canDelete: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedId?: string) => Promise<void>;
+  setRequestMessage?: (msg: string | null) => void;
 }
 
-const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, onClose, onSaved }) => {
+const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg }) => {
   const t = useT();
   const navigate = useNavigate();
   const isNew = plan === null;
@@ -795,7 +978,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [description, setDescription] = useState(plan?.description ?? "");
   const [responsible, setResponsible] = useState(plan?.responsible ?? "");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
-  const [loto, setLoto] = useState(plan?.evidenceRequired ?? "");
+  const [loto, setLoto] = useState(plan?.loto ?? "");
   const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? null);
   const [sfiSubgroupCode, setSfiSubgroupCode] = useState(plan?.sfiSubgroupCode ?? "");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
@@ -808,11 +991,19 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
   const [checklistUploading, setChecklistUploading] = useState(false);
   const [checklistUploadError, setChecklistUploadError] = useState<string | null>(null);
+  const [loadingCriteria, setLoadingCriteria] = useState(false);
+  const [loadingLoto, setLoadingLoto] = useState(false);
+  const [loadingRisk, setLoadingRisk] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
-  const [saving, setSaving] = useState(false);
+  const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showExecution, setShowExecution] = useState(false);
+  const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting,    setDeleting]    = useState(false);
+  const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
   const [sfiNodes, setSfiNodes] = useState<SfiNode[]>([]);
   const [loadingSfiNodes, setLoadingSfiNodes] = useState(false);
 
@@ -877,12 +1068,13 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   useEffect(() => {
     if (!plan) return;
     setAssetId(plan.assetId ?? "");
+    setTaskCode(plan.taskCode ?? "");
     setTaskType(plan.taskType ?? "MAINTENANCE");
     setTitle(plan.title);
     setDescription(plan.description ?? "");
     setResponsible(plan.responsible ?? "");
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
-    setLoto(plan.evidenceRequired ?? "");
+    setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
     setSfiSubgroupCode(plan.sfiSubgroupCode ?? "");
     setRiskLevel(toUiRiskLevel(plan.riskLevel));
@@ -900,41 +1092,178 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setShowPostpone(false);
   }, [plan]);
 
-  useCopilotEmitter(plan ? {
+  useCopilotEmitter({
     module: "MAINTENANCE_PLANS",
     screen: "MP_EDIT",
-    entityId: plan.id,
-    entityCode: plan.taskCode,
-    vesselCode: plan.vesselCode,
-    workflowStage: plan.executionStatus,
+    entityId:      plan?.id       ?? null,
+    entityCode:    plan?.taskCode ?? "NUEVO",
+    vesselCode:    plan?.vesselCode ?? null,
+    workflowStage: plan?.executionStatus ?? "NEW",
     canEdit: true,
     fieldValues: {
       title:              title              || null,
       description:        description        || null,
       responsible:        responsible        || null,
       acceptanceCriteria: acceptanceCriteria || null,
-      evidenceRequired:   loto               || null,
+      loto:               loto               || null,
       riskLevel:          riskLevel          || null,
       riskAnalysisResult: riskAnalysisResult || null,
       triggerType:        triggerType        || null,
       frequencyMonths:    frequencyMonths    || null,
       frequencyHours:     frequencyHours     || null,
     },
-  } : null);
+  });
 
-  useCopilotApplyFields(plan ? (fields) => {
+  useCopilotApplyFields((fields) => {
     if (fields.title              !== undefined) setTitle(fields.title);
     if (fields.description        !== undefined) setDescription(fields.description);
     if (fields.responsible        !== undefined) setResponsible(fields.responsible);
     if (fields.acceptanceCriteria !== undefined) setAcceptanceCriteria(fields.acceptanceCriteria);
-    if (fields.evidenceRequired   !== undefined) setLoto(fields.evidenceRequired);
+    if (fields.loto               !== undefined) setLoto(fields.loto);
     if (fields.riskAnalysisResult !== undefined) setRiskAnalysisResult(fields.riskAnalysisResult);
     if (fields.riskLevel          !== undefined) setRiskLevel(toUiRiskLevel(fields.riskLevel));
     if (fields.triggerType        !== undefined && TRIGGER_TYPES.includes(fields.triggerType as TriggerType))
       setTriggerType(fields.triggerType as TriggerType);
     if (fields.frequencyMonths    !== undefined) setFrequencyMonths(fields.frequencyMonths);
     if (fields.frequencyHours     !== undefined) setFrequencyHours(fields.frequencyHours);
-  } : null);
+  });
+
+  const handleAcceptanceCriteriaClick = useCallback(async () => {
+    if (!plan || loadingCriteria) return;
+    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
+    const taskDesc = description || title || "tarea no especificada";
+
+    setLoadingCriteria(true);
+    setAcceptanceCriteria("Analizando...");
+
+    try {
+      const reader = await api.stream("/app/copiloto/chat", {
+        capability: "maintenance_insights",
+        locale: "es",
+        messages: [{
+          role: "user",
+          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}\n\nSos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea. Los criterios deben indicar cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables.\n\nResponde ÚNICAMENTE con los criterios, en texto plano, sin introducción ni explicación adicional.`,
+        }],
+      });
+
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of value.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(data) as { text?: string };
+            if (parsed.text) fullText += parsed.text;
+          } catch { /* partial */ }
+        }
+      }
+      setAcceptanceCriteria(fullText.trim() || "");
+    } catch {
+      setAcceptanceCriteria("");
+    } finally {
+      setLoadingCriteria(false);
+    }
+  }, [plan, description, title, loadingCriteria]);
+
+  const handleLotoClick = useCallback(async () => {
+    if (!plan || loadingLoto) return;
+    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
+    const taskDesc = description || title || "tarea no especificada";
+
+    setLoadingLoto(true);
+    setLoto("Analizando...");
+
+    try {
+      const reader = await api.stream("/app/copiloto/chat", {
+        capability: "maintenance_insights",
+        locale: "es",
+        messages: [{
+          role: "user",
+          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}\n\nSos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloqueadas, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo.\n\nResponde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`,
+        }],
+      });
+
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of value.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(data) as { text?: string };
+            if (parsed.text) fullText += parsed.text;
+          } catch { /* partial */ }
+        }
+      }
+      setLoto(fullText.trim() || "");
+    } catch {
+      setLoto("");
+    } finally {
+      setLoadingLoto(false);
+    }
+  }, [plan, description, title, acceptanceCriteria, loadingLoto]);
+
+  const handleRiskClick = useCallback(async () => {
+    if (!plan || loadingRisk) return;
+    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
+    const taskDesc = description || title || "tarea no especificada";
+
+    setLoadingRisk(true);
+    try {
+      const reader = await api.stream("/app/copiloto/chat", {
+        capability: "maintenance_insights",
+        locale: "es",
+        messages: [{
+          role: "user",
+          content: `Activo: ${assetLabel}
+Tarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}${loto ? `\nLOTO: ${loto}` : ""}
+
+Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y determiná:
+1. El nivel de riesgo (LOW, MEDIUM, HIGH o CRITICAL)
+2. El resultado del análisis de riesgos (peligros identificados, consecuencias posibles, medidas de control)
+
+Responde ÚNICAMENTE con este JSON (sin texto adicional):
+{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis"}`,
+        }],
+      });
+
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of value.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(data) as { text?: string };
+            if (parsed.text) fullText += parsed.text;
+          } catch { /* partial */ }
+        }
+      }
+
+      // Parse JSON response
+      try {
+        const clean = fullText.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+        const result = JSON.parse(clean) as { level?: string; analysis?: string };
+        if (result.level && ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(result.level)) {
+          setRiskLevel(result.level as RiskLevel);
+        }
+        if (result.analysis) setRiskAnalysisResult(result.analysis);
+      } catch {
+        // Fallback: set raw text as analysis
+        if (fullText.trim()) setRiskAnalysisResult(fullText.trim());
+      }
+    } catch { /* noop */ }
+    finally {
+      setLoadingRisk(false);
+    }
+  }, [plan, description, title, acceptanceCriteria, loto, loadingRisk]);
 
   const sfiGroups = useMemo(() => {
     const map = new Map<number, string>();
@@ -956,8 +1285,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
       const freqMonths = needsDateFreq(triggerType) && frequencyMonths ? Number(frequencyMonths) : null;
       const freqHours  = needsHours(triggerType)   && frequencyHours  ? Number(frequencyHours)  : null;
 
+      let savedId: string;
       if (isNew) {
-        await api.post("/app/pms/maintenance-plans", {
+        const created = await api.post<{ id: string }>("/app/pms/maintenance-plans", {
           vesselCode: vesselCode.trim().toUpperCase(),
           assetId,
           taskCode: taskCode.trim() || undefined,
@@ -966,7 +1296,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
-          evidenceRequired: normalizeOptionalText(loto),
+          loto: normalizeOptionalText(loto),
           sfiGroupNumber,
           sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
@@ -978,15 +1308,17 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           triggerResultMode,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
         });
+        savedId = created.id;
       } else {
         await api.patch(`/app/pms/maintenance-plans/${plan.id}`, {
           ...(assetId ? { assetId } : {}),
+          ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
           taskType,
           title: title.trim(),
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
-          evidenceRequired: normalizeOptionalText(loto),
+          loto: normalizeOptionalText(loto),
           sfiGroupNumber,
           sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
@@ -998,8 +1330,11 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           triggerResultMode,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
         });
+        savedId = plan.id;
       }
-      onSaved();
+      await onSaved(savedId);
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t("common.saveError"));
     } finally {
@@ -1011,18 +1346,223 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const canPostpone = !isNew && plan.status !== "INACTIVE" && plan.status !== "DRAFT";
   const needsWO = !isNew && (plan.triggerResultMode === "AUTO_WO" || plan.triggerResultMode === "APPROVAL_WO");
 
+  async function downloadPdf() {
+    if (!plan || isNew) return;
+    const token = localStorage.getItem("gpms_token");
+    const slug  = localStorage.getItem("gpms_tenant_slug");
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (slug)  headers["X-Tenant-Slug"] = slug;
+    const res = await fetch(`/app/pms/maintenance-plans/${plan.id}/pdf`, { headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      alert(`Error ${res.status}: ${text.slice(0, 300) || "No se pudo generar el PDF."}`);
+      return;
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `${plan.taskCode ?? plan.id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  function downloadPdfLegacy() {
+    if (!plan || isNew) return;
+    const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("es-AR") : "—";
+    const v = (x: unknown) => String(x ?? "").trim() || "—";
+    const triggerLbl = (t: string) => ({ CALENDAR: "Meses (calendario)", MONTHS: "Meses (calendario)", HOURS: "Horas de operación", RUNNING_HOURS: "Horas de operación" }[t.toUpperCase()] ?? t);
+    const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: "OT automática", APPROVAL_WO: "OT con aprobación", CHECKLIST: "Completar Checklist" }[r] ?? r);
+    const statusLbl = (s: string) => ({ ACTIVE: "Activo", INACTIVE: "Inactivo", OVERDUE: "Vencido", DUE_SOON: "Por vencer" }[s] ?? s);
+    const taskTypeLbl = (t: string) => ({ MAINTENANCE: "Mantenimiento", INSPECTION: "Inspección" }[t] ?? t);
+    const riskLbl = (r: string) => ({ LOW: "BAJO", MEDIUM: "MEDIO", HIGH: "ALTO", CRITICAL: "CRÍTICO" }[r] ?? r.toUpperCase());
+    const riskColor = (r: string) => ({ LOW: "#16a34a", MEDIUM: "#d97706", HIGH: "#ea580c", CRITICAL: "#dc2626" }[r] ?? "#0f172a");
+
+    function bold(text: string): string {
+      return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+
+    function renderText(raw: string | null | undefined): string {
+      if (!raw?.trim()) return "—";
+      const lines = raw.replace(/ð/g, "").split("\n");
+      const out: string[] = [];
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.includes("|")) {
+          // Collect contiguous pipe lines as a table block
+          const block: string[] = [];
+          while (i < lines.length && lines[i].includes("|")) {
+            block.push(lines[i]);
+            i++;
+          }
+          // Filter out separator rows (|---|)
+          const rows = block
+            .filter(l => !/^\s*\|[\s|:-]+\|\s*$/.test(l))
+            .map(l => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map(c => bold(c.trim())));
+          if (rows.length === 0) continue;
+          let table = '<table class="md-table">';
+          rows.forEach((cells, ri) => {
+            const tag = ri === 0 ? "th" : "td";
+            table += `<tr>${cells.map(c => `<${tag}>${c || "&nbsp;"}</${tag}>`).join("")}</tr>`;
+          });
+          table += "</table>";
+          out.push(table);
+        } else {
+          const txt = line.trim();
+          out.push(txt ? `<p>${bold(txt)}</p>` : "<br/>");
+          i++;
+        }
+      }
+      return out.join("");
+    }
+
+    const gen = new Date().toLocaleString("es-AR");
+    const assetDisplay = v(plan.assetName ?? assets.find(a => a.id === plan.assetId)?.name ?? plan.assetId);
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>${v(plan.taskCode)}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{size:A4;margin:1cm}
+  @page{@bottom-right{content:"Página " counter(page);font-size:7.5pt;color:#94a3b8;font-family:Arial,sans-serif}}
+  html,body{width:100%;font-family:Arial,sans-serif;font-size:10pt;color:#1a1a2e}
+  /* ── Outer table: thead/tfoot repeat on every printed page ── */
+  table.page-wrap{width:100%;border-collapse:collapse}
+  table.page-wrap>thead>tr>td{padding-bottom:4px;border-bottom:1.5px solid #0f2744}
+  table.page-wrap>tfoot>tr>td{padding-top:4px;border-top:1px solid #cbd5e1}
+  .ph{display:flex;justify-content:space-between;align-items:center;font-size:8pt}
+  .ph-l{font-weight:bold;color:#0f2744;letter-spacing:0.4px}
+  .ph-r{color:#64748b}
+  .pf{font-size:7.5pt;color:#94a3b8}
+  /* ── Content ── */
+  .content{padding:8px 0}
+  h1{font-size:18pt;color:#0f2744;margin-bottom:2px}
+  .sub{font-size:9pt;color:#64748b;margin-bottom:10px}
+  hr{border:none;border-top:2px solid #0f2744;margin:8px 0 12px}
+  .section-title{background:#0f2744;color:#fff;font-size:8pt;font-weight:bold;
+    letter-spacing:1px;padding:4px 10px;margin:10px 0 0;text-transform:uppercase;
+    break-after:avoid}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #cbd5e1;border-top:none}
+  .cell{padding:6px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;background:#f8fafc}
+  .cell:last-child{border-right:none}
+  .cell-label{font-size:7pt;font-weight:bold;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:3px}
+  .cell-full .cell-label{font-size:11.2pt;color:#ffffff;background-color:#0f172a;display:block;padding:4px 10px;margin:0 -10px 8px;letter-spacing:0.5px}
+  .cell-value{font-size:10pt;font-weight:bold;color:#0f172a}
+  .cell-full{grid-column:1/-1;border-right:none;padding-top:14px}
+  .red{color:#b91c1c}.blue{color:#1d4ed8}
+  .sig-row{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #cbd5e1;border-top:none;margin-top:20px;break-inside:avoid}
+  .sig-cell{padding:8px 10px 28px;border-right:1px solid #cbd5e1;background:#f8fafc}
+  .sig-cell:last-child{border-right:none}
+  .sig-line{border-top:1px solid #aaa;margin-top:20px}
+  .md-table{width:100%;border-collapse:collapse;font-size:9pt;margin:4px 0}
+  .md-table th{background:#e2e8f0;font-weight:bold;text-align:left;padding:4px 8px;border:1px solid #cbd5e1}
+  .md-table td{padding:4px 8px;border:1px solid #cbd5e1;vertical-align:top}
+  .md-table tr:nth-child(even) td{background:#f8fafc}
+  p{margin:2px 0;font-size:9.5pt}
+</style></head><body>
+<table class="page-wrap">
+  <thead><tr><td>
+    <div class="ph">
+      <span class="ph-l" style="display:flex;align-items:center;gap:7px"><img src="/logo.png" style="width:16px;height:16px;object-fit:contain" />PLAN DE MANTENIMIENTO — CMS</span>
+      <span class="ph-r">${v(plan.taskCode)} · ${v(plan.vesselCode)}</span>
+    </div>
+  </td></tr></thead>
+  <tfoot><tr><td>
+    <div class="pf">
+      <span style="display:flex;align-items:center;gap:6px"><img src="/logo.png" style="width:14px;height:14px;object-fit:contain" />Generado: ${gen}</span>
+      <span>${v(plan.taskCode)} · ${v(plan.vesselCode)}</span>
+    </div>
+  </td></tr></tfoot>
+  <tbody><tr><td>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="display:flex;align-items:center;gap:14px">
+          <img src="/logo.png" style="width:60px;height:60px;object-fit:contain;flex-shrink:0" />
+          <div>
+            <h1>PLAN DE MANTENIMIENTO</h1>
+            <div class="sub">Copilot Management System</div>
+          </div>
+        </div>
+        <div style="text-align:right;font-size:9pt;color:#64748b">
+          <div style="font-size:7pt">Código:</div>
+          <div style="font-size:13pt;font-weight:bold;color:#0f2744">${v(plan.taskCode)}</div>
+          <div style="font-size:7pt;margin-top:4px">Generado: ${gen}</div>
+        </div>
+      </div>
+      <hr/>
+
+      <div class="section-title">Identificación</div>
+      <div class="grid">
+        <div class="cell"><div class="cell-label">Embarcación</div><div class="cell-value blue">${v(plan.vesselCode)}</div></div>
+        <div class="cell"><div class="cell-label">Activo / Equipo</div><div class="cell-value">${assetDisplay}</div></div>
+        <div class="cell"><div class="cell-label">Estado</div><div class="cell-value">${statusLbl(plan.status ?? "")}</div></div>
+        <div class="cell"><div class="cell-label">Código de tarea</div><div class="cell-value">${v(plan.taskCode)}</div></div>
+        <div class="cell"><div class="cell-label">Grupo SFI</div><div class="cell-value">${plan.sfiGroupNumber != null ? `G${plan.sfiGroupNumber}` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">Subgrupo SFI</div><div class="cell-value">${v(plan.sfiSubgroupCode)}</div></div>
+        <div class="cell"><div class="cell-label">Tipo de tarea</div><div class="cell-value">${taskTypeLbl(plan.taskType)}</div></div>
+        <div class="cell"><div class="cell-label">Responsable</div><div class="cell-value">${v(responsible)}</div></div>
+        <div class="cell"><div class="cell-label">Criticidad</div><div class="cell-value">${v(plan.criticality)}</div></div>
+      </div>
+
+      <div class="section-title">Planificación y Frecuencia</div>
+      <div class="grid">
+        <div class="cell"><div class="cell-label">Tipo de trigger</div><div class="cell-value">${triggerLbl(plan.triggerType)}</div></div>
+        <div class="cell"><div class="cell-label">Frecuencia (meses)</div><div class="cell-value">${plan.frequencyMonths != null ? `${plan.frequencyMonths} meses` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">Frecuencia (horas)</div><div class="cell-value">${plan.frequencyHours != null ? `${plan.frequencyHours} h` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">Última ejecución</div><div class="cell-value">${fmtDate(plan.lastExecutionDate)}</div></div>
+        <div class="cell"><div class="cell-label">Próximo vencimiento</div><div class="cell-value red">${fmtDate(plan.nextDueDate)}</div></div>
+        <div class="cell"><div class="cell-label">Modo de resultado</div><div class="cell-value">${resultLbl(plan.triggerResultMode ?? "")}</div></div>
+      </div>
+
+      <div class="section-title">Tareas a Realizar</div>
+      <div class="grid">
+        <div class="cell cell-full"><div class="cell-label">Título</div><div class="cell-value">${v(title)}</div></div>
+        <div class="cell cell-full"><div class="cell-label">Tareas a realizar / Descripción</div><div class="cell-value" style="font-weight:normal">${renderText(description)}</div></div>
+        ${acceptanceCriteria ? `<div class="cell cell-full"><div class="cell-label">Criterios de aceptación</div><div class="cell-value" style="font-weight:normal">${renderText(acceptanceCriteria)}</div></div>` : ""}
+        ${loto ? `<div class="cell cell-full"><div class="cell-label">Evidencia requerida / LOTO</div><div class="cell-value" style="font-weight:normal">${renderText(loto)}</div></div>` : ""}
+        ${riskLevel ? `<div class="cell cell-full"><div class="cell-label">Nivel de riesgo</div><div class="cell-value" style="font-size:13pt;color:${riskColor(riskLevel)}">${riskLbl(riskLevel)}</div></div>
+        ${riskAnalysisResult ? `<div class="cell cell-full"><div class="cell-label">Análisis de riesgo</div><div class="cell-value" style="font-weight:normal">${renderText(riskAnalysisResult)}</div></div>` : ""}` : ""}
+      </div>
+
+      <div class="sig-row">
+        <div class="sig-cell"><div class="cell-label">Responsable de ejecución</div><div class="sig-line"></div></div>
+        <div class="sig-cell"><div class="cell-label">Supervisor / Jefe de Máquinas</div><div class="sig-line"></div></div>
+        <div class="sig-cell"><div class="cell-label">Verificado por</div><div class="sig-line"></div></div>
+      </div>
+    </div>
+  </td></tr></tbody>
+</table>
+</body></html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { alert("El navegador bloqueó la ventana emergente. Permita popups para este sitio."); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+        <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-white">
                 {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
               </h2>
               {!isNew && <StatusBadgeInline plan={plan} onClickWo={plan.activeWorkOrderCode ? () => { onClose(); navigate(`/work-orders?autoCode=${plan.activeWorkOrderCode}`); } : undefined} />}
             </div>
-            <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+                {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            </div>
           </div>
 
           {readOnly && (
@@ -1030,15 +1570,22 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               Solo lectura — la edición de planes está restringida al administrador.
             </div>
           )}
-          <fieldset disabled={readOnly} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto disabled:opacity-70">
+          <fieldset disabled={readOnly} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto disabled:opacity-70">
 
             {/* Read-only identifiers (edit mode) */}
             {!isNew && (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.taskCode")}</p>
-                    <p className="text-sm font-mono font-bold text-white">{plan.taskCode}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("mp.taskCode")}</p>
+                    {isAdmin
+                      ? <input
+                          value={taskCode}
+                          onChange={e => setTaskCode(e.target.value.toUpperCase())}
+                          className="w-full bg-transparent border-b border-white/20 focus:border-accent/60 outline-none text-sm font-mono font-bold text-white py-0.5 transition-colors"
+                        />
+                      : <p className="text-sm font-mono font-bold text-white">{plan.taskCode}</p>
+                    }
                   </div>
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
@@ -1068,10 +1615,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   <label className={labelCls}>{t("mp.asset")}</label>
                   {loadingAssets
                     ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando activos…</div>
-                    : <select value={assetId} onChange={e => setAssetId(e.target.value)} className={selectCls}>
-                        <option value="">— Seleccioná un activo —</option>
-                        {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode}{a.name ? ` — ${a.name}` : ""}</option>)}
-                      </select>
+                    : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
                   }
                 </div>
               </>
@@ -1115,10 +1659,13 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   <label className={labelCls}>{t("mp.asset")}</label>
                   {loadingAssets
                     ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando activos…</div>
-                    : <select value={assetId} onChange={e => setAssetId(e.target.value)} className={selectCls} disabled={assets.length === 0}>
-                        <option value="">{!vesselCode ? "Seleccioná un buque primero" : assets.length === 0 ? "Sin activos para este buque" : "Seleccioná un activo…"}</option>
-                        {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode}{a.name ? ` — ${a.name}` : ""}</option>)}
-                      </select>
+                    : <AssetSearchDropdown
+                        assets={assets}
+                        value={assetId}
+                        onChange={setAssetId}
+                        disabled={!vesselCode || assets.length === 0}
+                        placeholder={!vesselCode ? "Seleccioná un buque primero" : assets.length === 0 ? "Sin activos para este buque" : "Seleccioná un activo…"}
+                      />
                   }
                 </div>
               </>
@@ -1170,7 +1717,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("col.description")}</label>
+              <label className={sectionLabelCls} style={sectionLabelStyle}>TAREAS A REALIZAR</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className={inputCls} />
             </div>
 
@@ -1215,22 +1762,45 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Acceptance criteria */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.acceptanceCriteria")}</label>
-              <textarea value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} rows={2} className={inputCls} />
+              <label
+                className={`${sectionLabelCls} cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : "hover:opacity-80"}`}
+                style={sectionLabelStyle}
+                onClick={handleAcceptanceCriteriaClick}
+                title="Click para que la IA genere los criterios de aceptación"
+              >
+                {t("mp.acceptanceCriteria")}
+                {loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+              </label>
+              <textarea value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} rows={2} className={inputCls} disabled={loadingCriteria} />
             </div>
 
             {/* LOTO */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.loto")}</label>
-              <textarea value={loto} onChange={e => setLoto(e.target.value)} rows={2} className={inputCls} />
+              <label
+                className={`${sectionLabelCls} cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : "hover:opacity-80"}`}
+                style={sectionLabelStyle}
+                onClick={handleLotoClick}
+                title="Click para que la IA genere el procedimiento LOTO"
+              >
+                {t("mp.loto")}
+                {loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+              </label>
+              <textarea value={loto} onChange={e => setLoto(e.target.value)} rows={2} className={inputCls} disabled={loadingLoto} />
             </div>
 
             {/* Risk level */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.riskLevel")}</label>
+              <label
+                className={`${labelCls} cursor-pointer transition-colors ${loadingRisk ? "text-accent/60 animate-pulse" : "hover:text-accent"}`}
+                onClick={handleRiskClick}
+                title="Click para que la IA analice el nivel de riesgo"
+              >
+                {t("mp.riskLevel")}
+                {loadingRisk && <span className="ml-1 text-[9px] text-accent/60 normal-case font-normal">analizando...</span>}
+              </label>
               <div className="flex items-center gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
-                  <button key={val} type="button" disabled={readOnly}
+                  <button key={val} type="button" disabled={readOnly || loadingRisk}
                     onClick={() => setRiskLevel(riskLevel === val ? "" : val as RiskLevel)}
                     aria-pressed={riskLevel === val}
                     className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
@@ -1242,8 +1812,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Risk analysis */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.riskAnalysisResult")}</label>
-              <textarea value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} rows={2} className={inputCls} />
+              <label className={sectionLabelCls} style={sectionLabelStyle}>{t("mp.riskAnalysisResult")}</label>
+              <textarea value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} rows={2} className={inputCls} disabled={loadingRisk} />
             </div>
 
             {/* Checklist upload — CHECKLIST mode only */}
@@ -1299,11 +1869,20 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           </fieldset>
 
           {/* Footer — always shows Reportar Ejecución + Postergar for active plans */}
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10">
+          <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 bg-[#0D1B2A] shrink-0">
             <div className="flex gap-2">
+              {/* Delete button — only ADMIN or FLEET_SUPERINTENDENT, existing plans only */}
+              {!isNew && canDelete && (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                </button>
+              )}
               {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
                 <button
-                  onClick={() => setShowExecution(true)}
+                  onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
                   className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 transition-all"
                 >
                   <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Abrir OT</span>
@@ -1327,19 +1906,63 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               )}
             </div>
             <div className="flex gap-2">
+              {!isNew && (
+                <button
+                  onClick={downloadPdf}
+                  className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:text-white hover:border-white/20 transition-all flex items-center gap-1.5"
+                  title="Imprimir / Guardar PDF"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
+                </button>
+              )}
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
                 {readOnly ? "Cerrar" : t("common.cancel")}
               </button>
               {!readOnly && (
                 <button onClick={() => { void onSave(); }} disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+                  className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${savedOk ? "bg-success-sea text-primary-bg" : "bg-accent text-primary-bg hover:brightness-110"}`}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedOk ? <><CheckCircle2 className="w-3.5 h-3.5" /> Guardado</> : t("common.save")}
                 </button>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {confirmDuplicateWO && plan.activeWorkOrderCode && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#0D1B2A] border border-yellow-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center shrink-0">
+                <Zap className="w-4 h-4 text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">OT ya abierta para esta tarea</p>
+                <p className="text-xs text-text-industrial/70 mt-1">
+                  Esta tarea ya tiene una Orden de Trabajo abierta:{" "}
+                  <span className="font-mono font-bold text-yellow-400">#{plan.activeWorkOrderCode}</span>.
+                  <br />¿Está seguro que quiere abrir una nueva OT?
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setConfirmDuplicateWO(false)}
+                className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setConfirmDuplicateWO(false); setShowExecution(true); }}
+                className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all"
+              >
+                Abrir OT de todas formas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isNew && showExecution && needsWO && (
         <CreateWorkOrderModal
@@ -1363,7 +1986,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             checklistDocUrl: plan.checklistTemplate,
           }}
           onClose={() => setShowExecution(false)}
-          onSaved={_woId => { setShowExecution(false); onSaved(); }}
+          onSaved={_woId => { setShowExecution(false); void onSaved(); }}
         />
       )}
       {!isNew && showExecution && !needsWO && (
@@ -1371,15 +1994,62 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           plan={plan}
           userName={userName}
           onClose={() => setShowExecution(false)}
-          onSuccess={() => { setShowExecution(false); onSaved(); }}
+          onSuccess={() => { setShowExecution(false); void onSaved(); }}
         />
       )}
       {!isNew && showPostpone && (
         <PostponeModal
           plan={plan}
           onClose={() => setShowPostpone(false)}
-          onSuccess={() => { setShowPostpone(false); onSaved(); }}
+          onSuccess={() => { setShowPostpone(false); void onSaved(); }}
         />
+      )}
+
+      {confirmDelete && !isNew && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Eliminar plan de mantenimiento</p>
+                <p className="text-xs text-text-industrial/70 mt-1">
+                  Esta acción no puede deshacerse. El plan{" "}
+                  <span className="font-mono font-bold text-white">{plan.taskCode}</span> será eliminado.
+                </p>
+              </div>
+            </div>
+            {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setActionError(null);
+                  try {
+                    await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
+                    setConfirmDelete(false);
+                    void onSaved();
+                  } catch (err) {
+                    setActionError(err instanceof Error ? err.message : "Error al eliminar");
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+              >
+                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Confirmar eliminación
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -1399,11 +2069,12 @@ export const MaintenancePlansPage: React.FC = () => {
 
   const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
   const [overdueOnly,   setOverdueOnly]   = useState(false);
-  const [sfiTextFilter, setSfiTextFilter] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
 
   useCopilotEmitter(!editing && !showModal ? { module: "MAINTENANCE_PLANS", screen: "MP_LIST" } : null);
+  const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
   const [showExcel,     setShowExcel]     = useState(false);
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
@@ -1447,15 +2118,21 @@ export const MaintenancePlansPage: React.FC = () => {
     } else if (overdueOnly) {
       items = items.filter(p => { const s = computeStatus(p); return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW"; });
     }
-    if (sfiTextFilter.trim()) {
-      const q = sfiTextFilter.trim().toLowerCase();
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
       items = items.filter(p =>
+        (p.vesselCode ?? "").toLowerCase().includes(q) ||
+        (p.taskCode ?? "").toLowerCase().includes(q) ||
+        (p.title ?? "").toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        (p.responsible ?? "").toLowerCase().includes(q) ||
         String(p.sfiGroupNumber ?? "").includes(q) ||
-        (p.sfiSubgroupCode ?? "").toLowerCase().includes(q)
+        (p.sfiSubgroupCode ?? "").toLowerCase().includes(q) ||
+        (p.assetName ?? "").toLowerCase().includes(q)
       );
     }
     return { items, total: items.length };
-  }, [rawData, sfiTab, overdueOnly, sfiTextFilter]);
+  }, [rawData, sfiTab, overdueOnly, searchText]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -1471,9 +2148,10 @@ export const MaintenancePlansPage: React.FC = () => {
   // ── Count of overdue/due/in_window for the toggle badge ───────────────────
   const urgentCount = useMemo(() => {
     if (!rawData) return 0;
-    return rawData.items.filter(p =>
-      p.executionStatus === "OVERDUE" || p.executionStatus === "DUE" || p.executionStatus === "IN_WINDOW"
-    ).length;
+    return rawData.items.filter(p => {
+      const s = computeStatus(p);
+      return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW";
+    }).length;
   }, [rawData]);
 
   const openEdit = async (row: Pick<MaintenancePlan, "id">) => {
@@ -1508,7 +2186,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "vesselCode",
       header: "EMBARCACIÓN / TASKID / SFI",
-      sortable: false,
+      sortValue: row => `${row.vesselCode} ${row.taskCode}`,
       render: row => (
         <div className="flex flex-col gap-0.5 min-w-[130px]">
           <span className="text-[11px] font-bold text-accent leading-tight">{vesselNameMap.get(row.vesselCode) ?? row.vesselCode}</span>
@@ -1528,8 +2206,8 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "title",
       header: "EQUIPO / TAREA",
-      sortable: false,
-      className: "w-72",
+      className: "w-96",
+      sortValue: row => (row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.title,
       render: row => (
         <div className="flex flex-col gap-0.5">
           <span className="text-[12px] font-bold text-white leading-tight line-clamp-1">
@@ -1539,19 +2217,11 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       ),
     },
-    // ── Col 3: RESPONSABLE ──────────────────────────────────────────────────
-    {
-      key: "responsible",
-      header: "RESPONSABLE",
-      render: row => row.responsible
-        ? <span className="text-xs text-text-industrial/80 line-clamp-1">{row.responsible}</span>
-        : <span className="text-text-industrial/30 text-xs">—</span>,
-    },
     // ── Col 4: FRECUENCIA ───────────────────────────────────────────────────
     {
       key: "frequency",
       header: "FRECUENCIA (HS / MES)",
-      sortable: false,
+      sortValue: row => row.frequencyMonths ?? row.frequencyHours ?? 0,
       render: row => (
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs text-text-industrial/80 whitespace-nowrap">{formatFrequency(row)}</span>
@@ -1567,6 +2237,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "lastExecutionDate",
       header: "ÚLTIMA EJECUCIÓN",
+      sortValue: row => row.lastExecutionDate ?? row.lastExecutionHours ?? null,
       render: row => {
         if (needsHours(row.triggerType)) {
           return row.lastExecutionHours != null
@@ -1582,6 +2253,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "nextDueDate",
       header: "PRÓXIMO VENCIMIENTO",
+      sortValue: row => row.nextDueDate ?? row.nextDueHours ?? null,
       render: row => {
         const isOverdue = row.executionStatus === "OVERDUE";
         if (needsHours(row.triggerType)) {
@@ -1598,7 +2270,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "situacion",
       header: "STATUS",
-      sortable: false,
+      sortValue: row => computeStatus(row),
       render: row => <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />,
     },
     // ── Col 8: ACCIONES ─────────────────────────────────────────────────────
@@ -1664,17 +2336,17 @@ export const MaintenancePlansPage: React.FC = () => {
             overdueOnly ? "bg-orange-500/30 text-orange-200" : "bg-white/10 text-text-industrial/50"
           }`}>{urgentCount}</span>
         </button>
-        {/* Filtrar por SFI */}
+        {/* Buscador global */}
         <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
-          <Filter className="w-3 h-3 text-text-industrial/40 shrink-0" />
+          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
           <input
-            value={sfiTextFilter}
-            onChange={e => setSfiTextFilter(e.target.value)}
-            placeholder="Filtrar por SFI"
-            className="w-32 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Buscar por código, tarea, equipo, responsable…"
+            className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
           />
-          {sfiTextFilter && (
-            <button onClick={() => setSfiTextFilter("")} className="text-text-industrial/40 hover:text-white transition-colors">
+          {searchText && (
+            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-white transition-colors">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -1702,7 +2374,7 @@ export const MaintenancePlansPage: React.FC = () => {
               <option key={v.code} value={v.code}>{v.name}</option>
             ))}
           </select>
-          {(statusFilter || vesselFilter || overdueOnly || sfiTextFilter) && (
+          {(statusFilter || vesselFilter || overdueOnly || searchText) && (
             <button
               onClick={() => {
                 updateFilters({ status: "", vesselCode: "" });
@@ -1781,7 +2453,7 @@ export const MaintenancePlansPage: React.FC = () => {
             dueDate: executing.nextDueDate,
             acceptanceCriteria: executing.acceptanceCriteria,
             responsible: executing.responsible,
-            loto: executing.evidenceRequired,
+            loto: executing.loto,
             riskLevel: executing.riskLevel,
             riskAnalysisResult: executing.riskAnalysisResult,
             checklistDocUrl: executing.checklistTemplate,
@@ -1806,8 +2478,18 @@ export const MaintenancePlansPage: React.FC = () => {
           userId={user?.id ?? null}
           userName={userName}
           isAdmin={user?.role === "TENANT_ADMIN"}
+          canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
+          setRequestMessage={setRequestMessageFromContext}
           onClose={() => { setShowModal(false); setEditing(null); }}
-          onSaved={() => { setShowModal(false); setEditing(null); void reload(); }}
+          onSaved={async (savedId) => {
+            void reload();
+            if (savedId) {
+              try {
+                const detail = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${savedId}`);
+                setEditing(detail);
+              } catch { /* silent, plan stays open */ }
+            }
+          }}
         />
       )}
     </div>

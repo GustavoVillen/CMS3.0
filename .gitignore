@@ -13,3 +13,13 @@ temp/
 
 # Prisma generated client
 generated/
+
+# Claude Code local settings
+.claude/
+
+# Uploaded files (user content, not source code)
+apps/api/uploads/
+
+# Docs / legacy files
+docs/
+"Check Lists/"

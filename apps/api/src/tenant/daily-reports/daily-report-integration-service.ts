@@ -84,6 +84,8 @@ export async function confirmAndIntegrateDailyReport(
   for (const entry of equipmentHoursEntries) {
     if (!entry.assetId || entry.runningHoursTotal == null) continue;
 
+    const currentHours = entry.runningHoursTotal;
+
     const hoursTriggerPlans = await (prisma as any).maintenancePlan.findMany({
       where: {
         tenantId: tenant.id,
@@ -96,8 +98,6 @@ export async function confirmAndIntegrateDailyReport(
     });
 
     for (const plan of hoursTriggerPlans) {
-      const currentHours = entry.runningHoursTotal;
-
       const updates: Record<string, unknown> = {};
 
       if (plan.frequencyHours && plan.frequencyHours > 0) {
@@ -310,6 +310,68 @@ export async function getDailyReportWithSubEntities(
   });
 
   if (!report) throw new RouteError(404, "NOT_FOUND", "Reporte no encontrado.");
+
+  // Enrich maintenanceEntries with taskCode from the related MaintenancePlan
+  const planIds: string[] = report.maintenanceEntries
+    .map((e: any) => e.maintenancePlanId)
+    .filter(Boolean);
+
+  const taskCodeMap = new Map<string, string>();
+  if (planIds.length > 0) {
+    const plans = await (prisma as any).maintenancePlan.findMany({
+      where: { id: { in: planIds } },
+      select: { id: true, taskCode: true },
+    });
+    for (const p of plans) taskCodeMap.set(p.id, p.taskCode);
+  }
+
+  report.maintenanceEntries = report.maintenanceEntries.map((e: any) => ({
+    ...e,
+    taskCode: e.maintenancePlanId ? (taskCodeMap.get(e.maintenancePlanId) ?? null) : null,
+  }));
+
+  // Enrich defectEntries with defectCode — try FK first, then description match
+  const defectIds: string[] = report.defectEntries
+    .map((e: any) => e.defectId)
+    .filter(Boolean);
+
+  const defectCodeById = new Map<string, string>();
+  if (defectIds.length > 0) {
+    const defects = await (prisma as any).defect.findMany({
+      where: { id: { in: defectIds } },
+      select: { id: true, defectCode: true },
+    });
+    for (const d of defects) defectCodeById.set(d.id, d.defectCode);
+  }
+
+  // For entries without a FK, look up by description + vesselCode
+  const unlinkedDescriptions: string[] = report.defectEntries
+    .filter((e: any) => !e.defectId && e.description)
+    .map((e: any) => e.description as string);
+
+  const defectCodeByDesc = new Map<string, string>();
+  if (unlinkedDescriptions.length > 0) {
+    const matched = await (prisma as any).defect.findMany({
+      where: {
+        vesselCode: report.vesselCode,
+        description: { in: unlinkedDescriptions },
+        deletedAt: null,
+      },
+      select: { description: true, defectCode: true },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const d of matched) {
+      if (!defectCodeByDesc.has(d.description)) defectCodeByDesc.set(d.description, d.defectCode);
+    }
+  }
+
+  report.defectEntries = report.defectEntries.map((e: any) => ({
+    ...e,
+    defectCode: e.defectId
+      ? (defectCodeById.get(e.defectId) ?? null)
+      : (defectCodeByDesc.get(e.description) ?? null),
+  }));
+
   return report;
 }
 
@@ -321,6 +383,8 @@ export async function upsertDailyEquipmentHours(
     assetId?: string | null;
     equipmentLabel: string;
     runningHoursTotal?: number | null;
+    fuelConsumptionLiters?: number | null;
+    oilConsumptionLiters?: number | null;
     inService?: boolean | null;
     standby?: boolean | null;
     remarks?: string | null;
@@ -349,6 +413,8 @@ export async function upsertDailyEquipmentHours(
         assetId: entry.assetId ?? null,
         equipmentLabel: entry.equipmentLabel,
         runningHoursTotal: entry.runningHoursTotal ?? null,
+        fuelConsumptionLiters: entry.fuelConsumptionLiters ?? null,
+        oilConsumptionLiters: entry.oilConsumptionLiters ?? null,
         inService: entry.inService ?? null,
         standby: entry.standby ?? null,
         remarks: entry.remarks ?? null,
@@ -392,7 +458,7 @@ export async function upsertDailyMaintenanceEntries(
   entries: Array<{
     id?: string;
     assetId?: string | null;
-    equipmentLabel: string;
+    equipmentLabel?: string | null;
     taskTitle: string;
     taskType: "MAINTENANCE" | "INSPECTION";
     shortDescription?: string | null;
@@ -424,7 +490,7 @@ export async function upsertDailyMaintenanceEntries(
         vesselCode: report.vesselCode,
         dailyReportId: reportId,
         assetId: entry.assetId ?? null,
-        equipmentLabel: entry.equipmentLabel,
+        equipmentLabel: entry.equipmentLabel ?? "",
         taskTitle: entry.taskTitle,
         taskType: entry.taskType as never,
         shortDescription: entry.shortDescription ?? null,

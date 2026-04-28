@@ -154,14 +154,6 @@ enum DeferralStatus {
   CLOSED
 }
 
-enum RcaStatus {
-  DRAFT
-  UNDER_ANALYSIS
-  COMPLETED
-  APPROVED
-  CLOSED
-}
-
 enum RcaMethodology {
   FIVE_WHYS
   FISHBONE
@@ -170,7 +162,6 @@ enum RcaMethodology {
 }
 
 enum CapaSourceType {
-  RCA
   DEFECT
   WORK_ORDER
   INSPECTION
@@ -257,35 +248,23 @@ enum SpareStatus {
   OBSOLETE
 }
 
-enum SpareOrderStatus {
-  DRAFT
-  REQUESTED
-  APPROVED
-  ORDERED
-  PARTIALLY_RECEIVED
-  RECEIVED
-  CANCELLED
-}
-
-enum SpareOrderPriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 enum MovementType {
   RECEIPT
   ISSUE
   ADJUSTMENT
   TRANSFER
+  TRANSFER_IN
+  TRANSFER_OUT
+  RETURN_IN
+  ADJUSTMENT_PLUS
+  ADJUSTMENT_MINUS
 }
 
 enum MovementRefType {
-  SPARE_ORDER
   WORK_ORDER
   DEFECT
   ADJUSTMENT
+  SPARE_REQUEST
 }
 
 enum EvaluationStatus {
@@ -330,7 +309,6 @@ enum AttachmentTarget {
   INSPECTION
   CERTIFICATE
   DAILY_REPORT
-  RCA
   CAPA
   SPARE_ORDER
   INSPECTION_EXECUTION
@@ -430,6 +408,75 @@ enum SparesReceiptPossible {
   UNKNOWN
 }
 
+// ─── Bitácora ─────────────────────────────────────────────────────────────────
+
+enum BitacoraCategory {
+  NOVEDAD_TECNICA
+  OBSERVACION_OPERATIVA
+  EVENTO_IMPORTANTE
+  INSTRUCCION_RECIBIDA
+  SEGUIMIENTO
+  ANOTACION_GENERAL
+}
+
+model BitacoraEntry {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  entryCode          String
+  entryDate          DateTime
+  category           BitacoraCategory @default(ANOTACION_GENERAL)
+  title              String
+  body               String           @db.Text
+  relatedAssetId     String?
+  isMonitoring       Boolean          @default(false)
+  monitoringClosedAt DateTime?
+  createdAt          DateTime         @default(now())
+  createdByUserId    String
+  updatedAt          DateTime         @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  @@unique([tenantId, vesselCode, entryCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, entryDate])
+}
+
+// ─── Fase 3: Spare Requests & Reservations ───────────────────────────────────
+
+enum SpareRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+enum SpareRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SpareRequestItemStatus {
+  PENDING
+  RESERVED
+  PARTIALLY_RESERVED
+  FULFILLED
+  CANCELLED
+}
+
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+}
+
 // ─── New PMS extension enums ──────────────────────────────────────────────────
 
 enum SuperintendentAssignmentType {
@@ -502,6 +549,7 @@ model TenantSetting {
   tenantId        String       @id
   displayName     String
   logoUrl         String?
+  logoUrlLight    String?
   primaryColor    String?
   supportEmail    String
   defaultLocale   LocaleCode   @default(es)
@@ -728,7 +776,6 @@ model Vessel {
   workOrders       WorkOrder[]
   defects          Defect[]
   deferrals        Deferral[]
-  rcaRecords       RcaRecord[]
   capaRecords      CapaRecord[]
   inspections      Inspection[]
   inspectionLogs   InspectionLog[]
@@ -736,7 +783,6 @@ model Vessel {
   dailyReports     DailyReport[]
   providers        Provider[]
   spares           Spare[]
-  spareOrders      SpareOrder[]
   stockMovements   StockMovement[]
   providerEvals    ProviderEvaluation[]
   providerNcs      ProviderNonconformity[]
@@ -797,7 +843,7 @@ model MaintenancePlan {
   frequencyMonths      Int?
   responsible          String?
   acceptanceCriteria   String?
-  evidenceRequired     String?
+  loto                 String?
   sfiGroupNumber       Int?
   sfiSubgroupCode      String?
   riskLevel            String?
@@ -869,10 +915,11 @@ model WorkOrder {
   riskAnalysisResult  String?
   checklistDocUrl     String?
   // Result fields
-  woResult            String?
-  executedByName      String?
-  observations        String?
-  supportingDocUrl    String?
+  woResult                String?
+  executedByName          String?
+  observations            String?
+  supportingDocUrl        String?
+  runningHoursAtExecution Float?
   createdAt           DateTime          @default(now())
   createdByUserId     String
   updatedAt           DateTime          @updatedAt
@@ -890,31 +937,39 @@ model WorkOrder {
 }
 
 model Defect {
-  id                String                 @id @default(cuid())
-  tenantId          String
-  vesselCode        String
-  assetId           String
-  workOrderId       String?
-  defectCode        String
-  status            DefectStatus           @default(OPEN)
-  severity          DefectSeverity         @default(MEDIUM)
-  operationalState  DefectOperationalState @default(NORMAL)
-  classification    String
-  reportedAt        DateTime
-  description       String
-  immediateAction   String?
-  correctiveAction  String?
-  rcaAnalysis       String?
-  capaDescription   String?
-  repairType        String?
-  createdAt         DateTime               @default(now())
-  createdByUserId   String
-  updatedAt         DateTime               @updatedAt
-  updatedByUserId   String
-  deletedAt         DateTime?
-  deletedByUserId   String?
+  id                     String                 @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  assetId                String
+  workOrderId            String?
+  defectCode             String
+  status                 DefectStatus           @default(OPEN)
+  severity               DefectSeverity         @default(MEDIUM)
+  operationalState       DefectOperationalState @default(NORMAL)
+  classification         String
+  reportedAt             DateTime
+  description            String
+  immediateAction        String?
+  correctiveAction       String?
+  rcaAnalysis            String?
+  rcaMethodology         RcaMethodology?
+  rcaImmediateCause      String?
+  rcaContributingCause   String?
+  rcaRootCause           String?
+  rcaPreventiveActions   String?
+  rcaCompletedAt         DateTime?
+  rcaApprovedAt          DateTime?
+  rcaApprovedByUserId    String?
+  capaDescription        String?
+  repairType             String?
+  createdAt              DateTime               @default(now())
+  createdByUserId        String
+  updatedAt              DateTime               @updatedAt
+  updatedByUserId        String
+  deletedAt              DateTime?
+  deletedByUserId        String?
 
-  vessel            Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  vessel                 Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
 
   @@unique([tenantId, vesselCode, defectCode])
   @@index([tenantId])
@@ -956,41 +1011,6 @@ model Deferral {
   vessel               Vessel             @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
 
   @@unique([tenantId, vesselCode, deferralCode])
-  @@index([tenantId])
-  @@index([tenantId, vesselCode])
-  @@index([tenantId, status])
-}
-
-model RcaRecord {
-  id                 String         @id @default(cuid())
-  tenantId           String
-  vesselCode         String
-  assetId            String
-  defectId           String?
-  workOrderId        String?
-  rcaCode            String
-  status             RcaStatus      @default(DRAFT)
-  methodology        RcaMethodology
-  analysisSummary    String?
-  immediateCause     String?
-  contributingCause  String?
-  rootCause          String?
-  correctiveActions  String?
-  preventiveActions  String?
-  completedAt        DateTime?
-  approvedAt         DateTime?
-  approvedByUserId   String?
-  closedAt           DateTime?
-  createdAt          DateTime       @default(now())
-  createdByUserId    String
-  updatedAt          DateTime       @updatedAt
-  updatedByUserId    String
-  deletedAt          DateTime?
-  deletedByUserId    String?
-
-  vessel             Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
-
-  @@unique([tenantId, vesselCode, rcaCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
@@ -1129,6 +1149,7 @@ model DailyReport {
   engineHoursMain     Float?
   generatorHours      Float?
   fuelConsumedLiters  Float?
+  oilConsumedLiters   Float?
   notes               String?
   // Report context
   reportType              DailyReportType?
@@ -1170,17 +1191,19 @@ model DailyReport {
 // ─── Daily Report sub-entities ───────────────────────────────────────────────
 
 model DailyEquipmentHours {
-  id                  String      @id @default(cuid())
-  tenantId            String
-  vesselCode          String
-  dailyReportId       String
-  assetId             String?
-  equipmentLabel      String
-  runningHoursTotal   Float?
-  inService           Boolean?
-  standby             Boolean?
-  remarks             String?
-  createdAt           DateTime    @default(now())
+  id                      String      @id @default(cuid())
+  tenantId                String
+  vesselCode              String
+  dailyReportId           String
+  assetId                 String?
+  equipmentLabel          String
+  runningHoursTotal       Float?
+  fuelConsumptionLiters   Float?
+  oilConsumptionLiters    Float?
+  inService               Boolean?
+  standby                 Boolean?
+  remarks                 String?
+  createdAt               DateTime    @default(now())
 
   dailyReport         DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
 
@@ -1194,7 +1217,7 @@ model DailyMaintenanceEntry {
   vesselCode          String
   dailyReportId       String
   assetId             String?
-  equipmentLabel      String
+  equipmentLabel      String   @default("")
   taskTitle           String
   taskType            TaskType
   shortDescription    String?
@@ -1253,6 +1276,30 @@ model DailyDefectEntry {
 
 // ─── Block 07: Procurement & Stock ───────────────────────────────────────────
 
+model StockLocation {
+  id              String    @id @default(cuid())
+  tenantId        String
+  vesselCode      String?
+  code            String
+  name            String
+  description     String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  defaultForSpares Spare[]
+  stockMovements   StockMovement[]
+  reservations     StockReservation[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
 model Provider {
   id               String         @id @default(cuid())
   tenantId         String
@@ -1273,7 +1320,6 @@ model Provider {
   deletedByUserId  String?
 
   vessel           Vessel                  @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
-  spareOrders      SpareOrder[]
   evaluations      ProviderEvaluation[]
   nonconformities  ProviderNonconformity[]
   inspections      Inspection[]
@@ -1284,89 +1330,47 @@ model Provider {
 }
 
 model Spare {
-  id               String       @id @default(cuid())
-  tenantId         String
-  vesselCode       String
-  sku              String
-  name             String
-  category         String?
-  criticality      AssetCriticality @default(B)
-  manufacturer     String?
-  model            String?
-  unit             String
-  currentStock     Float        @default(0)
-  minStock         Float        @default(0)
-  reorderPoint     Float        @default(0)
-  status           SpareStatus  @default(ACTIVE)
-  location         String?
-  createdAt        DateTime     @default(now())
-  createdByUserId  String
-  updatedAt        DateTime     @updatedAt
-  updatedByUserId  String
-  deletedAt        DateTime?
-  deletedByUserId  String?
+  id                     String           @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  sku                    String
+  name                   String
+  category               String?
+  criticality            AssetCriticality @default(B)
+  manufacturer           String?
+  model                  String?
+  unit                   String
+  currentStock           Float            @default(0)  // deprecated — use stock-calc-service
+  minStock               Float            @default(0)
+  reorderPoint           Float            @default(0)
+  targetStock            Float?
+  status                 SpareStatus      @default(ACTIVE)
+  location               String?
+  // Extended fields (Fase 2)
+  internalPartNumber     String?
+  manufacturerPartNumber String?
+  longDescription        String?
+  defaultLocationId      String?
+  preferredSupplierId    String?
+  linkedAssetId          String?
+  sfiCode                String?
+  leadTimeDays           Int?
+  createdAt              DateTime         @default(now())
+  createdByUserId        String
+  updatedAt              DateTime         @updatedAt
+  updatedByUserId        String
+  deletedAt              DateTime?
+  deletedByUserId        String?
 
-  vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
-  stockMovements   StockMovement[]
-  orderLines       SpareOrderLine[]
+  vessel           Vessel              @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  defaultLocation  StockLocation?      @relation(fields: [defaultLocationId], references: [id], onDelete: SetNull)
+  stockMovements     StockMovement[]
+  requestItems       SpareRequestItem[]
+  reservations       StockReservation[]
 
   @@unique([tenantId, vesselCode, sku])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
-}
-
-model SpareOrder {
-  id                   String           @id @default(cuid())
-  tenantId             String
-  vesselCode           String
-  orderCode            String
-  status               SpareOrderStatus @default(DRAFT)
-  priority             SpareOrderPriority @default(MEDIUM)
-  providerId           String?
-  requestedByUserId    String
-  requestedAt          DateTime
-  expectedDeliveryDate DateTime?
-  totalLines           Int              @default(0)
-  totalCost            Float?
-  currency             String?
-  notes                String?
-  createdAt            DateTime         @default(now())
-  createdByUserId      String
-  updatedAt            DateTime         @updatedAt
-  updatedByUserId      String
-  deletedAt            DateTime?
-  deletedByUserId      String?
-
-  vessel               Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
-  provider             Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  lines                SpareOrderLine[]
-
-  @@unique([tenantId, vesselCode, orderCode])
-  @@index([tenantId])
-  @@index([tenantId, vesselCode])
-  @@index([tenantId, status])
-}
-
-model SpareOrderLine {
-  id              String     @id @default(cuid())
-  spareOrderId    String
-  spareId         String?
-  description     String
-  partNumber      String?
-  quantity        Float
-  unit            String?
-  unitPrice       Float?
-  currency        String?
-  notes           String?
-  createdAt       DateTime   @default(now())
-  createdByUserId String
-  updatedAt       DateTime   @updatedAt
-  updatedByUserId String
-
-  spareOrder      SpareOrder @relation(fields: [spareOrderId], references: [id], onDelete: Cascade)
-  spare           Spare?     @relation(fields: [spareId], references: [id], onDelete: SetNull)
-
-  @@index([spareOrderId])
 }
 
 model StockMovement {
@@ -1374,6 +1378,7 @@ model StockMovement {
   tenantId         String
   vesselCode       String
   spareId          String
+  locationId       String?
   movementCode     String
   movementType     MovementType
   quantity         Float
@@ -1387,10 +1392,92 @@ model StockMovement {
 
   vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   spare            Spare            @relation(fields: [spareId], references: [id])
+  location         StockLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([spareId])
+}
+
+model SpareRequest {
+  id                      String                @id @default(cuid())
+  tenantId                String
+  requestCode             String
+  status                  SpareRequestStatus    @default(DRAFT)
+  priority                SpareRequestPriority  @default(MEDIUM)
+  requestedByUserId       String
+  requestedAt             DateTime
+  approvedByUserId        String?
+  approvedAt              DateTime?
+  rejectionReason         String?
+  notes                   String?
+  requestedForVesselCode  String?
+  requestedForAssetId     String?
+  requestedForLocationId  String?
+  createdAt               DateTime              @default(now())
+  createdByUserId         String
+  updatedAt               DateTime              @updatedAt
+  updatedByUserId         String
+  deletedAt               DateTime?
+  deletedByUserId         String?
+
+  items                   SpareRequestItem[]
+
+  @@unique([tenantId, requestCode])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+model SpareRequestItem {
+  id                String                 @id @default(cuid())
+  spareRequestId    String
+  spareId           String?
+  description       String
+  quantity          Float
+  unit              String
+  quantityReserved  Float                  @default(0)
+  quantityFulfilled Float                  @default(0)
+  status            SpareRequestItemStatus @default(PENDING)
+  notes             String?
+  receivedAt        DateTime?
+  receiptNotes      String?
+  createdAt         DateTime               @default(now())
+  createdByUserId   String
+  updatedAt         DateTime               @updatedAt
+  updatedByUserId   String
+
+  spareRequest      SpareRequest           @relation(fields: [spareRequestId], references: [id], onDelete: Cascade)
+  spare             Spare?                 @relation(fields: [spareId], references: [id], onDelete: SetNull)
+  reservations      StockReservation[]
+
+  @@index([spareRequestId])
+  @@index([spareId])
+}
+
+model StockReservation {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  spareId         String
+  requestItemId   String
+  locationId      String?
+  quantity        Float
+  status          StockReservationStatus @default(ACTIVE)
+  reservedAt      DateTime               @default(now())
+  expiresAt       DateTime?
+  releasedAt      DateTime?
+  consumedAt      DateTime?
+  createdByUserId String
+  updatedAt       DateTime               @updatedAt
+  updatedByUserId String
+
+  spare           Spare                  @relation(fields: [spareId], references: [id])
+  requestItem     SpareRequestItem       @relation(fields: [requestItemId], references: [id])
+  location        StockLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([spareId])
+  @@index([requestItemId])
+  @@index([tenantId, status])
 }
 
 model ProviderEvaluation {
@@ -1483,7 +1570,6 @@ model Attachment {
 
 enum PromptCapability {
   knowledge_assistant
-  rca_assistant
   defect_assistant
   deferral_analysis
   barrier_interviewer

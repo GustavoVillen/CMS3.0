@@ -240,6 +240,41 @@ export async function archiveTenantAiDocument(session: TenantAccessSession, id: 
 }
 
 // ---------------------------------------------------------------------------
+// Delete a DRAFT version
+// ---------------------------------------------------------------------------
+
+export async function deleteTenantAiDocumentVersion(
+  session: TenantAccessSession,
+  documentId: string,
+  versionId: string,
+) {
+  requireAdmin(session);
+
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+
+  const version = await prisma.aiDocumentVersion.findFirst({
+    where: { id: versionId, documentId, tenantId: tenant.id },
+  });
+  if (!version) throw new RouteError(404, "AI_DOCUMENT_VERSION_NOT_FOUND", "Versión no encontrada.");
+  if (version.status !== "DRAFT") {
+    throw new RouteError(409, "AI_DOCUMENT_VERSION_NOT_DRAFT", "Solo se pueden eliminar versiones en estado DRAFT.");
+  }
+
+  await prisma.aiDocumentVersion.delete({ where: { id: versionId } });
+
+  await prisma.aiDocument.update({
+    where: { id: documentId },
+    data:  { updatedByUserId: session.user.id },
+  });
+
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // AI context helper — returns concatenated content of all ACTIVE versions
 // ---------------------------------------------------------------------------
 

@@ -58,7 +58,6 @@ export function buildHomePage(env: AppEnv): string {
         <li><code>GET /app/work-orders?vesselCode=LATERE</code> with Bearer token and tenant host</li>
         <li><code>GET /app/defects?vesselCode=LATERE</code> with Bearer token and tenant host</li>
         <li><code>GET /app/deferrals?vesselCode=LATERE</code> with Bearer token and tenant host</li>
-        <li><code>GET /app/rca?vesselCode=LATERE</code> with Bearer token and tenant host</li>
         <li><code>GET /app/capa?vesselCode=LATERE</code> with Bearer token and tenant host</li>
         <li><code>GET /app/spares?vesselCode=LATERE</code> with Bearer token and tenant host</li>
         <li><code>GET /app/providers?vesselCode=LATERE</code> with Bearer token and tenant host</li>
@@ -145,7 +144,6 @@ export function buildHomePage(env: AppEnv): string {
         <button onclick="loadWorkOrders()">Load Work Orders</button>
         <button onclick="loadDefects()">Load Defects</button>
         <button onclick="loadDeferrals()">Load Deferrals</button>
-        <button onclick="loadRca()">Load RCA</button>
         <button onclick="loadCapa()">Load CAPA</button>
         <button onclick="loadSpares()">Load Spares</button>
         <button onclick="loadProviders()">Load Providers</button>
@@ -464,33 +462,6 @@ export function buildHomePage(env: AppEnv): string {
       </div>
       <div class="row">
         <div class="field">
-          <label for="rcaVesselCode">RCA vesselCode filter</label>
-          <input id="rcaVesselCode" value="LATERE" />
-        </div>
-        <div class="field">
-          <label for="rcaStatus">RCA status filter</label>
-          <select id="rcaStatus">
-            <option value="">all</option>
-            <option value="DRAFT">DRAFT</option>
-            <option value="UNDER_ANALYSIS">UNDER_ANALYSIS</option>
-            <option value="COMPLETED">COMPLETED</option>
-            <option value="APPROVED">APPROVED</option>
-            <option value="CLOSED">CLOSED</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="rcaMethodology">RCA methodology filter</label>
-          <select id="rcaMethodology">
-            <option value="">all</option>
-            <option value="5_WHYS">5_WHYS</option>
-            <option value="FISHBONE">FISHBONE</option>
-            <option value="FTA">FTA</option>
-            <option value="BARRIER_ANALYSIS">BARRIER_ANALYSIS</option>
-          </select>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
           <label for="capaVesselCode">CAPA vesselCode filter</label>
           <input id="capaVesselCode" value="LATERE" />
         </div>
@@ -519,7 +490,6 @@ export function buildHomePage(env: AppEnv): string {
           <label for="capaSourceType">CAPA source type filter</label>
           <select id="capaSourceType">
             <option value="">all</option>
-            <option value="RCA">RCA</option>
             <option value="DEFECT">DEFECT</option>
             <option value="WORK_ORDER">WORK_ORDER</option>
             <option value="INSPECTION">INSPECTION</option>
@@ -698,7 +668,6 @@ export function buildHomePage(env: AppEnv): string {
             <option value="INSPECTION">INSPECTION</option>
             <option value="CERTIFICATE">CERTIFICATE</option>
             <option value="DAILY_REPORT">DAILY_REPORT</option>
-            <option value="RCA">RCA</option>
             <option value="CAPA">CAPA</option>
             <option value="SPARE_ORDER">SPARE_ORDER</option>
           </select>
@@ -1446,23 +1415,6 @@ export function buildHomePage(env: AppEnv): string {
           },
         });
         writeOutput('Deferrals', result);
-      }
-
-      async function loadRca() {
-        const vesselCode = document.getElementById('rcaVesselCode').value.trim();
-        const status = document.getElementById('rcaStatus').value;
-        const methodology = document.getElementById('rcaMethodology').value;
-        const query = new URLSearchParams({ tenant: getTenantHost() });
-        if (vesselCode) query.set('vesselCode', vesselCode);
-        if (status) query.set('status', status);
-        if (methodology) query.set('methodology', methodology);
-
-        const result = await callJson('/app/rca?' + query.toString(), {
-          headers: {
-            'Authorization': 'Bearer ' + accessTokens.tenant,
-          },
-        });
-        writeOutput('RCA', result);
       }
 
       async function loadCapa() {

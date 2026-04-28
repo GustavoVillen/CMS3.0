@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Clock, Loader2, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Clock, Download, ExternalLink, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -8,6 +8,12 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+
+const SOURCE_ROUTE: Record<string, string> = {
+  WORK_ORDER:       "/work-orders",
+  DEFECT:           "/defects",
+  MAINTENANCE_PLAN: "/maintenance-plans",
+};
 
 interface Deferral {
   id: string;
@@ -17,6 +23,7 @@ interface Deferral {
   assetName: string | null;
   sourceType: string;
   sourceId: string;
+  sourceCode: string | null;
   deferralCode: string;
   status: string;
   requestedAt: string;
@@ -81,11 +88,12 @@ function normalizeOptionalText(value: string): string | undefined {
 
 interface ReviewModalProps {
   deferralId: string;
+  compensatoryMeasures?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, onClose, onSuccess }) => {
+const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasures, onClose, onSuccess }) => {
   const t = useT();
   const [reviewNotes, setReviewNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,6 +105,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, onClose, onSucces
     try {
       await api.post(`/app/pms/deferrals/${deferralId}/review`, {
         reviewNotes: normalizeOptionalText(reviewNotes),
+        compensatoryMeasures: compensatoryMeasures ?? null,
       });
       onSuccess();
     } catch (err) {
@@ -104,7 +113,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, onClose, onSucces
     } finally {
       setSaving(false);
     }
-  }, [deferralId, onSuccess, reviewNotes, t]);
+  }, [compensatoryMeasures, deferralId, onSuccess, reviewNotes, t]);
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -133,14 +142,18 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, onClose, onSucces
 
 interface ApproveModalProps {
   deferralId: string;
+  initialTargetDate?: string | null;
+  initialCompensatoryMeasures?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, onClose, onSuccess }) => {
+const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDate, initialCompensatoryMeasures, onClose, onSuccess }) => {
   const t = useT();
-  const [targetDate, setTargetDate] = useState("");
-  const [compensatoryMeasures, setCompensatoryMeasures] = useState("");
+  const [targetDate, setTargetDate] = useState(
+    initialTargetDate ? new Date(initialTargetDate).toISOString().split("T")[0] ?? "" : ""
+  );
+  const [compensatoryMeasures, setCompensatoryMeasures] = useState(initialCompensatoryMeasures ?? "");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -314,6 +327,67 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const [assetDisplayName, setAssetDisplayName] = useState(deferral.assetName ?? deferral.assetId);
   const [sourceDisplayName, setSourceDisplayName] = useState(deferral.sourceId);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [compensatoryMeasures, setCompensatoryMeasures] = useState(deferral.compensatoryMeasures ?? "");
+  const [loadingCompensatory, setLoadingCompensatory]   = useState(false);
+  const [downloadingPdf, setDownloadingPdf]             = useState(false);
+  const [cancelling, setCancelling]                     = useState(false);
+  const [confirmCancel, setConfirmCancel]               = useState(false);
+  const [saving, setSaving]                             = useState(false);
+  const [savedOk, setSavedOk]                           = useState(false);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setActionError(null);
+    setSavedOk(false);
+    try {
+      await api.patch(`/app/pms/deferrals/${deferral.id}`, { compensatoryMeasures });
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2500);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("common.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }, [compensatoryMeasures, deferral.id, t]);
+
+  const handleCancelDeferral = useCallback(async () => {
+    setCancelling(true);
+    setActionError(null);
+    try {
+      await api.delete(`/app/pms/deferrals/${deferral.id}`);
+      onSuccess();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("common.deleteError"));
+      setConfirmCancel(false);
+    } finally {
+      setCancelling(false);
+    }
+  }, [deferral.id, onSuccess, t]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    setDownloadingPdf(true);
+    try {
+      // Persist locally edited compensatory measures before generating PDF (only when REQUESTED)
+      if (deferral.status === "REQUESTED" && compensatoryMeasures !== (deferral.compensatoryMeasures ?? "")) {
+        try { await api.patch(`/app/pms/deferrals/${deferral.id}`, { compensatoryMeasures }); } catch { /* non-blocking */ }
+      }
+      const token = localStorage.getItem("gpms_token") ?? "";
+      const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
+      const res   = await fetch(`/app/pms/deferrals/${deferral.id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `${deferral.deferralCode}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }, [deferral.id, deferral.deferralCode, deferral.status, deferral.compensatoryMeasures, compensatoryMeasures]);
 
   const resolveSourceLabel = useCallback(async (): Promise<string> => {
     try {
@@ -386,7 +460,52 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const showActiveActions = deferral.status === "ACTIVE";
 
   const isTerminal = ["EXPIRED", "REJECTED", "CLOSED"].includes(deferral.status);
-  const { setRequestMessage } = useCopilotScreenContext();
+  useCopilotScreenContext();
+
+  const handleCompensatoryClick = useCallback(async () => {
+    if (!showRequestedActions || loadingCompensatory) return;
+    setLoadingCompensatory(true);
+    setCompensatoryMeasures("Analizando...");
+    try {
+      const sourceTypeLabel = deferral.sourceType === "WORK_ORDER" ? "Orden de Trabajo"
+        : deferral.sourceType === "DEFECT" ? "Defecto"
+        : deferral.sourceType === "MAINTENANCE_PLAN" ? "Plan de Mantenimiento"
+        : deferral.sourceType;
+      const targetDateStr = deferral.targetDate ? fmtDate(deferral.targetDate) : "no especificada";
+      const reader = await api.stream("/app/copiloto/chat", {
+        capability: "maintenance_insights",
+        locale: "es",
+        messages: [{
+          role: "user",
+          content: `Aplazamiento de mantenimiento (CONTEXTO COMPLETO — no preguntes información que ya está abajo):
+- Código del aplazamiento: ${deferral.deferralCode}
+- Buque: ${deferral.vesselCode}
+- Activo afectado: ${deferral.assetName ?? deferral.assetId}
+- Tipo de origen: ${sourceTypeLabel}
+- Origen específico: ${sourceDisplayName}
+- Fecha objetivo del aplazamiento: ${targetDateStr}
+- Justificación del solicitante: ${deferral.justification ?? "No especificada"}
+
+Sos experto en gestión de mantenimiento naval. Proponé directamente medidas compensatorias concretas, verificables y específicas al activo y al tipo de tarea aplazada, para mitigar el riesgo operacional mientras dure el aplazamiento. Las medidas deben ser prácticas, ejecutables por la tripulación, y enfocadas en monitoreo, controles operativos y planes de contingencia.
+
+NO hagas preguntas: con la información provista alcanza para proponer medidas razonables. Respondé ÚNICAMENTE con las medidas compensatorias en formato de lista numerada, en texto plano, sin introducción ni explicación adicional.`,
+        }],
+      });
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of value.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break;
+          try { const p = JSON.parse(data) as { text?: string }; if (p.text) fullText += p.text; } catch { /* partial */ }
+        }
+      }
+      setCompensatoryMeasures(fullText.trim() || "");
+    } catch { setCompensatoryMeasures(""); }
+    finally { setLoadingCompensatory(false); }
+  }, [showRequestedActions, loadingCompensatory, deferral, sourceDisplayName]);
   useCopilotEmitter({
     module: "DEFERRALS",
     screen: "DEFERRAL_VIEW",
@@ -450,12 +569,39 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   <p className="text-sm text-white whitespace-pre-wrap">{deferral.justification}</p>
                 </div>
               )}
-              {deferral.compensatoryMeasures && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
-                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("def2.compensatory")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap">{deferral.compensatoryMeasures}</p>
-                </div>
-              )}
+              <div className="sm:col-span-2 space-y-1.5">
+                <button
+                  type="button"
+                  onClick={handleCompensatoryClick}
+                  disabled={!showRequestedActions || loadingCompensatory}
+                  className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors ${
+                    showRequestedActions
+                      ? loadingCompensatory
+                        ? "text-accent/50 animate-pulse cursor-default"
+                        : "text-accent/70 hover:text-accent cursor-pointer"
+                      : "text-text-industrial/40 cursor-default"
+                  }`}
+                  title={showRequestedActions ? "Click para que la IA genere las medidas compensatorias" : undefined}
+                >
+                  <Sparkles className="w-3 h-3 shrink-0" />
+                  {t("def2.compensatory")}
+                  {loadingCompensatory && <span className="ml-1 normal-case font-normal">analizando...</span>}
+                </button>
+                {showRequestedActions ? (
+                  <textarea
+                    rows={3}
+                    value={compensatoryMeasures}
+                    onChange={e => setCompensatoryMeasures(e.target.value)}
+                    disabled={loadingCompensatory}
+                    placeholder="Click en el título para generar con IA, o escribí manualmente…"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y disabled:opacity-60"
+                  />
+                ) : (
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white whitespace-pre-wrap min-h-[2.5rem]">
+                    {compensatoryMeasures || <span className="text-text-industrial/30 italic">—</span>}
+                  </div>
+                )}
+              </div>
               {deferral.reviewNotes && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("def2.reviewNotes")}</p>
@@ -499,53 +645,87 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                 Resolviendo nombres de referencias...
               </div>
             )}
-            {!isTerminal && (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/20 bg-accent/5 px-3 py-2">
-                <p className="text-xs text-text-industrial/80">La IA analiza la justificación técnica y las medidas compensatorias.</p>
-                <button
-                  type="button"
-                  onClick={() => setRequestMessage(`Analizá este diferimiento y ayúdame a evaluar la solidez de la justificación técnica y las medidas compensatorias documentadas.`)}
-                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-bold text-white hover:brightness-110 transition-all"
-                >
-                  Asistir con IA
-                </button>
-              </div>
-            )}
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-            {showRequestedActions && (
-              <button onClick={() => setShowReview(true)} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 transition-all">
-                {t("def2.review")}
-              </button>
-            )}
-            {showUnderReviewActions && (
-              <>
-                <button onClick={() => setShowApprove(true)} className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 transition-all">
-                  {t("def2.approve")}
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
+            <button
+              onClick={() => { void handleDownloadPdf(); }}
+              disabled={downloadingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
+            >
+              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              PDF
+            </button>
+            <div className="flex items-center gap-2">
+              {showRequestedActions && (
+                <button
+                  onClick={() => {
+                    if (confirmCancel) { void handleCancelDeferral(); }
+                    else { setConfirmCancel(true); }
+                  }}
+                  disabled={cancelling}
+                  title="Cancelar la postergación (eliminar)"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${
+                    confirmCancel
+                      ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
+                      : "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                  }`}
+                >
+                  {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {confirmCancel ? "¿Confirmar?" : "Cancelar postergación"}
                 </button>
-                <button onClick={() => setShowReject(true)} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all">
-                  {t("def2.reject")}
+              )}
+              {showRequestedActions && (
+                <button
+                  onClick={() => { void handleSave(); }}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 disabled:opacity-50 transition-all"
+                >
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  {savedOk ? "Guardado ✓" : t("common.save")}
                 </button>
-              </>
-            )}
-            {showApprovedActions && (
-              <button onClick={() => { void onActivate(); }} disabled={activating} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-                {activating ? <Loader2 className="w-4 h-4 animate-spin" /> : t("def2.activate")}
-              </button>
-            )}
-            {showActiveActions && (
-              <button onClick={() => setShowClose(true)} className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 transition-all">
-                {t("def2.close")}
-              </button>
-            )}
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+              )}
+              {showRequestedActions && (
+                <button onClick={() => setShowReview(true)} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 transition-all">
+                  {t("def2.review")}
+                </button>
+              )}
+              {showUnderReviewActions && (
+                <>
+                  <button onClick={() => setShowApprove(true)} className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 transition-all">
+                    {t("def2.approve")}
+                  </button>
+                  <button onClick={() => setShowReject(true)} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all">
+                    {t("def2.reject")}
+                  </button>
+                </>
+              )}
+              {showApprovedActions && (
+                <button onClick={() => { void onActivate(); }} disabled={activating} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+                  {activating ? <Loader2 className="w-4 h-4 animate-spin" /> : t("def2.activate")}
+                </button>
+              )}
+              {showActiveActions && (
+                <button onClick={() => setShowClose(true)} className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 transition-all">
+                  {t("def2.close")}
+                </button>
+              )}
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            </div>
           </div>
         </div>
       </div>
 
-      {showReview && <ReviewModal deferralId={deferral.id} onClose={() => setShowReview(false)} onSuccess={onSuccess} />}
-      {showApprove && <ApproveModal deferralId={deferral.id} onClose={() => setShowApprove(false)} onSuccess={onSuccess} />}
+      {showReview && <ReviewModal deferralId={deferral.id} compensatoryMeasures={compensatoryMeasures} onClose={() => setShowReview(false)} onSuccess={onSuccess} />}
+      {showApprove && (
+        <ApproveModal
+          deferralId={deferral.id}
+          initialTargetDate={deferral.targetDate}
+          initialCompensatoryMeasures={compensatoryMeasures || deferral.compensatoryMeasures}
+          onClose={() => setShowApprove(false)}
+          onSuccess={onSuccess}
+        />
+      )}
       {showReject && <RejectModal deferralId={deferral.id} onClose={() => setShowReject(false)} onSuccess={onSuccess} />}
       {showClose && <CloseDeferralModal deferralId={deferral.id} onClose={() => setShowClose(false)} onSuccess={onSuccess} />}
     </>
@@ -554,6 +734,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
 
 export const DeferralsPage: React.FC = () => {
   const t = useT();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing] = useState<Deferral | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
@@ -592,6 +773,27 @@ export const DeferralsPage: React.FC = () => {
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
 
+  const autoCode = (searchParams.get("autoCode") ?? "").trim();
+  useEffect(() => {
+    if (!autoCode) return;
+    // Clear param immediately so it doesn't re-trigger
+    const params = new URLSearchParams(searchParams);
+    params.delete("autoCode");
+    setSearchParams(params, { replace: true });
+
+    setDetailLoadingId("autoCode");
+    // Fetch all deferrals unfiltered to find the matching code regardless of current filters
+    api.get<{ items: Deferral[] }>(`/app/pms/deferrals`)
+      .then(r => {
+        const match = r.items.find(d => d.deferralCode === autoCode);
+        if (!match) return;
+        return api.get<Deferral>(`/app/pms/deferrals/${match.id}`).then(setEditing).catch(() => setEditing(match));
+      })
+      .catch(() => {})
+      .finally(() => setDetailLoadingId(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCode]);
+
   const openDetail = useCallback(async (row: Deferral) => {
     setDetailLoadingId(row.id);
     setDetailError(null);
@@ -616,6 +818,24 @@ export const DeferralsPage: React.FC = () => {
       key: "sourceType",
       header: t("def2.sourceType"),
       render: row => <SourceTypeBadge sourceType={row.sourceType} />,
+    },
+    {
+      key: "sourceCode",
+      header: "Documento",
+      render: row => {
+        const route = SOURCE_ROUTE[row.sourceType];
+        if (!row.sourceCode) return <span className="text-text-industrial/30 text-xs">—</span>;
+        if (!route) return <span className="font-mono text-xs text-text-industrial/60">{row.sourceCode}</span>;
+        return (
+          <button
+            onClick={e => { e.stopPropagation(); navigate(`${route}?openId=${row.sourceId}`); }}
+            className="flex items-center gap-1 font-mono text-xs text-accent hover:text-white bg-white/5 hover:bg-accent/10 border border-white/10 hover:border-accent/30 rounded px-1.5 py-0.5 transition-all"
+          >
+            {row.sourceCode}
+            <ExternalLink className="w-2.5 h-2.5 opacity-60 shrink-0" />
+          </button>
+        );
+      },
     },
     {
       key: "vesselCode",

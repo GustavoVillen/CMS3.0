@@ -17,7 +17,14 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
     <header className="h-16 border-b border-white/10 flex items-center justify-between px-8 bg-primary-bg/30 backdrop-blur-md shrink-0 relative z-50">
       <div className="flex items-center gap-4">
         {tenant && (
-          <span className="text-xs text-text-industrial/40 border border-white/10 rounded-full px-3 py-0.5">
+          <span className="flex items-center gap-2 text-sm font-semibold text-white/80 border border-white/15 rounded-full px-3 py-1.5">
+            {(tenant.logoUrlLight || tenant.logoUrl) && (
+              <img
+                src={(tenant.logoUrlLight || tenant.logoUrl)!}
+                alt=""
+                className="w-5 h-5 object-contain shrink-0"
+              />
+            )}
             {tenant.name}
           </span>
         )}

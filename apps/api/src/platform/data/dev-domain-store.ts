@@ -59,7 +59,7 @@ export interface DevMaintenancePlanRecord {
   frequencyMonths?: number;
   responsible?: string;
   acceptanceCriteria?: string;
-  evidenceRequired?: string;
+  loto?: string;
   sfiGroupNumber?: number;
   sfiSubgroupCode?: string;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -144,32 +144,6 @@ export interface DevDeferralRecord {
   closedAt?: string;
   closeNotes?: string;
   rejectionReason?: string;
-  createdAt: string;
-  createdByUserId: string;
-  updatedAt: string;
-  updatedByUserId: string;
-}
-
-export interface DevRcaRecord {
-  tenantSlug: string;
-  id: string;
-  vesselCode: string;
-  assetId: string;
-  defectId?: string;
-  workOrderId?: string;
-  rcaCode: string;
-  status: "DRAFT" | "UNDER_ANALYSIS" | "COMPLETED" | "APPROVED" | "CLOSED";
-  methodology: "5_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
-  analysisSummary?: string;
-  immediateCause?: string;
-  contributingCause?: string;
-  rootCause?: string;
-  correctiveActions?: string;
-  preventiveActions?: string;
-  completedAt?: string;
-  approvedAt?: string;
-  approvedByUserId?: string;
-  closedAt?: string;
   createdAt: string;
   createdByUserId: string;
   updatedAt: string;
@@ -615,7 +589,7 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     frequencyHours: 250,
     responsible: "Chief Engineer",
     acceptanceCriteria: "No leaks, stable oil pressure, clean filter replacement confirmed.",
-    evidenceRequired: "Photos and service checklist",
+    loto: "Photos and service checklist",
     sfiGroupNumber: 7,
     sfiSubgroupCode: "710",
     riskLevel: "HIGH",
@@ -642,7 +616,7 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     frequencyHours: 500,
     responsible: "Chief Engineer",
     acceptanceCriteria: "Engine parameters within standard operating range after maintenance.",
-    evidenceRequired: "Checklist, readings, and signed verification",
+    loto: "Checklist, readings, and signed verification",
     sfiGroupNumber: 7,
     sfiSubgroupCode: "720",
     riskLevel: "CRITICAL",
@@ -669,7 +643,7 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     frequencyMonths: 1,
     responsible: "Engine Officer",
     acceptanceCriteria: "Stable load acceptance and no alarm condition during test.",
-    evidenceRequired: "Functional test report",
+    loto: "Functional test report",
     sfiGroupNumber: 7,
     sfiSubgroupCode: "740",
     riskLevel: "MEDIUM",
@@ -1023,107 +997,6 @@ const DEV_DEFERRALS: DevDeferralRecord[] = [
     activeSince: "2026-03-12",
     closedAt: "2026-03-25",
     closeNotes: "Inspection complete and deferral closed.",
-    createdAt,
-    createdByUserId,
-    updatedAt,
-    updatedByUserId: createdByUserId,
-  },
-];
-
-const DEV_RCAS: DevRcaRecord[] = [
-  {
-    tenantSlug: "demo",
-    id: "rca-demo-latere-port-engine-001",
-    vesselCode: "LATERE",
-    assetId: "asset-demo-latere-main-engine-port",
-    defectId: "def-demo-latere-port-engine-001",
-    rcaCode: "RCA-0001",
-    status: "UNDER_ANALYSIS",
-    methodology: "5_WHYS",
-    analysisSummary: "Injector line leakage investigation underway; data collection in progress.",
-    createdAt,
-    createdByUserId,
-    updatedAt,
-    updatedByUserId: createdByUserId,
-  },
-  {
-    tenantSlug: "demo",
-    id: "rca-demo-latere-starboard-engine-002",
-    vesselCode: "LATERE",
-    assetId: "asset-demo-latere-main-engine-starboard",
-    defectId: "def-demo-latere-starboard-engine-002",
-    rcaCode: "RCA-0002",
-    status: "COMPLETED",
-    methodology: "FISHBONE",
-    analysisSummary: "Cooling pressure instability traced to thermostat wear and seal degradation.",
-    immediateCause: "Thermostat assembly sticking under load.",
-    contributingCause: "Deferred seal replacement beyond service interval.",
-    rootCause: "Procurement lead time variance not reflected in preventive schedule.",
-    correctiveActions: "Replace thermostat assembly and seals; recalibrate cooling loop.",
-    preventiveActions: "Update maintenance plan with lead-time buffer and condition checks.",
-    completedAt: "2026-04-12T18:00:00.000Z",
-    createdAt,
-    createdByUserId,
-    updatedAt,
-    updatedByUserId: createdByUserId,
-  },
-  {
-    tenantSlug: "demo",
-    id: "rca-demo-glt-generator-a-003",
-    vesselCode: "GLT001",
-    assetId: "asset-demo-glt-generator-a",
-    defectId: "def-demo-glt-generator-a-003",
-    rcaCode: "RCA-0003",
-    status: "DRAFT",
-    methodology: "FTA",
-    analysisSummary: "Preliminary fault tree initiated for alarm lamp intermittent failure.",
-    createdAt,
-    createdByUserId,
-    updatedAt,
-    updatedByUserId: createdByUserId,
-  },
-  {
-    tenantSlug: "demo",
-    id: "rca-demo-glt-generator-a-004",
-    vesselCode: "GLT001",
-    assetId: "asset-demo-glt-generator-a",
-    workOrderId: "wo-demo-glt-generator-a-005",
-    rcaCode: "RCA-0004",
-    status: "APPROVED",
-    methodology: "5_WHYS",
-    analysisSummary: "Battery charger calibration drift tied to unstable reference voltage supply.",
-    immediateCause: "Reference voltage oscillation during load changes.",
-    contributingCause: "Loose connector and degraded grounding strap.",
-    rootCause: "Periodic electrical inspection checklist missed ground strap torque check.",
-    correctiveActions: "Replace connector, restore grounding, and retest calibration stability.",
-    preventiveActions: "Add grounding verification to monthly electrical checklist.",
-    completedAt: "2026-03-26T12:30:00.000Z",
-    approvedAt: "2026-03-27T09:00:00.000Z",
-    approvedByUserId: createdByUserId,
-    createdAt,
-    createdByUserId,
-    updatedAt,
-    updatedByUserId: createdByUserId,
-  },
-  {
-    tenantSlug: "demo",
-    id: "rca-demo-latere-port-engine-005",
-    vesselCode: "LATERE",
-    assetId: "asset-demo-latere-main-engine-port",
-    defectId: "def-demo-latere-port-engine-004",
-    rcaCode: "RCA-0005",
-    status: "CLOSED",
-    methodology: "BARRIER_ANALYSIS",
-    analysisSummary: "Turbocharger vibration exceedance linked to degraded mounting isolation.",
-    immediateCause: "Mounting isolator wear allowed vibration amplification.",
-    contributingCause: "Insufficient inspection frequency on isolator assemblies.",
-    rootCause: "Condition monitoring threshold not updated after last retrofit.",
-    correctiveActions: "Replace isolators and rebaseline vibration thresholds.",
-    preventiveActions: "Increase inspection interval and update monitoring dashboard rules.",
-    completedAt: "2026-04-01T17:00:00.000Z",
-    approvedAt: "2026-04-02T09:30:00.000Z",
-    approvedByUserId: createdByUserId,
-    closedAt: "2026-04-05T15:00:00.000Z",
     createdAt,
     createdByUserId,
     updatedAt,
@@ -2702,26 +2575,6 @@ export function listDevDeferralsForTenant(
     if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
     if (filters.status && item.status !== filters.status) return false;
     if (filters.sourceType && item.sourceType !== filters.sourceType) return false;
-    return true;
-  });
-}
-
-export function listDevRcasForTenant(
-  tenantSlug: string,
-  role: TenantRole,
-  assignedVesselCodes: string[],
-  filters: {
-    vesselCode?: string | null;
-    status?: string | null;
-    methodology?: string | null;
-  } = {},
-): DevRcaRecord[] {
-  return DEV_RCAS.filter((item) => {
-    if (item.tenantSlug !== tenantSlug) return false;
-    if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
-    if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
-    if (filters.status && item.status !== filters.status) return false;
-    if (filters.methodology && item.methodology !== filters.methodology) return false;
     return true;
   });
 }

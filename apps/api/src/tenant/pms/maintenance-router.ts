@@ -8,6 +8,7 @@ import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import {
   completeChecklistPlan,
   createTenantMaintenancePlan,
+  deleteTenantMaintenancePlan,
   generateUniqueTaskCode,
   getTenantMaintenancePlan,
   listTenantMaintenancePlans,
@@ -29,6 +30,8 @@ import {
 } from "../work-orders/work-orders-service";
 import { createWorkLog, listWorkLogs } from "./work-logs-service";
 import { saveChecklistDocument } from "./checklist-uploads-service";
+import { buildWorkOrderPdf } from "./work-order-pdf-service";
+import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -56,6 +59,7 @@ export async function handleMaintenanceRoutes(
   const isMaintenancePath = url.pathname.startsWith("/app/pms/maintenance-plans");
   const isWorkOrdersPath = url.pathname.startsWith("/app/pms/work-orders");
   const isWorkLogsPath = url.pathname.startsWith("/app/pms/work-logs");
+  console.log(`[maintenance-router] ${method} ${url.pathname} | maint=${isMaintenancePath}`);
   if (!isMaintenancePath && !isWorkOrdersPath && !isWorkLogsPath) return false;
 
   const tenantSlug = requireTenantSlug(request, env);
@@ -139,17 +143,28 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
-  if (/^\/app\/pms\/maintenance-plans\/[^/]+$/.test(url.pathname)) {
+  if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    if (method === "GET") {
-      sendJson(response, 200, await getTenantMaintenancePlan(session, id));
-      return true;
+    sendJson(response, 200, await getTenantMaintenancePlan(session, id));
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/pms\/maintenance-plans\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof updateTenantMaintenancePlan>[2];
+    sendJson(response, 200, await updateTenantMaintenancePlan(session, id, body));
+    return true;
+  }
+
+  if (method === "DELETE" && /^\/app\/pms\/maintenance-plans\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const role = session.user.role;
+    if (role !== "TENANT_ADMIN" && role !== "FLEET_SUPERINTENDENT") {
+      throw new RouteError(403, "FORBIDDEN", "Solo ADMIN o Superintendente pueden eliminar planes.");
     }
-    if (method === "PATCH") {
-      const body = await readJsonBody(request) as Parameters<typeof updateTenantMaintenancePlan>[2];
-      sendJson(response, 200, await updateTenantMaintenancePlan(session, id, body));
-      return true;
-    }
+    await deleteTenantMaintenancePlan(session, id);
+    sendJson(response, 200, { ok: true });
+    return true;
   }
 
   if (method === "GET" && url.pathname === "/app/pms/work-orders") {
@@ -194,6 +209,34 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof cancelWorkOrder>[2];
     sendJson(response, 200, await cancelWorkOrder(session, id, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/pdf$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const plan = await getTenantMaintenancePlan(session, id);
+    const filename = `${(plan as any).taskCode ?? id}.pdf`;
+    const buffer = await buildMaintenancePlanPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/pdf$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const wo = await getTenantWorkOrder(session, id);
+    const filename = `${wo.workOrderCode}.pdf`;
+    const buffer = await buildWorkOrderPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

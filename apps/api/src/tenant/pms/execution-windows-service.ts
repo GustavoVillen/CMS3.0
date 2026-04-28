@@ -134,8 +134,9 @@ export async function refreshExecutionStatuses(tenantId: string, currentHours?: 
 
     let nextStatus = plan.executionStatus;
     if (plan.triggerType === "HOURS" || plan.triggerType === "RUNNING_HOURS") {
-      if (!hasCurrentHours) continue;
-      nextStatus = computeHoursExecutionStatus(plan, currentHours as number);
+      const hoursToUse = (plan as any).assetCurrentHours ?? currentHours;
+      if (hoursToUse == null || !Number.isFinite(hoursToUse)) continue;
+      nextStatus = computeHoursExecutionStatus(plan, hoursToUse as number);
     } else if (plan.triggerType === "MONTHS" || plan.triggerType === "CALENDAR") {
       nextStatus = computeDateExecutionStatus(plan, now);
     }

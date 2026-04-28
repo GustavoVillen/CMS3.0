@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   Building2, Plus, Users, Globe, Mail, X, Loader2,
-  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff,
+  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, KeyRound,
 } from "lucide-react";
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
@@ -12,6 +12,8 @@ import { PageHeader } from "../../components/PageHeader";
 interface Tenant {
   id: string; slug: string; displayName: string; status: string; plan?: string;
   defaultLocale: string; timezone: string; currency: string; supportEmail: string;
+  logoUrl?: string | null;
+  logoUrlLight?: string | null;
   createdAt: string; updatedAt: string;
 }
 interface TenantDomain  { id: string; tenantSlug: string; host: string; isPrimary: boolean; createdAt: string; }
@@ -21,8 +23,8 @@ interface ListResponse  { items: Tenant[]; total: number; }
 
 const STATUSES   = ["ACTIVE", "SUSPENDED", "PROVISIONING", "DISABLED"];
 const LOCALES    = ["es", "en", "pt"];
-const TIMEZONES  = ["America/Argentina/Buenos_Aires", "America/Sao_Paulo", "America/New_York", "Europe/Madrid", "UTC"];
-const CURRENCIES = ["ARS", "BRL", "USD", "EUR"];
+const TIMEZONES  = ["America/Argentina/Buenos_Aires", "America/Asuncion", "America/Sao_Paulo", "America/New_York", "Europe/Madrid", "UTC"];
+const CURRENCIES = ["ARS", "PYG", "BRL", "USD", "EUR"];
 const TENANT_ROLES = ["TENANT_ADMIN","MAINTENANCE_MANAGER","TECHNICIAN_OPERATOR","INSPECTOR_COMPLIANCE","PROCUREMENT_STORE","AUDITOR_READONLY"];
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -81,10 +83,148 @@ function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: 
   );
 }
 
+/** Flood-fill BG removal + optional pixel colorize to white. */
+function processLogo(dataUrl: string, colorize: "keep" | "white", tolerance = 40): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const src = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const out = ctx.createImageData(src);
+      out.data.set(src.data);
+      const od = out.data;
+      const w = canvas.width, h = canvas.height;
+
+      // Detect BG color from 4 corners
+      function corner(x: number, y: number) { const i = (y * w + x) * 4; return [src.data[i], src.data[i+1], src.data[i+2]]; }
+      const corners = [corner(0,0), corner(w-1,0), corner(0,h-1), corner(w-1,h-1)];
+      const [bgR, bgG, bgB] = corners.reduce((a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]]).map(v => v / 4);
+      const thresh = tolerance * 3;
+
+      function isBg(i: number) {
+        return Math.abs(src.data[i] - bgR) + Math.abs(src.data[i+1] - bgG) + Math.abs(src.data[i+2] - bgB) < thresh;
+      }
+
+      // BFS flood fill from all edges
+      const visited = new Uint8Array(w * h);
+      const queue: number[] = [];
+      for (let x = 0; x < w; x++) { queue.push(x); queue.push((h-1)*w+x); }
+      for (let y = 1; y < h-1; y++) { queue.push(y*w); queue.push(y*w+w-1); }
+
+      while (queue.length) {
+        const pos = queue.pop()!;
+        if (visited[pos]) continue;
+        visited[pos] = 1;
+        const i = pos * 4;
+        if (!isBg(i)) continue;
+        od[i+3] = 0;
+        const x = pos % w, y = (pos / w) | 0;
+        if (x > 0)     queue.push(pos - 1);
+        if (x < w - 1) queue.push(pos + 1);
+        if (y > 0)     queue.push(pos - w);
+        if (y < h - 1) queue.push(pos + w);
+      }
+
+      // Second pass: soften near-bg edge pixels (reduce artifacts)
+      for (let pos = 0; pos < w * h; pos++) {
+        if (visited[pos]) continue;
+        const i = pos * 4;
+        if (od[i+3] === 0) continue;
+        // Check if any neighbour is transparent (edge pixel)
+        const x = pos % w, y = (pos / w) | 0;
+        const hasTranspNeighbour =
+          (x > 0 && od[(pos-1)*4+3] === 0) || (x < w-1 && od[(pos+1)*4+3] === 0) ||
+          (y > 0 && od[(pos-w)*4+3] === 0) || (y < h-1 && od[(pos+w)*4+3] === 0);
+        if (hasTranspNeighbour && isBg(i)) od[i+3] = 0;
+      }
+
+      // Colorize to white if requested (light version for dark backgrounds)
+      if (colorize === "white") {
+        for (let i = 0; i < od.length; i += 4) {
+          if (od[i+3] > 0) { od[i] = 255; od[i+1] = 255; od[i+2] = 255; }
+        }
+      }
+
+      ctx.putImageData(out, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.src = dataUrl;
+  });
+}
+
+function LogoVariant({ label, bg, value, onClear }: { label: string; bg: string; value: string | null; onClear: () => void }) {
+  return (
+    <div className="flex flex-col gap-1.5 flex-1">
+      <span className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">{label}</span>
+      <div className="rounded-xl border border-white/10 flex items-center justify-center h-16 overflow-hidden relative" style={{ background: bg }}>
+        {value
+          ? <img src={value} alt={label} className="w-full h-full object-contain p-2" />
+          : <span className="text-[10px] text-text-industrial/20">Sin imagen</span>
+        }
+      </div>
+      {value && (
+        <button type="button" onClick={onClear} className="text-[10px] text-text-industrial/30 hover:text-red-400 transition-colors text-center">Quitar</button>
+      )}
+    </div>
+  );
+}
+
+function DualLogoPicker({ dark, light, onChange }: {
+  dark: string | null;
+  light: string | null;
+  onChange: (dark: string | null, light: string | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await new Promise<string>(res => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.readAsDataURL(file);
+    });
+    setProcessing(true);
+    try {
+      const [darkVersion, lightVersion] = await Promise.all([
+        processLogo(dataUrl, "keep"),
+        processLogo(dataUrl, "white"),
+      ]);
+      onChange(darkVersion, lightVersion);
+    } finally {
+      setProcessing(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        <LogoVariant label="Versión oscura (fondo blanco)" bg="#ffffff" value={dark} onClear={() => onChange(null, light)} />
+        <LogoVariant label="Versión clara (fondo oscuro)" bg="#0D1526" value={light} onClear={() => onChange(dark, null)} />
+      </div>
+      <button type="button" onClick={() => ref.current?.click()} disabled={processing}
+        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-white/20 text-xs text-text-industrial/40 hover:border-red-500/40 hover:text-red-400 transition-all disabled:opacity-50">
+        {processing
+          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando logos...</>
+          : <><ImagePlus className="w-3.5 h-3.5" /> {dark || light ? "Reemplazar imagen" : "Seleccionar imagen"}</>
+        }
+      </button>
+      <p className="text-[10px] text-text-industrial/25 text-center">Se generan 2 versiones automáticamente con fondo transparente</p>
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
 // ─── Create Tenant Modal ──────────────────────────────────────────────────────
 
 function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ slug: "", displayName: "", supportEmail: "", defaultLocale: "es", timezone: "America/Argentina/Buenos_Aires", currency: "ARS" });
+  const [form, setForm] = useState({ slug: "", displayName: "", supportEmail: "", defaultLocale: "es", timezone: "America/Argentina/Buenos_Aires", currency: "ARS", logoUrl: null as string | null, logoUrlLight: null as string | null });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -97,6 +237,9 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
   return (
     <ModalWrapper title="Crear Tenant" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Logo de la empresa">
+          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        </Field>
         <Field label="Slug (único, solo minúsculas y guiones)">
           <input className={inp} required value={form.slug} onChange={set("slug")} placeholder="mi-empresa" pattern="[a-z0-9-]+" />
         </Field>
@@ -109,7 +252,7 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
         <div className="grid grid-cols-3 gap-3">
           <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()}</option>)}</select></Field>
+          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
         </div>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Crear Tenant" />
@@ -121,7 +264,7 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
 // ─── Edit Tenant Modal ────────────────────────────────────────────────────────
 
 function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ displayName: tenant.displayName, supportEmail: tenant.supportEmail, status: tenant.status, defaultLocale: tenant.defaultLocale, timezone: tenant.timezone, currency: tenant.currency });
+  const [form, setForm] = useState({ displayName: tenant.displayName, supportEmail: tenant.supportEmail, status: tenant.status, defaultLocale: tenant.defaultLocale, timezone: tenant.timezone, currency: tenant.currency, logoUrl: tenant.logoUrl ?? null as string | null, logoUrlLight: tenant.logoUrlLight ?? null as string | null });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -134,13 +277,16 @@ function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose
   return (
     <ModalWrapper title={`Editar — ${tenant.slug}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Logo de la empresa">
+          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        </Field>
         <Field label="Nombre para mostrar"><input className={inp} required value={form.displayName} onChange={set("displayName")} /></Field>
         <Field label="Email de soporte"><input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} /></Field>
         <Field label="Estado"><select className={sel} value={form.status} onChange={set("status")}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()}</option>)}</select></Field>
+          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
         </div>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} />
@@ -238,18 +384,65 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
   );
 }
 
+// ─── Change Password Modal ────────────────────────────────────────────────────
+
+function ChangePasswordModal({ tenantSlug, user, onClose }: { tenantSlug: string; user: TenantUser; onClose: () => void }) {
+  const [password, setPassword]   = useState("");
+  const [confirm, setConfirm]     = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [err, setErr]             = useState<string|null>(null);
+  const [ok, setOk]               = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirm) { setErr("Las contraseñas no coinciden."); return; }
+    if (password.length < 6)  { setErr("Mínimo 6 caracteres."); return; }
+    setLoading(true); setErr(null);
+    try {
+      await platformPatch(`/platform/tenants/${tenantSlug}/users/${user.id}`, { password });
+      setOk(true);
+    } catch (ex: any) { setErr(ex.message ?? "Error al cambiar contraseña"); }
+    finally { setLoading(false); }
+  };
+
+  if (ok) return (
+    <ModalWrapper title="Contraseña actualizada" onClose={onClose}>
+      <div className="space-y-3">
+        <OkMsg msg={`Contraseña de ${user.email} actualizada correctamente.`} />
+        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white font-bold hover:bg-white/10 transition-all">Cerrar</button>
+      </div>
+    </ModalWrapper>
+  );
+
+  return (
+    <ModalWrapper title={`Cambiar contraseña — ${user.email}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Nueva contraseña">
+          <input className={inp} type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoFocus />
+        </Field>
+        <Field label="Confirmar contraseña">
+          <input className={inp} type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" />
+        </Field>
+        {err && <ErrMsg msg={err} />}
+        <SaveBtn loading={loading} label="Cambiar contraseña" />
+      </form>
+    </ModalWrapper>
+  );
+}
+
 // ─── Tenant Detail Drawer ─────────────────────────────────────────────────────
 
 type DetailTab = "domains" | "users" | "invitations";
 
 function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; onClose: () => void; onChanged: () => void }) {
   const [tab, setTab] = useState<DetailTab>("domains");
-  const [addDomain, setAddDomain] = useState(false);
-  const [addUser, setAddUser]     = useState(false);
-  const [addInvite, setAddInvite] = useState(false);
+  const [addDomain, setAddDomain]       = useState(false);
+  const [addUser, setAddUser]           = useState(false);
+  const [addInvite, setAddInvite]       = useState(false);
+  const [changePwUser, setChangePwUser] = useState<TenantUser | null>(null);
 
   const { data: domains, loading: dLoading, reload: dReload } = usePlatformList<TenantDomain[]>(`/platform/tenants/${tenant.slug}/domains`);
-  const { data: users,   loading: uLoading, reload: uReload } = usePlatformList<{ items: TenantUser[]; total: number }>(`/platform/tenants/${tenant.slug}/users`);
+  const { data: users,   loading: uLoading, error: uError, reload: uReload } = usePlatformList<{ items: TenantUser[]; total: number }>(`/platform/tenants/${tenant.slug}/users`);
   const { data: invites, loading: iLoading, reload: iReload } = usePlatformList<TenantInvite[]>(`/platform/tenants/${tenant.slug}/invitations`);
 
   const setPrimary = async (domain: TenantDomain) => {
@@ -266,9 +459,9 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
 
   return (
     <>
-      <div className="fixed inset-0 z-40 flex">
+      <div className="fixed inset-0 top-12 left-56 z-40 flex">
         <div className="flex-1 bg-black/50 backdrop-blur-sm" />
-        <aside className="w-[580px] bg-[#0A1020] border-l border-white/10 flex flex-col h-full overflow-hidden">
+        <aside className="w-[460px] bg-[#0A1020] border-l border-white/10 flex flex-col h-full overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
             <div>
               <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
@@ -320,10 +513,15 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
               <>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-text-industrial/40">{users?.total ?? "—"} usuarios</p>
-                  <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={uReload} className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/40 hover:text-white transition-all" title="Recargar"><Loader2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
+                  </div>
                 </div>
                 {uLoading
                   ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
+                  : uError
+                  ? <ErrMsg msg={uError} />
                   : !users?.items.length
                   ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin usuarios</div>
                   : users.items.map(u => (
@@ -335,6 +533,13 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-accent">{u.role.replace(/_/g," ")}</span>
                         <StatusBadge status={u.membershipStatus} />
+                        <button
+                          onClick={() => setChangePwUser(u)}
+                          title="Cambiar contraseña"
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/30 hover:text-yellow-400 transition-all"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))
@@ -371,9 +576,10 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
         </aside>
       </div>
 
-      {addDomain && <AddDomainModal tenantSlug={tenant.slug} onClose={() => setAddDomain(false)} onAdded={() => { dReload(); onChanged(); }} />}
-      {addUser   && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
-      {addInvite && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
+      {addDomain    && <AddDomainModal tenantSlug={tenant.slug} onClose={() => setAddDomain(false)} onAdded={() => { dReload(); onChanged(); }} />}
+      {addUser      && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
+      {addInvite    && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
+      {changePwUser && <ChangePasswordModal tenantSlug={tenant.slug} user={changePwUser} onClose={() => setChangePwUser(null)} />}
     </>
   );
 }

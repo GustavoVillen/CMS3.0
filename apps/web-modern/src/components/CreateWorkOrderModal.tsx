@@ -28,6 +28,7 @@ export interface WoPrefill {
 }
 
 interface Asset { id: string; assetCode: string; name: string; }
+interface Vessel { code: string; name: string; }
 
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
@@ -61,6 +62,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   // ── INFO fields (standalone mode only) ────────────────────────────────────
   const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? "");
+  const [vessels, setVessels]         = useState<Vessel[]>([]);
   const [assetId, setAssetId]         = useState(prefill?.assetId ?? "");
   const [assets, setAssets]           = useState<Asset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -84,6 +86,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
+
+  // Vessel list for standalone mode
+  useEffect(() => {
+    if (prefill) return;
+    api.get<{ items: Vessel[] }>("/app/vessels?limit=200")
+      .then(res => setVessels(res.items ?? []))
+      .catch(() => setVessels([]));
+  }, [prefill]);
 
   // Asset lookup for standalone mode
   useEffect(() => {
@@ -224,7 +234,12 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className={labelCls}>Embarcación *</label>
-                    <input value={vesselCode} onChange={e => setVesselCode(e.target.value.toUpperCase())} placeholder="GL01" className={inputCls} />
+                    <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+                      <option value="">— Seleccionar embarcación —</option>
+                      {vessels.map(v => (
+                        <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className={labelCls}>Equipo *</label>

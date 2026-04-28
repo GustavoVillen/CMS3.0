@@ -20,7 +20,6 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 // ---------------------------------------------------------------------------
 
 export type CopilotModule =
-  | "RCA"
   | "WORK_ORDERS"
   | "CAPA"
   | "DEFERRALS"

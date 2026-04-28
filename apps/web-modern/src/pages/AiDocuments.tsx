@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Bot, Plus, FileText, Archive, Rocket, Layers, X } from "lucide-react";
+import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { fmtDate } from "../lib/utils";
@@ -145,6 +145,20 @@ function DocumentCard({
     }
   };
 
+  const deleteVersion = async (versionId: string) => {
+    const confirmed = window.confirm("¿Eliminar esta versión DRAFT?");
+    if (!confirmed) return;
+    setBusyId(versionId);
+    try {
+      await api.delete(`/app/ai-documents/${document.id}/versions/${versionId}`);
+      onChanged();
+    } catch {
+      // ignore
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const archiveDocument = async () => {
     const confirmed = window.confirm(`Archivar "${document.name}"?`);
     if (!confirmed) return;
@@ -222,13 +236,24 @@ function DocumentCard({
               </div>
 
               {isAdmin && version.status !== "ACTIVE" && (
-                <button
-                  onClick={() => activateVersion(version.id)}
-                  disabled={busyId === version.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20 disabled:opacity-50 transition-all"
-                >
-                  <Rocket className="w-3.5 h-3.5" /> Activar
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => activateVersion(version.id)}
+                    disabled={busyId === version.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20 disabled:opacity-50 transition-all"
+                  >
+                    <Rocket className="w-3.5 h-3.5" /> Activar
+                  </button>
+                  {version.status === "DRAFT" && (
+                    <button
+                      onClick={() => deleteVersion(version.id)}
+                      disabled={busyId === version.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}

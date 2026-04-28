@@ -19,6 +19,7 @@ export interface CreateDailyReportInput {
   engineHoursMain?: number | null;
   generatorHours?: number | null;
   fuelConsumedLiters?: number | null;
+  oilConsumedLiters?: number | null;
   notes?: string | null;
   nextPort?: string | null;
   etaNextPort?: string | null;
@@ -51,6 +52,25 @@ function parseOptionalDate(v: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Parse a date string respecting the tenant timezone.
+ * For date-only strings (YYYY-MM-DD), interprets as noon in the tenant timezone
+ * so the stored UTC instant always maps back to the same calendar date locally.
+ */
+function parseTenantLocalDate(dateStr: string, tenantTz: string): Date {
+  if (dateStr.includes("T")) return new Date(dateStr);
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y!, mo! - 1, d!, 12, 0, 0));
+  const tzOffset = new Intl.DateTimeFormat("en", { timeZone: tenantTz, timeZoneName: "shortOffset" })
+    .formatToParts(dt).find(p => p.type === "timeZoneName")?.value ?? "";
+  const match = tzOffset.match(/([+-])(\d+):?(\d*)/);
+  if (match) {
+    const sign = match[1] === "+" ? -1 : 1;
+    dt.setUTCMinutes(dt.getUTCMinutes() + sign * (parseInt(match[2]!) * 60 + parseInt(match[3] || "0")));
+  }
+  return dt;
+}
+
 export async function listTenantDailyReports(session: TenantAccessSession, filters: DailyReportListFilters = {}) {
   const prisma = getPrismaClient();
   if (!prisma) {
@@ -66,7 +86,10 @@ export async function listTenantDailyReports(session: TenantAccessSession, filte
   }
   if (filters.vesselCode) where.vesselCode = filters.vesselCode;
   if (filters.status) where.status = filters.status;
-  if (filters.reportDate) where.reportDate = new Date(filters.reportDate);
+  if (filters.reportDate) {
+    const tenantTz = (tenant as any).settings?.timezone ?? "UTC";
+    where.reportDate = parseTenantLocalDate(filters.reportDate, tenantTz);
+  }
 
   return prisma.dailyReport.findMany({ where, orderBy: { reportDate: "desc" } });
 }
@@ -100,6 +123,7 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
   if (!input.reportDate) throw new RouteError(400, "VALIDATION_ERROR", "reportDate es requerido.");
 
   const vesselCode = input.vesselCode.trim().toUpperCase();
+  const tenantTz = (tenant as any).settings?.timezone ?? "UTC";
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
   const rptCount = await prisma.dailyReport.count({ where: { tenantId: tenant.id, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
@@ -110,7 +134,7 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
       tenantId: tenant.id,
       vesselCode,
       reportCode,
-      reportDate: new Date(input.reportDate),
+      reportDate: parseTenantLocalDate(input.reportDate, tenantTz),
       status: (input.status ?? "DRAFT") as never,
       summary: input.summary?.trim() || null,
       positionLat: parseOptionalFloat(input.positionLat),
@@ -118,6 +142,7 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
       engineHoursMain: parseOptionalFloat(input.engineHoursMain),
       generatorHours: parseOptionalFloat(input.generatorHours),
       fuelConsumedLiters: parseOptionalFloat(input.fuelConsumedLiters),
+      oilConsumedLiters: parseOptionalFloat(input.oilConsumedLiters),
       notes: input.notes?.trim() || null,
       nextPort: input.nextPort?.trim() || null,
       etaNextPort: parseOptionalDate(input.etaNextPort),
@@ -150,6 +175,7 @@ export async function updateTenantDailyReport(session: TenantAccessSession, id: 
   if (input.engineHoursMain !== undefined) data.engineHoursMain = parseOptionalFloat(input.engineHoursMain);
   if (input.generatorHours !== undefined) data.generatorHours = parseOptionalFloat(input.generatorHours);
   if (input.fuelConsumedLiters !== undefined) data.fuelConsumedLiters = parseOptionalFloat(input.fuelConsumedLiters);
+  if (input.oilConsumedLiters !== undefined) data.oilConsumedLiters = parseOptionalFloat(input.oilConsumedLiters);
   if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
   if (input.nextPort !== undefined) data.nextPort = input.nextPort?.trim() || null;
   if (input.etaNextPort !== undefined) data.etaNextPort = parseOptionalDate(input.etaNextPort);

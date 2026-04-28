@@ -24,8 +24,8 @@ import { TeamPage } from "./pages/Team";
 import { DailyReportsPage } from "./pages/DailyReports";
 import { DeferralsPage } from "./pages/Deferrals";
 import { CapaPage } from "./pages/Capa";
-import { RcaPage } from "./pages/Rca";
-import { SpareOrdersPage } from "./pages/SpareOrders";
+import { SpareRequestsPage } from "./pages/SpareRequests";
+import { SpareReceiptsPage } from "./pages/SpareReceipts";
 import { ProvidersPage } from "./pages/Providers";
 import { ProfilePage } from "./pages/Profile";
 import { PlatformLogin } from "./pages/platform/PlatformLogin";
@@ -91,12 +91,12 @@ export default function App() {
               <Route path="/daily-reports"     element={<DailyReportsPage />} />
               <Route path="/defects"           element={<DefectsPage />} />
               <Route path="/deferrals"         element={<DeferralsPage />} />
-              <Route path="/rca"               element={<RcaPage />} />
               <Route path="/capa"              element={<CapaPage />} />
               <Route path="/inspections"       element={<InspectionsPage />} />
               <Route path="/certificates"      element={<CertificatesPage />} />
               <Route path="/spares"            element={<SparesPage />} />
-              <Route path="/spare-orders"      element={<SpareOrdersPage />} />
+              <Route path="/spare-requests"    element={<SpareRequestsPage />} />
+              <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

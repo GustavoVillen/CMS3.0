@@ -2,10 +2,11 @@ import React from "react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
+import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 
 // ---------------------------------------------------------------------------
@@ -14,10 +15,12 @@ import { useCopilotEmitter } from "../lib/copilot-context";
 
 interface Vessel { code: string; name: string; status: string; }
 interface WorkOrder { id: string; status: string; criticality?: string; dueDate?: string; }
-interface MaintenancePlan { id: string; executionStatus: string; nextDueDate: string | null; nextDueHours: number | null; }
+interface MaintenancePlan { id: string; executionStatus: string; nextDueDate: string | null; nextDueHours: number | null; lastExecutionDate: string | null; lastExecutionHours: number | null; }
 interface Defect { id: string; status: string; severity: string; }
 interface Certificate { id: string; status: string; expiryDate?: string; }
 interface Deferral   { id: string; status: string; }
+interface CritSpare  { id: string; available: number; reorderPoint: number | null; }
+interface SpareRequest { id: string; status: string; items: { id: string; status: string; quantity: number; quantityFulfilled: number }[]; }
 interface AiInsight {
   id: string;
   insightType: string;
@@ -41,9 +44,12 @@ export const Dashboard: React.FC = () => {
   const certificates      = useFetch<ListResponse<Certificate>>("/app/certificates");
   const deferrals         = useFetch<ListResponse<Deferral>>("/app/pms/deferrals");
   const insights          = useFetch<ListResponse<AiInsight>>("/app/ai-insights?status=OPEN");
+  const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
+  const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
+  const [showInsights, setShowInsights] = React.useState(false);
 
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
@@ -61,7 +67,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     for (const w of items) {
       if (CLOSED_STATUSES.has(w.status)) continue;
       if (w.status === "ON_HOLD") { postergadas++; continue; }
-      const overdue = !!w.dueDate && new Date(w.dueDate) < now;
+      const overdue = !!w.dueDate && parseLocalDate(w.dueDate) < now;
       if (overdue) vencidas++; else abiertas++;
     }
     return [
@@ -85,29 +91,71 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ].filter(s => s.value > 0);
   }, [deferrals.data]);
 
-  // Donut chart: maintenance plans by execution status (client-side derivation)
+  // Donut chart: maintenance plans by execution status — same logic as computeStatus() in MaintenancePlans.tsx
   const mpStatusCounts = React.useMemo(() => {
     const items = maintenancePlans.data?.items ?? [];
-    const map: Record<string, number> = { OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
+    const map: Record<string, number> = { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
     const now = Date.now();
     for (const p of items) {
       if (p.executionStatus === "IN_WINDOW") { map.IN_WINDOW++; continue; }
+      if (p.lastExecutionDate == null && p.lastExecutionHours == null) { map.NEVER_EXECUTED++; continue; }
+      if (p.nextDueHours != null) {
+        const hours = (p as any).assetCurrentHours ?? 0;
+        const diff = p.nextDueHours - hours;
+        if (diff <= 0)   { map.OVERDUE++;  continue; }
+        if (diff <= 50)  { map.DUE++;      continue; }
+        if (diff <= 250) { map.UPCOMING++; continue; }
+        map.FUTURE++; continue;
+      }
       if (p.nextDueDate) {
-        const days = (new Date(p.nextDueDate).getTime() - now) / 86_400_000;
-        if (days < 0)       { map.OVERDUE++;  continue; }
-        if (days <= 7)      { map.DUE++;      continue; }
-        if (days <= 30)     { map.UPCOMING++; continue; }
+        const days = (parseLocalDate(p.nextDueDate).getTime() - now) / 86_400_000;
+        if (days < 0)   { map.OVERDUE++;  continue; }
+        if (days <= 7)  { map.DUE++;      continue; }
+        if (days <= 30) { map.UPCOMING++; continue; }
       }
       map.FUTURE++;
     }
     return [
-      { key: "OVERDUE",   name: "Vencidas",    value: map.OVERDUE,   fill: "#EF4444" },
-      { key: "DUE",       name: "Por Vencer",  value: map.DUE,       fill: "#F97316" },
-      { key: "IN_WINDOW", name: "En Proceso",  value: map.IN_WINDOW, fill: "#06D6A0" },
-      { key: "UPCOMING",  name: "Próximas",    value: map.UPCOMING,  fill: "#EAB308" },
-      { key: "FUTURE",    name: "Al Día",      value: map.FUTURE,    fill: "rgba(255,255,255,0.2)" },
+      { key: "NEVER_EXECUTED", name: "Sin ejecutar", value: map.NEVER_EXECUTED, fill: "#64748b" },
+      { key: "OVERDUE",        name: "Vencidas",      value: map.OVERDUE,        fill: "#EF4444" },
+      { key: "DUE",            name: "Por Vencer",    value: map.DUE,            fill: "#F97316" },
+      { key: "IN_WINDOW",      name: "En Proceso",    value: map.IN_WINDOW,      fill: "#EAB308" },
+      { key: "UPCOMING",       name: "Próximas",      value: map.UPCOMING,       fill: "#F97316" },
+      { key: "FUTURE",         name: "Al Día",        value: map.FUTURE,         fill: "#06D6A0" },
     ].filter(s => s.value > 0);
   }, [maintenancePlans.data]);
+
+  const spareReqCounts = React.useMemo(() => {
+    const allItems = (spareRequests.data?.items ?? []).flatMap(r => r.items);
+    const map: Record<string, number> = { PENDING: 0, FULFILLED: 0, CANCELLED: 0 };
+    for (const i of allItems) {
+      if (i.status === "FULFILLED") map.FULFILLED++;
+      else if (i.status === "CANCELLED") map.CANCELLED++;
+      else map.PENDING++;
+    }
+    return [
+      { key: "PENDING",   name: "Pendientes",  value: map.PENDING,   fill: "#EAB308" },
+      { key: "FULFILLED", name: "Recibidos",   value: map.FULFILLED, fill: "#06D6A0" },
+      { key: "CANCELLED", name: "Cancelados",  value: map.CANCELLED, fill: "#475569" },
+    ].filter(s => s.value > 0);
+  }, [spareRequests.data]);
+
+  const critSparesCounts = React.useMemo(() => {
+    const items = criticalSpares.data?.items ?? [];
+    let sinStock = 0, bajoReorden = 0, ok = 0;
+    for (const s of items) {
+      if (s.available <= 0) { sinStock++; continue; }
+      if (s.reorderPoint !== null && s.reorderPoint > 0 && s.available < s.reorderPoint) { bajoReorden++; continue; }
+      ok++;
+    }
+    return [
+      { key: "sin_stock",    name: "Sin Stock",     value: sinStock,    fill: "#EF4444" },
+      { key: "bajo_reorden", name: "Bajo Reorden",  value: bajoReorden, fill: "#F97316" },
+      { key: "ok",           name: "OK",            value: ok,          fill: "#06D6A0" },
+    ].filter(s => s.value > 0);
+  }, [criticalSpares.data]);
+
+  const insightCount = insights.data?.total ?? 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -116,7 +164,19 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <StatCard icon={Ship}          label={t("dashboard.vessels")}      value={vesselCount}    loading={vessels.loading}      onClick={() => navigate("/vessels")} />
         <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
         <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
+        <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
       </div>
+
+      {/* AI Insights modal */}
+      {showInsights && (
+        <InsightsModal
+          insights={insights.data?.items ?? []}
+          loading={insights.loading}
+          onClose={() => setShowInsights(false)}
+          onNavigate={() => { setShowInsights(false); navigate("/ai-insights"); }}
+          t={t}
+        />
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -242,30 +302,92 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           )}
         </div>
 
-        {/* AI Insights panel */}
-        <div className="bento-card flex flex-col glass-glow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-accent">
-              <Sparkles className="w-4 h-4" />
-              <h2 className="text-sm font-bold">AI Insights</h2>
+        {/* Critical Spares stock status chart */}
+        <div className="bento-card flex flex-col h-[260px]">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-sm font-bold text-white">Repuestos Críticos</h2>
+              <p className="text-[10px] text-text-industrial/40">Estado de stock (criticidad A)</p>
             </div>
-            {insights.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+            {criticalSpares.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
-          {insights.error ? (
-            <ErrorMsg msg={insights.error} />
-          ) : insights.data?.total === 0 ? (
-            <p className="text-xs text-text-industrial/30 text-center mt-8">{t("dashboard.noInsights")}</p>
+          {criticalSpares.error ? <ErrorMsg msg={criticalSpares.error} /> : critSparesCounts.length === 0 && !criticalSpares.loading ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+              <Package className="w-6 h-6 text-text-industrial/40" />
+              <p className="text-xs text-text-industrial/40">Sin repuestos críticos registrados</p>
+            </div>
           ) : (
-            <div className="space-y-2 flex-1 overflow-y-auto">
-              {(insights.data?.items ?? []).slice(0, 5).map(ins => (
-                <InsightItem key={ins.id} insight={ins} />
-              ))}
+            <div className="flex items-center gap-2 flex-1">
+              <div className="w-[160px] h-[160px] shrink-0 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={critSparesCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      {critSparesCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-bold text-white">{criticalSpares.data?.total ?? 0}</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Total</span>
+                </div>
+              </div>
+              <div className="w-[130px] space-y-2">
+                {critSparesCounts.map(s => (
+                  <button key={s.key} type="button" onClick={() => navigate(`/spares?criticality=A&stockStatus=${s.key}`)}
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-          <button onClick={() => navigate("/ai-insights")}
-            className="mt-3 w-full py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
-            {t("dashboard.viewAllInsights")}
-          </button>
+        </div>
+
+        {/* Spare Requests status chart */}
+        <div className="bento-card flex flex-col h-[260px]">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-sm font-bold text-white">Solicitudes de Repuestos</h2>
+              <p className="text-[10px] text-text-industrial/40">Ítems por estado de recepción</p>
+            </div>
+            {spareRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          </div>
+          {spareRequests.error ? <ErrorMsg msg={spareRequests.error} /> : spareReqCounts.length === 0 && !spareRequests.loading ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+              <Package className="w-6 h-6 text-text-industrial/40" />
+              <p className="text-xs text-text-industrial/40">Sin solicitudes registradas</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1">
+              <div className="w-[160px] h-[160px] shrink-0 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={spareReqCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      {spareReqCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-bold text-white">{spareReqCounts.reduce((a, s) => a + s.value, 0)}</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Ítems</span>
+                </div>
+              </div>
+              <div className="w-[130px] space-y-2">
+                {spareReqCounts.map(s => (
+                  <button key={s.key} type="button" onClick={() => navigate(`/spare-requests?status=${s.key}`)}
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Inactive vessels — compact alert strip */}
@@ -346,4 +468,68 @@ const ErrorMsg = ({ msg }: { msg: string }) => (
   </div>
 );
 
-// Suppress unused warnings
+const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => (
+  <div className="bento-card cursor-pointer group relative overflow-hidden" onClick={onClick}>
+    <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
+    <div className="flex items-start justify-between mb-4">
+      <div className="p-2 rounded-lg bg-accent/10 border border-accent/20">
+        <Sparkles className="w-4 h-4 text-accent" />
+      </div>
+      {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+    </div>
+    <p className="text-xs text-text-industrial/40 font-medium mb-1">AI Insights</p>
+    <div className="flex items-end justify-between">
+      <p className="text-2xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
+      {!loading && count > 0 && (
+        <span className="text-[9px] text-accent/60 font-bold uppercase tracking-widest group-hover:text-accent transition-colors pb-1">Ver →</span>
+      )}
+    </div>
+  </div>
+);
+
+const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
+  insights: AiInsight[];
+  loading: boolean;
+  onClose: () => void;
+  onNavigate: () => void;
+  t: (k: string) => string;
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div
+      className="relative z-10 w-full max-w-lg bg-primary-bg border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-2 text-accent">
+          <Sparkles className="w-4 h-4" />
+          <h2 className="text-sm font-bold">AI Insights</h2>
+          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 font-bold text-accent">{insights.length}</span>
+        </div>
+        <button onClick={onClose} className="text-text-industrial/40 hover:text-white text-lg leading-none transition-colors">✕</button>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 text-accent animate-spin" />
+          </div>
+        ) : insights.length === 0 ? (
+          <p className="text-xs text-text-industrial/30 text-center py-8">{t("dashboard.noInsights")}</p>
+        ) : (
+          insights.map(ins => <InsightItem key={ins.id} insight={ins} />)
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-white/10 shrink-0">
+        <button onClick={onNavigate}
+          className="w-full py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+          {t("dashboard.viewAllInsights")}
+        </button>
+      </div>
+    </div>
+  </div>
+);
