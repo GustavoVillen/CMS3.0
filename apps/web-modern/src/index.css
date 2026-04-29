@@ -41,8 +41,10 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  
-  @apply rounded-2xl p-6 transition-all duration-300 hover:scale-[1.02];
+
+  /* No hover:scale en el base — solo color del borde. Los tiles clickeables
+     que quieran escalar agregan hover:scale-[1.02] en su propio className. */
+  @apply rounded-2xl p-6 transition-colors duration-300;
 }
 
 .bento-card:hover {

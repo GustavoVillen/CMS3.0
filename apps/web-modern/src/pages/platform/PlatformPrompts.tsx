@@ -209,7 +209,7 @@ export const PlatformPromptsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {prompts.map(p => (
-            <div key={p.id} className="bento-card space-y-3 cursor-pointer hover:border-white/20 transition-colors" onClick={() => setEditing(p)}>
+            <div key={p.id} className="bento-card space-y-3 cursor-pointer hover:border-white/20 transition-all hover:scale-[1.02]" onClick={() => setEditing(p)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-text-industrial/30 font-bold">

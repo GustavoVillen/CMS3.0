@@ -427,7 +427,7 @@ const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onC
   color?: string;
   onClick?: () => void;
 }) => (
-  <div className="bento-card cursor-pointer" onClick={onClick}>
+  <div className="bento-card cursor-pointer transition-transform hover:scale-[1.02]" onClick={onClick}>
     <div className="flex items-start justify-between mb-4">
       <div className="p-2 rounded-lg bg-white/5 border border-white/10">
         <Icon className="w-4 h-4 text-accent" />
@@ -469,7 +469,7 @@ const ErrorMsg = ({ msg }: { msg: string }) => (
 );
 
 const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => (
-  <div className="bento-card cursor-pointer group relative overflow-hidden" onClick={onClick}>
+  <div className="bento-card cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
     <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
     <div className="flex items-start justify-between mb-4">
       <div className="p-2 rounded-lg bg-accent/10 border border-accent/20">

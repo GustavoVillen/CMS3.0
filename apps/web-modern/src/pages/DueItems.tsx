@@ -295,7 +295,7 @@ export const DueItemsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <button
           onClick={() => updateFilters({ executionStatus: executionStatusFilter === "OVERDUE" ? "" : "OVERDUE" })}
-          className={`bento-card text-left ${executionStatusFilter === "OVERDUE" ? "ring-1 ring-red-500/50" : ""}`}
+          className={`bento-card text-left transition-transform hover:scale-[1.02] ${executionStatusFilter === "OVERDUE" ? "ring-1 ring-red-500/50" : ""}`}
         >
           <div className="flex items-center justify-between mb-2">
             <AlertCircle className="w-4 h-4 text-red-400" />
@@ -307,7 +307,7 @@ export const DueItemsPage: React.FC = () => {
 
         <button
           onClick={() => updateFilters({ executionStatus: executionStatusFilter === "DUE" ? "" : "DUE" })}
-          className={`bento-card text-left ${executionStatusFilter === "DUE" ? "ring-1 ring-accent/60" : ""}`}
+          className={`bento-card text-left transition-transform hover:scale-[1.02] ${executionStatusFilter === "DUE" ? "ring-1 ring-accent/60" : ""}`}
         >
           <div className="flex items-center justify-between mb-2">
             <Clock className="w-4 h-4 text-accent" />
@@ -319,7 +319,7 @@ export const DueItemsPage: React.FC = () => {
 
         <button
           onClick={() => updateFilters({ executionStatus: executionStatusFilter === "IN_WINDOW" ? "" : "IN_WINDOW" })}
-          className={`bento-card text-left ${executionStatusFilter === "IN_WINDOW" ? "ring-1 ring-yellow-400/50" : ""}`}
+          className={`bento-card text-left transition-transform hover:scale-[1.02] ${executionStatusFilter === "IN_WINDOW" ? "ring-1 ring-yellow-400/50" : ""}`}
         >
           <div className="flex items-center justify-between mb-2">
             <CalendarClock className="w-4 h-4 text-yellow-400" />
@@ -331,7 +331,7 @@ export const DueItemsPage: React.FC = () => {
 
         <button
           onClick={() => updateFilters({ executionStatus: executionStatusFilter === "UPCOMING" ? "" : "UPCOMING" })}
-          className={`bento-card text-left ${executionStatusFilter === "UPCOMING" ? "ring-1 ring-blue-400/50" : ""}`}
+          className={`bento-card text-left transition-transform hover:scale-[1.02] ${executionStatusFilter === "UPCOMING" ? "ring-1 ring-blue-400/50" : ""}`}
         >
           <div className="flex items-center justify-between mb-2">
             <CalendarCheck className="w-4 h-4 text-blue-400" />
