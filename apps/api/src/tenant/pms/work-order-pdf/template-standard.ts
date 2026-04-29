@@ -12,8 +12,15 @@ import {
 
 const CM             = 72 / 2.54;
 const MARGIN_V       = Math.round(1.5 * CM);
-const FOOTER_SIZE    = 40;
+const APPROVAL_BAND_H = 18;
+const FOOTER_SIZE    = 40 + APPROVAL_BAND_H;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
+
+const APPROVAL_COLS = [
+  { label: "Elaborado:", value: "Barlovento Servicios Profesionales" },
+  { label: "Revisado:",  value: "Asesoría Jurídica" },
+  { label: "Aprobado:",  value: "Gerente General" },
+];
 
 export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
   const { wo, assetLabel, assignedName, tenantLogoBuffer } = ctx;
@@ -283,16 +290,34 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     y += sigH + 8;
 
     // ── FOOTER ───────────────────────────────────────────────────────────────
-    const footerY = PAGE_H - FOOTER_SIZE;
-    doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
+    // Approval band on top
+    const bandY = PAGE_H - FOOTER_SIZE;
+    const NAVY_FOOTER = "#0C2461";
+    doc.rect(ML, bandY, W, APPROVAL_BAND_H).fillColor(NAVY_FOOTER).fill();
+    const cw = Math.floor(W / APPROVAL_COLS.length);
+    APPROVAL_COLS.forEach((col, i) => {
+      const cx = ML + i * cw;
+      if (i > 0) {
+        doc.moveTo(cx, bandY + 2).lineTo(cx, bandY + APPROVAL_BAND_H - 2)
+           .strokeColor("#FFFFFF").opacity(0.35).lineWidth(0.4).stroke().opacity(1);
+      }
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#FFFFFF")
+        .text(`${col.label} ${col.value}`, cx + 6, bandY + (APPROVAL_BAND_H - 8) / 2 + 1, {
+          width: cw - 12, align: "center", lineBreak: false, ellipsis: true,
+        });
+    });
+
+    // Existing logo + app name + WO code line below the band
+    const footerY = bandY + APPROVAL_BAND_H + 8;
+    doc.moveTo(ML, footerY - 4).lineTo(ML + W, footerY - 4).strokeColor(border).lineWidth(1).stroke();
     if (existsSync(LOGO_PATH)) {
-      try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
+      try { doc.image(LOGO_PATH, ML, footerY + 1, { width: 14, height: 14 }); } catch {}
     }
     doc.fontSize(8).font("Helvetica").fillColor(gray)
       .text("Copilot Management System — Documento generado automáticamente. No requiere firma digital.",
-        ML + 18, footerY, { width: W / 2 - 18 });
+        ML + 18, footerY + 3, { width: W / 2 - 18 });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`${wo.workOrderCode} · ${wo.vesselCode} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
+      .text(`${wo.workOrderCode} · ${wo.vesselCode} · ${fmt(new Date())}`, ML, footerY + 3, { width: W, align: "right" });
 
     doc.end();
   });

@@ -15,8 +15,16 @@ const ML       = 36;
 const MR       = 36;
 const W        = PW - ML - MR;
 const MARGIN_T = 36;
-const FOOTER_H = 28;
+const APPROVAL_BAND_H = 18;
+const FOOTER_INFO_H   = 28;
+const FOOTER_H = APPROVAL_BAND_H + FOOTER_INFO_H;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
+
+const APPROVAL_COLS = [
+  { label: "Elaborado:", value: "Barlovento Servicios Profesionales" },
+  { label: "Revisado:",  value: "Asesoría Jurídica" },
+  { label: "Aprobado:",  value: "Gerente General" },
+];
 
 const NAVY   = "#0C2461";
 const WHITE  = "#FFFFFF";
@@ -52,10 +60,39 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
 
     function drawFooter() {
       const fy = PAGE_H - FOOTER_H;
-      doc.moveTo(ML, fy).lineTo(ML + W, fy).strokeColor(BORDER).lineWidth(0.5).stroke();
+
+      // ── Approval band (navy, 3 cells) ──
+      doc.rect(ML, fy, W, APPROVAL_BAND_H).fillColor(NAVY).fill();
+      const cw = Math.floor(W / APPROVAL_COLS.length);
+      APPROVAL_COLS.forEach((col, i) => {
+        const cx = ML + i * cw;
+        if (i > 0) {
+          doc.moveTo(cx, fy + 2).lineTo(cx, fy + APPROVAL_BAND_H - 2)
+             .strokeColor("#FFFFFF").opacity(0.35).lineWidth(0.4).stroke().opacity(1);
+        }
+        const text = sanitizePdfText(`${col.label} ${col.value}`);
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(WHITE)
+          .text(text, cx + 6, fy + (APPROVAL_BAND_H - 8) / 2 + 1, {
+            width: cw - 12, align: "center", lineBreak: false, ellipsis: true,
+          });
+      });
+
+      // ── Info line: CMS logo + app name (left) | page info (right) ──
+      const ify = fy + APPROVAL_BAND_H;
+      doc.moveTo(ML, ify).lineTo(ML + W, ify).strokeColor(BORDER).lineWidth(0.5).stroke();
+
+      let textX = ML;
+      if (existsSync(LOGO_PATH)) {
+        try {
+          doc.image(LOGO_PATH, ML, ify + 6, { width: 14, height: 14 });
+          textX = ML + 18;
+        } catch { /* non-blocking */ }
+      }
+      doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
+        .text("Copilot Management System", textX, ify + 9, { width: W / 2 - 18, lineBreak: false });
       doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-        .text(`REGI-MAN — Pagina ${page} — ${wo.workOrderCode} — ${wo.vesselCode} — ${fmt(new Date())}`,
-          ML, fy + 7, { width: W, align: "center" });
+        .text(`REGI-MAN-02.4 — Pagina ${page} — ${wo.workOrderCode} — ${wo.vesselCode} — ${fmt(new Date())}`,
+          ML, ify + 9, { width: W, align: "right" });
     }
 
     doc.on("pageAdded", () => { page++; y = MARGIN_T; });
