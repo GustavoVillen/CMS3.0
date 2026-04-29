@@ -103,16 +103,51 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
         .text(label, cx + BOX + 4, cy + 0.5, { lineBreak: false });
     }
 
+    // Render text area. Lines starting with a bullet (• · ● ◦ ▪ ▫) get
+    // an empty closed square drawn instead of the bullet character.
+    const BULLET_RE = /^(\s*)[•·●◦▪▫]\s*(.*)$/;
+    const BULLET_BOX = 6;
+    const BULLET_GUTTER = 12; // total horizontal space reserved before the text
+    const LINE_PAD = 5;
+
     function textArea(cx: number, cy: number, cw: number, text: string, minH = 28): number {
-      const innerW = cw - 10;
-      const h = Math.max(minH, text
-        ? doc.fontSize(9).font("Helvetica").heightOfString(text, { width: innerW }) + 10
-        : minH);
+      const innerW = cw - LINE_PAD * 2;
+      const innerWBullet = innerW - BULLET_GUTTER;
+      const lines = text ? text.split("\n") : [""];
+
+      // Pre-compute total height
+      doc.fontSize(9).font("Helvetica");
+      let totalH = LINE_PAD * 2;
+      for (const line of lines) {
+        const m = line.match(BULLET_RE);
+        const content = m ? m[2] : line;
+        const w = m ? innerWBullet : innerW;
+        totalH += doc.heightOfString(content || " ", { width: w });
+      }
+      const h = Math.max(minH, totalH);
+
+      // Draw container
       doc.rect(cx, cy, cw, h).fillColor(WHITE).fill();
       doc.rect(cx, cy, cw, h).strokeColor(BORDER).lineWidth(0.4).stroke();
-      if (text) {
-        doc.fontSize(9).font("Helvetica").fillColor(BLACK)
-          .text(text, cx + 5, cy + 5, { width: innerW });
+
+      // Render line by line
+      let ly = cy + LINE_PAD;
+      doc.fontSize(9).font("Helvetica").fillColor(BLACK);
+      for (const line of lines) {
+        const m = line.match(BULLET_RE);
+        if (m) {
+          const content = m[2];
+          // Empty closed square at the start of the line
+          doc.rect(cx + LINE_PAD, ly + 2, BULLET_BOX, BULLET_BOX)
+             .strokeColor(BLACK).lineWidth(0.7).stroke();
+          doc.fillColor(BLACK).font("Helvetica").fontSize(9)
+             .text(content || " ", cx + LINE_PAD + BULLET_GUTTER, ly, { width: innerWBullet });
+          ly += doc.heightOfString(content || " ", { width: innerWBullet });
+        } else {
+          doc.fillColor(BLACK).font("Helvetica").fontSize(9)
+             .text(line || " ", cx + LINE_PAD, ly, { width: innerW });
+          ly += doc.heightOfString(line || " ", { width: innerW });
+        }
       }
       return h;
     }
