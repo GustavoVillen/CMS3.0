@@ -115,6 +115,13 @@ enum WorkOrderPriority {
   CRITICAL
 }
 
+enum WorkOrderDepartment {
+  CUBIERTA
+  MAQUINAS
+  BARCAZA
+  SERVICIOS
+}
+
 enum DefectStatus {
   OPEN
   UNDER_REVIEW
@@ -914,6 +921,11 @@ model WorkOrder {
   riskLevel           String?
   riskAnalysisResult  String?
   checklistDocUrl     String?
+  // Mercurio form fields
+  department              WorkOrderDepartment?
+  location                String?
+  communicationMethod     String[]
+  distribution            String[]
   // Result fields
   woResult                String?
   executedByName          String?

@@ -31,6 +31,10 @@ export interface CreateWorkOrderInput {
   loto?: string | null;
   riskLevel?: string | null;
   riskAnalysisResult?: string | null;
+  department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  location?: string | null;
+  communicationMethod?: string[];
+  distribution?: string[];
 }
 
 export interface UpdateWorkOrderInput {
@@ -57,6 +61,11 @@ export interface UpdateWorkOrderInput {
   runningHoursAtExecution?: number | null;
   observations?: string | null;
   supportingDocUrl?: string | null;
+  // Mercurio form fields
+  department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  location?: string | null;
+  communicationMethod?: string[];
+  distribution?: string[];
 }
 
 export interface HoldWorkOrderInput {
@@ -344,6 +353,10 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
       loto: normalizeOptionalText(payload.loto),
       riskLevel: normalizeOptionalText(payload.riskLevel),
       riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
+      department: payload.department ?? null,
+      location: normalizeOptionalText(payload.location),
+      communicationMethod: payload.communicationMethod ?? [],
+      distribution: payload.distribution ?? [],
       createdByUserId: session.user.id,
       updatedByUserId: session.user.id,
     },
@@ -389,6 +402,10 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.runningHoursAtExecution !== undefined) data.runningHoursAtExecution = payload.runningHoursAtExecution ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
+  if (payload.department !== undefined) data.department = payload.department ?? null;
+  if (payload.location !== undefined) data.location = normalizeOptionalText(payload.location);
+  if (payload.communicationMethod !== undefined) data.communicationMethod = payload.communicationMethod;
+  if (payload.distribution !== undefined) data.distribution = payload.distribution;
 
   return prisma.workOrder.update({ where: { id: current.id }, data });
 }

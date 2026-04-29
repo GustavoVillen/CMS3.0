@@ -53,6 +53,11 @@ interface WorkOrder {
   observations: string | null;
   supportingDocUrl: string | null;
   createdAt: string;
+  // Mercurio form fields
+  department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  location: string | null;
+  communicationMethod: string[];
+  distribution: string[];
 }
 
 
@@ -235,6 +240,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       .catch(() => { if (!cancelled) { setDeferralStatus(null); setDeferralTargetDate(null); } });
     return () => { cancelled = true; };
   }, [workOrder.id, workOrder.status]);
+
+  // ── Mercurio form fields ──
+  const [department, setDepartment]         = useState<string>(workOrder.department ?? "");
+  const [location, setLocation]             = useState(workOrder.location ?? "");
+  const [commMethod, setCommMethod]         = useState<string[]>(workOrder.communicationMethod ?? []);
+  const [distribution, setDistribution]     = useState<string[]>(workOrder.distribution ?? []);
+
+  function toggleArr(arr: string[], set: (v: string[]) => void, val: string) {
+    set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
+  }
 
   // ── Plan fields ──
   const [title, setTitle]                   = useState(workOrder.title ?? "");
@@ -475,6 +490,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         loto,
         riskLevel: normalizeOptionalText(riskLevel),
         riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+        department: (department as any) || null,
+        location: normalizeOptionalText(location),
+        communicationMethod: commMethod,
+        distribution,
         checklistDocUrl: chkUrl,
         woResult: normalizeOptionalText(woResult),
         executedByName: normalizeOptionalText(executedByName),
@@ -487,6 +506,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+      department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
       woResult, executedByName, executionDate, runningHoursAtExecution, observations,
       uploadIfNeeded, onSaved, t, workOrder.id]);
@@ -620,6 +640,30 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── PLAN ── */}
           <section className="space-y-4">
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">Plan</p>
+
+            {/* ── Departamento + Ubicación ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>Departamento</label>
+                <div className="flex flex-wrap gap-2">
+                  {(["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const).map(d => (
+                    <button key={d} type="button" disabled={!isEditable}
+                      onClick={() => setDepartment(department === d ? "" : d)}
+                      className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
+                        department === d
+                          ? "bg-accent text-white border-accent"
+                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                      }`}
+                    >{d}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Ubicación</label>
+                <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable}
+                  className={inputCls} placeholder="Ej: Sala de máquinas, Cubierta proa…" />
+              </div>
+            </div>
 
             <div className="space-y-1.5">
               <label className={labelCls}>Título de la OT</label>
@@ -911,6 +955,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 )}
               </div>
             )}
+          </section>
+
+          {/* ── Medio de comunicación ── */}
+          <section className="space-y-3 border-t border-white/10 pt-4">
+            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Medio de comunicación utilizado</p>
+            <div className="flex gap-3 flex-wrap">
+              {(["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const).map(opt => (
+                <button key={opt} type="button" disabled={!isEditable}
+                  onClick={() => toggleArr(commMethod, setCommMethod, opt)}
+                  className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                    commMethod.includes(opt)
+                      ? "bg-accent text-white border-accent"
+                      : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                  }`}
+                >{opt}</button>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Distribución ── */}
+          <section className="space-y-3 border-t border-white/10 pt-4">
+            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Distribución</p>
+            <div className="flex gap-2 flex-wrap">
+              {(["GGE","PDT","JTE","JOP","JRH","JVE","JCO","JSE","JUR","ADM","CAP","JMA"] as const).map(code => (
+                <button key={code} type="button" disabled={!isEditable}
+                  onClick={() => toggleArr(distribution, setDistribution, code)}
+                  className={`w-12 py-1 rounded text-xs font-bold border transition-colors ${
+                    distribution.includes(code)
+                      ? "bg-accent text-white border-accent"
+                      : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                  }`}
+                >{code}</button>
+              ))}
+            </div>
           </section>
 
           {closingWarning && (

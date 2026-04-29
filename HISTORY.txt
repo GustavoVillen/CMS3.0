@@ -1,5 +1,19 @@
 HISTORY.txt
 
+[2026-04-28] Schema: WorkOrder — nuevos campos para formato Mercurio Group
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- prisma/schema.prisma
+
+CAMBIOS:
+1. Nuevo enum WorkOrderDepartment: CUBIERTA, MAQUINAS, BARCAZA, SERVICIOS
+2. WorkOrder.department (WorkOrderDepartment?, opcional)
+3. WorkOrder.location (String?, opcional)
+4. WorkOrder.communicationMethod (String[], default [])
+5. WorkOrder.distribution (String[], default [])
+db push + prisma generate ejecutados sin migraciones destructivas.
+
 [2026-04-25] Copiloto: click en "Criterios de aceptación" para análisis experto — FIXED
 Agent: Claude Haiku 4.5
 
