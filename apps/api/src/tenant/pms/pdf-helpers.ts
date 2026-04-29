@@ -52,8 +52,8 @@ export function sanitizePdfText(s: string): string {
     .replace(/ρ/g, "rho")
     .replace(/θ/g, "theta")
     .replace(/φ/g, "phi")
-    // Checkbox-like symbols → plain marker
-    .replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]")
+    // Checkbox-like symbols and bullets → plain marker (empty checkbox)
+    .replace(/[ð☐☑☒□■✓✔✘•·●◦▪▫]/g, "[ ]")
     // Remove bold markdown markers
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     // Fallback: strip any remaining characters outside WinAnsi
