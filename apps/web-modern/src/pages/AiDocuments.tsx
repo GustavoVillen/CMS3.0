@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, X } from "lucide-react";
+import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, X, Eye, Save } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { fmtDate } from "../lib/utils";
@@ -131,6 +131,7 @@ function DocumentCard({
   onChanged: () => void;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [viewVersionId, setViewVersionId] = useState<string | null>(null);
   const activeVersion = document.versions.find((version) => version.status === "ACTIVE");
 
   const activateVersion = async (versionId: string) => {
@@ -175,6 +176,14 @@ function DocumentCard({
 
   return (
     <div className="bento-card space-y-4">
+      {viewVersionId && (
+        <ViewEditVersionModal
+          documentId={document.id}
+          versionId={viewVersionId}
+          onClose={() => setViewVersionId(null)}
+          onSaved={() => { setViewVersionId(null); onChanged(); }}
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -235,31 +244,155 @@ function DocumentCard({
                 </p>
               </div>
 
-              {isAdmin && version.status !== "ACTIVE" && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => activateVersion(version.id)}
-                    disabled={busyId === version.id}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20 disabled:opacity-50 transition-all"
-                  >
-                    <Rocket className="w-3.5 h-3.5" /> Activar
-                  </button>
-                  {version.status === "DRAFT" && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setViewVersionId(version.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-text-industrial hover:border-accent/30 hover:text-white transition-all"
+                  title={isAdmin && version.status === "DRAFT" ? "Ver / editar contenido" : "Ver contenido"}
+                >
+                  <Eye className="w-3.5 h-3.5 text-accent" />
+                  {isAdmin && version.status === "DRAFT" ? "Ver / Editar" : "Ver"}
+                </button>
+                {isAdmin && version.status !== "ACTIVE" && (
+                  <>
                     <button
-                      onClick={() => deleteVersion(version.id)}
+                      onClick={() => activateVersion(version.id)}
                       disabled={busyId === version.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20 disabled:opacity-50 transition-all"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                      <Rocket className="w-3.5 h-3.5" /> Activar
                     </button>
-                  )}
-                </div>
-              )}
+                    {version.status === "DRAFT" && (
+                      <button
+                        onClick={() => deleteVersion(version.id)}
+                        disabled={busyId === version.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+function ViewEditVersionModal({
+  documentId,
+  versionId,
+  onClose,
+  onSaved,
+}: {
+  documentId: string;
+  versionId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
+
+  const [version, setVersion] = useState<(AiDocumentVersion & { content: string }) | null>(null);
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const doc = await api.get<AiDocument & { versions: Array<AiDocumentVersion & { content: string }> }>(`/app/ai-documents/${documentId}`);
+        if (cancelled) return;
+        const v = doc.versions.find((x) => x.id === versionId);
+        if (!v) {
+          setError("Versión no encontrada.");
+        } else {
+          setVersion(v);
+          setContent(v.content);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "No se pudo cargar el contenido.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [documentId, versionId]);
+
+  const canEdit = isAdmin && version?.status === "DRAFT";
+  const dirty = version != null && content !== version.content;
+
+  const handleSave = async () => {
+    if (!canEdit || !dirty) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/app/ai-documents/${documentId}/versions/${versionId}`, { content });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={version ? `v${version.version} · ${version.status}` : "Cargando…"} onClose={onClose}>
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+        </div>
+      ) : error ? (
+        <p className="text-xs text-red-400">{error}</p>
+      ) : version ? (
+        <div className="space-y-4">
+          {!canEdit && version.status === "ACTIVE" && (
+            <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3">
+              <p className="text-xs text-accent/80">
+                Esta versión está <b>ACTIVE</b> y no se puede editar directamente. Para cambiarla, creá una <b>nueva versión</b> y activala.
+              </p>
+            </div>
+          )}
+          <Field label="Contenido">
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              readOnly={!canEdit}
+              rows={16}
+              className={`input-field resize-y min-h-[300px] font-mono text-xs ${!canEdit ? "opacity-80 cursor-default" : ""}`}
+            />
+          </Field>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all"
+            >
+              {canEdit ? "Cancelar" : "Cerrar"}
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {saving ? "Guardando..." : "Guardar cambios"}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </ModalShell>
   );
 }
 

@@ -50,7 +50,7 @@ import { exportModule } from "./excel/excel-export-service";
 import {
   listTenantAiDocuments, getTenantAiDocument, createTenantAiDocument,
   createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument,
-  deleteTenantAiDocumentVersion,
+  deleteTenantAiDocumentVersion, updateTenantAiDocumentVersionContent,
 } from "./ai-documents/ai-documents-service";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
@@ -673,6 +673,13 @@ export async function handleTenantRoutes(
     const parts = url.pathname.split("/");
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     sendJson(response, 200, await deleteTenantAiDocumentVersion(session, parts[3]!, parts[5]!));
+    return true;
+  }
+  if (method === "PATCH" && /^\/app\/ai-documents\/[\w-]+\/versions\/[\w-]+$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 200, await updateTenantAiDocumentVersionContent(session, parts[3]!, parts[5]!, String(body.content ?? "")));
     return true;
   }
 

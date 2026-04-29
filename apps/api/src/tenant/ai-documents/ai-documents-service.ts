@@ -170,6 +170,48 @@ export async function createTenantAiDocumentVersion(
 }
 
 // ---------------------------------------------------------------------------
+// Update content of a DRAFT version
+// ---------------------------------------------------------------------------
+
+export async function updateTenantAiDocumentVersionContent(
+  session: TenantAccessSession,
+  documentId: string,
+  versionId: string,
+  content: string,
+) {
+  requireAdmin(session);
+
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const trimmed = String(content || "").trim();
+  if (!trimmed) throw new RouteError(400, "AI_DOCUMENT_CONTENT_REQUIRED", "El contenido del documento es requerido.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+
+  const version = await prisma.aiDocumentVersion.findFirst({
+    where: { id: versionId, documentId, tenantId: tenant.id },
+  });
+  if (!version) throw new RouteError(404, "AI_DOCUMENT_VERSION_NOT_FOUND", "Versión no encontrada.");
+  if (version.status !== "DRAFT") {
+    throw new RouteError(409, "AI_DOCUMENT_VERSION_NOT_DRAFT", "Solo se puede editar el contenido de versiones DRAFT. Para modificar una versión ACTIVE, creá una nueva versión.");
+  }
+
+  const updated = await prisma.aiDocumentVersion.update({
+    where: { id: versionId },
+    data:  { content: trimmed, sizeBytes: Buffer.byteLength(trimmed, "utf8") },
+  });
+
+  await prisma.aiDocument.update({
+    where: { id: documentId },
+    data:  { updatedByUserId: session.user.id },
+  });
+
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
 // Activate a version
 // ---------------------------------------------------------------------------
 
