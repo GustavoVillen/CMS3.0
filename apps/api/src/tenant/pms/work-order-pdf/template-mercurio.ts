@@ -215,14 +215,41 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(38);
     y += textArea(ML, y, W, sanitizePdfText((wo as any).description ?? ""), 38);
 
-    // CMS extras: plan inline
-    if ((wo as any).estimatedHours || (wo as any).riskLevel || assignedName) {
+    // ── CRITERIOS DE ACEPTACION ───────────────────────────────────────────────
+    sectionHeader("CRITERIOS DE ACEPTACION");
+    ensureSpace(38);
+    y += textArea(ML, y, W, sanitizePdfText((wo as any).acceptanceCriteria ?? ""), 38);
+
+    // ── LOTO ──────────────────────────────────────────────────────────────────
+    sectionHeader("LOTO (LOCKOUT / TAGOUT)");
+    ensureSpace(38);
+    y += textArea(ML, y, W, sanitizePdfText((wo as any).loto ?? ""), 38);
+
+    // ── NIVEL DE RIESGO ───────────────────────────────────────────────────────
+    sectionHeader("NIVEL DE RIESGO");
+    const RISK_H = 22;
+    ensureSpace(RISK_H);
+    const RISK_COLOR: Record<string, string> = {
+      LOW: "#16a34a", MEDIUM: "#b45309", HIGH: "#b91c1c", CRITICAL: "#7f1d1d",
+    };
+    cell(ML, y, W, RISK_H, sanitizePdfText(riskLabel((wo as any).riskLevel)), {
+      fontSize: 11, bold: true, align: "center",
+      color: RISK_COLOR[(wo as any).riskLevel ?? ""] ?? BLACK,
+    });
+    y += RISK_H;
+
+    // ── RESULTADO ANALISIS DE RIESGO ──────────────────────────────────────────
+    sectionHeader("RESULTADO DEL ANALISIS DE RIESGO");
+    ensureSpace(38);
+    y += textArea(ML, y, W, sanitizePdfText((wo as any).riskAnalysisResult ?? ""), 38);
+
+    // CMS extras: plan inline (Responsable / Horas / Prioridad — riesgo ya tiene su propia sección)
+    if ((wo as any).estimatedHours || assignedName || (wo as any).priority) {
       const PLAN_ROW_H = 22;
       ensureSpace(PLAN_ROW_H * 2);
       const planCols = [
         { label: "Responsable", value: sanitizePdfText(assignedName ?? (wo as any).assignedToUserId ?? "—") },
         { label: "Horas estimadas", value: (wo as any).estimatedHours != null ? `${(wo as any).estimatedHours} h` : "—" },
-        { label: "Nivel de riesgo", value: riskLabel((wo as any).riskLevel) },
         { label: "Prioridad", value: sanitizePdfText(priorityLabel((wo as any).priority ?? "")), color: PRIORITY_COLOR[(wo as any).priority ?? ""] },
       ];
       const colW = Math.floor(W / planCols.length);
