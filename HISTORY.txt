@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-04-29] PDF de Orden de Trabajo configurable por tenant
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma
+- apps/api/src/tenant/pms/work-order-pdf-service.ts (reducido a entry point)
+- apps/api/src/tenant/pms/work-order-pdf/ (nuevo subdirectorio)
+- apps/api/src/platform/tenants/platform-tenants-service.ts
+- apps/web-modern/src/pages/platform/PlatformTenants.tsx
+
+CAMBIOS:
+1. Nuevo enum WorkOrderPdfTemplate { STANDARD, MERCURIO } en schema.
+2. TenantSetting.workOrderPdfTemplate (default STANDARD).
+3. work-order-pdf/ con shared.ts (helpers + tipos), data-loader.ts (queries
+   centralizadas), template-standard.ts (layout moderno restaurado de 383e418),
+   template-mercurio.ts (REGI-MAN-02.4 extraído), index.ts (registry).
+4. Entry point dispatchea por templateKey leído de tenant settings.
+5. Platform service: input/output con workOrderPdfTemplate, persistencia
+   en create/update.
+6. Platform admin UI: selector "Plantilla PDF de OT" en CreateTenantModal y
+   EditTenantModal.
+
+VERIFICACION END-TO-END:
+- demo (STANDARD): 4 pag / 54KB. mercurio (MERCURIO): 2 pag / 11KB.
+- Switch en runtime sin restart de API.
+- PATCH /platform/tenants persiste el campo correctamente.
+
 [2026-04-28] Schema: WorkOrder — nuevos campos para formato Mercurio Group
 Agent: Claude Sonnet 4.6
 

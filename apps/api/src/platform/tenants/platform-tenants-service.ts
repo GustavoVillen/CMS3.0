@@ -11,6 +11,8 @@ import {
   type DevTenantStatus,
 } from "../data/dev-tenant-store";
 
+export type WorkOrderPdfTemplateKey = "STANDARD" | "MERCURIO";
+
 export interface PlatformTenantSummary {
   id: string;
   slug: string;
@@ -24,6 +26,7 @@ export interface PlatformTenantSummary {
   enabledLocales: LocaleCode[];
   timezone: string;
   currency: string;
+  workOrderPdfTemplate: WorkOrderPdfTemplateKey;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,6 +48,7 @@ export interface PlatformTenantCreateRequest {
   enabledLocales: LocaleCode[];
   timezone: string;
   currency: string;
+  workOrderPdfTemplate?: WorkOrderPdfTemplateKey;
 }
 
 export interface PlatformTenantUpdateRequest {
@@ -58,6 +62,7 @@ export interface PlatformTenantUpdateRequest {
   enabledLocales?: LocaleCode[];
   timezone?: string;
   currency?: string;
+  workOrderPdfTemplate?: WorkOrderPdfTemplateKey;
 }
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
@@ -106,6 +111,7 @@ function toSummaryFromDev(record: DevTenantRecord): PlatformTenantSummary {
     enabledLocales: record.enabledLocales,
     timezone: record.timezone,
     currency: record.currency,
+    workOrderPdfTemplate: ((record as any).workOrderPdfTemplate as WorkOrderPdfTemplateKey) ?? "STANDARD",
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -127,6 +133,7 @@ function toSummaryFromPrisma(tenant: {
     enabledLocales: LocaleCode[];
     timezone: string;
     currency: string;
+    workOrderPdfTemplate?: string | null;
   } | null;
 }): PlatformTenantSummary {
   if (!tenant.settings) {
@@ -146,6 +153,7 @@ function toSummaryFromPrisma(tenant: {
     enabledLocales: tenant.settings.enabledLocales,
     timezone: tenant.settings.timezone,
     currency: tenant.settings.currency,
+    workOrderPdfTemplate: (tenant.settings.workOrderPdfTemplate as WorkOrderPdfTemplateKey) ?? "STANDARD",
     createdAt: tenant.createdAt.toISOString(),
     updatedAt: tenant.updatedAt.toISOString(),
   };
@@ -248,13 +256,14 @@ export async function createPlatformTenant(request: PlatformTenantCreateRequest)
           enabledLocales,
           timezone,
           currency,
-        },
+          workOrderPdfTemplate: request.workOrderPdfTemplate ?? "STANDARD",
+        } as any,
       },
     },
     include: { settings: true },
   });
 
-  return toSummaryFromPrisma(tenant);
+  return toSummaryFromPrisma(tenant as any);
 }
 
 export async function updatePlatformTenant(
@@ -300,6 +309,7 @@ export async function updatePlatformTenant(
   if (request.enabledLocales !== undefined) settingsData.enabledLocales = request.enabledLocales;
   if (request.timezone !== undefined) settingsData.timezone = request.timezone;
   if (request.currency !== undefined) settingsData.currency = request.currency;
+  if (request.workOrderPdfTemplate !== undefined) settingsData.workOrderPdfTemplate = request.workOrderPdfTemplate;
 
   const tenantUpdate = await prisma.tenant.update({
     where: { id: tenant.id },
@@ -317,7 +327,8 @@ export async function updatePlatformTenant(
             enabledLocales: request.enabledLocales || tenant.settings?.enabledLocales || ["en"],
             timezone: request.timezone || tenant.settings?.timezone || "UTC",
             currency: request.currency || tenant.settings?.currency || "USD",
-          },
+            workOrderPdfTemplate: request.workOrderPdfTemplate ?? "STANDARD",
+          } as any,
           update: settingsData,
         },
       },
@@ -325,5 +336,5 @@ export async function updatePlatformTenant(
     include: { settings: true },
   });
 
-  return toSummaryFromPrisma(tenantUpdate);
+  return toSummaryFromPrisma(tenantUpdate as any);
 }

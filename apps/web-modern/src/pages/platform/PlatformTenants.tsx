@@ -14,6 +14,7 @@ interface Tenant {
   defaultLocale: string; timezone: string; currency: string; supportEmail: string;
   logoUrl?: string | null;
   logoUrlLight?: string | null;
+  workOrderPdfTemplate?: "STANDARD" | "MERCURIO";
   createdAt: string; updatedAt: string;
 }
 interface TenantDomain  { id: string; tenantSlug: string; host: string; isPrimary: boolean; createdAt: string; }
@@ -25,6 +26,10 @@ const STATUSES   = ["ACTIVE", "SUSPENDED", "PROVISIONING", "DISABLED"];
 const LOCALES    = ["es", "en", "pt"];
 const TIMEZONES  = ["America/Argentina/Buenos_Aires", "America/Asuncion", "America/Sao_Paulo", "America/New_York", "Europe/Madrid", "UTC"];
 const CURRENCIES = ["ARS", "PYG", "BRL", "USD", "EUR"];
+const WO_PDF_TEMPLATES: Array<{ value: "STANDARD" | "MERCURIO"; label: string }> = [
+  { value: "STANDARD", label: "Estándar (genérico)" },
+  { value: "MERCURIO", label: "Mercurio Group (REGI-MAN-02.4)" },
+];
 const TENANT_ROLES = ["TENANT_ADMIN","MAINTENANCE_MANAGER","TECHNICIAN_OPERATOR","INSPECTOR_COMPLIANCE","PROCUREMENT_STORE","AUDITOR_READONLY"];
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -224,7 +229,7 @@ function DualLogoPicker({ dark, light, onChange }: {
 // ─── Create Tenant Modal ──────────────────────────────────────────────────────
 
 function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ slug: "", displayName: "", supportEmail: "", defaultLocale: "es", timezone: "America/Argentina/Buenos_Aires", currency: "ARS", logoUrl: null as string | null, logoUrlLight: null as string | null });
+  const [form, setForm] = useState({ slug: "", displayName: "", supportEmail: "", defaultLocale: "es", timezone: "America/Argentina/Buenos_Aires", currency: "ARS", logoUrl: null as string | null, logoUrlLight: null as string | null, workOrderPdfTemplate: "STANDARD" as "STANDARD" | "MERCURIO" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -254,6 +259,11 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
           <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
         </div>
+        <Field label="Plantilla PDF de Orden de Trabajo">
+          <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
+            {WO_PDF_TEMPLATES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </Field>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Crear Tenant" />
       </form>
@@ -264,7 +274,7 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
 // ─── Edit Tenant Modal ────────────────────────────────────────────────────────
 
 function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ displayName: tenant.displayName, supportEmail: tenant.supportEmail, status: tenant.status, defaultLocale: tenant.defaultLocale, timezone: tenant.timezone, currency: tenant.currency, logoUrl: tenant.logoUrl ?? null as string | null, logoUrlLight: tenant.logoUrlLight ?? null as string | null });
+  const [form, setForm] = useState({ displayName: tenant.displayName, supportEmail: tenant.supportEmail, status: tenant.status, defaultLocale: tenant.defaultLocale, timezone: tenant.timezone, currency: tenant.currency, logoUrl: tenant.logoUrl ?? null as string | null, logoUrlLight: tenant.logoUrlLight ?? null as string | null, workOrderPdfTemplate: (tenant.workOrderPdfTemplate ?? "STANDARD") as "STANDARD" | "MERCURIO" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -288,6 +298,11 @@ function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
           <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
         </div>
+        <Field label="Plantilla PDF de Orden de Trabajo">
+          <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
+            {WO_PDF_TEMPLATES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </Field>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} />
       </form>

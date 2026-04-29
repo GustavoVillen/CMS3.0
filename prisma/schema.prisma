@@ -122,6 +122,11 @@ enum WorkOrderDepartment {
   SERVICIOS
 }
 
+enum WorkOrderPdfTemplate {
+  STANDARD
+  MERCURIO
+}
+
 enum DefectStatus {
   OPEN
   UNDER_REVIEW
@@ -570,6 +575,8 @@ model TenantSetting {
   requireApprovalForCriticalCorrectives Boolean  @default(true)
   requireApprovalForComplianceTasks     Boolean  @default(true)
   autoConsumeNonCriticalSpares          Boolean  @default(false)
+  // PDF templates per entity (extensible: defectPdfTemplate, deferralPdfTemplate, etc.)
+  workOrderPdfTemplate WorkOrderPdfTemplate @default(STANDARD)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
