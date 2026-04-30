@@ -1,5 +1,45 @@
 HISTORY.txt
 
+[2026-04-30] Análisis de Fluidos con extracción por IA (Fases 1+2)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma
+- apps/api/src/tenant/fluid-analyses/ (nuevo)
+- apps/api/src/tenant/tenant-router.ts
+- apps/api/src/server.ts
+- apps/web-modern/src/pages/FluidAnalyses.tsx (nuevo)
+- apps/web-modern/src/App.tsx, Layout.tsx, Sidebar.tsx
+
+CAMBIOS:
+1. Schema: 3 enums (FluidType, FluidSampleStatus, FluidVerdict, FluidThresholdDirection)
+   + 3 modelos (FluidSample, FluidAnalysisResult, FluidParameterThreshold).
+   Soporta 11 tipos de fluido (motor/hidráulico/reductora/transmisión/diesel/
+   gasoil/refrigeración/caldera/agua potable/refrigerante/otro). Parámetros
+   guardados como JSON para flexibilidad por tipo.
+2. Backend service: CRUD de muestras + resultados, cálculo automático de
+   veredicto comparando parámetros contra umbrales del tenant. Auto-creación
+   de eventos de auditoría (FluidSample.created, FluidAnalysisResult.entered,
+   FluidAnalysisResult.criticalAlert).
+3. AI extractor (Claude Sonnet 4.6 con visión multimodal): recibe PDF/imagen/foto
+   del reporte del lab, devuelve JSON estructurado con confianza por campo
+   (high/medium/low). Hace fuzzy match contra Activos del tenant para sugerir
+   el equipo automaticamente.
+4. File upload patron consistente con certificates/checklists: raw body +
+   X-Filename header, almacenamiento en uploads/fluid-reports/{tenant}/UUID.ext
+5. Seed automatico al primer uso del tenant: 28 umbrales por defecto
+   distribuidos en 7 tipos de fluido (engine, hydraulic, gearbox, fuel,
+   cooling water, boiler water, potable water). Editables por TENANT_ADMIN.
+6. Frontend: pagina con listado filtrado por buque/fluido/veredicto/estado.
+   Modal de detalle con tabla de parametros. Modal de carga de resultado con
+   botón "Subir reporte" → IA extrae → form pre-lleno con badges de
+   confianza por parametro → usuario revisa y confirma.
+
+VERIFICACION:
+- API levanta limpio, /app/fluid-analyses devuelve [], thresholds count: 28
+- E2E: create sample → upsert result {fe:200,cu:15,water:0.05,tbn:7.5}
+  → verdict CRITICAL (umbral fe critico = 150ppm)
+
 [2026-04-29] PDF de Orden de Trabajo configurable por tenant
 Agent: Claude Opus 4.7
 

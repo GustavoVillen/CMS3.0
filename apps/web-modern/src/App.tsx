@@ -18,6 +18,7 @@ import { InspectionsPage } from "./pages/Inspections";
 import { DefectsPage } from "./pages/Defects";
 import { AiInsightsPage } from "./pages/AiInsights";
 import { AiDocumentsPage } from "./pages/AiDocuments";
+import { FluidAnalysesPage } from "./pages/FluidAnalyses";
 import { MaintenancePlansPage } from "./pages/MaintenancePlans";
 import { MaintenanceGanttPage } from "./pages/MaintenanceGantt";
 import { VesselSuperintendentsPage } from "./pages/VesselSuperintendents";
@@ -104,6 +105,7 @@ export default function App() {
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />
+              <Route path="/fluid-analyses"    element={<FluidAnalysesPage />} />
               <Route path="/bitacora"          element={<BitacoraPage />} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />

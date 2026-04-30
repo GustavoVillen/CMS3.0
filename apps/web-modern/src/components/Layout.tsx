@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/providers":         "Proveedores",
   "/ai-insights":       "Inteligencia Predictiva",
   "/ai-documents":      "AI Documents",
+  "/fluid-analyses":    "Análisis de Fluidos",
   "/bitacora":          "Bitácora del Sistema",
 };
 

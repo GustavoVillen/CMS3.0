@@ -8,6 +8,7 @@ import { getRequestUrl } from "./http/request-url";
 import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa } from "./http/static-files";
 import { serveCertificateUpload } from "./tenant/certificates/cert-uploads-service";
 import { serveChecklistUpload } from "./tenant/pms/checklist-uploads-service";
+import { serveFluidReportUpload } from "./tenant/fluid-analyses/fluid-uploads-service";
 import { buildHealthcheckPayload } from "./health/health-route";
 import { buildHomePage } from "./platform/home/home-page";
 import { handlePublicBootstrapRequest } from "./tenant/bootstrap/public-bootstrap-route";
@@ -69,6 +70,15 @@ const server = createServer(async (request, response) => {
   if (method === "GET" && checklistUploadMatch) {
     const [, tenantSlug, filename] = checklistUploadMatch;
     const served = serveChecklistUpload(response, tenantSlug, filename);
+    if (served) return;
+    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
+    return;
+  }
+
+  const fluidReportMatch = url.pathname.match(/^\/uploads\/fluid-reports\/([^/]+)\/([^/]+)$/);
+  if (method === "GET" && fluidReportMatch) {
+    const [, tenantSlug, filename] = fluidReportMatch;
+    const served = serveFluidReportUpload(response, tenantSlug, filename);
     if (served) return;
     sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
     return;

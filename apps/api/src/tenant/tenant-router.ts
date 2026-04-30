@@ -52,6 +52,13 @@ import {
   createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument,
   deleteTenantAiDocumentVersion, updateTenantAiDocumentVersionContent,
 } from "./ai-documents/ai-documents-service";
+import {
+  listFluidSamples, getFluidSample, createFluidSample, updateFluidSample, deleteFluidSample,
+  upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold,
+  type FluidType as FluidTypeEnum, type Verdict, type SampleStatus,
+} from "./fluid-analyses/fluid-analyses-service";
+import { saveFluidReportFile } from "./fluid-analyses/fluid-uploads-service";
+import { extractFluidReport } from "./fluid-analyses/fluid-analyses-ai-extractor";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
 import { handleProfileRoutes } from "./profile/profile-router";
@@ -680,6 +687,97 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 200, await updateTenantAiDocumentVersionContent(session, parts[3]!, parts[5]!, String(body.content ?? "")));
+    return true;
+  }
+
+  // ── Fluid Analyses ─────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/fluid-analyses") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await listFluidSamples(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      assetId:    url.searchParams.get("assetId"),
+      fluidType:  url.searchParams.get("fluidType") as FluidTypeEnum | null,
+      verdict:    url.searchParams.get("verdict")   as Verdict | null,
+      status:     url.searchParams.get("status")    as SampleStatus | null,
+      from:       url.searchParams.get("from"),
+      to:         url.searchParams.get("to"),
+    }));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/fluid-analyses") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 201, await createFluidSample(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/fluid-analyses\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getFluidSample(session, id));
+    return true;
+  }
+  if (method === "PATCH" && /^\/app\/fluid-analyses\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 200, await updateFluidSample(session, id, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/fluid-analyses\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await deleteFluidSample(session, id));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/fluid-analyses\/[\w-]+\/result$/.test(url.pathname)) {
+    const sampleId = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 200, await upsertFluidResult(session, sampleId, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/fluid-analyses/upload-report") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
+    sendJson(response, 201, { url: saved.url, name: saved.name, mime: saved.mime });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/fluid-analyses/extract") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
+    const vesselCode = (Array.isArray(request.headers["x-vessel-code"]) ? request.headers["x-vessel-code"][0] : request.headers["x-vessel-code"]) ?? null;
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    // Save the file first so the URL is available for later
+    const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
+    const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode });
+    sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/fluid-analyses-thresholds") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await listThresholds(session, url.searchParams.get("fluidType") as FluidTypeEnum | null));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/fluid-analyses-thresholds") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as any;
+    sendJson(response, 200, await upsertThreshold(session, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/fluid-analyses-thresholds\/[\w-]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/").pop()!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await deleteThreshold(session, id));
     return true;
   }
 

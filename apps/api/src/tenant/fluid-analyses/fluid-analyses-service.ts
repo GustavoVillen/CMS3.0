@@ -1,0 +1,491 @@
+import type { TenantAccessSession } from "../auth/session-store";
+import { getPrismaClient } from "../../platform/data/prisma-client";
+import { RouteError } from "../../http/route-error";
+import { publishAudit } from "../../platform/audit/audit-publisher";
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+export const FLUID_TYPES = [
+  "ENGINE_OIL", "HYDRAULIC_OIL", "GEARBOX_OIL", "TRANSMISSION_OIL",
+  "FUEL_DIESEL", "FUEL_GASOIL",
+  "COOLING_WATER", "BOILER_WATER", "POTABLE_WATER",
+  "REFRIGERANT", "OTHER",
+] as const;
+export type FluidType = typeof FLUID_TYPES[number];
+
+export const SAMPLE_STATUSES = ["DRAFT", "SENT", "REPORTED", "ARCHIVED"] as const;
+export type SampleStatus = typeof SAMPLE_STATUSES[number];
+
+export const VERDICTS = ["NORMAL", "CAUTION", "CRITICAL", "ACTION_REQUIRED"] as const;
+export type Verdict = typeof VERDICTS[number];
+
+// ── Inputs ───────────────────────────────────────────────────────────────────
+
+export interface CreateFluidSampleInput {
+  vesselCode: string;
+  assetId: string;
+  fluidType: FluidType;
+  fluidProduct?: string | null;
+  sampledAt: string | Date;
+  runningHours?: number | null;
+  containerCode?: string | null;
+  labName?: string | null;
+  labReference?: string | null;
+  notes?: string | null;
+  sentAt?: string | Date | null;
+  status?: SampleStatus;
+}
+
+export interface UpdateFluidSampleInput {
+  assetId?: string;
+  fluidType?: FluidType;
+  fluidProduct?: string | null;
+  sampledAt?: string | Date;
+  runningHours?: number | null;
+  containerCode?: string | null;
+  labName?: string | null;
+  labReference?: string | null;
+  notes?: string | null;
+  sentAt?: string | Date | null;
+  status?: SampleStatus;
+}
+
+export interface CreateResultInput {
+  receivedAt?: string | Date;
+  verdict?: Verdict;
+  summary?: string | null;
+  parameters: Record<string, unknown>;
+  reportUrl?: string | null;
+  reportMime?: string | null;
+  reportSourceText?: string | null;
+}
+
+export interface UpdateResultInput extends Partial<CreateResultInput> {}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function ensureAdminOrManager(session: TenantAccessSession): void {
+  const role = session.user.role;
+  const ok = role === "TENANT_ADMIN" || role === "MAINTENANCE_MANAGER";
+  if (!ok) throw new RouteError(403, "FORBIDDEN", "Sin permiso para gestionar análisis de fluidos.");
+}
+
+async function resolveTenantId(session: TenantAccessSession): Promise<string> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenant = await (prisma as any).tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+  return tenant.id;
+}
+
+function parseDate(v: string | Date | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+function normText(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t.length > 0 ? t : null;
+}
+
+async function nextSampleCode(prisma: any, tenantId: string, vesselCode: string): Promise<string> {
+  const last = await prisma.fluidSample.findFirst({
+    where: { tenantId, vesselCode },
+    orderBy: { createdAt: "desc" },
+    select: { sampleCode: true },
+  });
+  let n = 1;
+  if (last?.sampleCode) {
+    const m = last.sampleCode.match(/(\d+)$/);
+    if (m) n = parseInt(m[1], 10) + 1;
+  }
+  return `FA-${vesselCode}-${String(n).padStart(4, "0")}`;
+}
+
+// ── Verdict computation from parameters + thresholds ─────────────────────────
+
+export interface ThresholdRow {
+  parameter: string;
+  cautionMin: number | null;
+  cautionMax: number | null;
+  criticalMin: number | null;
+  criticalMax: number | null;
+  direction: "HIGH_BAD" | "LOW_BAD" | "RANGE";
+}
+
+export function computeVerdict(parameters: Record<string, unknown>, thresholds: ThresholdRow[]): Verdict {
+  let worst: Verdict = "NORMAL";
+  for (const t of thresholds) {
+    const raw = parameters[t.parameter];
+    if (raw == null) continue;
+    const v = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(v)) continue;
+
+    let level: Verdict = "NORMAL";
+    if (t.direction === "HIGH_BAD") {
+      if (t.criticalMax != null && v >= t.criticalMax) level = "CRITICAL";
+      else if (t.cautionMax != null && v >= t.cautionMax) level = "CAUTION";
+    } else if (t.direction === "LOW_BAD") {
+      if (t.criticalMin != null && v <= t.criticalMin) level = "CRITICAL";
+      else if (t.cautionMin != null && v <= t.cautionMin) level = "CAUTION";
+    } else {
+      // RANGE: critical fuera del rango critico, caution fuera del rango caution
+      if ((t.criticalMin != null && v < t.criticalMin) || (t.criticalMax != null && v > t.criticalMax)) level = "CRITICAL";
+      else if ((t.cautionMin != null && v < t.cautionMin) || (t.cautionMax != null && v > t.cautionMax)) level = "CAUTION";
+    }
+
+    if (level === "CRITICAL") return "CRITICAL";
+    if (level === "CAUTION" && worst === "NORMAL") worst = "CAUTION";
+  }
+  return worst;
+}
+
+// ── List / get ───────────────────────────────────────────────────────────────
+
+export interface ListFilters {
+  vesselCode?: string | null;
+  assetId?: string | null;
+  fluidType?: FluidType | null;
+  verdict?: Verdict | null;
+  status?: SampleStatus | null;
+  from?: string | null;
+  to?: string | null;
+}
+
+export async function listFluidSamples(session: TenantAccessSession, filters: ListFilters = {}) {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [], total: 0 };
+  const tenantId = await resolveTenantId(session);
+  // Seed defaults the first time the tenant uses the feature (idempotent)
+  void seedDefaultThresholds(tenantId).catch(() => {});
+
+  const where: any = { tenantId, deletedAt: null };
+  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  if (filters.assetId)    where.assetId    = filters.assetId;
+  if (filters.fluidType)  where.fluidType  = filters.fluidType;
+  if (filters.status)     where.status     = filters.status;
+  if (filters.from || filters.to) {
+    where.sampledAt = {};
+    if (filters.from) where.sampledAt.gte = new Date(filters.from);
+    if (filters.to)   where.sampledAt.lte = new Date(filters.to);
+  }
+
+  const samples = await (prisma as any).fluidSample.findMany({
+    where,
+    orderBy: { sampledAt: "desc" },
+    include: { result: true },
+    take: 500,
+  });
+
+  // Filter by verdict (post-load since it's on result)
+  const filtered = filters.verdict
+    ? samples.filter((s: any) => s.result?.verdict === filters.verdict)
+    : samples;
+
+  return { items: filtered, total: filtered.length };
+}
+
+export async function getFluidSample(session: TenantAccessSession, id: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+  const sample = await (prisma as any).fluidSample.findFirst({
+    where: { id, tenantId, deletedAt: null },
+    include: { result: true },
+  });
+  if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+  return sample;
+}
+
+// ── Create / update / delete sample ──────────────────────────────────────────
+
+export async function createFluidSample(session: TenantAccessSession, input: CreateFluidSampleInput) {
+  ensureAdminOrManager(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const vesselCode = String(input.vesselCode || "").trim();
+  if (!vesselCode) throw new RouteError(400, "FIELD_REQUIRED", "vesselCode es requerido.");
+  const assetId = String(input.assetId || "").trim();
+  if (!assetId) throw new RouteError(400, "FIELD_REQUIRED", "assetId es requerido.");
+  if (!FLUID_TYPES.includes(input.fluidType)) throw new RouteError(400, "INVALID_FLUID_TYPE", "Tipo de fluido inválido.");
+
+  const sampledAt = parseDate(input.sampledAt);
+  if (!sampledAt) throw new RouteError(400, "INVALID_DATE", "sampledAt inválido.");
+
+  const sampleCode = await nextSampleCode(prisma as any, tenantId, vesselCode);
+
+  const created = await (prisma as any).fluidSample.create({
+    data: {
+      tenantId,
+      vesselCode,
+      assetId,
+      sampleCode,
+      fluidType: input.fluidType,
+      fluidProduct: normText(input.fluidProduct),
+      sampledAt,
+      runningHours: input.runningHours ?? null,
+      sampledByUserId: session.user.id,
+      containerCode: normText(input.containerCode),
+      sentAt: parseDate(input.sentAt),
+      labName: normText(input.labName),
+      labReference: normText(input.labReference),
+      notes: normText(input.notes),
+      status: input.status ?? "DRAFT",
+      createdByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    },
+  });
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "FluidSample.created",
+    entityType: "FluidSample",
+    entityId: created.id,
+    metadata: { sampleCode, vesselCode, fluidType: created.fluidType },
+  });
+
+  return created;
+}
+
+export async function updateFluidSample(session: TenantAccessSession, id: string, input: UpdateFluidSampleInput) {
+  ensureAdminOrManager(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const current = await (prisma as any).fluidSample.findFirst({ where: { id, tenantId, deletedAt: null } });
+  if (!current) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  const data: any = { updatedByUserId: session.user.id };
+  if (input.assetId !== undefined)       data.assetId       = String(input.assetId).trim();
+  if (input.fluidType !== undefined)     data.fluidType     = input.fluidType;
+  if (input.fluidProduct !== undefined)  data.fluidProduct  = normText(input.fluidProduct);
+  if (input.sampledAt !== undefined)     data.sampledAt     = parseDate(input.sampledAt);
+  if (input.runningHours !== undefined)  data.runningHours  = input.runningHours ?? null;
+  if (input.containerCode !== undefined) data.containerCode = normText(input.containerCode);
+  if (input.sentAt !== undefined)        data.sentAt        = parseDate(input.sentAt);
+  if (input.labName !== undefined)       data.labName       = normText(input.labName);
+  if (input.labReference !== undefined)  data.labReference  = normText(input.labReference);
+  if (input.notes !== undefined)         data.notes         = normText(input.notes);
+  if (input.status !== undefined)        data.status        = input.status;
+
+  const updated = await (prisma as any).fluidSample.update({ where: { id }, data });
+  return updated;
+}
+
+export async function deleteFluidSample(session: TenantAccessSession, id: string) {
+  ensureAdminOrManager(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+  const current = await (prisma as any).fluidSample.findFirst({ where: { id, tenantId, deletedAt: null } });
+  if (!current) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  await (prisma as any).fluidSample.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedByUserId: session.user.id, updatedByUserId: session.user.id },
+  });
+  return { ok: true };
+}
+
+// ── Create / update result ───────────────────────────────────────────────────
+
+export async function upsertFluidResult(session: TenantAccessSession, sampleId: string, input: CreateResultInput) {
+  ensureAdminOrManager(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const sample = await (prisma as any).fluidSample.findFirst({
+    where: { id: sampleId, tenantId, deletedAt: null },
+    include: { result: true },
+  });
+  if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  const params = (input.parameters && typeof input.parameters === "object") ? input.parameters : {};
+  const receivedAt = parseDate(input.receivedAt) ?? new Date();
+
+  // Compute verdict from thresholds if not explicitly provided
+  let verdict: Verdict = input.verdict ?? "NORMAL";
+  if (!input.verdict) {
+    const thresholds = await (prisma as any).fluidParameterThreshold.findMany({
+      where: { tenantId, fluidType: sample.fluidType },
+    });
+    if (thresholds.length > 0) verdict = computeVerdict(params, thresholds);
+  }
+
+  const baseData = {
+    receivedAt,
+    verdict,
+    summary: normText(input.summary),
+    parameters: params as any,
+    reportUrl: normText(input.reportUrl),
+    reportMime: normText(input.reportMime),
+    reportSourceText: normText(input.reportSourceText),
+  };
+
+  let result;
+  if (sample.result) {
+    result = await (prisma as any).fluidAnalysisResult.update({
+      where: { id: sample.result.id },
+      data: baseData,
+    });
+  } else {
+    result = await (prisma as any).fluidAnalysisResult.create({
+      data: { ...baseData, tenantId, sampleId, enteredByUserId: session.user.id },
+    });
+  }
+
+  // Move sample to REPORTED
+  await (prisma as any).fluidSample.update({
+    where: { id: sampleId },
+    data:  { status: "REPORTED", updatedByUserId: session.user.id },
+  });
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "FluidAnalysisResult.entered",
+    entityType: "FluidSample",
+    entityId: sampleId,
+    metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
+  });
+
+  if (verdict === "CRITICAL" || verdict === "ACTION_REQUIRED") {
+    void publishAudit(prisma, {
+      tenantId,
+      actorUserId: session.user.id,
+      action: "FluidAnalysisResult.criticalAlert",
+      entityType: "FluidSample",
+      entityId: sampleId,
+      metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
+    });
+  }
+
+  return result;
+}
+
+// ── Thresholds CRUD (admin only) ─────────────────────────────────────────────
+
+export async function listThresholds(session: TenantAccessSession, fluidType?: FluidType | null) {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [] };
+  const tenantId = await resolveTenantId(session);
+  await seedDefaultThresholds(tenantId).catch(() => {});
+  const where: any = { tenantId };
+  if (fluidType) where.fluidType = fluidType;
+  const items = await (prisma as any).fluidParameterThreshold.findMany({
+    where,
+    orderBy: [{ fluidType: "asc" }, { parameter: "asc" }],
+  });
+  return { items };
+}
+
+export async function upsertThreshold(session: TenantAccessSession, input: {
+  fluidType: FluidType; parameter: string; label: string; unit?: string | null;
+  cautionMin?: number | null; cautionMax?: number | null;
+  criticalMin?: number | null; criticalMax?: number | null;
+  direction: "HIGH_BAD" | "LOW_BAD" | "RANGE";
+}) {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede modificar umbrales.");
+  }
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const data = {
+    tenantId,
+    fluidType: input.fluidType,
+    parameter: String(input.parameter || "").trim(),
+    label: String(input.label || "").trim(),
+    unit: normText(input.unit),
+    cautionMin: input.cautionMin ?? null,
+    cautionMax: input.cautionMax ?? null,
+    criticalMin: input.criticalMin ?? null,
+    criticalMax: input.criticalMax ?? null,
+    direction: input.direction,
+  };
+  if (!data.parameter || !data.label) throw new RouteError(400, "FIELD_REQUIRED", "parameter y label son requeridos.");
+
+  const existing = await (prisma as any).fluidParameterThreshold.findFirst({
+    where: { tenantId, fluidType: data.fluidType, parameter: data.parameter },
+  });
+  if (existing) {
+    return (prisma as any).fluidParameterThreshold.update({ where: { id: existing.id }, data });
+  } else {
+    return (prisma as any).fluidParameterThreshold.create({ data });
+  }
+}
+
+export async function deleteThreshold(session: TenantAccessSession, id: string) {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede modificar umbrales.");
+  }
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+  await (prisma as any).fluidParameterThreshold.deleteMany({ where: { id, tenantId } });
+  return { ok: true };
+}
+
+// ── Seed default thresholds for a tenant ─────────────────────────────────────
+
+export async function seedDefaultThresholds(tenantId: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) return;
+  const existing = await (prisma as any).fluidParameterThreshold.count({ where: { tenantId } });
+  if (existing > 0) return;
+  const rows = DEFAULT_THRESHOLDS.map(t => ({ ...t, tenantId }));
+  await (prisma as any).fluidParameterThreshold.createMany({ data: rows, skipDuplicates: true });
+}
+
+const DEFAULT_THRESHOLDS = [
+  // Engine oil (4-stroke marine diesel)
+  { fluidType: "ENGINE_OIL" as const, parameter: "fe",    label: "Hierro",        unit: "ppm",     cautionMin: null, cautionMax: 80,  criticalMin: null, criticalMax: 150, direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "cu",    label: "Cobre",         unit: "ppm",     cautionMin: null, cautionMax: 25,  criticalMin: null, criticalMax: 60,  direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "cr",    label: "Cromo",         unit: "ppm",     cautionMin: null, cautionMax: 10,  criticalMin: null, criticalMax: 25,  direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "pb",    label: "Plomo",         unit: "ppm",     cautionMin: null, cautionMax: 30,  criticalMin: null, criticalMax: 80,  direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "si",    label: "Silicio",       unit: "ppm",     cautionMin: null, cautionMax: 15,  criticalMin: null, criticalMax: 35,  direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "water", label: "Agua",          unit: "%",       cautionMin: null, cautionMax: 0.2, criticalMin: null, criticalMax: 0.5, direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "fuel",  label: "Dilución comb.",unit: "%",       cautionMin: null, cautionMax: 3,   criticalMin: null, criticalMax: 6,   direction: "HIGH_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "tbn",   label: "TBN",           unit: "mgKOH/g", cautionMin: 5,    cautionMax: null, criticalMin: 3,   criticalMax: null, direction: "LOW_BAD" as const },
+  { fluidType: "ENGINE_OIL" as const, parameter: "viscosity100", label: "Viscosidad @100°C", unit: "cSt", cautionMin: 12, cautionMax: 16, criticalMin: 10, criticalMax: 18, direction: "RANGE" as const },
+
+  // Hydraulic
+  { fluidType: "HYDRAULIC_OIL" as const, parameter: "water", label: "Agua",   unit: "ppm", cautionMin: null, cautionMax: 200,  criticalMin: null, criticalMax: 500, direction: "HIGH_BAD" as const },
+  { fluidType: "HYDRAULIC_OIL" as const, parameter: "iso",   label: "ISO 4406 (sumado)", unit: "código", cautionMin: null, cautionMax: 50, criticalMin: null, criticalMax: 60, direction: "HIGH_BAD" as const },
+  { fluidType: "HYDRAULIC_OIL" as const, parameter: "viscosity40", label: "Viscosidad @40°C", unit: "cSt", cautionMin: 40, cautionMax: 50, criticalMin: 35, criticalMax: 55, direction: "RANGE" as const },
+
+  // Gearbox
+  { fluidType: "GEARBOX_OIL" as const, parameter: "fe",    label: "Hierro", unit: "ppm",  cautionMin: null, cautionMax: 100, criticalMin: null, criticalMax: 200, direction: "HIGH_BAD" as const },
+  { fluidType: "GEARBOX_OIL" as const, parameter: "cu",    label: "Cobre",  unit: "ppm",  cautionMin: null, cautionMax: 30,  criticalMin: null, criticalMax: 80,  direction: "HIGH_BAD" as const },
+  { fluidType: "GEARBOX_OIL" as const, parameter: "water", label: "Agua",   unit: "%",    cautionMin: null, cautionMax: 0.1, criticalMin: null, criticalMax: 0.3, direction: "HIGH_BAD" as const },
+
+  // Fuel diesel
+  { fluidType: "FUEL_DIESEL" as const, parameter: "water",     label: "Agua",          unit: "%",   cautionMin: null, cautionMax: 0.05, criticalMin: null, criticalMax: 0.2, direction: "HIGH_BAD" as const },
+  { fluidType: "FUEL_DIESEL" as const, parameter: "sediment",  label: "Sedimentos",    unit: "%",   cautionMin: null, cautionMax: 0.05, criticalMin: null, criticalMax: 0.1, direction: "HIGH_BAD" as const },
+  { fluidType: "FUEL_DIESEL" as const, parameter: "sulfur",    label: "Azufre",        unit: "ppm", cautionMin: null, cautionMax: 1000, criticalMin: null, criticalMax: 5000, direction: "HIGH_BAD" as const },
+  { fluidType: "FUEL_DIESEL" as const, parameter: "density",   label: "Densidad",      unit: "kg/m³", cautionMin: 820, cautionMax: 860, criticalMin: 810, criticalMax: 870, direction: "RANGE" as const },
+
+  // Cooling water
+  { fluidType: "COOLING_WATER" as const, parameter: "ph",        label: "pH",                unit: "", cautionMin: 8.3, cautionMax: 10, criticalMin: 7.5, criticalMax: 11, direction: "RANGE" as const },
+  { fluidType: "COOLING_WATER" as const, parameter: "nitrites",  label: "Nitritos",          unit: "ppm", cautionMin: 1000, cautionMax: null, criticalMin: 500, criticalMax: null, direction: "LOW_BAD" as const },
+  { fluidType: "COOLING_WATER" as const, parameter: "chlorides", label: "Cloruros",          unit: "ppm", cautionMin: null, cautionMax: 50, criticalMin: null, criticalMax: 100, direction: "HIGH_BAD" as const },
+
+  // Boiler water
+  { fluidType: "BOILER_WATER" as const, parameter: "ph",         label: "pH",                unit: "", cautionMin: 9, cautionMax: 11, criticalMin: 8.5, criticalMax: 12, direction: "RANGE" as const },
+  { fluidType: "BOILER_WATER" as const, parameter: "alkalinity", label: "Alcalinidad",       unit: "ppm CaCO3", cautionMin: 100, cautionMax: 700, criticalMin: 50, criticalMax: 900, direction: "RANGE" as const },
+  { fluidType: "BOILER_WATER" as const, parameter: "silica",     label: "Sílice",            unit: "ppm SiO2", cautionMin: null, cautionMax: 30, criticalMin: null, criticalMax: 100, direction: "HIGH_BAD" as const },
+
+  // Potable water
+  { fluidType: "POTABLE_WATER" as const, parameter: "ph",            label: "pH",        unit: "",     cautionMin: 6.5, cautionMax: 8.5, criticalMin: 6, criticalMax: 9, direction: "RANGE" as const },
+  { fluidType: "POTABLE_WATER" as const, parameter: "freeChlorine",  label: "Cloro libre", unit: "ppm", cautionMin: 0.2, cautionMax: 1.0, criticalMin: 0.1, criticalMax: 4, direction: "RANGE" as const },
+  { fluidType: "POTABLE_WATER" as const, parameter: "coliforms",     label: "Coliformes (UFC/100mL)", unit: "UFC", cautionMin: null, cautionMax: 0.5, criticalMin: null, criticalMax: 1, direction: "HIGH_BAD" as const },
+];

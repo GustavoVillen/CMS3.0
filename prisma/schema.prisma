@@ -127,6 +127,42 @@ enum WorkOrderPdfTemplate {
   MERCURIO
 }
 
+// ── Fluid Analyses ────────────────────────────────────────────────────────────
+
+enum FluidType {
+  ENGINE_OIL
+  HYDRAULIC_OIL
+  GEARBOX_OIL
+  TRANSMISSION_OIL
+  FUEL_DIESEL
+  FUEL_GASOIL
+  COOLING_WATER
+  BOILER_WATER
+  POTABLE_WATER
+  REFRIGERANT
+  OTHER
+}
+
+enum FluidSampleStatus {
+  DRAFT
+  SENT
+  REPORTED
+  ARCHIVED
+}
+
+enum FluidVerdict {
+  NORMAL
+  CAUTION
+  CRITICAL
+  ACTION_REQUIRED
+}
+
+enum FluidThresholdDirection {
+  HIGH_BAD
+  LOW_BAD
+  RANGE
+}
+
 enum DefectStatus {
   OPEN
   UNDER_REVIEW
@@ -2013,4 +2049,81 @@ model SpareLink {
 
   @@index([equipmentClassId])
   @@index([taskMasterId])
+}
+
+// ─── Block 12: Análisis de Fluidos (lubricantes, combustibles, agua) ─────────
+
+model FluidSample {
+  id               String              @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetId          String
+  sampleCode       String
+  fluidType        FluidType
+  fluidProduct     String?
+  sampledAt        DateTime
+  runningHours     Float?
+  sampledByUserId  String?
+  containerCode    String?
+  sentAt           DateTime?
+  labName          String?
+  labReference     String?
+  status           FluidSampleStatus   @default(DRAFT)
+  notes            String?
+  createdAt        DateTime            @default(now())
+  createdByUserId  String
+  updatedAt        DateTime            @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  result           FluidAnalysisResult?
+
+  @@unique([tenantId, vesselCode, sampleCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, assetId])
+  @@index([tenantId, fluidType])
+  @@index([tenantId, status])
+}
+
+model FluidAnalysisResult {
+  id               String       @id @default(cuid())
+  tenantId         String
+  sampleId         String       @unique
+  receivedAt       DateTime
+  verdict          FluidVerdict @default(NORMAL)
+  summary          String?
+  parameters       Json
+  reportUrl        String?
+  reportMime       String?
+  reportSourceText String?
+  defectId         String?
+  enteredByUserId  String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  sample           FluidSample  @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([verdict])
+}
+
+model FluidParameterThreshold {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  fluidType     FluidType
+  parameter     String
+  label         String
+  unit          String?
+  cautionMin    Float?
+  cautionMax    Float?
+  criticalMin   Float?
+  criticalMax   Float?
+  direction     FluidThresholdDirection @default(HIGH_BAD)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@unique([tenantId, fluidType, parameter])
+  @@index([tenantId, fluidType])
 }
