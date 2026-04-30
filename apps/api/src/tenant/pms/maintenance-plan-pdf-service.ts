@@ -229,7 +229,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       y += 6;
     }
 
-    function renderDescription(label: string, text: string) {
+    function renderDescription(label: string, text: string, useBlueHeader = false) {
       if (!text || text === "—") { textBox(label, "—", 3, 3); return; }
 
       // Split into lines and detect markdown table blocks
@@ -267,11 +267,16 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       }
 
       // Render label header
-      y += 10; // gap between previous element and this label
-      ensureSpace(22);
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.5 });
-      y += 12;
+      if (useBlueHeader) {
+        sectionHeader(label);
+        y += 6;
+      } else {
+        y += 10; // gap between previous element and this label
+        ensureSpace(22);
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+          .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.5 });
+        y += 12;
+      }
 
       for (const seg of segments) {
         if (seg.type === "text") {
@@ -371,13 +376,13 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     y += 14; // 5mm gap between section header and content
 
     textBox("Título", val(p["title"]), 3, 3);
-    renderDescription("Tareas a realizar / Descripción", val(p["description"]));
+    renderDescription("Tareas a realizar / Descripción", val(p["description"]), true);
 
     if (p["acceptanceCriteria"]) {
-      renderDescription("Criterios de aceptación", val(p["acceptanceCriteria"]));
+      renderDescription("Criterios de aceptación", val(p["acceptanceCriteria"]), true);
     }
     if (p["loto"]) {
-      renderDescription("LOTO (Lockout/Tagout)", val(p["loto"]));
+      renderDescription("LOTO (Lockout/Tagout)", val(p["loto"]), true);
     }
     if (p["riskLevel"]) {
       inlineRow([
@@ -387,7 +392,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       ]);
     }
     if (p["riskAnalysisResult"]) {
-      renderDescription("Resultado análisis de riesgo", val(p["riskAnalysisResult"]));
+      renderDescription("Resultado análisis de riesgo", val(p["riskAnalysisResult"]), true);
     }
     y += 16;
 

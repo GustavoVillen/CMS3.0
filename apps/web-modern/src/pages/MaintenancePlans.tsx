@@ -68,6 +68,8 @@ interface MaintenancePlan {
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
   samplingFluidType?: string | null;
+  windowMode?: string | null;
+  windowLeadDays?: number | null;
 }
 
 interface ListResponse {
@@ -1013,6 +1015,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [frequencyMonths, setFrequencyMonths] = useState(String(plan?.frequencyMonths ?? ""));
   const [frequencyHours, setFrequencyHours] = useState(String(plan?.frequencyHours ?? ""));
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
+  const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
+  const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
   const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
   const [samplingFluidType, setSamplingFluidType] = useState<string>(plan?.samplingFluidType ?? "");
   const [checklistUploading, setChecklistUploading] = useState(false);
@@ -1110,6 +1114,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setFrequencyMonths(String(plan.frequencyMonths ?? ""));
     setFrequencyHours(String(plan.frequencyHours ?? ""));
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
+    setWindowMode(plan.windowMode ?? "AUTO");
+    setWindowLeadDays(String(plan.windowLeadDays ?? ""));
     setChecklistTemplate(plan.checklistTemplate ?? "");
     setSamplingFluidType(plan.samplingFluidType ?? "");
     setChecklistUploading(false);
@@ -1333,6 +1339,8 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
           frequencyMonths: freqMonths,
           frequencyHours: freqHours,
           triggerResultMode,
+          windowMode,
+          windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
           samplingFluidType: samplingFluidType || null,
         });
@@ -1356,6 +1364,8 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
           frequencyMonths: freqMonths,
           frequencyHours: freqHours,
           triggerResultMode,
+          windowMode,
+          windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
           samplingFluidType: samplingFluidType || null,
         });
@@ -1381,6 +1391,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
     acceptanceCriteria, loto, sfiGroupNumber, sfiSubgroupCode,
     riskLevel, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
+    windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
   });
   useEscapeGuard({
@@ -1790,6 +1801,30 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
               </div>
             </div>
 
+            {/* Ventana de ejecución anticipada */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>Modo de ventana anticipada</label>
+                <select value={windowMode} onChange={e => { setWindowMode(e.target.value); if (e.target.value === "AUTO") setWindowLeadDays(""); }} className={selectCls} disabled={readOnly}>
+                  <option value="AUTO">AUTO — calculado por el sistema</option>
+                  <option value="MANUAL">MANUAL — días fijos</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Días de anticipación</label>
+                <input
+                  type="number" min="0" value={windowLeadDays}
+                  onChange={e => setWindowLeadDays(e.target.value)}
+                  placeholder={windowMode === "AUTO" ? "Calculado automáticamente" : "Ej: 7"}
+                  disabled={readOnly || windowMode === "AUTO"}
+                  className={inputCls}
+                />
+                {windowMode === "AUTO" && (
+                  <p className="text-[10px] text-text-industrial/40">El sistema calcula ~10–15% de la frecuencia del plan.</p>
+                )}
+              </div>
+            </div>
+
             {/* Análisis de fluido — si está set, al cerrar la OT del plan se crea automáticamente una muestra DRAFT */}
             <div className="space-y-1.5">
               <label className={labelCls}>
@@ -2052,6 +2087,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             riskLevel: riskLevel || plan.riskLevel,
             riskAnalysisResult: riskAnalysisResult || plan.riskAnalysisResult,
             checklistDocUrl: plan.checklistTemplate,
+            samplingFluidType: samplingFluidType || plan.samplingFluidType,
           }}
           onClose={() => setShowExecution(false)}
           onSaved={_woId => { setShowExecution(false); void onSaved(); }}
@@ -2525,6 +2561,7 @@ export const MaintenancePlansPage: React.FC = () => {
             riskLevel: executing.riskLevel,
             riskAnalysisResult: executing.riskAnalysisResult,
             checklistDocUrl: executing.checklistTemplate,
+            samplingFluidType: executing.samplingFluidType,
           }}
           onClose={() => setExecuting(null)}
           onSaved={_woId => { setExecuting(null); void reload(); }}

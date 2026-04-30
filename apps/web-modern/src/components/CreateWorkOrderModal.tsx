@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Wrench, X } from "lucide-react";
+import { Droplets, Loader2, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -26,7 +26,18 @@ export interface WoPrefill {
   riskAnalysisResult?: string | null;
   checklistDocUrl?: string | null;
   loto?: string | null;
+  samplingFluidType?: string | null;
 }
+
+const FLUID_TYPE_LABELS: Record<string, string> = {
+  ENGINE_OIL:    "Aceite motor",
+  HYDRAULIC_OIL: "Aceite hidráulico",
+  GEAR_OIL:      "Aceite de transmisión",
+  FUEL:          "Combustible",
+  COOLANT:       "Refrigerante",
+  REFRIGERANT:   "Refrigerante",
+  OTHER:         "Fluido",
+};
 
 interface Asset { id: string; assetCode: string; name: string; }
 interface Vessel { code: string; name: string; }
@@ -368,6 +379,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               )}
             </div>
           </section>
+
+          {prefill?.samplingFluidType && (
+            <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
+              <Droplets className="w-4 h-4 text-teal-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-teal-300 leading-relaxed">
+                Al cerrar esta OT se creará automáticamente una muestra de <span className="font-semibold">{FLUID_TYPE_LABELS[prefill.samplingFluidType] ?? prefill.samplingFluidType}</span> en estado DRAFT para análisis de fluidos.
+              </p>
+            </div>
+          )}
 
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>

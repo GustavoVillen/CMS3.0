@@ -152,6 +152,19 @@ function buildSuggestedAssetCode(name: string, existingCodes: Set<string>): stri
   return nextSequentialAssetCode(buildNamePrefix(name), existingCodes);
 }
 
+function buildFormattedAssetCode(
+  vesselCode: string,
+  groupNumber: string,
+  name: string,
+  existingCodes: Set<string>,
+): string {
+  const vc = toAssetCodeToken(vesselCode);
+  const gn = groupNumber.trim();
+  const namePrefix = buildNamePrefix(name);
+  const prefix = vc && gn ? `${vc}-${gn}-${namePrefix}` : namePrefix;
+  return nextSequentialAssetCode(prefix, existingCodes);
+}
+
 interface AssetModalProps {
   initial: Asset | null;
   vessels: Vessel[];
@@ -357,26 +370,16 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setName(nextName);
     if (isEdit) return;
     const normalized = nextName.trim().toLocaleLowerCase();
-    const selected = normalized
-      ? nameOptions.find(option => option.name.trim().toLocaleLowerCase() === normalized)
-      : null;
     if (!normalized) {
       setAssetCode("");
       setAssetCodeTouched(false);
       return;
     }
 
-    if (selected?.suggestedAssetCode) {
-      const uniqueFromExisting = suggestFromExistingCode(selected.suggestedAssetCode, existingCodesForSelectedVessel);
-      setAssetCode(uniqueFromExisting);
-      setAssetCodeTouched(false);
-      return;
-    }
-
-    const suggested = buildSuggestedAssetCode(nextName, existingCodesForSelectedVessel);
+    const suggested = buildFormattedAssetCode(vesselCode, selectedGroup, nextName, existingCodesForSelectedVessel);
     setAssetCode(suggested);
     setAssetCodeTouched(false);
-  }, [existingCodesForSelectedVessel, isEdit, nameOptions]);
+  }, [existingCodesForSelectedVessel, isEdit, selectedGroup, vesselCode]);
 
   useEffect(() => {
     if (isEdit) return;
@@ -384,13 +387,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     if (!name.trim()) return;
     if (assetCodeTouched && assetCode.trim()) return;
 
-    const normalized = name.trim().toLocaleLowerCase();
-    const selected = nameOptions.find(option => option.name.trim().toLocaleLowerCase() === normalized);
-    if (selected?.suggestedAssetCode) {
-      setAssetCode(suggestFromExistingCode(selected.suggestedAssetCode, existingCodesForSelectedVessel));
-      return;
-    }
-    setAssetCode(buildSuggestedAssetCode(name, existingCodesForSelectedVessel));
+    setAssetCode(buildFormattedAssetCode(vesselCode, selectedGroup, name, existingCodesForSelectedVessel));
   }, [
     assetCode,
     assetCodeTouched,
@@ -398,7 +395,9 @@ const AssetModal: React.FC<AssetModalProps> = ({
     isEdit,
     name,
     nameOptions,
+    selectedGroup,
     selectedSubgroup,
+    vesselCode,
   ]);
 
   const onSave = useCallback(async () => {
