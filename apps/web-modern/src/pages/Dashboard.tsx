@@ -166,11 +166,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Ship}          label={t("dashboard.vessels")}      value={vesselCount}    loading={vessels.loading}      onClick={() => navigate("/vessels")} />
-        <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
-        <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
-        <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
+      <div className="w-1/2">
+        <div className="grid grid-cols-4 gap-4">
+          <StatCard icon={Ship}          label={t("dashboard.vessels")}      value={vesselCount}    loading={vessels.loading}      onClick={() => navigate("/vessels")} />
+          <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
+          <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
+          <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
+        </div>
       </div>
 
       {/* AI Insights modal */}
@@ -187,10 +189,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* WO chart */}
-        <div className="bento-card flex flex-col h-[260px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-sm font-bold text-white">{t("dashboard.woTitle")}</h2>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.woTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.woSubtitle")}</p>
             </div>
             {workOrders.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -226,10 +228,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Maintenance Plans status chart */}
-        <div className="bento-card flex flex-col h-[260px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-sm font-bold text-white">Planes de Mantenimiento</h2>
+              <h2 className="text-xs font-bold text-white">Planes de Mantenimiento</h2>
               <p className="text-[10px] text-text-industrial/40">Estado de ejecución</p>
             </div>
             {maintenancePlans.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -265,10 +267,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Deferrals status chart */}
-        <div className="bento-card flex flex-col h-[260px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-sm font-bold text-white">Aplazamientos</h2>
+              <h2 className="text-xs font-bold text-white">Aplazamientos</h2>
               <p className="text-[10px] text-text-industrial/40">Estado activo</p>
             </div>
             {deferrals.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -309,10 +311,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Critical Spares stock status chart */}
-        <div className="bento-card flex flex-col h-[260px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-sm font-bold text-white">Repuestos Críticos</h2>
+              <h2 className="text-xs font-bold text-white">Repuestos Críticos</h2>
               <p className="text-[10px] text-text-industrial/40">Estado de stock (criticidad A)</p>
             </div>
             {criticalSpares.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -353,10 +355,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Spare Requests status chart */}
-        <div className="bento-card flex flex-col h-[260px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-sm font-bold text-white">Solicitudes de Repuestos</h2>
+              <h2 className="text-xs font-bold text-white">Solicitudes de Repuestos</h2>
               <p className="text-[10px] text-text-industrial/40">Ítems por estado de recepción</p>
             </div>
             {spareRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -443,15 +445,15 @@ const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onC
   color?: string;
   onClick?: () => void;
 }) => (
-  <div className="bento-card cursor-pointer transition-transform hover:scale-[1.02]" onClick={onClick}>
-    <div className="flex items-start justify-between mb-4">
-      <div className="p-2 rounded-lg bg-white/5 border border-white/10">
-        <Icon className="w-4 h-4 text-accent" />
+  <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]" onClick={onClick}>
+    <div className="flex items-start justify-between mb-3">
+      <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+        <Icon className="w-3.5 h-3.5 text-accent" />
       </div>
       {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
     </div>
-    <p className="text-xs text-text-industrial/40 font-medium mb-1">{label}</p>
-    <p className={`text-2xl font-bold tracking-tight ${color}`}>
+    <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
+    <p className={`text-xl font-bold tracking-tight ${color}`}>
       {loading ? "—" : value}
     </p>
   </div>
@@ -485,17 +487,17 @@ const ErrorMsg = ({ msg }: { msg: string }) => (
 );
 
 const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => (
-  <div className="bento-card cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
+  <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
     <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
-    <div className="flex items-start justify-between mb-4">
-      <div className="p-2 rounded-lg bg-accent/10 border border-accent/20">
-        <Sparkles className="w-4 h-4 text-accent" />
+    <div className="flex items-start justify-between mb-3">
+      <div className="p-1.5 rounded-lg bg-accent/10 border border-accent/20">
+        <Sparkles className="w-3.5 h-3.5 text-accent" />
       </div>
       {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
     </div>
-    <p className="text-xs text-text-industrial/40 font-medium mb-1">AI Insights</p>
+    <p className="text-[10px] text-text-industrial/40 font-medium mb-1">AI Insights</p>
     <div className="flex items-end justify-between">
-      <p className="text-2xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
+      <p className="text-xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
       {!loading && count > 0 && (
         <span className="text-[9px] text-accent/60 font-bold uppercase tracking-widest group-hover:text-accent transition-colors pb-1">Ver →</span>
       )}
@@ -565,10 +567,10 @@ const FuelConsumptionWidget = ({
   const hasData = data.length > 0;
 
   return (
-    <div className="bento-card flex flex-col h-[220px]">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bento-card p-4! flex flex-col h-[190px]">
+      <div className="flex items-center justify-between mb-1">
         <div>
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <h2 className="text-xs font-bold text-white flex items-center gap-2">
             <Droplets className="w-3.5 h-3.5 text-accent" />
             Consumo de Combustible
           </h2>

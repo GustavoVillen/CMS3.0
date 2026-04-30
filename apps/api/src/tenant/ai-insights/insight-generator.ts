@@ -40,6 +40,8 @@ export async function generateInsightsForTenant(tenantId: string): Promise<numbe
   await collectRepeatedFailureInsights(prisma, tenantId, drafts, now);
   await collectRepeatedDeferralInsights(prisma, tenantId, drafts, now);
   await collectInspectionFailureInsights(prisma, tenantId, drafts, now);
+  await collectFluidAnalysisInsights(prisma, tenantId, drafts, now);
+  await collectFuelConsumptionInsights(prisma, tenantId, drafts, now);
 
   let upserted = 0;
   for (const draft of drafts) {
@@ -421,6 +423,135 @@ async function collectInspectionFailureInsights(
         title:          `Patrón de fallas en inspecciones: ${vessel.code}`,
         summary:        `El buque ${vessel.code} registró ${failCount} inspecciones FAIL y ${conditionalCount} CONDITIONAL en 90 días.`,
         recommendation: "Revisar los hallazgos de inspección y generar acciones correctivas (CAPA).",
+      });
+    }
+  }
+}
+
+async function collectFluidAnalysisInsights(
+  prisma: PrismaClient,
+  tenantId: string,
+  drafts: InsightDraft[],
+  now: Date,
+) {
+  const window90 = new Date(now);
+  window90.setDate(window90.getDate() - 90);
+
+  const results = await prisma.fluidAnalysisResult.findMany({
+    where: {
+      tenantId,
+      receivedAt: { gte: window90 },
+      verdict: { in: ["CAUTION", "CRITICAL", "ACTION_REQUIRED"] as any[] },
+    },
+    select: {
+      verdict: true,
+      sample: { select: { assetId: true, vesselCode: true, sampleCode: true } },
+    },
+  });
+
+  type AssetEntry = { critical: number; caution: number; vesselCode: string; sampleCode: string };
+  const byAsset = new Map<string, AssetEntry>();
+
+  for (const r of results) {
+    const assetId = r.sample.assetId;
+    const entry = byAsset.get(assetId) ?? {
+      critical: 0, caution: 0,
+      vesselCode: r.sample.vesselCode,
+      sampleCode: r.sample.sampleCode,
+    };
+    if (r.verdict === "CRITICAL" || r.verdict === "ACTION_REQUIRED") entry.critical++;
+    else entry.caution++;
+    byAsset.set(assetId, entry);
+  }
+
+  for (const [assetId, entry] of byAsset.entries()) {
+    if (entry.critical >= 1) {
+      drafts.push({
+        insightCode:    `FLUID-CRIT-${assetId}`,
+        insightType:    "fluid_analysis_critical",
+        priority:       "HIGH",
+        targetType:     "ASSET",
+        targetId:       assetId,
+        vesselCode:     entry.vesselCode,
+        title:          `Análisis de fluido crítico en activo`,
+        summary:        `Se detectaron ${entry.critical} resultado(s) CRÍTICO/ACCIÓN REQUERIDA en análisis de fluidos de los últimos 90 días.`,
+        recommendation: "Revisar el estado del lubricante o fluido, considerar cambio inmediato y verificar condición del equipo.",
+      });
+    } else if (entry.caution >= 2) {
+      drafts.push({
+        insightCode:    `FLUID-CAUT-${assetId}`,
+        insightType:    "fluid_analysis_caution_trend",
+        priority:       "MEDIUM",
+        targetType:     "ASSET",
+        targetId:       assetId,
+        vesselCode:     entry.vesselCode,
+        title:          `Tendencia de precaución en análisis de fluidos`,
+        summary:        `El activo acumula ${entry.caution} resultados en estado PRECAUCIÓN en los últimos 90 días.`,
+        recommendation: "Incrementar frecuencia de muestreo y revisar condición del fluido antes del próximo mantenimiento.",
+      });
+    }
+  }
+}
+
+async function collectFuelConsumptionInsights(
+  prisma: PrismaClient,
+  tenantId: string,
+  drafts: InsightDraft[],
+  now: Date,
+) {
+  const day30 = new Date(now);
+  day30.setDate(day30.getDate() - 30);
+  const day60 = new Date(now);
+  day60.setDate(day60.getDate() - 60);
+
+  const vessels = await prisma.vessel.findMany({
+    where:  { tenantId, deletedAt: null },
+    select: { code: true },
+  });
+
+  for (const vessel of vessels) {
+    const recent = await prisma.dailyReport.findMany({
+      where: {
+        tenantId,
+        vesselCode:       vessel.code,
+        deletedAt:        null,
+        reportDate:       { gte: day30 },
+        fuelConsumedLiters: { gt: 0 },
+      },
+      select: { fuelConsumedLiters: true },
+    });
+
+    const prior = await prisma.dailyReport.findMany({
+      where: {
+        tenantId,
+        vesselCode:       vessel.code,
+        deletedAt:        null,
+        reportDate:       { gte: day60, lt: day30 },
+        fuelConsumedLiters: { gt: 0 },
+      },
+      select: { fuelConsumedLiters: true },
+    });
+
+    if (recent.length < 3 || prior.length < 3) continue;
+
+    const avgRecent = recent.reduce((s, r) => s + (r.fuelConsumedLiters ?? 0), 0) / recent.length;
+    const avgPrior  = prior.reduce((s, r) => s + (r.fuelConsumedLiters ?? 0), 0) / prior.length;
+
+    if (avgPrior <= 0) continue;
+
+    const pctIncrease = ((avgRecent - avgPrior) / avgPrior) * 100;
+
+    if (pctIncrease >= 20) {
+      drafts.push({
+        insightCode:    `FUEL-TREND-${vessel.code}`,
+        insightType:    "fuel_consumption_increase",
+        priority:       pctIncrease >= 35 ? "HIGH" : "MEDIUM",
+        targetType:     "VESSEL",
+        targetId:       vessel.code,
+        vesselCode:     vessel.code,
+        title:          `Aumento de consumo de combustible: ${vessel.code}`,
+        summary:        `El consumo promedio de los últimos 30 días (${avgRecent.toFixed(0)} L/día) es un ${pctIncrease.toFixed(0)}% mayor que el período anterior (${avgPrior.toFixed(0)} L/día).`,
+        recommendation: "Verificar eficiencia de motores, condiciones de navegación, carga y posibles fugas.",
       });
     }
   }
