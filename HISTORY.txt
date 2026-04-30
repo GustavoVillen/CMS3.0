@@ -1,5 +1,48 @@
 HISTORY.txt
 
+[2026-04-30] Análisis de Fluidos: Fases 3+4 (auto-defecto, tendencias, copiloto)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-service.ts
+- apps/api/src/tenant/tenant-router.ts
+- apps/api/src/tenant/copiloto/copiloto-service.ts
+- apps/web-modern/src/pages/FluidAnalyses.tsx
+
+CAMBIOS:
+1. Fase 3 — Auto-creacion de Defecto en CRITICAL/ACTION_REQUIRED:
+   Cuando upsertFluidResult clasifica un veredicto critico, crea automaticamente
+   un Defect con:
+   - defectCode = DEF-{vessel}-{seq}
+   - severity HIGH (CRITICAL) o CRITICAL (ACTION_REQUIRED)
+   - classification = "PREDICTIVE_FLUID_ANALYSIS"
+   - description con sampleCode, fluidType, veredicto, resumen del lab y peores parametros
+   El defectId queda guardado en FluidAnalysisResult.defectId para trazabilidad.
+
+2. Fase 4 — Endpoint de tendencias:
+   GET /app/fluid-analyses-trend?assetId=X&fluidType=Y&limit=12
+   Devuelve hasta 50 muestras del mismo equipo ordenadas cronologicamente,
+   con valores numericos extraidos de parameters.
+
+3. Fase 4 — Grafica de tendencia (Recharts) en modal de detalle:
+   - Selector de parametro arriba (fe, cu, water, tbn, etc.)
+   - LineChart con eje X = fechas, eje Y = valores
+   - Lineas de referencia para umbrales caution (amarillo) y critical (rojo)
+   - Min 2 muestras necesarias para graficar.
+
+4. Fase 4 — Tools del copiloto:
+   - query_fluid_analyses(vesselCode?, assetId?, fluidType?, verdict?, limit?)
+     consulta general con filtros opcionales
+   - query_fluid_trend(assetId, fluidType?, limit?)
+     devuelve la serie temporal de un equipo, util para que la IA detecte
+     tendencias y responda "como viene el motor SB" o "el hierro esta subiendo"
+
+VERIFICACION:
+- E2E: upsert result {fe:250} → verdict CRITICAL → auto-creacion de
+  DEF-GLT001-0001 severity HIGH classification PREDICTIVE_FLUID_ANALYSIS
+- Trend endpoint devuelve 1 punto para asset existente
+- TS sin errores nuevos en API ni frontend
+
 [2026-04-30] Análisis de Fluidos con extracción por IA (Fases 1+2)
 Agent: Claude Opus 4.7
 

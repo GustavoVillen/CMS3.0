@@ -212,6 +212,35 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       required: ["vesselCode"],
     },
   },
+  {
+    name: "query_fluid_analyses",
+    description:
+      "Query fluid analyses (oil, fuel, water, hydraulic) for the current tenant. Use this to check the latest sample of a piece of equipment, find the verdict (NORMAL/CAUTION/CRITICAL/ACTION_REQUIRED), inspect parameters (Fe, Cu, water, TBN, etc.), or look at history. Each sample has a result with parameters and verdict.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Filter by vessel code (optional)" },
+        assetId:    { type: "string", description: "Filter by asset ID (optional)" },
+        fluidType:  { type: "string", description: "Filter by fluid type: ENGINE_OIL | HYDRAULIC_OIL | GEARBOX_OIL | TRANSMISSION_OIL | FUEL_DIESEL | FUEL_GASOIL | COOLING_WATER | BOILER_WATER | POTABLE_WATER | REFRIGERANT | OTHER (optional)" },
+        verdict:    { type: "string", description: "Filter by verdict: NORMAL | CAUTION | CRITICAL | ACTION_REQUIRED (optional)" },
+        limit:      { type: "number", description: "Max results to return (default 10, max 20)" },
+      },
+    },
+  },
+  {
+    name: "query_fluid_trend",
+    description:
+      "Get the chronological trend (last N samples) of a single asset's fluid parameter. Use this to detect degradation trends, e.g. when the user asks 'cómo viene el motor SB' or 'el hierro está subiendo'. Returns numeric values per parameter ordered from oldest to newest.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        assetId:   { type: "string", description: "Asset ID (required)" },
+        fluidType: { type: "string", description: "Filter by fluid type (optional, recommended for accuracy)" },
+        limit:     { type: "number", description: "Number of samples to include in the trend (default 10, max 50)" },
+      },
+      required: ["assetId"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -363,6 +392,57 @@ async function executeCopilotTool(
       return JSON.stringify(
         rows.length > 0 ? rows : { message: "No CAPA records found matching the given criteria." },
       );
+    }
+
+    if (name === "query_fluid_analyses") {
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      if (input.vesselCode) where.vesselCode = input.vesselCode;
+      if (input.assetId)    where.assetId    = input.assetId;
+      if (input.fluidType)  where.fluidType  = input.fluidType;
+      const samples = await (prisma as any).fluidSample.findMany({
+        where,
+        take: limit,
+        orderBy: { sampledAt: "desc" },
+        select: {
+          sampleCode: true, vesselCode: true, assetId: true, fluidType: true,
+          sampledAt: true, runningHours: true, status: true, labName: true,
+          result: { select: { verdict: true, summary: true, parameters: true, receivedAt: true } },
+        },
+      });
+      const filtered = input.verdict
+        ? samples.filter((s: any) => s.result?.verdict === input.verdict)
+        : samples;
+      return JSON.stringify(
+        filtered.length > 0 ? filtered : { message: "No fluid analyses found." },
+      );
+    }
+
+    if (name === "query_fluid_trend") {
+      const assetId = String(input.assetId || "");
+      if (!assetId) return JSON.stringify({ error: "assetId is required" });
+      const trendLimit = Math.min(Number(input.limit ?? 10), 50);
+      const where: Record<string, unknown> = { tenantId, assetId, deletedAt: null };
+      if (input.fluidType) where.fluidType = input.fluidType;
+      const samples = await (prisma as any).fluidSample.findMany({
+        where, take: trendLimit, orderBy: { sampledAt: "asc" },
+        select: {
+          sampleCode: true, sampledAt: true, runningHours: true, fluidType: true,
+          result: { select: { verdict: true, parameters: true } },
+        },
+      });
+      const trend = samples.map((s: any) => {
+        const values: Record<string, number> = {};
+        const params = s.result?.parameters as Record<string, any> | null;
+        if (params) {
+          for (const [k, raw] of Object.entries(params)) {
+            const v = (raw && typeof raw === "object" && "value" in (raw as any)) ? (raw as any).value : raw;
+            const n = typeof v === "number" ? v : Number(v);
+            if (Number.isFinite(n)) values[k] = n;
+          }
+        }
+        return { sampleCode: s.sampleCode, sampledAt: s.sampledAt, runningHours: s.runningHours, fluidType: s.fluidType, verdict: s.result?.verdict ?? null, values };
+      });
+      return JSON.stringify(trend.length > 0 ? trend : { message: "No samples for this asset." });
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });

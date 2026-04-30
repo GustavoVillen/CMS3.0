@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
-  CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText,
+  CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
@@ -464,6 +465,14 @@ function SampleDetailModal({
           </div>
         )}
 
+        {/* Trend chart for this asset + fluid type */}
+        <div className="space-y-2 pt-2 border-t border-white/10">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-accent" /> Tendencia del equipo
+          </h3>
+          <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
+        </div>
+
         {sample.notes && (
           <div className="p-3 rounded-xl bg-white/5 border border-white/10">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
@@ -519,6 +528,124 @@ function ParametersTable({ parameters }: { parameters: Record<string, FluidParam
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─── Trend chart for asset + fluid type ──────────────────────────────────────
+
+interface TrendPoint {
+  sampleId: string;
+  sampleCode: string;
+  sampledAt: string;
+  runningHours: number | null;
+  verdict: Verdict | null;
+  values: Record<string, number>;
+}
+interface ThresholdRow {
+  parameter: string;
+  cautionMin: number | null; cautionMax: number | null;
+  criticalMin: number | null; criticalMax: number | null;
+  direction: "HIGH_BAD" | "LOW_BAD" | "RANGE";
+}
+
+function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidType }) {
+  const [points, setPoints] = useState<TrendPoint[]>([]);
+  const [thresholds, setThresholds] = useState<ThresholdRow[]>([]);
+  const [selectedParam, setSelectedParam] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [trend, thr] = await Promise.all([
+          api.get<{ items: TrendPoint[] }>(`/app/fluid-analyses-trend?assetId=${assetId}&fluidType=${fluidType}&limit=12`),
+          api.get<{ items: ThresholdRow[] }>(`/app/fluid-analyses-thresholds?fluidType=${fluidType}`),
+        ]);
+        if (cancelled) return;
+        setPoints(trend.items);
+        setThresholds(thr.items);
+        // Default selected parameter: first param that appears in any sample
+        const allKeys = new Set<string>();
+        trend.items.forEach(p => Object.keys(p.values).forEach(k => allKeys.add(k)));
+        const first = Array.from(allKeys)[0] ?? "";
+        setSelectedParam(first);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assetId, fluidType]);
+
+  if (loading) return <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>;
+  if (points.length < 2) {
+    return (
+      <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+        <p className="text-xs text-text-industrial/40">Se necesitan al menos 2 muestras del mismo equipo para mostrar tendencia.</p>
+      </div>
+    );
+  }
+
+  const availableParams = Array.from(new Set(points.flatMap(p => Object.keys(p.values)))).sort();
+  const param = selectedParam || availableParams[0];
+  const threshold = thresholds.find(t => t.parameter === param);
+
+  const data = points.map(p => ({
+    label: new Date(p.sampledAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }),
+    sampleCode: p.sampleCode,
+    value: p.values[param] ?? null,
+    verdict: p.verdict,
+  })).filter(d => d.value !== null);
+
+  if (data.length < 2) {
+    return (
+      <div className="space-y-2">
+        <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
+        <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+          <p className="text-xs text-text-industrial/40">Sin suficientes muestras con valores de "{param}" para graficar tendencia.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
+        <span className="text-[10px] text-text-industrial/40">Últimas {data.length} muestras</span>
+      </div>
+      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={data} margin={{ top: 5, right: 12, left: 0, bottom: 5 }}>
+            <XAxis dataKey="label" stroke="#64748b" fontSize={10} />
+            <YAxis stroke="#64748b" fontSize={10} />
+            <Tooltip
+              contentStyle={{ background: "#0D1526", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+              labelStyle={{ color: "#fbbf24" }}
+              formatter={(value: any, _name: any, props: any) => [`${value}${threshold?.direction ? "" : ""}`, props.payload.sampleCode]}
+            />
+            {threshold?.cautionMax != null && <ReferenceLine y={threshold.cautionMax} stroke="#facc15" strokeDasharray="3 3" label={{ value: "Caución", fill: "#facc15", fontSize: 9, position: "right" }} />}
+            {threshold?.criticalMax != null && <ReferenceLine y={threshold.criticalMax} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Crítico", fill: "#ef4444", fontSize: 9, position: "right" }} />}
+            {threshold?.cautionMin != null && <ReferenceLine y={threshold.cautionMin} stroke="#facc15" strokeDasharray="3 3" label={{ value: "Caución", fill: "#facc15", fontSize: 9, position: "right" }} />}
+            {threshold?.criticalMin != null && <ReferenceLine y={threshold.criticalMin} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Crítico", fill: "#ef4444", fontSize: 9, position: "right" }} />}
+            <Line type="monotone" dataKey="value" stroke="#fb923c" strokeWidth={2} dot={{ r: 4, strokeWidth: 0, fill: "#fb923c" }} activeDot={{ r: 6 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function ParamSelector({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <TrendingUp className="w-3.5 h-3.5 text-accent" />
+      <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">Parámetro</span>
+      <select value={value} onChange={e => onChange(e.target.value)} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono">
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
     </div>
   );
 }

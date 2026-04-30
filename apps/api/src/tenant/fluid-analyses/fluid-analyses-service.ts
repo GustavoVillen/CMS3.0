@@ -366,9 +366,143 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
       entityId: sampleId,
       metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
     });
+
+    // Auto-create Defect if not already linked
+    if (!result.defectId) {
+      try {
+        const defectId = await createDefectFromResult(prisma, session, sample, result, params);
+        if (defectId) {
+          await (prisma as any).fluidAnalysisResult.update({
+            where: { id: result.id },
+            data:  { defectId },
+          });
+          result.defectId = defectId;
+        }
+      } catch {
+        // Non-fatal: surfaced via the criticalAlert audit event regardless
+      }
+    }
   }
 
   return result;
+}
+
+// ── Auto-create Defect from a critical fluid result ──────────────────────────
+
+async function createDefectFromResult(
+  prisma: any,
+  session: TenantAccessSession,
+  sample: any,
+  result: any,
+  parameters: Record<string, unknown>,
+): Promise<string | null> {
+  // Pick the worst parameters to surface in the description
+  const worstParams = Object.entries(parameters)
+    .filter(([, v]) => Number.isFinite(Number(v)))
+    .map(([k, v]) => `${k}=${v}`)
+    .slice(0, 6)
+    .join(", ");
+
+  // Generate next defect code
+  const last = await prisma.defect.findFirst({
+    where: { tenantId: sample.tenantId, vesselCode: sample.vesselCode },
+    orderBy: { createdAt: "desc" },
+    select: { defectCode: true },
+  });
+  let n = 1;
+  if (last?.defectCode) {
+    const m = last.defectCode.match(/(\d+)$/);
+    if (m) n = parseInt(m[1], 10) + 1;
+  }
+  const defectCode = `DEF-${sample.vesselCode}-${String(n).padStart(4, "0")}`;
+
+  const severity = result.verdict === "ACTION_REQUIRED" ? "CRITICAL" : "HIGH";
+  const description = [
+    `Análisis de fluido ${sample.sampleCode} (${sample.fluidType}) — Veredicto: ${result.verdict}.`,
+    result.summary ? `Resumen del lab: ${result.summary}` : "",
+    worstParams ? `Parámetros: ${worstParams}` : "",
+  ].filter(Boolean).join(" ");
+
+  const defect = await prisma.defect.create({
+    data: {
+      tenantId: sample.tenantId,
+      vesselCode: sample.vesselCode,
+      assetId: sample.assetId,
+      defectCode,
+      status: "OPEN",
+      severity,
+      classification: "PREDICTIVE_FLUID_ANALYSIS",
+      reportedAt: new Date(),
+      description,
+      createdByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    },
+  });
+
+  void publishAudit(prisma, {
+    tenantId: sample.tenantId,
+    actorUserId: session.user.id,
+    action: "Defect.createdFromFluidAnalysis",
+    entityType: "Defect",
+    entityId: defect.id,
+    metadata: { defectCode, sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, severity },
+  });
+
+  return defect.id;
+}
+
+// ── Trend data: last N samples of an asset, optionally filtered by parameter ─
+
+export interface TrendPoint {
+  sampleId: string;
+  sampleCode: string;
+  sampledAt: string;
+  runningHours: number | null;
+  verdict: Verdict | null;
+  values: Record<string, number>;   // only numeric parameters
+}
+
+export async function getAssetFluidTrend(
+  session: TenantAccessSession,
+  assetId: string,
+  fluidType?: FluidType | null,
+  limit = 12,
+): Promise<{ items: TrendPoint[] }> {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [] };
+  const tenantId = await resolveTenantId(session);
+
+  const where: any = { tenantId, assetId, deletedAt: null };
+  if (fluidType) where.fluidType = fluidType;
+
+  const samples = await (prisma as any).fluidSample.findMany({
+    where,
+    orderBy: { sampledAt: "asc" },
+    take: limit,
+    include: { result: true },
+  });
+
+  const items: TrendPoint[] = samples.map((s: any) => {
+    const values: Record<string, number> = {};
+    const params = s.result?.parameters as Record<string, any> | null;
+    if (params) {
+      for (const [k, raw] of Object.entries(params)) {
+        const v = (raw && typeof raw === "object" && "value" in (raw as any)) ? (raw as any).value : raw;
+        const n = typeof v === "number" ? v : Number(v);
+        if (Number.isFinite(n)) values[k] = n;
+      }
+    }
+    return {
+      sampleId:     s.id,
+      sampleCode:   s.sampleCode,
+      sampledAt:    s.sampledAt.toISOString(),
+      runningHours: s.runningHours,
+      verdict:      s.result?.verdict ?? null,
+      values,
+    };
+  });
+
+  return { items };
 }
 
 // ── Thresholds CRUD (admin only) ─────────────────────────────────────────────

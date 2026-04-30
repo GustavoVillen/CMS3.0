@@ -54,7 +54,7 @@ import {
 } from "./ai-documents/ai-documents-service";
 import {
   listFluidSamples, getFluidSample, createFluidSample, updateFluidSample, deleteFluidSample,
-  upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold,
+  upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold, getAssetFluidTrend,
   type FluidType as FluidTypeEnum, type Verdict, type SampleStatus,
 } from "./fluid-analyses/fluid-analyses-service";
 import { saveFluidReportFile } from "./fluid-analyses/fluid-uploads-service";
@@ -761,6 +761,15 @@ export async function handleTenantRoutes(
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
     const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode });
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/fluid-analyses-trend") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const assetId = url.searchParams.get("assetId");
+    if (!assetId) throw new RouteError(400, "ASSET_ID_REQUIRED", "assetId es requerido.");
+    const fluidType = url.searchParams.get("fluidType") as FluidTypeEnum | null;
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 12), 50);
+    sendJson(response, 200, await getAssetFluidTrend(session, assetId, fluidType, limit));
     return true;
   }
   if (method === "GET" && url.pathname === "/app/fluid-analyses-thresholds") {
