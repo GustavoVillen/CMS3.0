@@ -9,6 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -259,6 +260,14 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
 
   const isCriticalStock = !isNew && spare.onHand < spare.minStock;
   const isWarnStock     = !isNew && !isCriticalStock && spare.onHand <= spare.reorderPoint;
+
+  // ESC guard: confirma cambios sin guardar
+  const isDirty = useDirtyTracker({
+    vesselCode, sku, name, category, criticality, manufacturer, model, unit,
+    minStock, reorderPoint, targetStock, location, status,
+    internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays,
+  });
+  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

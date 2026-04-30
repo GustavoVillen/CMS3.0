@@ -10,6 +10,7 @@ import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { RichTextArea } from "../components/RichTextArea";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -262,6 +263,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
       setSaving(false);
     }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, assetId, classification, description, severity, operationalState, immediateAction,
+  });
+  useEscapeGuard({
+    isDirty,
+    onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
+    onClose,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -588,6 +599,25 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
       onSaved();
     }
   }, [closeDefectAndWo, onSaved, patchDefect, repairType]);
+
+  // ESC guard: dirty si algun campo editable difiere del valor original del defect
+  const isDirty = !isClosed && (
+    description           !== (defect.description           ?? "") ||
+    classification        !== (defect.classification        ?? "") ||
+    severity              !== (defect.severity              ?? "MEDIUM") ||
+    operationalState      !== (defect.operationalState      ?? "NORMAL") ||
+    status                !== (defect.status                ?? "OPEN") ||
+    immediateAction       !== (defect.immediateAction       ?? "") ||
+    correctiveAction      !== (defect.correctiveAction      ?? "") ||
+    rcaAnalysis           !== (defect.rcaAnalysis           ?? "") ||
+    (rcaMethodology || null) !== (defect.rcaMethodology     ?? null) ||
+    rcaImmediateCause     !== (defect.rcaImmediateCause     ?? "") ||
+    rcaContributingCause  !== (defect.rcaContributingCause  ?? "") ||
+    rcaRootCause          !== (defect.rcaRootCause          ?? "") ||
+    rcaPreventiveActions  !== (defect.rcaPreventiveActions  ?? "") ||
+    repairType            !== (defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null)
+  );
+  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   // "ask-permanent-wo" screen
   if (postSaveStep === "ask-permanent-wo") {

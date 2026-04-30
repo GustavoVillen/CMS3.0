@@ -10,6 +10,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface Asset {
   id: string;
@@ -493,6 +494,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
     trackDailyReport,
     vesselCode,
   ]);
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, assetCode, selectedGroup, selectedSubgroup, name, criticality, status,
+    manufacturer, model, serialNumber, trackDailyReport,
+    installationDate, lastOverhaulDate, replacementDate,
+  });
+  useEscapeGuard({ isDirty, onSave: onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

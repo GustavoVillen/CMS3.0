@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface Vessel {
   id: string;
@@ -221,6 +222,18 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
     } catch (err) { setError(err instanceof ApiError ? err.message : t("common.saveError")); }
     finally { setSaving(false); }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    code, name, owner, vesselType, imo, registration, powerHp, dwtTons,
+    lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
+    incorporationDate, incorporationType, status,
+  });
+  useEscapeGuard({
+    isDirty,
+    onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
+    onClose,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

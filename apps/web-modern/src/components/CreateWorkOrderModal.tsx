@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       checklistDocFile, onSaved, t]);
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, assetId, type, priority, criticality, openDate, dueDate,
+    title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    checklistDocFileName: checklistDocFile?.name ?? "",
+  });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

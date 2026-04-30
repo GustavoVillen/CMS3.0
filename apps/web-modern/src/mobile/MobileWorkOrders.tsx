@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { useEscapeGuard } from "../lib/escape-guard";
 
 interface WO {
   id: string;
@@ -91,6 +92,23 @@ export const MobileWorkOrders: React.FC = () => {
       setSaving(false);
     }
   }, [selected, woResult, observations, reload]);
+
+  // ─── ESC guard: cierre con confirmación según vista ─────────────────────────
+  const closeFormDirty =
+    view === "close" && (woResult !== "SATISFACTORY" || observations.trim() !== "");
+
+  useEscapeGuard({
+    enabled: view === "close",
+    isDirty: closeFormDirty,
+    onSave: handleClose,
+    onClose: () => setView("detail"),
+  });
+
+  useEscapeGuard({
+    enabled: view === "detail",
+    isDirty: false,
+    onClose: back,
+  });
 
   // ── Close form ──────────────────────────────────────────────────────────────
   if (view === "close" && selected) {

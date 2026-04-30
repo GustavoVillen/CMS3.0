@@ -3,6 +3,7 @@ import { ChevronLeft, Plus, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
+import { useEscapeGuard } from "../lib/escape-guard";
 
 interface Defect {
   id: string;
@@ -77,6 +78,28 @@ export const MobileDefects: React.FC = () => {
       setSaving(false);
     }
   }, [selectedVesselCode, assetId, classification, description, severity, operationalState, reload]);
+
+  // ─── ESC guard ──────────────────────────────────────────────────────────────
+  const createDirty =
+    view === "create" &&
+    (assetId !== "" ||
+      description.trim() !== "" ||
+      severity !== "MEDIUM" ||
+      operationalState !== "NORMAL" ||
+      classification !== "Mecánico");
+
+  useEscapeGuard({
+    enabled: view === "create",
+    isDirty: createDirty,
+    onSave: handleCreate,
+    onClose: () => setView("list"),
+  });
+
+  useEscapeGuard({
+    enabled: view === "detail",
+    isDirty: false,
+    onClose: () => { setView("list"); setSelected(null); },
+  });
 
   // ── Create form ─────────────────────────────────────────────────────────────
   if (view === "create") {

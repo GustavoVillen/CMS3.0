@@ -12,6 +12,7 @@ import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder } from "../lib/print-work-order";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -510,6 +511,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
       woResult, executedByName, executionDate, runningHoursAtExecution, observations,
       uploadIfNeeded, onSaved, t, workOrder.id]);
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    department, location, commMethod, distribution,
+    checklistDocFileName: checklistDocFile?.name ?? "",
+    woResult, executedByName, executionDate, runningHoursAtExecution, observations,
+    supportingDocFileName: supportingDocFile?.name ?? "",
+  });
+  const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
+  useEscapeGuard({
+    enabled: !woClosedReadOnly,
+    isDirty,
+    onSave,
+    onClose,
+  });
 
   const onClose_WO = useCallback(async () => {
     if (!woResult) { setErr("El resultado de la OT es requerido para cerrar."); return; }

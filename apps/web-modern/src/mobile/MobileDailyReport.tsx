@@ -3,6 +3,7 @@ import { ChevronLeft, CheckCircle, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
+import { useEscapeGuard } from "../lib/escape-guard";
 
 interface DailyReport {
   id: string;
@@ -83,6 +84,25 @@ export const MobileDailyReport: React.FC = () => {
       setSaving(false);
     }
   }, [selectedVesselCode, todayStr, opStatus, fuel, engineH, genH, oil, notes, reload]);
+
+  // ─── ESC guard ──────────────────────────────────────────────────────────────
+  const createDirty =
+    view === "create" &&
+    (fuel !== "" || engineH !== "" || genH !== "" || oil !== "" ||
+     notes.trim() !== "" || opStatus !== "UNDERWAY");
+
+  useEscapeGuard({
+    enabled: view === "create",
+    isDirty: createDirty,
+    onSave: handleCreate,
+    onClose: () => setView("list"),
+  });
+
+  useEscapeGuard({
+    enabled: view === "detail",
+    isDirty: false,
+    onClose: () => { setView("list"); setSel(null); },
+  });
 
   // ── Create ───────────────────────────────────────────────────────────────────
   if (view === "create") {
