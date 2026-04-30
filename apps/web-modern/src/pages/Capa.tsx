@@ -8,6 +8,7 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface CapaRecord {
   id: string;
@@ -72,6 +73,10 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
     }
   }, [capaId, onSuccess, t, verificationNote]);
 
+  // ESC guard
+  const isDirty = useDirtyTracker({ verificationNote });
+  useEscapeGuard({ isDirty, onSave, onClose });
+
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -128,6 +133,10 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, onClose, onSucc
     }
   }, [capaId, onSuccess, t, verificationNote]);
 
+  // ESC guard
+  const isDirty = useDirtyTracker({ verificationNote });
+  useEscapeGuard({ isDirty, onSave, onClose });
+
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -183,6 +192,10 @@ const CancelCapaModal: React.FC<CancelCapaModalProps> = ({ capaId, onClose, onSu
       setSaving(false);
     }
   }, [cancelReason, capaId, onSuccess, t]);
+
+  // ESC guard
+  const isDirty = useDirtyTracker({ cancelReason });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -283,6 +296,21 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
       setSaving(false);
     }
   }, [description, dueDate, onSuccess, owner, priority, record.id, t, title]);
+
+  // ESC guard — comparado contra el record original
+  const recordDirty = !isTerminal && (
+    title       !== (record.title       ?? "") ||
+    description !== (record.description ?? "") ||
+    priority    !== (record.priority    ?? "MEDIUM") ||
+    owner       !== (record.owner       ?? "") ||
+    dueDate     !== asDateInputValue(record.dueDate)
+  );
+  useEscapeGuard({
+    enabled: !showCompleteModal && !showCloseModal && !showCancelModal,
+    isDirty: recordDirty,
+    onSave,
+    onClose,
+  });
 
   return (
     <>

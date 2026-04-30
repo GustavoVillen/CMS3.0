@@ -31,6 +31,7 @@ import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { RichTextArea } from "../components/RichTextArea";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -454,6 +455,18 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
     if (await doSave()) onSuccess();
   };
 
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    executedByName, result, notes, deficienciesNotes, completedAt, runningHours,
+    docFileName: docFile?.name ?? "",
+  });
+  useEscapeGuard({
+    enabled: !showPrintConfirm,
+    isDirty,
+    onSave: handleSave,
+    onClose,
+  });
+
   const handleSaveAndPdf = async () => {
     if (!await doSave()) return;
     const token = localStorage.getItem("gpms_token");
@@ -810,6 +823,16 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
       setSaving(false);
     }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    newDueDate, newDueHours, justification, compensatoryMeasures, authorizedBy,
+  });
+  useEscapeGuard({
+    isDirty,
+    onSave: () => save(false),
+    onClose,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1351,6 +1374,21 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
   const canExecute = !isNew && plan.status !== "INACTIVE" && plan.status !== "DRAFT";
   const canPostpone = !isNew && plan.status !== "INACTIVE" && plan.status !== "DRAFT";
   const needsWO = !isNew && (plan.triggerResultMode === "AUTO_WO" || plan.triggerResultMode === "APPROVAL_WO");
+
+  // ESC guard
+  const planDirty = useDirtyTracker({
+    vesselCode, taskCode, assetId, taskType, title, description, responsible,
+    acceptanceCriteria, loto, sfiGroupNumber, sfiSubgroupCode,
+    riskLevel, riskAnalysisResult, status, triggerType,
+    frequencyMonths, frequencyHours, triggerResultMode,
+    checklistTemplate, samplingFluidType,
+  });
+  useEscapeGuard({
+    enabled: !readOnly && !showExecution && !showPostpone && !confirmDelete && !confirmDuplicateWO,
+    isDirty: planDirty,
+    onSave,
+    onClose,
+  });
 
   async function downloadPdf() {
     if (!plan || isNew) return;

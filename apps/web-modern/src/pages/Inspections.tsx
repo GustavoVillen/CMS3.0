@@ -7,6 +7,7 @@ import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface InspectionTemplateSummary {
   id: string;
@@ -267,6 +268,10 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
     }
   }, [executionId, generalObservations, inspectorName, nextScheduledDate, onSuccess, result, t]);
 
+  // ESC guard
+  const isDirty = useDirtyTracker({ result, generalObservations, nextScheduledDate, inspectorName });
+  useEscapeGuard({ isDirty, onSave, onClose });
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -407,6 +412,15 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
       setSavingResults(false);
     }
   }, [buildResultsPayload, editing.execution.id, onResultsSaved, t]);
+
+  // ESC guard — dirty si checklist se modificó
+  const checklistDirty = useDirtyTracker(checklistFormState);
+  useEscapeGuard({
+    enabled: !showCompleteModal,
+    isDirty: checklistDirty,
+    onSave: onSaveResults,
+    onClose,
+  });
 
   const onStart = useCallback(async () => {
     setStarting(true);
@@ -568,6 +582,9 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
     () => [...(template.checklistItems ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     [template.checklistItems],
   );
+
+  // ESC guard (read-only modal — solo cierra)
+  useEscapeGuard({ isDirty: false, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

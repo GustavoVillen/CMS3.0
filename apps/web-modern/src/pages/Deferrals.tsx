@@ -8,6 +8,7 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 const SOURCE_ROUTE: Record<string, string> = {
   WORK_ORDER:       "/work-orders",
@@ -115,6 +116,9 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
     }
   }, [compensatoryMeasures, deferralId, onSuccess, reviewNotes, t]);
 
+  const isDirty = useDirtyTracker({ reviewNotes });
+  useEscapeGuard({ isDirty, onSave, onClose });
+
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -172,6 +176,9 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
       setSaving(false);
     }
   }, [compensatoryMeasures, deferralId, onSuccess, t, targetDate]);
+
+  const isDirty = useDirtyTracker({ targetDate, compensatoryMeasures });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -233,6 +240,9 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
     }
   }, [deferralId, onSuccess, rejectionReason, t]);
 
+  const isDirty = useDirtyTracker({ rejectionReason });
+  useEscapeGuard({ isDirty, onSave, onClose });
+
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -284,6 +294,9 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
       setSaving(false);
     }
   }, [closeNotes, deferralId, onSuccess, t]);
+
+  const isDirty = useDirtyTracker({ closeNotes });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -349,6 +362,15 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
       setSaving(false);
     }
   }, [compensatoryMeasures, deferral.id, t]);
+
+  // ESC guard
+  const isDeferralDirty = compensatoryMeasures !== (deferral.compensatoryMeasures ?? "");
+  useEscapeGuard({
+    enabled: !showReview && !showApprove && !showReject && !showClose && !confirmCancel,
+    isDirty: isDeferralDirty,
+    onSave: handleSave,
+    onClose,
+  });
 
   const handleCancelDeferral = useCallback(async () => {
     setCancelling(true);

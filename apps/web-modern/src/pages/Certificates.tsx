@@ -10,6 +10,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface Certificate {
   id: string;
@@ -186,6 +187,17 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
       setSaving(false);
     }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    certCode, name, vesselCode, authority, issueDate, expiryDate, lastInsp, notes,
+    originalSourceLink, originalSourceName, originalSourceMimeOrExt,
+  });
+  useEscapeGuard({
+    isDirty,
+    onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
+    onClose,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

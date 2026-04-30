@@ -11,6 +11,7 @@ import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/utils";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -354,6 +355,13 @@ function SampleFormModal({
       setErr(e instanceof ApiError ? e.message : "No se pudo guardar.");
     } finally { setSaving(false); }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, assetId, fluidType, fluidProduct, sampledAt, runningHours,
+    containerCode, labName, labReference, notes,
+  });
+  useEscapeGuard({ isDirty, onSave: submit, onClose });
 
   return (
     <ModalShell title={mode === "create" ? "Nueva muestra" : `Editar ${sample?.sampleCode}`} onClose={onClose}>
@@ -810,6 +818,12 @@ function ResultFormModal({
       setErr(e instanceof ApiError ? e.message : "No se pudo guardar.");
     } finally { setSaving(false); }
   };
+
+  // ESC guard
+  const resultDirty = useDirtyTracker({
+    verdict, summary, receivedAt, params, reportUrl,
+  });
+  useEscapeGuard({ isDirty: resultDirty, onSave: submit, onClose });
 
   return (
     <ModalShell title={`Cargar resultado · ${sample.sampleCode}`} onClose={onClose} wide>

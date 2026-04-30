@@ -7,6 +7,7 @@ import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "..
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,6 +92,13 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
       setError(e instanceof Error ? e.message : "Error al guardar.");
     } finally { setSaving(false); }
   };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, providerCode, name, category, status,
+    contactName, contactEmail, contactPhone, location,
+  });
+  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   const handleDelete = async () => {
     if (!provider) return;
