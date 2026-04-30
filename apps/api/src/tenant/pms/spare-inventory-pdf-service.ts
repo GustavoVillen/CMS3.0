@@ -95,21 +95,29 @@ export async function buildSpareInventoryPdf(
 
     function cell(cx: number, cy: number, cw: number, ch: number, text: string, opts: {
       bold?: boolean; fontSize?: number; align?: "left" | "center" | "right";
-      bg?: string; color?: string;
+      bg?: string; color?: string; wrap?: boolean;
     } = {}) {
       if (opts.bg) doc.rect(cx, cy, cw, ch).fillColor(opts.bg).fill();
       doc.rect(cx, cy, cw, ch).strokeColor(BORDER).lineWidth(0.4).stroke();
       if (text) {
-        doc.fontSize(opts.fontSize ?? 9)
+        const fs = opts.fontSize ?? 9;
+        const ty = opts.wrap ? cy + 3 : cy + (ch - fs) / 2;
+        doc.fontSize(fs)
           .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
           .fillColor(opts.color ?? BLACK)
-          .text(text, cx + 5, cy + (ch - (opts.fontSize ?? 9)) / 2, {
+          .text(text, cx + 5, ty, {
             width: cw - 10,
             align: opts.align ?? "left",
-            lineBreak: false,
-            ellipsis: true,
+            lineBreak: !!opts.wrap,
+            ellipsis: !opts.wrap,
           });
       }
+    }
+
+    function measureH(text: string, fontName: "Helvetica" | "Helvetica-Bold", fontSize: number, colWidth: number): number {
+      if (!text) return 0;
+      doc.fontSize(fontSize).font(fontName);
+      return doc.heightOfString(text, { width: colWidth - 10 });
     }
 
     function checkbox(cx: number, cy: number, label: string, checked: boolean) {
@@ -281,7 +289,8 @@ export async function buildSpareInventoryPdf(
     });
     y += HDR_ROW_H;
 
-    const ROW_H_DATA = 16;
+    const ROW_H_MIN = 16;
+    const ROW_PADDING_V = 3;
     const detailsFor = (it: typeof report.items[number]): string => {
       const parts = [];
       if (it.longDescription) parts.push(it.longDescription);
@@ -291,16 +300,26 @@ export async function buildSpareInventoryPdf(
     };
 
     for (const it of report.items) {
-      ensureSpace(ROW_H_DATA);
       const color = it.belowReorder ? RED : BLACK;
-      cell(colX(0), y, colW[0], ROW_H_DATA, sanitizePdfText(`${it.sku} — ${it.name}`), { fontSize: 8, color });
-      cell(colX(1), y, colW[1], ROW_H_DATA, sanitizePdfText(detailsFor(it)), { fontSize: 7.5, color });
-      cell(colX(2), y, colW[2], ROW_H_DATA, sanitizePdfText(it.sfiCode ?? ""), { fontSize: 8, color, align: "center" });
-      cell(colX(3), y, colW[3], ROW_H_DATA, String(it.onHand), { fontSize: 8, color, align: "right", bold: it.belowReorder });
-      cell(colX(4), y, colW[4], ROW_H_DATA, sanitizePdfText(it.unit), { fontSize: 7.5, color, align: "center" });
-      cell(colX(5), y, colW[5], ROW_H_DATA, sanitizePdfText(it.location ?? ""), { fontSize: 7.5, color });
-      cell(colX(6), y, colW[6], ROW_H_DATA, fmtDate(it.lastMovementAt), { fontSize: 7.5, color, align: "center" });
-      y += ROW_H_DATA;
+      const t0 = sanitizePdfText(`${it.sku} — ${it.name}`);
+      const t1 = sanitizePdfText(detailsFor(it));
+      const t5 = sanitizePdfText(it.location ?? "");
+
+      // Calculate row height from wrapping columns
+      const h0 = measureH(t0, "Helvetica", 8,   colW[0]) + 2 * ROW_PADDING_V;
+      const h1 = measureH(t1, "Helvetica", 7.5, colW[1]) + 2 * ROW_PADDING_V;
+      const h5 = measureH(t5, "Helvetica", 7.5, colW[5]) + 2 * ROW_PADDING_V;
+      const rowH = Math.max(ROW_H_MIN, h0, h1, h5);
+
+      ensureSpace(rowH);
+      cell(colX(0), y, colW[0], rowH, t0, { fontSize: 8, color, wrap: true });
+      cell(colX(1), y, colW[1], rowH, t1, { fontSize: 7.5, color, wrap: true });
+      cell(colX(2), y, colW[2], rowH, sanitizePdfText(it.sfiCode ?? ""), { fontSize: 8, color, align: "center" });
+      cell(colX(3), y, colW[3], rowH, String(it.onHand), { fontSize: 8, color, align: "right", bold: it.belowReorder });
+      cell(colX(4), y, colW[4], rowH, sanitizePdfText(it.unit), { fontSize: 7.5, color, align: "center" });
+      cell(colX(5), y, colW[5], rowH, t5, { fontSize: 7.5, color, wrap: true });
+      cell(colX(6), y, colW[6], rowH, fmtDate(it.lastMovementAt), { fontSize: 7.5, color, align: "center" });
+      y += rowH;
     }
 
     // Fill remaining page with empty rows for handwritten additions (Mercurio style)
@@ -308,11 +327,11 @@ export async function buildSpareInventoryPdf(
     const filledRows = report.items.length;
     const emptyRowsToDraw = Math.max(0, minTotalRows - filledRows);
     for (let i = 0; i < emptyRowsToDraw; i++) {
-      if (y + ROW_H_DATA > CONTENT_BOTTOM) break;
+      if (y + ROW_H_MIN > CONTENT_BOTTOM) break;
       headers.forEach((_, ci) => {
-        cell(colX(ci), y, colW[ci], ROW_H_DATA, "", {});
+        cell(colX(ci), y, colW[ci], ROW_H_MIN, "", {});
       });
-      y += ROW_H_DATA;
+      y += ROW_H_MIN;
     }
 
     // ── SUMMARY (mejora sobre el original) ──────────────────────────────────

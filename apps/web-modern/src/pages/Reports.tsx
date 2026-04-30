@@ -56,19 +56,25 @@ function fmtDate(s: string | null): string {
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-async function downloadReportPdf(url: string, filename: string) {
+function downloadReportPdf(url: string, filename: string): Promise<void> {
+  // Use .then() chain (NOT async/await) so the click() stays within the
+  // user-gesture context — Chrome blocks downloads triggered after an `await`.
   const token = localStorage.getItem("gpms_token") ?? "";
   const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
-  const res = await fetch(url, {
+  return fetch(url, {
     headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
+  }).then(r => {
+    if (!r.ok) throw new Error("PDF generation failed");
+    return r.blob();
+  }).then(blob => {
+    // Force application/pdf MIME so Chrome doesn't flag it as unsafe.
+    const pdfBlob = blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+    const objUrl = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = objUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
   });
-  if (!res.ok) throw new Error("PDF generation failed");
-  const blob = await res.blob();
-  const objUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = objUrl; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
 }
 
 // ─── Inventory Tab ───────────────────────────────────────────────────────────
@@ -87,17 +93,14 @@ const InventoryTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
 
   const { data, loading, reload } = useFetch<InventoryReport>(queryUrl ?? "");
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!vesselCode) return;
     setDownloading(true);
-    try {
-      const p = new URLSearchParams({ vesselCode, asOfDate });
-      if (department) p.set("department", department);
-      const filename = `inventario-${vesselCode}-${asOfDate}.pdf`;
-      await downloadReportPdf(`/app/pms/reports/spare-inventory/pdf?${p.toString()}`, filename);
-    } finally {
-      setDownloading(false);
-    }
+    const p = new URLSearchParams({ vesselCode, asOfDate });
+    if (department) p.set("department", department);
+    const filename = `inventario-${vesselCode}-${asOfDate}.pdf`;
+    downloadReportPdf(`/app/pms/reports/spare-inventory/pdf?${p.toString()}`, filename)
+      .finally(() => setDownloading(false));
   };
 
   if (!vesselCode) {
@@ -122,7 +125,7 @@ const InventoryTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
           <button onClick={() => void reload()} className="px-3 py-1.5 text-xs font-semibold bg-white/5 border border-white/10 text-white/60 rounded-lg hover:bg-white/10 hover:text-white transition-colors">
             Actualizar
           </button>
-          <button onClick={() => void handleDownload()} disabled={downloading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-40">
+          <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-40">
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
             Descargar PDF
           </button>
@@ -203,16 +206,13 @@ const ConsumptionTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
 
   const { data, loading, reload } = useFetch<ConsumptionReport>(queryUrl ?? "");
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!vesselCode) return;
     setDownloading(true);
-    try {
-      const filename = `consumo-${vesselCode}-${year}-${String(month).padStart(2, "0")}.pdf`;
-      const url = `/app/pms/reports/spare-consumption/pdf?vesselCode=${encodeURIComponent(vesselCode)}&year=${year}&month=${month}`;
-      await downloadReportPdf(url, filename);
-    } finally {
-      setDownloading(false);
-    }
+    const filename = `consumo-${vesselCode}-${year}-${String(month).padStart(2, "0")}.pdf`;
+    const url = `/app/pms/reports/spare-consumption/pdf?vesselCode=${encodeURIComponent(vesselCode)}&year=${year}&month=${month}`;
+    downloadReportPdf(url, filename)
+      .finally(() => setDownloading(false));
   };
 
   const yearOptions = useMemo(() => {
@@ -243,7 +243,7 @@ const ConsumptionTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
           <button onClick={() => void reload()} className="px-3 py-1.5 text-xs font-semibold bg-white/5 border border-white/10 text-white/60 rounded-lg hover:bg-white/10 hover:text-white transition-colors">
             Actualizar
           </button>
-          <button onClick={() => void handleDownload()} disabled={downloading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-40">
+          <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-40">
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
             Descargar PDF
           </button>

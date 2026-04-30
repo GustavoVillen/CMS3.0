@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, X } from "lucide-react";
 import { api } from "../lib/api";
@@ -27,6 +27,7 @@ interface Spare {
   longDescription: string | null; sfiCode: string | null; leadTimeDays: number | null;
 }
 interface ListResponse { items: Spare[]; total: number; }
+interface SfiNode { id: string; code: string; description: string; groupNumber: number; groupName: string; }
 
 // ---------------------------------------------------------------------------
 // Stock level indicator (uses onHand from calculation service)
@@ -171,6 +172,28 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const [longDescription,         setLongDescription]         = useState(spare?.longDescription         ?? "");
   const [sfiCode,                 setSfiCode]                 = useState(spare?.sfiCode                 ?? "");
   const [leadTimeDays,            setLeadTimeDays]            = useState(String(spare?.leadTimeDays     ?? ""));
+
+  // SFI selectors — group is derived from the first digit of the existing code on edit
+  const { data: sfiData } = useFetch<{ items: SfiNode[] }>("/app/pms/sfi");
+  const sfiNodes = sfiData?.items ?? [];
+  const [sfiGroup, setSfiGroup] = useState<string>(() => {
+    if (!spare?.sfiCode) return "";
+    const digits = String(spare.sfiCode).replace(/\D/g, "");
+    return digits[0] ?? "";
+  });
+  const sfiGroups = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const n of sfiNodes) {
+      if (!seen.has(n.groupNumber)) seen.set(n.groupNumber, n.groupName);
+    }
+    return Array.from(seen.entries()).sort((a, b) => a[0] - b[0]).map(([num, name]) => ({ num, name }));
+  }, [sfiNodes]);
+  const filteredCodes = useMemo(() => {
+    if (!sfiGroup) return [];
+    const gn = parseInt(sfiGroup, 10);
+    return sfiNodes.filter(n => n.groupNumber === gn);
+  }, [sfiNodes, sfiGroup]);
+  const handleSfiGroupChange = (g: string) => { setSfiGroup(g); setSfiCode(""); };
 
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -319,7 +342,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <label className={labelCls}>Unidad *</label>
               <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="ud, m, kg, L…" className={inputCls} />
@@ -329,8 +352,22 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
               <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Rack A-3…" className={inputCls} />
             </div>
             <div>
+              <label className={labelCls}>SFI Grupo</label>
+              <select value={sfiGroup} onChange={e => handleSfiGroupChange(e.target.value)} className={inputCls}>
+                <option value="">— Grupo —</option>
+                {sfiGroups.map(g => (
+                  <option key={g.num} value={String(g.num)}>{g.num} — {g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className={labelCls}>Código SFI</label>
-              <input value={sfiCode} onChange={e => setSfiCode(e.target.value)} placeholder="710, 720…" className={inputCls} />
+              <select value={sfiCode} onChange={e => setSfiCode(e.target.value)} className={inputCls} disabled={!sfiGroup || filteredCodes.length === 0}>
+                <option value="">— Código —</option>
+                {filteredCodes.map(n => (
+                  <option key={n.code} value={n.code}>{n.code} — {n.description}</option>
+                ))}
+              </select>
             </div>
           </div>
 

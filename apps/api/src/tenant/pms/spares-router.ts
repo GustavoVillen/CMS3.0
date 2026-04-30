@@ -65,7 +65,8 @@ export async function handleSparesRoutes(
     !url.pathname.startsWith("/app/pms/stock-movements") &&
     !url.pathname.startsWith("/app/pms/stock-locations") &&
     !url.pathname.startsWith("/app/pms/spare-requests") &&
-    !url.pathname.startsWith("/app/pms/stock-reservations")
+    !url.pathname.startsWith("/app/pms/stock-reservations") &&
+    !url.pathname.startsWith("/app/pms/reports/spare-")
   ) {
     return false;
   }
