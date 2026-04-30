@@ -109,6 +109,12 @@ export interface CopilotoRequest {
   tenantId: string;
   tenantSlug: string;
   /**
+   * Authenticated user id — forwarded to Anthropic as `metadata.user_id` so that
+   * the Anthropic Console (Workbench → Usage) can break down token consumption
+   * per user. Anthropic recommends a hash/uuid, never an email/PII.
+   */
+  userId: string;
+  /**
    * Structured snapshot of the screen the user is working on (emitted by the frontend).
    * Injected into the system prompt so the AI can give context-aware answers.
    * Sanitised: only string/null leaf values, no circular refs, no sensitive secrets.
@@ -474,17 +480,24 @@ export async function streamCopilotoChat(
     getActiveTenantAiDocumentsContent(req.tenantId),
   ]);
 
-  const systemParts: string[] = [GUARDRAILS];
-
+  // ── Stable system blocks (cacheable) ──
+  // GUARDRAILS + capability + tenant docs are stable across turns within a tenant/locale.
+  // We mark the last stable block with cache_control so Anthropic caches tools + system
+  // up to that point. From the second turn onward, this prefix bills at ~10% of normal.
+  const stableSystemBlocks: Anthropic.TextBlockParam[] = [
+    { type: "text", text: GUARDRAILS },
+  ];
   if (publishedPrompt) {
-    systemParts.push(`## Capability Instructions\n${publishedPrompt}`);
+    stableSystemBlocks.push({ type: "text", text: `## Capability Instructions\n${publishedPrompt}` });
   }
-
   if (docsContent) {
-    systemParts.push(`## Tenant Knowledge Documents\n${docsContent}`);
+    stableSystemBlocks.push({ type: "text", text: `## Tenant Knowledge Documents\n${docsContent}` });
   }
+  stableSystemBlocks[stableSystemBlocks.length - 1]!.cache_control = { type: "ephemeral" };
 
-  // Inject current screen context when provided by the frontend
+  // ── Volatile system blocks (per-request, after the cache breakpoint) ──
+  const volatileSystemBlocks: Anthropic.TextBlockParam[] = [];
+
   if (req.screenContext && typeof req.screenContext === "object" && Object.keys(req.screenContext).length > 0) {
     const ctx = req.screenContext;
     const entityCode  = ctx.entityCode  as string | undefined;
@@ -493,56 +506,55 @@ export async function streamCopilotoChat(
     const stage       = ctx.workflowStage as string | undefined;
 
     const refParts = [
-      entityCode                         && `**${entityCode}**`,
-      module_                            && `(${module_})`,
-      vesselCode                         && `vessel ${vesselCode}`,
-      stage                              && `status: ${stage}`,
+      entityCode  && `**${entityCode}**`,
+      module_     && `(${module_})`,
+      vesselCode  && `vessel ${vesselCode}`,
+      stage       && `status: ${stage}`,
     ].filter(Boolean);
 
-    systemParts.push(
-      `## ACTIVE RECORD — CRITICAL CONTEXT\n` +
-      `The user currently has this specific record open on their screen: ${refParts.join(", ")}.\n` +
-      `When the user refers to "the RCA", "this work order", "this case", "analyze it", "help me", ` +
-      `or uses ANY ambiguous reference, they mean **this exact entity**.\n` +
-      `**NEVER ask which record, vessel, or entity to analyze — you already know. ` +
-      `Use the field values below and answer directly.**\n\n` +
-      JSON.stringify(ctx, null, 2),
-    );
+    volatileSystemBlocks.push({
+      type: "text",
+      text:
+        `## ACTIVE RECORD — CRITICAL CONTEXT\n` +
+        `The user currently has this specific record open on their screen: ${refParts.join(", ")}.\n` +
+        `When the user refers to "the RCA", "this work order", "this case", "analyze it", "help me", ` +
+        `or uses ANY ambiguous reference, they mean **this exact entity**.\n` +
+        `**NEVER ask which record, vessel, or entity to analyze — you already know. ` +
+        `Use the field values below and answer directly.**\n\n` +
+        JSON.stringify(ctx),
+    });
   }
 
-  // Inject last 5 open insights as operational context
-  const prisma = getPrismaClient();
-  if (prisma) {
-    try {
-      const insightWhere: Record<string, unknown> = { tenantId: req.tenantId, status: "OPEN" };
-      if (req.vesselCode) insightWhere.vesselCode = req.vesselCode;
+  // Inject last 5 open insights only on the FIRST turn of the conversation —
+  // injecting them per-turn invalidates the cache (volatile system content downstream).
+  if (req.messages.length === 1) {
+    const prisma = getPrismaClient();
+    if (prisma) {
+      try {
+        const insightWhere: Record<string, unknown> = { tenantId: req.tenantId, status: "OPEN" };
+        if (req.vesselCode) insightWhere.vesselCode = req.vesselCode;
 
-      const insights = await prisma.aiInsight.findMany({
-        where: insightWhere,
-        orderBy: [{ priority: "desc" }, { detectedAt: "desc" }],
-        take: 5,
-        select: {
-          insightType: true,
-          priority: true,
-          title: true,
-          summary: true,
-          vesselCode: true,
-        },
-      });
+        const insights = await prisma.aiInsight.findMany({
+          where: insightWhere,
+          orderBy: [{ priority: "desc" }, { detectedAt: "desc" }],
+          take: 5,
+          select: { insightType: true, priority: true, title: true, summary: true, vesselCode: true },
+        });
 
-      if (insights.length > 0) {
-        const insightBlock = insights
-          .map(i => `[${i.priority}] ${i.title} (${i.vesselCode ?? "fleet"}): ${i.summary}`)
-          .join("\n");
-        systemParts.push(`## Active Operational Insights\n${insightBlock}`);
+        if (insights.length > 0) {
+          const insightBlock = insights
+            .map(i => `[${i.priority}] ${i.title} (${i.vesselCode ?? "fleet"}): ${i.summary}`)
+            .join("\n");
+          volatileSystemBlocks.push({ type: "text", text: `## Active Operational Insights\n${insightBlock}` });
+        }
+      } catch {
+        // non-fatal — proceed without insights context
       }
-    } catch {
-      // non-fatal — proceed without insights context
     }
   }
 
   const client = new Anthropic({ apiKey });
-  const systemPrompt = systemParts.join("\n\n");
+  const systemBlocks: Anthropic.TextBlockParam[] = [...stableSystemBlocks, ...volatileSystemBlocks];
 
   const baseMessages: Anthropic.MessageParam[] = req.messages.map((m, i) => {
     // Inject file attachment as multimodal block into the last user message
@@ -586,9 +598,10 @@ export async function streamCopilotoChat(
   const phase1Stream = client.messages.stream({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
-    system: systemPrompt,
+    system: systemBlocks,
     tools: COPILOT_TOOLS,
     messages: baseMessages,
+    metadata: { user_id: req.userId },
   });
 
   // Emit text chunks from phase 1 in real time
@@ -630,9 +643,10 @@ export async function streamCopilotoChat(
     const phase2Stream = client.messages.stream({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
-      system: systemPrompt,
+      system: systemBlocks,
       // No tools in phase 2 — prevent infinite looping
       messages: phase2Messages,
+      metadata: { user_id: req.userId },
     });
 
     for await (const chunk of phase2Stream) {

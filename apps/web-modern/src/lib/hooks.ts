@@ -1,16 +1,51 @@
-import { useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { api, ApiError } from "./api";
+import { useVesselContext } from "./vessel-context";
+
+// Paths where vessel-code injection must be skipped (the vessel list itself,
+// auth endpoints, and any tenant-level resources that are not vessel-scoped).
+const VESSEL_SCOPE_SKIP = [
+  "/app/vessels",
+  "/app/me",
+  "/app/auth/",
+  "/app/providers",
+  "/app/ai-documents",
+  "/app/team",
+  "/app/audit",
+  "/app/excel/",
+  "/app/attachments",
+  "/app/copiloto",
+  "/app/profile",
+  "/app/ai-insights",
+];
+
+function injectVesselCode(path: string, vesselCode: string): string {
+  if (VESSEL_SCOPE_SKIP.some(prefix => path.startsWith(prefix))) return path;
+  const qIdx = path.indexOf("?");
+  const base = qIdx === -1 ? path : path.slice(0, qIdx);
+  const params = new URLSearchParams(qIdx === -1 ? "" : path.slice(qIdx + 1));
+  params.set("vesselCode", vesselCode);
+  return `${base}?${params.toString()}`;
+}
 
 export function useFetch<T>(path: string, deps: unknown[] = []) {
-  const [data, setData]     = useState<T | null>(null);
+  const { selectedVesselCode } = useVesselContext();
+
+  const effectivePath = useMemo(
+    () => selectedVesselCode ? injectVesselCode(path, selectedVesselCode) : path,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [path, selectedVesselCode],
+  );
+
+  const [data, setData]       = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<T>(path);
+      const res = await api.get<T>(effectivePath);
       setData(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error de carga");
@@ -18,7 +53,7 @@ export function useFetch<T>(path: string, deps: unknown[] = []) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, ...deps]);
+  }, [effectivePath, ...deps]);
 
   useEffect(() => { load(); }, [load]);
 

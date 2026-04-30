@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { Bell, User, LogOut, ChevronDown } from "lucide-react";
+import { Bell, User, LogOut, ChevronDown, Ship } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { useNavigate } from "react-router-dom";
 
 export const Header: React.FC<{ title: string }> = ({ title }) => {
   const { user, tenant, logout } = useAuth();
+  const { vessels, selectedVesselCode, setSelectedVesselCode } = useVesselContext();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const showSelector = vessels.length > 1;
 
   const handleLogout = () => {
     logout();
@@ -31,6 +34,24 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Global vessel selector */}
+        {showSelector && (
+          <div className="flex items-center gap-2 border border-white/10 rounded-full px-3 py-1.5 bg-white/3 hover:bg-white/5 transition-colors">
+            <Ship className="w-3.5 h-3.5 text-accent shrink-0" />
+            <select
+              value={selectedVesselCode ?? ""}
+              onChange={e => setSelectedVesselCode(e.target.value || null)}
+              className="text-xs bg-transparent text-white focus:outline-none cursor-pointer appearance-none pr-1"
+            >
+              <option value="">Todos los buques</option>
+              {vessels.map(v => (
+                <option key={v.code} value={v.code}>{v.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3 h-3 text-text-industrial/40 shrink-0 pointer-events-none" />
+          </div>
+        )}
+
         <button className="relative p-2 rounded-full hover:bg-white/5 transition-colors">
           <Bell className="w-5 h-5 text-text-industrial/60" />
         </button>

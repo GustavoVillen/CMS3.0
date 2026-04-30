@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
 import { I18nProvider, type Locale } from "./lib/i18n";
+import { VesselProvider } from "./lib/vessel-context";
 import { Layout } from "./components/Layout";
 import { MobileLayout } from "./components/MobileLayout";
 import { PlatformLayout } from "./components/PlatformLayout";
@@ -125,7 +126,13 @@ function PlatformLoginRedirect() {
 function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
   const { tenant } = useAuth();
   const locale = (tenant?.locale ?? "es") as Locale;
-  return <I18nProvider locale={locale}>{children}</I18nProvider>;
+  return (
+    <I18nProvider locale={locale}>
+      <VesselProvider>
+        {children}
+      </VesselProvider>
+    </I18nProvider>
+  );
 }
 
 function TenantLoginRedirect() {

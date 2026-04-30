@@ -1,13 +1,15 @@
 import React from "react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { useVesselContext } from "../lib/vessel-context";
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -50,6 +52,10 @@ export const Dashboard: React.FC = () => {
   const t            = useT();
   const locale       = useLocale();
   const [showInsights, setShowInsights] = React.useState(false);
+  const { selectedVessel, isVesselScoped } = useVesselContext();
+
+  // useFetch injects vesselCode automatically from VesselContext
+  const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
 
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
@@ -409,6 +415,16 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           );
         })()}
+
+        {/* Droplets consumption trend */}
+        <div className="lg:col-span-3">
+          <FuelConsumptionWidget
+            data={fuelData.data?.items ?? []}
+            loading={fuelData.loading}
+            error={fuelData.error}
+            vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : "Todos los buques"}
+          />
+        </div>
       </div>
 
     </div>
@@ -486,6 +502,158 @@ const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: b
     </div>
   </div>
 );
+
+// ---------------------------------------------------------------------------
+// Droplets consumption helpers
+// ---------------------------------------------------------------------------
+
+interface ChartPoint {
+  date: string;
+  label: string;
+  realValue: number | null;
+  interpolatedValue: number | null;
+}
+
+function buildDropletsChartData(raw: { date: string; liters: number }[]): ChartPoint[] {
+  const DAYS = 30;
+  const today = new Date();
+  const realMap = new Map(raw.map(r => [r.date, r.liters]));
+
+  const points: ChartPoint[] = [];
+  for (let i = DAYS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const date = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString("es", { day: "numeric", month: "short" });
+    points.push({ date, label, realValue: realMap.get(date) ?? null, interpolatedValue: null });
+  }
+
+  // Linear interpolation between real points — only for interior gaps
+  let i = 0;
+  while (i < points.length) {
+    if (points[i]!.realValue !== null) { i++; continue; }
+    const gapStart = i;
+    while (i < points.length && points[i]!.realValue === null) i++;
+    const gapEnd = i;
+    const leftIdx = gapStart - 1;
+    const rightIdx = gapEnd;
+    if (leftIdx >= 0 && rightIdx < points.length) {
+      const leftVal = points[leftIdx]!.realValue!;
+      const rightVal = points[rightIdx]!.realValue!;
+      // Include boundary real points in the interpolated series for seamless join
+      points[leftIdx]!.interpolatedValue = leftVal;
+      for (let j = gapStart; j < gapEnd; j++) {
+        const t = (j - leftIdx) / (rightIdx - leftIdx);
+        points[j]!.interpolatedValue = Math.round(leftVal + t * (rightVal - leftVal));
+      }
+      points[rightIdx]!.interpolatedValue = rightVal;
+    }
+  }
+
+  return points;
+}
+
+const FuelConsumptionWidget = ({
+  data, loading, error, vesselName,
+}: {
+  data: { date: string; liters: number }[];
+  loading: boolean;
+  error: string | null;
+  vesselName: string;
+}) => {
+  const chartData = React.useMemo(() => buildDropletsChartData(data), [data]);
+  const hasData = data.length > 0;
+
+  return (
+    <div className="bento-card flex flex-col h-[220px]">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Droplets className="w-3.5 h-3.5 text-accent" />
+            Consumo de Combustible
+          </h2>
+          <p className="text-[10px] text-text-industrial/40">Últimos 30 días · {vesselName}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          {!loading && hasData && (
+            <div className="flex items-center gap-3 text-[10px] text-text-industrial/50">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-5 h-0.5 bg-[#4FC3F7] rounded" />
+                Real
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-5 h-0.5 bg-[#94A3B8] rounded" style={{ borderTop: "2px dashed #94A3B8", height: 0 }} />
+                Estimado
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error ? (
+        <ErrorMsg msg={error} />
+      ) : !loading && !hasData ? (
+        <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+          <Droplets className="w-6 h-6 text-text-industrial/40" />
+          <p className="text-xs text-text-industrial/40">Sin reportes de combustible en los últimos 30 días</p>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "rgba(224,225,221,0.35)", fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                interval={4}
+              />
+              <YAxis
+                tick={{ fill: "rgba(224,225,221,0.35)", fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={48}
+                tickFormatter={v => `${(v as number).toLocaleString("es")}L`}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }}
+                itemStyle={{ color: "#E0E1DD" }}
+                labelStyle={{ color: "rgba(224,225,221,0.5)", fontSize: 11 }}
+                formatter={(value: number, name: string) => [
+                  `${value.toLocaleString("es")} L`,
+                  name === "realValue" ? "Real" : "Estimado",
+                ]}
+              />
+              {/* Solid line for real data */}
+              <Line
+                dataKey="realValue"
+                stroke="#4FC3F7"
+                strokeWidth={2}
+                dot={{ r: 3, fill: "#4FC3F7", strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: "#4FC3F7" }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+              {/* Dashed line for interpolated gaps */}
+              <Line
+                dataKey="interpolatedValue"
+                stroke="#94A3B8"
+                strokeWidth={1.5}
+                strokeDasharray="5 4"
+                dot={false}
+                activeDot={{ r: 4, fill: "#94A3B8" }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
   insights: AiInsight[];

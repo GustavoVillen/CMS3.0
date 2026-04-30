@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
+  ArrowUpDown, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
@@ -125,6 +126,13 @@ export const FluidAnalysesPage: React.FC = () => {
   const [filters, setFilters] = useState({ vesselCode: "", fluidType: "", verdict: "", status: "" });
   const [creatingSample, setCreatingSample] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string>("sampledAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   const params = new URLSearchParams();
   if (filters.vesselCode) params.set("vesselCode", filters.vesselCode);
@@ -134,10 +142,31 @@ export const FluidAnalysesPage: React.FC = () => {
   const path = `/app/fluid-analyses${params.toString() ? "?" + params.toString() : ""}`;
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
-  const samples = useMemo(() => data?.items ?? [], [data?.items]);
-
   const { data: assetsData } = useFetch<{ items: AssetItem[] }>("/app/assets", []);
   const { data: vesselsData } = useFetch<{ items: Array<{ code: string; name: string | null }> }>("/app/vessels", []);
+
+  const assets = useMemo(() => assetsData?.items ?? [], [assetsData?.items]);
+
+  const samples = useMemo(() => {
+    const items = [...(data?.items ?? [])];
+    items.sort((a, b) => {
+      let av: string | number | null = null;
+      let bv: string | number | null = null;
+      if (sortKey === "sampleCode")  { av = a.sampleCode;  bv = b.sampleCode; }
+      if (sortKey === "vesselCode")  { av = a.vesselCode;  bv = b.vesselCode; }
+      if (sortKey === "assetId")     { av = assetLabel(a.assetId, assets); bv = assetLabel(b.assetId, assets); }
+      if (sortKey === "fluidType")   { av = a.fluidType;   bv = b.fluidType; }
+      if (sortKey === "sampledAt")   { av = a.sampledAt;   bv = b.sampledAt; }
+      if (sortKey === "runningHours"){ av = a.runningHours ?? -1; bv = b.runningHours ?? -1; }
+      if (sortKey === "status")      { av = a.status;      bv = b.status; }
+      if (sortKey === "verdict")     { av = a.result?.verdict ?? ""; bv = b.result?.verdict ?? ""; }
+      if (sortKey === "report")      { av = a.result?.reportUrl ? 1 : 0; bv = b.result?.reportUrl ? 1 : 0; }
+      if (av === null || bv === null) return 0;
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return items;
+  }, [data?.items, sortKey, sortDir, assets]);
 
   return (
     <div className="space-y-5">
@@ -207,15 +236,15 @@ export const FluidAnalysesPage: React.FC = () => {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
-                <th className="text-left px-4 py-3 font-semibold">Código</th>
-                <th className="text-left px-4 py-3 font-semibold">Buque</th>
-                <th className="text-left px-4 py-3 font-semibold">Equipo</th>
-                <th className="text-left px-4 py-3 font-semibold">Fluido</th>
-                <th className="text-left px-4 py-3 font-semibold">Toma</th>
-                <th className="text-right px-4 py-3 font-semibold">Horas</th>
-                <th className="text-left px-4 py-3 font-semibold">Estado</th>
-                <th className="text-left px-4 py-3 font-semibold">Veredicto</th>
-                <th className="text-left px-4 py-3 font-semibold">Reporte</th>
+                <SortTh label="Código"    col="sampleCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Buque"     col="vesselCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Equipo"    col="assetId"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Fluido"    col="fluidType"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Toma"      col="sampledAt"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Horas"     col="runningHours" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
+                <SortTh label="Estado"    col="status"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Veredicto" col="verdict"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Reporte"   col="report"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>
@@ -248,6 +277,30 @@ export const FluidAnalysesPage: React.FC = () => {
     </div>
   );
 };
+
+function SortTh({ label, col, sortKey, sortDir, onSort, align = "left" }: {
+  label: string;
+  col: string;
+  sortKey: string;
+  sortDir: "asc" | "desc";
+  onSort: (col: string) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === col;
+  const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ArrowUpDown;
+  return (
+    <th className={`px-4 py-3 font-semibold text-${align}`}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-1 hover:text-white transition-colors ${active ? "text-accent" : ""}`}
+      >
+        {label}
+        <Icon className="w-3 h-3 shrink-0" />
+      </button>
+    </th>
+  );
+}
 
 function assetLabel(assetId: string, assets: AssetItem[]): string {
   const a = assets.find(x => x.id === assetId);

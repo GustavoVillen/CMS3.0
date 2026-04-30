@@ -18,7 +18,7 @@ import { saveAttachment } from "./attachments/attachment-uploads-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
 import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
-import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport } from "./daily-reports/daily-reports-service";
+import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport, getFuelConsumptionTrend } from "./daily-reports/daily-reports-service";
 import {
   confirmAndIntegrateDailyReport,
   getDailyReportWithSubEntities,
@@ -430,6 +430,16 @@ export async function handleTenantRoutes(
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveCertificateSourceFile(session.tenantSlug, originalName, buffer);
     sendJson(response, 200, result);
+    return true;
+  }
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/dashboard/fuel-consumption") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode") || null;
+    const days = Math.min(90, Math.max(7, parseInt(url.searchParams.get("days") ?? "30", 10) || 30));
+    const points = await getFuelConsumptionTrend(session, vesselCode, days);
+    sendJson(response, 200, { items: points });
     return true;
   }
 
@@ -902,6 +912,7 @@ export async function handleTenantRoutes(
           vesselCode:     body.vesselCode    ?? null,
           tenantId:       tenant.id,
           tenantSlug:     slug,
+          userId:         session.user.id,
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
         },
@@ -930,7 +941,7 @@ export async function handleTenantRoutes(
   // ── Copiloto one-shot analysis endpoints ─────────────────────────────────
   if (method === "POST" && url.pathname === "/app/copiloto/analyze-deficiency") {
     const slug = requireTenantSlug(request, env);
-    requireTenantAccessSession(request, slug);
+    const session = requireTenantAccessSession(request, slug);
     const body = await readJsonBody(request) as {
       planTitle?: string; vesselCode?: string; deficienciesNotes?: string;
     };
@@ -949,7 +960,7 @@ export async function handleTenantRoutes(
     ].join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });
@@ -958,7 +969,7 @@ export async function handleTenantRoutes(
 
   if (method === "POST" && url.pathname === "/app/copiloto/analyze-postponement") {
     const slug = requireTenantSlug(request, env);
-    requireTenantAccessSession(request, slug);
+    const session = requireTenantAccessSession(request, slug);
     const body = await readJsonBody(request) as {
       planTitle?: string; vesselCode?: string; triggerType?: string;
       justification?: string; newDueDate?: string | null; newDueHours?: string | null;
@@ -981,7 +992,7 @@ export async function handleTenantRoutes(
     ].filter(Boolean).join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });

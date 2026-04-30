@@ -188,3 +188,53 @@ export async function updateTenantDailyReport(session: TenantAccessSession, id: 
 
   return prisma.dailyReport.update({ where: { id }, data });
 }
+
+export interface FuelConsumptionPoint {
+  date: string;   // YYYY-MM-DD
+  liters: number;
+}
+
+export async function getFuelConsumptionTrend(
+  session: TenantAccessSession,
+  vesselCode: string | null,
+  days = 30,
+): Promise<FuelConsumptionPoint[]> {
+  const prisma = getPrismaClient();
+  if (!prisma) return [];
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) return [];
+
+  const since = new Date();
+  since.setDate(since.getDate() - (days - 1));
+  since.setUTCHours(0, 0, 0, 0);
+
+  const where: Record<string, unknown> = {
+    tenantId: tenant.id,
+    deletedAt: null,
+    fuelConsumedLiters: { not: null },
+    status: { in: ["SUBMITTED", "REVIEWED", "CLOSED"] },
+    reportDate: { gte: since },
+  };
+
+  if (vesselCode) {
+    where.vesselCode = vesselCode;
+  } else if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
+    where.vesselCode = { in: session.user.assignedVesselCodes };
+  }
+
+  const records = await prisma.dailyReport.findMany({
+    where,
+    select: { reportDate: true, fuelConsumedLiters: true },
+    orderBy: { reportDate: "asc" },
+  });
+
+  // Group by calendar date (YYYY-MM-DD), sum liters per day
+  const byDate = new Map<string, number>();
+  for (const r of records) {
+    const key = r.reportDate.toISOString().slice(0, 10);
+    byDate.set(key, (byDate.get(key) ?? 0) + (r.fuelConsumedLiters ?? 0));
+  }
+
+  return Array.from(byDate.entries()).map(([date, liters]) => ({ date, liters }));
+}
