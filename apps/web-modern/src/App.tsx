@@ -29,6 +29,7 @@ import { DeferralsPage } from "./pages/Deferrals";
 import { CapaPage } from "./pages/Capa";
 import { SpareRequestsPage } from "./pages/SpareRequests";
 import { SpareReceiptsPage } from "./pages/SpareReceipts";
+import { ReportsPage } from "./pages/Reports";
 import { ProvidersPage } from "./pages/Providers";
 import { ProfilePage } from "./pages/Profile";
 import { PlatformLogin } from "./pages/platform/PlatformLogin";
@@ -103,6 +104,7 @@ export default function App() {
               <Route path="/spares"            element={<SparesPage />} />
               <Route path="/spare-requests"    element={<SpareRequestsPage />} />
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
+              <Route path="/reports"           element={<ReportsPage />} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

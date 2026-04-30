@@ -613,6 +613,9 @@ model TenantSetting {
   autoConsumeNonCriticalSpares          Boolean  @default(false)
   // PDF templates per entity (extensible: defectPdfTemplate, deferralPdfTemplate, etc.)
   workOrderPdfTemplate WorkOrderPdfTemplate @default(STANDARD)
+  // Document revisions (printed in PDF headers — incrementable per tenant when forms change)
+  spareInventoryRevision    Int @default(2)
+  spareConsumptionRevision  Int @default(1)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

@@ -96,6 +96,66 @@ export async function handleSparesRoutes(
     return true;
   }
 
+  // ── Reportes (Inventario / Consumo Mensual) ──────────────────────────────────
+
+  if (method === "GET" && url.pathname === "/app/pms/reports/spare-inventory") {
+    const { getSpareInventoryReport } = await import("./spare-reports-service");
+    const dept = url.searchParams.get("department");
+    const report = await getSpareInventoryReport(session, {
+      vesselCode: url.searchParams.get("vesselCode") ?? "",
+      department: dept as "CUBIERTA" | "MAQUINAS" | "COCINA" | "BARCAZA" | null,
+      asOfDate: url.searchParams.get("asOfDate"),
+    });
+    sendJson(response, 200, report);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/reports/spare-inventory/pdf") {
+    const { buildSpareInventoryPdf } = await import("./spare-inventory-pdf-service");
+    const dept = url.searchParams.get("department");
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const buffer = await buildSpareInventoryPdf(session, {
+      vesselCode,
+      department: dept as "CUBIERTA" | "MAQUINAS" | "COCINA" | "BARCAZA" | null,
+      asOfDate: url.searchParams.get("asOfDate"),
+    });
+    const filename = `inventario-${vesselCode}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/reports/spare-consumption") {
+    const { getSpareConsumptionReport } = await import("./spare-reports-service");
+    const report = await getSpareConsumptionReport(session, {
+      vesselCode: url.searchParams.get("vesselCode") ?? "",
+      year:  Number(url.searchParams.get("year")  ?? new Date().getFullYear()),
+      month: Number(url.searchParams.get("month") ?? new Date().getMonth() + 1),
+    });
+    sendJson(response, 200, report);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/reports/spare-consumption/pdf") {
+    const { buildSpareConsumptionPdf } = await import("./spare-consumption-pdf-service");
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const year  = Number(url.searchParams.get("year")  ?? new Date().getFullYear());
+    const month = Number(url.searchParams.get("month") ?? new Date().getMonth() + 1);
+    const buffer = await buildSpareConsumptionPdf(session, { vesselCode, year, month });
+    const filename = `consumo-${vesselCode}-${year}-${String(month).padStart(2, "0")}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
   if (/^\/app\/pms\/spares\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "GET") {
