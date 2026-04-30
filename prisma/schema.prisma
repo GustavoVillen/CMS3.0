@@ -906,6 +906,9 @@ model MaintenancePlan {
   nextDueHours         Float?
   // PMS extensions
   taskMasterId         String?
+  // Fluid sampling: si está set, al cerrar la OT generada por este plan se
+  // crea automáticamente un FluidSample DRAFT con horas y datos del activo.
+  samplingFluidType    FluidType?
   triggerResultMode    TriggerResultMode      @default(DUE_ONLY)
   checklistTemplate    String?
   windowMode           ExecutionWindowMode    @default(AUTO)
@@ -2054,22 +2057,25 @@ model SpareLink {
 // ─── Block 12: Análisis de Fluidos (lubricantes, combustibles, agua) ─────────
 
 model FluidSample {
-  id               String              @id @default(cuid())
-  tenantId         String
-  vesselCode       String
-  assetId          String
-  sampleCode       String
-  fluidType        FluidType
-  fluidProduct     String?
-  sampledAt        DateTime
-  runningHours     Float?
-  sampledByUserId  String?
-  containerCode    String?
-  sentAt           DateTime?
-  labName          String?
-  labReference     String?
-  status           FluidSampleStatus   @default(DRAFT)
-  notes            String?
+  id                 String              @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  assetId            String
+  sampleCode         String
+  fluidType          FluidType
+  fluidProduct       String?
+  sampledAt          DateTime
+  runningHours       Float?
+  sampledByUserId    String?
+  containerCode      String?
+  sentAt             DateTime?
+  labName            String?
+  labReference       String?
+  status             FluidSampleStatus   @default(DRAFT)
+  notes              String?
+  // Trazabilidad cuando el sample fue generado automáticamente al cerrar una OT
+  sourceWorkOrderId  String?
+  sourcePlanId       String?
   createdAt        DateTime            @default(now())
   createdByUserId  String
   updatedAt        DateTime            @updatedAt

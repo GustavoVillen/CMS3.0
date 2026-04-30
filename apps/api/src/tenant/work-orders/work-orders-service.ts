@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
+import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -492,6 +493,9 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
 
+  let samplingFluidType: string | null = null;
+  let samplingPlanId: string | null = null;
+
   const closedResult = await prisma.$transaction(async (tx) => {
     const startDate = current.status === "PLANNED" ? completedDate : undefined;
     const closed = await tx.workOrder.update({
@@ -537,6 +541,11 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             updatedByUserId: session.user.id,
           },
         });
+        // Capture sampling info for post-commit auto-creation of FluidSample
+        if ((plan as any).samplingFluidType) {
+          samplingFluidType = (plan as any).samplingFluidType;
+          samplingPlanId = plan.id;
+        }
       }
     }
 
@@ -578,7 +587,29 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     entityId: current.id,
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult },
   });
-  return { ...closedResult, failedMovements };
+
+  // Auto-create FluidSample DRAFT if the plan was a fluid sampling plan
+  let createdFluidSampleId: string | null = null;
+  if (samplingFluidType) {
+    try {
+      createdFluidSampleId = await createFluidSampleFromWorkOrder({
+        tenantId:        current.tenantId,
+        vesselCode:      current.vesselCode,
+        assetId:         current.assetId,
+        fluidType:       samplingFluidType as FluidTypeEnum,
+        workOrderId:     current.id,
+        workOrderCode:   current.workOrderCode,
+        planId:          samplingPlanId,
+        runningHours:    payload.runningHoursAtExecution ?? null,
+        completedAt:     completedDate,
+        createdByUserId: session.user.id,
+      });
+    } catch (err) {
+      console.error("[closeWorkOrder] auto-create FluidSample failed", err);
+    }
+  }
+
+  return { ...closedResult, failedMovements, createdFluidSampleId };
 }
 
 export async function cancelWorkOrder(session: TenantAccessSession, id: string, payload: CancelWorkOrderInput) {

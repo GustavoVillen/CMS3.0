@@ -451,6 +451,62 @@ async function createDefectFromResult(
   return defect.id;
 }
 
+// ── Auto-create a DRAFT sample from a closed work order ─────────────────────
+//
+// Called from closeWorkOrder when the linked MaintenancePlan has a
+// `samplingFluidType` set. The newly created FluidSample is in DRAFT status —
+// the user finishes filling lab data afterwards from the FluidAnalyses page.
+
+export interface CreateSampleFromWoInput {
+  tenantId: string;
+  vesselCode: string;
+  assetId: string;
+  fluidType: FluidType;
+  workOrderId: string;
+  workOrderCode: string;
+  planId: string | null;
+  runningHours: number | null;
+  completedAt: Date;
+  createdByUserId: string;
+}
+
+export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoInput): Promise<string | null> {
+  const prisma = getPrismaClient();
+  if (!prisma) return null;
+
+  const sampleCode = await nextSampleCode(prisma as any, input.tenantId, input.vesselCode);
+
+  const sample = await (prisma as any).fluidSample.create({
+    data: {
+      tenantId:          input.tenantId,
+      vesselCode:        input.vesselCode,
+      assetId:           input.assetId,
+      sampleCode,
+      fluidType:         input.fluidType,
+      sampledAt:         input.completedAt,
+      runningHours:      input.runningHours,
+      sampledByUserId:   input.createdByUserId,
+      status:            "DRAFT",
+      notes:             `Generada automáticamente al cerrar OT ${input.workOrderCode}.`,
+      sourceWorkOrderId: input.workOrderId,
+      sourcePlanId:      input.planId,
+      createdByUserId:   input.createdByUserId,
+      updatedByUserId:   input.createdByUserId,
+    },
+  });
+
+  void publishAudit(prisma, {
+    tenantId: input.tenantId,
+    actorUserId: input.createdByUserId,
+    action: "FluidSample.createdFromWorkOrder",
+    entityType: "FluidSample",
+    entityId: sample.id,
+    metadata: { sampleCode, vesselCode: input.vesselCode, fluidType: input.fluidType, workOrderCode: input.workOrderCode },
+  });
+
+  return sample.id;
+}
+
 // ── Trend data: last N samples of an asset, optionally filtered by parameter ─
 
 export interface TrendPoint {

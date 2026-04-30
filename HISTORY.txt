@@ -1,5 +1,39 @@
 HISTORY.txt
 
+[2026-04-30] Análisis de Fluidos: Fase 5 — integración con Plan/OT
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-service.ts
+- apps/api/src/tenant/work-orders/work-orders-service.ts
+- apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts
+- apps/web-modern/src/pages/MaintenancePlans.tsx
+- apps/web-modern/src/pages/FluidAnalyses.tsx
+
+CAMBIOS:
+1. Schema: MaintenancePlan.samplingFluidType (FluidType?, opcional) marca
+   un plan como "plan de muestreo de fluido". FluidSample gana
+   sourceWorkOrderId + sourcePlanId para trazabilidad bidireccional.
+2. Backend: createFluidSampleFromWorkOrder() crea muestra DRAFT con
+   horas/asset/fluidType pre-cargados. Hook en closeWorkOrder lo invoca
+   automaticamente cuando el plan asociado tiene samplingFluidType set.
+   El close response incluye createdFluidSampleId para que el frontend
+   pueda redirigir si quiere.
+3. Frontend MaintenancePlans: nuevo selector "Plan de muestreo de fluido"
+   en el form de plan (11 opciones de fluido + "no es plan de muestreo").
+4. Frontend FluidAnalyses: si el sample tiene sourceWorkOrderId, banner
+   en el modal de detalle con boton "Ver OT origen" que navega a
+   /work-orders?openId=X.
+
+VERIFICACION E2E:
+- PATCH plan samplingFluidType=GEARBOX_OIL → persiste en DB.
+- POST open-work-order desde el plan → genera WO PLANNED.
+- POST close-work-order con runningHoursAtExecution=14000 → response
+  incluye createdFluidSampleId. DB confirma FluidSample creado:
+  sampleCode FA-LATERE-0001, fluidType GEARBOX_OIL, runningHours 14000,
+  status DRAFT, sourceWorkOrderId vinculado.
+
 [2026-04-30] Análisis de Fluidos: Fases 3+4 (auto-defecto, tendencias, copiloto)
 Agent: Claude Opus 4.7
 

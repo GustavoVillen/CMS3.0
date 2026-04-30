@@ -66,6 +66,7 @@ interface MaintenancePlan {
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
+  samplingFluidType?: string | null;
 }
 
 interface ListResponse {
@@ -990,6 +991,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [frequencyHours, setFrequencyHours] = useState(String(plan?.frequencyHours ?? ""));
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
+  const [samplingFluidType, setSamplingFluidType] = useState<string>(plan?.samplingFluidType ?? "");
   const [checklistUploading, setChecklistUploading] = useState(false);
   const [checklistUploadError, setChecklistUploadError] = useState<string | null>(null);
   const [loadingCriteria, setLoadingCriteria] = useState(false);
@@ -1086,6 +1088,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setFrequencyHours(String(plan.frequencyHours ?? ""));
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setChecklistTemplate(plan.checklistTemplate ?? "");
+    setSamplingFluidType(plan.samplingFluidType ?? "");
     setChecklistUploading(false);
     setChecklistUploadError(null);
     setActionError(null);
@@ -1308,6 +1311,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
           frequencyHours: freqHours,
           triggerResultMode,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
+          samplingFluidType: samplingFluidType || null,
         });
         savedId = created.id;
       } else {
@@ -1330,6 +1334,7 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
           frequencyHours: freqHours,
           triggerResultMode,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
+          samplingFluidType: samplingFluidType || null,
         });
         savedId = plan.id;
       }
@@ -1745,6 +1750,30 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
                   {TRIGGER_RESULT_MODES.map(m => <option key={m} value={m}>{t(`mp.trm.${m}` as any)}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Análisis de fluido — si está set, al cerrar la OT del plan se crea automáticamente una muestra DRAFT */}
+            <div className="space-y-1.5">
+              <label className={labelCls}>
+                Plan de muestreo de fluido <span className="text-text-industrial/40 normal-case font-normal">(opcional)</span>
+              </label>
+              <select value={samplingFluidType} onChange={e => setSamplingFluidType(e.target.value)} className={selectCls} disabled={readOnly}>
+                <option value="">— No es plan de muestreo —</option>
+                <option value="ENGINE_OIL">Aceite motor</option>
+                <option value="HYDRAULIC_OIL">Hidráulico</option>
+                <option value="GEARBOX_OIL">Reductora</option>
+                <option value="TRANSMISSION_OIL">Transmisión</option>
+                <option value="FUEL_DIESEL">Diesel</option>
+                <option value="FUEL_GASOIL">Gasoil</option>
+                <option value="COOLING_WATER">Agua refrigeración</option>
+                <option value="BOILER_WATER">Agua caldera</option>
+                <option value="POTABLE_WATER">Agua potable</option>
+                <option value="REFRIGERANT">Refrigerante</option>
+                <option value="OTHER">Otro</option>
+              </select>
+              {samplingFluidType && (
+                <p className="text-[10px] text-accent/70">Al cerrar la OT generada por este plan, se creará automáticamente una muestra de fluido en estado DRAFT.</p>
+              )}
             </div>
 
             {/* Responsible + Status */}

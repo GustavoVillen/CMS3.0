@@ -32,6 +32,8 @@ export interface CreateMaintenancePlanInput {
   riskAnalysisResult?: string | null;
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
+  /** Si está set, al cerrar la OT del plan se crea automáticamente un FluidSample DRAFT con horas/asset/fluidType pre-cargados. */
+  samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
   triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
@@ -62,6 +64,8 @@ export interface UpdateMaintenancePlanInput {
   riskAnalysisResult?: string | null;
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
+  /** Si está set, al cerrar la OT del plan se crea automáticamente un FluidSample DRAFT con horas/asset/fluidType pre-cargados. */
+  samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
   triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
@@ -607,6 +611,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
     status: payload.status ?? "ACTIVE",
     taskMasterId: normalizeOptionalText(payload.taskMasterId),
+    samplingFluidType: payload.samplingFluidType ?? null,
     triggerResultMode: payload.triggerResultMode ?? "DUE_ONLY",
     checklistTemplate: normalizeOptionalText(payload.checklistTemplate),
     windowMode: payload.windowMode ?? "AUTO",
@@ -686,6 +691,7 @@ export async function updateTenantMaintenancePlan(
   if (payload.riskAnalysisResult !== undefined) data.riskAnalysisResult = normalizeOptionalText(payload.riskAnalysisResult);
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.taskMasterId !== undefined) data.taskMasterId = normalizeOptionalText(payload.taskMasterId);
+  if (payload.samplingFluidType !== undefined) data.samplingFluidType = payload.samplingFluidType ?? null;
   if (payload.triggerResultMode !== undefined) data.triggerResultMode = payload.triggerResultMode;
   if (payload.checklistTemplate !== undefined) data.checklistTemplate = normalizeOptionalText(payload.checklistTemplate);
   if (payload.windowMode !== undefined) data.windowMode = payload.windowMode;

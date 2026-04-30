@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
@@ -74,6 +75,8 @@ interface FluidSample {
   notes: string | null;
   result: FluidResult | null;
   createdAt: string;
+  sourceWorkOrderId: string | null;
+  sourcePlanId: string | null;
 }
 
 interface ListResponse { items: FluidSample[]; total: number; }
@@ -381,6 +384,7 @@ function SampleDetailModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [sample, setSample]       = useState<FluidSample | null>(null);
   const [loading, setLoading]     = useState(true);
   const [err, setErr]             = useState<string | null>(null);
@@ -417,6 +421,21 @@ function SampleDetailModal({
   return (
     <ModalShell title={`${sample.sampleCode} · ${FLUID_LABELS[sample.fluidType]}`} onClose={onClose} wide>
       <div className="space-y-5">
+        {sample.sourceWorkOrderId && (
+          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
+            <div className="flex items-center gap-2 text-xs text-accent/80">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generada automáticamente al cerrar una OT.</span>
+            </div>
+            <button
+              onClick={() => navigate(`/work-orders?openId=${encodeURIComponent(sample.sourceWorkOrderId!)}`)}
+              className="text-xs font-bold text-accent hover:text-white inline-flex items-center gap-1"
+            >
+              Ver OT origen →
+            </button>
+          </div>
+        )}
+
         {/* Header info */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Stat label="Buque" value={sample.vesselCode} />
