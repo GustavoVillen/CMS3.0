@@ -291,30 +291,55 @@ export async function buildSpareInventoryPdf(
 
     const ROW_H_MIN = 16;
     const ROW_PADDING_V = 3;
+
+    // Strip boilerplate prefixes that some longDescription values carry from
+    // legacy imports (e.g. "Repuesto/consumible asociado: …", "Clasificación
+    // SFI asignada: 330." …). The SFI is rendered in its own column and the
+    // category/min already have their own labels, so duplicating them noise
+    // up the cell.
+    const cleanLongDescription = (raw: string | null): string => {
+      if (!raw) return "";
+      let s = raw;
+      // Drop "Clasificación SFI asignada: <digits>." anywhere.
+      s = s.replace(/Clasificaci[oó]n\s+SFI\s+asignada:\s*\d+\.?\s*/gi, "");
+      // Drop "Repuesto/consumible asociado:" lead-in.
+      s = s.replace(/^\s*Repuesto\/consumible\s+asociado:\s*/i, "");
+      // Collapse whitespace.
+      return s.replace(/\s{2,}/g, " ").trim();
+    };
+
     const detailsFor = (it: typeof report.items[number]): string => {
       const parts = [];
-      if (it.longDescription) parts.push(it.longDescription);
+      const cleaned = cleanLongDescription(it.longDescription);
+      if (cleaned) parts.push(cleaned);
       if (it.category) parts.push(`Cat: ${it.category}`);
       if (it.minStock > 0) parts.push(`Mín: ${it.minStock}`);
       return parts.join(" · ");
+    };
+
+    const sfiCellText = (it: typeof report.items[number]): string => {
+      if (!it.sfiCode) return "";
+      return it.sfiName ? `${it.sfiName} (${it.sfiCode})` : it.sfiCode;
     };
 
     for (const it of report.items) {
       const color = it.belowReorder ? RED : BLACK;
       const t0 = sanitizePdfText(`${it.sku} — ${it.name}`);
       const t1 = sanitizePdfText(detailsFor(it));
+      const t2 = sanitizePdfText(sfiCellText(it));
       const t5 = sanitizePdfText(it.location ?? "");
 
       // Calculate row height from wrapping columns
       const h0 = measureH(t0, "Helvetica", 8,   colW[0]) + 2 * ROW_PADDING_V;
       const h1 = measureH(t1, "Helvetica", 7.5, colW[1]) + 2 * ROW_PADDING_V;
+      const h2 = measureH(t2, "Helvetica", 7.5, colW[2]) + 2 * ROW_PADDING_V;
       const h5 = measureH(t5, "Helvetica", 7.5, colW[5]) + 2 * ROW_PADDING_V;
-      const rowH = Math.max(ROW_H_MIN, h0, h1, h5);
+      const rowH = Math.max(ROW_H_MIN, h0, h1, h2, h5);
 
       ensureSpace(rowH);
       cell(colX(0), y, colW[0], rowH, t0, { fontSize: 8, color, wrap: true });
       cell(colX(1), y, colW[1], rowH, t1, { fontSize: 7.5, color, wrap: true });
-      cell(colX(2), y, colW[2], rowH, sanitizePdfText(it.sfiCode ?? ""), { fontSize: 8, color, align: "center" });
+      cell(colX(2), y, colW[2], rowH, t2, { fontSize: 7.5, color, align: "center", wrap: true });
       cell(colX(3), y, colW[3], rowH, String(it.onHand), { fontSize: 8, color, align: "right", bold: it.belowReorder });
       cell(colX(4), y, colW[4], rowH, sanitizePdfText(it.unit), { fontSize: 7.5, color, align: "center" });
       cell(colX(5), y, colW[5], rowH, t5, { fontSize: 7.5, color, wrap: true });

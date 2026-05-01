@@ -28,6 +28,8 @@ export interface SpareInventoryItem {
   belowReorder: boolean;
   location: string | null;
   sfiCode: string | null;
+  /** Description of the SFI node (e.g. "Fuel Oil System") when sfiCode resolves. */
+  sfiName: string | null;
   department: Department | null;
   /** Date of the last movement (any type) for this spare, ISO string. */
   lastMovementAt: string | null;
@@ -198,6 +200,30 @@ export async function getSpareInventoryReport(
 
   const onHandMap = await getOnHandMap(prisma, spares.map((s: any) => s.id));
 
+  // SFI description map (global + tenant-specific). Used to render
+  // "Fuel Oil System (710)" instead of just the code.
+  const sfiCodes = new Set<string>();
+  for (const s of spares) {
+    if (s.sfiCode) sfiCodes.add(s.sfiCode);
+    const aSfi = s.linkedAssetId ? assetSfiMap.get(s.linkedAssetId) : null;
+    if (aSfi) sfiCodes.add(aSfi);
+  }
+  const sfiNameMap = new Map<string, string>();
+  if (sfiCodes.size > 0) {
+    const sfiRows = await (prisma as any).sfiNode.findMany({
+      where: {
+        code: { in: Array.from(sfiCodes) },
+        OR: [{ tenantId: null }, { tenantId }],
+      },
+      select: { code: true, description: true, tenantId: true },
+    });
+    // Tenant-specific overrides the global one if both exist.
+    for (const r of sfiRows) {
+      const existing = sfiNameMap.get(r.code);
+      if (!existing || r.tenantId === tenantId) sfiNameMap.set(r.code, r.description);
+    }
+  }
+
   // Last movement per spare
   const lastMoveMap = new Map<string, string>();
   if (spares.length > 0) {
@@ -220,6 +246,7 @@ export async function getSpareInventoryReport(
     if (filters.department && dept !== filters.department) continue;
 
     const onHand = onHandMap.get(s.id) ?? 0;
+    const resolvedSfi = s.sfiCode ?? assetSfi ?? null;
     items.push({
       id: s.id,
       sku: s.sku,
@@ -232,7 +259,8 @@ export async function getSpareInventoryReport(
       reorderPoint: s.reorderPoint ?? 0,
       belowReorder: onHand <= (s.reorderPoint ?? 0),
       location: s.location,
-      sfiCode: s.sfiCode ?? assetSfi ?? null,
+      sfiCode: resolvedSfi,
+      sfiName: resolvedSfi ? sfiNameMap.get(resolvedSfi) ?? null : null,
       department: dept,
       lastMovementAt: lastMoveMap.get(s.id) ?? null,
     });
