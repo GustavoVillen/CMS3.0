@@ -4,6 +4,29 @@ import { listDevVesselsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
+const VESSEL_SELECT = {
+  id: true,
+  code: true,
+  name: true,
+  owner: true,
+  vesselType: true,
+  imo: true,
+  registration: true,
+  powerHp: true,
+  dwtTons: true,
+  lengthM: true,
+  beamM: true,
+  depthM: true,
+  trnTn: true,
+  trbTn: true,
+  buildYear: true,
+  buildCountry: true,
+  incorporationDate: true,
+  incorporationType: true,
+  status: true,
+  createdAt: true,
+} as const;
+
 export async function listTenantVessels(session: TenantAccessSession) {
   const prisma = getPrismaClient();
   if (!prisma) {
@@ -13,67 +36,16 @@ export async function listTenantVessels(session: TenantAccessSession) {
   const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
   if (!tenant) return [];
 
+  const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
   if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT
-         "id",
-         "code",
-         "name",
-         "owner",
-         "vesselType",
-         "imo",
-         "registration",
-         "powerHp",
-         "dwtTons",
-         "lengthM",
-         "beamM",
-         "depthM",
-         "trnTn",
-         "trbTn",
-         "buildYear",
-         "buildCountry",
-         "incorporationDate",
-         "incorporationType",
-         "status",
-         "createdAt"
-       FROM "public"."Vessel"
-       WHERE "tenantId" = $1
-         AND "deletedAt" IS NULL
-         AND "code" = ANY($2::text[])
-       ORDER BY "code" ASC`,
-      tenant.id,
-      session.user.assignedVesselCodes,
-    );
+    where.code = { in: session.user.assignedVesselCodes };
   }
 
-  return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT
-       "id",
-       "code",
-       "name",
-       "owner",
-       "vesselType",
-       "imo",
-       "registration",
-       "powerHp",
-       "dwtTons",
-       "lengthM",
-       "beamM",
-       "depthM",
-       "trnTn",
-       "trbTn",
-       "buildYear",
-       "buildCountry",
-       "incorporationDate",
-       "incorporationType",
-       "status",
-       "createdAt"
-     FROM "public"."Vessel"
-     WHERE "tenantId" = $1
-       AND "deletedAt" IS NULL
-     ORDER BY "code" ASC`,
-    tenant.id,
-  );
+  return prisma.vessel.findMany({
+    where: where as any,
+    select: VESSEL_SELECT,
+    orderBy: { code: "asc" },
+  });
 }
 
 export async function getTenantVesselById(session: TenantAccessSession, id: string) {
@@ -85,43 +57,14 @@ export async function getTenantVesselById(session: TenantAccessSession, id: stri
   const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
   if (!tenant) return null;
 
-  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT
-       "id",
-       "code",
-       "name",
-       "owner",
-       "vesselType",
-       "imo",
-       "registration",
-       "powerHp",
-       "dwtTons",
-       "lengthM",
-       "beamM",
-       "depthM",
-       "trnTn",
-       "trbTn",
-       "buildYear",
-       "buildCountry",
-       "incorporationDate",
-       "incorporationType",
-       "status",
-       "createdAt"
-     FROM "public"."Vessel"
-     WHERE "id" = $1
-       AND "tenantId" = $2
-       AND "deletedAt" IS NULL
-     LIMIT 1`,
-    id,
-    tenant.id,
-  );
-
-  const record = rows[0] ?? null;
+  const record = await prisma.vessel.findFirst({
+    where: { id, tenantId: tenant.id, deletedAt: null },
+    select: VESSEL_SELECT,
+  });
   if (!record) return null;
 
   if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    const code = String(record.code ?? "");
-    if (!session.user.assignedVesselCodes.includes(code)) return null;
+    if (!session.user.assignedVesselCodes.includes(record.code)) return null;
   }
 
   return record;
@@ -196,45 +139,29 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
   };
 }
 
-const DETAIL_COLUMN_MAP: Record<string, string> = {
-  owner: "owner",
-  vesselType: "vesselType",
-  imo: "imo",
-  registration: "registration",
-  powerHp: "powerHp",
-  dwtTons: "dwtTons",
-  lengthM: "lengthM",
-  beamM: "beamM",
-  depthM: "depthM",
-  trnTn: "trnTn",
-  trbTn: "trbTn",
-  buildYear: "buildYear",
-  buildCountry: "buildCountry",
-  incorporationDate: "incorporationDate",
-  incorporationType: "incorporationType",
-};
+const DETAIL_FIELDS = new Set([
+  "owner", "vesselType", "imo", "registration",
+  "powerHp", "dwtTons", "lengthM", "beamM", "depthM", "trnTn", "trbTn",
+  "buildYear", "buildCountry", "incorporationDate", "incorporationType",
+]);
 
-async function updateVesselDetailsRaw(
+async function updateVesselDetails(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   vesselId: string,
+  tenantId: string,
   details: Record<string, unknown>,
 ): Promise<void> {
-  const entries = Object.entries(details).filter(([key]) => Boolean(DETAIL_COLUMN_MAP[key]));
-  if (!entries.length) return;
-
-  const assignments: string[] = [];
-  const values: unknown[] = [vesselId];
-  let paramIndex = 2;
-
-  for (const [key, value] of entries) {
-    const column = DETAIL_COLUMN_MAP[key];
-    assignments.push(`"${column}" = $${paramIndex}`);
-    values.push(value);
-    paramIndex += 1;
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (DETAIL_FIELDS.has(key)) data[key] = value;
   }
+  if (Object.keys(data).length === 0) return;
 
-  const sql = `UPDATE "public"."Vessel" SET ${assignments.join(", ")} WHERE "id" = $1`;
-  await prisma.$executeRawUnsafe(sql, ...values);
+  // updateMany lets us scope by both id AND tenantId in WHERE — defense in depth.
+  await prisma.vessel.updateMany({
+    where: { id: vesselId, tenantId },
+    data: data as any,
+  });
 }
 
 export async function createTenantVessel(session: TenantAccessSession, input: VesselWriteInput) {
@@ -275,7 +202,7 @@ export async function createTenantVessel(session: TenantAccessSession, input: Ve
     },
   });
 
-  await updateVesselDetailsRaw(prisma, vessel.id, buildVesselDetailsData(input));
+  await updateVesselDetails(prisma, vessel.id, tenant.id, buildVesselDetailsData(input));
   void publishAudit(prisma, {
     tenantId: tenant.id,
     actorUserId: session.user.id,
@@ -326,7 +253,7 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   if (input.incorporationDate !== undefined) detailsToUpdate.incorporationDate = normalizeOptionalDate(input.incorporationDate);
   if (input.incorporationType !== undefined) detailsToUpdate.incorporationType = normalizeOptionalText(input.incorporationType);
 
-  await updateVesselDetailsRaw(prisma, id, detailsToUpdate);
+  await updateVesselDetails(prisma, id, tenant.id, detailsToUpdate);
   void publishAudit(prisma, {
     tenantId: tenant.id,
     actorUserId: session.user.id,
