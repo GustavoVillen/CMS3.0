@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
@@ -48,6 +48,7 @@ export const Dashboard: React.FC = () => {
   const insights          = useFetch<ListResponse<AiInsight>>("/app/ai-insights?status=OPEN");
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
+  const dailyReports      = useFetch<ListResponse<{ id: string }>>("/app/daily-reports");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -60,7 +61,7 @@ export const Dashboard: React.FC = () => {
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
   // KPIs derived from fetched data
-  const vesselCount   = vessels.data?.total ?? 0;
+  const dailyReportsCount = dailyReports.data?.total ?? 0;
 const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.status === "IN_PROGRESS").length ?? 0;
   const certsExpiring = certificates.data?.items.filter(c => c.status === "EXPIRING_SOON" || c.status === "EXPIRED").length ?? 0;
 
@@ -168,7 +169,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       {/* KPI Cards */}
       <div className="w-1/2">
         <div className="grid grid-cols-4 gap-4">
-          <StatCard icon={Ship}          label={t("dashboard.vessels")}      value={vesselCount}    loading={vessels.loading}      onClick={() => navigate("/vessels")} />
+          <StatCard icon={FileText}      label={t("dashboard.dailyReports")} value={dailyReportsCount} loading={dailyReports.loading} onClick={() => navigate("/daily-reports")} />
           <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
           <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
           <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />

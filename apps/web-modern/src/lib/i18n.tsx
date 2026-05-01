@@ -40,6 +40,7 @@ const dict = {
 
   // Dashboard KPI labels
   "dashboard.vessels":           { es: "Vessels activos",          en: "Active Vessels",         pt: "Embarcações ativas" },
+  "dashboard.dailyReports":      { es: "Reportes Diarios",         en: "Daily Reports",          pt: "Relatórios Diários" },
   "dashboard.workOrders":        { es: "OTs abiertas",             en: "Open Work Orders",       pt: "Ordens de Serviço abertas" },
   "dashboard.defects":           { es: "Defectos abiertos",        en: "Open Defects",           pt: "Defeitos abertos" },
   "dashboard.certificates":      { es: "Certificados por vencer",  en: "Expiring Certificates",  pt: "Certificados a vencer" },
