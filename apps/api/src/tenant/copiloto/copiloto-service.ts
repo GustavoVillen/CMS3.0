@@ -147,7 +147,20 @@ export interface CopilotoRequest {
    * Sent once; subsequent turns carry context through conversation history.
    */
   fileAttachment?: FileContent | null;
+  /**
+   * Interaction mode. When "voice", a voice-specific instruction block is
+   * appended to the system prompt server-side (was previously embedded in
+   * the client bundle — moved here for R-18). Default: undefined (text mode).
+   */
+  mode?: "voice" | null;
 }
+
+const MOBILE_VOICE_INSTRUCTION = `[Modo: asistente móvil de voz. Reglas estrictas:
+- Respondé directo, en 1 a 3 oraciones cortas. Sin saludos, sin introducciones, sin "de acuerdo", sin "voy a analizar", sin presentarte.
+- Si la consulta requiere datos del sistema (planes de mantenimiento, inspecciones, órdenes de trabajo, defectos, certificados, repuestos), usá primero las herramientas query_* disponibles y respondé con los datos encontrados.
+- Si no encontrás la información en el sistema, decilo en una sola oración: "No encontré [X] en el sistema."
+- No menciones que sos un asistente. Solo entregá la respuesta.
+- Tu salida será leída en voz alta: nada de markdown, listas con guiones ni emojis. Texto plano natural.]`;
 
 // ---------------------------------------------------------------------------
 // Copilot query tools — agentic DB access so the AI answers its own questions
@@ -518,6 +531,12 @@ export async function streamCopilotoChat(
 
   // ── Volatile system blocks (per-request, after the cache breakpoint) ──
   const volatileSystemBlocks: Anthropic.TextBlockParam[] = [];
+
+  // Voice mode: append the mobile-voice instruction here instead of in the
+  // client bundle. Volatile because it varies per-request (text vs voice).
+  if (req.mode === "voice") {
+    volatileSystemBlocks.push({ type: "text", text: MOBILE_VOICE_INSTRUCTION });
+  }
 
   if (req.screenContext && typeof req.screenContext === "object" && Object.keys(req.screenContext).length > 0) {
     const ctx = req.screenContext;

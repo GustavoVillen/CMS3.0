@@ -46,12 +46,8 @@ function formatDuration(seconds: number): string {
 
 const MIN_HOLD_MS = 400;
 
-const MOBILE_VOICE_INSTRUCTION = `[Modo: asistente móvil de voz. Reglas estrictas:
-- Respondé directo, en 1 a 3 oraciones cortas. Sin saludos, sin introducciones, sin "de acuerdo", sin "voy a analizar", sin presentarte.
-- Si la consulta requiere datos del sistema (planes de mantenimiento, inspecciones, órdenes de trabajo, defectos, certificados, repuestos), usá primero las herramientas query_* disponibles y respondé con los datos encontrados.
-- Si no encontrás la información en el sistema, decilo en una sola oración: "No encontré [X] en el sistema."
-- No menciones que sos un asistente. Solo entregá la respuesta.
-- Tu salida será leída en voz alta: nada de markdown, listas con guiones ni emojis. Texto plano natural.]`;
+// Voice mode prompt lives server-side. We just signal mode: "voice" in the request
+// body and the backend appends the appropriate system prompt instruction.
 
 export const MobileCopilot: React.FC = () => {
   const screenContext = useCopilotScreenContext();
@@ -123,18 +119,14 @@ export const MobileCopilot: React.FC = () => {
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      const apiMessages = next.map((m, i) => ({
-        role: m.role,
-        content: i === 0 && m.role === "user"
-          ? `${MOBILE_VOICE_INSTRUCTION}\n\n${m.content}`
-          : m.content,
-      }));
+      const apiMessages = next.map((m) => ({ role: m.role, content: m.content }));
 
       const reader = await api.stream("/app/copiloto/chat", {
         capability: "knowledge_assistant",
         locale: navigator.language?.split("-")[0] ?? "es",
         messages: apiMessages,
         screenContext: screenContext ?? undefined,
+        mode: "voice",
       });
 
       let assistantContent = "";

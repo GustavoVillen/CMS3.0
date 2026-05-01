@@ -894,6 +894,7 @@ export async function handleTenantRoutes(
       messages: ChatMessage[]; vesselCode?: string | null;
       screenContext?: Record<string, unknown> | null;
       fileAttachment?: Record<string, unknown> | null;
+      mode?: "voice" | null;
     };
     const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
     if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -918,6 +919,7 @@ export async function handleTenantRoutes(
           userId:         session.user.id,
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
+          mode:           body.mode ?? null,
         },
         (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
       );
