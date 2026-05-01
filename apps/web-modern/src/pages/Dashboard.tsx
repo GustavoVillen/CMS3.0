@@ -485,7 +485,7 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
 }) => {
   const alert = !loading && !hasToday;
   const wrapCls = alert
-    ? "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] bg-red-500/10 border-red-500/30"
+    ? "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] bg-red-500/50 border-red-500/30"
     : "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
   const iconBoxCls = alert
     ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
