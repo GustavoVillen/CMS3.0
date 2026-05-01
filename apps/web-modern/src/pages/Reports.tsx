@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FileBarChart, FileDown, Loader2, Package } from "lucide-react";
+import { FileBarChart, FileDown, History, Loader2, Package, RefreshCw } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useVesselContext } from "../lib/vessel-context";
 import { PageHeader } from "../components/PageHeader";
@@ -79,7 +79,7 @@ function downloadReportPdf(url: string, filename: string): Promise<void> {
 
 // ─── Inventory Tab ───────────────────────────────────────────────────────────
 
-const InventoryTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
+const InventoryTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> = ({ vesselCode, onDownloaded }) => {
   const [department, setDepartment] = useState<Department | "">("");
   const [asOfDate, setAsOfDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [downloading, setDownloading] = useState(false);
@@ -100,6 +100,7 @@ const InventoryTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
     if (department) p.set("department", department);
     const filename = `inventario-${vesselCode}-${asOfDate}.pdf`;
     downloadReportPdf(`/app/pms/reports/spare-inventory/pdf?${p.toString()}`, filename)
+      .then(() => onDownloaded?.())
       .finally(() => setDownloading(false));
   };
 
@@ -193,7 +194,7 @@ const InventoryTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
 
 // ─── Consumption Tab ─────────────────────────────────────────────────────────
 
-const ConsumptionTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
+const ConsumptionTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> = ({ vesselCode, onDownloaded }) => {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
@@ -212,6 +213,7 @@ const ConsumptionTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
     const filename = `consumo-${vesselCode}-${year}-${String(month).padStart(2, "0")}.pdf`;
     const url = `/app/pms/reports/spare-consumption/pdf?vesselCode=${encodeURIComponent(vesselCode)}&year=${year}&month=${month}`;
     downloadReportPdf(url, filename)
+      .then(() => onDownloaded?.())
       .finally(() => setDownloading(false));
   };
 
@@ -308,12 +310,115 @@ const ConsumptionTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
   );
 };
 
+// ─── History Panel ───────────────────────────────────────────────────────────
+
+interface HistoryItem {
+  id: string;
+  createdAt: string;
+  type: "INVENTORY" | "CONSUMPTION";
+  vesselCode: string;
+  fileName: string;
+  asOfDate: string | null;
+  year: number | null;
+  month: number | null;
+  department: string | null;
+  actorUserId: string | null;
+  actorName: string | null;
+}
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function describePeriod(it: HistoryItem): string {
+  if (it.type === "CONSUMPTION" && it.year && it.month) {
+    return `${MONTH_NAMES_ES[it.month - 1]} ${it.year}`;
+  }
+  if (it.type === "INVENTORY" && it.asOfDate) {
+    return `Snapshot ${fmtDate(it.asOfDate)}`;
+  }
+  return "—";
+}
+
+const HistoryPanel: React.FC<{ vesselCode: string; refreshKey: number }> = ({ vesselCode, refreshKey }) => {
+  const url = useMemo(() => {
+    const p = new URLSearchParams({ limit: "50" });
+    if (vesselCode) p.set("vesselCode", vesselCode);
+    return `/app/pms/reports/history?${p.toString()}`;
+  }, [vesselCode]);
+
+  const { data, loading, reload } = useFetch<{ items: HistoryItem[]; total: number }>(url, [url, refreshKey]);
+  const items = data?.items ?? [];
+
+  return (
+    <div className="mt-6 bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-bold text-white uppercase tracking-wider">Historial de generaciones</h3>
+          <span className="text-[10px] text-white/40">{vesselCode ? `· ${vesselCode}` : "· Todos los buques"}</span>
+        </div>
+        <button
+          onClick={() => void reload()}
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-white/50 hover:text-white transition-colors"
+          title="Actualizar"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="border-b border-white/10">
+            <tr className="text-[10px] uppercase tracking-wider text-white/40">
+              <th className="px-3 py-2 text-left">Fecha y hora</th>
+              <th className="px-3 py-2 text-left">Tipo</th>
+              <th className="px-3 py-2 text-left">Buque</th>
+              <th className="px-3 py-2 text-left">Período</th>
+              <th className="px-3 py-2 text-left">Departamento</th>
+              <th className="px-3 py-2 text-left">Generado por</th>
+              <th className="px-3 py-2 text-left">Archivo</th>
+            </tr>
+          </thead>
+          <tbody className="text-white/80">
+            {loading && items.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-white/30"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Cargando historial…</td></tr>
+            )}
+            {!loading && items.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-white/30">Aún no hay reportes generados.</td></tr>
+            )}
+            {items.map(it => (
+              <tr key={it.id} className="border-b border-white/5 hover:bg-white/5">
+                <td className="px-3 py-2 font-mono text-[11px]">{fmtDateTime(it.createdAt)}</td>
+                <td className="px-3 py-2">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${it.type === "INVENTORY" ? "bg-accent/15 text-accent" : "bg-emerald-500/15 text-emerald-400"}`}>
+                    {it.type === "INVENTORY" ? "Inventario" : "Consumo"}
+                  </span>
+                </td>
+                <td className="px-3 py-2 font-mono">{it.vesselCode || "—"}</td>
+                <td className="px-3 py-2">{describePeriod(it)}</td>
+                <td className="px-3 py-2 text-[10px]">{it.department ?? "—"}</td>
+                <td className="px-3 py-2 text-[11px]">{it.actorName ?? it.actorUserId ?? "—"}</td>
+                <td className="px-3 py-2 font-mono text-[10px] text-white/50">{it.fileName}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const ReportsPage: React.FC = () => {
   const t = useT();
   const { selectedVesselCode, vessels, setSelectedVesselCode } = useVesselContext();
   const [tab, setTab] = useState<"inventory" | "consumption">("inventory");
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const bumpHistory = () => setHistoryVersion(v => v + 1);
 
   // If no vessel is selected globally, allow picking one locally on this page
   const [localVessel, setLocalVessel] = useState<string>("");
@@ -370,10 +475,12 @@ export const ReportsPage: React.FC = () => {
 
       <div className="mt-4">
         {tab === "inventory"
-          ? <InventoryTab vesselCode={effectiveVessel} />
-          : <ConsumptionTab vesselCode={effectiveVessel} />
+          ? <InventoryTab vesselCode={effectiveVessel} onDownloaded={bumpHistory} />
+          : <ConsumptionTab vesselCode={effectiveVessel} onDownloaded={bumpHistory} />
         }
       </div>
+
+      <HistoryPanel vesselCode={effectiveVessel} refreshKey={historyVersion} />
     </div>
   );
 };

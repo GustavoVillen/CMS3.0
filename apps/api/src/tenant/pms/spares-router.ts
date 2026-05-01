@@ -113,14 +113,23 @@ export async function handleSparesRoutes(
 
   if (method === "GET" && url.pathname === "/app/pms/reports/spare-inventory/pdf") {
     const { buildSpareInventoryPdf } = await import("./spare-inventory-pdf-service");
+    const { recordMonthlyReportGenerated } = await import("./monthly-reports-history-service");
     const dept = url.searchParams.get("department");
     const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const asOfDate   = url.searchParams.get("asOfDate");
     const buffer = await buildSpareInventoryPdf(session, {
       vesselCode,
       department: dept as "CUBIERTA" | "MAQUINAS" | "COCINA" | "BARCAZA" | null,
-      asOfDate: url.searchParams.get("asOfDate"),
+      asOfDate,
     });
     const filename = `inventario-${vesselCode}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    await recordMonthlyReportGenerated(session, {
+      type: "INVENTORY",
+      vesselCode,
+      fileName: filename,
+      asOfDate,
+      department: dept,
+    });
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
@@ -143,17 +152,39 @@ export async function handleSparesRoutes(
 
   if (method === "GET" && url.pathname === "/app/pms/reports/spare-consumption/pdf") {
     const { buildSpareConsumptionPdf } = await import("./spare-consumption-pdf-service");
+    const { recordMonthlyReportGenerated } = await import("./monthly-reports-history-service");
     const vesselCode = url.searchParams.get("vesselCode") ?? "";
     const year  = Number(url.searchParams.get("year")  ?? new Date().getFullYear());
     const month = Number(url.searchParams.get("month") ?? new Date().getMonth() + 1);
     const buffer = await buildSpareConsumptionPdf(session, { vesselCode, year, month });
     const filename = `consumo-${vesselCode}-${year}-${String(month).padStart(2, "0")}.pdf`;
+    await recordMonthlyReportGenerated(session, {
+      type: "CONSUMPTION",
+      vesselCode,
+      fileName: filename,
+      year,
+      month,
+    });
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/reports/history") {
+    const { listMonthlyReportHistory } = await import("./monthly-reports-history-service");
+    const vesselCode = url.searchParams.get("vesselCode");
+    const typeParam  = url.searchParams.get("type");
+    const limit      = Number(url.searchParams.get("limit") ?? "100");
+    const items = await listMonthlyReportHistory(session, {
+      vesselCode,
+      type: typeParam === "INVENTORY" || typeParam === "CONSUMPTION" ? typeParam : null,
+      limit: Number.isFinite(limit) ? limit : 100,
+    });
+    sendJson(response, 200, { items, total: items.length });
     return true;
   }
 
