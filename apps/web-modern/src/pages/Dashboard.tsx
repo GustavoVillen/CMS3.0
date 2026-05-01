@@ -187,7 +187,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             onClick={() => navigate("/daily-reports")}
           />
           <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
-          <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
+          <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} alert={certsExpiring > 0} onClick={() => navigate("/certificates")} />
           <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
         </div>
       </div>
@@ -454,27 +454,40 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onClick }: {
+const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onClick, alert = false }: {
   icon: React.FC<{ className?: string }>;
   label: string;
   value: number;
   loading: boolean;
   color?: string;
   onClick?: () => void;
-}) => (
-  <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]" onClick={onClick}>
-    <div className="flex items-start justify-between mb-3">
-      <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
-        <Icon className="w-3.5 h-3.5 text-accent" />
+  /** When true, paint the card background red-translucent (same alert style as DailyReportCard). */
+  alert?: boolean;
+}) => {
+  // .bento-card sets `background` in plain CSS (higher specificity than
+  // Tailwind utilities), so override via inline style when alerting.
+  const wrapStyle: React.CSSProperties | undefined = alert
+    ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
+    : undefined;
+  const iconBoxCls = alert
+    ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
+    : "p-1.5 rounded-lg bg-white/5 border border-white/10";
+  const iconColor = alert ? "text-red-400" : "text-accent";
+  return (
+    <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]" style={wrapStyle} onClick={onClick}>
+      <div className="flex items-start justify-between mb-3">
+        <div className={iconBoxCls}>
+          <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+        </div>
+        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
       </div>
-      {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
+      <p className={`text-xl font-bold tracking-tight ${color}`}>
+        {loading ? "—" : value}
+      </p>
     </div>
-    <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
-    <p className={`text-xl font-bold tracking-tight ${color}`}>
-      {loading ? "—" : value}
-    </p>
-  </div>
-);
+  );
+};
 
 const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
   label: string;
