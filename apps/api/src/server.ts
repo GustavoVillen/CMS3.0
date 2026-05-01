@@ -17,6 +17,7 @@ import { handlePlatformRoutes } from "./platform/platform-router";
 import { handleTenantRoutes } from "./tenant/tenant-router";
 import { handlePmsRoutes } from "./tenant/pms/pms-router";
 import { resetPrismaClient } from "./platform/data/prisma-client";
+import { evictExpiredSessions } from "./tenant/auth/session-store";
 
 loadDotEnvFile();
 
@@ -132,6 +133,10 @@ const server = createServer(async (request, response) => {
 server.listen(port, () => {
   process.stdout.write(`API server listening on http://localhost:${port}\n`);
 });
+
+// Sweep expired access tokens from the in-memory Map every 5 minutes.
+// Lazy eviction in get*() handles tokens that are queried; this catches the rest.
+setInterval(evictExpiredSessions, 5 * 60 * 1000).unref();
 
 // ── Background insight scheduler — every 6 hours for all active tenants ───────
 

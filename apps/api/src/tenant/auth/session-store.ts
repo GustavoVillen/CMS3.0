@@ -41,9 +41,36 @@ export function registerPlatformAccessSession(session: PlatformAccessSession): v
 }
 
 export function getTenantAccessSession(accessToken: string): TenantAccessSession | null {
-  return tenantSessions.get(accessToken) || null;
+  const session = tenantSessions.get(accessToken);
+  if (!session) return null;
+  if (new Date(session.accessTokenExpiresAt).getTime() <= Date.now()) {
+    tenantSessions.delete(accessToken);
+    return null;
+  }
+  return session;
 }
 
 export function getPlatformAccessSession(accessToken: string): PlatformAccessSession | null {
-  return platformSessions.get(accessToken) || null;
+  const session = platformSessions.get(accessToken);
+  if (!session) return null;
+  if (new Date(session.accessTokenExpiresAt).getTime() <= Date.now()) {
+    platformSessions.delete(accessToken);
+    return null;
+  }
+  return session;
+}
+
+/**
+ * Periodic cleanup — removes expired sessions from the in-memory Maps to
+ * prevent unbounded growth. Tokens are also lazily evicted in get*() above,
+ * so this is a safety net for tokens that are issued but never queried again.
+ */
+export function evictExpiredSessions(): void {
+  const now = Date.now();
+  for (const [token, s] of tenantSessions) {
+    if (new Date(s.accessTokenExpiresAt).getTime() <= now) tenantSessions.delete(token);
+  }
+  for (const [token, s] of platformSessions) {
+    if (new Date(s.accessTokenExpiresAt).getTime() <= now) platformSessions.delete(token);
+  }
 }
