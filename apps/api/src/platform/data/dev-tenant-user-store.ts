@@ -26,7 +26,7 @@ const DEV_TENANT_USERS: DevTenantUserRecord[] = [
     id: "dev-tenant-user-demo-admin",
     email: "admin@demo.local",
     legacyUserId: "DEMOADMIN",
-    passwordHash: "plain$demo123",
+    passwordHash: "plain$Mercurio26",
     preferredLocale: "es",
     firstName: "Demo",
     lastName: "Admin",

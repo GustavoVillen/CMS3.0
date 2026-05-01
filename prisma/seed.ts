@@ -55,14 +55,14 @@ async function main(): Promise<void> {
     create: { tenantId: demoTenant.id, host: "demo.localhost", isPrimary: true },
   });
 
-  const platformPasswordHash = hashPassword("admin123");
+  const platformPasswordHash = hashPassword("Mercurio26");
   await prisma.platformUser.upsert({
     where: { email: "admin@localhost" },
     update: { passwordHash: platformPasswordHash, role: PlatformRole.SUPERADMIN, status: UserStatus.ACTIVE, firstName: "Platform", lastName: "Admin" },
     create: { email: "admin@localhost", passwordHash: platformPasswordHash, role: PlatformRole.SUPERADMIN, status: UserStatus.ACTIVE, firstName: "Platform", lastName: "Admin" },
   });
 
-  const tenantPasswordHash = hashPassword("demo123");
+  const tenantPasswordHash = hashPassword("Mercurio26");
   const tenantUser = await prisma.user.upsert({
     where: { email: "admin@demo.local" },
     update: { legacyUserId: "DEMOADMIN", passwordHash: tenantPasswordHash, status: UserStatus.ACTIVE, preferredLocale: "es", firstName: "Demo", lastName: "Admin" },
@@ -78,8 +78,8 @@ async function main(): Promise<void> {
   const tid = demoTenant.id;
   const uid = tenantUser.id;
 
-  process.stdout.write("Platform user: admin@localhost / admin123\n");
-  process.stdout.write("Tenant user: admin@demo.local / demo123\n");
+  process.stdout.write("Platform user: admin@localhost / Mercurio26\n");
+  process.stdout.write("Tenant user: admin@demo.local / Mercurio26\n");
 
   // ── Demo operational data (non-critical — wrapped in try/catch) ────────────
   try {

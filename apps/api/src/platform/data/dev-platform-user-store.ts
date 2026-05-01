@@ -17,7 +17,7 @@ const DEV_PLATFORM_USERS: DevPlatformUserRecord[] = [
   {
     id: "dev-platform-user-admin",
     email: "admin@localhost",
-    passwordHash: "plain$admin123",
+    passwordHash: "plain$Mercurio26",
     role: "SUPERADMIN",
     status: "ACTIVE",
     firstName: "Platform",
