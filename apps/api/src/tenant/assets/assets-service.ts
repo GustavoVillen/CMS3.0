@@ -283,36 +283,36 @@ export async function updateTenantAsset(
 
   const current = await getTenantAsset(session, id);
 
-  const setClauses: string[] = [`"updatedByUserId" = $1`, `"updatedAt" = NOW()`];
-  const params: unknown[] = [session.user.id];
+  const data: Record<string, unknown> = {
+    updatedByUserId: session.user.id,
+    updatedAt: new Date(),
+  };
+  if (payload.vesselCode !== undefined) data.vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
+  if (payload.assetCode !== undefined) data.assetCode = normalizeRequiredText(payload.assetCode, "assetCode").toUpperCase();
+  if (payload.name !== undefined) data.name = normalizeRequiredText(payload.name, "name");
+  if (payload.sfiCode !== undefined) data.sfiCode = normalizeOptionalText(payload.sfiCode);
+  if (payload.criticality !== undefined) data.criticality = payload.criticality;
+  if (payload.status !== undefined) data.status = payload.status;
+  if (payload.trackDailyReport !== undefined) data.trackDailyReport = payload.trackDailyReport;
+  if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);
+  if (payload.model !== undefined) data.model = normalizeOptionalText(payload.model);
+  if (payload.serialNumber !== undefined) data.serialNumber = normalizeOptionalText(payload.serialNumber);
+  if (payload.installationDate !== undefined) data.installationDate = parseOptionalDate(payload.installationDate, "installationDate");
+  if (payload.lastOverhaulDate !== undefined) data.lastOverhaulDate = parseOptionalDate(payload.lastOverhaulDate, "lastOverhaulDate");
+  if (payload.replacementDate !== undefined) data.replacementDate = parseOptionalDate(payload.replacementDate, "replacementDate");
 
-  const push = (col: string, val: unknown) => { params.push(val); setClauses.push(`"${col}" = $${params.length}`); };
+  // updateMany scoped { id, tenantId } — defense in depth on top of the
+  // getTenantAsset() check above. update() returns the row but only accepts
+  // unique-where; updateMany accepts compound non-unique scope.
+  const result = await (prisma as unknown as {
+    asset: { updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }> };
+  }).asset.updateMany({
+    where: { id: current.id, tenantId: current.tenantId },
+    data,
+  });
+  if (result.count === 0) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
 
-  if (payload.vesselCode !== undefined) push("vesselCode", normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase());
-  if (payload.assetCode !== undefined) push("assetCode", normalizeRequiredText(payload.assetCode, "assetCode").toUpperCase());
-  if (payload.name !== undefined) push("name", normalizeRequiredText(payload.name, "name"));
-  if (payload.sfiCode !== undefined) push("sfiCode", normalizeOptionalText(payload.sfiCode));
-  if (payload.criticality !== undefined) push("criticality", payload.criticality);
-  if (payload.status !== undefined) push("status", payload.status);
-  if (payload.trackDailyReport !== undefined) push("trackDailyReport", payload.trackDailyReport);
-  if (payload.manufacturer !== undefined) push("manufacturer", normalizeOptionalText(payload.manufacturer));
-  if (payload.model !== undefined) push("model", normalizeOptionalText(payload.model));
-  if (payload.serialNumber !== undefined) push("serialNumber", normalizeOptionalText(payload.serialNumber));
-  if (payload.installationDate !== undefined) push("installationDate", parseOptionalDate(payload.installationDate, "installationDate"));
-  if (payload.lastOverhaulDate !== undefined) push("lastOverhaulDate", parseOptionalDate(payload.lastOverhaulDate, "lastOverhaulDate"));
-  if (payload.replacementDate !== undefined) push("replacementDate", parseOptionalDate(payload.replacementDate, "replacementDate"));
-
-  params.push(current.id);
-  await prisma.$executeRawUnsafe(
-    `UPDATE "Asset" SET ${setClauses.join(", ")} WHERE "id" = $${params.length}`,
-    ...params,
-  );
-
-  const rows = await prisma.$queryRawUnsafe<AssetRecord[]>(
-    `SELECT * FROM "Asset" WHERE "id" = $1`,
-    current.id,
-  );
-  const updated = rows[0];
+  const updated = await getTenantAsset(session, current.id);
   void publishAudit(prisma, {
     tenantId: updated.tenantId,
     actorUserId: session.user.id,
