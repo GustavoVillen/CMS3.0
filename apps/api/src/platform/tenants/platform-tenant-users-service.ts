@@ -66,6 +66,7 @@ export interface PlatformTenantUserUpdateRequest {
 const EMAIL_PATTERN = /.+@.+\..+/;
 const ROLE_VALUES: TenantRole[] = [
   "TENANT_ADMIN",
+  "FLEET_SUPERINTENDENT",
   "MAINTENANCE_MANAGER",
   "TECHNICIAN_OPERATOR",
   "INSPECTOR_COMPLIANCE",

@@ -4,6 +4,7 @@ export type LoginMode = "email_or_legacy_user_id";
 
 export type TenantRole =
   | "TENANT_ADMIN"
+  | "FLEET_SUPERINTENDENT"
   | "MAINTENANCE_MANAGER"
   | "TECHNICIAN_OPERATOR"
   | "INSPECTOR_COMPLIANCE"
