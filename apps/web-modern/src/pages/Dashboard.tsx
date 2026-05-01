@@ -192,7 +192,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             onClick={() => navigate("/daily-reports")}
           />
           <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
-          <StatCard icon={FileCheck}     label={certsBadge.label}            value={certsBadge.value}  loading={certificates.loading} color={certsBadge.value > 0 ? "text-red-400" : "text-white"} alert={certsBadge.value > 0} onClick={() => navigate("/certificates")} />
+          <StatCard icon={FileCheck}     label={certsBadge.label}            value={certsBadge.value}  loading={certificates.loading} color={certsBadge.value > 0 ? "text-red-400" : "text-white"} alert={certsExpired > 0} onClick={() => navigate("/certificates")} />
           <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
         </div>
       </div>
