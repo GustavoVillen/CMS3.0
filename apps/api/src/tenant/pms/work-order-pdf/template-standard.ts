@@ -290,19 +290,18 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     y += sigH + 8;
 
     // ── FOOTER ───────────────────────────────────────────────────────────────
-    // Approval band on top
+    // Approval band on top (no background — same style as footer text)
     const bandY = PAGE_H - FOOTER_SIZE;
-    const NAVY_FOOTER = "#0C2461";
-    doc.rect(ML, bandY, W, APPROVAL_BAND_H).fillColor(NAVY_FOOTER).fill();
+    doc.moveTo(ML, bandY).lineTo(ML + W, bandY).strokeColor(border).lineWidth(0.5).stroke();
     const cw = Math.floor(W / APPROVAL_COLS.length);
     APPROVAL_COLS.forEach((col, i) => {
       const cx = ML + i * cw;
       if (i > 0) {
         doc.moveTo(cx, bandY + 2).lineTo(cx, bandY + APPROVAL_BAND_H - 2)
-           .strokeColor("#FFFFFF").opacity(0.35).lineWidth(0.4).stroke().opacity(1);
+           .strokeColor(border).lineWidth(0.4).stroke();
       }
-      doc.fontSize(8).font("Helvetica-Bold").fillColor("#FFFFFF")
-        .text(`${col.label} ${col.value}`, cx + 6, bandY + (APPROVAL_BAND_H - 8) / 2 + 1, {
+      doc.fontSize(7).font("Helvetica").fillColor(gray)
+        .text(`${col.label} ${col.value}`, cx + 6, bandY + (APPROVAL_BAND_H - 7) / 2 + 1, {
           width: cw - 12, align: "center", lineBreak: false, ellipsis: true,
         });
     });

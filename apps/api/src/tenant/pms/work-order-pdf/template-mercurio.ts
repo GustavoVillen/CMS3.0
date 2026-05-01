@@ -61,18 +61,18 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     function drawFooter() {
       const fy = PAGE_H - FOOTER_H;
 
-      // ── Approval band (navy, 3 cells) ──
-      doc.rect(ML, fy, W, APPROVAL_BAND_H).fillColor(NAVY).fill();
+      // ── Approval band (no background — same style as footer text) ──
+      doc.moveTo(ML, fy).lineTo(ML + W, fy).strokeColor(BORDER).lineWidth(0.5).stroke();
       const cw = Math.floor(W / APPROVAL_COLS.length);
       APPROVAL_COLS.forEach((col, i) => {
         const cx = ML + i * cw;
         if (i > 0) {
           doc.moveTo(cx, fy + 2).lineTo(cx, fy + APPROVAL_BAND_H - 2)
-             .strokeColor("#FFFFFF").opacity(0.35).lineWidth(0.4).stroke().opacity(1);
+             .strokeColor(BORDER).lineWidth(0.4).stroke();
         }
         const text = sanitizePdfText(`${col.label} ${col.value}`);
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(WHITE)
-          .text(text, cx + 6, fy + (APPROVAL_BAND_H - 8) / 2 + 1, {
+        doc.fontSize(7).font("Helvetica").fillColor(GRAY)
+          .text(text, cx + 6, fy + (APPROVAL_BAND_H - 7) / 2 + 1, {
             width: cw - 12, align: "center", lineBreak: false, ellipsis: true,
           });
       });
