@@ -35,15 +35,15 @@ export async function getCrewCredentials(session: TenantAccessSession, vesselId:
   }
 
   const tenantId = await getTenantId(prisma, session.tenantSlug);
-  const rows = await prisma.$queryRawUnsafe<Array<{ crewPasswordHash: string | null; crewPasswordUpdatedAt: Date | null }>>(
-    `SELECT "crewPasswordHash", "crewPasswordUpdatedAt" FROM "Vessel" WHERE "id" = $1 AND "tenantId" = $2 AND "deletedAt" IS NULL`,
-    vesselId, tenantId,
-  );
-  if (!rows.length) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
+  const vessel = await prisma.vessel.findFirst({
+    where: { id: vesselId, tenantId, deletedAt: null },
+    select: { crewPasswordHash: true, crewPasswordUpdatedAt: true },
+  });
+  if (!vessel) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
 
   return {
-    hasPassword: !!rows[0].crewPasswordHash,
-    updatedAt: rows[0].crewPasswordUpdatedAt?.toISOString() ?? null,
+    hasPassword: !!vessel.crewPasswordHash,
+    updatedAt: vessel.crewPasswordUpdatedAt?.toISOString() ?? null,
   };
 }
 
@@ -76,17 +76,18 @@ export async function setCrewPassword(
   }
 
   const tenantId = await getTenantId(prisma, session.tenantSlug);
-  const rows2 = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `SELECT "id" FROM "Vessel" WHERE "id" = $1 AND "tenantId" = $2 AND "deletedAt" IS NULL`,
-    vesselId, tenantId,
-  );
-  if (!rows2.length) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
-
-  await prisma.$executeRawUnsafe(
-    `UPDATE "Vessel" SET "crewPasswordHash" = $1, "crewPasswordUpdatedAt" = NOW() WHERE "id" = $2`,
-    hashPassword(password),
-    vesselId,
-  );
+  // updateMany returns count — atomic check-and-update scoped to id+tenantId.
+  // If 0 rows match, the vessel doesn't exist in this tenant → 404.
+  // Eliminates the prior SELECT-then-UPDATE race and closes M-01 (UPDATE
+  // previously had no tenantId in WHERE).
+  const result = await prisma.vessel.updateMany({
+    where: { id: vesselId, tenantId, deletedAt: null },
+    data: {
+      crewPasswordHash: hashPassword(password),
+      crewPasswordUpdatedAt: new Date(),
+    },
+  });
+  if (result.count === 0) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
 
   const { publishAudit } = await import("../../platform/audit/audit-publisher");
   await publishAudit(prisma, {
