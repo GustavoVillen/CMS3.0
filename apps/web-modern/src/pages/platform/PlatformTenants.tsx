@@ -30,7 +30,24 @@ const WO_PDF_TEMPLATES: Array<{ value: "STANDARD" | "MERCURIO"; label: string }>
   { value: "STANDARD", label: "Estándar (genérico)" },
   { value: "MERCURIO", label: "Mercurio Group (REGI-MAN-02.4)" },
 ];
-const TENANT_ROLES = ["TENANT_ADMIN","MAINTENANCE_MANAGER","TECHNICIAN_OPERATOR","INSPECTOR_COMPLIANCE","PROCUREMENT_STORE","AUDITOR_READONLY"];
+const TENANT_ROLES = [
+  "TENANT_ADMIN",
+  "FLEET_SUPERINTENDENT",
+  "MAINTENANCE_MANAGER",
+  "TECHNICIAN_OPERATOR",
+  "INSPECTOR_COMPLIANCE",
+  "PROCUREMENT_STORE",
+  "AUDITOR_READONLY",
+];
+const ROLE_LABELS: Record<string, string> = {
+  TENANT_ADMIN:         "Administrador",
+  FLEET_SUPERINTENDENT: "Superintendent de Flota",
+  MAINTENANCE_MANAGER:  "Jefe de Mantenimiento",
+  TECHNICIAN_OPERATOR:  "Técnico / Operador",
+  INSPECTOR_COMPLIANCE: "Inspector / Cumplimiento",
+  PROCUREMENT_STORE:    "Compras / Almacén",
+  AUDITOR_READONLY:     "Auditor (solo lectura)",
+};
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -362,7 +379,7 @@ function AddInviteModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Email"><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g," ")}</option>)}</select></Field>
+          <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
           <Field label="Locale"><select className={sel} value={form.locale} onChange={set("locale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
         </div>
         {err && <ErrMsg msg={err} />}
@@ -391,7 +408,7 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
           <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Juan" /></Field>
           <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} placeholder="García" /></Field>
         </div>
-        <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g," ")}</option>)}</select></Field>
+        <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Crear Usuario" />
       </form>
@@ -455,7 +472,7 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
         </Field>
         <Field label="Rol">
           <select className={sel} value={form.role} onChange={set("role")}>
-            {TENANT_ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g," ")}</option>)}
+            {TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}
           </select>
         </Field>
         <div className="border-t border-white/5 pt-3 space-y-3">
@@ -577,7 +594,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                         <p className="text-[10px] text-text-industrial/40 mt-0.5">{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] font-bold text-accent">{u.role.replace(/_/g," ")}</span>
+                        <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[u.role] ?? u.role.replace(/_/g," ")}</span>
                         <StatusBadge status={u.membershipStatus} />
                         <button
                           onClick={() => setEditUser(u)}
@@ -610,7 +627,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                         <p className="text-[10px] text-text-industrial/40 mt-0.5">Expira: {fmtDate(inv.expiresAt)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] font-bold text-accent">{inv.role.replace(/_/g," ")}</span>
+                        <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[inv.role] ?? inv.role.replace(/_/g," ")}</span>
                         <StatusBadge status={inv.status} />
                       </div>
                     </div>
