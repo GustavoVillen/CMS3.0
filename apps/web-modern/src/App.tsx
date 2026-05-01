@@ -50,8 +50,30 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = usePlatformAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/platform/login" replace />;
+  const { isAuthenticated, user } = usePlatformAuth();
+  if (!isAuthenticated) return <Navigate to="/platform/login" replace />;
+  // Defense-in-depth: only SUPERADMIN can reach platform pages.
+  // Backend enforces this on every request; frontend just avoids rendering
+  // pages that would 403 the user immediately.
+  if (user?.role !== "SUPERADMIN") return <AccessDenied />;
+  return <>{children}</>;
+}
+
+/** Restrict a tenant route to a specific list of roles. */
+function RequireRole({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user || !roles.includes(user.role)) return <AccessDenied />;
+  return <>{children}</>;
+}
+
+function AccessDenied() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-text-industrial/40">
+      <h2 className="text-2xl font-bold text-white">Acceso denegado</h2>
+      <p className="text-sm">No tenés permiso para ver esta página.</p>
+      <a href="/" className="text-xs text-accent hover:underline">Volver al inicio</a>
+    </div>
+  );
 }
 
 const PlaceholderPage = ({ title }: { title: string }) => (
@@ -89,8 +111,8 @@ export default function App() {
             <Route element={<RequireAuth><TenantI18nWrapper><Layout /></TenantI18nWrapper></RequireAuth>}>
               <Route path="/"                  element={<Dashboard />} />
               <Route path="/due-items"         element={<DueItemsPage />} />
-              <Route path="/superintendents"   element={<VesselSuperintendentsPage />} />
-              <Route path="/team"              element={<TeamPage />} />
+              <Route path="/superintendents"   element={<RequireRole roles={["TENANT_ADMIN"]}><VesselSuperintendentsPage /></RequireRole>} />
+              <Route path="/team"              element={<RequireRole roles={["TENANT_ADMIN"]}><TeamPage /></RequireRole>} />
               <Route path="/vessels"           element={<VesselsPage />} />
               <Route path="/assets"            element={<AssetsPage />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
