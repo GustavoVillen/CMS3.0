@@ -3,6 +3,7 @@ import { Users, Plus, X, Loader2, AlertCircle } from "lucide-react";
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
+import { PasswordInput } from "../../components/PasswordInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@plataforma.com" />
         </Field>
         <Field label="Contraseña">
-          <input className={inp} type="password" required value={form.password} onChange={set("password")} placeholder="••••••••" />
+          <PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Juan" /></Field>
@@ -153,7 +154,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: PlatformUser; onClose
           </Field>
         </div>
         <Field label="Nueva contraseña (dejar vacío para no cambiar)">
-          <input className={inp} type="password" value={form.password} onChange={set("password")} placeholder="••••••••" />
+          <PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="••••••••" />
         </Field>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} />

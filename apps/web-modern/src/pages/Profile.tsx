@@ -4,6 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
+import { PasswordInput } from "../components/PasswordInput";
 
 interface ProfileData {
   id: string;
@@ -169,8 +170,7 @@ export const ProfilePage: React.FC = () => {
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
               <label className="block text-xs text-text-industrial/60 mb-1">{t("profile.currentPwd")}</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={currentPwd}
                 onChange={e => setCurrentPwd(e.target.value)}
                 required
@@ -180,8 +180,7 @@ export const ProfilePage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-text-industrial/60 mb-1">{t("profile.newPwd")}</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={newPwd}
                   onChange={e => setNewPwd(e.target.value)}
                   required
@@ -191,8 +190,7 @@ export const ProfilePage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs text-text-industrial/60 mb-1">{t("profile.confirmPwd")}</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={confirmPwd}
                   onChange={e => setConfirmPwd(e.target.value)}
                   required

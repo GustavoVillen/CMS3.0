@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { usePlatformAuth } from "../../lib/platform-auth";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export const PlatformLogin: React.FC = () => {
   const { login, loading, error, isAuthenticated } = usePlatformAuth();
@@ -46,7 +47,7 @@ export const PlatformLogin: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Contraseña</label>
-              <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required
+              <PasswordInput value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
                 placeholder="••••••••" />
             </div>

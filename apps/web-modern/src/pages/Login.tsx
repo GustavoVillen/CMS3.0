@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { PasswordInput } from "../components/PasswordInput";
 
 export const Login: React.FC = () => {
   const { login, loading, error, isAuthenticated } = useAuth();
@@ -67,8 +68,7 @@ export const Login: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Contraseña</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required

@@ -6,6 +6,7 @@ import {
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
+import { PasswordInput } from "../../components/PasswordInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -403,7 +404,7 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
     <ModalWrapper title="Crear Usuario de Tenant" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Email"><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
-        <Field label="Contraseña"><input className={inp} type="password" required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
+        <Field label="Contraseña"><PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
         <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
         <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
         {err && <ErrMsg msg={err} />}
@@ -472,11 +473,11 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
         <div className="border-t border-white/5 pt-3 space-y-3">
           <p className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">Nueva contraseña (opcional)</p>
           <Field label="Contraseña">
-            <input className={inp} type="password" value={form.password} onChange={set("password")} placeholder="Dejar vacío para no cambiar" />
+            <PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="Dejar vacío para no cambiar" />
           </Field>
           {form.password && (
             <Field label="Confirmar contraseña">
-              <input className={inp} type="password" value={form.confirm} onChange={set("confirm")} placeholder="••••••••" />
+              <PasswordInput className={inp} value={form.confirm} onChange={set("confirm")} placeholder="••••••••" />
             </Field>
           )}
         </div>
