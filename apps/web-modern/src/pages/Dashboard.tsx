@@ -48,7 +48,7 @@ export const Dashboard: React.FC = () => {
   const insights          = useFetch<ListResponse<AiInsight>>("/app/ai-insights?status=OPEN");
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
-  const dailyReports      = useFetch<ListResponse<{ id: string }>>("/app/daily-reports");
+  const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -61,7 +61,17 @@ export const Dashboard: React.FC = () => {
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
   // KPIs derived from fetched data
-  const dailyReportsCount = dailyReports.data?.total ?? 0;
+  // Latest daily report info: timestamp of the most recent submission and
+  // a flag indicating whether today's report (in browser local time) is
+  // already submitted. The list comes ordered by reportDate desc.
+  const dailyReportsInfo = React.useMemo(() => {
+    const items = dailyReports.data?.items ?? [];
+    if (items.length === 0) return { lastAt: null as string | null, hasToday: false };
+    const latest = items[0];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const hasToday = items.some(r => String(r.reportDate).slice(0, 10) === todayStr);
+    return { lastAt: latest.createdAt ?? null, hasToday };
+  }, [dailyReports.data]);
 const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.status === "IN_PROGRESS").length ?? 0;
   const certsExpiring = certificates.data?.items.filter(c => c.status === "EXPIRING_SOON" || c.status === "EXPIRED").length ?? 0;
 
@@ -169,7 +179,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       {/* KPI Cards */}
       <div className="w-1/2">
         <div className="grid grid-cols-4 gap-4">
-          <StatCard icon={FileText}      label={t("dashboard.dailyReports")} value={dailyReportsCount} loading={dailyReports.loading} onClick={() => navigate("/daily-reports")} />
+          <DailyReportCard
+            label={t("dashboard.dailyReports")}
+            lastAt={dailyReportsInfo.lastAt}
+            hasToday={dailyReportsInfo.hasToday}
+            loading={dailyReports.loading}
+            onClick={() => navigate("/daily-reports")}
+          />
           <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
           <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/certificates")} />
           <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
@@ -459,6 +475,48 @@ const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onC
     </p>
   </div>
 );
+
+const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
+  label: string;
+  lastAt: string | null;
+  hasToday: boolean;
+  loading: boolean;
+  onClick?: () => void;
+}) => {
+  const alert = !loading && !hasToday;
+  const wrapCls = alert
+    ? "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] bg-red-500/10 border-red-500/30"
+    : "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
+  const iconBoxCls = alert
+    ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
+    : "p-1.5 rounded-lg bg-white/5 border border-white/10";
+  const iconColor = alert ? "text-red-400" : "text-accent";
+  const valueCls  = alert ? "text-sm font-bold tracking-tight text-red-400" : "text-sm font-bold tracking-tight text-white";
+
+  const formatted = lastAt
+    ? new Date(lastAt).toLocaleString(undefined, {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "—";
+
+  return (
+    <div className={wrapCls} onClick={onClick}>
+      <div className="flex items-start justify-between mb-3">
+        <div className={iconBoxCls}>
+          {alert
+            ? <AlertTriangle className={`w-3.5 h-3.5 ${iconColor}`} />
+            : <FileText className={`w-3.5 h-3.5 ${iconColor}`} />}
+        </div>
+        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+      </div>
+      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
+      <p className={valueCls}>
+        {loading ? "—" : (alert ? "Sin reporte hoy" : formatted)}
+      </p>
+    </div>
+  );
+};
 
 const PRIORITY_STYLES: Record<string, string> = {
   CRITICAL: "bg-red-500/10 text-red-400 border-red-500/20",
