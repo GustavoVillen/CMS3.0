@@ -9436,3 +9436,81 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
   Trigger para retomar: "Seguir PlanC"
 
 
+================================================================================
+2026-05-01 (sesion 3) — Tanda 3 deployada + Tanda 4.1 rotacion DB
+Agent: Claude Opus 4.7
+================================================================================
+
+REMEDIATION: Tanda 3 - 5 fixes deployados (criticos coordinados)
+  Commits:
+    fe3dddb F1.1/R-05: validar expiracion de access tokens (cierra C-06)
+    2fbfdab R-16: limite global de body size en readJsonBody (cierra H-09)
+    288801a R-06: rate limiting en endpoints de auth (cierra C-07)
+    1929bc8 R-18: mover MOBILE_VOICE_INSTRUCTION del frontend al backend
+    139cffd R-07: security headers globales + CSP report-only (cierra C-08)
+
+  Verificacion en produccion:
+    - HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+      Permissions-Policy, CSP-Report-Only confirmados en respuestas HTTP
+    - Rate limit testeado: intentos 1-9 OK 401, intentos 10-11 = 429
+    - Login con Mercurio26 sigue funcionando
+    - 0 errores nuevos post-restart
+
+  Hallazgos cerrados Tanda 3: C-06, C-07, C-08, H-09.
+
+REMEDIATION: Tanda 4.1 - Rotacion de password de DB
+  Razon: La password gpms2026 circulo en chats de auditoria/sesion.
+         Buena practica: rotar credenciales que pasaron por canales no
+         destinados a almacenarlas.
+
+  Operacion atomica via script /tmp/gpms-rotate-db-pwd.sh (auto-eliminado):
+    1. Backup DB pre-rotacion
+    2. Generacion password 24 chars alfanumericos (138 bits entropia)
+    3. ALTER USER gpms WITH PASSWORD ... (sin matar conexiones existentes)
+    4. Backup .env -> /app/.env.backup-pre-rotation-20260501_192442
+    5. sed update DATABASE_URL en /app/.env
+    6. pm2 restart con --update-env
+
+  Bug encontrado y resuelto:
+    - pm2 restart --update-env por si solo NO refresca env vars cacheadas
+      en el dump de PM2 desde el primer arranque
+    - Solucion: cargar .env al shell ANTES del restart:
+        set -a; . /app/.env; set +a
+        pm2 restart gpms --update-env
+        pm2 save --force
+    - Lesson aprendida documentada en memory/feedback_actualiza_vps.md
+
+  Verificacion:
+    - Password vieja gpms2026 -> rechazada por Postgres
+    - psql con nueva password -> OK
+    - process.env.DATABASE_URL en proceso vivo -> 24 chars
+    - Login app -> 200 con tokens validos
+
+  Backups disponibles para rollback:
+    - DB:   /root/backups/gpms_20260501_192442.dump
+    - .env: /app/.env.backup-pre-rotation-20260501_192442
+    - Password actual: /root/.gpms-db-rotation-20260501_192442.txt (chmod 600)
+
+ARCHIVOS NUEVOS:
+  - apps/api/src/http/rate-limiter.ts (R-06)
+  - apps/api/src/http/security-headers.ts (R-07)
+  - apps/api/src/common/logger.ts (R-24, ya estaba de Tanda 1)
+
+ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
+  - Tandas 1, 2, 3 deployadas
+  - Tanda 4.1 (rotacion DB) deployada
+  - Hallazgos cerrados:
+      CRITICAL: C-04, C-06, C-07, C-08 (4)
+      HIGH:     H-01, H-02, H-03, H-04, H-06, H-08, H-09 (7)
+      MEDIUM:   M-01, M-02, M-03, M-04, M-06 parcial (5)
+      LOW:      11/15 raw queries migradas
+  - Pendiente proxima sesion:
+      Tanda 4.2: R-08 cookies HttpOnly (invasivo, 4-6h)
+      Tanda 4.3: R-11 password policy 8 chars (medio, 2-3h)
+      Tanda 5: F4.1 sesiones en DB, R-23 Zod schemas
+      Tanda 6: R-03 signed URLs para uploads
+      Bonus: monitorear CSP-violations 1-2 dias antes de promover a enforcing
+
+  Trigger para retomar: "Seguir PlanC"
+
+
