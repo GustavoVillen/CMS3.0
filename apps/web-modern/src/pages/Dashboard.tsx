@@ -250,7 +250,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Maintenance Plans status chart */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        {(() => {
+          const mpAlert = (mpStatusCounts.find(s => s.key === "OVERDUE")?.value ?? 0) > 0;
+          const mpStyle: React.CSSProperties | undefined = mpAlert
+            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
+            : undefined;
+          return (
+        <div className="bento-card p-4! flex flex-col h-[226px]" style={mpStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-white">Planes de Mantenimiento</h2>
@@ -287,6 +293,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           )}
         </div>
+          );
+        })()}
 
         {/* Deferrals status chart */}
         <div className="bento-card p-4! flex flex-col h-[226px]">
