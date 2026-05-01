@@ -174,6 +174,10 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const [sfiCode,                 setSfiCode]                 = useState(spare?.sfiCode                 ?? "");
   const [leadTimeDays,            setLeadTimeDays]            = useState(String(spare?.leadTimeDays     ?? ""));
 
+  // Vessel list for dropdown
+  const { data: vesselsData } = useFetch<{ items: { code: string; name: string }[] }>("/app/vessels", []);
+  const vessels = vesselsData?.items ?? [];
+
   // SFI selectors — group is derived from the first digit of the existing code on edit
   const { data: sfiData } = useFetch<{ items: SfiNode[] }>("/app/pms/sfi");
   const sfiNodes = sfiData?.items ?? [];
@@ -304,7 +308,12 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
             <div>
               <label className={labelCls}>Vessel *</label>
               {isNew
-                ? <input value={vesselCode} onChange={e => setVesselCode(e.target.value.toUpperCase())} placeholder="VESSEL" className={inputCls} />
+                ? <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+                    <option value="">— Seleccionar vessel —</option>
+                    {vessels.map(v => (
+                      <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+                    ))}
+                  </select>
                 : <p className="text-sm font-mono text-accent">{spare.vesselCode}</p>}
             </div>
             <div>
