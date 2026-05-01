@@ -230,20 +230,13 @@ async function updateVesselDetailsRaw(
   id: string,
   details: Record<string, unknown>,
 ): Promise<void> {
-  const entries = Object.entries(details).filter(([key]) => key in VESSEL_DETAIL_COLUMNS);
-  if (!entries.length) return;
-
-  const sets: string[] = [];
-  const values: unknown[] = [id];
-  let idx = 2;
-  for (const [key, value] of entries) {
-    sets.push(`"${VESSEL_DETAIL_COLUMNS[key]}" = $${idx}`);
-    values.push(value);
-    idx += 1;
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (key in VESSEL_DETAIL_COLUMNS) data[VESSEL_DETAIL_COLUMNS[key]] = value;
   }
+  if (Object.keys(data).length === 0) return;
 
-  const sql = `UPDATE "public"."Vessel" SET ${sets.join(", ")} WHERE "id" = $1`;
-  await prisma.$executeRawUnsafe(sql, ...values);
+  await prisma.vessel.update({ where: { id }, data: data as any });
 }
 
 function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, tenantId: string): Record<string, unknown> {
