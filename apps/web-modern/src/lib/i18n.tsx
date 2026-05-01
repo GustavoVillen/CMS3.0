@@ -44,6 +44,7 @@ const dict = {
   "dashboard.workOrders":        { es: "OTs abiertas",             en: "Open Work Orders",       pt: "Ordens de Serviço abertas" },
   "dashboard.defects":           { es: "Defectos abiertos",        en: "Open Defects",           pt: "Defeitos abertos" },
   "dashboard.certificates":      { es: "Certificados por vencer",  en: "Expiring Certificates",  pt: "Certificados a vencer" },
+  "dashboard.certificatesExpired": { es: "Certificados vencidos",   en: "Expired Certificates",   pt: "Certificados vencidos" },
 
   // Dashboard sections
   "dashboard.woTitle":           { es: "Órdenes de Trabajo",       en: "Work Orders",            pt: "Ordens de Serviço" },

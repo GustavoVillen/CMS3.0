@@ -73,7 +73,12 @@ export const Dashboard: React.FC = () => {
     return { lastAt: latest.createdAt ?? null, hasToday };
   }, [dailyReports.data]);
 const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.status === "IN_PROGRESS").length ?? 0;
-  const certsExpiring = certificates.data?.items.filter(c => c.status === "EXPIRING_SOON" || c.status === "EXPIRED").length ?? 0;
+  const certsExpired  = certificates.data?.items.filter(c => c.status === "EXPIRED").length ?? 0;
+  const certsExpiring = certificates.data?.items.filter(c => c.status === "EXPIRING_SOON").length ?? 0;
+  // Show expired count with priority; only fall back to expiring when there are none expired.
+  const certsBadge = certsExpired > 0
+    ? { value: certsExpired,  label: t("dashboard.certificatesExpired") }
+    : { value: certsExpiring, label: t("dashboard.certificates") };
 
   // Donut chart: Abiertas / Vencidas / Cerradas
   const statusCounts = React.useMemo(() => {
@@ -187,7 +192,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             onClick={() => navigate("/daily-reports")}
           />
           <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
-          <StatCard icon={FileCheck}     label={t("dashboard.certificates")} value={certsExpiring}  loading={certificates.loading} color={certsExpiring > 0 ? "text-red-400" : "text-white"} alert={certsExpiring > 0} onClick={() => navigate("/certificates")} />
+          <StatCard icon={FileCheck}     label={certsBadge.label}            value={certsBadge.value}  loading={certificates.loading} color={certsBadge.value > 0 ? "text-red-400" : "text-white"} alert={certsBadge.value > 0} onClick={() => navigate("/certificates")} />
           <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
         </div>
       </div>
