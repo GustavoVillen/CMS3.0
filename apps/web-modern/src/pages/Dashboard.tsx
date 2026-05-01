@@ -341,7 +341,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Critical Spares stock status chart */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        {(() => {
+          const csAlert = (critSparesCounts.find(s => s.key === "sin_stock")?.value ?? 0) > 0;
+          const csStyle: React.CSSProperties | undefined = csAlert
+            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
+            : undefined;
+          return (
+        <div className="bento-card p-4! flex flex-col h-[226px]" style={csStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-white">Repuestos Críticos</h2>
@@ -383,6 +389,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           )}
         </div>
+          );
+        })()}
 
         {/* Spare Requests status chart */}
         <div className="bento-card p-4! flex flex-col h-[226px]">
