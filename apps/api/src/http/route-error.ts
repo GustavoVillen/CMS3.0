@@ -22,18 +22,22 @@ export function toErrorPayload(error: unknown): { statusCode: number; payload: {
     };
   }
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   if (error instanceof Error) {
+    process.stderr.write(`[unhandled-error] ${error.stack ?? error.message}\n`);
     return {
-      statusCode: 400,
+      statusCode: 500,
       payload: {
         error: {
-          code: "REQUEST_FAILED",
-          message: error.message,
+          code: "INTERNAL_ERROR",
+          message: isProduction ? "An internal error occurred." : error.message,
         },
       },
     };
   }
 
+  process.stderr.write(`[unknown-error] ${String(error)}\n`);
   return {
     statusCode: 500,
     payload: {
