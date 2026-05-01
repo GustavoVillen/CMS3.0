@@ -438,13 +438,22 @@ export async function setMemberPassword(session: TenantAccessSession, userId: st
   }
 
   const { hashPassword } = await import("../../platform/auth/passwords");
-  await prisma.$executeRawUnsafe(
-    `UPDATE "User" SET "passwordHash" = $1 WHERE "id" = $2`,
-    hashPassword(password),
-    userId,
-  );
-
   const tenantId = await getTenantId(prisma, session.tenantSlug);
+
+  // updateMany scoped via membership: only updates if the user has a membership
+  // in this tenant. Prevents an admin from another tenant from changing the
+  // password of a user that doesn't belong to them.
+  const result = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      memberships: { some: { tenantId } },
+    },
+    data: { passwordHash: hashPassword(password) },
+  });
+  if (result.count === 0) {
+    throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  }
+
   await publishAudit(prisma, {
     tenantId,
     actorUserId: session.user.id,
