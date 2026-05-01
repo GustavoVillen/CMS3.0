@@ -6,6 +6,7 @@ import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenan
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
+import { log } from "../../common/logger";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -469,7 +470,7 @@ export async function holdWorkOrder(session: TenantAccessSession, id: string, pa
     sourceId: current.id,
     justification: payload.holdReason,
     targetDate: payload.targetDate ?? null,
-  }).catch((err: unknown) => { console.error("[holdWorkOrder] auto-deferral failed:", err); });
+  }).catch((err: unknown) => { log.error("[holdWorkOrder] auto-deferral failed:", err); });
   return held;
 }
 
@@ -573,7 +574,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
           },
         });
       } catch (err) {
-        console.error("[closeWorkOrder] stock movement failed for spare", usage.spareId, err);
+        log.error("[closeWorkOrder] stock movement failed for spare", usage.spareId, err);
         failedMovements.push(usage.spareId);
       }
     }
@@ -605,7 +606,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         createdByUserId: session.user.id,
       });
     } catch (err) {
-      console.error("[closeWorkOrder] auto-create FluidSample failed", err);
+      log.error("[closeWorkOrder] auto-create FluidSample failed", err);
     }
   }
 
@@ -638,7 +639,7 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
   });
   if (current.maintenancePlanId) {
     void restorePlanAfterWoCancellation(session, current.maintenancePlanId)
-      .catch((err: unknown) => { console.error("[cancelWorkOrder] plan restore failed:", err); });
+      .catch((err: unknown) => { log.error("[cancelWorkOrder] plan restore failed:", err); });
   }
   return cancelled;
 }

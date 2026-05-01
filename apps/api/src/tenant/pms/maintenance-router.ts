@@ -5,6 +5,7 @@ import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
+import { log } from "../../common/logger";
 import {
   completeChecklistPlan,
   createTenantMaintenancePlan,
@@ -59,7 +60,7 @@ export async function handleMaintenanceRoutes(
   const isMaintenancePath = url.pathname.startsWith("/app/pms/maintenance-plans");
   const isWorkOrdersPath = url.pathname.startsWith("/app/pms/work-orders");
   const isWorkLogsPath = url.pathname.startsWith("/app/pms/work-logs");
-  console.log(`[maintenance-router] ${method} ${url.pathname} | maint=${isMaintenancePath}`);
+  log.debug(`[maintenance-router] ${method} ${url.pathname} | maint=${isMaintenancePath}`);
   if (!isMaintenancePath && !isWorkOrdersPath && !isWorkLogsPath) return false;
 
   const tenantSlug = requireTenantSlug(request, env);

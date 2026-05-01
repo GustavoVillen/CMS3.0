@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { log } from "../../common/logger";
 
 export interface DeferralListFilters {
   vesselCode?: string | null;
@@ -451,7 +452,7 @@ export async function cancelDeferral(session: TenantAccessSession, id: string) {
         });
       }
     } catch (err) {
-      console.error("[cancelDeferral] failed to revert WO status:", err);
+      log.error("[cancelDeferral] failed to revert WO status:", err);
     }
   }
 

@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { log } from "../../common/logger";
 
 export async function getDailyReportPeriodSuggestions(session: TenantAccessSession, reportId: string) {
   const prisma = getPrismaClient();
@@ -34,7 +35,7 @@ export async function getDailyReportPeriodSuggestions(session: TenantAccessSessi
   // Include the full reportDate day (add 2 days to be timezone-safe, then filter by date on display)
   const periodEnd: Date = new Date(reportDate.getTime() + 2 * 86400000);
 
-  console.log("[period-suggestions] vessel:", vesselCode, "reportDate:", reportDate.toISOString(), "period:", periodStart.toISOString(), "→", periodEnd.toISOString());
+  log.debug("[period-suggestions] vessel:", vesselCode, "reportDate:", reportDate.toISOString(), "period:", periodStart.toISOString(), "→", periodEnd.toISOString());
 
   // ── Work Orders closed in period ────────────────────────────────────────
   const workOrders = await (prisma as any).workOrder.findMany({
@@ -48,7 +49,7 @@ export async function getDailyReportPeriodSuggestions(session: TenantAccessSessi
     include: { workLogs: { take: 1, orderBy: { createdAt: "desc" } } },
     orderBy: { completedDate: "asc" },
   });
-  console.log("[period-suggestions] workOrders found:", workOrders.length);
+  log.debug("[period-suggestions] workOrders found:", workOrders.length);
 
   // Plan IDs already covered by a closed WO (avoid duplicates)
   const woPlansIds = new Set<string>(workOrders.map((wo: any) => wo.maintenancePlanId).filter(Boolean));
@@ -67,7 +68,7 @@ export async function getDailyReportPeriodSuggestions(session: TenantAccessSessi
     where: directPlansWhere,
     orderBy: { lastExecutionDate: "asc" },
   });
-  console.log("[period-suggestions] directPlans found:", directPlans.length, directPlans.map((p: any) => ({ id: p.id, taskCode: p.taskCode, lastExecutionDate: p.lastExecutionDate })));
+  log.debug("[period-suggestions] directPlans found:", directPlans.length, directPlans.map((p: any) => ({ id: p.id, taskCode: p.taskCode, lastExecutionDate: p.lastExecutionDate })));
 
   // ── Defects reported/created in period ──────────────────────────────────
   const defects = await (prisma as any).defect.findMany({

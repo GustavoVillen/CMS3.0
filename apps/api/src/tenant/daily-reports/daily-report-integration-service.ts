@@ -13,6 +13,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { computeNextDueDate, computeNextDueHours } from "../pms/execution-windows-service";
 import { refreshExecutionStatuses } from "../pms/execution-windows-service";
+import { log } from "../../common/logger";
 
 export interface IntegrationResult {
   updatedRunningHoursCount: number;
@@ -445,7 +446,7 @@ export async function upsertDailyEquipmentHours(
           });
         }
       } catch (err) {
-        process.stderr.write(`[daily-hours] nextDueHours bootstrap failed: ${String(err)}\n`);
+        log.error("[daily-hours] nextDueHours bootstrap failed:", err);
       }
     }
   }

@@ -1,5 +1,6 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { log } from "../../common/logger";
 
 export interface DueItemsFilters {
   vesselCode?: string | null;
@@ -164,7 +165,7 @@ async function loadCurrentHoursByAsset(
       if (!map.has(row.assetId)) map.set(row.assetId, row.runningHoursTotal);
     }
   } catch (err) {
-    process.stderr.write(`[due-items] current hours load failed: ${String(err)}\n`);
+    log.error("[due-items] current hours load failed:", err);
   }
   return map;
 }
@@ -277,7 +278,7 @@ export async function listDueItems(session: TenantAccessSession, filters: DueIte
         if (wo.maintenancePlanId) planIdsWithActiveWO.add(wo.maintenancePlanId);
       }
     } catch (err) {
-      process.stderr.write(`[due-items] WO filter failed: ${String(err)}\n`);
+      log.error("[due-items] WO filter failed:", err);
     }
   }
 
