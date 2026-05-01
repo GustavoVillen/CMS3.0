@@ -457,16 +457,23 @@ export async function listTenantMaintenancePlans(
       : Promise.resolve([] as { id: string; name: string | null }[]),
     assetIds.length > 0
       ? (() => {
+          // Window function (ROW_NUMBER OVER PARTITION) has no direct Prisma ORM
+          // equivalent. Kept as raw but explicitly scoped by tenantId for defense
+          // in depth (M-02). assetIds come from a tenant-scoped findMany above
+          // so the implicit scope was already correct, but explicit > implicit.
           const placeholders = assetIds.map((_: string, i: number) => `$${i + 1}`).join(", ");
+          const tenantPlaceholder = `$${assetIds.length + 1}`;
           return prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
             `SELECT "assetId", "runningHoursTotal"
              FROM (
                SELECT "assetId", "runningHoursTotal",
                       ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
                FROM "DailyEquipmentHours"
-               WHERE "assetId" IN (${placeholders}) AND "runningHoursTotal" IS NOT NULL
+               WHERE "assetId" IN (${placeholders})
+                 AND "tenantId" = ${tenantPlaceholder}
+                 AND "runningHoursTotal" IS NOT NULL
              ) sub WHERE rn = 1`,
-            ...assetIds,
+            ...assetIds, tenantId,
           );
         })()
       : Promise.resolve([] as { assetId: string; runningHoursTotal: number }[]),
