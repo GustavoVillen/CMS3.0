@@ -9324,3 +9324,63 @@ FEATURE: Copiloto puede imprimir/generar PDF del ultimo reporte
   - Si no hay reporte previo, responde pidiendo que genere uno primero
   - Funciones agregadas: isPrintRequest(), inlineFormat(), markdownToHtml(), printReport()
 
+
+================================================================================
+2026-05-01 — Auditoria de seguridad + Tanda 1 de remediacion (PlanP + PlanC)
+Agent: Claude Opus 4.7
+================================================================================
+
+AUDIT: Auditoria integral de ciberseguridad (PlanC)
+  - 8 hallazgos CRITICAL + 9 HIGH + 9 MEDIUM identificados
+  - Multi-tenant isolation: 218 queries verificadas, 26/26 platform routes con
+    requirePlatformSuperadmin guard, soft delete consistente
+  - AI/Copilot: prompt injection directa via screenContext (HIGH)
+  - Re-clasificacion post-investigacion:
+    * C-01 Postgres trust: VPS usa Postgres NATIVO con auth real, NO Docker
+      compose, NO se aplica el trust. CRITICAL -> INFO
+    * H-05 header fallback: el sistema NO usa subdominios (ningun TenantDomain
+      apunta a *.shipcms.cloud, mercurio no existe en DNS). Header fallback es
+      el mecanismo de routing de tenant. HIGH -> LOW
+
+INFRA: Backups automaticos del VPS (T0.1)
+  - Script /usr/local/bin/gpms-backup.sh con pg_dump custom format + retencion 7 dias
+  - Cron diario a las 03:00 (root crontab)
+  - Backup local en c:/NPMS/backups/gpms_backup_*.dump
+  - Setup de SSH key auth para deploy/checks automaticos
+
+REMEDIATION: Tanda 1 - 6 fixes deployados a produccion
+  Commits (cherry-pickeable):
+    9faf772 R-09: gate plain$ por NODE_ENV en verifyPassword
+    d227e28 R-04: eliminar /internal/db-reset (sin auth, redundante con auto-reset)
+    a636210 R-12: audit events de auth (login success/fail, password changes)
+    8273c99 R-17: sanitizar error.message en produccion + 400->500 en errores no controlados
+    b95617c R-24: logger con niveles (silencia debug/info en produccion)
+    c3b7343 R-19: timing constante + fail unificado en login (verifyPasswordOrTimingDummy)
+
+  Hallazgos cerrados:
+    - H-04 (plain$ sin gate por NODE_ENV)
+    - C-04 (/internal/db-reset sin auth)
+    - H-06 (auth no auditada)
+    - H-08 (error.message filtrado al cliente)
+    - M-04 (logs operativos en produccion)
+    - M-03 (user enumeration via timing side-channel)
+
+DEPLOY: VPS update + bug fix critico encontrado
+  - HALLAZGO BUG SERIO PRE-EXISTENTE: NODE_ENV=development en /app/.env
+    de produccion. Toda Tanda 1 hubiera quedado dormida sin esto.
+  - Fix: NODE_ENV=production + pm2 restart --update-env + pm2 save
+  - Verificacion: PLATFORM_LOGIN_FAILED audit event registrado correctamente,
+    [maintenance-router] log silenciado, sin errores nuevos post-restart
+
+ARCHIVOS NUEVOS:
+  - apps/api/src/common/logger.ts: logger compartido con niveles
+  - prisma/gen-hash.cjs: helper de generacion scrypt (temporal, ya borrado)
+
+PROXIMOS PASOS:
+  - Tanda 2 (5 fixes): R-15 downloadImage, R-03 auth en uploads,
+    R-13/R-14 sanitizacion AI, R-25 frontend role guards, R-22 reemplazar $queryRawUnsafe
+  - Tanda 3 (5 fixes): F1.1 expiracion tokens, R-06 rate limiting login,
+    R-07 security headers (CSP report-only), R-18 mover voice prompt al backend, R-16 body limit
+  - F1.2 (apagar header fallback) descartado: no aplicable hasta migrar a subdominios reales
+  - F4.1 (sesiones en DB) postergado a Tanda 5
+
