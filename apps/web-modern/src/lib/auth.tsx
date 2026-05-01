@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { api, ApiError, setUnauthorizedHandler } from "./api";
+import { useIdleTimeout } from "./idle-timeout";
+
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 export interface AuthUser {
   id: string;
@@ -135,6 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("gpms_refresh_token");
     });
   }, []);
+
+  // Idle timeout: log out after 15 min without user activity (mouse/keyboard/touch).
+  // Only active when the user is logged in.
+  useIdleTimeout(IDLE_TIMEOUT_MS, logout, state.isAuthenticated);
 
   return (
     <AuthContext.Provider value={{ ...state, login, logout, error, loading }}>

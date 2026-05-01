@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { ApiError, setUnauthorizedHandler } from "./api";
+import { useIdleTimeout } from "./idle-timeout";
+
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 export interface PlatformUser {
   id: string;
@@ -57,6 +60,9 @@ export function PlatformAuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     setUnauthorizedHandler(logout);
   }, [logout]);
+
+  // Idle timeout: log out after 15 min without user activity.
+  useIdleTimeout(IDLE_TIMEOUT_MS, logout, state.isAuthenticated);
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
