@@ -205,7 +205,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
 
-  const [adjQty,     setAdjQty]     = useState(String(spare?.available ?? spare?.onHand ?? 0));
+  const [adjQty,     setAdjQty]     = useState(String(spare?.onHand ?? 0));
   const [adjNotes,   setAdjNotes]   = useState("");
   const [adjSaving,  setAdjSaving]  = useState(false);
   const [adjError,   setAdjError]   = useState<string | null>(null);
@@ -479,10 +479,12 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
                         referenceType: "ADJUSTMENT",
                         notes:         adjNotes.trim() || `Ajuste manual de stock`,
                       });
+                      setAdjSuccess(true);
+                      setAdjNotes("");
+                      onSaved({ ...spare, onHand: newQty, available: newQty });
+                    } else {
+                      setAdjError("La cantidad ingresada es igual al stock actual. No se realizó ningún cambio.");
                     }
-                    setAdjSuccess(true);
-                    setAdjNotes("");
-                    onSaved({ ...spare, onHand: newQty, available: newQty });
                   } catch (e) {
                     setAdjError(e instanceof Error ? e.message : "Error al ajustar stock.");
                   } finally { setAdjSaving(false); }
