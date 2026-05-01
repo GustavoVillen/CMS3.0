@@ -9384,3 +9384,55 @@ PROXIMOS PASOS:
   - F1.2 (apagar header fallback) descartado: no aplicable hasta migrar a subdominios reales
   - F4.1 (sesiones en DB) postergado a Tanda 5
 
+
+================================================================================
+2026-05-01 (continuacion) — Tanda 2 deployada (PlanC)
+Agent: Claude Opus 4.7
+================================================================================
+
+REMEDIATION: Tanda 2 - 5+ fixes deployados
+  Commits:
+    7885ee5 R-15: eliminar downloadImage SSRF en pdf-helpers (cierra H-01)
+    c6535ac R-13/R-14: <untrusted_data> wrapper en copilot (cierra H-02, H-03)
+    86f12b6 R-25: frontend role guards (App.tsx) — cierra M-06 parcial
+    c7111f8 R-22 parte 1/6: vessels-service migrado a Prisma ORM (4 raw queries)
+    1bc33aa R-22 parte 2/6: vessel-crew-credentials migrado (cierra M-01 TOCTOU)
+    878fb23 R-22 parte 3/6: team-service updateMany scoped via membership
+    e30ae1b R-22 parte 4/6: maintenance-plans tenantId scope (cierra M-02)
+    7db7a00 R-22 parte 5/6: assets-service updateTenantAsset migrado
+    c795f91 R-22 parte 6/6: excel-import updateVesselDetailsRaw migrado
+
+  Resultados R-22:
+    - Inicial: 15 raw queries en 8 archivos
+    - Eliminadas: 11
+    - Restantes: 4 (todas con tenantId en WHERE explicito y razon tecnica:
+      window functions, subquery correlacionada, auth critica)
+
+  Hallazgos cerrados en Tanda 2: H-01, H-02, H-03, M-01, M-02, M-06 parcial.
+
+  Diferido a Tanda 6 dedicada:
+    - R-03 (auth en uploads /uploads/fluid-reports, /uploads/checklists,
+      /uploads/certificates). El frontend usa <a href> directo, requiere
+      signed URLs con HMAC. Filenames son UUIDs v4 (mitigation efectiva).
+      C-02/C-03 reclasificados de CRITICAL a MEDIUM por UUIDs.
+
+DEPLOY: VPS update OK
+  - git pull (10 archivos)
+  - vite build (R-25 cambia App.tsx) -> bundle nuevo
+  - pm2 restart con NODE_ENV=production explicito
+  - Login + audit event PLATFORM_LOGIN_SUCCESS verificados
+
+ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
+  - Tanda 1: Deployada
+  - Tanda 2: Deployada
+  - Tanda 3 (proxima): F1.1 expiracion tokens, R-06 rate limit login,
+    R-07 security headers (CSP report-only), R-18 mover voice prompt
+    al backend, R-16 body size limit. ~3-4h.
+  - Tanda 4 (estructurales con downtime): rotar password DB, R-08 cookies
+    HttpOnly, R-11 password 8 chars
+  - Tanda 5 (refactor): F4.1 sesiones en DB, R-23 Zod schemas
+  - Tanda 6 (uploads): R-03 con signed URLs
+
+  Trigger para retomar: "Seguir PlanC"
+
+
