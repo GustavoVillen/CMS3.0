@@ -4,6 +4,7 @@ import { getDevPlatformUserByEmail } from "../data/dev-platform-user-store";
 import { RouteError } from "../../http/route-error";
 import { verifyPassword, hashOpaqueToken } from "./passwords";
 import { issueOpaqueSessionTokens } from "./tokens";
+import { publishPlatformAudit, publishSystemAudit } from "../audit/audit-publisher";
 
 function isDevelopmentMode(): boolean {
   return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
@@ -50,10 +51,22 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
 
     const user = await prisma.platformUser.findUnique({ where: { email } });
     if (!user || user.status !== "ACTIVE") {
+      await publishSystemAudit(prisma, {
+        action: "PLATFORM_LOGIN_FAILED",
+        entityType: "PlatformUser",
+        entityId: null,
+        metadata: { email, reason: user ? "user_inactive" : "user_not_found" },
+      });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
 
     if (!verifyPassword(password, user.passwordHash)) {
+      await publishSystemAudit(prisma, {
+        action: "PLATFORM_LOGIN_FAILED",
+        entityType: "PlatformUser",
+        entityId: user.id,
+        metadata: { email, reason: "wrong_password" },
+      });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
 
@@ -65,6 +78,14 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
         refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
+    });
+
+    await publishPlatformAudit(prisma, {
+      actorPlatformUserId: user.id,
+      action: "PLATFORM_LOGIN_SUCCESS",
+      entityType: "PlatformUser",
+      entityId: user.id,
+      metadata: { email: user.email, role: user.role },
     });
 
     return {

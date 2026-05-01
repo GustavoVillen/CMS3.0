@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDevTenantUserById, updateDevTenantUser } from "../../platform/data/dev-tenant-user-store";
 import { RouteError } from "../../http/route-error";
 import { verifyPassword, hashPassword } from "../../platform/auth/passwords";
+import { publishAudit } from "../../platform/audit/audit-publisher";
 
 function isDev(): boolean {
   return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
@@ -71,6 +72,19 @@ export async function changePassword(
       throw new RouteError(401, "WRONG_PASSWORD", "Current password is incorrect.");
     }
     await prisma.user.update({ where: { id: session.user.id }, data: { passwordHash: hashPassword(input.newPassword) } });
+
+    // Resolve tenantId from slug (session has slug, not id)
+    const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
+    if (tenant) {
+      await publishAudit(prisma, {
+        tenantId: tenant.id,
+        actorUserId: session.user.id,
+        action: "PASSWORD_CHANGED",
+        entityType: "User",
+        entityId: session.user.id,
+        metadata: { tenantSlug: session.tenantSlug, self: true },
+      });
+    }
     return;
   }
   if (isDev()) {

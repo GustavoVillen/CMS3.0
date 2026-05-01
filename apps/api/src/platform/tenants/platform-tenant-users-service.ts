@@ -3,6 +3,7 @@ import { RouteError } from "../../http/route-error";
 import { hashPassword } from "../auth/passwords";
 import { getPrismaClient } from "../data/prisma-client";
 import { getDevTenantBySlug } from "../data/dev-tenant-store";
+import { publishPlatformAudit } from "../audit/audit-publisher";
 import {
   createDevTenantUser,
   getDevTenantUserByEmail,
@@ -349,6 +350,7 @@ export async function updatePlatformTenantUser(
   tenantSlug: string,
   userId: string,
   request: PlatformTenantUserUpdateRequest,
+  actorPlatformUserId?: string,
 ): Promise<PlatformTenantUserSummary> {
   const tenant = await resolveTenantId(tenantSlug);
   const prisma = getPrismaClient();
@@ -467,6 +469,24 @@ export async function updatePlatformTenantUser(
 
   if (!updated) {
     throw new RouteError(500, "TENANT_USER_UPDATE_FAILED", "Failed to update tenant user.");
+  }
+
+  if (actorPlatformUserId) {
+    const changedFields: string[] = [];
+    if (nextEmail) changedFields.push("email");
+    if (nextPasswordHash) changedFields.push("password");
+    if (nextRole) changedFields.push("role");
+    if (nextUserStatus) changedFields.push("userStatus");
+    if (nextMembershipStatus) changedFields.push("membershipStatus");
+    if (hasAssignedVessels) changedFields.push("assignedVesselCodes");
+    await publishPlatformAudit(prisma, {
+      tenantId: tenant.id,
+      actorPlatformUserId,
+      action: nextPasswordHash ? "PASSWORD_CHANGED_BY_PLATFORM_ADMIN" : "TENANT_USER_UPDATED_BY_PLATFORM_ADMIN",
+      entityType: "User",
+      entityId: userId,
+      metadata: { tenantSlug, changedFields },
+    });
   }
 
   return toSummaryFromPrisma(updated);

@@ -3,6 +3,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { hashOpaqueToken } from "../../platform/auth/passwords";
 import { RouteError } from "../../http/route-error";
+import { publishAudit } from "../../platform/audit/audit-publisher";
 import {
   listDevInvitations,
   createDevInvitation,
@@ -442,5 +443,16 @@ export async function setMemberPassword(session: TenantAccessSession, userId: st
     hashPassword(password),
     userId,
   );
+
+  const tenantId = await getTenantId(prisma, session.tenantSlug);
+  await publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "PASSWORD_CHANGED",
+    entityType: "User",
+    entityId: userId,
+    metadata: { tenantSlug: session.tenantSlug, self: false, byAdmin: true },
+  });
+
   return { ok: true };
 }

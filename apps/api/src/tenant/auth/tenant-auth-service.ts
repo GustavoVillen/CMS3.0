@@ -7,6 +7,7 @@ import { RouteError } from "../../http/route-error";
 import { buildTenantBootstrapPayload } from "../bootstrap/public-bootstrap";
 import { resolveActiveSessionLocale } from "../i18n/locale-resolution";
 import { TENANT_AUTH_POLICY } from "./auth-policies";
+import { publishAudit, publishSystemAudit } from "../../platform/audit/audit-publisher";
 
 function isDevelopmentMode(): boolean {
   return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
@@ -86,14 +87,36 @@ async function loginVesselCrew(
   );
 
   if (!rows.length || !rows[0].crewPasswordHash) {
+    await publishSystemAudit(prisma, {
+      tenantId: tenant.id,
+      action: "TENANT_LOGIN_FAILED",
+      entityType: "Tenant",
+      entityId: tenant.id,
+      metadata: { tenantSlug: tenant.slug, identifier: vesselCode, reason: "no_match" },
+    });
     throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
   if (!verifyPassword(password, rows[0].crewPasswordHash)) {
+    await publishSystemAudit(prisma, {
+      tenantId: tenant.id,
+      action: "TENANT_LOGIN_FAILED",
+      entityType: "Vessel",
+      entityId: rows[0].id,
+      metadata: { tenantSlug: tenant.slug, vesselCode, reason: "wrong_crew_password" },
+    });
     throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
   const vessel = rows[0];
+
+  await publishSystemAudit(prisma, {
+    tenantId: tenant.id,
+    action: "VESSEL_CREW_LOGIN_SUCCESS",
+    entityType: "Vessel",
+    entityId: vessel.id,
+    metadata: { tenantSlug: tenant.slug, vesselCode: vessel.code },
+  });
   const locale = resolveActiveSessionLocale({
     requestedLocale: requestedLocale,
     preferredLocale: null,
@@ -197,6 +220,15 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
         refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
+    });
+
+    await publishAudit(prisma, {
+      tenantId: tenant.id,
+      actorUserId: membership.user.id,
+      action: "TENANT_LOGIN_SUCCESS",
+      entityType: "User",
+      entityId: membership.user.id,
+      metadata: { tenantSlug: tenant.slug, email: membership.user.email, role: membership.role },
     });
 
     return {

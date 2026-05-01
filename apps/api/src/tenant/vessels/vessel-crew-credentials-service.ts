@@ -88,6 +88,16 @@ export async function setCrewPassword(
     vesselId,
   );
 
+  const { publishAudit } = await import("../../platform/audit/audit-publisher");
+  await publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "VESSEL_CREW_PASSWORD_CHANGED",
+    entityType: "Vessel",
+    entityId: vesselId,
+    metadata: { tenantSlug: session.tenantSlug, vesselCode },
+  });
+
   return { ok: true, updatedAt: now };
 }
 

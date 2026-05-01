@@ -168,7 +168,7 @@ export async function handlePlatformRoutes(
     const session = requirePlatformAccessSession(request);
     requirePlatformSuperadmin(session);
     const payload = await readJsonBody<any>(request);
-    sendJson(response, 200, await updatePlatformTenantUser(tenantUserMatch[1], tenantUserMatch[2], payload));
+    sendJson(response, 200, await updatePlatformTenantUser(tenantUserMatch[1], tenantUserMatch[2], payload, session.user.id));
     return true;
   }
 
