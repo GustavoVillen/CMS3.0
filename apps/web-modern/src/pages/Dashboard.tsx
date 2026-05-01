@@ -484,9 +484,12 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
   onClick?: () => void;
 }) => {
   const alert = !loading && !hasToday;
-  const wrapCls = alert
-    ? "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] bg-red-500/50 border-red-500/30"
-    : "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
+  const wrapCls = "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
+  // .bento-card sets `background` in plain CSS (higher specificity than
+  // Tailwind's bg-red-500/50), so we override via inline style when alerting.
+  const wrapStyle: React.CSSProperties | undefined = alert
+    ? { background: "rgba(239, 68, 68, 0.5)", borderColor: "rgba(239, 68, 68, 0.3)" }
+    : undefined;
   const iconBoxCls = alert
     ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
     : "p-1.5 rounded-lg bg-white/5 border border-white/10";
@@ -501,7 +504,7 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
     : "—";
 
   return (
-    <div className={wrapCls} onClick={onClick}>
+    <div className={wrapCls} style={wrapStyle} onClick={onClick}>
       <div className="flex items-start justify-between mb-3">
         <div className={iconBoxCls}>
           {alert
