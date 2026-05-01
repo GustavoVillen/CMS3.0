@@ -1,7 +1,7 @@
 import type { TenantLoginRequest, TenantLoginResponse, TenantRefreshRequest, TenantRefreshResponse } from "./auth-types";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDevTenantUserByIdentifier } from "../../platform/data/dev-tenant-user-store";
-import { verifyPassword, hashOpaqueToken } from "../../platform/auth/passwords";
+import { verifyPassword, verifyPasswordOrTimingDummy, hashOpaqueToken } from "../../platform/auth/passwords";
 import { issueOpaqueSessionTokens } from "../../platform/auth/tokens";
 import { RouteError } from "../../http/route-error";
 import { buildTenantBootstrapPayload } from "../bootstrap/public-bootstrap";
@@ -71,13 +71,18 @@ function loginTenantUserFromDevelopmentFallback(
   };
 }
 
-async function loginVesselCrew(
+/**
+ * Attempts vessel crew login. Returns the response on success, null on any failure.
+ * Always runs scrypt exactly once (real or timing-dummy) to keep timing constant.
+ * Does NOT audit failures — the caller does that once per request.
+ */
+async function tryVesselCrewLogin(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenant: { id: string; slug: string; settings: any },
   vesselCode: string,
   password: string,
   requestedLocale?: string | null,
-): Promise<TenantLoginResponse> {
+): Promise<TenantLoginResponse | null> {
   const rows = await prisma.$queryRawUnsafe<Array<{
     id: string; code: string; name: string; crewPasswordHash: string | null;
   }>>(
@@ -86,36 +91,19 @@ async function loginVesselCrew(
     tenant.id, vesselCode,
   );
 
-  if (!rows.length || !rows[0].crewPasswordHash) {
-    await publishSystemAudit(prisma, {
-      tenantId: tenant.id,
-      action: "TENANT_LOGIN_FAILED",
-      entityType: "Tenant",
-      entityId: tenant.id,
-      metadata: { tenantSlug: tenant.slug, identifier: vesselCode, reason: "no_match" },
-    });
-    throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
-  }
+  const candidate = rows[0];
+  const passwordOk = verifyPasswordOrTimingDummy(password, candidate?.crewPasswordHash);
 
-  if (!verifyPassword(password, rows[0].crewPasswordHash)) {
-    await publishSystemAudit(prisma, {
-      tenantId: tenant.id,
-      action: "TENANT_LOGIN_FAILED",
-      entityType: "Vessel",
-      entityId: rows[0].id,
-      metadata: { tenantSlug: tenant.slug, vesselCode, reason: "wrong_crew_password" },
-    });
-    throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
+  if (!candidate || !candidate.crewPasswordHash || !passwordOk) {
+    return null;
   }
-
-  const vessel = rows[0];
 
   await publishSystemAudit(prisma, {
     tenantId: tenant.id,
     action: "VESSEL_CREW_LOGIN_SUCCESS",
     entityType: "Vessel",
-    entityId: vessel.id,
-    metadata: { tenantSlug: tenant.slug, vesselCode: vessel.code },
+    entityId: candidate.id,
+    metadata: { tenantSlug: tenant.slug, vesselCode: candidate.code },
   });
   const locale = resolveActiveSessionLocale({
     requestedLocale: requestedLocale,
@@ -129,12 +117,12 @@ async function loginVesselCrew(
   return {
     session: tokens,
     user: {
-      id: `crew-${vessel.code}`,
-      email: `tripulacion@${vessel.code.toLowerCase()}.vessel`,
+      id: `crew-${candidate.code}`,
+      email: `tripulacion@${candidate.code.toLowerCase()}.vessel`,
       firstName: `Tripulación`,
-      lastName: vessel.name,
+      lastName: candidate.name,
       role: "TECHNICIAN_OPERATOR",
-      assignedVesselCodes: [vessel.code],
+      assignedVesselCodes: [candidate.code],
       locale,
     },
     bootstrap: buildTenantBootstrapPayload(
@@ -195,13 +183,30 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       },
     });
 
-    // Try vessel crew login if no user membership found
-    if (!membership || membership.user.status !== "ACTIVE") {
-      return await loginVesselCrew(prisma, tenant, identifier, password, request.locale);
-    }
+    // Always run scrypt (real or dummy) so response time doesn't leak whether
+    // the identifier matched a real membership.
+    const validMembership = !!membership && membership.user.status === "ACTIVE";
+    const membershipPasswordOk = verifyPasswordOrTimingDummy(
+      password,
+      validMembership ? membership!.user.passwordHash : null,
+    );
 
-    if (!verifyPassword(password, membership.user.passwordHash)) {
-      return await loginVesselCrew(prisma, tenant, identifier, password, request.locale);
+    // If tenant user login fails, try vessel crew. Never throw mid-flow:
+    // we want a single failure point with a single audit + single error.
+    if (!validMembership || !membershipPasswordOk) {
+      const crewResponse = await tryVesselCrewLogin(prisma, tenant, identifier, password, request.locale);
+      if (crewResponse) return crewResponse;
+
+      // All paths failed. Single audit event with neutral metadata
+      // (don't reveal which path got how far — keep response identical).
+      await publishSystemAudit(prisma, {
+        tenantId: tenant.id,
+        action: "TENANT_LOGIN_FAILED",
+        entityType: "Tenant",
+        entityId: tenant.id,
+        metadata: { tenantSlug: tenant.slug, identifier },
+      });
+      throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
 
     const locale = resolveActiveSessionLocale({

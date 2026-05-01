@@ -29,3 +29,24 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 export function hashOpaqueToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
+
+// Pre-computed at module load. Used to equalize timing when no real hash exists,
+// preventing user enumeration via response-time side-channels.
+const DUMMY_HASH = hashPassword("__timing_dummy_never_matches__");
+
+/**
+ * Verify a password against a hash. If `storedHash` is null/undefined/empty,
+ * runs scrypt on a dummy hash anyway to keep response time constant — prevents
+ * an attacker from distinguishing "user/vessel exists" from "doesn't exist"
+ * via timing attacks. Always returns false in the dummy case.
+ */
+export function verifyPasswordOrTimingDummy(
+  password: string,
+  storedHash: string | null | undefined,
+): boolean {
+  if (!storedHash) {
+    verifyPassword(password, DUMMY_HASH);
+    return false;
+  }
+  return verifyPassword(password, storedHash);
+}
