@@ -24,6 +24,7 @@ const PlatformAuthContext = createContext<PlatformAuthContextValue | null>(null)
 
 const STORAGE_KEY = "gpms_platform_auth";
 const TOKEN_KEY   = "gpms_platform_token";
+const REFRESH_KEY = "gpms_platform_refresh_token";
 
 function loadStored(): PlatformAuthState {
   try {
@@ -50,6 +51,7 @@ export function PlatformAuthProvider({ children }: { children: React.ReactNode }
     setState({ token: null, user: null, isAuthenticated: false });
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
   }, []);
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function PlatformAuthProvider({ children }: { children: React.ReactNode }
         setError(code === "AUTH_INVALID_CREDENTIALS" ? "Credenciales inválidas" : "Error de autenticación");
         return;
       }
-      const data = await res.json() as { session: { accessToken: string }; user: PlatformUser };
+      const data = await res.json() as { session: { accessToken: string; refreshToken: string }; user: PlatformUser };
       const next: PlatformAuthState = {
         token: data.session.accessToken,
         user: data.user,
@@ -79,6 +81,7 @@ export function PlatformAuthProvider({ children }: { children: React.ReactNode }
       };
       setState(next);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(REFRESH_KEY, data.session.refreshToken);
     } catch {
       setError("Error de conexión");
     } finally {
@@ -99,12 +102,74 @@ export function usePlatformAuth() {
   return ctx;
 }
 
-/** Fetch helper for platform API calls (uses platform token) */
-export async function platformFetch<T>(path: string): Promise<T> {
+/**
+ * Try to refresh the platform access token using the stored refresh token.
+ * Returns the new access token on success, null on failure.
+ * Concurrent refresh attempts are deduplicated via the in-flight promise.
+ */
+let refreshInflight: Promise<string | null> | null = null;
+async function refreshPlatformToken(): Promise<string | null> {
+  if (refreshInflight) return refreshInflight;
+  refreshInflight = (async () => {
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (!refreshToken) return null;
+    try {
+      const res = await fetch("/platform/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json() as { accessToken: string; refreshToken: string };
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_KEY, data.refreshToken);
+      // Sync into the auth state blob too so reload preserves the new token
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.token = data.accessToken;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      } catch {/* ignore */}
+      return data.accessToken;
+    } catch {
+      return null;
+    }
+  })();
+  try {
+    return await refreshInflight;
+  } finally {
+    refreshInflight = null;
+  }
+}
+
+/** One-shot fetch with automatic refresh-and-retry on 401. */
+async function platformAuthedFetch(path: string, init: RequestInit): Promise<Response> {
   const token = localStorage.getItem(TOKEN_KEY) ?? "";
-  const res = await fetch(path, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
+  const headers = { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` };
+  let res = await fetch(path, { ...init, headers });
+  if (res.status !== 401) return res;
+
+  const newToken = await refreshPlatformToken();
+  if (!newToken) return res; // refresh failed → return original 401
+
+  const retryHeaders = { ...(init.headers as Record<string, string>), Authorization: `Bearer ${newToken}` };
+  res = await fetch(path, { ...init, headers: retryHeaders });
+  return res;
+}
+
+function buildJsonInit(method: string, body?: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  };
+}
+
+/** Fetch helper for platform API calls (uses platform token, auto-refreshes on 401) */
+export async function platformFetch<T>(path: string): Promise<T> {
+  const res = await platformAuthedFetch(path, buildJsonInit("GET"));
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new ApiError(res.status, (json as any).error?.code ?? "ERROR", (json as any).error?.message ?? res.statusText);
@@ -113,12 +178,7 @@ export async function platformFetch<T>(path: string): Promise<T> {
 }
 
 export async function platformPost<T>(path: string, body: unknown): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY) ?? "";
-  const res = await fetch(path, {
-    method:  "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
+  const res = await platformAuthedFetch(path, buildJsonInit("POST", body));
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new ApiError(res.status, (json as any).error?.code ?? "ERROR", (json as any).error?.message ?? res.statusText);
@@ -127,12 +187,7 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function platformPatch<T>(path: string, body: unknown): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY) ?? "";
-  const res = await fetch(path, {
-    method:  "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
+  const res = await platformAuthedFetch(path, buildJsonInit("PATCH", body));
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new ApiError(res.status, (json as any).error?.code ?? "ERROR", (json as any).error?.message ?? res.statusText);

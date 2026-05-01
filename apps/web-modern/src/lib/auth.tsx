@@ -72,10 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("gpms_tenant_slug", tenantSlug);
 
       const res = await api.post<{
-        session: { accessToken: string };
+        session: { accessToken: string; refreshToken: string };
         user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[] };
         bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null } };
       }>("/app/auth/login", { identifier, password });
+
+      // Persist refresh token so api.ts can recover from 401 (access token expiry)
+      localStorage.setItem("gpms_refresh_token", res.session.refreshToken);
 
       const u = res.user;
       const t = res.bootstrap?.tenant;
@@ -119,15 +122,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("gpms_auth");
     localStorage.removeItem("gpms_token");
     localStorage.removeItem("gpms_tenant_slug");
+    localStorage.removeItem("gpms_refresh_token");
   }, []);
 
-  // Auto-logout on 401 (server restarted and lost in-memory session)
+  // Auto-logout on 401 only after refresh attempt has failed (api.ts handles refresh)
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setState({ token: null, user: null, tenant: null, isAuthenticated: false });
       localStorage.removeItem("gpms_auth");
       localStorage.removeItem("gpms_token");
       localStorage.removeItem("gpms_tenant_slug");
+      localStorage.removeItem("gpms_refresh_token");
     });
   }, []);
 
