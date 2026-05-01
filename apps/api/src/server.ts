@@ -86,6 +86,20 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // ── CSP report receiver (browsers POST violations here while in report-only) ─
+  if (method === "POST" && url.pathname === "/internal/csp-report") {
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const { log } = await import("./common/logger");
+      log.warn("[csp-violation]", raw.slice(0, 2000));
+    } catch { /* swallow — receiver must never fail */ }
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+
   // ── Sub-router dispatch ─────────────────────────────────────────────────────
   try {
     if (await handlePlatformRoutes(method, url, request, response, env)) return;

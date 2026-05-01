@@ -7,6 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join, extname } from "node:path";
 import type { ServerResponse } from "node:http";
+import { applySecurityHeaders } from "./security-headers";
 
 // Resolve public dir relative to this file: apps/api/src/http → apps/web-legacy/public
 const WEB_LEGACY_PUBLIC = join(__dirname, "../../../web-legacy/public");
@@ -38,6 +39,7 @@ export function serveStaticFile(response: ServerResponse, relativePath: string):
     const filePath = join(WEB_LEGACY_PUBLIC, relativePath);
     const content  = readFileSync(filePath);
     const mime     = mimeFor(relativePath);
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type":  mime,
       "Cache-Control": "no-cache",
@@ -77,6 +79,7 @@ export function serveWebModernAsset(response: ServerResponse, relativePath: stri
 export function serveWebModernSpa(response: ServerResponse): void {
   try {
     const html = readFileSync(join(WEB_MODERN_DIST, "index.html"));
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type":  "text/html; charset=utf-8",
       "Cache-Control": "no-cache",
@@ -95,6 +98,7 @@ export function serveWebModernSpa(response: ServerResponse): void {
 export function serveSpaHtml(response: ServerResponse): void {
   try {
     const html = readFileSync(join(WEB_LEGACY_PUBLIC, "index.html"));
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type":  "text/html; charset=utf-8",
       "Cache-Control": "no-cache",

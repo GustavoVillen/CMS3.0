@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, createReadStream, statSync, readFileSync 
 import { join, extname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
+import { applySecurityHeaders } from "../../http/security-headers";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "fluid-reports");
 
@@ -76,6 +77,7 @@ export function serveFluidReportUpload(
   try {
     const stat = statSync(filePath);
     if (!stat.isFile()) return false;
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type": mimeForFluidFile(filename),
       "Content-Length": stat.size,

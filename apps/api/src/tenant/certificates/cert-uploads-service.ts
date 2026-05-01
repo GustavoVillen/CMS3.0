@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, createReadStream, statSync } from "node:f
 import { join, extname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
+import { applySecurityHeaders } from "../../http/security-headers";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "certificates");
 
@@ -71,6 +72,7 @@ export function serveCertificateUpload(
     if (!stat.isFile()) return false;
     const ext = extname(filename).toLowerCase();
     const mime = MIME_MAP[ext] ?? "application/octet-stream";
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type": mime,
       "Content-Length": stat.size,
