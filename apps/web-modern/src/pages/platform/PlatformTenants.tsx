@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
   Building2, Plus, Users, Globe, Mail, X, Loader2,
-  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, KeyRound,
+  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, Pencil,
 } from "lucide-react";
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
@@ -399,47 +399,78 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
   );
 }
 
-// ─── Change Password Modal ────────────────────────────────────────────────────
+// ─── Edit User Modal ──────────────────────────────────────────────────────────
 
-function ChangePasswordModal({ tenantSlug, user, onClose }: { tenantSlug: string; user: TenantUser; onClose: () => void }) {
-  const [password, setPassword]   = useState("");
-  const [confirm, setConfirm]     = useState("");
-  const [loading, setLoading]     = useState(false);
-  const [err, setErr]             = useState<string|null>(null);
-  const [ok, setOk]               = useState(false);
+function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: string; user: TenantUser; onClose: () => void; onSaved: () => void }) {
+  const isNamedEmail = user.email.startsWith("named-");
+  const [form, setForm] = useState({
+    firstName: user.firstName ?? "",
+    lastName:  user.lastName  ?? "",
+    email:     isNamedEmail ? "" : user.email,
+    role:      user.role,
+    password:  "",
+    confirm:   "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState<string|null>(null);
+  const [ok, setOk]           = useState(false);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirm) { setErr("Las contraseñas no coinciden."); return; }
-    if (password.length < 6)  { setErr("Mínimo 6 caracteres."); return; }
+    if (form.password && form.password !== form.confirm) { setErr("Las contraseñas no coinciden."); return; }
+    if (form.password && form.password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres."); return; }
+    const payload: Record<string, string> = { firstName: form.firstName, lastName: form.lastName, role: form.role };
+    if (form.email && form.email !== user.email) payload.email = form.email;
+    if (form.password) payload.password = form.password;
     setLoading(true); setErr(null);
     try {
-      await platformPatch(`/platform/tenants/${tenantSlug}/users/${user.id}`, { password });
+      await platformPatch(`/platform/tenants/${tenantSlug}/users/${user.id}`, payload);
       setOk(true);
-    } catch (ex: any) { setErr(ex.message ?? "Error al cambiar contraseña"); }
+    } catch (ex: any) { setErr(ex.message ?? "Error al guardar"); }
     finally { setLoading(false); }
   };
 
   if (ok) return (
-    <ModalWrapper title="Contraseña actualizada" onClose={onClose}>
+    <ModalWrapper title="Usuario actualizado" onClose={() => { onSaved(); onClose(); }}>
       <div className="space-y-3">
-        <OkMsg msg={`Contraseña de ${user.email} actualizada correctamente.`} />
-        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white font-bold hover:bg-white/10 transition-all">Cerrar</button>
+        <OkMsg msg="Usuario actualizado correctamente." />
+        <button onClick={() => { onSaved(); onClose(); }} className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white font-bold hover:bg-white/10 transition-all">Cerrar</button>
       </div>
     </ModalWrapper>
   );
 
   return (
-    <ModalWrapper title={`Cambiar contraseña — ${user.email}`} onClose={onClose}>
+    <ModalWrapper title={`Editar usuario — ${user.firstName || user.email}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Nueva contraseña">
-          <input className={inp} type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoFocus />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Juan" /></Field>
+          <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} placeholder="García" /></Field>
+        </div>
+        <Field label="Email">
+          <input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" />
+          {isNamedEmail && <p className="text-[10px] text-yellow-400/70 mt-1">Este usuario no tiene email real — asigná uno.</p>}
         </Field>
-        <Field label="Confirmar contraseña">
-          <input className={inp} type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" />
+        <Field label="Rol">
+          <select className={sel} value={form.role} onChange={set("role")}>
+            {TENANT_ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g," ")}</option>)}
+          </select>
         </Field>
+        <div className="border-t border-white/5 pt-3 space-y-3">
+          <p className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">Nueva contraseña (opcional)</p>
+          <Field label="Contraseña">
+            <input className={inp} type="password" value={form.password} onChange={set("password")} placeholder="Dejar vacío para no cambiar" />
+          </Field>
+          {form.password && (
+            <Field label="Confirmar contraseña">
+              <input className={inp} type="password" value={form.confirm} onChange={set("confirm")} placeholder="••••••••" />
+            </Field>
+          )}
+        </div>
         {err && <ErrMsg msg={err} />}
-        <SaveBtn loading={loading} label="Cambiar contraseña" />
+        <SaveBtn loading={loading} label="Guardar cambios" />
       </form>
     </ModalWrapper>
   );
@@ -454,7 +485,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
   const [addDomain, setAddDomain]       = useState(false);
   const [addUser, setAddUser]           = useState(false);
   const [addInvite, setAddInvite]       = useState(false);
-  const [changePwUser, setChangePwUser] = useState<TenantUser | null>(null);
+  const [editUser, setEditUser] = useState<TenantUser | null>(null);
 
   const { data: domains, loading: dLoading, reload: dReload } = usePlatformList<TenantDomain[]>(`/platform/tenants/${tenant.slug}/domains`);
   const { data: users,   loading: uLoading, error: uError, reload: uReload } = usePlatformList<{ items: TenantUser[]; total: number }>(`/platform/tenants/${tenant.slug}/users`);
@@ -549,11 +580,11 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                         <span className="text-[10px] font-bold text-accent">{u.role.replace(/_/g," ")}</span>
                         <StatusBadge status={u.membershipStatus} />
                         <button
-                          onClick={() => setChangePwUser(u)}
-                          title="Cambiar contraseña"
+                          onClick={() => setEditUser(u)}
+                          title="Editar usuario"
                           className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/30 hover:text-yellow-400 transition-all"
                         >
-                          <KeyRound className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -594,7 +625,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
       {addDomain    && <AddDomainModal tenantSlug={tenant.slug} onClose={() => setAddDomain(false)} onAdded={() => { dReload(); onChanged(); }} />}
       {addUser      && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
       {addInvite    && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
-      {changePwUser && <ChangePasswordModal tenantSlug={tenant.slug} user={changePwUser} onClose={() => setChangePwUser(null)} />}
+      {editUser && <EditUserModal tenantSlug={tenant.slug} user={editUser} onClose={() => setEditUser(null)} onSaved={uReload} />}
     </>
   );
 }
