@@ -153,7 +153,31 @@ async function fetchRecords(
     case "maintenance_plans": {
       if (filters.status)      where.status      = filters.status;
       if (filters.triggerType) where.triggerType = filters.triggerType;
-      return prisma.maintenancePlan.findMany({ where, orderBy: { nextDueDate: "asc" } }) as any;
+      const rows = await prisma.maintenancePlan.findMany({
+        where,
+        orderBy: { nextDueDate: "asc" },
+      }) as Array<Record<string, unknown> & { assetId: string; tenantId: string }>;
+
+      // MaintenancePlan stores assetId as a "soft" FK (no Prisma @relation).
+      // The template columns assetCode / sfiCode describe the linked Asset, not
+      // the plan itself — fetch them in one query and merge.
+      const assetIds = [...new Set(rows.map((r) => r.assetId).filter(Boolean))];
+      const assets = assetIds.length
+        ? await prisma.asset.findMany({
+            where: { id: { in: assetIds }, tenantId: where.tenantId as string },
+            select: { id: true, assetCode: true, sfiCode: true },
+          })
+        : [];
+      const assetMap = new Map(assets.map((a) => [a.id, a]));
+
+      return rows.map((r) => {
+        const a = assetMap.get(r.assetId);
+        return {
+          ...r,
+          assetCode: a?.assetCode ?? null,
+          sfiCode:   a?.sfiCode   ?? null,
+        };
+      });
     }
     case "work_orders": {
       if (filters.status)   where.status   = filters.status;
