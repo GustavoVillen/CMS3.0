@@ -404,10 +404,7 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Email"><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
         <Field label="Contraseña"><input className={inp} type="password" required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Juan" /></Field>
-          <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} placeholder="García" /></Field>
-        </div>
+        <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
         <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
         {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Crear Usuario" />
@@ -462,10 +459,7 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
   return (
     <ModalWrapper title={`Editar usuario — ${user.firstName || user.email}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Juan" /></Field>
-          <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} placeholder="García" /></Field>
-        </div>
+        <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
         <Field label="Email">
           <input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" />
           {isNamedEmail && <p className="text-[10px] text-yellow-400/70 mt-1">Este usuario no tiene email real — asigná uno.</p>}
@@ -590,8 +584,8 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : users.items.map(u => (
                     <div key={u.id} className="bento-card py-3 px-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm text-white font-medium truncate">{u.email}</p>
-                        <p className="text-[10px] text-text-industrial/40 mt-0.5">{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</p>
+                        <p className="text-sm text-white font-medium truncate">{u.firstName || u.email}</p>
+                        <p className="text-[10px] text-text-industrial/40 mt-0.5 truncate">{u.firstName ? u.email : "—"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[u.role] ?? u.role.replace(/_/g," ")}</span>
