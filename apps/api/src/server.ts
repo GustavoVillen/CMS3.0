@@ -84,14 +84,6 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  // ── DB reconnect ─────────────────────────────────────────────────────────────
-  // Allow forcing a reconnect attempt after the DB comes back online.
-  if (method === "POST" && url.pathname === "/internal/db-reset") {
-    resetPrismaClient();
-    sendJson(response, 200, { ok: true, message: "Prisma client reset. Next request will attempt reconnection." });
-    return;
-  }
-
   // ── Sub-router dispatch ─────────────────────────────────────────────────────
   try {
     if (await handlePlatformRoutes(method, url, request, response, env)) return;
