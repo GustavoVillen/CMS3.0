@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AppEnv } from "../config/env";
 import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
+import { enforceRateLimit } from "../http/rate-limiter";
 import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/platform-route-auth";
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
@@ -36,6 +37,7 @@ export async function handlePlatformRoutes(
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   if (method === "POST" && url.pathname === "/platform/auth/login") {
+    enforceRateLimit(request, "auth:platform-login", { maxRequests: 10, windowMs: 60_000 });
     const payload = await readJsonBody<{ email: string; password: string }>(request);
     const result = await loginPlatformUser(payload);
     registerPlatformAccessSession({
@@ -50,6 +52,7 @@ export async function handlePlatformRoutes(
   }
 
   if (method === "POST" && url.pathname === "/platform/auth/refresh") {
+    enforceRateLimit(request, "auth:platform-refresh", { maxRequests: 30, windowMs: 60_000 });
     const payload = await readJsonBody<{ refreshToken: string }>(request);
     const result = await refreshPlatformSession(payload);
     sendJson(response, 200, result);

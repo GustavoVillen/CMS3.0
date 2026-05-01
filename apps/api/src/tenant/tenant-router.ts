@@ -3,6 +3,7 @@ import type { AppEnv } from "../config/env";
 import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
 import { RouteError } from "../http/route-error";
+import { enforceRateLimit } from "../http/rate-limiter";
 import { resolveTenantSlugFromRequest } from "./bootstrap/public-bootstrap-route";
 import { loginTenantUser, refreshTenantSession } from "./auth/tenant-auth-service";
 import { registerTenantAccessSession } from "./auth/session-store";
@@ -136,6 +137,7 @@ export async function handleTenantRoutes(
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   if (method === "POST" && url.pathname === "/app/auth/login") {
+    enforceRateLimit(request, "auth:tenant-login", { maxRequests: 10, windowMs: 60_000 });
     const slug = requireTenantSlug(request, env);
     const payload = await readJsonBody<{ identifier: string; password: string; locale?: string | null }>(request);
     const result = await loginTenantUser(slug, payload);
@@ -152,6 +154,7 @@ export async function handleTenantRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/auth/refresh") {
+    enforceRateLimit(request, "auth:tenant-refresh", { maxRequests: 30, windowMs: 60_000 });
     const slug = requireTenantSlug(request, env);
     const payload = await readJsonBody<{ refreshToken: string }>(request);
     const result = await refreshTenantSession(slug, payload);
