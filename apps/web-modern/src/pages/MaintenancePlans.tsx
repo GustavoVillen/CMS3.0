@@ -16,6 +16,7 @@ import {
   Minimize2,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   X,
   Zap,
@@ -240,6 +241,7 @@ const selectCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 const sectionLabelCls = "block font-semibold uppercase tracking-wider px-2 py-1 rounded-sm";
 const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", color: "white", fontSize: "1.2rem" };
+const aiLabelStyle: React.CSSProperties = { backgroundColor: "#0c1f3f", color: "white", fontSize: "1.2rem", borderLeft: "3px solid #3b82f6" };
 
 // ─── Asset live-search dropdown ────────────────────────────────────────────────
 
@@ -1175,7 +1177,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
         locale: "es",
         messages: [{
           role: "user",
-          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}\n\nSos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea. Los criterios deben indicar cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables.\n\nResponde ÚNICAMENTE con los criterios, en texto plano, sin introducción ni explicación adicional.`,
+          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}\n\nSos experto en mantenimiento de máquinas navales. Generá el siguiente contenido para esta tarea:\n\n1. Criterios de aceptación verificables, específicos y técnicos (cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables).\n\n2. Una sección con las herramientas, equipos de medición e instrumentos requeridos.\n\nUsá exactamente este formato (sin introducción ni explicación adicional):\n[criterios de aceptación]\n\nHERRAMIENTAS E INSTRUMENTOS NECESARIOS:\n[lista de herramientas e instrumentos]`,
         }],
       });
 
@@ -1215,7 +1217,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
         locale: "es",
         messages: [{
           role: "user",
-          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}\n\nSos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloqueadas, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo.\n\nResponde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`,
+          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}\n\nSos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.\n\nResponde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`,
         }],
       });
 
@@ -1256,12 +1258,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           content: `Activo: ${assetLabel}
 Tarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}${loto ? `\nLOTO: ${loto}` : ""}
 
-Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y determiná:
-1. El nivel de riesgo (LOW, MEDIUM, HIGH o CRITICAL)
-2. El resultado del análisis de riesgos (peligros identificados, consecuencias posibles, medidas de control)
+Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
 
-Responde ÚNICAMENTE con este JSON (sin texto adicional):
-{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis"}`,
+NIVEL: LOW|MEDIUM|HIGH|CRITICAL
+
+[peligros identificados, consecuencias posibles y medidas de control]
+
+EQUIPOS DE PPE:
+- [equipo de protección 1]
+- [equipo de protección 2]`,
         }],
       });
 
@@ -1280,18 +1285,14 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
         }
       }
 
-      // Parse JSON response
-      try {
-        const clean = fullText.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-        const result = JSON.parse(clean) as { level?: string; analysis?: string };
-        if (result.level && ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(result.level)) {
-          setRiskLevel(result.level as RiskLevel);
-        }
-        if (result.analysis) setRiskAnalysisResult(result.analysis);
-      } catch {
-        // Fallback: set raw text as analysis
-        if (fullText.trim()) setRiskAnalysisResult(fullText.trim());
+      // Parse plain-text response: first line is "NIVEL: HIGH", rest is the analysis
+      const text = fullText.trim();
+      const levelMatch = text.match(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)/im);
+      if (levelMatch) {
+        setRiskLevel(levelMatch[1] as RiskLevel);
       }
+      const analysisText = text.replace(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)\s*/im, "").trim();
+      if (analysisText) setRiskAnalysisResult(analysisText);
     } catch { /* noop */ }
     finally {
       setLoadingRisk(false);
@@ -1866,13 +1867,17 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             {/* Acceptance criteria */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : "hover:opacity-80"}`}
-                style={sectionLabelStyle}
+                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingCriteria ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
+                style={aiLabelStyle}
                 onClick={handleAcceptanceCriteriaClick}
-                title="Click para que la IA genere los criterios de aceptación"
+                title="Click para que la IA genere los criterios y herramientas"
               >
-                {t("mp.acceptanceCriteria")}
-                {loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+                <span>{t("mp.acceptanceCriteria")}</span>
+                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
+                  {loadingCriteria
+                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
+                    : <><Sparkles className="w-3 h-3" /> IA</>}
+                </span>
               </label>
               <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
             </div>
@@ -1880,13 +1885,17 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             {/* LOTO */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : "hover:opacity-80"}`}
-                style={sectionLabelStyle}
+                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingLoto ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
+                style={aiLabelStyle}
                 onClick={handleLotoClick}
                 title="Click para que la IA genere el procedimiento LOTO"
               >
-                {t("mp.loto")}
-                {loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+                <span>{t("mp.loto")}</span>
+                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
+                  {loadingLoto
+                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
+                    : <><Sparkles className="w-3 h-3" /> IA</>}
+                </span>
               </label>
               <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
             </div>
@@ -1894,12 +1903,17 @@ Responde ÚNICAMENTE con este JSON (sin texto adicional):
             {/* Risk level */}
             <div className="space-y-1.5">
               <label
-                className={`${labelCls} cursor-pointer transition-colors ${loadingRisk ? "text-accent/60 animate-pulse" : "hover:text-accent"}`}
+                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingRisk ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
+                style={aiLabelStyle}
                 onClick={handleRiskClick}
-                title="Click para que la IA analice el nivel de riesgo"
+                title="Click para que la IA analice el nivel de riesgo y PPE requerido"
               >
-                {t("mp.riskLevel")}
-                {loadingRisk && <span className="ml-1 text-[9px] text-accent/60 normal-case font-normal">analizando...</span>}
+                <span>{t("mp.riskLevel")}</span>
+                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
+                  {loadingRisk
+                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
+                    : <><Sparkles className="w-3 h-3" /> IA</>}
+                </span>
               </label>
               <div className="flex items-center gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getTenantMaintenancePlan } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
@@ -58,6 +59,26 @@ const MARGIN_V = Math.round(1.5 * CM);
 const FOOTER_H = 40;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - MARGIN_V;
 
+// DejaVu Sans has full Unicode support (including ≥ ≤ etc.)
+// Paths for Linux (VPS) and Windows (local dev)
+const DEJAVU_PATHS = [
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+  "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+  "C:\\Windows\\Fonts\\DejaVuSans.ttf",
+  join(process.cwd(), "assets", "DejaVuSans.ttf"),
+];
+const DEJAVU_BOLD_PATHS = [
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+  "C:\\Windows\\Fonts\\DejaVuSans-Bold.ttf",
+  join(process.cwd(), "assets", "DejaVuSans-Bold.ttf"),
+];
+const dejavuRegular = DEJAVU_PATHS.find(existsSync) ?? null;
+const dejavuBold    = DEJAVU_BOLD_PATHS.find(existsSync) ?? null;
+
+const FONT_REGULAR = dejavuRegular ? "DejaVuSans" : "Helvetica";
+const FONT_BOLD    = dejavuBold    ? "DejaVuSans-Bold" : "Helvetica-Bold";
+
 export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   const plan = await getTenantMaintenancePlan(session, id);
   const p = plan as Record<string, unknown>;
@@ -108,6 +129,9 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     doc.on("end",  () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    if (dejavuRegular) doc.registerFont("DejaVuSans", dejavuRegular);
+    if (dejavuBold)    doc.registerFont("DejaVuSans-Bold", dejavuBold);
+
     const ML = 48;
     const MR = 48;
     const PW = 595.28;
@@ -132,7 +156,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     function sectionHeader(title: string) {
       ensureSpace(22);
       doc.rect(ML, y, W, 18).fillColor(bgHead).fill();
-      doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff")
+      doc.fontSize(8).font(FONT_BOLD).fillColor("#ffffff")
         .text(title.toUpperCase(), ML + 10, y + 5, { width: W - 20, characterSpacing: 1.2 });
       y += 18;
     }
@@ -145,10 +169,10 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         const bx = ML + i * colW;
         doc.roundedRect(bx, y, colW, boxH, 0).fillColor(bgBox).fill();
         doc.roundedRect(bx, y, colW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+        doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
           .text(f.label.toUpperCase(), bx + 10, y + 7, { width: colW - 20, characterSpacing: 0.5 });
-        doc.fontSize(10.5).font("Helvetica-Bold").fillColor(f.color ?? black)
-          .text(f.value, bx + 10, y + 19, { width: colW - 20 });
+        doc.fontSize(10.5).font(FONT_BOLD).fillColor(f.color ?? black)
+          .text(sanitizePdfText(f.value), bx + 10, y + 19, { width: colW - 20 });
       });
       y += boxH;
     }
@@ -158,15 +182,15 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       const innerW = (W / totalCols) * span - 20;
       const contentH = clean === "—"
         ? 14
-        : doc.fontSize(9.5).font("Helvetica").heightOfString(clean, { width: innerW, lineGap: 2 });
+        : doc.fontSize(9.5).font(FONT_REGULAR).heightOfString(clean, { width: innerW, lineGap: 2 });
       const boxH = Math.max(38, contentH + 22);
       ensureSpace(boxH);
       const boxW = (W / totalCols) * span;
       doc.roundedRect(ML, y, boxW, boxH, 0).fillColor(bgBox).fill();
       doc.roundedRect(ML, y, boxW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+      doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
         .text(label.toUpperCase(), ML + 10, y + 6, { width: innerW, characterSpacing: 0.5 });
-      doc.fontSize(9.5).font("Helvetica").fillColor(clean === "—" ? gray : black)
+      doc.fontSize(9.5).font(FONT_REGULAR).fillColor(clean === "—" ? gray : black)
         .text(clean, ML + 10, y + 18, { width: innerW, lineGap: 2 });
       y += boxH;
     }
@@ -189,7 +213,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       headers.forEach((h, i) => {
         doc.rect(colX(i), y, colWidths[i], headerH).fillColor("#e2e8f0").fill();
         doc.rect(colX(i), y, colWidths[i], headerH).strokeColor(border).lineWidth(0.4).stroke();
-        doc.fontSize(7.5).font("Helvetica-Bold").fillColor(black)
+        doc.fontSize(7.5).font(FONT_BOLD).fillColor(black)
           .text(h.trim(), colX(i) + cellPad, y + 5, { width: colWidths[i] - cellPad * 2, ellipsis: true });
       });
       y += headerH;
@@ -199,11 +223,11 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         const cellHeights = row.map((cell, i) => {
           const cw = colWidths[i] ?? restColW;
           const raw = cell.trim();
-          const hasCheckbox = /^[^\x00-\x7F\s]/.test(raw);
-          const cleanText = sanitizePdfText(raw.replace(/^[^\x00-\x7F]+\s*/, ""));
+          const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(raw);
+          const cleanText = sanitizePdfText(hasCheckbox ? raw.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : raw);
           const textW = cw - cellPad * 2 - (hasCheckbox ? 11 : 0);
           if (!cleanText) return 16;
-          return doc.fontSize(7.5).font("Helvetica").heightOfString(cleanText, { width: textW, lineGap: 1 }) + 8;
+          return doc.fontSize(7.5).font(FONT_REGULAR).heightOfString(cleanText, { width: textW, lineGap: 1 }) + 8;
         });
         const rowH = Math.max(16, ...cellHeights);
         ensureSpace(rowH);
@@ -211,8 +235,8 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
           const cw = colWidths[i] ?? restColW;
           doc.rect(colX(i), y, cw, rowH).strokeColor(border).lineWidth(0.3).stroke();
           const raw = cell.trim();
-          const hasCheckbox = /^[^\x00-\x7F\s]/.test(raw);
-          const cleanText = sanitizePdfText(raw.replace(/^[^\x00-\x7F]+\s*/, ""));
+          const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(raw);
+          const cleanText = sanitizePdfText(hasCheckbox ? raw.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : raw);
           let textX = colX(i) + cellPad;
           if (hasCheckbox) {
             const cbSize = 7;
@@ -220,7 +244,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
             textX += cbSize + 3;
           }
           if (cleanText) {
-            doc.fontSize(7.5).font("Helvetica").fillColor(black)
+            doc.fontSize(7.5).font(FONT_REGULAR).fillColor(black)
               .text(cleanText, textX, y + 4, { width: cw - (textX - colX(i)) - cellPad, lineGap: 1 });
           }
         });
@@ -273,7 +297,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       } else {
         y += 10; // gap between previous element and this label
         ensureSpace(22);
-        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+        doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
           .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.5 });
         y += 12;
       }
@@ -282,9 +306,10 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         if (seg.type === "text") {
           const innerW = W - 20;
           for (const line of seg.content.split("\n")) {
-            const hasCheckbox = /^[^\x00-\x7F\s]/.test(line.trim());
-            const cleanLine = sanitizePdfText(line.replace(/^[^\x00-\x7F]+\s*/, ""));
-            const lineH = doc.fontSize(9.5).font("Helvetica").heightOfString(cleanLine || " ", { width: innerW - (hasCheckbox ? 14 : 0), lineGap: 1 });
+            // Only treat actual checkbox/square symbols as checkboxes — not comparison operators like ≥
+            const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(line.trim());
+            const cleanLine = sanitizePdfText(hasCheckbox ? line.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : line);
+            const lineH = doc.fontSize(9.5).font(FONT_REGULAR).heightOfString(cleanLine || " ", { width: innerW - (hasCheckbox ? 14 : 0), lineGap: 1 });
             ensureSpace(lineH + 4);
             let textX = ML;
             if (hasCheckbox) {
@@ -293,7 +318,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
               textX += cbSize + 4;
             }
             if (cleanLine.trim()) {
-              doc.fontSize(9.5).font("Helvetica").fillColor(black)
+              doc.fontSize(9.5).font(FONT_REGULAR).fillColor(black)
                 .text(cleanLine, textX, y, { width: innerW - (textX - ML), lineGap: 1 });
             }
             y += lineH + 2;
@@ -320,11 +345,11 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     }
 
     const titleW = W - TENANT_LOGO_MAX_W - 16;
-    doc.fontSize(20).font("Helvetica-Bold").fillColor(navy)
+    doc.fontSize(20).font(FONT_BOLD).fillColor(navy)
       .text("PLAN DE MANTENIMIENTO", ML + 14, y + 2, { width: titleW });
-    doc.fontSize(13).font("Helvetica-Bold").fillColor(navy)
+    doc.fontSize(13).font(FONT_BOLD).fillColor(navy)
       .text(val(p["taskCode"]), ML + 14, y + 28, { width: titleW });
-    doc.fontSize(8).font("Helvetica").fillColor(gray)
+    doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
       .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML + 14, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
@@ -430,7 +455,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       const bx = ML + i * sigW;
       doc.roundedRect(bx, y, sigW, sigH, 0).fillColor(bgBox).fill();
       doc.roundedRect(bx, y, sigW, sigH, 0).strokeColor(border).lineWidth(0.5).stroke();
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+      doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
         .text(label.toUpperCase(), bx + 10, y + 8, { width: sigW - 20, characterSpacing: 0.5 });
       doc.moveTo(bx + 10, y + 50).lineTo(bx + sigW - 10, y + 50).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
     });
@@ -442,9 +467,9 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     if (existsSync(LOGO_PATH)) {
       try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
     }
-    doc.fontSize(8).font("Helvetica").fillColor(gray)
+    doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
       .text("Copilot Management System — Documento generado automáticamente.", ML + 18, footerY, { width: W / 2 - 18 });
-    doc.fontSize(8).font("Helvetica").fillColor(gray)
+    doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
       .text(`${val(p["taskCode"])} · ${val(p["vesselCode"])} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
 
     doc.end();

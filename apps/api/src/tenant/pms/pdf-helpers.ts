@@ -24,41 +24,46 @@ function isWinAnsiSafe(cp: number): boolean {
  */
 export function sanitizePdfText(s: string): string {
   return s
-    // Mathematical comparison / operators
-    .replace(/≥/g, ">=")
-    .replace(/≤/g, "<=")
-    .replace(/≠/g, "!=")
-    .replace(/≈/g, "~=")
-    .replace(/∞/g, "inf")
-    .replace(/√/g, "sqrt")
-    .replace(/∑/g, "sum")
-    .replace(/∆/g, "Delta")
+    // Strip markdown bold/italic before anything else
+    .replace(/\*\*\*([^*\n]+)\*\*\*/g, "$1")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    // Mathematical comparison operators — \uXXXX escapes only, no literal Unicode chars
+    .replace(/[≥≧⩾]/g, ">=")   // ≥ ≧ ⩾
+    .replace(/[≤≦⩽]/g, "<=")   // ≤ ≦ ⩽
+    .replace(/≠/g, "!=")                  // ≠
+    .replace(/≈/g, "~=")                  // ≈
+    .replace(/∞/g, "inf")                 // ∞
+    .replace(/√/g, "sqrt")                // √
+    .replace(/∑/g, "sum")                 // ∑
+    .replace(/[Δ∆]/g, "Delta")       // Δ ∆
     // Arrows
-    .replace(/[→⟹⇒]/g, "->")
-    .replace(/[←⟸⇐]/g, "<-")
-    .replace(/↑/g, "^")
-    .replace(/↓/g, "v")
-    .replace(/↔/g, "<->")
-    // Greek letters (commonly used in technical/maritime docs)
-    .replace(/Ω/g, "Ohm")
-    .replace(/μ/g, "u")          // Greek mu (≠ micro sign U+00B5 which IS in WinAnsi)
-    .replace(/Δ/g, "Delta")
-    .replace(/Σ/g, "Sigma")
-    .replace(/π/g, "pi")
-    .replace(/α/g, "alpha")
-    .replace(/β/g, "beta")
-    .replace(/γ/g, "gamma")
-    .replace(/λ/g, "lambda")
-    .replace(/ρ/g, "rho")
-    .replace(/θ/g, "theta")
-    .replace(/φ/g, "phi")
-    // Checkbox-like symbols → plain marker. Bullets (• etc.) NO se reemplazan
-    // acá porque las plantillas los interceptan y dibujan un cuadro real.
+    .replace(/[→⟹⇒]/g, "->")   // → ⟹ ⇒
+    .replace(/[←⟸⇐]/g, "<-")   // ← ⟸ ⇐
+    .replace(/↑/g, "^")                   // ↑
+    .replace(/↓/g, "v")                   // ↓
+    .replace(/↔/g, "<->")                 // ↔
+    // Greek letters
+    .replace(/Ω/g, "Ohm")                 // Ω
+    .replace(/μ/g, "u")                   // μ
+    .replace(/Σ/g, "Sigma")               // Σ
+    .replace(/π/g, "pi")                  // π
+    .replace(/α/g, "alpha")               // α
+    .replace(/β/g, "beta")                // β
+    .replace(/γ/g, "gamma")               // γ
+    .replace(/λ/g, "lambda")              // λ
+    .replace(/ρ/g, "rho")                 // ρ
+    .replace(/θ/g, "theta")               // θ
+    .replace(/φ/g, "phi")                 // φ
+    // Checkbox-like symbols → plain marker
     .replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]")
-    // Remove bold markdown markers
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    // Fallback: strip any remaining characters outside WinAnsi
-    .replace(/[\s\S]/g, ch => isWinAnsiSafe(ch.codePointAt(0) ?? 0) ? ch : "?");
+    // Fallback: replace any remaining non-WinAnsi char
+    .replace(/[\s\S]/g, ch => {
+      const cp = ch.codePointAt(0) ?? 0;
+      if (isWinAnsiSafe(cp)) return ch;
+      if (cp >= 0x2212 && cp <= 0x2215) return "-";
+      return "?";
+    });
 }
 
 export const LOGO_PATH = join(PUBLIC_DIR, "logo.png");
