@@ -488,7 +488,7 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
   // .bento-card sets `background` in plain CSS (higher specificity than
   // Tailwind's bg-red-500/50), so we override via inline style when alerting.
   const wrapStyle: React.CSSProperties | undefined = alert
-    ? { background: "rgba(239, 68, 68, 0.25)", borderColor: "rgba(239, 68, 68, 0.3)" }
+    ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
     : undefined;
   const iconBoxCls = alert
     ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
