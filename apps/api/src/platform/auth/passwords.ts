@@ -10,6 +10,7 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, storedHash: string): boolean {
   if (storedHash.startsWith("plain$")) {
+    if (process.env.NODE_ENV === "production") return false;
     return storedHash.slice("plain$".length) === password;
   }
 
