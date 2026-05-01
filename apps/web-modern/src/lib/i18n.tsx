@@ -151,7 +151,7 @@ const dict = {
   "insp.checklist":        { es: "Checklist de Inspección",  en: "Inspection Checklist",    pt: "Checklist de Inspeção" },
   "insp.isGlobal":         { es: "Global",                   en: "Global",                  pt: "Global" },
   "page.spares":           { es: "Repuestos & Stock",        en: "Spares & Stock",          pt: "Sobressalentes & Estoque" },
-  "page.reports":          { es: "Reportes",                 en: "Reports",                 pt: "Relatórios" },
+  "page.reports":          { es: "Reportes Mensuales",       en: "Monthly Reports",         pt: "Relatórios Mensais" },
   "page.dailyReports":     { es: "Reportes Diarios",         en: "Daily Reports",           pt: "Relatórios Diários" },
   "page.maintenancePlans": { es: "Planes de Mantenimiento",  en: "Maintenance Plans",       pt: "Planos de Manutenção" },
   "page.dueItems":         { es: "Items Vencidos / Proximos",en: "Due / Upcoming Items",    pt: "Itens Vencidos / Proximos" },

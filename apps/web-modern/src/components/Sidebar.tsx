@@ -40,6 +40,7 @@ const NAV: NavSection[] = [
       { icon: ClipboardList,   label: "Plan de Mantenimiento", path: "/maintenance-plans" },
       { icon: Wrench,          label: "Órdenes de Trabajo",    path: "/work-orders" },
       { icon: FileText,        label: "Reportes Diarios",      path: "/daily-reports" },
+      { icon: FileBarChart,    label: "Reportes Mensuales",    path: "/reports" },
       { icon: AlertTriangle,   label: "Defectos",              path: "/defects" },
       { icon: ScrollText,      label: "Bitácora",              path: "/bitacora",
         roles: ["TENANT_ADMIN"] },
@@ -53,7 +54,6 @@ const NAV: NavSection[] = [
       { icon: ShieldCheck,     label: "Certificados",          path: "/certificates" },
       { icon: FlaskConical,    label: "Análisis de Fluidos",   path: "/fluid-analyses" },
       { icon: Gauge,           label: "Solicitud de Repuestos", path: "/spare-requests" },
-      { icon: FileBarChart,    label: "Reportes",              path: "/reports" },
     ],
   },
   {
