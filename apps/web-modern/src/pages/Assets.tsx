@@ -11,6 +11,7 @@ import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useVesselContext } from "../lib/vessel-context";
 
 interface Asset {
   id: string;
@@ -168,6 +169,7 @@ function buildFormattedAssetCode(
 
 interface AssetModalProps {
   initial: Asset | null;
+  defaultVesselCode?: string | null;
   vessels: Vessel[];
   sfiNodes: SfiNode[];
   sfiLoading: boolean;
@@ -185,6 +187,7 @@ interface AssetNameOption {
 
 const AssetModal: React.FC<AssetModalProps> = ({
   initial,
+  defaultVesselCode,
   vessels,
   sfiNodes,
   sfiLoading,
@@ -203,7 +206,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   );
   const currentHours = assetDetail?.currentHours ?? initial?.currentHours ?? null;
 
-  const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? "");
+  const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? defaultVesselCode ?? "");
   const [assetCode, setAssetCode] = useState(initial?.assetCode ?? "");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedSubgroup, setSelectedSubgroup] = useState("");
@@ -322,7 +325,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   }, [initial?.id, isEdit, tenantAssets, vesselCode]);
 
   useEffect(() => {
-    setVesselCode(initial?.vesselCode ?? "");
+    setVesselCode(initial?.vesselCode ?? defaultVesselCode ?? "");
     setAssetCode(initial?.assetCode ?? "");
     setName(initial?.name ?? "");
     setCriticality(initial?.criticality ?? "B");
@@ -347,7 +350,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     const node = sfiNodes.find(item => item.code === existingSfi);
     setSelectedSubgroup(existingSfi);
     setSelectedGroup(node ? String(node.groupNumber) : "");
-  }, [initial, sfiNodes]);
+  }, [initial, sfiNodes, defaultVesselCode]);
 
   const onGroupChanged = useCallback((groupValue: string) => {
     setSelectedGroup(groupValue);
@@ -824,6 +827,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
 export const AssetsPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
+  const { selectedVesselCode } = useVesselContext();
   const isAdmin = user?.role === "TENANT_ADMIN";
   const [searchParams, setSearchParams] = useSearchParams();
   const [showExcel, setShowExcel] = useState(false);
@@ -947,6 +951,7 @@ export const AssetsPage: React.FC = () => {
       {editing !== undefined && (
         <AssetModal
           initial={editing}
+          defaultVesselCode={selectedVesselCode}
           vessels={vesselsData?.items ?? []}
           sfiNodes={sfiData?.items ?? []}
           sfiLoading={sfiLoading}

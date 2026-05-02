@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-05-02] Assets: +Nuevo precarga el vessel actualmente seleccionado en el header
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/Assets.tsx
+
+CAMBIO:
+- AssetModal recibe nuevo prop opcional defaultVesselCode
+- Cuando initial es null (modo Nuevo) y hay defaultVesselCode, se precarga el dropdown VESSELS
+- DeferralsPage extrae selectedVesselCode de useVesselContext y lo pasa al modal
+- Si no hay vessel seleccionado en el header, queda vacío como antes
+
 [2026-05-02] Assets: sugerencia IA de criticidad + campo "Fundamento de Criticidad"
 Agent: Claude Opus 4.7
 
