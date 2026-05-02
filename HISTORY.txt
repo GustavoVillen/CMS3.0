@@ -9545,11 +9545,27 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
       no relacionados con este fix)
 
   Pendiente / proxima sesion:
-    - Verificar en el VPS que NODE_ENV=production esta bien fijado en el
-      proceso (PM2/systemd). Si esta en development, los logins demo
-      funcionan AHORA MISMO desde internet.
     - Defensa en profundidad (opcional): quitar de buildHomePage los
       strings con credenciales demo, aunque siga gateada.
     - Confirmar que los registros DEMOADMIN/admin@localhost no fueron
       seeded a la DB de produccion (prisma/seed.ts los menciona).
+    - Cosmetico: APP_ROOT_DOMAIN=localhost en el VPS (no afecta seguridad
+      pero deberia ser shipcms.cloud).
+
+  Despliegue VPS (commit c8401db):
+    - git pull --ff-only OK (78341d9..c8401db)
+    - NODE_ENV=production confirmado en .env y en proceso PM2 (gpms)
+    - pm2 stop + start (no restart) requerido para que tsx recargara el
+      archivo: el restart simple no invalido el cache de tsx en /tmp/tsx-0.
+      Plan: rm -rf /tmp/tsx-* + pm2 stop + pm2 start.
+    - Verificacion final OK:
+      * curl http://127.0.0.1:3105/ -> SPA "Copilot Management System"
+      * curl https://shipcms.cloud/ -> SPA "Copilot Management System"
+      * curl https://shipcms.cloud/health -> JSON ok
+    - La landing dev "PMS SaaS API" ya no es accesible publicamente.
+
+  Lesson aprendida (anotar en memory):
+    - Para cambios en codigo TS servido por tsx (sin build), un
+      "pm2 restart" puede no invalidar el cache de tsx en /tmp/tsx-N.
+      Usar siempre: rm -rf /tmp/tsx-* && pm2 stop X && pm2 start X.
 
