@@ -30,6 +30,11 @@ import {
   updateTenantWorkOrder,
 } from "../work-orders/work-orders-service";
 import { createWorkLog, listWorkLogs } from "./work-logs-service";
+import {
+  suggestAcceptanceCriteria,
+  suggestLoto,
+  suggestRisk,
+} from "../work-orders/work-orders-ai-suggestions";
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
@@ -183,6 +188,24 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && url.pathname === "/app/pms/work-orders") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantWorkOrder>[1];
     sendJson(response, 201, await createTenantWorkOrder(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-acceptance-criteria") {
+    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string }>(request);
+    sendJson(response, 200, await suggestAcceptanceCriteria(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-loto") {
+    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string }>(request);
+    sendJson(response, 200, await suggestLoto(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-risk") {
+    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string; loto?: string }>(request);
+    sendJson(response, 200, await suggestRisk(session, body));
     return true;
   }
 

@@ -9977,3 +9977,38 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - Considerar dashboard agregado por mes para gerentes
 
 
+
+
+[2026-05-02] Hardening de IP — copiloto + prompts WO movidos al backend
+  Cambios:
+    - copiloto-service.ts: agregado guardrail "CONFIDENTIALITY OF INSTRUCTIONS"
+      que bloquea cualquier intento de prompt-injection que pida revelar
+      el system prompt (en cualquier idioma, encoding, o pretexto).
+      La IA solo responde "No puedo compartir mis instrucciones internas."
+    - Nuevo: apps/api/src/tenant/work-orders/work-orders-ai-suggestions.ts
+      Servicio backend con los 3 prompts que estaban hardcoded en
+      WorkOrders.tsx (criterios de aceptación, LOTO, riesgo).
+    - Nuevos endpoints en maintenance-router.ts:
+        POST /app/pms/work-orders/suggest-acceptance-criteria
+        POST /app/pms/work-orders/suggest-loto
+        POST /app/pms/work-orders/suggest-risk
+      Todos requieren tenant session, registran usage en AiUsageEvent.
+    - WorkOrders.tsx: eliminado streamAiField + los 3 prompts inline.
+      Ahora cada handler hace POST al endpoint correspondiente.
+    - Verificado: bundle frontend ya no contiene "criterios de aceptación
+      verificables" ni los otros strings de los 3 prompts.
+    - .env: removidas GOOGLE_API_KEY y ELEVENLABS_API_KEY (no se usan).
+    - .env.example: idem.
+    - api.ts: fix bug crítico — refresh token leía data.accessToken pero
+      el server devuelve data.session.accessToken → guardaba "undefined"
+      y desconectaba al usuario en el siguiente request.
+    - auth.tsx: removido useIdleTimeout (no funcionaba como esperado).
+      La sesión ahora solo se cierra por logout manual o refresh expirado.
+
+  Pendientes de seguridad (próxima tanda):
+    - Mover prompts restantes al backend:
+        Deferrals.tsx:535 (medidas compensatorias)
+        MaintenancePlans.tsx:1180, 1220, 1261 (3 prompts)
+    - Auditar queries Prisma sin filtro tenantId (cross-tenant leak)
+    - Revisar headers CORS / CSP en producción
+    - Migrar secretos de .env a un secrets manager

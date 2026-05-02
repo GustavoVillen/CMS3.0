@@ -393,74 +393,50 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       setRiskLevel(fields.riskLevel);
   } : null);
 
-  const streamAiField = useCallback(async (prompt: string): Promise<string> => {
-    const reader = await api.stream("/app/copiloto/chat", {
-      capability: "maintenance_insights",
-      locale: "es",
-      messages: [{ role: "user", content: prompt }],
-    });
-    let fullText = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of value.split("\n")) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") break;
-        try { const p = JSON.parse(data) as { text?: string }; if (p.text) fullText += p.text; } catch { /* partial */ }
-      }
-    }
-    return fullText.trim();
-  }, []);
-
   const handleAcceptanceCriteriaClick = useCallback(async () => {
     if (!isEditable || loadingCriteria) return;
-    const assetLabel = workOrder.assetName ?? "equipo desconocido";
-    const taskDesc   = description || title || "tarea no especificada";
     setLoadingCriteria(true);
     setAcceptanceCriteria("Analizando...");
     try {
-      const text = await streamAiField(
-        `Activo: ${assetLabel}\nTarea: ${taskDesc}\n\nSos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea. Los criterios deben indicar cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables.\n\nResponde ÚNICAMENTE con los criterios, en texto plano, sin introducción ni explicación adicional.`
-      );
-      setAcceptanceCriteria(text || "");
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance-criteria", {
+        assetLabel: workOrder.assetName ?? null,
+        taskDesc: description || title || null,
+      });
+      setAcceptanceCriteria(res.text || "");
     } catch { setAcceptanceCriteria(""); }
     finally { setLoadingCriteria(false); }
-  }, [isEditable, loadingCriteria, workOrder.assetName, description, title, streamAiField]);
+  }, [isEditable, loadingCriteria, workOrder.assetName, description, title]);
 
   const handleLotoClick = useCallback(async () => {
     if (!isEditable || loadingLoto) return;
-    const assetLabel = workOrder.assetName ?? "equipo desconocido";
-    const taskDesc   = description || title || "tarea no especificada";
     setLoadingLoto(true);
     setLoto("Analizando...");
     try {
-      const text = await streamAiField(
-        `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}\n\nSos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo.\n\nResponde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`
-      );
-      setLoto(text || "");
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
+        assetLabel: workOrder.assetName ?? null,
+        taskDesc: description || title || null,
+        acceptanceCriteria: acceptanceCriteria || null,
+      });
+      setLoto(res.text || "");
     } catch { setLoto(""); }
     finally { setLoadingLoto(false); }
-  }, [isEditable, loadingLoto, workOrder.assetName, description, title, acceptanceCriteria, streamAiField]);
+  }, [isEditable, loadingLoto, workOrder.assetName, description, title, acceptanceCriteria]);
 
   const handleRiskClick = useCallback(async () => {
     if (!isEditable || loadingRisk) return;
-    const assetLabel = workOrder.assetName ?? "equipo desconocido";
-    const taskDesc   = description || title || "tarea no especificada";
     setLoadingRisk(true);
     try {
-      const raw = await streamAiField(
-        `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}${loto ? `\nLOTO: ${loto}` : ""}\n\nSos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y determiná:\n1. El nivel de riesgo (LOW, MEDIUM, HIGH o CRITICAL)\n2. El resultado del análisis de riesgos (peligros identificados, consecuencias posibles, medidas de control)\n\nResponde ÚNICAMENTE con este JSON (sin texto adicional):\n{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis"}`
-      );
-      try {
-        const clean = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-        const result = JSON.parse(clean) as { level?: string; analysis?: string };
-        if (result.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(result.level)) setRiskLevel(result.level);
-        if (result.analysis) setRiskAnalysisResult(result.analysis);
-      } catch { if (raw) setRiskAnalysisResult(raw); }
+      const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
+        assetLabel: workOrder.assetName ?? null,
+        taskDesc: description || title || null,
+        acceptanceCriteria: acceptanceCriteria || null,
+        loto: loto || null,
+      });
+      if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) setRiskLevel(res.level);
+      if (res.analysis) setRiskAnalysisResult(res.analysis);
     } catch { /* noop */ }
     finally { setLoadingRisk(false); }
-  }, [isEditable, loadingRisk, workOrder.assetName, description, title, acceptanceCriteria, loto, streamAiField]);
+  }, [isEditable, loadingRisk, workOrder.assetName, description, title, acceptanceCriteria, loto]);
 
   const uploadIfNeeded = useCallback(async (file: File | null, currentUrl: string) => {
     if (!file) return currentUrl || null;
