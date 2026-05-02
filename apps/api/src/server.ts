@@ -19,6 +19,7 @@ import { handlePmsRoutes } from "./tenant/pms/pms-router";
 import { resetPrismaClient } from "./platform/data/prisma-client";
 import { evictExpiredSessions } from "./tenant/auth/session-store";
 import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
+import { attachUsageTracking } from "./http/usage-tracking-middleware";
 
 loadDotEnvFile();
 
@@ -26,6 +27,8 @@ const env = parseAppEnv(process.env as Record<string, string | undefined>);
 const port = Number(process.env.PORT || 3105);
 
 const server = createServer(async (request, response) => {
+  attachUsageTracking(request, response);
+
   const method = String(request.method || "GET").toUpperCase();
   const url = getRequestUrl(request);
 

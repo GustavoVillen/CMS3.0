@@ -7,6 +7,7 @@ import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
 import { listPlatformAuditEvents } from "./audit/platform-audit-service";
+import { listUsageEvents, aiCostUsd } from "../tenant/usage/usage-service";
 import {
   createPlatformTenant, getPlatformTenant, listPlatformTenants, updatePlatformTenant,
 } from "./tenants/platform-tenants-service";
@@ -224,6 +225,39 @@ export async function handlePlatformRoutes(
     return true;
   }
 
+  // ── Usage log (AI tokens + HTTP bytes) ────────────────────────────────────
+  if (method === "GET" && url.pathname === "/platform/usage") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const filters = parseUsageFilters(url.searchParams);
+    const { items, total } = await listUsageEvents(filters);
+    const itemsWithCost = items.map(it => ({
+      ...it,
+      costUsd: it.kind === "ai_call"
+        ? aiCostUsd(it.model ?? "", it.inputTokens, it.outputTokens, it.cacheReadTokens, it.cacheCreationTokens)
+        : 0,
+    }));
+    sendJson(response, 200, { items: itemsWithCost, total });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/platform/usage.xlsx") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const filters = parseUsageFilters(url.searchParams);
+    // Larger cap for export — default to 10k
+    filters.limit = Math.min(Number(url.searchParams.get("limit") ?? 10000), 50000);
+    filters.offset = 0;
+    const { exportUsageEventsXlsx } = await import("../tenant/usage/usage-export");
+    const buffer = await exportUsageEventsXlsx(filters);
+    response.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="usage-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+      "Content-Length": String(buffer.length),
+    });
+    response.end(buffer);
+    return true;
+  }
+
   // ── Prompts ────────────────────────────────────────────────────────────────
   if (method === "GET" && url.pathname === "/platform/prompts") {
     const session = requirePlatformAccessSession(request);
@@ -276,4 +310,24 @@ export async function handlePlatformRoutes(
   }
 
   return false;
+}
+
+function parseUsageFilters(sp: URLSearchParams): import("../tenant/usage/usage-service").ListUsageFilters {
+  const kindRaw = sp.get("kind");
+  const kind = kindRaw === "ai_call" || kindRaw === "http_request" ? kindRaw : null;
+  const fromRaw = sp.get("from");
+  const toRaw = sp.get("to");
+  const from = fromRaw ? new Date(fromRaw) : null;
+  const to = toRaw ? new Date(toRaw) : null;
+  return {
+    kind,
+    tenantSlug: sp.get("tenantSlug") || null,
+    userEmail:  sp.get("userEmail")  || null,
+    feature:    sp.get("feature")    || null,
+    vesselCode: sp.get("vesselCode") || null,
+    from: from && !isNaN(from.getTime()) ? from : null,
+    to:   to   && !isNaN(to.getTime())   ? to   : null,
+    limit:  Number(sp.get("limit")  ?? 100),
+    offset: Number(sp.get("offset") ?? 0),
+  };
 }

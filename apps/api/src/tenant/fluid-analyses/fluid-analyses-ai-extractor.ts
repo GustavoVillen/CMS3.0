@@ -7,6 +7,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { recordAiUsage } from "../usage/usage-service";
 
 export interface ExtractedField<T> {
   value: T | null;
@@ -108,12 +109,36 @@ export async function extractFluidReport(
     text: "Extraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.",
   });
 
+  const fluidModel = "claude-sonnet-4-6";
+  const aiStarted = Date.now();
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: fluidModel,
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: contentBlocks }],
   });
+
+  // Record token usage — non-blocking. Resolve tenantId lazily.
+  (async () => {
+    const prisma = getPrismaClient();
+    if (!prisma) return;
+    const tenant = await (prisma as any).tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
+    if (!tenant) return;
+    recordAiUsage({
+      tenantId:            tenant.id,
+      tenantSlug:          session.tenantSlug,
+      userId:              session.user.id,
+      userEmail:           session.user.email,
+      vesselCode:          input.vesselCode ?? null,
+      feature:             "fluid_analyses",
+      model:               fluidModel,
+      inputTokens:         response.usage.input_tokens,
+      outputTokens:        response.usage.output_tokens,
+      cacheReadTokens:     response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs:           Date.now() - aiStarted,
+    });
+  })().catch(() => { /* swallow */ });
 
   const text = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")

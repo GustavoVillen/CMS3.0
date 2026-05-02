@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { api } from "../lib/api";
 import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
   AlertTriangle, Clock, ShieldCheck, Microscope, Package, Truck,
@@ -112,6 +113,28 @@ export const Sidebar: React.FC = () => {
       return next;
     });
 
+  // ── My AI usage (this month) — polled every 60s ────────────────────────────
+  const [aiUsage, setAiUsage] = useState<{ totalTokens: number; costUsd: number } | null>(null);
+  useEffect(() => {
+    let stopped = false;
+    const fetchUsage = () => {
+      api.get<{ totalTokens: number; costUsd: number }>("/app/me/ai-usage")
+        .then(s => { if (!stopped) setAiUsage({ totalTokens: s.totalTokens, costUsd: s.costUsd }); })
+        .catch(() => { /* silent — no badge if it fails */ });
+    };
+    fetchUsage();
+    const id = setInterval(fetchUsage, 60_000);
+    return () => { stopped = true; clearInterval(id); };
+  }, []);
+
+  const fmtTok = (n: number): string => {
+    if (n < 1000) return String(n);
+    if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
+    return `${(n / 1_000_000).toFixed(2)}M`;
+  };
+  const aiBadgeText = aiUsage ? `IA ${fmtTok(aiUsage.totalTokens)} tok` : null;
+  const aiBadgeTitle = aiUsage ? `Consumo IA del mes — ${aiUsage.totalTokens.toLocaleString("es-AR")} tokens (~US$ ${aiUsage.costUsd.toFixed(4)})` : "";
+
   const effectiveWidth = collapsed ? COLLAPSED_W : width;
 
   return (
@@ -219,6 +242,11 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse shrink-0" />
               <span className="text-[11px] text-white/40">Sistemas OK</span>
+              {aiBadgeText && (
+                <span className="text-[10px] text-white/30 ml-auto" title={aiBadgeTitle}>
+                  {aiBadgeText}
+                </span>
+              )}
             </div>
           </div>
         )}

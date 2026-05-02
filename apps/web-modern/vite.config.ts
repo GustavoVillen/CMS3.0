@@ -24,6 +24,7 @@ export default defineConfig({
       '/platform/tenants':      { target: 'http://localhost:3105', changeOrigin: true, bypass: apiOnly },
       '/platform/users':        { target: 'http://localhost:3105', changeOrigin: true, bypass: apiOnly },
       '/platform/audit-events': { target: 'http://localhost:3105', changeOrigin: true, bypass: apiOnly },
+      '/platform/usage':        { target: 'http://localhost:3105', changeOrigin: true, bypass: apiOnly },
       '/platform/prompts':      { target: 'http://localhost:3105', changeOrigin: true, bypass: apiOnly },
     },
   },

@@ -604,7 +604,6 @@ export const SparesPage: React.FC = () => {
     { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-white/50">{r.minStock}</span> },
     { key: "reorderPoint", header: t("col.reorder"),       render: r => <span className="text-xs text-white/50">{r.reorderPoint}</span> },
     { key: "status",       header: t("col.status"),        render: r => <StatusBadge status={r.status} /> },
-    { key: "createdAt",    header: t("col.createdAt"),     render: r => fmtDate(r.createdAt) },
   ];
 
   return (

@@ -12,6 +12,7 @@ import { acceptTenantInvitation } from "./invitations/tenant-invitations-service
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
+import { getMonthlyAiUsageForUser } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments } from "./attachments/attachments-service";
@@ -182,6 +183,22 @@ export async function handleTenantRoutes(
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
     sendJson(response, 200, { tenant: { slug: session.tenantSlug }, user: session.user });
+    return true;
+  }
+
+  // ── /app/me/ai-usage (badge sidebar — AI tokens consumed this month) ──────
+  if (method === "GET" && url.pathname === "/app/me/ai-usage") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) {
+      sendJson(response, 200, { monthLabel: "", totalTokens: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+      return true;
+    }
+    const tenant = await prisma.tenant.findUnique({ where: { slug }, select: { id: true } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+    const summary = await getMonthlyAiUsageForUser(tenant.id, session.user.id);
+    sendJson(response, 200, summary);
     return true;
   }
 
@@ -917,6 +934,7 @@ export async function handleTenantRoutes(
           tenantId:       tenant.id,
           tenantSlug:     slug,
           userId:         session.user.id,
+          userEmail:      session.user.email,
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
           mode:           body.mode ?? null,
@@ -965,7 +983,7 @@ export async function handleTenantRoutes(
     ].join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });
@@ -997,7 +1015,7 @@ export async function handleTenantRoutes(
     ].filter(Boolean).join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });

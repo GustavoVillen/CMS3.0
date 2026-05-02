@@ -9569,3 +9569,94 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
       "pm2 restart" puede no invalidar el cache de tsx en /tmp/tsx-N.
       Usar siempre: rm -rf /tmp/tsx-* && pm2 stop X && pm2 start X.
 
+
+[2026-05-02] FEAT: Tracking de consumo IA + bytes satelitales
+  Objetivo:
+    - Visibilizar consumo de tokens IA por usuario (badge en sidebar).
+    - Log auditable accesible al SUPERADMIN con costo en USD.
+    - Medir bytes HTTP in/out por request (estimacion costo enlace satelital).
+
+  Schema (prisma/schema.prisma):
+    - Modelo nuevo UsageEvent (append-only, 6 meses retencion):
+        id, tenantId, tenantSlug, userId, userEmail, vesselCode,
+        kind ("ai_call" | "http_request"),
+        feature, model, inputTokens, outputTokens,
+        cacheReadTokens, cacheCreationTokens,
+        route, method, statusCode, bytesIn, bytesOut,
+        latencyMs, errored, createdAt
+        + indices por tenantId, userId, kind, vesselCode, createdAt
+    - TenantSetting: agregados satelliteUsdPerMbIn, satelliteUsdPerMbOut (default 0)
+
+  Backend:
+    - apps/api/src/tenant/usage/usage-service.ts (nuevo):
+        recordAiUsage, recordHttpUsage (no bloqueantes, .catch silencioso)
+        getMonthlyAiUsageForUser (badge sidebar)
+        listUsageEvents (paginado + filtros para SUPERADMIN)
+        purgeOldUsageEvents (>180 dias, listo para cron)
+        AI_PRICING + aiCostUsd (Haiku/Sonnet/Opus, hardcoded)
+    - apps/api/src/tenant/usage/usage-export.ts (nuevo):
+        export Excel con exceljs (ya estaba en deps)
+    - apps/api/src/http/usage-tracking-middleware.ts (nuevo):
+        wrap response.write/end para contar bytesOut
+        Content-Length header para bytesIn
+        en finish: resolve session por Bearer y registra UsageEvent
+        ignora requests sin auth (publicas)
+    - apps/api/src/server.ts: attachUsageTracking(request, response)
+    - apps/api/src/tenant/copiloto/copiloto-service.ts:
+        recordAiUsage despues de Phase 1 y Phase 2 (incluye latencia)
+        nuevo campo userEmail en CopilotoRequest
+    - apps/api/src/tenant/fluid-analyses/fluid-analyses-ai-extractor.ts:
+        recordAiUsage despues del messages.create
+    - apps/api/src/tenant/tenant-router.ts:
+        nuevo endpoint GET /app/me/ai-usage (badge)
+        userEmail pasado en los 3 callsites del copiloto
+    - apps/api/src/platform/platform-router.ts:
+        nuevos endpoints (gateados por requirePlatformSuperadmin):
+          GET /platform/usage (paginado + filtros)
+          GET /platform/usage.xlsx (export Excel)
+
+  Frontend:
+    - apps/web-modern/vite.config.ts: proxy de /platform/usage al backend
+    - apps/web-modern/src/lib/platform-auth.tsx: export platformAuthedFetch
+    - apps/web-modern/src/pages/platform/PlatformUsage.tsx (nuevo):
+        Tabs Tokens IA / Bytes Satelital
+        Toggle "Por minuto / Sin agrupar" (default: por minuto)
+        Filtros: tenant, email, feature, rango fechas
+        Resumen totales (input/output/costo o bytes in/out)
+        Vista agregada IA: 1 fila por (minuto+tenant+user+feature+modelo)
+        Vista agregada HTTP: 1 fila por (minuto+tenant+user)
+        Boton Excel
+    - apps/web-modern/src/App.tsx: ruta /platform/usage
+    - apps/web-modern/src/components/PlatformLayout.tsx:
+        item nav "Consumo IA + Sat" entre Audit Events y Prompts
+    - apps/web-modern/src/components/Sidebar.tsx:
+        badge "IA Xk tok" al lado de "Sistemas OK"
+        polling cada 60s a /app/me/ai-usage
+
+  Decisiones cerradas con el usuario:
+    - Tarifa satelital: por tenant en TenantSettings (default 0, configurable)
+    - Tarifa IA: hardcoded (Haiku 4.5 in 1.0 / out 5.0 USD/MTok, etc)
+    - Costo USD calculado on-the-fly en frontend, no persistido
+    - Retencion 6 meses (purgeOldUsageEvents listo, falta enchufar a cron)
+    - Medicion de bytes: opcion A (en backend, sin overhead TLS)
+    - Diferencia uplink/downlink: si (bytesIn/bytesOut separados)
+    - Agregacion: opcion A (frontend, no DB)
+    - Granularidad agregada: por minuto + tenant + user (sin ruta/metodo)
+
+  Otros cambios menores en esta sesion:
+    - Spares.tsx: removida columna "ALTA" de la tabla
+    - Vessels.tsx: removida columna "ALTA" de la tabla
+
+  Verificacion local:
+    - Schema sincronizado (prisma db push) y cliente regenerado
+    - Typecheck OK en todos los archivos tocados
+    - Endpoint /platform/usage devuelve 401 sin auth (correcto)
+    - Vite proxy: /platform/usage agregado a la whitelist
+    - Pendiente: probar en VPS post-deploy
+
+  Pendientes (no bloqueantes):
+    - Enchufar purgeOldUsageEvents a un cron semanal en server.ts
+    - Setear tarifa USD/MB satelital real en TenantSetting cuando se sepa
+    - Considerar dashboard agregado por mes para gerentes
+
+

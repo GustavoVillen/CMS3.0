@@ -403,7 +403,6 @@ export const VesselsPage: React.FC = () => {
     { key: "name",      header: t("col.name"),      render: r => <span className="font-medium text-white">{r.name}</span> },
     { key: "vesselType",header: "TIPO",            render: r => <span className="text-text-industrial/80">{r.vesselType ?? "—"}</span> },
     { key: "status",    header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },
-    { key: "createdAt", header: t("col.createdAt"), render: r => fmtDate(r.createdAt) },
     {
       key: "actions", header: "",
       render: r => (

@@ -37,6 +37,7 @@ import { PlatformLogin } from "./pages/platform/PlatformLogin";
 import { PlatformTenantsPage } from "./pages/platform/PlatformTenants";
 import { PlatformUsersPage } from "./pages/platform/PlatformUsers";
 import { PlatformAuditPage } from "./pages/platform/PlatformAudit";
+import { PlatformUsagePage } from "./pages/platform/PlatformUsage";
 import { PlatformPromptsPage } from "./pages/platform/PlatformPrompts";
 import { BitacoraPage } from "./pages/Bitacora";
 
@@ -100,6 +101,7 @@ export default function App() {
               <Route path="tenants" element={<PlatformTenantsPage />} />
               <Route path="users"   element={<PlatformUsersPage />} />
               <Route path="audit"   element={<PlatformAuditPage />} />
+              <Route path="usage"   element={<PlatformUsagePage />} />
               <Route path="prompts" element={<PlatformPromptsPage />} />
             </Route>
 

@@ -151,7 +151,7 @@ async function refreshPlatformToken(): Promise<string | null> {
 }
 
 /** One-shot fetch with automatic refresh-and-retry on 401. */
-async function platformAuthedFetch(path: string, init: RequestInit): Promise<Response> {
+export async function platformAuthedFetch(path: string, init: RequestInit): Promise<Response> {
   const token = localStorage.getItem(TOKEN_KEY) ?? "";
   const headers = { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` };
   let res = await fetch(path, { ...init, headers });

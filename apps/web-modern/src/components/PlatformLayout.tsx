@@ -1,12 +1,13 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ShieldCheck, Building2, Users, ScrollText, MessageSquare, LogOut, ChevronRight } from "lucide-react";
+import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, LogOut, ChevronRight } from "lucide-react";
 import { usePlatformAuth } from "../lib/platform-auth";
 
 const NAV = [
   { icon: Building2,    label: "Tenants",        path: "/platform/tenants" },
   { icon: Users,        label: "Platform Users",  path: "/platform/users" },
   { icon: ScrollText,   label: "Audit Events",    path: "/platform/audit" },
+  { icon: Activity,     label: "Consumo IA + Sat", path: "/platform/usage" },
   { icon: MessageSquare,label: "Prompts",         path: "/platform/prompts" },
 ];
 

@@ -21,6 +21,7 @@ import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-serv
 import { getActiveTenantAiDocumentsContent } from "../ai-documents/ai-documents-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { recordAiUsage } from "../usage/usage-service";
 import type { FileContent } from "./file-parser-service";
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,8 @@ export interface CopilotoRequest {
    * per user. Anthropic recommends a hash/uuid, never an email/PII.
    */
   userId: string;
+  /** User email — used only for the internal SUPERADMIN usage log (denormalized). */
+  userEmail?: string;
   /**
    * Structured snapshot of the screen the user is working on (emitted by the frontend).
    * Injected into the system prompt so the AI can give context-aware answers.
@@ -636,8 +639,10 @@ export async function streamCopilotoChat(
   });
 
   // ── Phase 1: stream with tools enabled ──────────────────────────────────────
+  const phase1Model = "claude-haiku-4-5-20251001";
+  const phase1Started = Date.now();
   const phase1Stream = client.messages.stream({
-    model: "claude-haiku-4-5-20251001",
+    model: phase1Model,
     max_tokens: 2048,
     system: systemBlocks,
     tools: COPILOT_TOOLS,
@@ -653,6 +658,21 @@ export async function streamCopilotoChat(
   }
 
   const phase1Msg = await phase1Stream.finalMessage();
+
+  recordAiUsage({
+    tenantId:            req.tenantId,
+    tenantSlug:          req.tenantSlug,
+    userId:              req.userId,
+    userEmail:           req.userEmail ?? "",
+    vesselCode:          req.vesselCode ?? null,
+    feature:             "copiloto",
+    model:               phase1Model,
+    inputTokens:         phase1Msg.usage.input_tokens,
+    outputTokens:        phase1Msg.usage.output_tokens,
+    cacheReadTokens:     phase1Msg.usage.cache_read_input_tokens ?? 0,
+    cacheCreationTokens: phase1Msg.usage.cache_creation_input_tokens ?? 0,
+    latencyMs:           Date.now() - phase1Started,
+  });
 
   // If the model ended with tool_use, execute tools and do a second streaming pass
   if (phase1Msg.stop_reason === "tool_use") {
@@ -681,8 +701,10 @@ export async function streamCopilotoChat(
     ];
 
     // ── Phase 2: stream final answer with tool results ─────────────────────────
+    const phase2Model = "claude-haiku-4-5-20251001";
+    const phase2Started = Date.now();
     const phase2Stream = client.messages.stream({
-      model: "claude-haiku-4-5-20251001",
+      model: phase2Model,
       max_tokens: 2048,
       system: systemBlocks,
       // No tools in phase 2 — prevent infinite looping
@@ -695,5 +717,22 @@ export async function streamCopilotoChat(
         onChunk(chunk.delta.text);
       }
     }
+
+    const phase2Msg = await phase2Stream.finalMessage();
+
+    recordAiUsage({
+      tenantId:            req.tenantId,
+      tenantSlug:          req.tenantSlug,
+      userId:              req.userId,
+      userEmail:           req.userEmail ?? "",
+      vesselCode:          req.vesselCode ?? null,
+      feature:             "copiloto",
+      model:               phase2Model,
+      inputTokens:         phase2Msg.usage.input_tokens,
+      outputTokens:        phase2Msg.usage.output_tokens,
+      cacheReadTokens:     phase2Msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: phase2Msg.usage.cache_creation_input_tokens ?? 0,
+      latencyMs:           Date.now() - phase2Started,
+    });
   }
 }
