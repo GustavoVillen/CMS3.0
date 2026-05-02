@@ -1,5 +1,21 @@
 HISTORY.txt
 
+[2026-05-02] Aplazamientos: campo manual "Aprobado por" / "Rechazado por" en los modales
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma — Deferral.approverName, Deferral.rejectorName (String?)
+- apps/api/src/tenant/pms/deferrals-service.ts
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIOS:
+1. Schema: nuevos campos approverName y rejectorName en Deferral (texto libre)
+2. approveDeferral: payload requiere approverName, lo guarda y mantiene decidedByUserId/decisionAt para auditoría
+3. rejectDeferral: payload requiere rejectorName, idem
+4. Modal Aprobar: campo "Aprobado por *" requerido arriba de Fecha objetivo (texto libre)
+5. Modal Rechazar: campo "Rechazado por *" requerido arriba del Motivo
+6. Card de display: muestra approverName/rejectorName como autor; si difiere del usuario logueado, agrega "(registrado por X)" en gris
+
 [2026-05-02] Aplazamientos: refresh in-situ tras aprobar/rechazar para ver quién decidió
 Agent: Claude Opus 4.7
 

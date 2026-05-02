@@ -1096,6 +1096,8 @@ model Deferral {
   reviewNotes          String?
   decisionAt           DateTime?
   decidedByUserId      String?
+  approverName         String?
+  rejectorName         String?
   activeSince          DateTime?
   expiredAt            DateTime?
   closedAt             DateTime?

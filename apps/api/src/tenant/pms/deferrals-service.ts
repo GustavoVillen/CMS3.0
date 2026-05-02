@@ -40,6 +40,8 @@ interface DeferralRecord {
   reviewNotes: string | null;
   decisionAt: Date | null;
   decidedByUserId: string | null;
+  approverName: string | null;
+  rejectorName: string | null;
   activeSince: Date | null;
   expiredAt: Date | null;
   closedAt: Date | null;
@@ -341,7 +343,7 @@ export async function reviewDeferral(
 export async function approveDeferral(
   session: TenantAccessSession,
   id: string,
-  payload: { targetDate?: string | Date | null; compensatoryMeasures?: string | null },
+  payload: { targetDate?: string | Date | null; compensatoryMeasures?: string | null; approverName: string },
 ) {
   ensureTenantAdmin(session);
 
@@ -352,6 +354,8 @@ export async function approveDeferral(
   const current = await getDeferral(session, id);
   ensureStatus(current.status, "UNDER_REVIEW", "Approve");
 
+  const approverName = normalizeRequiredText(payload.approverName, "approverName");
+
   const approved = await deferral.update({
     where: { id: current.id },
     data: {
@@ -360,6 +364,7 @@ export async function approveDeferral(
       compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
       decisionAt: new Date(),
       decidedByUserId: session.user.id,
+      approverName,
       updatedByUserId: session.user.id,
     },
   });
@@ -377,7 +382,7 @@ export async function approveDeferral(
 export async function rejectDeferral(
   session: TenantAccessSession,
   id: string,
-  payload: { rejectionReason: string },
+  payload: { rejectionReason: string; rejectorName: string },
 ) {
   ensureTenantAdmin(session);
 
@@ -388,6 +393,8 @@ export async function rejectDeferral(
   const current = await getDeferral(session, id);
   ensureStatus(current.status, "UNDER_REVIEW", "Reject");
 
+  const rejectorName = normalizeRequiredText(payload.rejectorName, "rejectorName");
+
   const rejected = await deferral.update({
     where: { id: current.id },
     data: {
@@ -395,6 +402,7 @@ export async function rejectDeferral(
       rejectionReason: normalizeRequiredText(payload.rejectionReason, "rejectionReason"),
       decisionAt: new Date(),
       decidedByUserId: session.user.id,
+      rejectorName,
       updatedByUserId: session.user.id,
     },
   });

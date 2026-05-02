@@ -37,6 +37,8 @@ interface Deferral {
   decisionAt: string | null;
   decidedByUserId: string | null;
   decidedByName: string | null;
+  approverName: string | null;
+  rejectorName: string | null;
   activeSince: string | null;
   expiredAt: string | null;
   closedAt: string | null;
@@ -160,16 +162,22 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
     initialTargetDate ? new Date(initialTargetDate).toISOString().split("T")[0] ?? "" : ""
   );
   const [compensatoryMeasures, setCompensatoryMeasures] = useState(initialCompensatoryMeasures ?? "");
+  const [approverName, setApproverName] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const onSave = useCallback(async () => {
+    if (!approverName.trim()) {
+      setActionError("El nombre del aprobador es obligatorio.");
+      return;
+    }
     setSaving(true);
     setActionError(null);
     try {
       await api.post(`/app/pms/deferrals/${deferralId}/approve`, {
         targetDate: targetDate || undefined,
         compensatoryMeasures: normalizeOptionalText(compensatoryMeasures),
+        approverName: approverName.trim(),
       });
       onSuccess();
     } catch (err) {
@@ -177,9 +185,9 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
     } finally {
       setSaving(false);
     }
-  }, [compensatoryMeasures, deferralId, onSuccess, t, targetDate]);
+  }, [approverName, compensatoryMeasures, deferralId, onSuccess, t, targetDate]);
 
-  const isDirty = useDirtyTracker({ targetDate, compensatoryMeasures });
+  const isDirty = useDirtyTracker({ targetDate, compensatoryMeasures, approverName });
   useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
@@ -190,6 +198,10 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Aprobado por *</label>
+            <input type="text" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder="Nombre y apellido del aprobador" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+          </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.targetDate")}</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
@@ -202,7 +214,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving || !approverName.trim()} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -220,10 +232,15 @@ interface RejectModalProps {
 const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSuccess }) => {
   const t = useT();
   const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectorName, setRejectorName] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const onSave = useCallback(async () => {
+    if (!rejectorName.trim()) {
+      setActionError("El nombre del rechazador es obligatorio.");
+      return;
+    }
     if (!rejectionReason.trim()) {
       setActionError(t("def2.rejectionReason"));
       return;
@@ -233,6 +250,7 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
     try {
       await api.post(`/app/pms/deferrals/${deferralId}/reject`, {
         rejectionReason: rejectionReason.trim(),
+        rejectorName: rejectorName.trim(),
       });
       onSuccess();
     } catch (err) {
@@ -240,9 +258,9 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
     } finally {
       setSaving(false);
     }
-  }, [deferralId, onSuccess, rejectionReason, t]);
+  }, [deferralId, onSuccess, rejectionReason, rejectorName, t]);
 
-  const isDirty = useDirtyTracker({ rejectionReason });
+  const isDirty = useDirtyTracker({ rejectionReason, rejectorName });
   useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
@@ -254,14 +272,18 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")}</label>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Rechazado por *</label>
+            <input type="text" value={rejectorName} onChange={e => setRejectorName(e.target.value)} placeholder="Nombre y apellido del rechazador" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")} *</label>
             <textarea rows={4} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving || !rejectorName.trim() || !rejectionReason.trim()} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -641,8 +663,18 @@ NO hagas preguntas: con la información provista alcanza para proponer medidas r
                     {deferral.status === "APPROVED" ? "Aprobado por" : deferral.status === "REJECTED" ? "Rechazado por" : "Decisión"}
                   </p>
                   <p className="text-sm text-white">
-                    {deferral.decidedByName ?? "—"}
+                    {deferral.status === "APPROVED"
+                      ? (deferral.approverName ?? deferral.decidedByName ?? "—")
+                      : deferral.status === "REJECTED"
+                        ? (deferral.rejectorName ?? deferral.decidedByName ?? "—")
+                        : (deferral.decidedByName ?? "—")}
                     <span className="text-text-industrial/50"> · {fmtDate(deferral.decisionAt)}</span>
+                    {deferral.decidedByName && (
+                      (deferral.status === "APPROVED" && deferral.approverName && deferral.approverName !== deferral.decidedByName) ||
+                      (deferral.status === "REJECTED" && deferral.rejectorName && deferral.rejectorName !== deferral.decidedByName)
+                    ) && (
+                      <span className="text-text-industrial/40 text-xs"> (registrado por {deferral.decidedByName})</span>
+                    )}
                   </p>
                 </div>
               )}
