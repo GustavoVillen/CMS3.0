@@ -5,6 +5,7 @@ import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
+import { enforceRateLimit } from "../../http/rate-limiter";
 import {
   closeDefect,
   createDefect,
@@ -83,6 +84,7 @@ export async function handleQualityRoutes(
     return true;
   }
   if (method === "GET" && /^\/app\/pms\/defects\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const defect = await getDefect(session, id);
     const filename = `${defect.defectCode}-${defect.vesselCode}.pdf`;
@@ -120,6 +122,7 @@ export async function handleQualityRoutes(
   }
 
   if (method === "GET" && /^\/app\/pms\/deferrals\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const deferral = await getDeferral(session, id);
     const filename = `${deferral.deferralCode}.pdf`;
@@ -149,6 +152,7 @@ export async function handleQualityRoutes(
     return true;
   }
   if (method === "POST" && url.pathname === "/app/pms/deferrals/suggest-compensatory-measures") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestCompensatoryMeasures>[1]>(request);
     sendJson(response, 200, await suggestCompensatoryMeasures(session, body));
     return true;

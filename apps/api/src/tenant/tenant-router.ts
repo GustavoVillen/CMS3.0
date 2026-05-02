@@ -5,8 +5,8 @@ import { readJsonBody } from "../http/read-json-body";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
 import { resolveTenantSlugFromRequest } from "./bootstrap/public-bootstrap-route";
-import { loginTenantUser, refreshTenantSession } from "./auth/tenant-auth-service";
-import { registerTenantAccessSession } from "./auth/session-store";
+import { loginTenantUser, refreshTenantSession, logoutTenantSession } from "./auth/tenant-auth-service";
+import { registerTenantAccessSession, revokeTenantAccessSession } from "./auth/session-store";
 import { requireTenantAccessSession } from "./auth/tenant-route-auth";
 import { acceptTenantInvitation } from "./invitations/tenant-invitations-service";
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
@@ -198,6 +198,27 @@ export async function handleTenantRoutes(
     }
 
     sendJson(response, 200, result);
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/auth/logout") {
+    // Rate-limit razonable. No requerimos sesión activa: si el access token
+    // ya expiró pero el refresh sigue válido, igual queremos poder revocarlo.
+    enforceRateLimit(request, "auth:tenant-logout", { maxRequests: 30, windowMs: 60_000 });
+    const slug = requireTenantSlug(request, env);
+    let payload: { refreshToken?: string; accessToken?: string } = {};
+    try { payload = await readJsonBody<typeof payload>(request); } catch { /* body opcional */ }
+
+    // Revoca refresh en DB (idempotente — siempre OK).
+    if (payload.refreshToken) {
+      await logoutTenantSession(slug, payload.refreshToken);
+    }
+    // Quita el access token del Map en memoria.
+    if (payload.accessToken) {
+      revokeTenantAccessSession(payload.accessToken);
+    }
+
+    sendJson(response, 200, { ok: true });
     return true;
   }
 
@@ -813,6 +834,7 @@ export async function handleTenantRoutes(
   if (method === "GET" && /^\/app\/fluid-analyses\/[\w-]+\/pdf$/.test(url.pathname)) {
     const sampleId = url.pathname.split("/")[3]!;
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const pdfBuffer = await buildFluidAnalysisPdf(session, sampleId);
     response.writeHead(200, {
       "Content-Type": "application/pdf",
@@ -962,6 +984,7 @@ export async function handleTenantRoutes(
   if (method === "POST" && url.pathname === "/app/copiloto/chat") {
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as {
       capability?: string; locale?: string;
       messages: ChatMessage[]; vesselCode?: string | null;

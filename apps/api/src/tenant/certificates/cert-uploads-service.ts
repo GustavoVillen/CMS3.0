@@ -35,6 +35,8 @@ export async function saveCertificateSourceFile(
   };
 }
 
+// SVG removed: served inline as image/svg+xml, browsers execute <script> in
+// SVG → XSS persistente con el token del usuario en localStorage.
 const MIME_MAP: Record<string, string> = {
   ".pdf":  "application/pdf",
   ".png":  "image/png",
@@ -42,7 +44,6 @@ const MIME_MAP: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif":  "image/gif",
   ".webp": "image/webp",
-  ".svg":  "image/svg+xml",
   ".doc":  "application/msword",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".xls":  "application/vnd.ms-excel",

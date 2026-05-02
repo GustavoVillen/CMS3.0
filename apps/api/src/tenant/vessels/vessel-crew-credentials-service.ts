@@ -18,9 +18,7 @@ const DEV_CREW_CREDENTIALS: DevCrewCredential[] = [];
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
-function isDev(): boolean {
-  return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
-}
+import { isDevelopmentMode as isDev } from "../../common/runtime-mode";
 
 export async function getCrewCredentials(session: TenantAccessSession, vesselId: string) {
   if (session.user.role !== "TENANT_ADMIN") {

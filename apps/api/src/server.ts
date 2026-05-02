@@ -35,7 +35,8 @@ const server = createServer(async (request, response) => {
   // ── Unauthenticated / infrastructure routes ─────────────────────────────────
   // Dev-only landing: expone mapa de endpoints, hints de credenciales demo y
   // un Local Dev Console. NUNCA debe servirse en producción — cae al SPA.
-  if (method === "GET" && url.pathname === "/" && env.nodeEnv !== "production") {
+  // Fail-closed: solo mostrar en development explícito (no en "unknown").
+  if (method === "GET" && url.pathname === "/" && env.nodeEnv === "development") {
     sendHtml(response, 200, buildHomePage(env));
     return;
   }

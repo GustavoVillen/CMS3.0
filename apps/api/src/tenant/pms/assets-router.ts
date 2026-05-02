@@ -5,6 +5,7 @@ import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
+import { enforceRateLimit } from "../../http/rate-limiter";
 import {
   createTenantAsset,
   deleteTenantAsset,
@@ -60,6 +61,7 @@ export async function handleAssetRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/assets/suggest-criticality") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
     sendJson(response, 200, await suggestAssetCriticality(session, body));
     return true;

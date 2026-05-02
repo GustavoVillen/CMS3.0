@@ -9,8 +9,12 @@ export interface AppEnv {
 export type EnvSource = Record<string, string | undefined>;
 
 export function parseAppEnv(source: EnvSource): AppEnv {
+  // nodeEnv NO defaultea a "development" — eso activaría dev fallbacks
+  // (login con credenciales demo, mocks) en cualquier entorno que olvidara
+  // setear NODE_ENV. En su lugar, fail-closed: si no está seteado, "unknown"
+  // (que no es ni "development" ni "production" → ningún fallback corre).
   return {
-    nodeEnv: String(source.NODE_ENV || "development").trim() || "development",
+    nodeEnv: String(source.NODE_ENV || "").trim().toLowerCase() || "unknown",
     rootDomain: String(source.APP_ROOT_DOMAIN || "localhost").trim().toLowerCase() || "localhost",
     adminSubdomain:
       String(source.APP_ADMIN_SUBDOMAIN || "admin").trim().toLowerCase() || "admin",

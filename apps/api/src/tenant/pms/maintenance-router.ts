@@ -5,6 +5,7 @@ import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
+import { enforceRateLimit } from "../../http/rate-limiter";
 import { log } from "../../common/logger";
 import {
   completeChecklistPlan,
@@ -106,18 +107,21 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-acceptance-criteria") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanAcceptanceCriteria>[1]>(request);
     sendJson(response, 200, await suggestPlanAcceptanceCriteria(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-loto") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanLoto>[1]>(request);
     sendJson(response, 200, await suggestPlanLoto(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-risk") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanRisk>[1]>(request);
     sendJson(response, 200, await suggestPlanRisk(session, body));
     return true;
@@ -215,18 +219,21 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-acceptance-criteria") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string }>(request);
     sendJson(response, 200, await suggestAcceptanceCriteria(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-loto") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string }>(request);
     sendJson(response, 200, await suggestLoto(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-risk") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string; loto?: string }>(request);
     sendJson(response, 200, await suggestRisk(session, body));
     return true;
@@ -260,6 +267,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const plan = await getTenantMaintenancePlan(session, id);
     const filename = `${(plan as any).taskCode ?? id}.pdf`;
@@ -274,6 +282,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const wo = await getTenantWorkOrder(session, id);
     const filename = `${wo.workOrderCode}.pdf`;

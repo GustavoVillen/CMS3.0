@@ -9,9 +9,7 @@ import { resolveActiveSessionLocale } from "../i18n/locale-resolution";
 import { TENANT_AUTH_POLICY } from "./auth-policies";
 import { publishAudit, publishSystemAudit } from "../../platform/audit/audit-publisher";
 
-function isDevelopmentMode(): boolean {
-  return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
-}
+import { isDevelopmentMode } from "../../common/runtime-mode";
 
 function loginTenantUserFromDevelopmentFallback(
   tenantSlug: string,
@@ -352,6 +350,41 @@ export async function refreshTenantSession(
 
     throw error;
   }
+}
+
+/**
+ * Revoca un refresh token (logout). Marca el row como revoked en DB para que
+ * no se pueda usar para emitir nuevos access tokens. Idempotente: si el token
+ * no existe o ya está revocado, no hace nada y devuelve OK igual (no leak de
+ * "token válido vs no").
+ *
+ * El access token vigente sigue funcionando hasta su expiración (15 min) —
+ * es por diseño de tokens opacos sin DB-roundtrip por request. El cliente
+ * debe descartarlo localmente.
+ */
+export async function logoutTenantSession(
+  tenantSlug: string,
+  refreshToken: string,
+): Promise<void> {
+  const prisma = getPrismaClient();
+  if (!prisma) return; // dev sin DB: nada que revocar
+
+  const incomingHash = hashOpaqueToken(String(refreshToken || ""));
+  if (!incomingHash) return;
+
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return;
+
+    await prisma.refreshToken.updateMany({
+      where: {
+        tenantId: tenant.id,
+        refreshTokenHash: incomingHash,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+  } catch { /* swallow — logout siempre exitoso desde la perspectiva del cliente */ }
 }
 
 export function getTenantAuthPolicy() {

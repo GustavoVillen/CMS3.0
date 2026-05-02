@@ -74,3 +74,12 @@ export function evictExpiredSessions(): void {
     if (new Date(s.accessTokenExpiresAt).getTime() <= now) platformSessions.delete(token);
   }
 }
+
+/** Logout: borra el access token del Map en memoria. */
+export function revokeTenantAccessSession(accessToken: string): void {
+  tenantSessions.delete(accessToken);
+}
+
+export function revokePlatformAccessSession(accessToken: string): void {
+  platformSessions.delete(accessToken);
+}

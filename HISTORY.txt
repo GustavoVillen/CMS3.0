@@ -10110,3 +10110,67 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
       en lugar de los 5 bloques inline (DRY)
     - Auditar findUnique restantes de user.findUnique en spare-request-pdf
       y work-order-pdf data-loader (similar pattern, lower priority)
+
+
+[2026-05-02] Hardening de IP — Tanda 4: críticos de auditoría externa
+  Sintetizada auditoría de 4 sub-agents y verificados los hallazgos críticos.
+  Esta tanda cierra los CRÍTICOS y los ALTOS más urgentes:
+
+  C-2 — SVG XSS persistente cerrado:
+    - cert-uploads-service.ts: removido ".svg" del MIME_MAP. SVG ahora se
+      sirve como application/octet-stream (force download, no execute).
+
+  C-3 — NODE_ENV fail-closed:
+    - Nuevo: apps/api/src/common/runtime-mode.ts con isDevelopmentMode()
+      que SOLO devuelve true si NODE_ENV === "development". Si está unset
+      o tiene typo, devuelve false (no activa dev fallbacks).
+    - 4 copias inline reemplazadas: platform-auth-service.ts,
+      tenant-auth-service.ts, profile-service.ts, vessel-crew-credentials.
+    - config/env.ts: nodeEnv defaultea a "unknown" (no a "development").
+    - server.ts:38: home page check ahora === "development" (no !== "production").
+
+  C-1 — Endpoint de logout real:
+    - Nuevo POST /app/auth/logout que recibe refresh+access tokens.
+    - tenant-auth-service.logoutTenantSession(): updateMany del refresh
+      token en DB (revokedAt = now). Idempotente, no leak de existencia.
+    - session-store.revokeTenantAccessSession(): borra del Map en memoria.
+    - auth.tsx:logout() ahora llama al endpoint antes de limpiar localStorage.
+      Fire-and-forget para no bloquear el cierre de sesión local.
+
+  A-1 — Rate limit en PDF generation (8 endpoints):
+    - bucket "pdf:{userId}" con 10 req/min por usuario.
+    - maintenance-router (plan, WO), quality-router (defect, deferral),
+      spares-router (inventory, consumption, spare-request), tenant-router (fluid).
+
+  A-2 — Rate limit en endpoints de IA (8 + copiloto chat):
+    - bucket "ai:{userId}" con 30 req/min compartido para TODOS los AI
+      endpoints (suggest-criticality, suggest-acceptance-criteria, suggest-loto,
+      suggest-risk x2, suggest-compensatory-measures, copiloto/chat).
+    - Limita el cost-DoS contra Anthropic API por usuario malicioso.
+
+  Hallazgos descartados como falsos positivos del audit:
+    - "evictExpiredSessions nunca se llama" → SÍ se llama desde
+      server.ts:160 (setInterval cada 5 min). Agente solo leyó el archivo
+      session-store.ts sin ver el callsite.
+    - "/public/bootstrap leakea business data" → solo expone branding del
+      tenant (logo, color, locale, currency). Ningún dato operacional.
+
+  Pendientes de la auditoría (otra tanda):
+    - C-4 (TOCTOU en updates): cambiar update({where:{id}}) a
+      updateMany({where:{id,tenantId}}) en bitacora, ai-documents,
+      certificates, assets-service.deleteTenantAsset.
+    - A-3 (tokens en localStorage → XSS = takeover): migrar a httpOnly
+      cookies + CSRF. Refactor grande.
+    - A-4 (taskMasterId/spareId cross-tenant): validar tenant ownership.
+    - M-1 (Excel formula injection): escapar strings con =, +, -, @.
+    - A-6 (logger PII de emails): hashear emails en audit logs.
+    - A-7 (stack trace en respuesta): unificar generic message en dev/prod.
+    - M-4 (X-Forwarded-For sin validación de formato).
+    - M-5 (account lockout por usuario, no solo IP).
+
+  Validado:
+    - Typecheck OK (sin errores nuevos; los preexistentes en bitacora/
+      capa/defects/excel/profile siguen pendientes — no relacionados).
+    - Frontend buildea, bundle no contiene prompts (verificado: 0 hits
+      de "Sos experto").
+    - Bundle incluye call a /auth/logout (verificado).

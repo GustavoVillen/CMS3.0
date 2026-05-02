@@ -5,6 +5,7 @@ import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
+import { enforceRateLimit } from "../../http/rate-limiter";
 import {
   createTenantSpare,
   deleteTenantSpare,
@@ -113,6 +114,7 @@ export async function handleSparesRoutes(
   }
 
   if (method === "GET" && url.pathname === "/app/pms/reports/spare-inventory/pdf") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const { buildSpareInventoryPdf } = await import("./spare-inventory-pdf-service");
     const { recordMonthlyReportGenerated } = await import("./monthly-reports-history-service");
     const dept = url.searchParams.get("department");
@@ -152,6 +154,7 @@ export async function handleSparesRoutes(
   }
 
   if (method === "GET" && url.pathname === "/app/pms/reports/spare-consumption/pdf") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const { buildSpareConsumptionPdf } = await import("./spare-consumption-pdf-service");
     const { recordMonthlyReportGenerated } = await import("./monthly-reports-history-service");
     const vesselCode = url.searchParams.get("vesselCode") ?? "";
@@ -272,6 +275,7 @@ export async function handleSparesRoutes(
   // ── Spare Requests ───────────────────────────────────────────────────────────
 
   if (method === "GET" && /^\/app\/pms\/spare-requests\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const { buildSpareRequestPdf } = await import("./spare-request-pdf-service");
     const sr = await import("../spare-requests/spare-requests-service").then(m => m.getSpareRequest(session, id));

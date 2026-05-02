@@ -118,6 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Revoca el refresh token en el server antes de limpiar localStorage.
+    // Fire-and-forget: si falla la red, igual seguimos cerrando sesión local.
+    const refreshToken = localStorage.getItem("gpms_refresh_token");
+    const accessToken  = localStorage.getItem("gpms_token");
+    if (refreshToken || accessToken) {
+      api.post("/app/auth/logout", { refreshToken, accessToken }).catch(() => { /* ignore */ });
+    }
     setState({ token: null, user: null, tenant: null, isAuthenticated: false });
     localStorage.removeItem("gpms_auth");
     localStorage.removeItem("gpms_token");

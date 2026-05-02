@@ -4,10 +4,7 @@ import { getDevTenantUserById, updateDevTenantUser } from "../../platform/data/d
 import { RouteError } from "../../http/route-error";
 import { verifyPassword, hashPassword } from "../../platform/auth/passwords";
 import { publishAudit } from "../../platform/audit/audit-publisher";
-
-function isDev(): boolean {
-  return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
-}
+import { isDevelopmentMode as isDev } from "../../common/runtime-mode";
 
 export interface ProfileData {
   id: string;

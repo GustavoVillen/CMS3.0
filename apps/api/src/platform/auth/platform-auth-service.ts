@@ -5,10 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { verifyPassword, hashOpaqueToken } from "./passwords";
 import { issueOpaqueSessionTokens } from "./tokens";
 import { publishPlatformAudit, publishSystemAudit } from "../audit/audit-publisher";
-
-function isDevelopmentMode(): boolean {
-  return String(process.env.NODE_ENV || "development").trim().toLowerCase() === "development";
-}
+import { isDevelopmentMode } from "../../common/runtime-mode";
 
 function loginPlatformUserFromDevelopmentFallback(request: PlatformLoginRequest): PlatformLoginResponse {
   const email = String(request.email || "").trim();
