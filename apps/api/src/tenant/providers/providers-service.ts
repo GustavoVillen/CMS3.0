@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevProvidersForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { buildChangeDiff } from "../audit/build-change-diff";
 
 export interface ProviderListFilters {
   vesselCode?: string | null;
@@ -154,13 +155,15 @@ export async function updateProvider(session: TenantAccessSession, id: string, p
   if (payload.location     !== undefined) data.location     = normalizeOptionalText(payload.location);
 
   const updated = await prisma.provider.update({ where: { id: current.id }, data });
+  const changedKeys = Object.keys(data).filter(k => k !== "updatedByUserId");
+  const changes = buildChangeDiff(current as unknown as Record<string, unknown>, data, changedKeys);
   void publishAudit(prisma, {
     tenantId: updated.tenantId,
     actorUserId: session.user.id,
     action: "Provider.updated",
     entityType: "Provider",
     entityId: updated.id,
-    metadata: { providerCode: updated.providerCode, name: updated.name },
+    metadata: { providerCode: updated.providerCode, name: updated.name, vesselCode: updated.vesselCode, changes },
   });
   return updated;
 }

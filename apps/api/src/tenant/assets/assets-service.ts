@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevAssetsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { buildChangeDiff } from "../audit/build-change-diff";
 
 export interface AssetListFilters {
   vesselCode?: string | null;
@@ -313,13 +314,19 @@ export async function updateTenantAsset(
   if (result.count === 0) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
 
   const updated = await getTenantAsset(session, current.id);
+  const changedKeys = Object.keys(data).filter(k => !["updatedByUserId", "updatedAt"].includes(k));
+  const changes = buildChangeDiff(
+    current as unknown as Record<string, unknown>,
+    data,
+    changedKeys,
+  );
   void publishAudit(prisma, {
     tenantId: updated.tenantId,
     actorUserId: session.user.id,
     action: "Asset.updated",
     entityType: "Asset",
     entityId: updated.id,
-    metadata: { assetCode: updated.assetCode, name: updated.name, vesselCode: updated.vesselCode },
+    metadata: { assetCode: updated.assetCode, name: updated.name, vesselCode: updated.vesselCode, changes },
   });
   return updated;
 }

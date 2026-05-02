@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-05-02] Bitácora: campo-a-campo diff en eventos "Modificado" + Excel audit completo
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/audit/build-change-diff.ts (nuevo)
+- apps/api/src/tenant/vessels/vessels-service.ts
+- apps/api/src/tenant/assets/assets-service.ts
+- apps/api/src/tenant/certificates/certificates-service.ts
+- apps/api/src/tenant/providers/providers-service.ts
+- apps/api/src/tenant/spares/spares-service.ts
+- apps/api/src/tenant/excel/excel-template.ts
+- apps/api/src/tenant/excel/excel-import-service.ts
+- apps/api/src/tenant/excel/excel-export-service.ts
+- apps/web-modern/src/pages/Bitacora.tsx
+
+CAMBIOS:
+1. Nuevo utilitario buildChangeDiff(before, after, fields): compara campos y retorna {field:{from,to}} solo de los que cambiaron
+2. Servicios Vessel/Asset/Certificate/Provider/Spare: en publishAudit de updated, incluyen changes=buildChangeDiff(...) en metadata
+3. Bitácora.tsx: formatChanges() renderiza el diff como "Campo: valor_anterior → valor_nuevo | ..." en columna DETALLE para eventos "updated"
+4. FIELD_LABELS: mapa de keys técnicas a etiquetas en español para el diff
+5. Excel templates: assets agrega trackDailyReport, maintenance_plans agrega samplingFluidType, certificates agrega lastInspectionDate/notes/assetId
+6. Excel import service: assets importa trackDailyReport, certificates importa lastInspectionDate/notes/assetId, maintenance_plans importa samplingFluidType
+
 [2026-04-30] Análisis de Fluidos: Fase 5 — integración con Plan/OT
 Agent: Claude Opus 4.7
 

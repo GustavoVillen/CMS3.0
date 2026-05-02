@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevVesselsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { buildChangeDiff } from "../audit/build-change-diff";
 
 const VESSEL_SELECT = {
   id: true,
@@ -254,13 +255,23 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   if (input.incorporationType !== undefined) detailsToUpdate.incorporationType = normalizeOptionalText(input.incorporationType);
 
   await updateVesselDetails(prisma, id, tenant.id, detailsToUpdate);
+
+  const changedFields = Object.keys(data).filter(k => !["updatedByUserId"].includes(k));
+  const allChangedKeys = [...changedFields, ...Object.keys(detailsToUpdate)];
+  const afterValues = { ...data, ...detailsToUpdate };
+  const changes = buildChangeDiff(
+    vessel as unknown as Record<string, unknown>,
+    afterValues,
+    allChangedKeys,
+  );
+
   void publishAudit(prisma, {
     tenantId: tenant.id,
     actorUserId: session.user.id,
     action: "Vessel.updated",
     entityType: "Vessel",
     entityId: id,
-    metadata: { code: vessel.code, name: vessel.name },
+    metadata: { code: vessel.code, name: vessel.name, vesselCode: vessel.code, changes },
   });
   return updated;
 }

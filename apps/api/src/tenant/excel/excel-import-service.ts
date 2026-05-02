@@ -289,6 +289,7 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         installationDate: d.installationDate ? new Date(String(d.installationDate)) : null,
         lastOverhaulDate: d.lastOverhaulDate ? new Date(String(d.lastOverhaulDate)) : null,
         replacementDate:  d.replacementDate  ? new Date(String(d.replacementDate))  : null,
+        trackDailyReport: d.trackDailyReport === "true" || d.trackDailyReport === true || null,
       };
     case "maintenance_plans": {
       const r: Record<string, unknown> = {
@@ -319,7 +320,8 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       if ("nextDueDate"       in d) r.nextDueDate       = d.nextDueDate       ? new Date(String(d.nextDueDate)) : null;
       if ("lastExecutionHours" in d) r.lastExecutionHours = parseNumeric(d.lastExecutionHours);
       if ("nextDueHours"      in d) r.nextDueHours      = parseNumeric(d.nextDueHours);
-      if ("checklistTemplate" in d) r.checklistTemplate = d.checklistTemplate ?? null;
+      if ("checklistTemplate"  in d) r.checklistTemplate  = d.checklistTemplate  ?? null;
+      if ("samplingFluidType" in d) r.samplingFluidType = d.samplingFluidType ?? null;
       return r;
     }
     case "spares":
@@ -361,13 +363,16 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
     case "certificates":
       return {
         tenantId,
-        vesselCode:        d.vesselCode,
-        certificateCode:   d.certificateCode,
-        name:              d.name ?? null,
-        issuingAuthority:  d.issuingAuthority ?? null,
-        status:            d.status ?? "ACTIVE",
-        issueDate:         d.issueDate  ? new Date(String(d.issueDate))  : null,
-        expiryDate:        d.expiryDate ? new Date(String(d.expiryDate)) : null,
+        vesselCode:           d.vesselCode,
+        certificateCode:      d.certificateCode,
+        name:                 d.name ?? null,
+        issuingAuthority:     d.issuingAuthority ?? null,
+        status:               d.status ?? "ACTIVE",
+        issueDate:            d.issueDate            ? new Date(String(d.issueDate))            : null,
+        expiryDate:           d.expiryDate           ? new Date(String(d.expiryDate))           : null,
+        lastInspectionDate:   d.lastInspectionDate   ? new Date(String(d.lastInspectionDate))   : null,
+        notes:                d.notes ?? null,
+        assetId:              d.assetId ? String(d.assetId) : null,
       };
     case "work_orders":
       return { tenantId };

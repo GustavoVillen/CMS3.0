@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { listDevSparesForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { buildChangeDiff } from "../audit/build-change-diff";
 import { getOnHandMap, getReservedMapFromCalc, getAvailableQty } from "../pms/stock-calc-service";
 
 export interface SpareListFilters {
@@ -254,13 +255,15 @@ export async function updateTenantSpare(session: TenantAccessSession, id: string
 
   try {
     const updated = await prisma.spare.update({ where: { id: current.id }, data });
+    const changedKeys = Object.keys(data).filter(k => k !== "updatedByUserId");
+    const changes = buildChangeDiff(current as unknown as Record<string, unknown>, data, changedKeys);
     void publishAudit(prisma, {
       tenantId: updated.tenantId,
       actorUserId: session.user.id,
       action: "Spare.updated",
       entityType: "Spare",
       entityId: updated.id,
-      metadata: { sku: updated.sku, name: updated.name, vesselCode: updated.vesselCode },
+      metadata: { sku: updated.sku, name: updated.name, vesselCode: updated.vesselCode, changes },
     });
     return updated;
   } catch (error: unknown) {

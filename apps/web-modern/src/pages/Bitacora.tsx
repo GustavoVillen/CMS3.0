@@ -100,6 +100,37 @@ function vesselCode(metadata: Record<string, unknown> | null): string | null {
 function s(v: unknown): string { return typeof v === "string" ? v : ""; }
 function n(v: unknown): number { return typeof v === "number" ? v : 0; }
 
+const FIELD_LABELS: Record<string, string> = {
+  name: "Nombre", status: "Estado", owner: "Armador", vesselType: "Tipo",
+  imo: "IMO", registration: "Matrícula", powerHp: "Potencia (HP)", dwtTons: "DWT",
+  lengthM: "Eslora (m)", beamM: "Manga (m)", depthM: "Puntal (m)",
+  trnTn: "TRN", trbTn: "TRB", buildYear: "Año construcción", buildCountry: "País constr.",
+  incorporationDate: "Fecha incorporación", incorporationType: "Tipo incorporación",
+  criticality: "Criticidad", manufacturer: "Fabricante", model: "Modelo",
+  serialNumber: "N° serie", installationDate: "Fecha instalación",
+  lastOverhaulDate: "Último OH", replacementDate: "Reemplazo",
+  trackDailyReport: "Seguimiento diario", sfiCode: "SFI",
+  issuingAuthority: "Autoridad", issueDate: "Emisión", expiryDate: "Vencimiento",
+  lastInspectionDate: "Última inspección", notes: "Notas", assetId: "Equipo",
+  category: "Categoría", contactName: "Contacto", contactEmail: "Email",
+  contactPhone: "Teléfono", location: "Ubicación",
+  unit: "Unidad", minStock: "Stock mín.", reorderPoint: "Punto reorden",
+  targetStock: "Stock objetivo", leadTimeDays: "Lead time (días)",
+  internalPartNumber: "P/N interno", manufacturerPartNumber: "P/N fabricante",
+  longDescription: "Descripción larga",
+};
+
+function formatChanges(changes: Record<string, { from: unknown; to: unknown }>): string {
+  return Object.entries(changes)
+    .map(([key, { from, to }]) => {
+      const label = FIELD_LABELS[key] ?? key;
+      const fv = from != null ? String(from) : "—";
+      const tv = to   != null ? String(to)   : "—";
+      return `${label}: ${fv} → ${tv}`;
+    })
+    .join(" | ");
+}
+
 function detailLine(item: AuditLogItem): string {
   const m = item.metadata;
   if (!m) return "";
@@ -109,6 +140,19 @@ function detailLine(item: AuditLogItem): string {
 
   const action = item.action;
   const entity = item.entityType;
+
+  // Field-level diff (recorded on updated events)
+  if (
+    m.changes &&
+    typeof m.changes === "object" &&
+    !Array.isArray(m.changes) &&
+    Object.keys(m.changes as object).length > 0 &&
+    (action.toLowerCase().includes("updated") || action.toLowerCase().includes("modified"))
+  ) {
+    const changes = m.changes as Record<string, { from: unknown; to: unknown }>;
+    const diffText = formatChanges(changes);
+    if (diffText) return diffText;
+  }
 
   // ── Stock adjustment ────────────────────────────────────────────────────────
   if (action === "STOCK_ADJUSTED") {

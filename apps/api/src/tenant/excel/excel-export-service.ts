@@ -44,6 +44,7 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "frequencyHours",
     "frequencyMonths",
     "triggerResultMode",
+    "samplingFluidType",
     "taskMasterId",
     "executionStatus",
     "lastExecutionDate",

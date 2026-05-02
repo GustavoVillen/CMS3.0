@@ -1,5 +1,6 @@
 import React from "react";
-import { Activity, Download } from "lucide-react";
+import { Activity, Download, LineChart as LineChartIcon, X } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
@@ -211,6 +212,157 @@ const HTTP_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "latencyMs",  header: "Lat. avg", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
 ];
 
+// ── Chart helpers ────────────────────────────────────────────────────────────
+// One line per user. X-axis bucket size auto-selected from the visible time
+// span: ≤2h → minute, ≤7d → hour, >7d → day.
+
+type BucketSize = "minute" | "hour" | "day";
+
+function pickBucketSize(items: UsageEvent[]): BucketSize {
+  if (items.length < 2) return "minute";
+  let min = Infinity, max = -Infinity;
+  for (const it of items) {
+    const t = new Date(it.createdAt).getTime();
+    if (t < min) min = t;
+    if (t > max) max = t;
+  }
+  const spanMs = max - min;
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  if (spanMs <= TWO_HOURS) return "minute";
+  if (spanMs <= SEVEN_DAYS) return "hour";
+  return "day";
+}
+
+function truncateTo(iso: string, bucket: BucketSize): string {
+  const d = new Date(iso);
+  if (bucket === "minute") d.setSeconds(0, 0);
+  else if (bucket === "hour") { d.setMinutes(0, 0, 0); }
+  else { d.setHours(0, 0, 0, 0); }
+  return d.toISOString();
+}
+
+function fmtBucketLabel(iso: string, bucket: BucketSize): string {
+  const d = new Date(iso);
+  if (bucket === "day") return d.toLocaleDateString("es-AR");
+  if (bucket === "hour") return d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  return d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
+interface ChartPoint {
+  bucket: string;             // ISO of the bucket (used for sort)
+  label: string;              // formatted X-axis label
+  [userEmail: string]: number | string;
+}
+
+function buildChartSeries(
+  items: UsageEvent[],
+  metric: "tokens" | "bytes",
+): { points: ChartPoint[]; users: string[]; bucket: BucketSize } {
+  const bucket = pickBucketSize(items);
+  // points keyed by bucket ISO → record of user → metric value
+  const grid = new Map<string, Map<string, number>>();
+  const users = new Set<string>();
+
+  for (const it of items) {
+    const b = truncateTo(it.createdAt, bucket);
+    let row = grid.get(b);
+    if (!row) { row = new Map(); grid.set(b, row); }
+    const value = metric === "tokens"
+      ? it.inputTokens + it.outputTokens
+      : it.bytesIn + it.bytesOut;
+    row.set(it.userEmail, (row.get(it.userEmail) ?? 0) + value);
+    users.add(it.userEmail);
+  }
+
+  const usersArr = Array.from(users).sort();
+  const buckets = Array.from(grid.keys()).sort();
+  const points: ChartPoint[] = buckets.map(b => {
+    const row = grid.get(b)!;
+    const point: ChartPoint = { bucket: b, label: fmtBucketLabel(b, bucket) };
+    for (const u of usersArr) {
+      point[u] = row.get(u) ?? 0;
+    }
+    return point;
+  });
+
+  return { points, users: usersArr, bucket };
+}
+
+// Distinct, accessible color palette — colors stay consistent across renders
+const CHART_COLORS = [
+  "#fbbf24", "#60a5fa", "#34d399", "#f472b6", "#a78bfa",
+  "#fb7185", "#22d3ee", "#facc15", "#4ade80", "#c084fc",
+];
+
+const UsageChart: React.FC<{
+  items: UsageEvent[];
+  kind: "ai_call" | "http_request";
+  onClose: () => void;
+}> = ({ items, kind, onClose }) => {
+  const metric: "tokens" | "bytes" = kind === "ai_call" ? "tokens" : "bytes";
+  const { points, users, bucket } = React.useMemo(
+    () => buildChartSeries(items, metric),
+    [items, metric],
+  );
+
+  const yLabel  = kind === "ai_call" ? "Tokens" : "Bytes";
+  const fmtY = kind === "ai_call" ? fmtTok : fmtKb;
+  const bucketLabel = bucket === "minute" ? "minuto" : bucket === "hour" ? "hora" : "día";
+
+  if (points.length === 0) {
+    return (
+      <div className="rounded-xl bg-white/5 border border-white/10 p-8 text-center text-text-industrial/40 text-sm">
+        Sin datos para graficar.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-white/3 border border-white/10 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs text-text-industrial/60">
+          {yLabel} por usuario · agrupado por <span className="text-white">{bucketLabel}</span> · {users.length} usuario{users.length === 1 ? "" : "s"}
+        </div>
+        <button onClick={onClose} className="p-1 rounded hover:bg-white/10 text-text-industrial/40 hover:text-white transition-all" title="Cerrar gráfico">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div style={{ width: "100%", height: 320 }}>
+        <ResponsiveContainer>
+          <LineChart data={points} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+            <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }} stroke="rgba(255,255,255,0.2)" />
+            <YAxis
+              tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+              stroke="rgba(255,255,255,0.2)"
+              tickFormatter={(v: number) => fmtY(v)}
+              width={60}
+            />
+            <Tooltip
+              contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: "#e2e8f0" }}
+              formatter={(value: number, name: string) => [fmtY(value), name]}
+            />
+            <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }} />
+            {users.map((user, i) => (
+              <Line
+                key={user}
+                type="monotone"
+                dataKey={user}
+                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
 export const PlatformUsagePage: React.FC = () => {
   const [kind, setKind] = React.useState<"ai_call" | "http_request">("ai_call");
   const [groupBy, setGroupBy] = React.useState<"none" | "minute">("minute");
@@ -277,9 +429,19 @@ export const PlatformUsagePage: React.FC = () => {
 
   const showingCount = groupBy === "minute" ? aggregated.length : (data?.items.length ?? 0);
 
+  const [showChart, setShowChart] = React.useState(false);
+  const chartItems = React.useMemo(
+    () => (data?.items ?? []).filter(i => i.kind === kind),
+    [data, kind],
+  );
+
   return (
     <div className="space-y-5">
       <PageHeader icon={Activity} title="Consumo IA + Satelital" total={data?.total} onReload={reload}>
+        <button onClick={() => setShowChart(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${showChart ? "bg-accent/15 border-accent/30 text-accent" : "bg-white/5 border-white/10 text-text-industrial hover:border-accent/30"}`}>
+          <LineChartIcon className="w-3.5 h-3.5" /> Gráfico
+        </button>
         <button onClick={exportXlsx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <Download className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
@@ -350,6 +512,10 @@ export const PlatformUsagePage: React.FC = () => {
             </>
           )}
         </div>
+      )}
+
+      {showChart && (
+        <UsageChart items={chartItems} kind={kind} onClose={() => setShowChart(false)} />
       )}
 
       {groupBy === "minute" ? (

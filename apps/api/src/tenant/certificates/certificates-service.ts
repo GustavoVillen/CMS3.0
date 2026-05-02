@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevCertificatesForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { buildChangeDiff } from "../audit/build-change-diff";
 
 export interface CertificateListFilters {
   vesselCode?: string | null;
@@ -229,13 +230,19 @@ export async function updateTenantCertificate(session: TenantAccessSession, id: 
   if (input.originalSourceMimeOrExt !== undefined) data.originalSourceMimeOrExt = normalizeText(input.originalSourceMimeOrExt);
 
   const updated = await prisma.certificate.update({ where: { id }, data });
+  const changedKeys = Object.keys(data).filter(k => !["updatedByUserId"].includes(k));
+  const changes = buildChangeDiff(
+    cert as unknown as Record<string, unknown>,
+    data,
+    changedKeys,
+  );
   void publishAudit(prisma, {
     tenantId: tenant.id,
     actorUserId: session.user.id,
     action: "Certificate.updated",
     entityType: "Certificate",
     entityId: updated.id,
-    metadata: { certificateCode: updated.certificateCode, name: updated.name, vesselCode: updated.vesselCode },
+    metadata: { certificateCode: updated.certificateCode, name: updated.name, vesselCode: updated.vesselCode, changes },
   });
   return withComputedStatus(updated);
 }
