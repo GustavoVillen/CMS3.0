@@ -780,7 +780,14 @@ NO hagas preguntas: con la información provista alcanza para proponer medidas r
         </div>
       </div>
 
-      {showReview && <ReviewModal deferralId={deferral.id} compensatoryMeasures={compensatoryMeasures} onClose={() => setShowReview(false)} onSuccess={onSuccess} />}
+      {showReview && (
+        <ReviewModal
+          deferralId={deferral.id}
+          compensatoryMeasures={compensatoryMeasures}
+          onClose={() => setShowReview(false)}
+          onSuccess={() => { setShowReview(false); onClose(); onSuccess(); }}
+        />
+      )}
       {showApprove && (
         <ApproveModal
           deferralId={deferral.id}

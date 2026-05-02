@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-05-02] Aplazamientos: ReviewModal también cierra todo y vuelve al listado tras Guardar
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIO:
+- ReviewModal onSuccess: cierra el modal de Enviar a Revisión + cierra el modal de detalle + recarga la lista (igual que Aprobar/Rechazar/Cerrar)
+
 [2026-05-02] Aplazamientos: cerrar OT también cierra el aplazamiento ACTIVE asociado + Cerrar modal vuelve al listado
 Agent: Claude Opus 4.7
 
