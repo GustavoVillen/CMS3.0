@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-05-02] Excel Import Assets: fix trackDailyReport null + name null que rompían el create
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/excel/excel-import-service.ts
+
+CAMBIOS:
+1. trackDailyReport ya no se setea como null cuando el Excel no lo trae — ahora siempre Boolean (true/false)
+2. Acepta también "1" / 1 como true
+3. name nunca se pasa null — fallback al assetCode si viene vacío (schema dice name String NOT NULL)
+4. Causa raíz del error "Argument vessel is missing": Prisma 7.x reporta error engañoso cuando un campo Boolean obligatorio recibe null
+
 [2026-05-02] Análisis de Fluidos: endpoint regenerate + footer del PDF con sello CMS + fallback raw SQL
 Agent: Claude Opus 4.7
 

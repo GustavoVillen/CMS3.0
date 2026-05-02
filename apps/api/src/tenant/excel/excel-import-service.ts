@@ -274,13 +274,17 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         incorporationType: d.incorporationType ?? null,
         status: d.status ?? "ACTIVE",
       };
-    case "assets":
+    case "assets": {
+      const trackRaw = d.trackDailyReport;
+      const trackBool =
+        trackRaw === "true" || trackRaw === true || trackRaw === 1 || trackRaw === "1";
       return {
         tenantId,
         vesselCode:       d.vesselCode,
         sfiCode:          d.sfiCode != null ? String(d.sfiCode) : null,
         assetCode:        d.assetCode,
-        name:             d.name ?? null,
+        // schema: name String (NOT NULL) — fallback al assetCode si vino vacío
+        name:             d.name != null && String(d.name).trim() !== "" ? d.name : d.assetCode,
         criticality:      d.criticality ?? "B",
         status:           d.status ?? "OPERATIONAL",
         manufacturer:     d.manufacturer ?? null,
@@ -289,8 +293,9 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         installationDate: d.installationDate ? new Date(String(d.installationDate)) : null,
         lastOverhaulDate: d.lastOverhaulDate ? new Date(String(d.lastOverhaulDate)) : null,
         replacementDate:  d.replacementDate  ? new Date(String(d.replacementDate))  : null,
-        trackDailyReport: d.trackDailyReport === "true" || d.trackDailyReport === true || null,
+        trackDailyReport: trackBool,
       };
+    }
     case "maintenance_plans": {
       const r: Record<string, unknown> = {
         tenantId,
