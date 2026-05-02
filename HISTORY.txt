@@ -1,5 +1,25 @@
 HISTORY.txt
 
+[2026-05-02] Auth: refresh token re-registra la sesión en memoria (fix de logout silencioso a los 15 min)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/auth/auth-types.ts
+- apps/api/src/tenant/auth/tenant-auth-service.ts
+- apps/api/src/tenant/tenant-router.ts
+
+PROBLEMA:
+- Access token vivía 15 minutos. Al expirar, el frontend llamaba /app/auth/refresh.
+- Backend revocaba el refresh viejo, creaba uno nuevo, devolvía nuevo accessToken.
+- PERO no registraba la nueva sesión en el Map en memoria (tenantSessions).
+- El siguiente request con el nuevo accessToken no encontraba sesión → 401 → logout.
+- Resultado visible: el usuario era expulsado a los ~15 min de uso continuo.
+
+CAMBIOS:
+1. TenantRefreshResponse.userId opcional para que el router pueda re-construir la sesión
+2. refreshTenantSession devuelve userId del refresh token validado
+3. tenant-router /app/auth/refresh: tras llamar al service, carga membership/user y llama registerTenantAccessSession con el nuevo accessToken
+
 [2026-05-02] Assets: +Nuevo precarga el vessel actualmente seleccionado en el header
 Agent: Claude Opus 4.7
 

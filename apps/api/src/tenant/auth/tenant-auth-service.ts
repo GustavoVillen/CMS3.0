@@ -333,6 +333,11 @@ export async function refreshTenantSession(
 
     return {
       session: tokens,
+      // userId expuesto para que el router pueda re-registrar la sesión
+      // en memoria (tenantSessions Map) — sin esto, el access token nuevo
+      // emitido aquí no resuelve a una sesión válida y el primer request
+      // post-refresh devuelve 401 → logout.
+      userId: existing.userId,
     };
   } catch (error) {
     if (isDevelopmentMode()) {

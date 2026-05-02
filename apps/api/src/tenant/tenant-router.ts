@@ -161,6 +161,42 @@ export async function handleTenantRoutes(
     const slug = requireTenantSlug(request, env);
     const payload = await readJsonBody<{ refreshToken: string }>(request);
     const result = await refreshTenantSession(slug, payload);
+
+    // Re-registrar la sesión en el Map en memoria para que el nuevo access token
+    // resuelva en getTenantAccessSession (el Map se vacía con cada restart del API)
+    if (result.userId) {
+      try {
+        const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+        if (prisma) {
+          const tenant = await (prisma as any).tenant.findUnique({ where: { slug } });
+          if (tenant) {
+            const membership = await (prisma as any).tenantMembership.findFirst({
+              where: { tenantId: tenant.id, userId: result.userId, status: "ACTIVE" },
+              include: { user: true },
+            });
+            if (membership && membership.user.status === "ACTIVE") {
+              registerTenantAccessSession({
+                kind: "tenant",
+                tenantSlug: slug,
+                accessToken: result.session.accessToken,
+                refreshToken: result.session.refreshToken,
+                accessTokenExpiresAt: result.session.accessTokenExpiresAt,
+                user: {
+                  id: membership.user.id,
+                  email: membership.user.email,
+                  firstName: membership.user.firstName,
+                  lastName: membership.user.lastName,
+                  role: membership.role,
+                  assignedVesselCodes: membership.assignedVesselCodes,
+                  locale: membership.user.preferredLocale ?? "es",
+                },
+              });
+            }
+          }
+        }
+      } catch { /* non-blocking */ }
+    }
+
     sendJson(response, 200, result);
     return true;
   }

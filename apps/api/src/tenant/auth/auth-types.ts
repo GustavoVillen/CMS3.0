@@ -36,4 +36,5 @@ export interface TenantRefreshResponse {
     accessTokenExpiresAt: string;
     refreshToken: string;
   };
+  userId?: string;
 }
