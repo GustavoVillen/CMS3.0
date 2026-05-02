@@ -205,6 +205,28 @@ export async function createCapaRecord(session: TenantAccessSession, payload: Cr
   const tenantId = await getTenantIdOrThrow(session);
   const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
   applyVesselScope(session, {}, vesselCode, true);
+  const assetId = normalizeRequiredText(payload.assetId, "assetId");
+  const sourceId = normalizeRequiredText(payload.sourceId, "sourceId");
+
+  // Validar tenant ownership de assetId y sourceId.
+  const assetCount = await (prismaRaw as any).asset.count({
+    where: { id: assetId, tenantId, deletedAt: null },
+  });
+  if (assetCount === 0) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+  }
+  const sourceModel = payload.sourceType === "DEFECT" ? "defect"
+    : payload.sourceType === "WORK_ORDER" ? "workOrder"
+    : payload.sourceType === "INSPECTION" ? "inspection"
+    : null;
+  if (sourceModel) {
+    const sourceCount = await (prismaRaw as any)[sourceModel].count({
+      where: { id: sourceId, tenantId, deletedAt: null },
+    });
+    if (sourceCount === 0) {
+      throw new RouteError(404, "SOURCE_NOT_FOUND", "Origen no encontrado o no pertenece a este tenant.");
+    }
+  }
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
@@ -214,9 +236,9 @@ export async function createCapaRecord(session: TenantAccessSession, payload: Cr
     data: {
       tenantId,
       vesselCode,
-      assetId: normalizeRequiredText(payload.assetId, "assetId"),
+      assetId,
       sourceType: payload.sourceType,
-      sourceId: normalizeRequiredText(payload.sourceId, "sourceId"),
+      sourceId,
       capaCode,
       status: "OPEN",
       priority: payload.priority ?? "MEDIUM",

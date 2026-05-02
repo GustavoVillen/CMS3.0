@@ -207,7 +207,7 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
   ])];
   const userRows = userIds.length > 0
     ? await (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string }[]> } })
-        .user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, email: true } })
+        .user.findMany({ where: { id: { in: userIds }, memberships: { some: { tenantId, status: "ACTIVE" } } }, select: { id: true, firstName: true, lastName: true, email: true } })
     : [];
   const userNameMap = new Map(userRows.map(u => {
     const full = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -246,7 +246,7 @@ export async function getDeferral(session: TenantAccessSession, id: string) {
   if (userIds.length > 0) {
     try {
       const userRows = await (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string }[]> } })
-        .user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, email: true } });
+        .user.findMany({ where: { id: { in: userIds }, memberships: { some: { tenantId, status: "ACTIVE" } } }, select: { id: true, firstName: true, lastName: true, email: true } });
       for (const u of userRows) {
         const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
         userMap.set(u.id, fullName || u.email);
@@ -269,6 +269,32 @@ async function createDeferralCore(session: TenantAccessSession, payload: CreateD
 
   const tenantId = await getTenantIdOrThrow(session);
   const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
+  const assetId = normalizeRequiredText(payload.assetId, "assetId");
+  const sourceId = normalizeRequiredText(payload.sourceId, "sourceId");
+
+  // Validar tenant ownership de assetId y sourceId — sin esto, un atacante
+  // podría inyectar IDs cross-tenant y los lookups de display leakean
+  // codes de WO/defect/plan ajenos. (Defense-in-depth en lookups ya está,
+  // pero el fix root es validar acá.)
+  const assetCount = await (prismaRaw as any).asset.count({
+    where: { id: assetId, tenantId, deletedAt: null },
+  });
+  if (assetCount === 0) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+  }
+
+  const sourceModel = payload.sourceType === "WORK_ORDER" ? "workOrder"
+    : payload.sourceType === "DEFECT" ? "defect"
+    : payload.sourceType === "MAINTENANCE_PLAN" ? "maintenancePlan"
+    : null;
+  if (sourceModel) {
+    const sourceCount = await (prismaRaw as any)[sourceModel].count({
+      where: { id: sourceId, tenantId, deletedAt: null },
+    });
+    if (sourceCount === 0) {
+      throw new RouteError(404, "SOURCE_NOT_FOUND", "Origen del aplazamiento no encontrado o no pertenece a este tenant.");
+    }
+  }
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
@@ -278,9 +304,9 @@ async function createDeferralCore(session: TenantAccessSession, payload: CreateD
     data: {
       tenantId,
       vesselCode,
-      assetId: normalizeRequiredText(payload.assetId, "assetId"),
+      assetId,
       sourceType: payload.sourceType,
-      sourceId: normalizeRequiredText(payload.sourceId, "sourceId"),
+      sourceId,
       deferralCode,
       status: "REQUESTED",
       requestedAt: parseOptionalDate(payload.requestedAt, "requestedAt") ?? new Date(),

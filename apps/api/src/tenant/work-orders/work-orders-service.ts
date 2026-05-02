@@ -279,7 +279,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
     userIds.length > 0
-      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
+      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds }, memberships: { some: { tenantId, status: "ACTIVE" } } }, select: { id: true, firstName: true, lastName: true } })
       : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null }[]),
   ]);
 
@@ -361,6 +361,16 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
   const tenantId = await getTenantIdOrThrow(session);
   const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
   applyVesselScope(session, {}, vesselCode, true);
+  const assetId = normalizeRequiredText(payload.assetId, "assetId");
+
+  // Validar tenant ownership de assetId.
+  const assetCount = await (prismaRaw as any).asset.count({
+    where: { id: assetId, tenantId, deletedAt: null },
+  });
+  if (assetCount === 0) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+  }
+
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
   const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
@@ -370,7 +380,7 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     data: {
       tenantId,
       vesselCode,
-      assetId: normalizeRequiredText(payload.assetId, "assetId"),
+      assetId,
       maintenancePlanId: null,
       workOrderCode,
       type: payload.type ?? "PREVENTIVE",

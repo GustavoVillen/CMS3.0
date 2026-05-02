@@ -245,6 +245,24 @@ export async function createDefect(session: TenantAccessSession, payload: Create
   const tenantId = await getTenantIdOrThrow(session);
   const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
   applyVesselScope(session, {}, vesselCode, true);
+  const assetId = normalizeRequiredText(payload.assetId, "assetId");
+  const workOrderId = normalizeOptionalText(payload.workOrderId);
+
+  // Validar tenant ownership de assetId y workOrderId.
+  const assetCount = await (prismaRaw as any).asset.count({
+    where: { id: assetId, tenantId, deletedAt: null },
+  });
+  if (assetCount === 0) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+  }
+  if (workOrderId) {
+    const woCount = await (prismaRaw as any).workOrder.count({
+      where: { id: workOrderId, tenantId, deletedAt: null },
+    });
+    if (woCount === 0) {
+      throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Work order no encontrada o no pertenece a este tenant.");
+    }
+  }
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
@@ -256,8 +274,8 @@ export async function createDefect(session: TenantAccessSession, payload: Create
     data: {
       tenantId,
       vesselCode,
-      assetId: normalizeRequiredText(payload.assetId, "assetId"),
-      workOrderId: normalizeOptionalText(payload.workOrderId),
+      assetId,
+      workOrderId,
       defectCode,
       status: payload.status ?? "OPEN",
       severity: payload.severity ?? "MEDIUM",

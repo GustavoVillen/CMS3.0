@@ -10065,3 +10065,48 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - Auditar lookups similares de user.findMany (lower priority,
       User es global pero leakea names/emails)
     - Migrar secretos de .env a un secrets manager
+
+
+[2026-05-02] Hardening de IP — Tanda 3: fix root + user lookups + CSP enforce
+  Cambios:
+
+  Fix root cross-tenant — validar tenant ownership en creates:
+    - createDeferralCore: valida que assetId y sourceId pertenezcan al
+      tenant. Devuelve 404 si no. (apps/api/src/tenant/pms/deferrals-service.ts)
+    - createCapaRecord: valida assetId + sourceId (DEFECT/WORK_ORDER/INSPECTION).
+      (apps/api/src/tenant/pms/capa-service.ts)
+    - createDefect: valida assetId + workOrderId (opcional).
+      (apps/api/src/tenant/pms/defects-service.ts)
+    - createTenantWorkOrder: valida assetId.
+      (apps/api/src/tenant/work-orders/work-orders-service.ts)
+    - createTenantMaintenancePlan: valida assetId.
+      (apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts)
+
+    Antes: un atacante podía crear un deferral/capa/defect/WO/plan con
+    IDs de otro tenant. Los lookups posteriores leakeaban codes/data.
+    Tanda 2 cubrió el síntoma en lookups; tanda 3 cubre la causa.
+
+  User lookups (cross-tenant name/email leak):
+    - 4 sitios refactoreados para filtrar via memberships:
+        memberships: { some: { tenantId, status: "ACTIVE" } }
+    - Files: pms/deferrals-service.ts (x2), work-orders-service.ts,
+             pms/deferral-pdf-service.ts.
+    - Bonus: deferral-pdf-service también convirtió 3 findUnique
+      (workOrder/defect/maintenancePlan) a findFirst con tenantId.
+
+  CSP promoted from Report-Only to enforced:
+    - apps/api/src/http/security-headers.ts: Content-Security-Policy ahora
+      enforce. Directivas ampliadas para cubrir:
+        * Google Fonts (fonts.googleapis.com, fonts.gstatic.com)
+        * Leaflet desde unpkg.com (script + style + img)
+        * OSM tiles (*.tile.openstreetmap.org)
+        * OSM iframe embed (frame-src www.openstreetmap.org)
+    - Sigue mandando violations a /internal/csp-report para detectar
+      regresiones en logs ([csp-violation]).
+
+  Pendientes (no bloqueantes):
+    - Migrar secretos de .env a un secrets manager
+    - Considerar refactor: helper único validateTenantOwnership(tenantId, model, id)
+      en lugar de los 5 bloques inline (DRY)
+    - Auditar findUnique restantes de user.findUnique en spare-request-pdf
+      y work-order-pdf data-loader (similar pattern, lower priority)

@@ -591,6 +591,15 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
   const tenantId = await getTenantIdOrThrow(session);
   const vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
   applyVesselScope(session, {}, vesselCode, true);
+  const assetId = normalizeRequiredText(payload.assetId, "assetId");
+
+  // Validar tenant ownership de assetId.
+  const assetCount = await (prismaRaw as any).asset.count({
+    where: { id: assetId, tenantId, deletedAt: null },
+  });
+  if (assetCount === 0) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+  }
 
   // Auto-generate taskCode if not provided
   const sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
@@ -601,7 +610,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
   const data: Record<string, unknown> = {
     tenantId,
     vesselCode,
-    assetId: normalizeRequiredText(payload.assetId, "assetId"),
+    assetId,
     taskCode: resolvedTaskCode,
     title: normalizeRequiredText(payload.title, "title"),
     description: normalizeOptionalText(payload.description),

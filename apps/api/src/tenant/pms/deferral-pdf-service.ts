@@ -68,20 +68,29 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
   let sourceTitle: string | null = null;
   let sourceTask:  string | null = null;
   const prismaRaw = getPrismaClient();
+  let tenantId: string | null = null;
   if (prismaRaw) {
     try {
-      if (deferral.sourceType === "WORK_ORDER") {
-        const wo = await (prismaRaw as any).workOrder.findUnique({ where: { id: deferral.sourceId }, select: { workOrderCode: true, title: true, description: true } });
+      const t = await (prismaRaw as any).tenant.findUnique({
+        where: { slug: session.tenantSlug },
+        select: { id: true },
+      });
+      tenantId = t?.id ?? null;
+    } catch { /* non-blocking */ }
+
+    try {
+      if (deferral.sourceType === "WORK_ORDER" && tenantId) {
+        const wo = await (prismaRaw as any).workOrder.findFirst({ where: { id: deferral.sourceId, tenantId }, select: { workOrderCode: true, title: true, description: true } });
         sourceCode  = wo?.workOrderCode ?? null;
         sourceTitle = wo?.title ?? null;
         sourceTask  = wo?.description ?? null;
-      } else if (deferral.sourceType === "DEFECT") {
-        const def = await (prismaRaw as any).defect.findUnique({ where: { id: deferral.sourceId }, select: { defectCode: true, classification: true, description: true } });
+      } else if (deferral.sourceType === "DEFECT" && tenantId) {
+        const def = await (prismaRaw as any).defect.findFirst({ where: { id: deferral.sourceId, tenantId }, select: { defectCode: true, classification: true, description: true } });
         sourceCode  = def?.defectCode ?? null;
         sourceTitle = def?.classification ?? null;
         sourceTask  = def?.description ?? null;
-      } else if (deferral.sourceType === "MAINTENANCE_PLAN") {
-        const mp = await (prismaRaw as any).maintenancePlan.findUnique({ where: { id: deferral.sourceId }, select: { taskCode: true, title: true, description: true } });
+      } else if (deferral.sourceType === "MAINTENANCE_PLAN" && tenantId) {
+        const mp = await (prismaRaw as any).maintenancePlan.findFirst({ where: { id: deferral.sourceId, tenantId }, select: { taskCode: true, title: true, description: true } });
         sourceCode  = mp?.taskCode ?? null;
         sourceTitle = mp?.title ?? null;
         sourceTask  = mp?.description ?? null;
@@ -89,15 +98,17 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     } catch { /* non-blocking */ }
   }
 
-  // Resolve user names (requester, decider)
+  // Resolve user names (requester, decider) — filtered to users that
+  // are members of this tenant, so cross-tenant userIds (theoretical
+  // legacy data) don't leak names/emails.
   let requestedByName: string | null = null;
   let decidedByName:   string | null = null;
-  if (prismaRaw) {
+  if (prismaRaw && tenantId) {
     try {
       const userIds = [deferral.requestedByUserId, deferral.decidedByUserId].filter((x): x is string => Boolean(x));
       if (userIds.length > 0) {
         const users = await (prismaRaw as any).user.findMany({
-          where: { id: { in: userIds } },
+          where: { id: { in: userIds }, memberships: { some: { tenantId, status: "ACTIVE" } } },
           select: { id: true, firstName: true, lastName: true, email: true },
         });
         const nameById = new Map<string, string>(users.map((u: any) => {

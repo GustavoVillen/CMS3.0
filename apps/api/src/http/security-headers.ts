@@ -9,19 +9,28 @@ import type { ServerResponse } from "node:http";
  * - X-Frame-Options: prevents clickjacking via iframe embedding.
  * - Referrer-Policy: avoids leaking full URLs to external sites.
  * - Permissions-Policy: denies access to sensitive browser APIs by default.
- * - CSP-Report-Only: monitors what would block under enforcement, without
- *   actually blocking. Run in report-only for ~1 week, review pm2 logs for
- *   "[csp-violation]", then promote to enforcing Content-Security-Policy.
+ * - CSP: enforced. Allows the third-party origins the SPA actually uses
+ *   (Google Fonts, Leaflet from unpkg, OpenStreetMap tiles + iframe).
+ *   New violations are still POSTed to /internal/csp-report and logged
+ *   as "[csp-violation]" so we can spot regressions.
  */
 
-const CSP_REPORT_ONLY_VALUE = [
+const CSP_VALUE = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite bundle uses inline; tighten later
-  "style-src 'self' 'unsafe-inline'",                // Tailwind injects inline styles
-  "img-src 'self' data: blob:",                      // data: for tenant logos, blob: for previews
-  "font-src 'self' data:",
-  "connect-src 'self'",                              // /app/* and /platform/* on same origin
-  "media-src 'self' blob:",                          // SpeechSynthesis blobs
+  // Vite bundle inlines code and uses eval; Leaflet is loaded from unpkg
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com",
+  // Tailwind + Google Fonts stylesheet + Leaflet CSS
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
+  // data: for tenant logos, blob: for previews, OSM tiles, Leaflet marker assets
+  "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com",
+  // Google Fonts ttf/woff
+  "font-src 'self' data: https://fonts.gstatic.com",
+  // /app/* and /platform/* on same origin only
+  "connect-src 'self'",
+  // SpeechSynthesis blobs
+  "media-src 'self' blob:",
+  // OpenStreetMap embed iframe
+  "frame-src https://www.openstreetmap.org",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -49,7 +58,7 @@ export function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("Permissions-Policy", PERMISSIONS_POLICY_VALUE);
 
-  // CSP in report-only mode. Move to "Content-Security-Policy" header
-  // (without -Report-Only) once 1 week of logs shows no legitimate violations.
-  response.setHeader("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY_VALUE);
+  // CSP enforced. Violations also POST to /internal/csp-report so we can
+  // spot regressions in pm2 logs ([csp-violation]).
+  response.setHeader("Content-Security-Policy", CSP_VALUE);
 }
