@@ -671,6 +671,49 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult },
   });
 
+  // Cerrar aplazamientos ACTIVE asociados a esta OT (sourceType=WORK_ORDER, sourceId=woId).
+  // Cuando se aplaza una OT, el aplazamiento queda colgado aunque después se ejecute la OT;
+  // al cerrar la OT, ese aplazamiento ya no tiene sentido y debe quedar CLOSED.
+  try {
+    const deferralDelegateLocal = (prismaRaw as unknown as {
+      deferral: {
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string }[]>;
+        update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      };
+    }).deferral;
+    const activeDeferrals = await deferralDelegateLocal.findMany({
+      where: {
+        tenantId: current.tenantId,
+        sourceType: "WORK_ORDER",
+        sourceId: current.id,
+        status: "ACTIVE",
+        deletedAt: null,
+      },
+      select: { id: true, deferralCode: true },
+    });
+    for (const d of activeDeferrals) {
+      await deferralDelegateLocal.update({
+        where: { id: d.id },
+        data: {
+          status: "CLOSED",
+          closedAt: new Date(),
+          closeNotes: `Cerrado automáticamente al cerrar la OT ${current.workOrderCode}.`,
+          updatedByUserId: session.user.id,
+        },
+      });
+      void publishAudit(prismaRaw, {
+        tenantId: current.tenantId,
+        actorUserId: session.user.id,
+        action: "Deferral.closed",
+        entityType: "Deferral",
+        entityId: d.id,
+        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CLOSED", workOrderCode: current.workOrderCode },
+      });
+    }
+  } catch (err) {
+    log.error("[closeWorkOrder] failed to auto-close associated deferrals:", err);
+  }
+
   // Auto-create FluidSample DRAFT if the plan was a fluid sampling plan
   let createdFluidSampleId: string | null = null;
   if (samplingFluidType) {
@@ -719,6 +762,48 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
     entityId: current.id,
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, cancelReason: payload.cancelReason },
   });
+
+  // Cerrar aplazamientos ACTIVE asociados a esta OT (igual que en closeWorkOrder)
+  try {
+    const deferralDelegateLocal = (prismaRaw as unknown as {
+      deferral: {
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string }[]>;
+        update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      };
+    }).deferral;
+    const activeDeferrals = await deferralDelegateLocal.findMany({
+      where: {
+        tenantId: current.tenantId,
+        sourceType: "WORK_ORDER",
+        sourceId: current.id,
+        status: "ACTIVE",
+        deletedAt: null,
+      },
+      select: { id: true, deferralCode: true },
+    });
+    for (const d of activeDeferrals) {
+      await deferralDelegateLocal.update({
+        where: { id: d.id },
+        data: {
+          status: "CLOSED",
+          closedAt: new Date(),
+          closeNotes: `Cerrado automáticamente al cancelar la OT ${current.workOrderCode}.`,
+          updatedByUserId: session.user.id,
+        },
+      });
+      void publishAudit(prismaRaw, {
+        tenantId: current.tenantId,
+        actorUserId: session.user.id,
+        action: "Deferral.closed",
+        entityType: "Deferral",
+        entityId: d.id,
+        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CANCELLED", workOrderCode: current.workOrderCode },
+      });
+    }
+  } catch (err) {
+    log.error("[cancelWorkOrder] failed to auto-close associated deferrals:", err);
+  }
+
   if (current.maintenancePlanId) {
     void restorePlanAfterWoCancellation(session, current.maintenancePlanId)
       .catch((err: unknown) => { log.error("[cancelWorkOrder] plan restore failed:", err); });

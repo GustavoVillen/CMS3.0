@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-05-02] Aplazamientos: cerrar OT también cierra el aplazamiento ACTIVE asociado + Cerrar modal vuelve al listado
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/work-orders/work-orders-service.ts
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIOS:
+1. closeWorkOrder: tras WorkOrder.closed, busca Deferrals con sourceType=WORK_ORDER + sourceId=woId + status=ACTIVE y los cierra (status=CLOSED, closeNotes auto, audit Deferral.closed con autoClosedBy=WORK_ORDER_CLOSED)
+2. cancelWorkOrder: misma lógica con autoClosedBy=WORK_ORDER_CANCELLED
+3. CloseDeferralModal onSuccess: cierra el modal de cierre, cierra el modal de detalle y vuelve al listado (igual que Aprobar/Rechazar)
+
+[2026-05-02] Aplazamientos: tras Aprobar/Rechazar, cerrar todo y volver al listado
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIO:
+- ApproveModal/RejectModal onSuccess: cierra el modal de acción, cierra el modal de detalle y recarga la lista
+- Revertido el refresh in-situ del DeferralModal (volvemos a la pantalla de listado)
+- Otras acciones (review/close) mantienen el comportamiento previo
+
 [2026-05-02] Aplazamientos: campo manual "Aprobado por" / "Rechazado por" en los modales
 Agent: Claude Opus 4.7
 

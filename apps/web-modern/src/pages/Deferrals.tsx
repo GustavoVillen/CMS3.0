@@ -787,11 +787,23 @@ NO hagas preguntas: con la información provista alcanza para proponer medidas r
           initialTargetDate={deferral.targetDate}
           initialCompensatoryMeasures={compensatoryMeasures || deferral.compensatoryMeasures}
           onClose={() => setShowApprove(false)}
-          onSuccess={onSuccess}
+          onSuccess={() => { setShowApprove(false); onClose(); onSuccess(); }}
         />
       )}
-      {showReject && <RejectModal deferralId={deferral.id} onClose={() => setShowReject(false)} onSuccess={onSuccess} />}
-      {showClose && <CloseDeferralModal deferralId={deferral.id} onClose={() => setShowClose(false)} onSuccess={onSuccess} />}
+      {showReject && (
+        <RejectModal
+          deferralId={deferral.id}
+          onClose={() => setShowReject(false)}
+          onSuccess={() => { setShowReject(false); onClose(); onSuccess(); }}
+        />
+      )}
+      {showClose && (
+        <CloseDeferralModal
+          deferralId={deferral.id}
+          onClose={() => setShowClose(false)}
+          onSuccess={() => { setShowClose(false); onClose(); onSuccess(); }}
+        />
+      )}
     </>
   );
 };
@@ -961,17 +973,7 @@ export const DeferralsPage: React.FC = () => {
         <DeferralModal
           deferral={editing}
           onClose={() => setEditing(null)}
-          onSuccess={async () => {
-            // Refresca el detalle in-situ para mostrar quién aprobó/rechazó
-            // sin cerrar el modal. Tras la acción, el usuario ve el nuevo
-            // estado (botones "Activar"/"Cerrar" reemplazan a "Aprobar/Rechazar"
-            // y aparece la card "Aprobado/Rechazado por X · fecha").
-            try {
-              const refreshed = await api.get<Deferral>(`/app/pms/deferrals/${editing.id}`);
-              setEditing(refreshed);
-            } catch { /* fallback: cerrar */ setEditing(null); }
-            void reload();
-          }}
+          onSuccess={() => { void reload(); }}
         />
       )}
     </div>
