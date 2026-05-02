@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-05-02] Reportes Diarios: Submit deja el estado en SUBMITTED (no avanza a REVIEWED)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/daily-reports/daily-report-integration-service.ts
+
+CAMBIO:
+- confirmAndIntegrateDailyReport ya no setea status="REVIEWED" en el step 7
+- Solo registra integratedAt y updatedByUserId
+- El status queda donde lo dejó el frontend (SUBMITTED tras apretar Submit)
+- La transición a REVIEWED queda como acción manual posterior (selector de estado)
+- La integración de horas, recálculo de planes y cierre de dueitems sigue funcionando igual
+
 [2026-05-02] Aplazamientos: badge Documento (WO) abre la OT correcta
 Agent: Claude Opus 4.7
 

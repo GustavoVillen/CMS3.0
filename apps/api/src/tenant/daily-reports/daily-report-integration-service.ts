@@ -271,10 +271,12 @@ export async function confirmAndIntegrateDailyReport(
   }
 
   // ── Step 7: Mark report as integrated ────────────────────────────────────
+  // Solo registra la integración (integratedAt). No avanza el status:
+  // el frontend ya lo dejó en SUBMITTED al apretar Submit. La transición
+  // a REVIEWED queda como acción manual posterior.
   await (prisma as any).dailyReport.update({
     where: { id: reportId },
     data: {
-      status: "REVIEWED",
       integratedAt: new Date(),
       updatedByUserId: session.user.id,
     },
