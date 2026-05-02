@@ -1,5 +1,72 @@
 HISTORY.txt
 
+[2026-05-02] Aplazamientos: refresh in-situ tras aprobar/rechazar para ver quién decidió
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIO:
+- onSuccess del DeferralModal ya no cierra el modal de detalle; refresca con GET /app/pms/deferrals/:id
+- Tras aprobar/rechazar, el usuario ve inmediatamente la nueva card "Aprobado por X · fecha"
+- Antes había que cerrar y reabrir el aplazamiento para verlo
+
+[2026-05-02] Aplazamientos: mostrar también quién solicitó (requestedByName)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/pms/deferrals-service.ts
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIOS:
+1. getDeferral y listDeferrals: batch resolución de nombres incluye también requestedByUserId
+2. Card "Solicitado" del modal ahora muestra "Nombre · fecha" en lugar de solo la fecha
+3. (La card "Aprobado/Rechazado por" ya estaba implementada — solo aparece cuando hay decisión tomada)
+
+[2026-05-02] Aplazamientos: mostrar quién aprobó o rechazó (decidedByName)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/pms/deferrals-service.ts
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIOS:
+1. Backend ya guardaba decidedByUserId/decisionAt en approve y reject — solo faltaba exponer el nombre
+2. getDeferral resuelve el nombre del usuario (firstName + lastName, fallback a email)
+3. listDeferrals resuelve nombres en batch (un solo query a User)
+4. Frontend type Deferral incluye decidedByName
+5. Modal: la card "Decision At" ahora muestra "Aprobado por X · fecha" o "Rechazado por X · fecha" según el estado
+
+[2026-05-02] OT: Repuestos utilizados se persisten al Guardar (no solo al Cerrar)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/work-orders/work-orders-service.ts
+- apps/web-modern/src/pages/WorkOrders.tsx
+
+CAMBIOS:
+1. Nuevo helper applySpareUsagesToWo: borra movements ISSUE previos asociados a la WO y crea los nuevos (idempotente)
+2. UpdateWorkOrderInput.spareUsages: el endpoint PATCH ahora acepta y procesa la lista
+3. CloseWorkOrder: usa el mismo helper, evita duplicación si ya se guardaron antes
+4. getTenantWorkOrder: reconstruye spareUsages desde StockMovement (referenceType=WORK_ORDER) e incluye en la respuesta con sku/name/criticality
+5. Frontend: estado spareUsages se inicializa desde workOrder.spareUsages (precarga al editar)
+6. Frontend: useEffect rehidrata el campo `available` cuando carga el catálogo de spares
+7. Frontend: onSave (botón Guardar) ahora envía spareUsages en el PATCH
+
+[2026-05-02] Auto-logout: solo cuando se suspende PC o se activa screensaver (no por inactividad)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/lib/idle-timeout.ts
+- apps/web-modern/src/lib/auth.tsx
+- apps/web-modern/src/lib/platform-auth.tsx
+
+CAMBIOS:
+1. idle-timeout.ts: reescrito con detección por timer drift (setInterval 30s mide salto temporal)
+2. Si la PC se suspende o el screensaver pausa los timers del browser por más de 5 min, se cierra sesión
+3. Eliminados los listeners de mouse/keyboard/touch/scroll/focus/visibility — ya no se desconecta por inactividad humana
+4. Threshold ajustado de 15 min a 5 min (gap entre ticks reales y esperados)
+
 [2026-05-02] Bitácora: campo-a-campo diff en eventos "Modificado" + Excel audit completo
 Agent: Claude Opus 4.7
 

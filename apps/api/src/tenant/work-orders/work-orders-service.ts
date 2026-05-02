@@ -68,6 +68,8 @@ export interface UpdateWorkOrderInput {
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
+  // Spare usages — replaces previous ISSUE movements for this WO
+  spareUsages?: Array<{ spareId: string; qty: number; unit: string }>;
 }
 
 export interface HoldWorkOrderInput {
@@ -315,7 +317,38 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     assetName = asset?.name ?? null;
   } catch { /* non-blocking */ }
 
-  return { ...record, assetName };
+  // Reconstruct spare usages from stock movements scoped to this WO
+  const spareUsages: Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }> = [];
+  try {
+    const movements = await (prismaRaw as any).stockMovement.findMany({
+      where: { tenantId, referenceType: "WORK_ORDER", referenceId: record.id },
+      select: { spareId: true, quantity: true, unit: true },
+      orderBy: { occurredAt: "asc" },
+    });
+    if (movements.length > 0) {
+      const spareIds = [...new Set(movements.map((m: any) => m.spareId).filter(Boolean))] as string[];
+      const spares = await (prismaRaw as any).spare.findMany({
+        where: { id: { in: spareIds } },
+        select: { id: true, sku: true, name: true, criticality: true },
+      });
+      const spareMap = new Map<string, { sku: string; name: string; criticality: string }>(
+        spares.map((s: any) => [s.id, { sku: s.sku, name: s.name, criticality: s.criticality }]),
+      );
+      for (const m of movements as any[]) {
+        const meta = spareMap.get(m.spareId) ?? { sku: m.spareId, name: m.spareId, criticality: "C" };
+        spareUsages.push({
+          spareId: m.spareId,
+          qty: Number(m.quantity),
+          unit: m.unit,
+          sku: meta.sku,
+          name: meta.name,
+          criticality: meta.criticality,
+        });
+      }
+    }
+  } catch { /* non-blocking */ }
+
+  return { ...record, assetName, spareUsages };
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {
@@ -374,6 +407,59 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
   return created;
 }
 
+/**
+ * Replace spare-usage stock movements for a WO. Deletes previous ISSUE
+ * movements scoped to this WO (referenceType=WORK_ORDER, referenceId=woId)
+ * and creates new ones from the supplied list.
+ *
+ * Used both by save and close — ensures repeated saves don't duplicate.
+ */
+async function applySpareUsagesToWo(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  wo: { id: string; tenantId: string; vesselCode: string; workOrderCode: string },
+  usages: Array<{ spareId: string; qty: number; unit: string }>,
+  occurredAt: Date,
+  actorUserId: string,
+): Promise<{ failedMovements: string[] }> {
+  const smDelegate = (prismaRaw as unknown as {
+    stockMovement: {
+      deleteMany(a: unknown): Promise<{ count: number }>;
+      create(a: unknown): Promise<unknown>;
+    };
+  }).stockMovement;
+
+  await smDelegate.deleteMany({
+    where: { tenantId: wo.tenantId, referenceType: "WORK_ORDER", referenceId: wo.id },
+  });
+
+  const failedMovements: string[] = [];
+  for (const usage of usages) {
+    if (!usage.spareId || !usage.qty || usage.qty <= 0) continue;
+    try {
+      await smDelegate.create({
+        data: {
+          tenantId: wo.tenantId,
+          vesselCode: wo.vesselCode,
+          spareId: usage.spareId,
+          movementCode: `MOV-${wo.vesselCode}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          movementType: "ISSUE",
+          quantity: usage.qty,
+          unit: usage.unit,
+          occurredAt,
+          referenceType: "WORK_ORDER",
+          referenceId: wo.id,
+          notes: `Utilizado en OT ${wo.workOrderCode}`,
+          createdByUserId: actorUserId,
+        },
+      });
+    } catch (err) {
+      log.error("[applySpareUsagesToWo] stock movement failed for spare", usage.spareId, err);
+      failedMovements.push(usage.spareId);
+    }
+  }
+  return { failedMovements };
+}
+
 export async function updateTenantWorkOrder(session: TenantAccessSession, id: string, payload: UpdateWorkOrderInput) {
   ensureCanManageWorkOrders(session);
 
@@ -409,7 +495,19 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.communicationMethod !== undefined) data.communicationMethod = payload.communicationMethod;
   if (payload.distribution !== undefined) data.distribution = payload.distribution;
 
-  return prisma.workOrder.update({ where: { id: current.id }, data });
+  const updated = await prisma.workOrder.update({ where: { id: current.id }, data });
+
+  if (payload.spareUsages !== undefined) {
+    await applySpareUsagesToWo(
+      prismaRaw,
+      { id: current.id, tenantId: current.tenantId, vesselCode: current.vesselCode, workOrderCode: current.workOrderCode },
+      payload.spareUsages,
+      new Date(),
+      session.user.id,
+    );
+  }
+
+  return updated;
 }
 
 export async function startWorkOrder(session: TenantAccessSession, id: string) {
@@ -552,32 +650,16 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
     return closed;
   });
-  const failedMovements: string[] = [];
-  if (payload.spareUsages && payload.spareUsages.length > 0) {
-    const smDelegate = (prismaRaw as unknown as { stockMovement: { create(a: unknown): Promise<unknown> } }).stockMovement;
-    for (const usage of payload.spareUsages) {
-      try {
-        await smDelegate.create({
-          data: {
-            tenantId: current.tenantId,
-            vesselCode: current.vesselCode,
-            spareId: usage.spareId,
-            movementCode: `MOV-${current.vesselCode}-${Date.now()}`,
-            movementType: "ISSUE",
-            quantity: usage.qty,
-            unit: usage.unit,
-            occurredAt: completedDate,
-            referenceType: "WORK_ORDER",
-            referenceId: current.id,
-            notes: `Utilizado en OT ${current.workOrderCode}`,
-            createdByUserId: session.user.id,
-          },
-        });
-      } catch (err) {
-        log.error("[closeWorkOrder] stock movement failed for spare", usage.spareId, err);
-        failedMovements.push(usage.spareId);
-      }
-    }
+  let failedMovements: string[] = [];
+  if (payload.spareUsages !== undefined) {
+    const result = await applySpareUsagesToWo(
+      prismaRaw,
+      { id: current.id, tenantId: current.tenantId, vesselCode: current.vesselCode, workOrderCode: current.workOrderCode },
+      payload.spareUsages,
+      completedDate,
+      session.user.id,
+    );
+    failedMovements = result.failedMovements;
   }
 
   void publishAudit(prismaRaw, {

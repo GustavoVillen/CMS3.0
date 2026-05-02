@@ -278,7 +278,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   // ── Spare usages ──
   interface SpareUsage { spareId: string; spareName: string; unit: string; qty: number; criticality: string; available: number; }
-  const [spareUsages,    setSpareUsages]    = useState<SpareUsage[]>([]);
+  const initialSpareUsages: SpareUsage[] = ((workOrder as any).spareUsages ?? []).map((u: any) => ({
+    spareId: u.spareId,
+    spareName: `${u.sku ?? ""}${u.sku && u.name ? " — " : ""}${u.name ?? u.spareId}`,
+    unit: u.unit ?? "",
+    qty: Number(u.qty) || 0,
+    criticality: u.criticality ?? "C",
+    available: 0, // populated below from sparesData when it loads
+  }));
+  const [spareUsages,    setSpareUsages]    = useState<SpareUsage[]>(initialSpareUsages);
   const [addingUsage,    setAddingUsage]    = useState(false);
   const [usageSpareId,   setUsageSpareId]   = useState("");
   const [usageQty,       setUsageQty]       = useState("1");
@@ -290,6 +298,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
   );
   const woSpares = sparesData?.items ?? [];
+
+  // Hydrate `available` on existing spareUsages once the spares catalog loads
+  useEffect(() => {
+    if (woSpares.length === 0) return;
+    setSpareUsages(prev => prev.map(u => {
+      const s = woSpares.find(x => x.id === u.spareId);
+      return s ? { ...u, available: s.available, unit: u.unit || s.unit } : u;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sparesData]);
 
   const addUsage = () => {
     const spare = woSpares.find(s => s.id === usageSpareId);
@@ -502,6 +520,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
         observations: normalizeOptionalText(observations),
         supportingDocUrl: supUrl,
+        spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
       });
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
@@ -510,7 +529,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
       woResult, executedByName, executionDate, runningHoursAtExecution, observations,
-      uploadIfNeeded, onSaved, t, workOrder.id]);
+      spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
 
   // ESC guard
   const isDirty = useDirtyTracker({

@@ -198,10 +198,26 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
   defects.forEach(r    => codeMap.set(r.id, r.defectCode));
   plans.forEach(r      => codeMap.set(r.id, r.taskCode));
 
+  // Resolve requesters and decision-makers display names in a single batch
+  const userIds = [...new Set([
+    ...records.map(r => r.requestedByUserId).filter((v): v is string => !!v),
+    ...records.map(r => r.decidedByUserId).filter((v): v is string => !!v),
+  ])];
+  const userRows = userIds.length > 0
+    ? await (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string }[]> } })
+        .user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, email: true } })
+    : [];
+  const userNameMap = new Map(userRows.map(u => {
+    const full = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+    return [u.id, full || u.email];
+  }));
+
   return records.map(r => ({
     ...r,
-    assetName:  assetNameMap.get(r.assetId) ?? null,
-    sourceCode: codeMap.get(r.sourceId) ?? null,
+    assetName:       assetNameMap.get(r.assetId) ?? null,
+    sourceCode:      codeMap.get(r.sourceId) ?? null,
+    requestedByName: r.requestedByUserId ? userNameMap.get(r.requestedByUserId) ?? null : null,
+    decidedByName:   r.decidedByUserId   ? userNameMap.get(r.decidedByUserId)   ?? null : null,
   }));
 }
 
@@ -222,7 +238,26 @@ export async function getDeferral(session: TenantAccessSession, id: string) {
       .asset.findFirst({ where: { id: record.assetId }, select: { name: true } });
     assetName = assetRow?.name ?? null;
   } catch { /* non-blocking */ }
-  return { ...record, assetName };
+
+  const userIds = [record.requestedByUserId, record.decidedByUserId].filter((v): v is string => !!v);
+  const userMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    try {
+      const userRows = await (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string }[]> } })
+        .user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, email: true } });
+      for (const u of userRows) {
+        const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+        userMap.set(u.id, fullName || u.email);
+      }
+    } catch { /* non-blocking */ }
+  }
+
+  return {
+    ...record,
+    assetName,
+    requestedByName: record.requestedByUserId ? userMap.get(record.requestedByUserId) ?? null : null,
+    decidedByName:   record.decidedByUserId   ? userMap.get(record.decidedByUserId)   ?? null : null,
+  };
 }
 
 async function createDeferralCore(session: TenantAccessSession, payload: CreateDeferralInput) {

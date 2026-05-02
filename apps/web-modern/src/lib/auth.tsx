@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { api, ApiError, setUnauthorizedHandler } from "./api";
 import { useIdleTimeout } from "./idle-timeout";
 
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const SUSPEND_GAP_MS = 5 * 60 * 1000; // 5 minutes — timer-drift threshold
 
 export interface AuthUser {
   id: string;
@@ -139,9 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Idle timeout: log out after 15 min without user activity (mouse/keyboard/touch).
-  // Only active when the user is logged in.
-  useIdleTimeout(IDLE_TIMEOUT_MS, logout, state.isAuthenticated);
+  // Cierra sesión solo si la PC se suspendió o el screensaver bloqueó los
+  // timers del browser por más de 5 min (detectado por timer drift).
+  // No se desconecta por inactividad humana viendo la pantalla.
+  useIdleTimeout(SUSPEND_GAP_MS, logout, state.isAuthenticated);
 
   return (
     <AuthContext.Provider value={{ ...state, login, logout, error, loading }}>

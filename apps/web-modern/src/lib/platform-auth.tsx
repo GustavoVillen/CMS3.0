@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { ApiError, setUnauthorizedHandler } from "./api";
 import { useIdleTimeout } from "./idle-timeout";
 
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const SUSPEND_GAP_MS = 5 * 60 * 1000; // 5 minutes — timer-drift threshold
 
 export interface PlatformUser {
   id: string;
@@ -61,8 +61,9 @@ export function PlatformAuthProvider({ children }: { children: React.ReactNode }
     setUnauthorizedHandler(logout);
   }, [logout]);
 
-  // Idle timeout: log out after 15 min without user activity.
-  useIdleTimeout(IDLE_TIMEOUT_MS, logout, state.isAuthenticated);
+  // Cierra sesión solo si la PC se suspendió o el screensaver bloqueó los
+  // timers del browser por más de 5 min (detectado por timer drift).
+  useIdleTimeout(SUSPEND_GAP_MS, logout, state.isAuthenticated);
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);

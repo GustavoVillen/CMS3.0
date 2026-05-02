@@ -29,12 +29,14 @@ interface Deferral {
   status: string;
   requestedAt: string;
   requestedByUserId: string;
+  requestedByName: string | null;
   targetDate: string | null;
   justification: string | null;
   compensatoryMeasures: string | null;
   reviewNotes: string | null;
   decisionAt: string | null;
   decidedByUserId: string | null;
+  decidedByName: string | null;
   activeSince: string | null;
   expiredAt: string | null;
   closedAt: string | null;
@@ -577,7 +579,10 @@ NO hagas preguntas: con la información provista alcanza para proponer medidas r
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.requested")}</p>
-                <p className="text-sm text-white">{fmtDate(deferral.requestedAt)}</p>
+                <p className="text-sm text-white">
+                  {deferral.requestedByName ?? "—"}
+                  <span className="text-text-industrial/50"> · {fmtDate(deferral.requestedAt)}</span>
+                </p>
               </div>
               {deferral.targetDate && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3">
@@ -631,9 +636,14 @@ NO hagas preguntas: con la información provista alcanza para proponer medidas r
                 </div>
               )}
               {deferral.decisionAt && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Decision At</p>
-                  <p className="text-sm text-white">{fmtDate(deferral.decisionAt)}</p>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">
+                    {deferral.status === "APPROVED" ? "Aprobado por" : deferral.status === "REJECTED" ? "Rechazado por" : "Decisión"}
+                  </p>
+                  <p className="text-sm text-white">
+                    {deferral.decidedByName ?? "—"}
+                    <span className="text-text-industrial/50"> · {fmtDate(deferral.decisionAt)}</span>
+                  </p>
                 </div>
               )}
               {deferral.activeSince && (
@@ -919,8 +929,15 @@ export const DeferralsPage: React.FC = () => {
         <DeferralModal
           deferral={editing}
           onClose={() => setEditing(null)}
-          onSuccess={() => {
-            setEditing(null);
+          onSuccess={async () => {
+            // Refresca el detalle in-situ para mostrar quién aprobó/rechazó
+            // sin cerrar el modal. Tras la acción, el usuario ve el nuevo
+            // estado (botones "Activar"/"Cerrar" reemplazan a "Aprobar/Rechazar"
+            // y aparece la card "Aprobado/Rechazado por X · fecha").
+            try {
+              const refreshed = await api.get<Deferral>(`/app/pms/deferrals/${editing.id}`);
+              setEditing(refreshed);
+            } catch { /* fallback: cerrar */ setEditing(null); }
             void reload();
           }}
         />
