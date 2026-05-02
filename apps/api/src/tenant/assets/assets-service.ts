@@ -10,6 +10,7 @@ export interface AssetListFilters {
   status?: string | null;
   criticality?: string | null;
   trackDailyReport?: boolean | null;
+  isSafetyCritical?: boolean | null;
 }
 
 export interface CreateAssetInput {
@@ -21,6 +22,8 @@ export interface CreateAssetInput {
   criticalityRationale?: string | null;
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
+  isSafetyCritical?: boolean;
+  standbyTestFrequencyDays?: number | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -40,6 +43,8 @@ export interface UpdateAssetInput {
   criticalityRationale?: string | null;
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
+  isSafetyCritical?: boolean;
+  standbyTestFrequencyDays?: number | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -180,6 +185,7 @@ export async function listTenantAssets(session: TenantAccessSession, filters: As
   if (filters.status) addParam("status", filters.status);
   if (filters.criticality) addParam("criticality", filters.criticality);
   if (filters.trackDailyReport != null) addParam("trackDailyReport", filters.trackDailyReport);
+  if (filters.isSafetyCritical != null) addParam("isSafetyCritical", filters.isSafetyCritical);
 
   return prisma.$queryRawUnsafe<AssetRecord[]>(
     `SELECT a.*, (
@@ -245,6 +251,8 @@ export async function createTenantAsset(session: TenantAccessSession, payload: C
     criticalityRationale: normalizeOptionalText(payload.criticalityRationale),
     status: payload.status ?? "OPERATIONAL",
     trackDailyReport: payload.trackDailyReport ?? false,
+    isSafetyCritical: payload.isSafetyCritical ?? false,
+    standbyTestFrequencyDays: payload.standbyTestFrequencyDays ?? null,
     manufacturer: normalizeOptionalText(payload.manufacturer),
     model: normalizeOptionalText(payload.model),
     serialNumber: normalizeOptionalText(payload.serialNumber),
@@ -299,6 +307,8 @@ export async function updateTenantAsset(
   if (payload.criticalityRationale !== undefined) data.criticalityRationale = normalizeOptionalText(payload.criticalityRationale);
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.trackDailyReport !== undefined) data.trackDailyReport = payload.trackDailyReport;
+  if (payload.isSafetyCritical !== undefined) data.isSafetyCritical = payload.isSafetyCritical;
+  if (payload.standbyTestFrequencyDays !== undefined) data.standbyTestFrequencyDays = payload.standbyTestFrequencyDays;
   if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);
   if (payload.model !== undefined) data.model = normalizeOptionalText(payload.model);
   if (payload.serialNumber !== undefined) data.serialNumber = normalizeOptionalText(payload.serialNumber);

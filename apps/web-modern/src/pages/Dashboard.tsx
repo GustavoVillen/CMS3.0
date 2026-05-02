@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { StandbyTestsWidget, type PendingStandbyTest } from "../components/StandbyTestsWidget";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
 import { parseLocalDate } from "../lib/utils";
@@ -49,6 +50,7 @@ export const Dashboard: React.FC = () => {
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
+  const standbyTests      = useFetch<ListResponse<PendingStandbyTest>>("/app/pms/standby-tests/pending");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -207,6 +209,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           t={t}
         />
       )}
+
+      {/* ISM 10.3 — Pruebas de standby pendientes */}
+      <StandbyTestsWidget
+        items={standbyTests.data?.items ?? []}
+        loading={standbyTests.loading}
+        onChanged={() => standbyTests.reload()}
+      />
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -68,6 +68,8 @@ interface MaintenancePlan {
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
   samplingFluidType?: string | null;
   windowMode?: string | null;
   windowLeadDays?: number | null;
@@ -1012,6 +1014,11 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [sfiSubgroupCode, setSfiSubgroupCode] = useState(plan?.sfiSubgroupCode ?? "");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(plan?.riskAnalysisResult ?? "");
+  const [consequenceCategory, setConsequenceCategory] = useState<"" | "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL">(
+    (plan?.consequenceCategory as any) ?? "",
+  );
+  const [consequenceRationale, setConsequenceRationale] = useState(plan?.consequenceRationale ?? "");
+  const [loadingConsequence, setLoadingConsequence] = useState(false);
   const [status, setStatus] = useState(plan?.status ?? "ACTIVE");
   const [triggerType, setTriggerType] = useState<TriggerType>((plan?.triggerType as TriggerType) ?? "MONTHS");
   const [frequencyMonths, setFrequencyMonths] = useState(String(plan?.frequencyMonths ?? ""));
@@ -1111,6 +1118,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setSfiSubgroupCode(plan.sfiSubgroupCode ?? "");
     setRiskLevel(toUiRiskLevel(plan.riskLevel));
     setRiskAnalysisResult(plan.riskAnalysisResult ?? "");
+    setConsequenceCategory((plan.consequenceCategory as any) ?? "");
+    setConsequenceRationale(plan.consequenceRationale ?? "");
     setStatus(plan.status);
     setTriggerType((plan.triggerType as TriggerType) ?? "MONTHS");
     setFrequencyMonths(String(plan.frequencyMonths ?? ""));
@@ -1218,6 +1227,29 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     }
   }, [plan, description, title, acceptanceCriteria, loto, loadingRisk]);
 
+  const handleConsequenceClick = useCallback(async () => {
+    if (!plan || loadingConsequence) return;
+    setLoadingConsequence(true);
+    try {
+      const res = await api.post<{ category: string; rationale: string }>(
+        "/app/pms/maintenance-plans/suggest-consequence",
+        {
+          assetName: plan.assetName ?? plan.assetId ?? "",
+          assetSfiCode: plan.sfiSubgroupCode ?? null,
+          planTitle: title || null,
+          planDescription: description || null,
+        },
+      );
+      if (res.category && ["SAFETY","ENVIRONMENTAL","OPERATIONAL","NON_OPERATIONAL"].includes(res.category)) {
+        setConsequenceCategory(res.category as any);
+      }
+      if (res.rationale) setConsequenceRationale(res.rationale);
+    } catch { /* noop */ }
+    finally {
+      setLoadingConsequence(false);
+    }
+  }, [plan, title, description, loadingConsequence]);
+
   const sfiGroups = useMemo(() => {
     const map = new Map<number, string>();
     for (const node of sfiNodes) {
@@ -1254,6 +1286,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: normalizeOptionalText(consequenceRationale),
           status,
           triggerType,
           frequencyMonths: freqMonths,
@@ -1279,6 +1313,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: normalizeOptionalText(consequenceRationale),
           status,
           triggerType,
           frequencyMonths: freqMonths,
@@ -1850,6 +1886,38 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>{t("mp.riskAnalysisResult")}</label>
               <RichTextArea value={riskAnalysisResult} onChange={setRiskAnalysisResult} rows={2} className={inputCls} disabled={loadingRisk} />
+            </div>
+
+            {/* RCM consequence — "si esta tarea no se hace, ¿qué pasa?" */}
+            <div className="space-y-1.5">
+              <label
+                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingConsequence ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
+                style={aiLabelStyle}
+                onClick={handleConsequenceClick}
+                title="Click para que la IA sugiera la consecuencia (RCM)"
+              >
+                <span>Si no se hace, ¿qué pasa?</span>
+                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
+                  {loadingConsequence
+                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
+                    : <><Sparkles className="w-3 h-3" /> IA</>}
+                </span>
+              </label>
+              <select
+                value={consequenceCategory}
+                onChange={e => setConsequenceCategory(e.target.value as any)}
+                disabled={readOnly || loadingConsequence}
+                className={inputCls}
+              >
+                <option value="">— Sin clasificar —</option>
+                <option value="SAFETY">🔴 Riesgo a personas (lesión / fatalidad)</option>
+                <option value="ENVIRONMENTAL">🟢 Daño ambiental (vertido, emisión)</option>
+                <option value="OPERATIONAL">🟡 Pérdida de operación (paro, retraso)</option>
+                <option value="NON_OPERATIONAL">⚪ Solo costo de reparación</option>
+              </select>
+              {consequenceRationale && (
+                <p className="text-[11px] text-text-industrial/60 mt-1 italic">{consequenceRationale}</p>
+              )}
             </div>
 
             {/* Checklist upload — CHECKLIST mode only */}

@@ -10244,3 +10244,65 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - DB sslmode=disable: requiere config postgres + cert; depende de
       infra. NO VERIFICADO.
     - Migrar secretos a secrets manager (Doppler/Infisical/AWS Secrets).
+
+
+[2026-05-02] Tier 1 ISM/RCM/Standby Tests
+  Implementación del primer sprint de los 3 features "simple para el usuario"
+  acordados (sin agregar módulos ni pestañas nuevos):
+
+  Schema:
+    - Asset.isSafetyCritical: Boolean (ISM Code 10.3 — separa criticidad
+      operacional A/B/C de criticidad para seguridad humana)
+    - Asset.standbyTestFrequencyDays: Int? (frecuencia de prueba periódica
+      de equipos backup safety-critical)
+    - MaintenancePlan.consequenceCategory: ConsequenceCategory? enum
+      (SAFETY/ENVIRONMENTAL/OPERATIONAL/NON_OPERATIONAL — RCM)
+    - MaintenancePlan.consequenceRationale: String?
+    - Modelo nuevo StandbyTest (id, assetId, testedAt, result OK/FAILED,
+      notes, executedByUserId)
+    - Enums nuevos: ConsequenceCategory, StandbyTestResult
+
+  Backend nuevos services:
+    - assets-ism-ai.ts: suggestAssetIsmFlag con prompt experto en ISM 10.3
+    - maintenance-plans-rcm-ai.ts: suggestPlanConsequence con prompt experto
+      en RCM consequence categorization
+    - standby-tests/standby-tests-service.ts: createStandbyTest +
+      listPendingStandbyTests (vencidos primero, gracePeriod 7 días) +
+      listStandbyTestsForAsset
+
+  Backend endpoints nuevos:
+    - POST /app/pms/assets/suggest-ism (rate-limited)
+    - POST /app/pms/maintenance-plans/suggest-consequence (rate-limited)
+    - GET  /app/pms/standby-tests/pending
+    - POST /app/pms/standby-tests
+    - GET  /app/pms/standby-tests/asset/{assetId}
+
+  Backend extendidos:
+    - assets-service.ts: nuevos campos isSafetyCritical, standbyTestFrequencyDays
+      en CreateAssetInput, UpdateAssetInput, AssetListFilters (filtro nuevo)
+    - maintenance-plans-service.ts: nuevos campos consequenceCategory,
+      consequenceRationale en Create/Update inputs y data
+
+  Frontend cambios UX (cero módulos nuevos):
+    - Assets.tsx: bloque ISM con checkbox + botón IA + (si checked)
+      campo "Frecuencia de prueba (días)". Ícono ShieldAlert en columna
+      nombre para safety-critical.
+    - MaintenancePlans.tsx: dropdown "¿Si no se hace, qué pasa?" con 4
+      opciones en lenguaje claro (emojis 🔴🟢🟡⚪). Botón IA inline.
+      Rationale visible debajo en italic gris.
+    - Dashboard.tsx + StandbyTestsWidget.tsx (nuevo): widget proactivo
+      visible solo si hay pruebas pendientes. Lista vencidas (rojo) y
+      por vencer (amber). Botón "Registrar prueba" abre modal con 3
+      campos (fecha, OK/Falló, notas). Solo se muestra si total > 0.
+
+  Verificado:
+    - Schema sincronizado con prisma db push y cliente regenerado
+    - Typecheck OK (errores preexistentes en bitacora/capa/excel/profile/
+      maintenance-plans:570/998/1032 sin novedades)
+    - Frontend buildea, bundle generado
+
+  Sin agregar:
+    - Módulos nuevos
+    - Pestañas nuevas en navegación
+    - Training requerido para el usuario
+    - Carga cognitiva mayor en CRUD existentes (todo es opt-in)

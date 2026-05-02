@@ -14,6 +14,12 @@ import {
   updateTenantAsset,
 } from "../assets/assets-service";
 import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
+import { suggestAssetIsmFlag } from "../assets/assets-ism-ai";
+import {
+  createStandbyTest,
+  listPendingStandbyTests,
+  listStandbyTestsForAsset,
+} from "../standby-tests/standby-tests-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -36,6 +42,31 @@ export async function handleAssetRoutes(
   response: ServerResponse,
   env: AppEnv,
 ): Promise<boolean> {
+  // standby-tests no empieza con /app/pms/assets — handled separately
+  if (url.pathname.startsWith("/app/pms/standby-tests")) {
+    const tenantSlug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, tenantSlug);
+
+    if (method === "GET" && url.pathname === "/app/pms/standby-tests/pending") {
+      const items = await listPendingStandbyTests(session, url.searchParams.get("vesselCode"));
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    if (method === "POST" && url.pathname === "/app/pms/standby-tests") {
+      enforceRateLimit(request, `standby-test:${session.user.id}`, { maxRequests: 60, windowMs: 60_000 });
+      const body = await readJsonBody(request) as Parameters<typeof createStandbyTest>[1];
+      sendJson(response, 201, await createStandbyTest(session, body));
+      return true;
+    }
+    const m = url.pathname.match(/^\/app\/pms\/standby-tests\/asset\/([^/]+)$/);
+    if (method === "GET" && m) {
+      const items = await listStandbyTestsForAsset(session, m[1]!);
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    return false;
+  }
+
   if (!url.pathname.startsWith("/app/pms/assets")) return false;
 
   const tenantSlug = requireTenantSlug(request, env);
@@ -44,11 +75,13 @@ export async function handleAssetRoutes(
 
   if (method === "GET" && url.pathname === "/app/pms/assets") {
     const trackParam = url.searchParams.get("trackDailyReport");
+    const safetyParam = url.searchParams.get("isSafetyCritical");
     const items = await listTenantAssets(session, {
       vesselCode: url.searchParams.get("vesselCode"),
       status: url.searchParams.get("status"),
       criticality: url.searchParams.get("criticality"),
       trackDailyReport: trackParam === "true" ? true : trackParam === "false" ? false : null,
+      isSafetyCritical: safetyParam === "true" ? true : safetyParam === "false" ? false : null,
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
@@ -64,6 +97,13 @@ export async function handleAssetRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
     sendJson(response, 200, await suggestAssetCriticality(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/assets/suggest-ism") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestAssetIsmFlag>[1];
+    sendJson(response, 200, await suggestAssetIsmFlag(session, body));
     return true;
   }
 

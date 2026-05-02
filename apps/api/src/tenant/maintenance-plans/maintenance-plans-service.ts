@@ -30,6 +30,8 @@ export interface CreateMaintenancePlanInput {
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
   /** Si está set, al cerrar la OT del plan se crea automáticamente un FluidSample DRAFT con horas/asset/fluidType pre-cargados. */
@@ -62,6 +64,8 @@ export interface UpdateMaintenancePlanInput {
   sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
   /** Si está set, al cerrar la OT del plan se crea automáticamente un FluidSample DRAFT con horas/asset/fluidType pre-cargados. */
@@ -636,6 +640,8 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     sfiSubgroupCode: normalizeOptionalText(payload.sfiSubgroupCode),
     riskLevel: normalizeRiskLevel(payload.riskLevel),
     riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
+    consequenceCategory: payload.consequenceCategory ?? null,
+    consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
     status: payload.status ?? "ACTIVE",
     taskMasterId,
     samplingFluidType: payload.samplingFluidType ?? null,
@@ -716,6 +722,8 @@ export async function updateTenantMaintenancePlan(
   if (payload.sfiSubgroupCode !== undefined) data.sfiSubgroupCode = normalizeOptionalText(payload.sfiSubgroupCode);
   if (payload.riskLevel !== undefined) data.riskLevel = normalizeRiskLevel(payload.riskLevel);
   if (payload.riskAnalysisResult !== undefined) data.riskAnalysisResult = normalizeOptionalText(payload.riskAnalysisResult);
+  if (payload.consequenceCategory !== undefined) data.consequenceCategory = payload.consequenceCategory ?? null;
+  if (payload.consequenceRationale !== undefined) data.consequenceRationale = normalizeOptionalText(payload.consequenceRationale);
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.taskMasterId !== undefined) data.taskMasterId = normalizeOptionalText(payload.taskMasterId);
   if (payload.samplingFluidType !== undefined) data.samplingFluidType = payload.samplingFluidType ?? null;

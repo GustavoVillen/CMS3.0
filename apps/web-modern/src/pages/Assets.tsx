@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, Sparkles, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -30,6 +30,8 @@ interface Asset {
   lastOverhaulDate: string | null;
   replacementDate: string | null;
   trackDailyReport: boolean;
+  isSafetyCritical: boolean;
+  standbyTestFrequencyDays: number | null;
   currentHours: number | null;
   equipmentClassId: string | null;
   parentAssetId: string | null;
@@ -219,6 +221,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [model, setModel] = useState(initial?.model ?? "");
   const [serialNumber, setSerialNumber] = useState(initial?.serialNumber ?? "");
   const [trackDailyReport, setTrackDailyReport] = useState(initial?.trackDailyReport ?? false);
+  const [isSafetyCritical, setIsSafetyCritical] = useState(initial?.isSafetyCritical ?? false);
+  const [standbyTestFrequencyDays, setStandbyTestFrequencyDays] = useState<string>(
+    initial?.standbyTestFrequencyDays != null ? String(initial.standbyTestFrequencyDays) : "",
+  );
+  const [suggestingIsm, setSuggestingIsm] = useState(false);
   const [installationDate, setInstallationDate] = useState(toDateInputValue(initial?.installationDate ?? null));
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
   const [replacementDate, setReplacementDate] = useState(toDateInputValue(initial?.replacementDate ?? null));
@@ -332,6 +339,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setCriticalityRationale(initial?.criticalityRationale ?? "");
     setStatus(initial?.status ?? "OPERATIONAL");
     setTrackDailyReport(initial?.trackDailyReport ?? false);
+    setIsSafetyCritical(initial?.isSafetyCritical ?? false);
+    setStandbyTestFrequencyDays(initial?.standbyTestFrequencyDays != null ? String(initial.standbyTestFrequencyDays) : "");
     setManufacturer(initial?.manufacturer ?? "");
     setModel(initial?.model ?? "");
     setSerialNumber(initial?.serialNumber ?? "");
@@ -453,6 +462,10 @@ const AssetModal: React.FC<AssetModalProps> = ({
         criticalityRationale: normalizeOptionalText(criticalityRationale),
         status,
         trackDailyReport,
+        isSafetyCritical,
+        standbyTestFrequencyDays: standbyTestFrequencyDays.trim()
+          ? Number(standbyTestFrequencyDays.trim())
+          : null,
         manufacturer: normalizeOptionalText(manufacturer),
         model: normalizeOptionalText(model),
         serialNumber: normalizeOptionalText(serialNumber),
@@ -500,8 +513,39 @@ const AssetModal: React.FC<AssetModalProps> = ({
     t,
     tenantAssets,
     trackDailyReport,
+    isSafetyCritical,
+    standbyTestFrequencyDays,
     vesselCode,
   ]);
+
+  // Pedir sugerencia de ISM safety-critical a la IA
+  const requestIsmSuggestion = useCallback(async () => {
+    if (!name.trim() || suggestingIsm) return;
+    setSuggestingIsm(true);
+    setActionError(null);
+    try {
+      const result = await api.post<{ isSafetyCritical: boolean; rationale: string }>(
+        "/app/pms/assets/suggest-ism",
+        {
+          name: name.trim(),
+          vesselCode: vesselCode || null,
+          sfiCode: selectedSubgroup || null,
+          manufacturer: manufacturer || null,
+          model: model || null,
+        },
+      );
+      setIsSafetyCritical(result.isSafetyCritical);
+      // El rationale lo agregamos al rationale general de criticidad si está vacío,
+      // sino simplemente actualizamos el flag (no queremos pisar lo que ya escribió).
+      if (!criticalityRationale.trim()) {
+        setCriticalityRationale("ISM: " + result.rationale);
+      }
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia ISM.");
+    } finally {
+      setSuggestingIsm(false);
+    }
+  }, [name, vesselCode, selectedSubgroup, manufacturer, model, criticalityRationale, suggestingIsm]);
 
   // Pedir sugerencia de criticidad a la IA
   const requestCriticalitySuggestion = useCallback(async () => {
@@ -692,6 +736,53 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 placeholder="Justificación del nivel de criticidad asignado. Podés generarlo automáticamente apretando 'CRITICIDAD' arriba."
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
               />
+            </div>
+
+            {/* ISM safety-critical (ISM Code 10.3) */}
+            <div className="space-y-1.5 col-span-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isSafetyCritical}
+                    onChange={e => setIsSafetyCritical(e.target.checked)}
+                    className="w-4 h-4 accent-accent"
+                  />
+                  <span className="text-sm text-white">
+                    Equipo crítico para seguridad <span className="text-text-industrial/60">(ISM 10.3)</span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { void requestIsmSuggestion(); }}
+                  disabled={!name.trim() || suggestingIsm}
+                  title={!name.trim() ? "Completá el nombre primero" : "Sugerir con IA"}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {suggestingIsm
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Sparkles className="w-3 h-3" />}
+                  IA
+                </button>
+              </div>
+              {isSafetyCritical && (
+                <div className="pl-7 pt-2">
+                  <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1">
+                    Frecuencia de prueba de standby (días)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={standbyTestFrequencyDays}
+                    onChange={e => setStandbyTestFrequencyDays(e.target.value)}
+                    placeholder="ej. 30 — para equipos backup ISM 10.3 exige test periódico"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                  />
+                  <p className="text-[11px] text-text-industrial/50 mt-1">
+                    Si está vacío no aparecerá en el widget de pruebas pendientes del dashboard.
+                  </p>
+                </div>
+              )}
             </div>
             <label className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors">
               <input
@@ -921,7 +1012,20 @@ export const AssetsPage: React.FC = () => {
 
   const columns: Column<Asset>[] = useMemo(() => [
     { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-white text-xs">{row.assetCode}</span> },
-    { key: "name", header: t("col.name"), render: row => <span className="font-medium text-white line-clamp-1">{row.name}</span> },
+    {
+      key: "name",
+      header: t("col.name"),
+      render: row => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-white line-clamp-1">{row.name}</span>
+          {row.isSafetyCritical && (
+            <span title="Equipo crítico para seguridad (ISM 10.3)" className="inline-flex items-center text-amber-400">
+              <ShieldAlert className="w-3.5 h-3.5" />
+            </span>
+          )}
+        </div>
+      ),
+    },
     { key: "vesselCode", header: t("col.vessel"), render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span> },
     { key: "sfiCode", header: t("col.sfiCode"), render: row => row.sfiCode ?? "—" },
     { key: "criticality", header: t("col.criticality"), render: row => row.criticality },

@@ -41,6 +41,7 @@ import {
   suggestPlanLoto,
   suggestPlanRisk,
 } from "../maintenance-plans/maintenance-plans-ai-suggestions";
+import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
@@ -124,6 +125,13 @@ export async function handleMaintenanceRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanRisk>[1]>(request);
     sendJson(response, 200, await suggestPlanRisk(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-consequence") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestPlanConsequence>[1]>(request);
+    sendJson(response, 200, await suggestPlanConsequence(session, body));
     return true;
   }
 

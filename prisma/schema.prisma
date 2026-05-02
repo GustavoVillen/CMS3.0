@@ -69,6 +69,22 @@ enum AssetCriticality {
   C
 }
 
+// RCM consequence category — "si esta tarea no se hace, ¿qué pasa?"
+// Reliability-Centered Maintenance categoriza el motivo del plan por la
+// consecuencia que mitiga, no por la frecuencia. Sirve para distribuir
+// el esfuerzo de mantenimiento por riesgo real (no todo necesita preventivo).
+enum ConsequenceCategory {
+  SAFETY           // Riesgo a personas (lesión / fatalidad)
+  ENVIRONMENTAL    // Daño ambiental (vertido, emisión)
+  OPERATIONAL      // Pérdida de operación (paro, retraso)
+  NON_OPERATIONAL  // Solo costo de reparación (sin impacto)
+}
+
+enum StandbyTestResult {
+  OK
+  FAILED
+}
+
 enum AssetStatus {
   OPERATIONAL
   DEGRADED
@@ -903,6 +919,13 @@ model Asset {
   trackDailyReport Boolean          @default(false)
   // Justificación textual de la criticidad asignada (manual o sugerida por IA)
   criticalityRationale String?
+  // ISM Code 10.3: equipos cuya falla súbita puede causar situaciones peligrosas
+  // (sistemas de gobierno, contraincendio, propulsión emergencia, etc.).
+  // Independiente de criticality (A/B/C), que es operacional.
+  isSafetyCritical     Boolean       @default(false)
+  // Frecuencia de prueba de standby (ISM 10.3) — si es safety-critical y tiene
+  // backup/redundancia, las pruebas periódicas son obligatorias.
+  standbyTestFrequencyDays Int?
   // PMS extensions
   equipmentClassId String?
   parentAssetId    String?
@@ -918,10 +941,30 @@ model Asset {
   parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children         Asset[]          @relation("AssetHierarchy")
   inspectionExecs  InspectionExecution[]
+  standbyTests     StandbyTest[]
 
   @@unique([tenantId, vesselCode, assetCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
+}
+
+// ISM 10.3 — registro de prueba periódica de equipo standby/redundante.
+// El widget del dashboard usa Asset.standbyTestFrequencyDays + el último
+// test para decidir cuáles están vencidos.
+model StandbyTest {
+  id              String            @id @default(cuid())
+  tenantId        String
+  assetId         String
+  testedAt        DateTime
+  result          StandbyTestResult
+  notes           String?
+  executedByUserId String
+  createdAt       DateTime          @default(now())
+
+  asset           Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, assetId, testedAt])
+  @@index([tenantId, testedAt])
 }
 
 model MaintenancePlan {
@@ -943,6 +986,11 @@ model MaintenancePlan {
   riskLevel            String?
   riskAnalysisResult   String?
   taskType             TaskType               @default(MAINTENANCE)
+  // RCM: clasificación de qué consecuencia mitiga este plan. Usado para
+  // reportes de distribución por consecuencia y para ordenar prioridades.
+  consequenceCategory  ConsequenceCategory?
+  // Justificación textual de la categoría de consecuencia (manual o IA)
+  consequenceRationale String?
   status               MaintenancePlanStatus  @default(ACTIVE)
   lastExecutionDate    DateTime?
   nextDueDate          DateTime?
