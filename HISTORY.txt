@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-05-02] Aplazamientos: badge Documento (WO) abre la OT correcta
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/Deferrals.tsx
+
+CAMBIO:
+- Click en sourceCode (badge WO-XXX) ahora navega con ?autoCode=WO-XXX (el formato que WorkOrders sí entiende)
+- Antes usaba ?openId=... pero WorkOrders no procesaba ese param y el modal no se abría
+- Defect/MaintenancePlan siguen usando ?openId
+
 [2026-05-02] Quitar botón "Postergar" del modal de Plan de Mantenimiento
 Agent: Claude Opus 4.7
 

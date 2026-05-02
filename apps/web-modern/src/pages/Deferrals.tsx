@@ -909,9 +909,13 @@ export const DeferralsPage: React.FC = () => {
         const route = SOURCE_ROUTE[row.sourceType];
         if (!row.sourceCode) return <span className="text-text-industrial/30 text-xs">—</span>;
         if (!route) return <span className="font-mono text-xs text-text-industrial/60">{row.sourceCode}</span>;
+        // WO usa autoCode (workOrderCode), el resto usa openId (id interno)
+        const queryParam = row.sourceType === "WORK_ORDER"
+          ? `autoCode=${encodeURIComponent(row.sourceCode)}`
+          : `openId=${encodeURIComponent(row.sourceId)}`;
         return (
           <button
-            onClick={e => { e.stopPropagation(); navigate(`${route}?openId=${row.sourceId}`); }}
+            onClick={e => { e.stopPropagation(); navigate(`${route}?${queryParam}`); }}
             className="flex items-center gap-1 font-mono text-xs text-accent hover:text-white bg-white/5 hover:bg-accent/10 border border-white/10 hover:border-accent/30 rounded px-1.5 py-0.5 transition-all"
           >
             {row.sourceCode}
