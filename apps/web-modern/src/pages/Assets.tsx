@@ -727,18 +727,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
               </select>
             </div>
-            <div className="space-y-1.5 col-span-2">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Fundamento de Criticidad</label>
-              <textarea
-                value={criticalityRationale}
-                onChange={e => setCriticalityRationale(e.target.value)}
-                rows={3}
-                placeholder="Justificación del nivel de criticidad asignado. Podés generarlo automáticamente apretando 'CRITICIDAD' arriba."
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
-              />
-            </div>
-
-            {/* ISM safety-critical (ISM Code 10.3) */}
+            {/* ISM safety-critical (ISM Code 10.3) — primero el flag, después el fundamento */}
             <div className="space-y-1.5 col-span-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -783,6 +772,17 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   </p>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1.5 col-span-2">
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Fundamento de Criticidad</label>
+              <textarea
+                value={criticalityRationale}
+                onChange={e => setCriticalityRationale(e.target.value)}
+                rows={3}
+                placeholder="Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
+              />
             </div>
             <label className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors">
               <input
