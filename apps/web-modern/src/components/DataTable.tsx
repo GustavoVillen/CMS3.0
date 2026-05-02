@@ -208,7 +208,9 @@ export function StatusBadge({ status }: { status: string }) {
     FAIL:        "bg-red-500/10 text-red-400 border-red-500/20",
     CONDITIONAL: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
     PENDING:     "bg-white/5 text-text-industrial/40 border-white/10",
-    DRAFT:       "bg-white/5 text-text-industrial/40 border-white/10",
+    DRAFT:       "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    SUBMITTED:   "bg-success-sea/10 text-success-sea border-success-sea/20",
+    REVIEWED:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
   };
   const cls = map[status] ?? "bg-white/5 text-text-industrial/40 border-white/10";
   return (

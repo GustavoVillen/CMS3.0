@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-05-02] StatusBadge: colores para DRAFT (amarillo), SUBMITTED (verde), REVIEWED (azul)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/components/DataTable.tsx
+
+CAMBIO:
+- DRAFT cambia de gris a amarillo (en revisión por el operador)
+- SUBMITTED añadido como verde (success-sea, indica que se envió correctamente)
+- REVIEWED añadido como azul (revisado por superintendente)
+
 [2026-05-02] Reportes Diarios: Submit deja el estado en SUBMITTED (no avanza a REVIEWED)
 Agent: Claude Opus 4.7
 
