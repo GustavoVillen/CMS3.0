@@ -463,6 +463,14 @@ const dict = {
   "status.expiring":         { es: "Por vencer",         en: "Expiring",       pt: "A vencer" },
   "status.expired":          { es: "Vencido",            en: "Expired",        pt: "Vencido" },
 
+  // Operational status (vessel)
+  "opStatus.AT_SEA":         { es: "En navegación",      en: "At sea",         pt: "Em navegação" },
+  "opStatus.MANOEUVRING":    { es: "Maniobrando",        en: "Manoeuvring",    pt: "Manobrando" },
+  "opStatus.ANCHORED":       { es: "Fondeado",           en: "Anchored",       pt: "Fundeado" },
+  "opStatus.IN_PORT":        { es: "En puerto",          en: "In port",        pt: "Em porto" },
+  "opStatus.DRY_DOCK":       { es: "Varadero",           en: "Dry dock",       pt: "Dique seco" },
+  "opStatus.LAID_UP":        { es: "Amarrado",           en: "Laid up",        pt: "Amarrado" },
+
   // Empty states
   "empty.vessels":          { es: "No hay vessels registrados",       en: "No vessels registered",        pt: "Nenhuma embarcação registrada" },
   "empty.assets":           { es: "No hay activos registrados",       en: "No assets registered",         pt: "Nenhum ativo registrado" },

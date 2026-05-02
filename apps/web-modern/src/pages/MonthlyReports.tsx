@@ -193,6 +193,7 @@ interface MonthlyReportModalProps {
 }
 
 const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels, onClose, onSaved }) => {
+  const t = useT();
   const isNew = report === null;
   const [activeTab, setActiveTab] = useState<"info" | "inventory">("info");
   const [liveReport, setLiveReport] = useState<MonthlyReport | null>(report);
@@ -413,7 +414,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 <label className={labelCls}>Estado operacional</label>
                 <select value={operationalStatus} onChange={e => setOperationalStatus(e.target.value)} disabled={isClosed} className={selectCls}>
                   <option value="">—</option>
-                  {OPERATIONAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {OPERATIONAL_STATUSES.map(s => <option key={s} value={s}>{t(`opStatus.${s}` as never)}</option>)}
                 </select>
               </div>
 
