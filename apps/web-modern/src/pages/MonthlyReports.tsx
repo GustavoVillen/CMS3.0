@@ -228,6 +228,13 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
   const isClosed = !isNew && (liveReport?.status === "CLOSED");
 
+  // Auto-fetch GPS on mount when creating a new report and no coords yet.
+  // Same pattern used in DailyReports.tsx.
+  useEffect(() => {
+    if (isNew && !posLat && !posLon) fetchGeoPosition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchGeoPosition = () => {
     if (!navigator.geolocation) { setGeoError("Geolocalización no soportada."); return; }
     setGeolocating(true); setGeoError(null);
@@ -477,6 +484,11 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                         {mapCoords.lat.toFixed(5)}, {mapCoords.lon.toFixed(5)}
                       </span>
                     </div>
+                  </div>
+                ) : geolocating ? (
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 text-text-industrial/30" style={{ height: 180 }}>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-xs">Obteniendo ubicación…</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/2 text-text-industrial/20" style={{ height: 180 }}>
