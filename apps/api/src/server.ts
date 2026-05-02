@@ -30,7 +30,9 @@ const server = createServer(async (request, response) => {
   const url = getRequestUrl(request);
 
   // ── Unauthenticated / infrastructure routes ─────────────────────────────────
-  if (method === "GET" && url.pathname === "/") {
+  // Dev-only landing: expone mapa de endpoints, hints de credenciales demo y
+  // un Local Dev Console. NUNCA debe servirse en producción — cae al SPA.
+  if (method === "GET" && url.pathname === "/" && env.nodeEnv !== "production") {
     sendHtml(response, 200, buildHomePage(env));
     return;
   }

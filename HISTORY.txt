@@ -9514,3 +9514,42 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
   Trigger para retomar: "Seguir PlanC"
 
 
+[2026-05-02] FIX SEGURIDAD: Landing dev expuesta en https://shipcms.cloud
+  Sintoma:
+    - Visitar https://shipcms.cloud mostraba la pagina "PMS SaaS API" con:
+      * mapa completo de endpoints publicos y privados (/app/*, /platform/*)
+      * hint de credenciales demo (DEMOADMIN/demo123, admin@localhost/admin123)
+      * "Local Dev Console" con botones para disparar requests al backend
+      * disclosure de configuracion (root domain, admin subdomain, DB status)
+
+  Causa raiz:
+    - apps/api/src/server.ts:33 servia GET / -> buildHomePage(env) sin gate.
+      La pagina fue disenada para desarrollo local y quedo activa en prod.
+
+  Riesgo evaluado:
+    - ALTO disclosure (mapa de endpoints + arquitectura)
+    - MEDIO credenciales pista (las creds demo NO funcionan en prod porque
+      el fallback dev esta gateado por NODE_ENV=development en
+      tenant-auth-service.ts:12-14, 149, 270 — pero solo si NODE_ENV esta
+      bien fijado en el VPS, hay que verificarlo)
+
+  Cambio aplicado:
+    - apps/api/src/server.ts: GET / ahora se sirve solo si
+      env.nodeEnv !== "production". En produccion cae al catch-all que
+      sirve el SPA de la web (mejor que un 404, el visitante ve la landing
+      comercial / login).
+
+  Verificacion:
+    - tsc --noEmit: sin errores nuevos en server.ts ni home-page.ts
+      (errores preexistentes en otros archivos por Prisma client desactualizado,
+      no relacionados con este fix)
+
+  Pendiente / proxima sesion:
+    - Verificar en el VPS que NODE_ENV=production esta bien fijado en el
+      proceso (PM2/systemd). Si esta en development, los logins demo
+      funcionan AHORA MISMO desde internet.
+    - Defensa en profundidad (opcional): quitar de buildHomePage los
+      strings con credenciales demo, aunque siga gateada.
+    - Confirmar que los registros DEMOADMIN/admin@localhost no fueron
+      seeded a la DB de produccion (prisma/seed.ts los menciona).
+
