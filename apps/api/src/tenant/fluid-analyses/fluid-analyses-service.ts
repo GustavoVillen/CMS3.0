@@ -189,6 +189,18 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
   return { items: filtered, total: filtered.length };
 }
 
+export async function regenerateFluidAiAnalysis(session: TenantAccessSession, id: string) {
+  const tenantId = await resolveTenantId(session);
+  await generateFluidAiAnalysis({
+    tenantId,
+    tenantSlug: session.tenantSlug,
+    userId: session.user.id,
+    userEmail: session.user.email,
+    sampleId: id,
+  });
+  return getFluidSample(session, id);
+}
+
 export async function getFluidSample(session: TenantAccessSession, id: string) {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -198,6 +210,22 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
     include: { result: true },
   });
   if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  // Defensa contra Prisma client desactualizado: si el include no trajo aiAnalysis,
+  // lo traemos con raw SQL para no perder datos en producción durante migraciones.
+  if (sample.result && (sample.result.aiAnalysis === undefined || sample.result.aiAnalysisGeneratedAt === undefined)) {
+    try {
+      const rows = await (prisma as any).$queryRawUnsafe(
+        `SELECT "aiAnalysis", "aiAnalysisGeneratedAt" FROM "FluidAnalysisResult" WHERE id = $1 LIMIT 1`,
+        sample.result.id,
+      );
+      if (Array.isArray(rows) && rows.length > 0) {
+        sample.result.aiAnalysis = rows[0].aiAnalysis ?? null;
+        sample.result.aiAnalysisGeneratedAt = rows[0].aiAnalysisGeneratedAt ?? null;
+      }
+    } catch { /* non-blocking */ }
+  }
+
   return sample;
 }
 

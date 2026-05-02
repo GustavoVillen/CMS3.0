@@ -595,11 +595,10 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
   const regenerate = async () => {
     setRegenerating(true);
     try {
-      // Re-trigger result save (no body changes) to fire AI insight regeneration
-      // For now, we just reload the sample to pick up the auto-generated insight
-      await new Promise(r => setTimeout(r, 1500));
+      await api.post(`/app/fluid-analyses/${sampleId}/generate-ai-analysis`, {});
       await onRefresh();
-    } finally {
+    } catch { /* ignore */ }
+    finally {
       setRegenerating(false);
     }
   };
@@ -614,12 +613,12 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
           <p className="text-xs text-text-industrial/50">
             {regenerating
               ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> Generando análisis...</>
-              : "El análisis IA se genera automáticamente al cargar el resultado."}
+              : "Este análisis aún no tiene insight IA."}
           </p>
           {!regenerating && (
             <button onClick={() => { void regenerate(); }}
-              className="mt-2 text-[11px] text-accent hover:underline">
-              Buscar análisis generado
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20">
+              <Sparkles className="w-3.5 h-3.5" /> Generar análisis IA
             </button>
           )}
         </div>
@@ -633,11 +632,21 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
         </h3>
-        {result.aiAnalysisGeneratedAt && (
-          <span className="text-[10px] text-text-industrial/40">
-            Generado: {fmtDate(result.aiAnalysisGeneratedAt)}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {result.aiAnalysisGeneratedAt && (
+            <span className="text-[10px] text-text-industrial/40">
+              Generado: {fmtDate(result.aiAnalysisGeneratedAt)}
+            </span>
+          )}
+          <button
+            onClick={() => { void regenerate(); }}
+            disabled={regenerating}
+            className="text-[10px] text-accent/70 hover:text-accent disabled:opacity-50"
+            title="Regenerar análisis"
+          >
+            {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : "Regenerar"}
+          </button>
+        </div>
       </div>
       <div className="p-3 rounded-xl bg-accent/5 border border-accent/20">
         <pre className="text-xs text-text-industrial/80 whitespace-pre-wrap font-sans leading-relaxed">

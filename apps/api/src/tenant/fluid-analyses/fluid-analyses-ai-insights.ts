@@ -33,23 +33,29 @@ interface GenerateInput {
   sampleId: string;
 }
 
-export async function generateFluidAiAnalysis(input: GenerateInput): Promise<void> {
+export interface GenerateResult {
+  aiAnalysis: string | null;
+  aiAnalysisGeneratedAt: Date | null;
+}
+
+export async function generateFluidAiAnalysis(input: GenerateInput): Promise<GenerateResult> {
+  const empty: GenerateResult = { aiAnalysis: null, aiAnalysisGeneratedAt: null };
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     log.warn("[fluid-ai-insights] ANTHROPIC_API_KEY no configurada, skip");
-    return;
+    return empty;
   }
 
   const prisma = getPrismaClient();
-  if (!prisma) return;
+  if (!prisma) return empty;
 
   const sample = await (prisma as any).fluidSample.findFirst({
     where: { id: input.sampleId, tenantId: input.tenantId, deletedAt: null },
     include: { result: true },
   });
-  if (!sample || !sample.result) return;
+  if (!sample || !sample.result) return empty;
 
-  // Historial: hasta 12 muestras del mismo asset+fluidType ordenadas por fecha
   const history = await (prisma as any).fluidSample.findMany({
     where: {
       tenantId: input.tenantId,
@@ -103,10 +109,9 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<voi
     });
   } catch (err) {
     log.error("[fluid-ai-insights] Anthropic call failed:", err);
-    return;
+    return empty;
   }
 
-  // Telemetría no bloqueante
   recordAiUsage({
     tenantId: input.tenantId,
     tenantSlug: input.tenantSlug,
@@ -128,10 +133,13 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<voi
     .join("\n")
     .trim();
 
-  if (!text) return;
+  if (!text) return empty;
 
+  const generatedAt = new Date();
   await (prisma as any).fluidAnalysisResult.update({
     where: { id: sample.result.id },
-    data: { aiAnalysis: text, aiAnalysisGeneratedAt: new Date() },
+    data: { aiAnalysis: text, aiAnalysisGeneratedAt: generatedAt },
   });
+
+  return { aiAnalysis: text, aiAnalysisGeneratedAt: generatedAt };
 }

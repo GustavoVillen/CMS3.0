@@ -1,8 +1,9 @@
 import PDFDocument from "pdfkit";
+import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getFluidSample } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { resolveTenantLogo } from "../pms/pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo } from "../pms/pdf-helpers";
 
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -138,12 +139,24 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
       doc.text(stripMarkdown(sample.result.aiAnalysis), { align: "left" });
     }
 
-    // ── Footer note ────────────────────────────────────────────────────────
-    doc.moveDown(2);
-    doc.fontSize(8).fillColor("#94a3b8").text(
-      `Generado: ${new Date().toLocaleString("es-AR")} · ${sample.sampleCode}`,
-      { align: "right" },
-    );
+    // ── Footer con sello CMS ────────────────────────────────────────────────
+    const PAGE_W = 595.28;
+    const PAGE_H = 841.89;
+    const ML = 50;
+    const W = PAGE_W - 2 * ML;
+    const FOOTER_SIZE = 40;
+    const footerY = PAGE_H - FOOTER_SIZE;
+
+    doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor("#cbd5e1").lineWidth(1).stroke();
+    if (existsSync(LOGO_PATH)) {
+      try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch { /* ignore */ }
+    }
+    doc.fontSize(8).font("Helvetica").fillColor("#94a3b8")
+      .text("Copilot Management System — Documento generado automáticamente. No requiere firma digital.",
+        ML + 18, footerY, { width: W / 2 - 18 });
+    doc.fontSize(8).font("Helvetica").fillColor("#94a3b8")
+      .text(`${sample.sampleCode} · ${sample.vesselCode} · ${fmt(new Date())}`,
+        ML, footerY, { width: W, align: "right" });
 
     doc.end();
   });

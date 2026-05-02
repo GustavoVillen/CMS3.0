@@ -57,6 +57,7 @@ import {
 import {
   listFluidSamples, getFluidSample, createFluidSample, updateFluidSample, deleteFluidSample,
   upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold, getAssetFluidTrend,
+  regenerateFluidAiAnalysis,
   type FluidType as FluidTypeEnum, type Verdict, type SampleStatus,
 } from "./fluid-analyses/fluid-analyses-service";
 import { saveFluidReportFile } from "./fluid-analyses/fluid-uploads-service";
@@ -765,6 +766,12 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 200, await upsertFluidResult(session, sampleId, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/fluid-analyses\/[\w-]+\/generate-ai-analysis$/.test(url.pathname)) {
+    const sampleId = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await regenerateFluidAiAnalysis(session, sampleId));
     return true;
   }
   if (method === "GET" && /^\/app\/fluid-analyses\/[\w-]+\/pdf$/.test(url.pathname)) {
