@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -20,6 +20,7 @@ interface Asset {
   sfiCode: string | null;
   name: string;
   criticality: string;
+  criticalityRationale: string | null;
   status: string;
   manufacturer: string | null;
   model: string | null;
@@ -208,6 +209,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [selectedSubgroup, setSelectedSubgroup] = useState("");
   const [name, setName] = useState(initial?.name ?? "");
   const [criticality, setCriticality] = useState(initial?.criticality ?? "B");
+  const [criticalityRationale, setCriticalityRationale] = useState(initial?.criticalityRationale ?? "");
+  const [suggestingCriticality, setSuggestingCriticality] = useState(false);
   const [status, setStatus] = useState(initial?.status ?? "OPERATIONAL");
   const [manufacturer, setManufacturer] = useState(initial?.manufacturer ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
@@ -323,6 +326,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setAssetCode(initial?.assetCode ?? "");
     setName(initial?.name ?? "");
     setCriticality(initial?.criticality ?? "B");
+    setCriticalityRationale(initial?.criticalityRationale ?? "");
     setStatus(initial?.status ?? "OPERATIONAL");
     setTrackDailyReport(initial?.trackDailyReport ?? false);
     setManufacturer(initial?.manufacturer ?? "");
@@ -443,6 +447,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
         name: name.trim(),
         sfiCode: selectedSubgroup,
         criticality,
+        criticalityRationale: normalizeOptionalText(criticalityRationale),
         status,
         trackDailyReport,
         manufacturer: normalizeOptionalText(manufacturer),
@@ -474,6 +479,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   }, [
     assetCode,
     criticality,
+    criticalityRationale,
     initial,
     isAdmin,
     installationDate,
@@ -494,9 +500,35 @@ const AssetModal: React.FC<AssetModalProps> = ({
     vesselCode,
   ]);
 
+  // Pedir sugerencia de criticidad a la IA
+  const requestCriticalitySuggestion = useCallback(async () => {
+    if (!name.trim() || suggestingCriticality) return;
+    setSuggestingCriticality(true);
+    setActionError(null);
+    try {
+      const result = await api.post<{ criticality: "A" | "B" | "C"; rationale: string }>(
+        "/app/pms/assets/suggest-criticality",
+        {
+          name: name.trim(),
+          vesselCode: vesselCode || null,
+          sfiCode: selectedSubgroup || null,
+          manufacturer: manufacturer || null,
+          model: model || null,
+          serialNumber: serialNumber || null,
+        },
+      );
+      setCriticality(result.criticality);
+      setCriticalityRationale(result.rationale);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia.");
+    } finally {
+      setSuggestingCriticality(false);
+    }
+  }, [name, vesselCode, selectedSubgroup, manufacturer, model, serialNumber, suggestingCriticality]);
+
   // ESC guard
   const isDirty = useDirtyTracker({
-    vesselCode, assetCode, selectedGroup, selectedSubgroup, name, criticality, status,
+    vesselCode, assetCode, selectedGroup, selectedSubgroup, name, criticality, criticalityRationale, status,
     manufacturer, model, serialNumber, trackDailyReport,
     installationDate, lastOverhaulDate, replacementDate,
   });
@@ -614,7 +646,18 @@ const AssetModal: React.FC<AssetModalProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.criticality")}</label>
+              <button
+                type="button"
+                onClick={() => { void requestCriticalitySuggestion(); }}
+                disabled={!name.trim() || suggestingCriticality}
+                title={!name.trim() ? "Completá el nombre del equipo primero" : "Sugerir criticidad con IA"}
+                className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {suggestingCriticality
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <Sparkles className="w-3 h-3" />}
+                {t("col.criticality")}
+              </button>
               <select
                 value={criticality}
                 onChange={e => setCriticality(e.target.value)}
@@ -636,6 +679,16 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 <option value="DEGRADED">DEGRADED</option>
                 <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
               </select>
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Fundamento de Criticidad</label>
+              <textarea
+                value={criticalityRationale}
+                onChange={e => setCriticalityRationale(e.target.value)}
+                rows={3}
+                placeholder="Justificación del nivel de criticidad asignado. Podés generarlo automáticamente apretando 'CRITICIDAD' arriba."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
+              />
             </div>
             <label className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors">
               <input

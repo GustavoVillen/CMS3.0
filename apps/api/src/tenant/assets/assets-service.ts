@@ -18,6 +18,7 @@ export interface CreateAssetInput {
   name: string;
   sfiCode?: string | null;
   criticality?: "A" | "B" | "C";
+  criticalityRationale?: string | null;
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
   manufacturer?: string | null;
@@ -36,6 +37,7 @@ export interface UpdateAssetInput {
   name?: string;
   sfiCode?: string | null;
   criticality?: "A" | "B" | "C";
+  criticalityRationale?: string | null;
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
   manufacturer?: string | null;
@@ -240,6 +242,7 @@ export async function createTenantAsset(session: TenantAccessSession, payload: C
     sfiCode: normalizeOptionalText(payload.sfiCode),
     name: normalizeRequiredText(payload.name, "name"),
     criticality: payload.criticality ?? "B",
+    criticalityRationale: normalizeOptionalText(payload.criticalityRationale),
     status: payload.status ?? "OPERATIONAL",
     trackDailyReport: payload.trackDailyReport ?? false,
     manufacturer: normalizeOptionalText(payload.manufacturer),
@@ -293,6 +296,7 @@ export async function updateTenantAsset(
   if (payload.name !== undefined) data.name = normalizeRequiredText(payload.name, "name");
   if (payload.sfiCode !== undefined) data.sfiCode = normalizeOptionalText(payload.sfiCode);
   if (payload.criticality !== undefined) data.criticality = payload.criticality;
+  if (payload.criticalityRationale !== undefined) data.criticalityRationale = normalizeOptionalText(payload.criticalityRationale);
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.trackDailyReport !== undefined) data.trackDailyReport = payload.trackDailyReport;
   if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);

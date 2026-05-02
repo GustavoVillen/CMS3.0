@@ -1,5 +1,25 @@
 HISTORY.txt
 
+[2026-05-02] Assets: sugerencia IA de criticidad + campo "Fundamento de Criticidad"
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma — Asset.criticalityRationale (String?)
+- apps/api/src/tenant/assets/assets-criticality-ai.ts (nuevo)
+- apps/api/src/tenant/assets/assets-service.ts
+- apps/api/src/tenant/pms/assets-router.ts
+- apps/web-modern/src/pages/Assets.tsx
+
+CAMBIOS:
+1. Schema: criticalityRationale (String?) en Asset
+2. suggestAssetCriticality: Haiku recibe nombre+vessel+sfi+fabricante+modelo y devuelve {criticality, rationale} JSON estricto
+3. Endpoint POST /app/pms/assets/suggest-criticality
+4. CreateAssetInput / UpdateAssetInput aceptan criticalityRationale, persistido en BD
+5. Modal Asset: label "CRITICIDAD" reemplazado por botón clickeable (icon Sparkles + texto). Disabled si no hay nombre.
+6. Modal Asset: nuevo textarea "Fundamento de Criticidad" debajo del status (col-span-2), siempre visible
+7. Click en "CRITICIDAD" → spinner → llama IA → setea criticality + criticalityRationale
+8. Telemetría con feature="asset_criticality_suggestion"
+
 [2026-05-02] SFI 780: renombrado de "Sistemas de Vapor" a "Sistemas de Gobierno"
 Agent: Claude Opus 4.7
 

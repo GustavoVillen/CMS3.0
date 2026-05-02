@@ -12,6 +12,7 @@ import {
   listTenantAssets,
   updateTenantAsset,
 } from "../assets/assets-service";
+import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -55,6 +56,12 @@ export async function handleAssetRoutes(
   if (method === "POST" && url.pathname === "/app/pms/assets") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantAsset>[1];
     sendJson(response, 201, await createTenantAsset(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/assets/suggest-criticality") {
+    const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
+    sendJson(response, 200, await suggestAssetCriticality(session, body));
     return true;
   }
 

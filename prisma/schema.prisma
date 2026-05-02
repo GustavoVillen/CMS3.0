@@ -901,6 +901,8 @@ model Asset {
   lastOverhaulDate DateTime?
   replacementDate  DateTime?
   trackDailyReport Boolean          @default(false)
+  // Justificación textual de la criticidad asignada (manual o sugerida por IA)
+  criticalityRationale String?
   // PMS extensions
   equipmentClassId String?
   parentAssetId    String?
