@@ -1,5 +1,37 @@
 HISTORY.txt
 
+[2026-05-02] Excel Import: claves duplicadas se renombran (1), (2)... en lugar de reemplazarse
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/excel/excel-parser.ts
+
+CAMBIO:
+- Antes: clave duplicada en el archivo Excel → se descartaba la fila previa, se conservaba la última.
+- Ahora: la fila duplicada queda con la clave sufijada "código (1)", "código (2)", etc.
+- Ambas filas se preservan; ninguna se pierde.
+- El mensaje en la UI ahora dice: "renombrada a X para preservar ambas filas".
+
+[2026-05-02] Análisis de Fluidos: AI insight automático + botón "Guardar PDF" en el modal
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma — FluidAnalysisResult.aiAnalysis (String?), aiAnalysisGeneratedAt (DateTime?)
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-ai-insights.ts (nuevo)
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-pdf-service.ts (nuevo)
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-service.ts
+- apps/api/src/tenant/tenant-router.ts
+- apps/web-modern/src/pages/FluidAnalyses.tsx
+
+CAMBIOS:
+1. Schema: aiAnalysis (markdown) + aiAnalysisGeneratedAt en FluidAnalysisResult
+2. fluid-analyses-ai-insights.ts: generateFluidAiAnalysis(sampleId) llama a Haiku con la muestra + historial (asset+fluid hasta 12) y guarda 3 secciones (Tendencias / Interpretación / Recomendaciones) en aiAnalysis
+3. upsertFluidResult dispara la generación en background (no bloquea respuesta) tras crear/actualizar el result
+4. Endpoint GET /app/fluid-analyses/:id/pdf que arma PDF con identificación, parámetros y análisis IA
+5. Modal: card "Análisis IA" debajo de "Tendencia del equipo" muestra el insight con badge de fecha de generación
+6. Footer del modal: botón "Guardar PDF" que descarga el informe completo
+7. Telemetría de tokens registrada con feature="fluid_ai_insights" usando recordAiUsage
+
 [2026-05-02] StatusBadge: colores para DRAFT (amarillo), SUBMITTED (verde), REVIEWED (azul)
 Agent: Claude Opus 4.7
 

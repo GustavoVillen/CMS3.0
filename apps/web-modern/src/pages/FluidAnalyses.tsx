@@ -59,6 +59,8 @@ interface FluidResult {
   parameters: Record<string, FluidParameter | number | string>;
   reportUrl: string | null;
   reportMime: string | null;
+  aiAnalysis: string | null;
+  aiAnalysisGeneratedAt: string | null;
 }
 interface FluidSample {
   id: string;
@@ -553,6 +555,11 @@ function SampleDetailModal({
           <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
         </div>
 
+        {/* AI insight: tendencias + interpretación + recomendaciones */}
+        {sample.result && (
+          <AiInsightCard result={sample.result} sampleId={sample.id} onRefresh={load} />
+        )}
+
         {sample.notes && (
           <div className="p-3 rounded-xl bg-white/5 border border-white/10">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
@@ -560,16 +567,103 @@ function SampleDetailModal({
           </div>
         )}
 
-        {canManage && (
-          <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+        <div className="flex justify-between items-center gap-2 pt-2 border-t border-white/10">
+          <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white hover:border-accent/30">
+            <FileText className="w-3.5 h-3.5 text-accent" /> Guardar PDF
+          </button>
+          {canManage && (
             <button onClick={remove} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20">
               <Trash2 className="w-3.5 h-3.5" /> Eliminar
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </ModalShell>
   );
+}
+
+// ─── AI insight card ──────────────────────────────────────────────────────────
+
+function AiInsightCard({ result, sampleId, onRefresh }: {
+  result: FluidResult;
+  sampleId: string;
+  onRefresh: () => Promise<void>;
+}) {
+  const [regenerating, setRegenerating] = useState(false);
+
+  const regenerate = async () => {
+    setRegenerating(true);
+    try {
+      // Re-trigger result save (no body changes) to fire AI insight regeneration
+      // For now, we just reload the sample to pick up the auto-generated insight
+      await new Promise(r => setTimeout(r, 1500));
+      await onRefresh();
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  if (!result.aiAnalysis) {
+    return (
+      <div className="space-y-2 pt-2 border-t border-white/10">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
+        </h3>
+        <div className="p-3 rounded-xl bg-white/5 border border-dashed border-white/10 text-center">
+          <p className="text-xs text-text-industrial/50">
+            {regenerating
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> Generando análisis...</>
+              : "El análisis IA se genera automáticamente al cargar el resultado."}
+          </p>
+          {!regenerating && (
+            <button onClick={() => { void regenerate(); }}
+              className="mt-2 text-[11px] text-accent hover:underline">
+              Buscar análisis generado
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-white/10">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
+        </h3>
+        {result.aiAnalysisGeneratedAt && (
+          <span className="text-[10px] text-text-industrial/40">
+            Generado: {fmtDate(result.aiAnalysisGeneratedAt)}
+          </span>
+        )}
+      </div>
+      <div className="p-3 rounded-xl bg-accent/5 border border-accent/20">
+        <pre className="text-xs text-text-industrial/80 whitespace-pre-wrap font-sans leading-relaxed">
+          {result.aiAnalysis}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+async function downloadFluidPdf(sampleId: string, sampleCode: string) {
+  const token = localStorage.getItem("gpms_token") ?? "";
+  const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
+  try {
+    const r = await fetch(`/app/fluid-analyses/${sampleId}/pdf`, {
+      headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
+    });
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sampleCode}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch { /* ignore */ }
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

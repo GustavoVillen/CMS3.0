@@ -61,6 +61,7 @@ import {
 } from "./fluid-analyses/fluid-analyses-service";
 import { saveFluidReportFile } from "./fluid-analyses/fluid-uploads-service";
 import { extractFluidReport } from "./fluid-analyses/fluid-analyses-ai-extractor";
+import { buildFluidAnalysisPdf } from "./fluid-analyses/fluid-analyses-pdf-service";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
 import { handleProfileRoutes } from "./profile/profile-router";
@@ -764,6 +765,18 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 200, await upsertFluidResult(session, sampleId, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/fluid-analyses\/[\w-]+\/pdf$/.test(url.pathname)) {
+    const sampleId = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const pdfBuffer = await buildFluidAnalysisPdf(session, sampleId);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="fluid-${sampleId}.pdf"`,
+      "Content-Length": pdfBuffer.length,
+    });
+    response.end(pdfBuffer);
     return true;
   }
   if (method === "POST" && url.pathname === "/app/fluid-analyses/upload-report") {

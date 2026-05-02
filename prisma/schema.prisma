@@ -2193,6 +2193,9 @@ model FluidAnalysisResult {
   reportMime       String?
   reportSourceText String?
   defectId         String?
+  // AI analysis: tendencias clave, interpretación, recomendaciones (markdown)
+  aiAnalysis            String?
+  aiAnalysisGeneratedAt DateTime?
   enteredByUserId  String
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt

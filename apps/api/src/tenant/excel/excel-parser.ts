@@ -149,15 +149,15 @@ export async function parseExcelBuffer(buffer: Buffer, module: ExcelModule): Pro
       return;
     }
 
-    const keyStr = String(keyValue);
+    let keyStr = String(keyValue);
     if (seenKeys.has(keyStr)) {
-      // Auto-fix: replace the earlier row with this one (keep last occurrence)
-      const existingIdx = seenKeys.get(keyStr)!;
-      const prevRow = rows[existingIdx];
-      fixes.push(`Fila ${rowNumber}: clave duplicada "${keyStr}" — reemplaza fila ${prevRow.rowNumber} (se conserva la última).`);
-      rows[existingIdx] = { rowNumber, data };
-      seenKeys.set(keyStr, existingIdx);
-      return;
+      // Auto-fix: append (1), (2), ... so both rows are preserved with unique keys
+      const originalKey = keyStr;
+      let suffix = 1;
+      while (seenKeys.has(`${originalKey} (${suffix})`)) suffix++;
+      keyStr = `${originalKey} (${suffix})`;
+      data[matchingKey] = keyStr;
+      fixes.push(`Fila ${rowNumber}: clave duplicada "${originalKey}" — renombrada a "${keyStr}" para preservar ambas filas.`);
     }
 
     seenKeys.set(keyStr, rows.length);

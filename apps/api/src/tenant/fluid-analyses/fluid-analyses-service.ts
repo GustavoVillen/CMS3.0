@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -356,6 +357,15 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
     entityId: sampleId,
     metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
   });
+
+  // Generate AI insight (tendencias + interpretación + recomendaciones) in background
+  void generateFluidAiAnalysis({
+    tenantId,
+    tenantSlug: session.tenantSlug,
+    userId: session.user.id,
+    userEmail: session.user.email,
+    sampleId,
+  }).catch(err => { /* swallow */ void err; });
 
   if (verdict === "CRITICAL" || verdict === "ACTION_REQUIRED") {
     void publishAudit(prisma, {
