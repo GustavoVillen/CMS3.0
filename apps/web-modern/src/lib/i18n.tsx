@@ -365,7 +365,7 @@ const dict = {
   "sfi.c.750": { es: "Sistemas de achique y lastre",            en: "Bilge and ballast systems",                pt: "Sistemas de esgoto e lastro" },
   "sfi.c.760": { es: "Sistemas contra incendios",               en: "Fire fighting systems",                    pt: "Sistemas contra incêndio" },
   "sfi.c.770": { es: "Aire comprimido",                         en: "Compressed air",                           pt: "Ar comprimido" },
-  "sfi.c.780": { es: "Sistemas de vapor",                       en: "Steam systems",                            pt: "Sistemas de vapor" },
+  "sfi.c.780": { es: "Sistemas de gobierno",                    en: "Steering systems",                         pt: "Sistemas de governo" },
   "sfi.c.790": { es: "Otros sistemas de maquinaria",            en: "Other machinery systems",                  pt: "Outros sistemas de maquinário" },
   "sfi.c.800": { es: "Instalaciones eléctricas general",        en: "General electrical installations",         pt: "Instalações elétricas geral" },
   "sfi.c.810": { es: "Generadores y cuadros principales",       en: "Generators and main switchboards",         pt: "Geradores e painéis principais" },

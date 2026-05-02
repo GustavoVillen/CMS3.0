@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-05-02] SFI 780: renombrado de "Sistemas de Vapor" a "Sistemas de Gobierno"
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/lib/i18n.tsx
+
+CAMBIO:
+- sfi.c.780: es "Sistemas de gobierno" / en "Steering systems" / pt "Sistemas de governo"
+
 [2026-05-02] Excel Import Assets: fix trackDailyReport null + name null que rompían el create
 Agent: Claude Opus 4.7
 
