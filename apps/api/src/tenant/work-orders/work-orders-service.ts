@@ -671,33 +671,35 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult },
   });
 
-  // Cerrar aplazamientos ACTIVE asociados a esta OT (sourceType=WORK_ORDER, sourceId=woId).
-  // Cuando se aplaza una OT, el aplazamiento queda colgado aunque después se ejecute la OT;
-  // al cerrar la OT, ese aplazamiento ya no tiene sentido y debe quedar CLOSED.
+  // Cerrar aplazamientos asociados a esta OT (sourceType=WORK_ORDER, sourceId=woId)
+  // en cualquier estado no-terminal. Estados terminales (REJECTED, EXPIRED, CLOSED)
+  // se omiten porque ya están finalizados.
+  // Cuando se aplaza una OT, el aplazamiento queda colgado aunque después se ejecute
+  // la OT; al cerrar la OT, ese aplazamiento ya no tiene sentido y debe quedar CLOSED.
   try {
     const deferralDelegateLocal = (prismaRaw as unknown as {
       deferral: {
-        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string }[]>;
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string; status: string }[]>;
         update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
       };
     }).deferral;
-    const activeDeferrals = await deferralDelegateLocal.findMany({
+    const openDeferrals = await deferralDelegateLocal.findMany({
       where: {
         tenantId: current.tenantId,
         sourceType: "WORK_ORDER",
         sourceId: current.id,
-        status: "ACTIVE",
+        status: { notIn: ["CLOSED", "REJECTED", "EXPIRED"] },
         deletedAt: null,
       },
-      select: { id: true, deferralCode: true },
+      select: { id: true, deferralCode: true, status: true },
     });
-    for (const d of activeDeferrals) {
+    for (const d of openDeferrals) {
       await deferralDelegateLocal.update({
         where: { id: d.id },
         data: {
           status: "CLOSED",
           closedAt: new Date(),
-          closeNotes: `Cerrado automáticamente al cerrar la OT ${current.workOrderCode}.`,
+          closeNotes: `Cerrado automáticamente al cerrar la OT ${current.workOrderCode} (estado previo: ${d.status}).`,
           updatedByUserId: session.user.id,
         },
       });
@@ -707,7 +709,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         action: "Deferral.closed",
         entityType: "Deferral",
         entityId: d.id,
-        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CLOSED", workOrderCode: current.workOrderCode },
+        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CLOSED", previousStatus: d.status, workOrderCode: current.workOrderCode },
       });
     }
   } catch (err) {
@@ -763,31 +765,31 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, cancelReason: payload.cancelReason },
   });
 
-  // Cerrar aplazamientos ACTIVE asociados a esta OT (igual que en closeWorkOrder)
+  // Cerrar aplazamientos asociados a esta OT en cualquier estado no-terminal
   try {
     const deferralDelegateLocal = (prismaRaw as unknown as {
       deferral: {
-        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string }[]>;
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; deferralCode: string; status: string }[]>;
         update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
       };
     }).deferral;
-    const activeDeferrals = await deferralDelegateLocal.findMany({
+    const openDeferrals = await deferralDelegateLocal.findMany({
       where: {
         tenantId: current.tenantId,
         sourceType: "WORK_ORDER",
         sourceId: current.id,
-        status: "ACTIVE",
+        status: { notIn: ["CLOSED", "REJECTED", "EXPIRED"] },
         deletedAt: null,
       },
-      select: { id: true, deferralCode: true },
+      select: { id: true, deferralCode: true, status: true },
     });
-    for (const d of activeDeferrals) {
+    for (const d of openDeferrals) {
       await deferralDelegateLocal.update({
         where: { id: d.id },
         data: {
           status: "CLOSED",
           closedAt: new Date(),
-          closeNotes: `Cerrado automáticamente al cancelar la OT ${current.workOrderCode}.`,
+          closeNotes: `Cerrado automáticamente al cancelar la OT ${current.workOrderCode} (estado previo: ${d.status}).`,
           updatedByUserId: session.user.id,
         },
       });
@@ -797,7 +799,7 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
         action: "Deferral.closed",
         entityType: "Deferral",
         entityId: d.id,
-        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CANCELLED", workOrderCode: current.workOrderCode },
+        metadata: { deferralCode: d.deferralCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CANCELLED", previousStatus: d.status, workOrderCode: current.workOrderCode },
       });
     }
   } catch (err) {

@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-05-02] Cerrar/Cancelar OT cierra aplazamiento en CUALQUIER estado no-terminal
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/work-orders/work-orders-service.ts
+
+CAMBIO:
+- closeWorkOrder/cancelWorkOrder: filtro cambia de status="ACTIVE" a status NOT IN [CLOSED, REJECTED, EXPIRED]
+- Cierra aplazamientos en REQUESTED, UNDER_REVIEW, APPROVED, ACTIVE
+- closeNotes y audit metadata incluyen el estado previo del aplazamiento
+
 [2026-05-02] Aplazamientos: ReviewModal también cierra todo y vuelve al listado tras Guardar
 Agent: Claude Opus 4.7
 
