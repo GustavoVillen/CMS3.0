@@ -8,6 +8,8 @@ import { buildTenantBootstrapPayload } from "../bootstrap/public-bootstrap";
 import { resolveActiveSessionLocale } from "../i18n/locale-resolution";
 import { TENANT_AUTH_POLICY } from "./auth-policies";
 import { publishAudit, publishSystemAudit } from "../../platform/audit/audit-publisher";
+import { redactEmail } from "../../common/pii";
+import { assertNotLocked, recordLoginFailure, clearLoginFailures } from "../../http/login-lockout";
 
 import { isDevelopmentMode } from "../../common/runtime-mode";
 
@@ -168,6 +170,10 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       throw new RouteError(400, "AUTH_INVALID_REQUEST", "Identifier and password are required.");
     }
 
+    // Lockout por identificador — defensa contra brute force distribuido
+    // (botnet con muchas IPs ataca a una sola cuenta).
+    assertNotLocked(`tenant:${tenant.slug}`, identifier);
+
     const membership = await prisma.tenantMembership.findFirst({
       where: {
         tenantId: tenant.id,
@@ -197,15 +203,18 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
 
       // All paths failed. Single audit event with neutral metadata
       // (don't reveal which path got how far — keep response identical).
+      recordLoginFailure(`tenant:${tenant.slug}`, identifier);
       await publishSystemAudit(prisma, {
         tenantId: tenant.id,
         action: "TENANT_LOGIN_FAILED",
         entityType: "Tenant",
         entityId: tenant.id,
-        metadata: { tenantSlug: tenant.slug, identifier },
+        metadata: { tenantSlug: tenant.slug, identifierHash: redactEmail(identifier) },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
+
+    clearLoginFailures(`tenant:${tenant.slug}`, identifier);
 
     const locale = resolveActiveSessionLocale({
       requestedLocale: request.locale,

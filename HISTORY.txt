@@ -10174,3 +10174,73 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - Frontend buildea, bundle no contiene prompts (verificado: 0 hits
       de "Sos experto").
     - Bundle incluye call a /auth/logout (verificado).
+
+
+[2026-05-02] Hardening de IP — Tanda 5: cierre de auditoría externa
+  Cierre de los hallazgos restantes (8) de la auditoría con criterio
+  estricto. Uno descartado como falso positivo, los otros 7 cerrados:
+
+  C-4 (descartado) — TOCTOU updates en bitacora/ai-documents/etc:
+    Re-leído el código. El patrón findFirst({id, tenantId}) → throw 404
+    → update({id}) es safe en Node.js single-threaded: si la validación
+    falla, throws ANTES del update. No hay race posible. El audit
+    aplicó la etiqueta "TOCTOU" sin entender el modelo de ejecución.
+
+  A-4 — Cross-references cross-tenant:
+    - createTenantWorkOrder + createTenantMaintenancePlan: validan
+      taskMasterId ahora (filtra por tenantId OR isGlobal=true).
+    - applySpareUsagesToWo: pre-fetch de spareIds válidos para el tenant;
+      cualquier ID ajeno se descarta y va a failedMovements.
+    - Antes un atacante podía crear stock movements con spareIds de otro
+      tenant (corrupción de datos, no leak directo).
+
+  M-1 — Excel formula injection:
+    - excel-export-service.ts: nueva escapeFormula() prefija con apóstrofo
+      cualquier string que arranque con = + - @ TAB CR. Anula el ataque
+      "atacante mete =cmd|... como nombre de buque, exporta a Excel,
+      víctima abre el archivo y ejecuta comando".
+
+  A-7 — Stack/internals leak en error responses:
+    - route-error.ts: el message de 500 ahora es siempre "An internal
+      error occurred." (sin diferenciar dev/prod). Antes en dev exponía
+      error.message del unhandled — podía leak paths/queries SQL.
+      Stack sigue yendo a stderr para debugging.
+
+  A-6 — Email PII en audit logs:
+    - Nuevo: apps/api/src/common/pii.ts con redactEmail(). Output:
+      "<dominio>:<hash8>" (ej "gmail.com:a1b2c3d4"). Permite tracking
+      de patrones (mismo atacante, mismo dominio) sin almacenar el email
+      en claro.
+    - Aplicado en PLATFORM_LOGIN_FAILED y TENANT_LOGIN_FAILED audit events.
+
+  M-4 — X-Forwarded-For sin validación:
+    - rate-limiter.ts:getClientIp() ahora valida formato IPv4/IPv6 antes
+      de aceptar el header. Defensa contra atacante que setea
+      "X-Forwarded-For: <random>" en cada request para diluir el rate
+      limit en buckets-fantasma.
+
+  M-5 — Account lockout:
+    - Nuevo: apps/api/src/http/login-lockout.ts. Per-identifier counter
+      en memoria. Tras 5 fallos en 15 min, bloquea por 15 min más.
+    - Integrado en tenant login (scope "tenant:<slug>") y platform login
+      (scope "platform"). Login exitoso resetea el contador.
+    - Defensa contra brute force distribuido (botnet con N IPs ataca a
+      una sola cuenta — el rate-limit por IP no lo detecta).
+    - Trade-off conocido: enables DoS de cuenta si atacante conoce el
+      email. Acceptable porque la ventana es corta y self-resets.
+    - evictExpiredLockouts() enchufado al setInterval del server.
+
+  Validado:
+    - Typecheck OK (errores preexistentes en bitacora/capa/excel/profile
+      sin novedades).
+    - Frontend buildea, sin warnings nuevos.
+
+  Pendiente residual:
+    - A-3: tokens en localStorage → migrar a httpOnly cookies + CSRF.
+      Refactor grande (toca cada call a la API). Decisión de cuándo
+      hacerlo es del usuario.
+    - M-2 (header injection en Content-Disposition): RFC 5987 encoding.
+      Vector limitado, lo dejamos para otra tanda.
+    - DB sslmode=disable: requiere config postgres + cert; depende de
+      infra. NO VERIFICADO.
+    - Migrar secretos a secrets manager (Doppler/Infisical/AWS Secrets).

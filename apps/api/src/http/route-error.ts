@@ -22,8 +22,9 @@ export function toErrorPayload(error: unknown): { statusCode: number; payload: {
     };
   }
 
-  const isProduction = process.env.NODE_ENV === "production";
-
+  // No diferenciamos prod vs dev al responder al cliente. Cualquier error.message
+  // que no sea un RouteError deliberado puede leakear paths internos, queries
+  // SQL, nombres de tablas, etc. El detalle solo va a stderr (logs internos).
   if (error instanceof Error) {
     process.stderr.write(`[unhandled-error] ${error.stack ?? error.message}\n`);
     return {
@@ -31,7 +32,7 @@ export function toErrorPayload(error: unknown): { statusCode: number; payload: {
       payload: {
         error: {
           code: "INTERNAL_ERROR",
-          message: isProduction ? "An internal error occurred." : error.message,
+          message: "An internal error occurred.",
         },
       },
     };
@@ -43,7 +44,7 @@ export function toErrorPayload(error: unknown): { statusCode: number; payload: {
     payload: {
       error: {
         code: "UNKNOWN_ERROR",
-        message: "Unknown error.",
+        message: "An internal error occurred.",
       },
     },
   };

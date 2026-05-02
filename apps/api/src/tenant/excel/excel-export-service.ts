@@ -207,10 +207,29 @@ async function fetchRecords(
 // Build workbook
 // ---------------------------------------------------------------------------
 
+/**
+ * Sanitiza un string contra "CSV/Excel formula injection" (CWE-1236):
+ * Excel evalúa como fórmula cualquier celda que arranque con =, +, -, @, TAB
+ * o CR. Un atacante con permiso de escribir un nombre/descripción puede
+ * embeber `=cmd|'/c calc'!A1` y, al exportar y abrir el Excel en otra PC,
+ * dispara ejecución. Prefijamos con apóstrofo para forzar interpretación
+ * literal sin alterar el rendering.
+ */
+function escapeFormula(s: string): string {
+  if (!s) return s;
+  const first = s.charCodeAt(0);
+  // = + - @  \t  \r
+  if (first === 0x3D || first === 0x2B || first === 0x2D || first === 0x40 || first === 0x09 || first === 0x0D) {
+    return "'" + s;
+  }
+  return s;
+}
+
 function toExcelValue(val: unknown): string | number | null {
   if (val === null || val === undefined) return null;
   if (val instanceof Date) return val.toISOString().split("T")[0];
   if (typeof val === "boolean") return val ? "true" : "false";
+  if (typeof val === "string") return escapeFormula(val);
   return val as string | number;
 }
 

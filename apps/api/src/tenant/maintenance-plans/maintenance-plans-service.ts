@@ -601,6 +601,17 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
   }
 
+  // Validar tenant ownership de taskMasterId (incluye globales).
+  const taskMasterId = normalizeOptionalText(payload.taskMasterId);
+  if (taskMasterId) {
+    const tmCount = await (prismaRaw as any).taskMaster.count({
+      where: { id: taskMasterId, OR: [{ tenantId }, { isGlobal: true }] },
+    });
+    if (tmCount === 0) {
+      throw new RouteError(404, "TASK_MASTER_NOT_FOUND", "TaskMaster no encontrado o no pertenece a este tenant.");
+    }
+  }
+
   // Auto-generate taskCode if not provided
   const sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
   const resolvedTaskCode = payload.taskCode?.trim()
@@ -626,7 +637,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     riskLevel: normalizeRiskLevel(payload.riskLevel),
     riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
     status: payload.status ?? "ACTIVE",
-    taskMasterId: normalizeOptionalText(payload.taskMasterId),
+    taskMasterId,
     samplingFluidType: payload.samplingFluidType ?? null,
     triggerResultMode: payload.triggerResultMode ?? "DUE_ONLY",
     checklistTemplate: normalizeOptionalText(payload.checklistTemplate),

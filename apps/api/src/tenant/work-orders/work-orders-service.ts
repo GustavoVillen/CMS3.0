@@ -371,6 +371,18 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
   }
 
+  // Validar tenant ownership de taskMasterId (cross-reference cross-tenant
+  // sería un data-integrity issue: la WO referenciaría un task de otro tenant).
+  const taskMasterId = normalizeOptionalText(payload.taskMasterId);
+  if (taskMasterId) {
+    const tmCount = await (prismaRaw as any).taskMaster.count({
+      where: { id: taskMasterId, OR: [{ tenantId }, { isGlobal: true }] },
+    });
+    if (tmCount === 0) {
+      throw new RouteError(404, "TASK_MASTER_NOT_FOUND", "TaskMaster no encontrado o no pertenece a este tenant.");
+    }
+  }
+
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
   const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
@@ -393,7 +405,7 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
       description: normalizeOptionalText(payload.description),
       assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
       estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
-      taskMasterId: normalizeOptionalText(payload.taskMasterId),
+      taskMasterId,
       acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
       loto: normalizeOptionalText(payload.loto),
       riskLevel: normalizeOptionalText(payload.riskLevel),
@@ -442,9 +454,26 @@ async function applySpareUsagesToWo(
     where: { tenantId: wo.tenantId, referenceType: "WORK_ORDER", referenceId: wo.id },
   });
 
+  // Validar que todos los spareIds pertenecen al tenant. Sin esto, un user
+  // podría inyectar IDs cross-tenant y crear stock movements con spareIds
+  // que no le pertenecen — corrupción de datos.
+  const proposedIds = [...new Set(usages.map(u => u.spareId).filter(Boolean))];
+  const validIds = new Set<string>();
+  if (proposedIds.length > 0) {
+    const valid = await (prismaRaw as any).spare.findMany({
+      where: { id: { in: proposedIds }, tenantId: wo.tenantId },
+      select: { id: true },
+    });
+    for (const s of valid as Array<{ id: string }>) validIds.add(s.id);
+  }
+
   const failedMovements: string[] = [];
   for (const usage of usages) {
     if (!usage.spareId || !usage.qty || usage.qty <= 0) continue;
+    if (!validIds.has(usage.spareId)) {
+      failedMovements.push(usage.spareId);
+      continue;
+    }
     try {
       await smDelegate.create({
         data: {

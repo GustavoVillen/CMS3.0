@@ -6,6 +6,8 @@ import { verifyPassword, hashOpaqueToken } from "./passwords";
 import { issueOpaqueSessionTokens } from "./tokens";
 import { publishPlatformAudit, publishSystemAudit } from "../audit/audit-publisher";
 import { isDevelopmentMode } from "../../common/runtime-mode";
+import { redactEmail } from "../../common/pii";
+import { assertNotLocked, recordLoginFailure, clearLoginFailures } from "../../http/login-lockout";
 
 function loginPlatformUserFromDevelopmentFallback(request: PlatformLoginRequest): PlatformLoginResponse {
   const email = String(request.email || "").trim();
@@ -46,26 +48,32 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
       throw new RouteError(400, "AUTH_INVALID_REQUEST", "Email and password are required.");
     }
 
+    assertNotLocked("platform", email);
+
     const user = await prisma.platformUser.findUnique({ where: { email } });
     if (!user || user.status !== "ACTIVE") {
+      recordLoginFailure("platform", email);
       await publishSystemAudit(prisma, {
         action: "PLATFORM_LOGIN_FAILED",
         entityType: "PlatformUser",
         entityId: null,
-        metadata: { email, reason: user ? "user_inactive" : "user_not_found" },
+        metadata: { emailHash: redactEmail(email), reason: user ? "user_inactive" : "user_not_found" },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
 
     if (!verifyPassword(password, user.passwordHash)) {
+      recordLoginFailure("platform", email);
       await publishSystemAudit(prisma, {
         action: "PLATFORM_LOGIN_FAILED",
         entityType: "PlatformUser",
         entityId: user.id,
-        metadata: { email, reason: "wrong_password" },
+        metadata: { emailHash: redactEmail(email), reason: "wrong_password" },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
+
+    clearLoginFailures("platform", email);
 
     const tokens = issueOpaqueSessionTokens();
 

@@ -19,6 +19,7 @@ import { handlePmsRoutes } from "./tenant/pms/pms-router";
 import { resetPrismaClient } from "./platform/data/prisma-client";
 import { evictExpiredSessions } from "./tenant/auth/session-store";
 import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
+import { evictExpiredLockouts } from "./http/login-lockout";
 import { attachUsageTracking } from "./http/usage-tracking-middleware";
 
 loadDotEnvFile();
@@ -161,6 +162,9 @@ setInterval(evictExpiredSessions, 5 * 60 * 1000).unref();
 
 // Sweep stale rate-limit buckets every 10 minutes.
 setInterval(evictExpiredRateLimitBuckets, 10 * 60 * 1000).unref();
+
+// Sweep expired login-lockout entries every 10 minutes.
+setInterval(evictExpiredLockouts, 10 * 60 * 1000).unref();
 
 // ── Background insight scheduler — every 6 hours for all active tenants ───────
 
