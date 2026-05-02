@@ -1249,6 +1249,50 @@ model DailyReport {
   @@index([tenantId, vesselCode, reportDate])
 }
 
+// ─── Monthly Report ──────────────────────────────────────────────────────────
+
+model MonthlyReport {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  reportYear          Int
+  reportMonth         Int                 // 1..12
+  status              MonthlyReportStatus @default(DRAFT)
+  // Info tab fields
+  operationalStatus   VesselOperationalStatus?
+  currentPort         String?
+  positionLat         Float?
+  positionLon         Float?
+  summary             String?
+  nextPort            String?
+  etaNextPort         DateTime?
+  notes               String?
+  // Inventory snapshot — frozen at submission time
+  inventorySnapshot   Json?
+  inventorySnapshotAt DateTime?
+  // Audit
+  submittedAt         DateTime?
+  submittedByUserId   String?
+  integratedAt        DateTime?
+  createdAt           DateTime            @default(now())
+  createdByUserId     String
+  updatedAt           DateTime            @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  @@unique([tenantId, vesselCode, reportYear, reportMonth])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+enum MonthlyReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  CLOSED
+}
+
 // ─── Daily Report sub-entities ───────────────────────────────────────────────
 
 model DailyEquipmentHours {

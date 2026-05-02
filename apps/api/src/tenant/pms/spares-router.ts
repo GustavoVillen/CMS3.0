@@ -66,7 +66,8 @@ export async function handleSparesRoutes(
     !url.pathname.startsWith("/app/pms/stock-locations") &&
     !url.pathname.startsWith("/app/pms/spare-requests") &&
     !url.pathname.startsWith("/app/pms/stock-reservations") &&
-    !url.pathname.startsWith("/app/pms/reports/spare-")
+    !url.pathname.startsWith("/app/pms/reports/") &&
+    !url.pathname.startsWith("/app/pms/monthly-reports")
   ) {
     return false;
   }
@@ -186,6 +187,52 @@ export async function handleSparesRoutes(
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
+  }
+
+  // ── Monthly Reports (formal) ───────────────────────────────────────────────
+  if (url.pathname === "/app/pms/monthly-reports") {
+    const {
+      listTenantMonthlyReports, createTenantMonthlyReport,
+    } = await import("./monthly-reports-service");
+    if (method === "GET") {
+      const items = await listTenantMonthlyReports(session, {
+        vesselCode: url.searchParams.get("vesselCode"),
+        status:     url.searchParams.get("status"),
+        year:  url.searchParams.get("year")  ? Number(url.searchParams.get("year"))  : null,
+        month: url.searchParams.get("month") ? Number(url.searchParams.get("month")) : null,
+      });
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof createTenantMonthlyReport>[1];
+      sendJson(response, 201, await createTenantMonthlyReport(session, body));
+      return true;
+    }
+  }
+
+  const monthlyMatch = url.pathname.match(/^\/app\/pms\/monthly-reports\/([^/]+)(\/submit)?$/);
+  if (monthlyMatch) {
+    const id     = monthlyMatch[1]!;
+    const isSubmit = !!monthlyMatch[2];
+    const {
+      getTenantMonthlyReport, updateTenantMonthlyReport, submitTenantMonthlyReport,
+    } = await import("./monthly-reports-service");
+    if (isSubmit && method === "POST") {
+      sendJson(response, 200, await submitTenantMonthlyReport(session, id));
+      return true;
+    }
+    if (!isSubmit) {
+      if (method === "GET") {
+        sendJson(response, 200, await getTenantMonthlyReport(session, id));
+        return true;
+      }
+      if (method === "PATCH") {
+        const body = await readJsonBody(request) as Parameters<typeof updateTenantMonthlyReport>[2];
+        sendJson(response, 200, await updateTenantMonthlyReport(session, id, body));
+        return true;
+      }
+    }
   }
 
   if (/^\/app\/pms\/spares\/[^/]+$/.test(url.pathname)) {
