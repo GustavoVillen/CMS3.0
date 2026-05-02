@@ -1,8 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { api, ApiError, setUnauthorizedHandler } from "./api";
-import { useIdleTimeout } from "./idle-timeout";
-
-const SUSPEND_GAP_MS = 5 * 60 * 1000; // 5 minutes — timer-drift threshold
 
 export interface AuthUser {
   id: string;
@@ -138,11 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("gpms_refresh_token");
     });
   }, []);
-
-  // Cierra sesión solo si la PC se suspendió o el screensaver bloqueó los
-  // timers del browser por más de 5 min (detectado por timer drift).
-  // No se desconecta por inactividad humana viendo la pantalla.
-  useIdleTimeout(SUSPEND_GAP_MS, logout, state.isAuthenticated);
 
   return (
     <AuthContext.Provider value={{ ...state, login, logout, error, loading }}>
