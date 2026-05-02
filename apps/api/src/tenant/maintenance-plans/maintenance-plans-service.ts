@@ -451,7 +451,7 @@ export async function listTenantMaintenancePlans(
   const [assetRows, currentHoursRows, activeWos] = await Promise.all([
     assetIds.length > 0
       ? (prismaRaw as unknown as { asset: { findMany: (args: unknown) => Promise<{ id: string; name: string | null }[]> } }).asset.findMany({
-          where: { id: { in: assetIds } },
+          where: { id: { in: assetIds }, tenantId },
           select: { id: true, name: true },
         })
       : Promise.resolve([] as { id: string; name: string | null }[]),

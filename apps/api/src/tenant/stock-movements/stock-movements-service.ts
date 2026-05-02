@@ -96,8 +96,8 @@ export async function listTenantStockMovements(session: TenantAccessSession, fil
   };
 
   const [workOrders, defects] = await Promise.all([
-    woIds.length  > 0 ? prismaAny.workOrder.findMany({ where: { id: { in: woIds  } }, select: { id: true, workOrderCode: true } }) : [] as WORow[],
-    defIds.length > 0 ? prismaAny.defect.findMany(   { where: { id: { in: defIds } }, select: { id: true, defectCode:    true } }) : [] as DefRow[],
+    woIds.length  > 0 ? prismaAny.workOrder.findMany({ where: { id: { in: woIds  }, tenantId }, select: { id: true, workOrderCode: true } }) : [] as WORow[],
+    defIds.length > 0 ? prismaAny.defect.findMany(   { where: { id: { in: defIds }, tenantId }, select: { id: true, defectCode:    true } }) : [] as DefRow[],
   ]);
 
   const codeMap = new Map<string, string>();

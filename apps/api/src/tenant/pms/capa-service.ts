@@ -175,7 +175,7 @@ export async function listCapaRecords(session: TenantAccessSession, filters: Cap
   const records = await capa.findMany({ where, orderBy: { createdAt: "desc" } });
   const assetIds = [...new Set(records.map(r => r.assetId).filter(Boolean))];
   const assetRows = assetIds.length > 0
-    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, name: true } })
+    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
     : [];
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
   return records.map(r => ({ ...r, assetName: assetNameMap.get(r.assetId) ?? null }));

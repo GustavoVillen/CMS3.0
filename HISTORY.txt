@@ -10012,3 +10012,56 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - Auditar queries Prisma sin filtro tenantId (cross-tenant leak)
     - Revisar headers CORS / CSP en producción
     - Migrar secretos de .env a un secrets manager
+
+
+[2026-05-02] Hardening de IP — Tanda 2: prompts restantes + cross-tenant fixes
+  Cambios:
+    - Movidos al backend los 4 prompts restantes:
+        * Deferrals.tsx: medidas compensatorias
+          → POST /app/pms/deferrals/suggest-compensatory-measures
+        * MaintenancePlans.tsx: 3 prompts (criterios, LOTO, riesgo)
+          → POST /app/pms/maintenance-plans/suggest-{acceptance-criteria,loto,risk}
+    - Nuevos services:
+        * apps/api/src/tenant/pms/deferrals-ai-suggestions.ts
+        * apps/api/src/tenant/maintenance-plans/maintenance-plans-ai-suggestions.ts
+    - Verificado: bundle frontend ya NO contiene "Sos experto" (0 hits).
+
+  Defense-in-depth tenant isolation (queries Prisma sin filtro tenantId):
+    - apps/api/src/tenant/deferrals/deferrals-service.ts:37-39
+      (workOrder/defect/maintenancePlan findMany)
+    - apps/api/src/tenant/pms/deferrals-service.ts:177,193-195,240
+      (asset findMany/findFirst, workOrder/defect/maintenancePlan findMany)
+    - apps/api/src/tenant/work-orders/work-orders-service.ts:279,313,330
+      (asset findMany, asset findFirst, spare findMany)
+    - apps/api/src/tenant/stock-movements/stock-movements-service.ts:99-100
+      (workOrder/defect findMany)
+    - apps/api/src/tenant/daily-reports/daily-report-integration-service.ts:325,344
+      (maintenancePlan/defect findMany)
+    - apps/api/src/tenant/pms/spare-reports-service.ts:194,338,346
+      (asset/spare findMany)
+    - apps/api/src/tenant/pms/capa-service.ts:178 (asset findMany)
+    - apps/api/src/tenant/spare-requests/spare-request-items-service.ts:49
+      (spare findMany)
+    - apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts:454
+      (asset findMany)
+
+    Vector real explotable: createDeferralCore NO valida que assetId/sourceId
+    pertenezcan al mismo tenantId. Un atacante podía inyectar IDs cross-tenant
+    al crear un deferral, y luego los lookups de display leakeaban el code
+    del WO/defect/plan ajeno. Fix: agregar tenantId a todos los lookups por
+    ID. Ahora aunque la creación se bypassee, el lookup devuelve null.
+
+  CORS / CSP review:
+    - CORS: sin headers Access-Control-Allow-* → browser bloquea
+      cross-origin por default (correcto).
+    - CSP: en modo Content-Security-Policy-Report-Only. Pendiente
+      promover a enforce (Content-Security-Policy) tras revisar logs
+      de violaciones en el VPS.
+
+  Pendientes de seguridad (tanda 3):
+    - Promover CSP de Report-Only a enforce
+    - Validar en createDeferralCore que assetId/sourceId tengan
+      tenantId == session.tenantId (fix root, no solo defense-in-depth)
+    - Auditar lookups similares de user.findMany (lower priority,
+      User es global pero leakea names/emails)
+    - Migrar secretos de .env a un secrets manager

@@ -517,38 +517,16 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
         : deferral.sourceType === "DEFECT" ? "Defecto"
         : deferral.sourceType === "MAINTENANCE_PLAN" ? "Plan de Mantenimiento"
         : deferral.sourceType;
-      const targetDateStr = deferral.targetDate ? fmtDate(deferral.targetDate) : "no especificada";
-      const reader = await api.stream("/app/copiloto/chat", {
-        capability: "maintenance_insights",
-        locale: "es",
-        messages: [{
-          role: "user",
-          content: `Aplazamiento de mantenimiento (CONTEXTO COMPLETO — no preguntes información que ya está abajo):
-- Código del aplazamiento: ${deferral.deferralCode}
-- Buque: ${deferral.vesselCode}
-- Activo afectado: ${deferral.assetName ?? deferral.assetId}
-- Tipo de origen: ${sourceTypeLabel}
-- Origen específico: ${sourceDisplayName}
-- Fecha objetivo del aplazamiento: ${targetDateStr}
-- Justificación del solicitante: ${deferral.justification ?? "No especificada"}
-
-Sos experto en gestión de mantenimiento naval. Proponé directamente medidas compensatorias concretas, verificables y específicas al activo y al tipo de tarea aplazada, para mitigar el riesgo operacional mientras dure el aplazamiento. Las medidas deben ser prácticas, ejecutables por la tripulación, y enfocadas en monitoreo, controles operativos y planes de contingencia.
-
-NO hagas preguntas: con la información provista alcanza para proponer medidas razonables. Respondé ÚNICAMENTE con las medidas compensatorias en formato de lista numerada, en texto plano, sin introducción ni explicación adicional.`,
-        }],
+      const res = await api.post<{ text: string }>("/app/pms/deferrals/suggest-compensatory-measures", {
+        deferralCode: deferral.deferralCode ?? null,
+        vesselCode: deferral.vesselCode ?? null,
+        assetLabel: deferral.assetName ?? deferral.assetId ?? null,
+        sourceTypeLabel: sourceTypeLabel ?? null,
+        sourceDisplayName: sourceDisplayName ?? null,
+        targetDate: deferral.targetDate ? fmtDate(deferral.targetDate) : null,
+        justification: deferral.justification ?? null,
       });
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of value.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") break;
-          try { const p = JSON.parse(data) as { text?: string }; if (p.text) fullText += p.text; } catch { /* partial */ }
-        }
-      }
-      setCompensatoryMeasures(fullText.trim() || "");
+      setCompensatoryMeasures(res.text || "");
     } catch { setCompensatoryMeasures(""); }
     finally { setLoadingCompensatory(false); }
   }, [showRequestedActions, loadingCompensatory, deferral, sourceDisplayName]);

@@ -35,6 +35,11 @@ import {
   suggestLoto,
   suggestRisk,
 } from "../work-orders/work-orders-ai-suggestions";
+import {
+  suggestPlanAcceptanceCriteria,
+  suggestPlanLoto,
+  suggestPlanRisk,
+} from "../maintenance-plans/maintenance-plans-ai-suggestions";
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
@@ -97,6 +102,24 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantMaintenancePlan>[1];
     sendJson(response, 201, await createTenantMaintenancePlan(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-acceptance-criteria") {
+    const body = await readJsonBody<Parameters<typeof suggestPlanAcceptanceCriteria>[1]>(request);
+    sendJson(response, 200, await suggestPlanAcceptanceCriteria(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-loto") {
+    const body = await readJsonBody<Parameters<typeof suggestPlanLoto>[1]>(request);
+    sendJson(response, 200, await suggestPlanLoto(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-risk") {
+    const body = await readJsonBody<Parameters<typeof suggestPlanRisk>[1]>(request);
+    sendJson(response, 200, await suggestPlanRisk(session, body));
     return true;
   }
 

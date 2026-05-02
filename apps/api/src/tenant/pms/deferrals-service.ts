@@ -174,7 +174,7 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
 
   const assetIds = [...new Set(records.map(r => r.assetId).filter(Boolean))];
   const assetRows = assetIds.length > 0
-    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, name: true } })
+    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
     : [];
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
 
@@ -190,9 +190,9 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
   };
 
   const [workOrders, defects, plans] = await Promise.all([
-    woIds.length   > 0 ? prisma.workOrder.findMany(      { where: { id: { in: woIds   } }, select: { id: true, workOrderCode: true } }) : [],
-    defIds.length  > 0 ? prisma.defect.findMany(         { where: { id: { in: defIds  } }, select: { id: true, defectCode:    true } }) : [],
-    planIds.length > 0 ? prisma.maintenancePlan.findMany({ where: { id: { in: planIds } }, select: { id: true, taskCode:      true } }) : [],
+    woIds.length   > 0 ? prisma.workOrder.findMany(      { where: { id: { in: woIds   }, tenantId }, select: { id: true, workOrderCode: true } }) : [],
+    defIds.length  > 0 ? prisma.defect.findMany(         { where: { id: { in: defIds  }, tenantId }, select: { id: true, defectCode:    true } }) : [],
+    planIds.length > 0 ? prisma.maintenancePlan.findMany({ where: { id: { in: planIds }, tenantId }, select: { id: true, taskCode:      true } }) : [],
   ]);
 
   const codeMap = new Map<string, string>();
@@ -237,7 +237,7 @@ export async function getDeferral(session: TenantAccessSession, id: string) {
   let assetName: string | null = null;
   try {
     const assetRow = await (prismaRaw as unknown as { asset: { findFirst(a: unknown): Promise<{ name: string | null } | null> } })
-      .asset.findFirst({ where: { id: record.assetId }, select: { name: true } });
+      .asset.findFirst({ where: { id: record.assetId, tenantId }, select: { name: true } });
     assetName = assetRow?.name ?? null;
   } catch { /* non-blocking */ }
 

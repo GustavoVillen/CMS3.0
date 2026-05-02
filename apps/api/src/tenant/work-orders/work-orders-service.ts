@@ -276,7 +276,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
 
   const [assetRows, userRows] = await Promise.all([
     assetIds.length > 0
-      ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, name: true } })
+      ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
     userIds.length > 0
       ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
@@ -311,7 +311,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
   let assetName: string | null = null;
   try {
     const asset = await (prismaRaw as unknown as { asset: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).asset.findFirst({
-      where: { id: record.assetId },
+      where: { id: record.assetId, tenantId },
       select: { name: true },
     });
     assetName = asset?.name ?? null;
@@ -328,7 +328,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     if (movements.length > 0) {
       const spareIds = [...new Set(movements.map((m: any) => m.spareId).filter(Boolean))] as string[];
       const spares = await (prismaRaw as any).spare.findMany({
-        where: { id: { in: spareIds } },
+        where: { id: { in: spareIds }, tenantId },
         select: { id: true, sku: true, name: true, criticality: true },
       });
       const spareMap = new Map<string, { sku: string; name: string; criticality: string }>(

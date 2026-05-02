@@ -192,7 +192,7 @@ export async function getSpareInventoryReport(
   const assetSfiMap = new Map<string, string | null>();
   if (assetIds.length > 0) {
     const assets = await (prisma as any).asset.findMany({
-      where: { id: { in: assetIds } },
+      where: { id: { in: assetIds }, tenantId },
       select: { id: true, sfiCode: true },
     });
     for (const a of assets) assetSfiMap.set(a.id, a.sfiCode ?? null);
@@ -336,7 +336,7 @@ export async function getSpareConsumptionReport(
   }
 
   const spares = await (prisma as any).spare.findMany({
-    where: { id: { in: spareIds } },
+    where: { id: { in: spareIds }, tenantId },
     select: { id: true, sku: true, name: true, unit: true, sfiCode: true, linkedAssetId: true },
   });
 
@@ -344,7 +344,7 @@ export async function getSpareConsumptionReport(
   const assetSfiMap = new Map<string, string | null>();
   if (linkedAssetIds.length > 0) {
     const assets = await (prisma as any).asset.findMany({
-      where: { id: { in: linkedAssetIds } },
+      where: { id: { in: linkedAssetIds }, tenantId },
       select: { id: true, sfiCode: true },
     });
     for (const a of assets) assetSfiMap.set(a.id, a.sfiCode ?? null);

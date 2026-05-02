@@ -322,7 +322,7 @@ export async function getDailyReportWithSubEntities(
   const taskCodeMap = new Map<string, string>();
   if (planIds.length > 0) {
     const plans = await (prisma as any).maintenancePlan.findMany({
-      where: { id: { in: planIds } },
+      where: { id: { in: planIds }, tenantId: tenant.id },
       select: { id: true, taskCode: true },
     });
     for (const p of plans) taskCodeMap.set(p.id, p.taskCode);
@@ -341,7 +341,7 @@ export async function getDailyReportWithSubEntities(
   const defectCodeById = new Map<string, string>();
   if (defectIds.length > 0) {
     const defects = await (prisma as any).defect.findMany({
-      where: { id: { in: defectIds } },
+      where: { id: { in: defectIds }, tenantId: tenant.id },
       select: { id: true, defectCode: true },
     });
     for (const d of defects) defectCodeById.set(d.id, d.defectCode);

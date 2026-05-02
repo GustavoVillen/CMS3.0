@@ -46,7 +46,7 @@ export async function listRequestItems(session: TenantAccessSession, spareReques
   // Enrich with spareSku/spareName
   const spareIds = items.map(i => i.spareId).filter(Boolean) as string[];
   const spares = spareIds.length > 0
-    ? await prisma.spare.findMany({ where: { id: { in: spareIds } }, select: { id: true, sku: true, name: true, unit: true } })
+    ? await prisma.spare.findMany({ where: { id: { in: spareIds }, tenantId: req.tenantId }, select: { id: true, sku: true, name: true, unit: true } })
     : [];
   const spareMap = new Map(spares.map(s => [s.id, s]));
 

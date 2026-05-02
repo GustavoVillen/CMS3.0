@@ -1165,37 +1165,14 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
   const handleAcceptanceCriteriaClick = useCallback(async () => {
     if (!plan || loadingCriteria) return;
-    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
-    const taskDesc = description || title || "tarea no especificada";
-
     setLoadingCriteria(true);
     setAcceptanceCriteria("Analizando...");
-
     try {
-      const reader = await api.stream("/app/copiloto/chat", {
-        capability: "maintenance_insights",
-        locale: "es",
-        messages: [{
-          role: "user",
-          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}\n\nSos experto en mantenimiento de máquinas navales. Generá el siguiente contenido para esta tarea:\n\n1. Criterios de aceptación verificables, específicos y técnicos (cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables).\n\n2. Una sección con las herramientas, equipos de medición e instrumentos requeridos.\n\nUsá exactamente este formato (sin introducción ni explicación adicional):\n[criterios de aceptación]\n\nHERRAMIENTAS E INSTRUMENTOS NECESARIOS:\n[lista de herramientas e instrumentos]`,
-        }],
+      const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-acceptance-criteria", {
+        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        taskDesc: description || title || null,
       });
-
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of value.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(data) as { text?: string };
-            if (parsed.text) fullText += parsed.text;
-          } catch { /* partial */ }
-        }
-      }
-      setAcceptanceCriteria(fullText.trim() || "");
+      setAcceptanceCriteria(res.text || "");
     } catch {
       setAcceptanceCriteria("");
     } finally {
@@ -1205,37 +1182,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
   const handleLotoClick = useCallback(async () => {
     if (!plan || loadingLoto) return;
-    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
-    const taskDesc = description || title || "tarea no especificada";
-
     setLoadingLoto(true);
     setLoto("Analizando...");
-
     try {
-      const reader = await api.stream("/app/copiloto/chat", {
-        capability: "maintenance_insights",
-        locale: "es",
-        messages: [{
-          role: "user",
-          content: `Activo: ${assetLabel}\nTarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}\n\nSos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.\n\nResponde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`,
-        }],
+      const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-loto", {
+        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        taskDesc: description || title || null,
+        acceptanceCriteria: acceptanceCriteria || null,
       });
-
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of value.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(data) as { text?: string };
-            if (parsed.text) fullText += parsed.text;
-          } catch { /* partial */ }
-        }
-      }
-      setLoto(fullText.trim() || "");
+      setLoto(res.text || "");
     } catch {
       setLoto("");
     } finally {
@@ -1245,54 +1200,18 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
   const handleRiskClick = useCallback(async () => {
     if (!plan || loadingRisk) return;
-    const assetLabel = plan.assetName ?? plan.assetId ?? "equipo desconocido";
-    const taskDesc = description || title || "tarea no especificada";
-
     setLoadingRisk(true);
     try {
-      const reader = await api.stream("/app/copiloto/chat", {
-        capability: "maintenance_insights",
-        locale: "es",
-        messages: [{
-          role: "user",
-          content: `Activo: ${assetLabel}
-Tarea: ${taskDesc}${acceptanceCriteria ? `\nCriterios de aceptación: ${acceptanceCriteria}` : ""}${loto ? `\nLOTO: ${loto}` : ""}
-
-Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
-
-NIVEL: LOW|MEDIUM|HIGH|CRITICAL
-
-[peligros identificados, consecuencias posibles y medidas de control]
-
-EQUIPOS DE PPE:
-- [equipo de protección 1]
-- [equipo de protección 2]`,
-        }],
+      const res = await api.post<{ level: string; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
+        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        taskDesc: description || title || null,
+        acceptanceCriteria: acceptanceCriteria || null,
+        loto: loto || null,
       });
-
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of value.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(data) as { text?: string };
-            if (parsed.text) fullText += parsed.text;
-          } catch { /* partial */ }
-        }
+      if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) {
+        setRiskLevel(res.level as RiskLevel);
       }
-
-      // Parse plain-text response: first line is "NIVEL: HIGH", rest is the analysis
-      const text = fullText.trim();
-      const levelMatch = text.match(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)/im);
-      if (levelMatch) {
-        setRiskLevel(levelMatch[1] as RiskLevel);
-      }
-      const analysisText = text.replace(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)\s*/im, "").trim();
-      if (analysisText) setRiskAnalysisResult(analysisText);
+      if (res.analysis) setRiskAnalysisResult(res.analysis);
     } catch { /* noop */ }
     finally {
       setLoadingRisk(false);
