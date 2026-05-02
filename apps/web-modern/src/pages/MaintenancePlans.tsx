@@ -2013,14 +2013,6 @@ EQUIPOS DE PPE:
                   Reportar Resultado
                 </button>
               )}
-              {canPostpone && (
-                <button
-                  onClick={() => setShowPostpone(true)}
-                  className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-bold text-xs hover:bg-yellow-500/15 transition-all"
-                >
-                  Postergar
-                </button>
-              )}
             </div>
             <div className="flex gap-2">
               {!isNew && (

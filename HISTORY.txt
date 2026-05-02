@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-05-02] Quitar botón "Postergar" del modal de Plan de Mantenimiento
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/MaintenancePlans.tsx
+
+CAMBIO:
+- Removido el botón "Postergar" del footer del modal de Plan de Mantenimiento
+- El estado y el modal de PostponeModal quedan en el código (referenciado desde otros lados)
+
 [2026-05-02] Cerrar/Cancelar OT cierra aplazamiento en CUALQUIER estado no-terminal
 Agent: Claude Opus 4.7
 
