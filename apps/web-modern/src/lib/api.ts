@@ -49,18 +49,21 @@ async function refreshTenantToken(): Promise<string | null> {
         body: JSON.stringify({ refreshToken }),
       });
       if (!res.ok) return null;
-      const data = await res.json() as { accessToken: string; refreshToken: string };
-      localStorage.setItem("gpms_token", data.accessToken);
-      localStorage.setItem("gpms_refresh_token", data.refreshToken);
+      const data = await res.json() as { session: { accessToken: string; refreshToken: string } };
+      const newAccess  = data.session?.accessToken;
+      const newRefresh = data.session?.refreshToken;
+      if (!newAccess) return null;
+      localStorage.setItem("gpms_token", newAccess);
+      localStorage.setItem("gpms_refresh_token", newRefresh);
       try {
         const raw = localStorage.getItem("gpms_auth");
         if (raw) {
           const parsed = JSON.parse(raw);
-          parsed.token = data.accessToken;
+          parsed.token = newAccess;
           localStorage.setItem("gpms_auth", JSON.stringify(parsed));
         }
       } catch {/* ignore */}
-      return data.accessToken;
+      return newAccess;
     } catch {
       return null;
     }
