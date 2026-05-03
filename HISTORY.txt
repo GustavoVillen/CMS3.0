@@ -1,5 +1,22 @@
 HISTORY.txt
 
+[2026-05-03] OTs: reporte PDF de OTs abiertas agrupadas por responsable
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/pms/work-orders-open-report-pdf-service.ts (NUEVO)
+- apps/api/src/tenant/pms/maintenance-router.ts (endpoint GET /app/pms/work-orders/open-report.pdf)
+- apps/web-modern/src/lib/print-work-order.ts (nueva función printOpenWorkOrdersReport)
+- apps/web-modern/src/pages/WorkOrders.tsx (botón "Reporte OTs Abiertas")
+
+FUNCIONALIDAD:
+- PDF A4 landscape con header (logo, título, total, fecha)
+- Filtra OTs con status PLANNED + IN_PROGRESS (incluye vencidas, excluye ON_HOLD/CLOSED/CANCELLED/DEFERRED)
+- Agrupa por responsable, ordena alfabéticamente; "Sin responsable" al final
+- Cada grupo: header con nombre + contador de vencidas, tabla con código/embarcación/equipo/categoría/prioridad/fechas/estado
+- Vencidas resaltadas en rojo, prioridad CRITICAL/HIGH coloreada
+- Respeta vessel scope del usuario (solo TENANT_ADMIN ve todas las embarcaciones)
+
 [2026-05-02] Auth: refresh token re-registra la sesión en memoria (fix de logout silencioso a los 15 min)
 Agent: Claude Opus 4.7
 

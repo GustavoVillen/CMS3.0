@@ -45,6 +45,7 @@ import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-r
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
+import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -280,6 +281,19 @@ export async function handleMaintenanceRoutes(
     const plan = await getTenantMaintenancePlan(session, id);
     const filename = `${(plan as any).taskCode ?? id}.pdf`;
     const buffer = await buildMaintenancePlanPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/work-orders/open-report.pdf") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const buffer = await buildOpenWorkOrdersReportPdf(session);
+    const filename = `OTs-Abiertas-${new Date().toISOString().slice(0, 10)}.pdf`;
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,

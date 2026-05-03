@@ -10,7 +10,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
-import { printWorkOrder } from "../lib/print-work-order";
+import { printWorkOrder, printOpenWorkOrdersReport } from "../lib/print-work-order";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -1063,6 +1063,7 @@ export const WorkOrdersPage: React.FC = () => {
 
   useCopilotEmitter(!editing && !showCreate ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
   const [showExcel, setShowExcel]     = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [tableActionError, setTableActionError] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
@@ -1232,6 +1233,14 @@ export const WorkOrdersPage: React.FC = () => {
         )}
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+        </button>
+        <button
+          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(); } finally { setGeneratingReport(false); } }}
+          disabled={generatingReport}
+          title="Imprimir todas las OTs abiertas agrupadas por responsable"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
+        >
+          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas
         </button>
         <div className="flex items-center gap-2">
           <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
