@@ -1728,7 +1728,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className={sectionLabelCls} style={sectionLabelStyle}>TAREAS A REALIZAR</label>
+              <label className={labelCls}>TAREAS A REALIZAR</label>
               <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
             </div>
 
@@ -1822,17 +1822,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Acceptance criteria */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingCriteria ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
-                style={aiLabelStyle}
                 onClick={handleAcceptanceCriteriaClick}
                 title="Click para que la IA genere los criterios y herramientas"
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : ""}`}
               >
-                <span>{t("mp.acceptanceCriteria")}</span>
-                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
-                  {loadingCriteria
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
-                    : <><Sparkles className="w-3 h-3" /> IA</>}
-                </span>
+                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("mp.acceptanceCriteria")}
               </label>
               <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
             </div>
@@ -1840,17 +1835,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* LOTO */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingLoto ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
-                style={aiLabelStyle}
                 onClick={handleLotoClick}
                 title="Click para que la IA genere el procedimiento LOTO"
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : ""}`}
               >
-                <span>{t("mp.loto")}</span>
-                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
-                  {loadingLoto
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
-                    : <><Sparkles className="w-3 h-3" /> IA</>}
-                </span>
+                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("mp.loto")}
               </label>
               <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
             </div>
@@ -1858,17 +1848,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Risk level */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingRisk ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
-                style={aiLabelStyle}
                 onClick={handleRiskClick}
                 title="Click para que la IA analice el nivel de riesgo y PPE requerido"
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingRisk ? "opacity-60 animate-pulse" : ""}`}
               >
-                <span>{t("mp.riskLevel")}</span>
-                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
-                  {loadingRisk
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
-                    : <><Sparkles className="w-3 h-3" /> IA</>}
-                </span>
+                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("mp.riskLevel")}
               </label>
               <div className="flex items-center gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
@@ -1884,24 +1869,19 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Risk analysis */}
             <div className="space-y-1.5">
-              <label className={sectionLabelCls} style={sectionLabelStyle}>{t("mp.riskAnalysisResult")}</label>
+              <label className={labelCls}>{t("mp.riskAnalysisResult")}</label>
               <RichTextArea value={riskAnalysisResult} onChange={setRiskAnalysisResult} rows={2} className={inputCls} disabled={loadingRisk} />
             </div>
 
             {/* RCM consequence — "si esta tarea no se hace, ¿qué pasa?" */}
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} cursor-pointer transition-opacity flex items-center justify-between ${loadingConsequence ? "opacity-60 animate-pulse" : "hover:opacity-90"}`}
-                style={aiLabelStyle}
                 onClick={handleConsequenceClick}
                 title="Click para que la IA sugiera la consecuencia (RCM)"
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingConsequence ? "opacity-60 animate-pulse" : ""}`}
               >
-                <span>Si no se hace, ¿qué pasa?</span>
-                <span className="flex items-center gap-1 text-[10px] normal-case font-normal text-blue-400/70 shrink-0">
-                  {loadingConsequence
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> analizando...</>
-                    : <><Sparkles className="w-3 h-3" /> IA</>}
-                </span>
+                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Si no se hace, ¿qué pasa?
               </label>
               <select
                 value={consequenceCategory}
