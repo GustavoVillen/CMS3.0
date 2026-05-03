@@ -16,6 +16,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { getTenantAccessSession } from "../tenant/auth/session-store";
 import { getPrismaClient } from "../platform/data/prisma-client";
 import { recordHttpUsage } from "../tenant/usage/usage-service";
+import { getClientIp } from "./client-ip";
 
 function parseAuthBearer(headerValue: string | undefined): string | null {
   if (!headerValue) return null;
@@ -106,6 +107,7 @@ export function attachUsageTracking(request: IncomingMessage, response: ServerRe
           bytesIn,
           bytesOut,
           latencyMs:   Date.now() - startedAt,
+          ipAddress:   getClientIp(request),
         });
       })().catch(() => { /* swallow */ });
     } catch {

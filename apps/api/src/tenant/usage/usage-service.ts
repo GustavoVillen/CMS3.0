@@ -52,6 +52,7 @@ export interface RecordAiUsageInput {
   cacheCreationTokens?: number;
   latencyMs?: number;
   errored?: boolean;
+  ipAddress?: string | null;
 }
 
 export function recordAiUsage(input: RecordAiUsageInput): void {
@@ -75,6 +76,7 @@ export function recordAiUsage(input: RecordAiUsageInput): void {
         cacheCreationTokens: input.cacheCreationTokens ?? 0,
         latencyMs: input.latencyMs ?? null,
         errored: input.errored ?? false,
+        ipAddress: input.ipAddress ?? null,
       },
     })
     .catch(() => { /* never fail the request because of telemetry */ });
@@ -93,6 +95,7 @@ export interface RecordHttpUsageInput {
   bytesOut: number;
   latencyMs: number;
   errored?: boolean;
+  ipAddress?: string | null;
 }
 
 export function recordHttpUsage(input: RecordHttpUsageInput): void {
@@ -115,6 +118,7 @@ export function recordHttpUsage(input: RecordHttpUsageInput): void {
         bytesOut: input.bytesOut,
         latencyMs: input.latencyMs,
         errored: input.errored ?? input.statusCode >= 500,
+        ipAddress: input.ipAddress ?? null,
       },
     })
     .catch(() => { /* swallow */ });
@@ -213,6 +217,7 @@ export interface UsageEventRow {
   bytesOut: number;
   latencyMs: number | null;
   errored: boolean;
+  ipAddress: string | null;
 }
 
 export async function listUsageEvents(filters: ListUsageFilters): Promise<{ items: UsageEventRow[]; total: number }> {
@@ -261,6 +266,7 @@ export async function listUsageEvents(filters: ListUsageFilters): Promise<{ item
         bytesOut: true,
         latencyMs: true,
         errored: true,
+        ipAddress: true,
       },
     }),
     prisma.usageEvent.count({ where: where as never }),

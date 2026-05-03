@@ -819,6 +819,7 @@ model UsageEvent {
   bytesOut              Int       @default(0)           // response body bytes
   latencyMs             Int?
   errored               Boolean   @default(false)
+  ipAddress             String?                         // client IP (X-Forwarded-For first hop, validated)
   createdAt             DateTime  @default(now())
 
   @@index([tenantId, createdAt])

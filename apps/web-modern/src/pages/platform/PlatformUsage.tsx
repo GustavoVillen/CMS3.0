@@ -26,6 +26,7 @@ interface UsageEvent {
   bytesOut: number;
   latencyMs: number | null;
   errored: boolean;
+  ipAddress: string | null;
 }
 
 interface ListResponse { items: UsageEvent[]; total: number; }
@@ -73,6 +74,7 @@ interface AggregatedRow {
   latencyMs: number | null; // average
   errored: boolean;         // true if any in the bucket errored
   statusCode: number | null;
+  ipAddress: string | null; // last IP seen in the bucket (typically only one per user-minute)
 }
 
 function truncateToMinute(iso: string): string {
@@ -118,11 +120,13 @@ function aggregateByMinute(items: UsageEvent[]): AggregatedRow[] {
         latencyMs: 0,
         errored: false,
         statusCode: it.statusCode,
+        ipAddress: it.ipAddress,
         _latencySum: 0,
         _latencyCount: 0,
       };
       buckets.set(key, b);
     }
+    if (it.ipAddress) b.ipAddress = it.ipAddress;
     b.requests += 1;
     b.inputTokens += it.inputTokens;
     b.outputTokens += it.outputTokens;
@@ -154,6 +158,7 @@ const COMMON_COLS_RAW: Column<UsageEvent>[] = [
   { key: "createdAt",  header: "Fecha",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span> },
   { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario", render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
 ];
 
@@ -183,6 +188,7 @@ const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",  render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
   { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario", render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
 ];
 
@@ -206,6 +212,7 @@ const HTTP_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
   { key: "tenantSlug", header: "Tenant",   render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario",  render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[260px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "ipAddress",  header: "IP",       render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "requests",   header: "Reqs",     render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
   { key: "bytesIn",    header: "↑ In",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
   { key: "bytesOut",   header: "↓ Out",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesOut)}</span> },
