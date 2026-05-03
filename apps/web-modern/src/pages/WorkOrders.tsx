@@ -11,6 +11,7 @@ import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport } from "../lib/print-work-order";
+import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -1055,6 +1056,7 @@ export const WorkOrdersPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { selectedVesselCode } = useVesselContext();
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1235,12 +1237,12 @@ export const WorkOrdersPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
         <button
-          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(vesselFilter); } finally { setGeneratingReport(false); } }}
+          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(selectedVesselCode); } finally { setGeneratingReport(false); } }}
           disabled={generatingReport}
-          title={vesselFilter ? `Imprimir OTs abiertas de ${vesselFilter}` : "Imprimir todas las OTs abiertas agrupadas por responsable"}
+          title={selectedVesselCode ? `Imprimir OTs abiertas de ${selectedVesselCode}` : "Imprimir todas las OTs abiertas agrupadas por responsable"}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
         >
-          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas{vesselFilter ? ` (${vesselFilter})` : ""}
+          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas{selectedVesselCode ? ` (${selectedVesselCode})` : ""}
         </button>
         <div className="flex items-center gap-2">
           <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
