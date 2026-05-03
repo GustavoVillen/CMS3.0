@@ -317,6 +317,8 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       if ("loto"             in d) r.loto             = d.loto             ?? null;
       if ("riskLevel"         in d) r.riskLevel         = d.riskLevel         ?? null;
       if ("riskAnalysisResult" in d) r.riskAnalysisResult = d.riskAnalysisResult ?? null;
+      if ("consequenceCategory" in d) r.consequenceCategory = d.consequenceCategory ?? null;
+      if ("consequenceRationale" in d) r.consequenceRationale = d.consequenceRationale ?? null;
       if ("frequencyMonths"   in d) r.frequencyMonths   = d.frequencyMonths   ? Number(d.frequencyMonths) : null;
       if ("frequencyHours"    in d) r.frequencyHours    = parseNumeric(d.frequencyHours);
       if ("windowLeadDays"    in d) r.windowLeadDays    = d.windowLeadDays    ? Number(d.windowLeadDays) : null;

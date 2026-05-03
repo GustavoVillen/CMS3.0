@@ -61,6 +61,8 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "loto",                header: "loto",                 required: false, width: 40 },
     { key: "riskLevel",           header: "riskLevel",            required: false, width: 14 },
     { key: "riskAnalysisResult",  header: "riskAnalysisResult",   required: false, width: 50 },
+    { key: "consequenceCategory", header: "consequenceCategory",  required: false, width: 22 },
+    { key: "consequenceRationale", header: "consequenceRationale", required: false, width: 50 },
     { key: "triggerResultMode",   header: "triggerResultMode",    required: false, width: 22 },
     { key: "windowMode",          header: "windowMode",           required: false, width: 15 },
     { key: "windowLeadDays",      header: "windowLeadDays",       required: false, width: 16 },
