@@ -113,6 +113,8 @@ export interface OpenFormalWorkOrderInput {
   loto?: string | null;
   riskLevel?: string | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
 }
 
 interface RecalculatePlanInput {
@@ -879,6 +881,16 @@ export async function openFormalWorkOrder(
   const woCount = await prismaRaw.workOrder.count({ where: { tenantId: plan.tenantId, vesselCode: plan.vesselCode, createdAt: { gte: new Date(woYear, 0, 1), lt: new Date(woYear + 1, 0, 1) } } });
   const workOrderCode = `WO-${plan.vesselCode}-${woYY}-${String(woCount + 1).padStart(4, "0")}`;
 
+  // Hereda del plan cuando el payload no lo provee. Si el payload manda
+  // el campo (incluso vacío "", el normalizeOptionalText lo convertirá a
+  // null), respeta esa intención del usuario.
+  const inherit = <T>(payloadValue: unknown, planValue: T | null | undefined): T | null => {
+    if (payloadValue === undefined) return (planValue ?? null) as T | null;
+    const txt = normalizeOptionalText(payloadValue as string | null | undefined);
+    return (txt as unknown as T) ?? null;
+  };
+  const planAny = plan as any;
+
   const woTxResult = await prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.create({
       data: {
@@ -897,10 +909,14 @@ export async function openFormalWorkOrder(
         assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
         estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
         taskMasterId: plan.taskMasterId ?? null,
-        acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
-        loto: normalizeOptionalText(payload.loto),
-        riskLevel: normalizeOptionalText(payload.riskLevel),
-        riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
+        acceptanceCriteria: inherit<string>(payload.acceptanceCriteria, planAny.acceptanceCriteria),
+        loto: inherit<string>(payload.loto, planAny.loto),
+        riskLevel: inherit<string>(payload.riskLevel, planAny.riskLevel),
+        riskAnalysisResult: inherit<string>(payload.riskAnalysisResult, planAny.riskAnalysisResult),
+        consequenceCategory: payload.consequenceCategory !== undefined
+          ? (payload.consequenceCategory ?? null)
+          : (planAny.consequenceCategory ?? null),
+        consequenceRationale: inherit<string>(payload.consequenceRationale, planAny.consequenceRationale),
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
       },
