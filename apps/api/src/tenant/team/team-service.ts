@@ -330,16 +330,39 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
     || `named-${Date.now()}@internal.${session.tenantSlug}.local`;
 
   const cleanUsername = input.firstName.trim().toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "");
-  const user = await prisma.user.create({
-    data: {
-      email: internalEmail,
-      legacyUserId: cleanUsername,
-      firstName: input.firstName.trim(),
-      lastName: input.lastName?.trim() ?? null,
-      passwordHash: hashPassword(randomBytes(32).toString("hex")),
-      status: "ACTIVE",
-    },
-  });
+
+  // Validaciones previas para devolver mensajes claros (P2002 cae al handler
+  // genérico "An internal error occurred"). legacyUserId y email son únicos globales.
+  const existingByUsername = await prisma.user.findUnique({ where: { legacyUserId: cleanUsername } });
+  if (existingByUsername) {
+    throw new RouteError(409, "USERNAME_TAKEN", `Ya existe un usuario con USER "${cleanUsername}". Elegí otro nombre.`);
+  }
+  if (input.email) {
+    const existingByEmail = await prisma.user.findUnique({ where: { email: internalEmail } });
+    if (existingByEmail) {
+      throw new RouteError(409, "EMAIL_TAKEN", `Ya existe un usuario con email "${internalEmail}".`);
+    }
+  }
+
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        email: internalEmail,
+        legacyUserId: cleanUsername,
+        firstName: input.firstName.trim(),
+        lastName: input.lastName?.trim() ?? null,
+        passwordHash: hashPassword(randomBytes(32).toString("hex")),
+        status: "ACTIVE",
+      },
+    });
+  } catch (err: any) {
+    // Race entre la validación previa y el INSERT — devuelve el mismo 409.
+    if (err?.code === "P2002") {
+      throw new RouteError(409, "USERNAME_TAKEN", "Ya existe un usuario con ese USER o email.");
+    }
+    throw err;
+  }
 
   await (prisma as any).tenantMembership.create({
     data: {
