@@ -112,22 +112,34 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   const handleCriteriaClick = useCallback(async () => {
     if (loadingCriteria) return;
-    if (!aiTaskDesc) return;
+    if (!aiTaskDesc) {
+      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      return;
+    }
     setLoadingCriteria(true);
+    setErr(null);
     try {
-      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance", {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance-criteria", {
         assetLabel: aiAssetLabel,
         taskDesc: aiTaskDesc,
       });
       if (res.text) setAcceptanceCriteria(res.text);
-    } catch { /* noop */ }
+      else setErr("La IA no devolvió texto.");
+    } catch (e) {
+      console.error("[suggest-acceptance] failed:", e);
+      setErr(e instanceof ApiError ? `Criterios IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+    }
     finally { setLoadingCriteria(false); }
   }, [loadingCriteria, aiAssetLabel, aiTaskDesc]);
 
   const handleLotoClick = useCallback(async () => {
     if (loadingLoto) return;
-    if (!aiTaskDesc) return;
+    if (!aiTaskDesc) {
+      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      return;
+    }
     setLoadingLoto(true);
+    setErr(null);
     try {
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
         assetLabel: aiAssetLabel,
@@ -135,14 +147,22 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         acceptanceCriteria: acceptanceCriteria || null,
       });
       if (res.text) setLoto(res.text);
-    } catch { /* noop */ }
+      else setErr("La IA no devolvió texto.");
+    } catch (e) {
+      console.error("[suggest-loto] failed:", e);
+      setErr(e instanceof ApiError ? `LOTO IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+    }
     finally { setLoadingLoto(false); }
   }, [loadingLoto, aiAssetLabel, aiTaskDesc, acceptanceCriteria]);
 
   const handleRiskClick = useCallback(async () => {
     if (loadingRisk) return;
-    if (!aiTaskDesc) return;
+    if (!aiTaskDesc) {
+      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      return;
+    }
     setLoadingRisk(true);
+    setErr(null);
     try {
       const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
         assetLabel: aiAssetLabel,
@@ -152,7 +172,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       });
       if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) setRiskLevel(res.level);
       if (res.analysis) setRiskAnalysisResult(res.analysis);
-    } catch { /* noop */ }
+    } catch (e) {
+      console.error("[suggest-risk] failed:", e);
+      setErr(e instanceof ApiError ? `Riesgo IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+    }
     finally { setLoadingRisk(false); }
   }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto]);
 
