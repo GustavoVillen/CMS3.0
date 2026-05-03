@@ -89,6 +89,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
   let tenantLogoUrlLight: string | null = null;
   let tenantDbId: string | null = null;
   let assetName: string | null = null;
+  let assetIsSafetyCritical = false;
   let lastLog: { result: string; executedByName: string; completedAt: Date | null; runningHoursAtExecution: number | null; notes: string | null } | null = null;
   if (prisma) {
     const tenantRow = await (prisma as any).tenant.findUnique({
@@ -108,9 +109,10 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       try {
         const asset = await (prisma as any).asset.findUnique({
           where: { id: plan.assetId },
-          select: { name: true },
+          select: { name: true, isSafetyCritical: true },
         });
         assetName = asset?.name ?? null;
+        assetIsSafetyCritical = Boolean(asset?.isSafetyCritical);
       } catch { /* non-blocking */ }
     }
   }
@@ -374,6 +376,13 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       { label: "Responsable",      value: val(p["responsible"]) },
       { label: "Criticidad",       value: val(p["criticality"]) },
     ]);
+    if (assetIsSafetyCritical) {
+      inlineRow([
+        { label: "Equipo crítico para seguridad (ISM 10.3)", value: "Sí", color: "#b45309" },
+        { label: "", value: "" },
+        { label: "", value: "" },
+      ]);
+    }
     y += 6;
 
     // ── SECCIÓN 2: PLANIFICACIÓN ──────────────────────────────────────────────
@@ -418,6 +427,24 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     }
     if (p["riskAnalysisResult"]) {
       renderDescription("Resultado análisis de riesgo", val(p["riskAnalysisResult"]), true);
+    }
+    // RCM consequence (si está clasificada)
+    if (p["consequenceCategory"]) {
+      const consequenceLabel: Record<string, string> = {
+        SAFETY: "Riesgo a personas (lesión / fatalidad)",
+        ENVIRONMENTAL: "Daño ambiental (vertido, emisión)",
+        OPERATIONAL: "Pérdida de operación (paro, retraso)",
+        NON_OPERATIONAL: "Solo costo de reparación",
+      };
+      const cat = String(p["consequenceCategory"]);
+      inlineRow([
+        { label: "Consecuencia (RCM)", value: consequenceLabel[cat] ?? cat },
+        { label: "", value: "" },
+        { label: "", value: "" },
+      ]);
+      if (p["consequenceRationale"]) {
+        renderDescription("Fundamento de consecuencia", val(p["consequenceRationale"]), true);
+      }
     }
     y += 16;
 

@@ -1895,9 +1895,13 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <option value="OPERATIONAL">🟡 Pérdida de operación (paro, retraso)</option>
                 <option value="NON_OPERATIONAL">⚪ Solo costo de reparación</option>
               </select>
-              {consequenceRationale && (
-                <p className="text-[11px] text-text-industrial/60 mt-1 italic">{consequenceRationale}</p>
-              )}
+              <RichTextArea
+                value={consequenceRationale}
+                onChange={setConsequenceRationale}
+                rows={2}
+                className={inputCls}
+                disabled={readOnly || loadingConsequence}
+              />
             </div>
 
             {/* Checklist upload — CHECKLIST mode only */}

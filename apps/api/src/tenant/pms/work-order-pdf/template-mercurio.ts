@@ -34,7 +34,7 @@ const BORDER = "#9CA3AF";
 const LIGHT  = "#F3F4F6";
 
 export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
-  const { wo, assetLabel, assignedName, createdByName, tenant, tenantLogoBuffer, spareUsages, tenantSlug } = ctx;
+  const { wo, assetLabel, assetIsSafetyCritical, assignedName, createdByName, tenant, tenantLogoBuffer, spareUsages, tenantSlug } = ctx;
 
   const motivos = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"] as const;
   const motivoActivo = motivoFromType((wo as any).type ?? "");
@@ -268,7 +268,8 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     cell(ML + Math.floor(W * 0.4), y, W - Math.floor(W * 0.4), R3_H, "UBICACION", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     y += R3_H;
     const EQ_W = Math.floor(W * 0.4);
-    cell(ML, y, EQ_W, R3_H, assetLabel, { fontSize: 9 });
+    const assetCellText = assetIsSafetyCritical ? `${assetLabel}  [ISM 10.3]` : assetLabel;
+    cell(ML, y, EQ_W, R3_H, assetCellText, { fontSize: 9 });
     cell(ML + EQ_W, y, W - EQ_W, R3_H, sanitizePdfText((wo as any).location ?? ""), { fontSize: 9 });
     y += R3_H;
 

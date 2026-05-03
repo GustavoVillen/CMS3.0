@@ -95,6 +95,8 @@ export interface WorkOrderPdfContext {
   wo: any;
   /** Resolved asset display name or fallback. */
   assetLabel: string;
+  /** ISM Code 10.3 — flag de seguridad del activo. */
+  assetIsSafetyCritical: boolean;
   /** Display name for assigned user (firstName + lastName) or null. */
   assignedName: string | null;
   /** Display name (or email fallback) for the user that created the WO. */

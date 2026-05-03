@@ -23,7 +23,7 @@ const APPROVAL_COLS = [
 ];
 
 export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
-  const { wo, assetLabel, assignedName, tenantLogoBuffer } = ctx;
+  const { wo, assetLabel, assetIsSafetyCritical, assignedName, tenantLogoBuffer } = ctx;
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
@@ -230,6 +230,13 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       { label: "Prioridad",  value: priorityLabel(wo.priority), color: PRIORITY_COLOR[wo.priority] ?? black },
       { label: "Criticidad", value: (wo as any).criticality ?? "—" },
     ]);
+    if (assetIsSafetyCritical) {
+      inlineRow([
+        { label: "Equipo crítico para seguridad (ISM 10.3)", value: "Sí", color: "#b45309" },
+        { label: "", value: "" },
+        { label: "", value: "" },
+      ]);
+    }
     inlineRow([
       { label: "Fecha Apertura",    value: fmt(wo.openDate) },
       { label: "Fecha Vencimiento", value: fmt((wo as any).dueDate) },

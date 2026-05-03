@@ -99,9 +99,22 @@ export async function loadWorkOrderPdfContext(
 
   const assetLabel = sanitizePdfText((wo as any).assetName ?? wo.assetId ?? "—");
 
+  // ISM 10.3 — flag safety-critical del activo
+  let assetIsSafetyCritical = false;
+  if (prismaRaw && wo.assetId) {
+    try {
+      const asset = await (prismaRaw as any).asset.findUnique({
+        where: { id: wo.assetId },
+        select: { isSafetyCritical: true },
+      });
+      assetIsSafetyCritical = Boolean(asset?.isSafetyCritical);
+    } catch { /* non-blocking */ }
+  }
+
   return {
     wo,
     assetLabel,
+    assetIsSafetyCritical,
     assignedName,
     createdByName,
     tenant,
