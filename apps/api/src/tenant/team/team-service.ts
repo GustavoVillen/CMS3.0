@@ -260,6 +260,25 @@ export async function deleteMember(session: TenantAccessSession, userId: string)
 
   await (prisma as any).tenantMembership.delete({ where: { id: membership.id } });
 
+  // Si el User no tiene otras memberships activas, liberar su legacyUserId/email
+  // para que un admin pueda recrear con el mismo USER. Preservamos el User para
+  // mantener referencias históricas en audit logs.
+  const remainingMemberships = await (prisma as any).tenantMembership.count({ where: { userId } });
+  if (remainingMemberships === 0) {
+    const stamp = Date.now();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          legacyUserId: user.legacyUserId ? `__deleted__${stamp}__${user.legacyUserId}` : null,
+          email: `__deleted__${stamp}__${user.email}`,
+          status: "DISABLED",
+        },
+      });
+    }
+  }
+
   return { userId, deleted: true };
 }
 
