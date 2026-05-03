@@ -779,7 +779,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className={sectionLabelCls} style={sectionLabelStyle}>Resultado Análisis de Riesgo</label>
+              <label className={labelCls}>Resultado Análisis de Riesgo</label>
               <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder="Ej: Aceptable con controles" />
             </div>
             <div className="space-y-1.5">
