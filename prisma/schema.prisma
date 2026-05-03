@@ -80,11 +80,6 @@ enum ConsequenceCategory {
   NON_OPERATIONAL  // Solo costo de reparación (sin impacto)
 }
 
-enum StandbyTestResult {
-  OK
-  FAILED
-}
-
 enum AssetStatus {
   OPERATIONAL
   DEGRADED
@@ -924,9 +919,6 @@ model Asset {
   // (sistemas de gobierno, contraincendio, propulsión emergencia, etc.).
   // Independiente de criticality (A/B/C), que es operacional.
   isSafetyCritical     Boolean       @default(false)
-  // Frecuencia de prueba de standby (ISM 10.3) — si es safety-critical y tiene
-  // backup/redundancia, las pruebas periódicas son obligatorias.
-  standbyTestFrequencyDays Int?
   // PMS extensions
   equipmentClassId String?
   parentAssetId    String?
@@ -942,30 +934,10 @@ model Asset {
   parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children         Asset[]          @relation("AssetHierarchy")
   inspectionExecs  InspectionExecution[]
-  standbyTests     StandbyTest[]
 
   @@unique([tenantId, vesselCode, assetCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
-}
-
-// ISM 10.3 — registro de prueba periódica de equipo standby/redundante.
-// El widget del dashboard usa Asset.standbyTestFrequencyDays + el último
-// test para decidir cuáles están vencidos.
-model StandbyTest {
-  id              String            @id @default(cuid())
-  tenantId        String
-  assetId         String
-  testedAt        DateTime
-  result          StandbyTestResult
-  notes           String?
-  executedByUserId String
-  createdAt       DateTime          @default(now())
-
-  asset           Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, assetId, testedAt])
-  @@index([tenantId, testedAt])
 }
 
 model MaintenancePlan {

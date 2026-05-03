@@ -31,7 +31,6 @@ interface Asset {
   replacementDate: string | null;
   trackDailyReport: boolean;
   isSafetyCritical: boolean;
-  standbyTestFrequencyDays: number | null;
   currentHours: number | null;
   equipmentClassId: string | null;
   parentAssetId: string | null;
@@ -222,9 +221,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [serialNumber, setSerialNumber] = useState(initial?.serialNumber ?? "");
   const [trackDailyReport, setTrackDailyReport] = useState(initial?.trackDailyReport ?? false);
   const [isSafetyCritical, setIsSafetyCritical] = useState(initial?.isSafetyCritical ?? false);
-  const [standbyTestFrequencyDays, setStandbyTestFrequencyDays] = useState<string>(
-    initial?.standbyTestFrequencyDays != null ? String(initial.standbyTestFrequencyDays) : "",
-  );
   const [suggestingIsm, setSuggestingIsm] = useState(false);
   const [installationDate, setInstallationDate] = useState(toDateInputValue(initial?.installationDate ?? null));
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
@@ -340,7 +336,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setStatus(initial?.status ?? "OPERATIONAL");
     setTrackDailyReport(initial?.trackDailyReport ?? false);
     setIsSafetyCritical(initial?.isSafetyCritical ?? false);
-    setStandbyTestFrequencyDays(initial?.standbyTestFrequencyDays != null ? String(initial.standbyTestFrequencyDays) : "");
     setManufacturer(initial?.manufacturer ?? "");
     setModel(initial?.model ?? "");
     setSerialNumber(initial?.serialNumber ?? "");
@@ -463,9 +458,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
         status,
         trackDailyReport,
         isSafetyCritical,
-        standbyTestFrequencyDays: standbyTestFrequencyDays.trim()
-          ? Number(standbyTestFrequencyDays.trim())
-          : null,
         manufacturer: normalizeOptionalText(manufacturer),
         model: normalizeOptionalText(model),
         serialNumber: normalizeOptionalText(serialNumber),
@@ -514,7 +506,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
     tenantAssets,
     trackDailyReport,
     isSafetyCritical,
-    standbyTestFrequencyDays,
     vesselCode,
   ]);
 
@@ -754,24 +745,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   IA
                 </button>
               </div>
-              {isSafetyCritical && (
-                <div className="pl-7 pt-2">
-                  <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1">
-                    Frecuencia de prueba de standby (días)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={standbyTestFrequencyDays}
-                    onChange={e => setStandbyTestFrequencyDays(e.target.value)}
-                    placeholder="ej. 30 — para equipos backup ISM 10.3 exige test periódico"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-                  />
-                  <p className="text-[11px] text-text-industrial/50 mt-1">
-                    Si está vacío no aparecerá en el widget de pruebas pendientes del dashboard.
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="space-y-1.5 col-span-2">

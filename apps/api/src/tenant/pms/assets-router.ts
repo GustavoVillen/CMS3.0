@@ -15,11 +15,6 @@ import {
 } from "../assets/assets-service";
 import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
 import { suggestAssetIsmFlag } from "../assets/assets-ism-ai";
-import {
-  createStandbyTest,
-  listPendingStandbyTests,
-  listStandbyTestsForAsset,
-} from "../standby-tests/standby-tests-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -42,30 +37,6 @@ export async function handleAssetRoutes(
   response: ServerResponse,
   env: AppEnv,
 ): Promise<boolean> {
-  // standby-tests no empieza con /app/pms/assets — handled separately
-  if (url.pathname.startsWith("/app/pms/standby-tests")) {
-    const tenantSlug = requireTenantSlug(request, env);
-    const session = requireTenantAccessSession(request, tenantSlug);
-
-    if (method === "GET" && url.pathname === "/app/pms/standby-tests/pending") {
-      const items = await listPendingStandbyTests(session, url.searchParams.get("vesselCode"));
-      sendJson(response, 200, { items, total: items.length });
-      return true;
-    }
-    if (method === "POST" && url.pathname === "/app/pms/standby-tests") {
-      enforceRateLimit(request, `standby-test:${session.user.id}`, { maxRequests: 60, windowMs: 60_000 });
-      const body = await readJsonBody(request) as Parameters<typeof createStandbyTest>[1];
-      sendJson(response, 201, await createStandbyTest(session, body));
-      return true;
-    }
-    const m = url.pathname.match(/^\/app\/pms\/standby-tests\/asset\/([^/]+)$/);
-    if (method === "GET" && m) {
-      const items = await listStandbyTestsForAsset(session, m[1]!);
-      sendJson(response, 200, { items, total: items.length });
-      return true;
-    }
-    return false;
-  }
 
   if (!url.pathname.startsWith("/app/pms/assets")) return false;
 
