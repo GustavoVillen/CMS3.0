@@ -6,17 +6,46 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 
 const SYSTEM_PROMPT = `Sos un experto en mantenimiento y clasificación de equipos en buques.
-Te paso los datos de un equipo (asset) y tu tarea es asignarle un nivel de criticidad y justificarlo.
+Te paso los datos de un equipo (asset). Tu tarea es asignarle DOS clasificaciones independientes y justificarlas en un único rationale combinado.
 
-Niveles de criticidad:
+═══ 1. CRITICIDAD OPERACIONAL (A / B / C) ═══
+
 - A — Crítico: la falla compromete seguridad, vida humana, navegación, propulsión principal o cumplimiento regulatorio. Requiere redundancia o atención inmediata.
 - B — Importante: la falla afecta operación pero hay alternativas o tiempo para reaccionar. Mantenimiento preventivo riguroso.
 - C — Estándar: la falla tiene impacto operativo bajo. Mantenimiento básico/correctivo.
 
-Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra) con esta forma exacta:
-{"criticality": "A" | "B" | "C", "rationale": "texto de 1-3 oraciones explicando por qué"}
+═══ 2. SAFETY-CRITICAL ISM 10.3 (true / false) ═══
 
-El "rationale" debe ser técnico, claro y específico al equipo (no genérico). Mencioná el grupo SFI si es relevante.`;
+ISM 10.3 exige identificar "equipos cuya falla súbita puede provocar situaciones peligrosas". Es INDEPENDIENTE de la criticidad operacional — un equipo puede ser C operacional pero ISM-crítico (ej: balsa salvavidas, motor de bote) o B operacional y NO-ISM (ej: bomba de carga estándar).
+
+Casos típicos SAFETY-CRITICAL:
+- Sistemas de gobierno y propulsión emergencia
+- Sistemas contraincendio (bombas CI principales y emergencia, detección, supresión)
+- Sistemas de salvamento (botes salvavidas, balsas, MOB)
+- Achique de emergencia / bombas de sentina
+- Generadores y switchboards de emergencia
+- Detección de gases tóxicos / explosivos
+- Comunicación GMDSS (radio salvamento)
+- Iluminación de emergencia
+- Cierre estanco automático
+- Alarma general
+
+Casos típicos NO safety-critical (operacional pero no riesgo a vidas):
+- Compresores principales de servicio
+- Equipos de cocina, lavandería, AC confort
+- Bombas de carga (excepto si afectan estabilidad)
+- Comunicación NO-GMDSS
+
+Pista SFI: 770 (contraincendio) y 850 (emergencia) son típicamente ISM-críticos. SFI 700/800 tienen ambos casos.
+
+═══ FORMATO DE RESPUESTA ═══
+
+Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra):
+{"criticality": "A" | "B" | "C", "isSafetyCritical": true | false, "rationale": "texto"}
+
+El rationale debe ser técnico, específico al equipo (no genérico), y EXPLICAR LAS DOS DECISIONES. Sugerencia de formato:
+"Criticidad <X> porque <razón operacional>. <ISM-crítico|No ISM-crítico> porque <razón ISM>."
+Mencioná el grupo SFI si es relevante.`;
 
 interface SuggestInput {
   name: string;
@@ -29,6 +58,7 @@ interface SuggestInput {
 
 export interface SuggestResult {
   criticality: "A" | "B" | "C";
+  isSafetyCritical: boolean;
   rationale: string;
 }
 
@@ -114,10 +144,11 @@ export async function suggestAssetCriticality(
   if (crit !== "A" && crit !== "B" && crit !== "C") {
     throw new RouteError(502, "AI_PARSE_ERROR", `Criticidad inválida: ${crit}`);
   }
+  const isSafetyCritical = Boolean(parsed?.isSafetyCritical);
   const rationale = String(parsed?.rationale ?? "").trim();
   if (!rationale) {
     throw new RouteError(502, "AI_PARSE_ERROR", "Falta el fundamento.");
   }
 
-  return { criticality: crit as "A" | "B" | "C", rationale };
+  return { criticality: crit as "A" | "B" | "C", isSafetyCritical, rationale };
 }

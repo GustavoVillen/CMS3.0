@@ -14,7 +14,6 @@ import {
   updateTenantAsset,
 } from "../assets/assets-service";
 import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
-import { suggestAssetIsmFlag } from "../assets/assets-ism-ai";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -68,13 +67,6 @@ export async function handleAssetRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
     sendJson(response, 200, await suggestAssetCriticality(session, body));
-    return true;
-  }
-
-  if (method === "POST" && url.pathname === "/app/pms/assets/suggest-ism") {
-    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
-    const body = await readJsonBody(request) as Parameters<typeof suggestAssetIsmFlag>[1];
-    sendJson(response, 200, await suggestAssetIsmFlag(session, body));
     return true;
   }
 

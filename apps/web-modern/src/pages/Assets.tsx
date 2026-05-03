@@ -221,7 +221,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [serialNumber, setSerialNumber] = useState(initial?.serialNumber ?? "");
   const [trackDailyReport, setTrackDailyReport] = useState(initial?.trackDailyReport ?? false);
   const [isSafetyCritical, setIsSafetyCritical] = useState(initial?.isSafetyCritical ?? false);
-  const [suggestingIsm, setSuggestingIsm] = useState(false);
   const [installationDate, setInstallationDate] = useState(toDateInputValue(initial?.installationDate ?? null));
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
   const [replacementDate, setReplacementDate] = useState(toDateInputValue(initial?.replacementDate ?? null));
@@ -509,42 +508,13 @@ const AssetModal: React.FC<AssetModalProps> = ({
     vesselCode,
   ]);
 
-  // Pedir sugerencia de ISM safety-critical a la IA
-  const requestIsmSuggestion = useCallback(async () => {
-    if (!name.trim() || suggestingIsm) return;
-    setSuggestingIsm(true);
-    setActionError(null);
-    try {
-      const result = await api.post<{ isSafetyCritical: boolean; rationale: string }>(
-        "/app/pms/assets/suggest-ism",
-        {
-          name: name.trim(),
-          vesselCode: vesselCode || null,
-          sfiCode: selectedSubgroup || null,
-          manufacturer: manufacturer || null,
-          model: model || null,
-        },
-      );
-      setIsSafetyCritical(result.isSafetyCritical);
-      // El rationale lo agregamos al rationale general de criticidad si está vacío,
-      // sino simplemente actualizamos el flag (no queremos pisar lo que ya escribió).
-      if (!criticalityRationale.trim()) {
-        setCriticalityRationale("ISM: " + result.rationale);
-      }
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia ISM.");
-    } finally {
-      setSuggestingIsm(false);
-    }
-  }, [name, vesselCode, selectedSubgroup, manufacturer, model, criticalityRationale, suggestingIsm]);
-
-  // Pedir sugerencia de criticidad a la IA
+  // Pedir sugerencia de criticidad + ISM a la IA (un solo análisis combinado)
   const requestCriticalitySuggestion = useCallback(async () => {
     if (!name.trim() || suggestingCriticality) return;
     setSuggestingCriticality(true);
     setActionError(null);
     try {
-      const result = await api.post<{ criticality: "A" | "B" | "C"; rationale: string }>(
+      const result = await api.post<{ criticality: "A" | "B" | "C"; isSafetyCritical: boolean; rationale: string }>(
         "/app/pms/assets/suggest-criticality",
         {
           name: name.trim(),
@@ -556,6 +526,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
         },
       );
       setCriticality(result.criticality);
+      setIsSafetyCritical(result.isSafetyCritical);
       setCriticalityRationale(result.rationale);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia.");
@@ -718,33 +689,19 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
               </select>
             </div>
-            {/* ISM safety-critical (ISM Code 10.3) — primero el flag, después el fundamento */}
+            {/* ISM safety-critical (ISM Code 10.3) — el flag se sugiere desde el botón "Criticidad (IA)" */}
             <div className="space-y-1.5 col-span-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isSafetyCritical}
-                    onChange={e => setIsSafetyCritical(e.target.checked)}
-                    className="w-4 h-4 accent-accent"
-                  />
-                  <span className="text-sm text-white">
-                    Equipo crítico para seguridad <span className="text-text-industrial/60">(ISM 10.3)</span>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => { void requestIsmSuggestion(); }}
-                  disabled={!name.trim() || suggestingIsm}
-                  title={!name.trim() ? "Completá el nombre primero" : "Sugerir con IA"}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {suggestingIsm
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <Sparkles className="w-3 h-3" />}
-                  IA
-                </button>
-              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSafetyCritical}
+                  onChange={e => setIsSafetyCritical(e.target.checked)}
+                  className="w-4 h-4 accent-accent"
+                />
+                <span className="text-sm text-white">
+                  Equipo crítico para seguridad <span className="text-text-industrial/60">(ISM 10.3)</span>
+                </span>
+              </label>
             </div>
 
             <div className="space-y-1.5 col-span-2">
