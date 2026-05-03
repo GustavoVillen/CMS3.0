@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Droplets, Loader2, Wrench, X } from "lucide-react";
+import { Droplets, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -98,6 +98,63 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
+
+  // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo ──
+  const [loadingCriteria, setLoadingCriteria] = useState(false);
+  const [loadingLoto,     setLoadingLoto]     = useState(false);
+  const [loadingRisk,     setLoadingRisk]     = useState(false);
+
+  // Etiqueta del activo a partir del prefill o de la lista cargada
+  const aiAssetLabel = prefill?.sourceLabel
+    ?? assets.find(a => a.id === assetId)?.name
+    ?? null;
+  const aiTaskDesc = description.trim() || title.trim() || null;
+
+  const handleCriteriaClick = useCallback(async () => {
+    if (loadingCriteria) return;
+    if (!aiTaskDesc) return;
+    setLoadingCriteria(true);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance", {
+        assetLabel: aiAssetLabel,
+        taskDesc: aiTaskDesc,
+      });
+      if (res.text) setAcceptanceCriteria(res.text);
+    } catch { /* noop */ }
+    finally { setLoadingCriteria(false); }
+  }, [loadingCriteria, aiAssetLabel, aiTaskDesc]);
+
+  const handleLotoClick = useCallback(async () => {
+    if (loadingLoto) return;
+    if (!aiTaskDesc) return;
+    setLoadingLoto(true);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
+        assetLabel: aiAssetLabel,
+        taskDesc: aiTaskDesc,
+        acceptanceCriteria: acceptanceCriteria || null,
+      });
+      if (res.text) setLoto(res.text);
+    } catch { /* noop */ }
+    finally { setLoadingLoto(false); }
+  }, [loadingLoto, aiAssetLabel, aiTaskDesc, acceptanceCriteria]);
+
+  const handleRiskClick = useCallback(async () => {
+    if (loadingRisk) return;
+    if (!aiTaskDesc) return;
+    setLoadingRisk(true);
+    try {
+      const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
+        assetLabel: aiAssetLabel,
+        taskDesc: aiTaskDesc,
+        acceptanceCriteria: acceptanceCriteria || null,
+        loto: loto || null,
+      });
+      if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) setRiskLevel(res.level);
+      if (res.analysis) setRiskAnalysisResult(res.analysis);
+    } catch { /* noop */ }
+    finally { setLoadingRisk(false); }
+  }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto]);
 
   // Vessel list for standalone mode
   useEffect(() => {
@@ -340,22 +397,47 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Criterios de aceptación</label>
+              <label
+                onClick={handleCriteriaClick}
+                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA genere los criterios de aceptación"}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              >
+                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Criterios de aceptación
+              </label>
               <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
+                disabled={loadingCriteria}
                 className={`${inputCls} resize-y`} placeholder="Condiciones que deben cumplirse para dar la tarea por completada" />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>LOTO</label>
+              <label
+                onClick={handleLotoClick}
+                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA genere el procedimiento LOTO"}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              >
+                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                LOTO
+              </label>
               <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)}
+                disabled={loadingLoto}
                 className={`${inputCls} resize-y`} placeholder="Procedimiento de bloqueo y etiquetado" />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Nivel de Riesgo</label>
+              <label
+                onClick={handleRiskClick}
+                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA analice el nivel de riesgo"}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              >
+                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Nivel de Riesgo
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— ¿Qué riesgo tiene HACER la tarea? (JSA)</span>
+              </label>
               <div className="flex gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
                   <button key={val} type="button"
+                    disabled={loadingRisk}
                     onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
+                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
                     {label}
                   </button>
                 ))}
@@ -364,6 +446,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             <div className="space-y-1.5">
               <label className={labelCls}>Resultado Análisis de Riesgo</label>
               <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
+                disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder="Ej: Aceptable con controles" />
             </div>
             <div className="space-y-1.5">
