@@ -127,7 +127,7 @@ export const FluidAnalysesPage: React.FC = () => {
   const { user } = useAuth();
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
-  const [filters, setFilters] = useState({ vesselCode: "", fluidType: "", verdict: "", status: "" });
+  const [filters, setFilters] = useState({ fluidType: "" });
   const [creatingSample, setCreatingSample] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>("sampledAt");
@@ -139,10 +139,7 @@ export const FluidAnalysesPage: React.FC = () => {
   };
 
   const params = new URLSearchParams();
-  if (filters.vesselCode) params.set("vesselCode", filters.vesselCode);
   if (filters.fluidType)  params.set("fluidType",  filters.fluidType);
-  if (filters.verdict)    params.set("verdict",    filters.verdict);
-  if (filters.status)     params.set("status",     filters.status);
   const path = `/app/fluid-analyses${params.toString() ? "?" + params.toString() : ""}`;
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
@@ -196,25 +193,10 @@ export const FluidAnalysesPage: React.FC = () => {
 
       <PageHeader icon={FlaskConical} title="Análisis de Fluidos" total={data?.total} onReload={reload}>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={filters.vesselCode} onChange={e => setFilters(f => ({ ...f, vesselCode: e.target.value }))}
-            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
-            <option value="">Todos los buques</option>
-            {(vesselsData?.items ?? []).map(v => <option key={v.code} value={v.code}>{v.code}</option>)}
-          </select>
           <select value={filters.fluidType} onChange={e => setFilters(f => ({ ...f, fluidType: e.target.value }))}
             className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
             <option value="">Todos los fluidos</option>
             {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
-          </select>
-          <select value={filters.verdict} onChange={e => setFilters(f => ({ ...f, verdict: e.target.value }))}
-            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
-            <option value="">Todos los veredictos</option>
-            {VERDICTS.map(v => <option key={v} value={v}>{VERDICT_STYLES[v].label}</option>)}
-          </select>
-          <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
-            <option value="">Todos los estados</option>
-            {SAMPLE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           {canManage && (
             <button

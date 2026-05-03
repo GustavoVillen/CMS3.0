@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Loader2, Bot, Mic, VolumeX, AudioLines } from "lucide-react";
 import { api } from "../lib/api";
 import { useCopilotScreenContext } from "../lib/copilot-context";
+import { MarkdownText } from "./MarkdownText";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -9,10 +10,11 @@ interface ChatMessage {
   fromVoice?: boolean;
 }
 
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
-    .replace(/\*\*(.+?)\*\*/g, "$1");
+// Remueve solo el bloque [CAMPOS]...[/CAMPOS] (instrucciones internas del copiloto
+// que no debe ver el usuario). El resto del markdown (**bold**, headings, listas)
+// se renderiza con <MarkdownText>.
+function cleanCampos(text: string): string {
+  return text.replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "");
 }
 
 function buildVoiceSummary(text: string): string {
@@ -303,7 +305,7 @@ export const MobileCopilot: React.FC = () => {
           return (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[82%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
+                className={`max-w-[82%] px-3 py-2 rounded-2xl text-sm break-words ${
                   m.role === "user"
                     ? "bg-accent text-white rounded-br-sm"
                     : "bg-white/5 text-white rounded-bl-sm border border-white/10"
@@ -316,7 +318,7 @@ export const MobileCopilot: React.FC = () => {
                     {m.fromVoice && (
                       <AudioLines className="w-3.5 h-3.5 mt-0.5 shrink-0 opacity-70" />
                     )}
-                    <span>{stripMarkdown(m.content)}</span>
+                    <MarkdownText text={cleanCampos(m.content)} className="flex-1" />
                   </div>
                 )}
               </div>

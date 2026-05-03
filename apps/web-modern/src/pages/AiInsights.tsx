@@ -3,6 +3,7 @@ import { Sparkles, Loader2, AlertCircle, CheckCircle2, XCircle } from "lucide-re
 import { useFetch } from "../lib/hooks";
 import { PriorityBadge, fmtDate } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { MarkdownText } from "../components/MarkdownText";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
@@ -109,10 +110,10 @@ function InsightCard({ insight, onStatusChange }: { insight: AiInsight; onStatus
           <StatusDot status={insight.status} />
         </div>
       </div>
-      <p className="text-xs text-text-industrial/60 leading-relaxed">{insight.summary}</p>
+      <MarkdownText text={insight.summary} className="text-xs text-text-industrial/60" />
       <div className="p-3 rounded-xl bg-accent/5 border border-accent/10">
         <p className="text-[10px] uppercase tracking-wider text-accent font-bold mb-1">{t("aiInsights.recommendation")}</p>
-        <p className="text-xs text-text-industrial/70">{insight.recommendation}</p>
+        <MarkdownText text={insight.recommendation} className="text-xs text-text-industrial/70" />
       </div>
       <div className="flex items-center justify-between text-[10px] text-text-industrial/30 pt-1 border-t border-white/5">
         <span>{t("aiInsights.vessel")} {targetLabel}</span>
