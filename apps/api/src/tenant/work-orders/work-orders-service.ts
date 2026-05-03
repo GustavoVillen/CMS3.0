@@ -279,7 +279,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
     userIds.length > 0
-      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds }, memberships: { some: { tenantId, status: "ACTIVE" } } }, select: { id: true, firstName: true, lastName: true } })
+      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
       : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null }[]),
   ]);
 
