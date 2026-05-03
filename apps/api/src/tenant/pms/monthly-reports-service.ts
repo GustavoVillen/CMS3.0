@@ -58,9 +58,11 @@ async function resolveTenantId(session: TenantAccessSession): Promise<string> {
 }
 
 function applyVesselScope(session: TenantAccessSession, where: Record<string, unknown>) {
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
+  // FAIL-CLOSED: usuarios sin vessels asignados (que no son TENANT_ADMIN) no ven nada.
+  if (session.user.role === "TENANT_ADMIN") return;
+  where.vesselCode = session.user.assignedVesselCodes.length === 0
+    ? "__NO_ASSIGNED_VESSEL__"
+    : { in: session.user.assignedVesselCodes };
 }
 
 export async function listTenantMonthlyReports(

@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevDailyReportsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface DailyReportListFilters {
   vesselCode?: string | null;
@@ -81,10 +82,7 @@ export async function listTenantDailyReports(session: TenantAccessSession, filte
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
   if (filters.reportDate) {
     const tenantTz = (tenant as any).settings?.timezone ?? "UTC";
@@ -102,9 +100,7 @@ export async function getTenantDailyReport(session: TenantAccessSession, id: str
   if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
 
   const where: Record<string, unknown> = { id, tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
+  applyAssignedVesselScope(session, where);
 
   const record = await prisma.dailyReport.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Reporte no encontrado.");
@@ -217,11 +213,7 @@ export async function getFuelConsumptionTrend(
     reportDate: { gte: since },
   };
 
-  if (vesselCode) {
-    where.vesselCode = vesselCode;
-  } else if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
+  applyAssignedVesselScope(session, where, vesselCode ?? null);
 
   const records = await prisma.dailyReport.findMany({
     where,

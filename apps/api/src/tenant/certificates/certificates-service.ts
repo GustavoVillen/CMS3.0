@@ -4,6 +4,7 @@ import { listDevCertificatesForTenant } from "../../platform/data/dev-domain-sto
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface CertificateListFilters {
   vesselCode?: string | null;
@@ -20,10 +21,7 @@ export async function listTenantCertificates(session: TenantAccessSession, filte
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
 
   const rows = await prisma.certificate.findMany({ where, orderBy: { expiryDate: "asc" } });
@@ -40,7 +38,7 @@ export async function getTenantCertificateById(session: TenantAccessSession, id:
   const cert = await prisma.certificate.findFirst({ where: { id, tenantId: tenant.id, deletedAt: null } });
   if (!cert) return null;
 
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
+  if (session.user.role !== "TENANT_ADMIN") {
     if (!session.user.assignedVesselCodes.includes(cert.vesselCode)) return null;
   }
 

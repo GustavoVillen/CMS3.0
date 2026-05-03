@@ -119,13 +119,18 @@ export async function exportModule(
 
   const baseWhere: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
 
-  // Vessel scope enforcement
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
+  // Vessel scope enforcement (FAIL-CLOSED).
+  if (session.user.role === "TENANT_ADMIN") {
+    if (filters.vesselCode) baseWhere.vesselCode = filters.vesselCode;
+  } else if (filters.vesselCode) {
+    baseWhere.vesselCode = session.user.assignedVesselCodes.includes(filters.vesselCode)
+      ? filters.vesselCode
+      : "__NO_ASSIGNED_VESSEL__";
+  } else if (session.user.assignedVesselCodes.length === 0) {
+    baseWhere.vesselCode = "__NO_ASSIGNED_VESSEL__";
+  } else {
     baseWhere.vesselCode = { in: session.user.assignedVesselCodes };
   }
-
-  // Apply optional vesselCode filter from query params
-  if (filters.vesselCode) baseWhere.vesselCode = filters.vesselCode;
 
   const records = await fetchRecords(prisma, module, baseWhere, filters);
   return buildWorkbook(module, records);

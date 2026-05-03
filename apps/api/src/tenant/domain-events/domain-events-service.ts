@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevDomainEventsForTenant } from "../../platform/data/dev-domain-store";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface DomainEventListFilters {
   vesselCode?: string | null;
@@ -26,13 +27,7 @@ export async function listTenantDomainEvents(
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id };
-
-  // Vessel scope enforcement
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
-
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.entityType) where.entityType = filters.entityType;
   if (filters.eventKind)  where.eventKind  = filters.eventKind;
 

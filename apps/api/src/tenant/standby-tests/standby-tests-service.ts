@@ -78,14 +78,15 @@ export async function listPendingStandbyTests(session: TenantAccessSession, vess
     isSafetyCritical: true,
     standbyTestFrequencyDays: { not: null },
   };
-  // Vessel scope: si el user no es admin/superintendent y tiene buques asignados,
-  // solo ve los suyos.
+  // Vessel scope (FAIL-CLOSED): TENANT_ADMIN y FLEET_SUPERINTENDENT ven todos
+  // los buques. El resto solo ve sus buques asignados; sin asignación → ninguno.
   if (
     session.user.role !== "TENANT_ADMIN" &&
-    session.user.role !== "FLEET_SUPERINTENDENT" &&
-    session.user.assignedVesselCodes.length > 0
+    session.user.role !== "FLEET_SUPERINTENDENT"
   ) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
+    where.vesselCode = session.user.assignedVesselCodes.length === 0
+      ? "__NO_ASSIGNED_VESSEL__"
+      : { in: session.user.assignedVesselCodes };
   }
   if (vesselCode) where.vesselCode = vesselCode;
 

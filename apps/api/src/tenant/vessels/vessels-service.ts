@@ -38,8 +38,11 @@ export async function listTenantVessels(session: TenantAccessSession) {
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.code = { in: session.user.assignedVesselCodes };
+  // FAIL-CLOSED: usuarios sin vessels asignados (que no son TENANT_ADMIN) no ven nada.
+  if (session.user.role !== "TENANT_ADMIN") {
+    where.code = session.user.assignedVesselCodes.length === 0
+      ? "__NO_ASSIGNED_VESSEL__"
+      : { in: session.user.assignedVesselCodes };
   }
 
   return prisma.vessel.findMany({
@@ -64,7 +67,7 @@ export async function getTenantVesselById(session: TenantAccessSession, id: stri
   });
   if (!record) return null;
 
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
+  if (session.user.role !== "TENANT_ADMIN") {
     if (!session.user.assignedVesselCodes.includes(record.code)) return null;
   }
 

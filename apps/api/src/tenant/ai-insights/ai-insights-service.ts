@@ -24,12 +24,17 @@ export async function listTenantAiInsights(
 
   const where: Record<string, unknown> = { tenantId: tenant.id };
 
-  // Cross-vessel rule: non-admin users can see their vessel insights + FLEET insights
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.OR = [
-      { vesselCode: { in: session.user.assignedVesselCodes } },
-      { targetType: "FLEET" },
-    ];
+  // Cross-vessel rule: non-admin users see their vessel insights + FLEET insights.
+  // FAIL-CLOSED: usuarios sin vessels asignados solo ven los FLEET (nunca todo el tenant).
+  if (session.user.role !== "TENANT_ADMIN") {
+    if (session.user.assignedVesselCodes.length === 0) {
+      where.targetType = "FLEET";
+    } else {
+      where.OR = [
+        { vesselCode: { in: session.user.assignedVesselCodes } },
+        { targetType: "FLEET" },
+      ];
+    }
   }
 
   if (filters.vesselCode)  where.vesselCode  = filters.vesselCode;

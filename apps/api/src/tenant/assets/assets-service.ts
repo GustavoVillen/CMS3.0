@@ -172,12 +172,21 @@ export async function listTenantAssets(session: TenantAccessSession, filters: As
 
   const addParam = (col: string, val: unknown) => { params.push(val); conditions.push(`"${col}" = $${params.length}`); };
 
-  const vesselScope = filters.vesselCode ?? null;
-  if (vesselScope) addParam("vesselCode", vesselScope.toUpperCase());
-  else if (session.user.role === "TECHNICIAN_OPERATOR" || session.user.role === "FLEET_SUPERINTENDENT") {
-    if (session.user.assignedVesselCodes?.length) {
-      const placeholders = session.user.assignedVesselCodes.map((_: string, i: number) => `$${params.length + i + 1}`).join(", ");
-      session.user.assignedVesselCodes.forEach((c: string) => params.push(c));
+  // Vessel scope (FAIL-CLOSED). TENANT_ADMIN ve todo el tenant. Cualquier otro
+  // rol solo ve sus vessels asignados; sin asignación → no ve nada (sentinel).
+  // Si vino filters.vesselCode, se valida contra el scope del usuario.
+  const requestedVessel = filters.vesselCode?.toUpperCase() ?? null;
+  if (session.user.role === "TENANT_ADMIN") {
+    if (requestedVessel) addParam("vesselCode", requestedVessel);
+  } else {
+    const assigned = session.user.assignedVesselCodes ?? [];
+    if (requestedVessel) {
+      addParam("vesselCode", assigned.includes(requestedVessel) ? requestedVessel : "__NO_ASSIGNED_VESSEL__");
+    } else if (assigned.length === 0) {
+      addParam("vesselCode", "__NO_ASSIGNED_VESSEL__");
+    } else {
+      const placeholders = assigned.map((_: string, i: number) => `$${params.length + i + 1}`).join(", ");
+      assigned.forEach((c: string) => params.push(c));
       conditions.push(`"vesselCode" IN (${placeholders})`);
     }
   }

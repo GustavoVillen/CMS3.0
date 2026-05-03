@@ -296,10 +296,12 @@ export async function getDailyReportWithSubEntities(
   if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
 
   const where: Record<string, unknown> = { id: reportId, tenantId: tenant.id, deletedAt: null };
+  // FAIL-CLOSED: TENANT_ADMIN y FLEET_SUPERINTENDENT ven todo el tenant.
+  // El resto solo ve sus vessels asignados; sin asignación → no ve nada.
   if (session.user.role !== "TENANT_ADMIN" && session.user.role !== "FLEET_SUPERINTENDENT") {
-    if (session.user.assignedVesselCodes.length > 0) {
-      where.vesselCode = { in: session.user.assignedVesselCodes };
-    }
+    where.vesselCode = session.user.assignedVesselCodes.length === 0
+      ? "__NO_ASSIGNED_VESSEL__"
+      : { in: session.user.assignedVesselCodes };
   }
 
   const report = await (prisma as any).dailyReport.findFirst({

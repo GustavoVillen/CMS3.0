@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
   void seedDefaultThresholds(tenantId).catch(() => {});
 
   const where: any = { tenantId, deletedAt: null };
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.assetId)    where.assetId    = filters.assetId;
   if (filters.fluidType)  where.fluidType  = filters.fluidType;
   if (filters.status)     where.status     = filters.status;
@@ -205,8 +206,10 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
+  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  applyAssignedVesselScope(session, where);
   const sample = await (prisma as any).fluidSample.findFirst({
-    where: { id, tenantId, deletedAt: null },
+    where,
     include: { result: true },
   });
   if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");

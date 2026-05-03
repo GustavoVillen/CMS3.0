@@ -4,6 +4,7 @@ import { listDevProvidersForTenant } from "../../platform/data/dev-domain-store"
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface ProviderListFilters {
   vesselCode?: string | null;
@@ -72,10 +73,7 @@ export async function listTenantProviders(session: TenantAccessSession, filters:
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  if (session.user.role !== "TENANT_ADMIN" && session.user.assignedVesselCodes.length > 0) {
-    where.vesselCode = { in: session.user.assignedVesselCodes };
-  }
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status)     where.status     = filters.status;
   if (filters.category)   where.category   = filters.category;
 
