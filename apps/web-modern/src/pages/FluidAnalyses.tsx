@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
-  ArrowUpDown, ChevronUp, ChevronDown,
+  ArrowUpDown, ChevronUp, ChevronDown, Clipboard,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
@@ -865,9 +865,7 @@ function ResultFormModal({
   const [err, setErr]               = useState<string | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const processFile = useCallback(async (f: File) => {
     setFile(f);
     setExtractError(null);
     setExtracting(true);
@@ -892,7 +890,53 @@ function ResultFormModal({
     } finally {
       setExtracting(false);
     }
+  }, [sample.vesselCode]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    void processFile(f);
   };
+
+  // Paste image desde portapapeles (Ctrl+V dentro del bloque de upload).
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    if (extracting || saving) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        e.preventDefault();
+        const ext = item.type.split("/")[1] ?? "png";
+        const f = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: item.type });
+        void processFile(f);
+        return;
+      }
+    }
+  }, [processFile, extracting, saving]);
+
+  // Botón explícito "Pegar del portapapeles" (Permissions API moderna).
+  const handlePasteButton = useCallback(async () => {
+    if (extracting || saving) return;
+    setExtractError(null);
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imgType = item.types.find(t => t.startsWith("image/"));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const ext = imgType.split("/")[1] ?? "png";
+          const f = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imgType });
+          void processFile(f);
+          return;
+        }
+      }
+      setExtractError("El portapapeles no contiene una imagen. Copiá primero una captura del reporte.");
+    } catch {
+      setExtractError("El navegador no permitió leer el portapapeles. Probá pegar con Ctrl+V o subí el archivo.");
+    }
+  }, [processFile, extracting, saving]);
 
   const updateParam = (i: number, patch: Partial<typeof params[0]>) => {
     setParams(p => p.map((x, idx) => idx === i ? { ...x, ...patch } : x));
@@ -932,20 +976,38 @@ function ResultFormModal({
     <ModalShell title={`Cargar resultado · ${sample.sampleCode}`} onClose={onClose} wide>
       <div className="space-y-5">
         {/* Step 1: AI upload */}
-        <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
+        <div
+          className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3"
+          onPaste={handlePaste}
+          tabIndex={-1}
+        >
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
             <p className="text-xs font-bold text-accent">Subí el reporte del laboratorio (PDF, JPG, PNG, foto)</p>
           </div>
-          <p className="text-[11px] text-text-industrial/60">La IA va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.</p>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <span className="px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 inline-flex items-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" /> {file ? "Cambiar archivo" : "Subir reporte"}
-            </span>
-            <input type="file" accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,image/heic" onChange={handleFileChange} className="hidden" disabled={extracting || saving} />
+          <p className="text-[11px] text-text-industrial/60">
+            La IA va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.
+            También podés <kbd className="px-1 py-0.5 rounded bg-white/10 border border-white/20 text-[10px] font-mono">Ctrl+V</kbd> una imagen del portapapeles.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="cursor-pointer">
+              <span className="px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 inline-flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5" /> {file ? "Cambiar archivo" : "Subir reporte"}
+              </span>
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,image/heic" onChange={handleFileChange} className="hidden" disabled={extracting || saving} />
+            </label>
+            <button
+              type="button"
+              onClick={() => { void handlePasteButton(); }}
+              disabled={extracting || saving}
+              title="Pegar imagen desde el portapapeles"
+              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/15 text-xs text-text-industrial hover:text-white hover:border-accent/40 disabled:opacity-50 inline-flex items-center gap-1.5 transition-all"
+            >
+              <Clipboard className="w-3.5 h-3.5 text-accent" /> Pegar imagen
+            </button>
             {extracting && <span className="text-xs text-accent flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando con IA...</span>}
             {file && !extracting && <span className="text-xs text-text-industrial/60 truncate max-w-[300px]">{file.name}</span>}
-          </label>
+          </div>
           {extractError && <p className="text-xs text-red-400">{extractError}</p>}
           {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer" className="text-xs text-accent inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver archivo cargado</a>}
         </div>
