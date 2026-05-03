@@ -67,7 +67,7 @@ interface SfiListResponse {
   total: number;
 }
 
-type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE";
+type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE" | "ISM";
 const SFI_TABS: { key: SfiTab; label: string }[] = [
   { key: "ALL",  label: "TODOS" },
   { key: 0,      label: "G0" },
@@ -857,7 +857,7 @@ export const AssetsPage: React.FC = () => {
   useCopilotEmitter(editing === undefined ? { module: "ASSETS", screen: "ASSET_LIST" } : null);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
-  const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE">("ALL");
+  const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE" | "ISM">("ALL");
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
@@ -914,7 +914,8 @@ export const AssetsPage: React.FC = () => {
   const filteredAssets = useMemo(() => {
     let items = data?.items ?? null;
     if (!items) return items;
-    if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
+    if (sfiTab === "ISM") items = items.filter(a => a.isSafetyCritical);
+    else if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       items = items.filter(a =>
@@ -1059,6 +1060,27 @@ export const AssetsPage: React.FC = () => {
             </button>
           );
         })}
+        {/* ISM 10.3 — equipos críticos para seguridad */}
+        {(() => {
+          const ismCount = (data?.items ?? []).filter(a => a.isSafetyCritical).length;
+          if (ismCount === 0) return null;
+          const isActive = sfiTab === "ISM";
+          return (
+            <button
+              onClick={() => setSfiTab("ISM")}
+              title="Equipos críticos para seguridad (ISM Code 10.3)"
+              className={[
+                "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
+                isActive
+                  ? "bg-amber-500 text-primary-bg border-amber-500"
+                  : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50",
+              ].join(" ")}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              ISM 10.3 <span className="opacity-70">({ismCount})</span>
+            </button>
+          );
+        })()}
       </div>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
