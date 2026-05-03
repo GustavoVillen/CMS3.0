@@ -33,6 +33,8 @@ export interface CreateWorkOrderInput {
   loto?: string | null;
   riskLevel?: string | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
   department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
   location?: string | null;
   communicationMethod?: string[];
@@ -56,6 +58,8 @@ export interface UpdateWorkOrderInput {
   riskLevel?: string | null;
   riskAnalysisResult?: string | null;
   checklistDocUrl?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
   // Result fields
   woResult?: string | null;
   executedByName?: string | null;
@@ -410,6 +414,8 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
       loto: normalizeOptionalText(payload.loto),
       riskLevel: normalizeOptionalText(payload.riskLevel),
       riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
+      consequenceCategory: payload.consequenceCategory ?? null,
+      consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
       department: payload.department ?? null,
       location: normalizeOptionalText(payload.location),
       communicationMethod: payload.communicationMethod ?? [],
@@ -523,6 +529,8 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.riskLevel !== undefined) data.riskLevel = normalizeOptionalText(payload.riskLevel);
   if (payload.riskAnalysisResult !== undefined) data.riskAnalysisResult = normalizeOptionalText(payload.riskAnalysisResult);
   if (payload.checklistDocUrl !== undefined) data.checklistDocUrl = normalizeOptionalText(payload.checklistDocUrl);
+  if (payload.consequenceCategory !== undefined) data.consequenceCategory = payload.consequenceCategory ?? null;
+  if (payload.consequenceRationale !== undefined) data.consequenceRationale = normalizeOptionalText(payload.consequenceRationale);
   if (payload.woResult !== undefined) data.woResult = normalizeOptionalText(payload.woResult);
   if (payload.executedByName !== undefined) data.executedByName = normalizeOptionalText(payload.executedByName);
   if (payload.completedDate !== undefined) data.completedDate = parseOptionalDate(payload.completedDate, "completedDate");

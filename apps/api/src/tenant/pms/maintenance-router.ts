@@ -136,6 +136,13 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-consequence") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestPlanConsequence>[1]>(request);
+    sendJson(response, 200, await suggestPlanConsequence(session, body));
+    return true;
+  }
+
   if (method === "POST" && /^\/app\/pms\/maintenance-plans\/[^/]+\/quick-close$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof quickClosePlan>[2];

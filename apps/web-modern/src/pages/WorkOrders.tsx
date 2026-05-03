@@ -262,6 +262,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loto, setLoto]                     = useState(workOrder.loto ?? "");
   const [riskLevel, setRiskLevel]           = useState(workOrder.riskLevel ?? "");
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(workOrder.riskAnalysisResult ?? "");
+  const [consequenceCategory, setConsequenceCategory]   = useState<string>((workOrder as any).consequenceCategory ?? "");
+  const [consequenceRationale, setConsequenceRationale] = useState<string>((workOrder as any).consequenceRationale ?? "");
   const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
   const [checklistDocUrl] = useState(workOrder.checklistDocUrl ?? "");
 
@@ -365,6 +367,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingCriteria, setLoadingCriteria] = useState(false);
   const [loadingLoto,     setLoadingLoto]    = useState(false);
   const [loadingRisk,     setLoadingRisk]    = useState(false);
+  const [loadingConsequence, setLoadingConsequence] = useState(false);
 
   useCopilotEmitter({
     module: "WORK_ORDERS",
@@ -439,6 +442,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     finally { setLoadingRisk(false); }
   }, [isEditable, loadingRisk, workOrder.assetName, description, title, acceptanceCriteria, loto]);
 
+  const handleConsequenceClick = useCallback(async () => {
+    if (!isEditable || loadingConsequence) return;
+    setLoadingConsequence(true);
+    try {
+      const res = await api.post<{ category: string; rationale: string }>(
+        "/app/pms/work-orders/suggest-consequence",
+        {
+          assetName: workOrder.assetName ?? workOrder.assetId ?? "",
+          assetSfiCode: null,
+          planTitle: title || null,
+          planDescription: description || null,
+        },
+      );
+      if (res.category && ["SAFETY","ENVIRONMENTAL","OPERATIONAL","NON_OPERATIONAL"].includes(res.category)) {
+        setConsequenceCategory(res.category);
+      }
+      if (res.rationale) setConsequenceRationale(res.rationale);
+    } catch { /* noop */ }
+    finally { setLoadingConsequence(false); }
+  }, [isEditable, loadingConsequence, workOrder.assetName, workOrder.assetId, title, description]);
+
   const uploadIfNeeded = useCallback(async (file: File | null, currentUrl: string) => {
     if (!file) return currentUrl || null;
     const res = await api.upload<{ url: string }>(`/app/attachments/upload?entityType=WorkOrder&entityId=${workOrder.id}`, file);
@@ -461,6 +485,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             loto,
             riskLevel: normalizeOptionalText(riskLevel),
             riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+            consequenceCategory: consequenceCategory || null,
+            consequenceRationale: normalizeOptionalText(consequenceRationale),
           });
         } catch { /* non-blocking — still try to print */ }
       }
@@ -468,7 +494,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } finally {
       setGeneratingPdf(false);
     }
-  }, [isEditable, workOrder, title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult]);
+  }, [isEditable, workOrder, title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
 
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
@@ -486,6 +512,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         loto,
         riskLevel: normalizeOptionalText(riskLevel),
         riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+        consequenceCategory: consequenceCategory || null,
+        consequenceRationale: normalizeOptionalText(consequenceRationale),
         department: (department as any) || null,
         location: normalizeOptionalText(location),
         communicationMethod: commMethod,
@@ -503,6 +531,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+      consequenceCategory, consequenceRationale,
       department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
       woResult, executedByName, executionDate, runningHoursAtExecution, observations,
@@ -511,6 +540,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // ESC guard
   const isDirty = useDirtyTracker({
     title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    consequenceCategory, consequenceRationale,
     department, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
     woResult, executedByName, executionDate, runningHoursAtExecution, observations,
@@ -745,6 +775,36 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>Resultado Análisis de Riesgo</label>
               <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder="Ej: Aceptable con controles" />
+            </div>
+            <div className="space-y-1.5">
+              <label
+                onClick={isEditable ? handleConsequenceClick : undefined}
+                title={isEditable ? "Click para que la IA sugiera la consecuencia (RCM)" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
+              >
+                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Si no se hace, ¿qué pasa?{loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+              </label>
+              <select
+                value={consequenceCategory}
+                onChange={e => setConsequenceCategory(e.target.value)}
+                disabled={!isEditable || loadingConsequence}
+                className={inputCls}
+              >
+                <option value="">— Sin clasificar —</option>
+                <option value="SAFETY">🔴 Riesgo a personas (lesión / fatalidad)</option>
+                <option value="ENVIRONMENTAL">🟢 Daño ambiental (vertido, emisión)</option>
+                <option value="OPERATIONAL">🟡 Pérdida de operación (paro, retraso)</option>
+                <option value="NON_OPERATIONAL">⚪ Solo costo de reparación</option>
+              </select>
+              <textarea
+                rows={2}
+                value={consequenceRationale}
+                onChange={e => setConsequenceRationale(e.target.value)}
+                disabled={!isEditable || loadingConsequence}
+                className={`${inputCls} resize-y`}
+                placeholder="Fundamento de la categoría (ej: si la bomba CI no se prueba, no arranca en incendio)"
+              />
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Documento Checklist</label>

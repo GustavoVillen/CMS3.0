@@ -1059,6 +1059,9 @@ model WorkOrder {
   riskLevel           String?
   riskAnalysisResult  String?
   checklistDocUrl     String?
+  // RCM: consecuencia que se mitiga si la OT no se ejecuta
+  consequenceCategory  ConsequenceCategory?
+  consequenceRationale String?
   // Mercurio form fields
   department              WorkOrderDepartment?
   location                String?

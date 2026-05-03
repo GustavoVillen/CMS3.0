@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-05-03] OTs: análisis RCM (consecuencia + fundamento) en pantalla de Orden de Trabajo
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma: WorkOrder.consequenceCategory (ConsequenceCategory?), consequenceRationale (String?)
+- apps/api/src/tenant/work-orders/work-orders-service.ts: inputs + create/update
+- apps/api/src/tenant/pms/maintenance-router.ts: endpoint POST /app/pms/work-orders/suggest-consequence (reusa suggestPlanConsequence)
+- apps/web-modern/src/pages/WorkOrders.tsx: dropdown + textarea editable + handler IA con Sparkles
+
+FUNCIONALIDAD:
+- Mismo formato que MaintenancePlans: dropdown con 4 categorías RCM (SAFETY/ENVIRONMENTAL/OPERATIONAL/NON_OPERATIONAL) + textarea de fundamento
+- Click en el título "Si no se hace, ¿qué pasa?" dispara IA (Claude Haiku) que sugiere categoría + fundamento basado en activo + tarea + descripción
+- Persiste en api.patch (tanto en handleGeneratePdf como en onSave)
+- Incluido en useDirtyTracker (ESC guard)
+
 [2026-05-03] OTs: reporte PDF de OTs abiertas agrupadas por responsable
 Agent: Claude Opus 4.7
 
