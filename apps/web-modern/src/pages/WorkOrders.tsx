@@ -1189,7 +1189,7 @@ export const WorkOrdersPage: React.FC = () => {
       ),
     },
     { key: "type",   header: "Categoría",   render: r => <CategoryBadge type={r.type} /> },
-    { key: "assignedToUserId", header: "Responsable", sortValue: r => r.assignedToUserName ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? "—"}</span> },
+    { key: "assignedToUserId", header: "Responsable", sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? r.assignedToUserId ?? "—"}</span> },
     { key: "openDate", header: "F. Apertura",    render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{fmtDate(r.openDate)}</span> },
     {
       key: "dueDate", header: "F. Vencimiento",
