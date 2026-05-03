@@ -77,12 +77,13 @@ export async function buildOpenWorkOrdersReportPdf(
     where: { slug: session.tenantSlug },
     select: {
       id: true,
-      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true } },
+      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, workOrderPdfTemplate: true } },
     },
   });
   if (!tenantRow) throw new Error("Tenant not found");
   const tenantId = tenantRow.id;
   const tenantName: string | null = tenantRow.settings?.displayName ?? null;
+  const isMercurio = tenantRow.settings?.workOrderPdfTemplate === "MERCURIO";
   const tenantLogoBuffer = await resolveTenantLogo(
     session.tenantSlug,
     tenantRow.settings?.logoUrl,
@@ -359,6 +360,28 @@ export async function buildOpenWorkOrdersReportPdf(
       // Filas
       for (const r of items) drawRow(r);
       y += 8; // separación entre grupos
+    }
+
+    // ── Bloque de firmas (solo Mercurio) ────────────────────────────────
+    if (isMercurio) {
+      const SIGN_H = 38;
+      ensureSpace(SIGN_H + 12);
+      y += 12;
+      const colW = Math.floor(W / 3);
+      const labels = [
+        "Elaborado: Barlovento Servicios Profesionales",
+        "Revisado: Asesoría Jurídica",
+        "Aprobado: Gerente General",
+      ];
+      labels.forEach((label, i) => {
+        const cx = ML + i * colW;
+        const cw = i === 2 ? W - 2 * colW : colW;
+        doc.rect(cx, y, cw, SIGN_H).fillColor("#F3F4F6").fill();
+        doc.rect(cx, y, cw, SIGN_H).strokeColor(BORDER).lineWidth(0.5).stroke();
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(BLACK)
+          .text(sanitizePdfText(label), cx + 6, y + (SIGN_H - 8) / 2, { width: cw - 12, align: "center", lineBreak: false });
+      });
+      y += SIGN_H;
     }
 
     drawFooter();
