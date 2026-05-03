@@ -198,6 +198,15 @@ export async function updateMemberRole(session: TenantAccessSession, userId: str
   });
   if (!membership) throw new RouteError(404, "USER_NOT_FOUND", "Miembro no encontrado.");
 
+  // Validar TECHNICIAN_OPERATOR sin vessels asignados → bloquear el cambio.
+  if (role === "TECHNICIAN_OPERATOR" && (membership.assignedVesselCodes ?? []).length === 0) {
+    throw new RouteError(
+      400,
+      "TECHNICIAN_REQUIRES_VESSEL",
+      "Asigná al menos una embarcación antes de marcar al usuario como Técnico/Operador.",
+    );
+  }
+
   // If demoting from FLEET_SUPERINTENDENT, deactivate vessel assignments
   if (membership.role === "FLEET_SUPERINTENDENT" && role !== "FLEET_SUPERINTENDENT") {
     await (prisma as any).vesselSuperintendentAssignment.updateMany({
@@ -206,12 +215,12 @@ export async function updateMemberRole(session: TenantAccessSession, userId: str
     });
   }
 
+  // Preservar assignedVesselCodes en el cambio de rol — antes los reseteaba a []
+  // salvo para FLEET_SUPERINTENDENT, lo que dejaba a los técnicos sin scope y veían
+  // datos vacíos por el fail-closed. Ahora se mantienen y el admin los ajusta aparte.
   await (prisma as any).tenantMembership.update({
     where: { id: membership.id },
-    data: {
-      role,
-      assignedVesselCodes: role === "FLEET_SUPERINTENDENT" ? membership.assignedVesselCodes : [],
-    },
+    data: { role },
   });
 
   return { userId, role };
@@ -367,6 +376,9 @@ export async function syncMemberVessels(session: TenantAccessSession, userId: st
     if (!user || user.tenantSlug !== session.tenantSlug) {
       throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
     }
+    if (user.role === "TECHNICIAN_OPERATOR" && vesselCodes.length === 0) {
+      throw new RouteError(400, "TECHNICIAN_REQUIRES_VESSEL", "Un Técnico/Operador debe tener al menos una embarcación asignada.");
+    }
     updateDevTenantUser(userId, { assignedVesselCodes: vesselCodes });
     return { userId, assignedVesselCodes: vesselCodes };
   }
@@ -376,6 +388,10 @@ export async function syncMemberVessels(session: TenantAccessSession, userId: st
     where: { tenantId, userId },
   });
   if (!membership) throw new RouteError(404, "USER_NOT_FOUND", "Miembro no encontrado.");
+
+  if (membership.role === "TECHNICIAN_OPERATOR" && vesselCodes.length === 0) {
+    throw new RouteError(400, "TECHNICIAN_REQUIRES_VESSEL", "Un Técnico/Operador debe tener al menos una embarcación asignada.");
+  }
 
   await (prisma as any).tenantMembership.update({
     where: { id: membership.id },

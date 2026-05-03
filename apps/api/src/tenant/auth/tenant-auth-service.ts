@@ -71,78 +71,6 @@ function loginTenantUserFromDevelopmentFallback(
   };
 }
 
-/**
- * Attempts vessel crew login. Returns the response on success, null on any failure.
- * Always runs scrypt exactly once (real or timing-dummy) to keep timing constant.
- * Does NOT audit failures — the caller does that once per request.
- */
-async function tryVesselCrewLogin(
-  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
-  tenant: { id: string; slug: string; settings: any },
-  vesselCode: string,
-  password: string,
-  requestedLocale?: string | null,
-): Promise<TenantLoginResponse | null> {
-  const rows = await prisma.$queryRawUnsafe<Array<{
-    id: string; code: string; name: string; crewPasswordHash: string | null;
-  }>>(
-    `SELECT "id", "code", "name", "crewPasswordHash" FROM "Vessel"
-     WHERE "tenantId" = $1 AND UPPER("code") = UPPER($2) AND "deletedAt" IS NULL LIMIT 1`,
-    tenant.id, vesselCode,
-  );
-
-  const candidate = rows[0];
-  const passwordOk = verifyPasswordOrTimingDummy(password, candidate?.crewPasswordHash);
-
-  if (!candidate || !candidate.crewPasswordHash || !passwordOk) {
-    return null;
-  }
-
-  await publishSystemAudit(prisma, {
-    tenantId: tenant.id,
-    action: "VESSEL_CREW_LOGIN_SUCCESS",
-    entityType: "Vessel",
-    entityId: candidate.id,
-    metadata: { tenantSlug: tenant.slug, vesselCode: candidate.code },
-  });
-  const locale = resolveActiveSessionLocale({
-    requestedLocale: requestedLocale,
-    preferredLocale: null,
-    defaultLocale: tenant.settings?.defaultLocale ?? "es",
-    enabledLocales: tenant.settings?.enabledLocales ?? ["es"],
-  });
-
-  const tokens = issueOpaqueSessionTokens();
-
-  return {
-    session: tokens,
-    user: {
-      id: `crew-${candidate.code}`,
-      email: `tripulacion@${candidate.code.toLowerCase()}.vessel`,
-      firstName: `Tripulación`,
-      lastName: candidate.name,
-      role: "TECHNICIAN_OPERATOR",
-      assignedVesselCodes: [candidate.code],
-      locale,
-    },
-    bootstrap: buildTenantBootstrapPayload(
-      {
-        slug: tenant.slug,
-        displayName: tenant.settings?.displayName ?? tenant.slug,
-        logoUrl: tenant.settings?.logoUrl ?? null,
-        logoUrlLight: tenant.settings?.logoUrlLight ?? null,
-        primaryColor: tenant.settings?.primaryColor ?? "#2563eb",
-        supportEmail: tenant.settings?.supportEmail ?? "",
-        defaultLocale: tenant.settings?.defaultLocale ?? "es",
-        enabledLocales: tenant.settings?.enabledLocales ?? ["es"],
-        timezone: tenant.settings?.timezone ?? "UTC",
-        currency: tenant.settings?.currency ?? "USD",
-      },
-      { requestedLocale: locale, preferredLocale: locale },
-    ),
-  };
-}
-
 export async function loginTenantUser(tenantSlug: string, request: TenantLoginRequest): Promise<TenantLoginResponse> {
   const prisma = getPrismaClient();
   if (!prisma) {
@@ -195,12 +123,10 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       validMembership ? membership!.user.passwordHash : null,
     );
 
-    // If tenant user login fails, try vessel crew. Never throw mid-flow:
-    // we want a single failure point with a single audit + single error.
+    // Si la membership falla, no hay fallback. (El login de tripulación con
+    // vesselCode + password fue eliminado — las tripulaciones ahora son Users
+    // normales gestionados desde "Gestión del Equipo".)
     if (!validMembership || !membershipPasswordOk) {
-      const crewResponse = await tryVesselCrewLogin(prisma, tenant, identifier, password, request.locale);
-      if (crewResponse) return crewResponse;
-
       // All paths failed. Single audit event with neutral metadata
       // (don't reveal which path got how far — keep response identical).
       recordLoginFailure(`tenant:${tenant.slug}`, identifier);

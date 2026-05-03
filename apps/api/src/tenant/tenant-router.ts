@@ -43,7 +43,6 @@ import { listTenantSpares } from "./spares/spares-service";
 import { listBitacoraEntries, createBitacoraEntry, updateBitacoraEntry, deleteBitacoraEntry } from "./bitacora/bitacora-service";
 import { listTenantStockMovements } from "./stock-movements/stock-movements-service";
 import { listTenantVessels, getTenantVesselById, createTenantVessel, updateTenantVessel, deleteTenantVessel } from "./vessels/vessels-service";
-import { getCrewCredentials, setCrewPassword } from "./vessels/vessel-crew-credentials-service";
 import { listTenantWorkOrders } from "./work-orders/work-orders-service";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
 import { generateTemplate } from "./excel/excel-template";
@@ -288,20 +287,6 @@ export async function handleTenantRoutes(
     sendJson(response, 201, await createTenantVessel(session, body));
     return true;
   }
-  if (/^\/app\/vessels\/[^/]+\/crew-credentials$/.test(url.pathname)) {
-    const id = url.pathname.split("/")[3];
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    if (method === "GET") {
-      sendJson(response, 200, await getCrewCredentials(session, id));
-      return true;
-    }
-    if (method === "PUT") {
-      const body = await readJsonBody<{ vesselCode: string; password: string }>(request);
-      sendJson(response, 200, await setCrewPassword(session, id, body.vesselCode, body.password));
-      return true;
-    }
-  }
-
   if (/^\/app\/vessels\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/").pop()!;
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));

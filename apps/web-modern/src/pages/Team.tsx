@@ -437,6 +437,8 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   const isSelf    = member.userId === currentUserId;
   const isRevoked = member.status === "REVOKED";
   const isSuperintendent = member.role === "FLEET_SUPERINTENDENT";
+  const isTechnician     = member.role === "TECHNICIAN_OPERATOR";
+  const needsFleetAssignment = isSuperintendent || isTechnician;
 
   const handleRoleChange = async () => {
     if (newRole === member.role) return;
@@ -502,10 +504,15 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             <MemberCredentialsSection member={member} />
           )}
 
-          {/* Fleet assignment for superintendents */}
-          {isSuperintendent && !isRevoked && (
+          {/* Fleet assignment for roles that need vessel scoping */}
+          {needsFleetAssignment && !isRevoked && (
             <div className="border border-accent/15 rounded-xl p-4 bg-accent/3">
               <FleetAssignmentPanel member={member} onChanged={onChanged} />
+              {isTechnician && member.assignedVesselCodes.length === 0 && (
+                <p className="text-[10px] text-amber-400 mt-2">
+                  ⚠ Un Técnico/Operador necesita al menos una embarcación asignada para ver datos.
+                </p>
+              )}
             </div>
           )}
 

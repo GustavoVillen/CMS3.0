@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, Copy, Eye, EyeOff, KeyRound, Ship, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { Ship, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -68,106 +68,6 @@ const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode 
     {children}
   </div>
 );
-
-// ─── Crew Credentials Section ─────────────────────────────────────────────────
-
-const CrewCredentialsSection: React.FC<{ vessel: Vessel }> = ({ vessel }) => {
-  const [hasPassword, setHasPassword] = useState(false);
-  const [updatedAt, setUpdatedAt]     = useState<string | null>(null);
-  const [password, setPassword]       = useState("");
-  const [showPwd, setShowPwd]         = useState(false);
-  const [saving, setSaving]           = useState(false);
-  const [saved, setSaved]             = useState(false);
-  const [copied, setCopied]           = useState(false);
-  const [error, setError]             = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get<{ hasPassword: boolean; updatedAt: string | null }>(`/app/vessels/${vessel.id}/crew-credentials`)
-      .then(d => { setHasPassword(d.hasPassword); setUpdatedAt(d.updatedAt); })
-      .catch(() => {});
-  }, [vessel.id]);
-
-  const handleSave = async () => {
-    if (!password) return;
-    setSaving(true); setError(null);
-    try {
-      await api.put(`/app/vessels/${vessel.id}/crew-credentials`, { vesselCode: vessel.code, password });
-      setHasPassword(true);
-      setUpdatedAt(new Date().toISOString());
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(password || vessel.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="border-t border-white/10 pt-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <KeyRound className="w-4 h-4 text-accent" />
-        <h3 className="text-xs font-bold text-white uppercase tracking-wider">Credenciales de Tripulación</h3>
-        {hasPassword && updatedAt && (
-          <span className="text-[10px] text-text-industrial/40 ml-auto">Actualizado {fmtDate(updatedAt)}</span>
-        )}
-      </div>
-      <p className="text-[10px] text-text-industrial/50">
-        La tripulación inicia sesión con el código del buque como usuario y la contraseña que configures aquí.
-      </p>
-      <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">
-            Usuario (fijo)
-          </label>
-          <input
-            readOnly
-            value={vessel.code}
-            className="input-field opacity-50 cursor-not-allowed"
-          />
-        </div>
-        <div className="space-y-1.5 flex-1">
-          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">
-            {hasPassword ? "Nueva contraseña" : "Contraseña"}
-          </label>
-          <div className="relative">
-            <input
-              type={showPwd ? "text" : "password"}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder={hasPassword ? "Dejar vacío para no cambiar" : "Establecer contraseña…"}
-              className="input-field pr-16"
-            />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-              <button type="button" onClick={() => setShowPwd(v => !v)} className="p-1 text-text-industrial/30 hover:text-white transition-colors">
-                {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-              <button type="button" onClick={() => { void handleCopy(); }} className="p-1 text-text-industrial/30 hover:text-white transition-colors" title="Copiar">
-                {copied ? <Check className="w-3.5 h-3.5 text-success-sea" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <button
-        type="button"
-        onClick={() => { void handleSave(); }}
-        disabled={saving || !password}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white font-semibold hover:bg-white/10 disabled:opacity-40 transition-all"
-      >
-        {saved ? <Check className="w-3.5 h-3.5 text-success-sea" /> : <KeyRound className="w-3.5 h-3.5 text-accent" />}
-        {saved ? "Guardado" : "Guardar contraseña"}
-      </button>
-    </div>
-  );
-};
 
 const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSaved: () => void }> = ({ initial, onClose, onSaved }) => {
   const t = useT();
@@ -322,7 +222,6 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
               <option value="DECOMMISSIONED">{t("status.decommissioned")}</option>
             </select>
           </Field>
-          {isEdit && initial && <CrewCredentialsSection vessel={initial} />}
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">{t("common.cancel")}</button>
