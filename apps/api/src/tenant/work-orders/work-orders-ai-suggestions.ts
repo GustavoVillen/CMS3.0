@@ -15,12 +15,23 @@ const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí 
 
 Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
 
-const PROMPT_RISK = `Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y determiná:
-1. El nivel de riesgo (LOW, MEDIUM, HIGH o CRITICAL)
-2. El resultado del análisis de riesgos (peligros identificados, consecuencias posibles, medidas de control)
+const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
 
-Responde ÚNICAMENTE con este JSON (sin texto adicional):
-{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis"}`;
+CONTEXTO IMPORTANTE — qué te están pidiendo:
+Este análisis evalúa el riesgo PARA EL OPERARIO al EJECUTAR la tarea. Es decir: la pregunta es "¿qué peligros corre quien hace el trabajo MIENTRAS lo hace?".
+
+NO confundir con RCM (otra herramienta del sistema). RCM pregunta lo opuesto: "¿qué pasa si la tarea NO se hace?". RCM mira la consecuencia de la falla en el equipo. Vos NO tenés que pensar en eso.
+
+Vos pensás en: espacio confinado, energías peligrosas, hot work, caídas, atrapamiento, exposición química, ruido, atmósferas explosivas, partes móviles, cargas suspendidas, presión residual, temperatura, electricidad. Cosas que pueden lastimar AL TRIPULANTE durante la ejecución.
+
+Niveles de riesgo (operacional):
+- LOW: tarea rutinaria sin energías peligrosas, espacio normal, EPP básico.
+- MEDIUM: requiere LOTO simple, EPP específico, una persona alcanza.
+- HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
+- CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
+
+Respondé ÚNICAMENTE con este JSON (sin texto adicional):
+{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"peligros identificados durante la ejecución, consecuencias para el operario, medidas de control y EPP recomendado"}`;
 
 interface BaseInput {
   assetLabel?: string | null;

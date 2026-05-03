@@ -755,7 +755,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
                 {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Nivel de Riesgo{loadingRisk && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+                Nivel de Riesgo
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— ¿Qué riesgo tiene HACER la tarea? (JSA)</span>
+                {loadingRisk && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
               <div className="flex gap-1.5">
                 {([
@@ -783,7 +785,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
                 {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Si no se hace, ¿qué pasa?{loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
+                Si no se hace, ¿qué pasa?
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— Consecuencia de la falla (RCM)</span>
+                {loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
               <select
                 value={consequenceCategory}

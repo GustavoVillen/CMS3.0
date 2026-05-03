@@ -1854,6 +1854,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               >
                 {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("mp.riskLevel")}
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— ¿Qué riesgo tiene HACER la tarea? (JSA)</span>
               </label>
               <div className="flex items-center gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
@@ -1882,6 +1883,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               >
                 {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 Si no se hace, ¿qué pasa?
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— Consecuencia de la falla (RCM)</span>
               </label>
               <select
                 value={consequenceCategory}

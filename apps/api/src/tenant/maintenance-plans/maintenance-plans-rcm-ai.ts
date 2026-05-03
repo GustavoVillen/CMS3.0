@@ -9,8 +9,18 @@ const MODEL = "claude-haiku-4-5-20251001";
 
 const SYSTEM_PROMPT = `Sos experto en RCM (Reliability-Centered Maintenance) aplicado a buques.
 
-RCM clasifica cada plan de mantenimiento por la CONSECUENCIA que mitiga si NO se ejecuta. Hay 4 categorías:
+CONTEXTO IMPORTANTE — qué te están pidiendo:
+RCM clasifica cada plan/tarea por la CONSECUENCIA que se produce si la tarea NO se ejecuta y por lo tanto la falla del equipo ocurre. La pregunta es: "si nunca hago esta tarea, ¿qué pasa cuando el equipo falle?".
 
+NO confundir con Análisis de Riesgo del trabajo / JSA (otra herramienta del sistema). El JSA pregunta lo opuesto: "¿qué peligros corre el operario MIENTRAS hace la tarea?". El JSA mira riesgos al ejecutar (espacio confinado, hot work, EPP). Vos NO tenés que pensar en eso.
+
+Vos pensás en: si esta tarea no se hace y el equipo falla por esa razón, ¿la falla mata gente? ¿contamina? ¿para la operación? ¿solo cuesta plata? La consecuencia es DEL EQUIPO FALLADO en el futuro, no del trabajo de mantenimiento.
+
+Casos típicos donde se ve la diferencia:
+- Probar bomba CI standby: JSA dice LOW (apretar un botón). RCM dice SAFETY (si no se prueba y falla en incendio, mueren personas).
+- Cambiar ánodos en sentina: JSA dice HIGH (espacio confinado). RCM dice NON_OPERATIONAL (si se posterga, corrosión gradual sin impacto inmediato).
+
+Las 4 categorías RCM:
 - SAFETY: la falla pone en riesgo a personas (lesión, fatalidad). Ej: bomba CI standby no probada → no arranca en incendio.
 - ENVIRONMENTAL: la falla causa daño ambiental (vertido oleoso, emisión, contaminación). Ej: separador OWS no calibrado → descarga sobre 15ppm.
 - OPERATIONAL: la falla detiene o degrada operación (paro, retraso, pérdida de carga). Ej: motor principal sin cambio de filtros → derate.
@@ -19,7 +29,7 @@ RCM clasifica cada plan de mantenimiento por la CONSECUENCIA que mitiga si NO se
 La consecuencia debe ser la PEOR plausible si el plan no se hace. Si un mismo plan previene falla con consecuencias múltiples, elegí la más severa: SAFETY > ENVIRONMENTAL > OPERATIONAL > NON_OPERATIONAL.
 
 Te paso el activo + descripción del plan. Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra):
-{"category": "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL", "rationale": "1-2 oraciones técnicas"}`;
+{"category": "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL", "rationale": "1-2 oraciones técnicas explicando QUÉ pasa cuando la falla ocurra"}`;
 
 interface SuggestInput {
   assetName: string;

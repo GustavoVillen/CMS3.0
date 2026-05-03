@@ -23,11 +23,26 @@ const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí 
 
 Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
 
-const PROMPT_RISK = `Sos experto en gestión de riesgos en mantenimiento de máquinas navales. Analizá esta tarea y respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
+const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
+
+CONTEXTO IMPORTANTE — qué te están pidiendo:
+Este análisis evalúa el riesgo PARA EL OPERARIO al EJECUTAR la tarea. Es decir: la pregunta es "¿qué peligros corre quien hace el trabajo MIENTRAS lo hace?".
+
+NO confundir con RCM (otra herramienta del sistema). RCM pregunta lo opuesto: "¿qué pasa si la tarea NO se hace?". RCM mira la consecuencia de la falla en el equipo. Vos NO tenés que pensar en eso.
+
+Vos pensás en: espacio confinado, energías peligrosas, hot work, caídas, atrapamiento, exposición química, ruido, atmósferas explosivas, partes móviles, cargas suspendidas, presión residual, temperatura, electricidad. Cosas que pueden lastimar AL TRIPULANTE durante la ejecución.
+
+Niveles de riesgo (operacional):
+- LOW: tarea rutinaria sin energías peligrosas, espacio normal, EPP básico.
+- MEDIUM: requiere LOTO simple, EPP específico, una persona alcanza.
+- HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
+- CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
+
+Respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
 
 NIVEL: LOW|MEDIUM|HIGH|CRITICAL
 
-[peligros identificados, consecuencias posibles y medidas de control]
+[peligros identificados durante la ejecución, consecuencias para el operario y medidas de control]
 
 EQUIPOS DE PPE:
 - [equipo de protección 1]
