@@ -1076,21 +1076,6 @@ export const WorkOrdersPage: React.FC = () => {
   const vesselFilter   = (searchParams.get("vesselCode") ?? "").trim();
   const viewFilter     = (searchParams.get("view")      ?? "").trim(); // open | overdue | closed
   const autoCode       = (searchParams.get("autoCode")  ?? "").trim();
-  const [vesselInput, setVesselInput] = useState(vesselFilter);
-  useEffect(() => { setVesselInput(vesselFilter); }, [vesselFilter]);
-
-  const updateFilters = useCallback((next: { status?: string; type?: string; priority?: string; vesselCode?: string }) => {
-    const params = new URLSearchParams(searchParams);
-    const s = next.status    !== undefined ? next.status    : statusFilter;
-    const tp = next.type     !== undefined ? next.type      : typeFilter;
-    const pr = next.priority !== undefined ? next.priority  : priorityFilter;
-    const v  = next.vesselCode !== undefined ? next.vesselCode : vesselFilter;
-    if (s)  params.set("status",    s);  else params.delete("status");
-    if (tp) params.set("type",      tp); else params.delete("type");
-    if (pr) params.set("priority",  pr); else params.delete("priority");
-    if (v)  params.set("vesselCode", v); else params.delete("vesselCode");
-    setSearchParams(params, { replace: true });
-  }, [priorityFilter, searchParams, setSearchParams, statusFilter, typeFilter, vesselFilter]);
 
   const path = useMemo(() => {
     const params = new URLSearchParams();
@@ -1244,13 +1229,6 @@ export const WorkOrdersPage: React.FC = () => {
         >
           {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas{selectedVesselCode ? ` (${selectedVesselCode})` : ""}
         </button>
-        <div className="flex items-center gap-2">
-          <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
-          <button onClick={() => updateFilters({ vesselCode: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">{t("common.apply")}</button>
-          {vesselFilter && (
-            <button onClick={() => updateFilters({ status: "", type: "", priority: "", vesselCode: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40">{t("common.clear")}</button>
-          )}
-        </div>
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle...</div>}
