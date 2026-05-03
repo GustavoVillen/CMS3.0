@@ -372,6 +372,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingLoto,     setLoadingLoto]    = useState(false);
   const [loadingRisk,     setLoadingRisk]    = useState(false);
   const [loadingConsequence, setLoadingConsequence] = useState(false);
+  const [loadingRewrite,   setLoadingRewrite]    = useState(false);
 
   useCopilotEmitter({
     module: "WORK_ORDERS",
@@ -466,6 +467,23 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch { /* noop */ }
     finally { setLoadingConsequence(false); }
   }, [isEditable, loadingConsequence, workOrder.assetName, workOrder.assetId, title, description]);
+
+  const handleRewriteDeficiencies = useCallback(async () => {
+    if (!isEditable || loadingRewrite) return;
+    if (!deficienciasText.trim()) return;
+    setLoadingRewrite(true);
+    try {
+      const res = await api.post<{ rewritten: string }>(
+        "/app/pms/work-orders/rewrite-deficiencies",
+        {
+          text: deficienciasText,
+          assetName: workOrder.assetName ?? null,
+        },
+      );
+      if (res.rewritten) setDeficienciasText(res.rewritten);
+    } catch { /* noop */ }
+    finally { setLoadingRewrite(false); }
+  }, [isEditable, loadingRewrite, deficienciasText, workOrder.assetName]);
 
   const uploadIfNeeded = useCallback(async (file: File | null, currentUrl: string) => {
     if (!file) return currentUrl || null;
@@ -847,8 +865,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             {/* ── Deficiencias encontradas ── */}
             {woResult === "WITH_DEFICIENCIES" && (
               <div className="space-y-1.5">
-                <label className={labelCls}>Deficiencias encontradas</label>
-                <textarea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder="Descripción detallada de las deficiencias encontradas" />
+                <div className="flex items-center justify-between">
+                  <label className={labelCls}>Deficiencias encontradas</label>
+                  <button
+                    type="button"
+                    onClick={() => { void handleRewriteDeficiencies(); }}
+                    disabled={!isEditable || loadingRewrite || !deficienciasText.trim()}
+                    title={!deficienciasText.trim() ? "Escribí algo primero" : "Reescribir profesionalmente con IA"}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loadingRewrite
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Sparkles className="w-3 h-3" />}
+                    Reescribir IA
+                  </button>
+                </div>
+                <textarea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable || loadingRewrite} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder="Descripción detallada de las deficiencias encontradas" />
               </div>
             )}
 

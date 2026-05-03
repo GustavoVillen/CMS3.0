@@ -42,6 +42,7 @@ import {
   suggestPlanRisk,
 } from "../maintenance-plans/maintenance-plans-ai-suggestions";
 import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
+import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
@@ -140,6 +141,13 @@ export async function handleMaintenanceRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanConsequence>[1]>(request);
     sendJson(response, 200, await suggestPlanConsequence(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/rewrite-deficiencies") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof rewriteDeficiencies>[1]>(request);
+    sendJson(response, 200, await rewriteDeficiencies(session, body));
     return true;
   }
 
