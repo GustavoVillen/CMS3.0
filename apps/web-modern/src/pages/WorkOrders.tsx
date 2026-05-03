@@ -1233,31 +1233,10 @@ export const WorkOrdersPage: React.FC = () => {
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>Todos los estados</option>
-          <option value="PLANNED">Planificada</option>
-          <option value="IN_PROGRESS">En progreso</option>
-          <option value="ON_HOLD">En espera</option>
-          <option value="CLOSED">Cerrada</option>
-          <option value="CANCELLED">Cancelada</option>
-        </select>
-        <select value={toFilterSelectValue(typeFilter)} onChange={e => updateFilters({ type: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>Todas las categorías</option>
-          <option value="PREVENTIVE">Mantenimiento</option>
-          <option value="CORRECTIVE">Reparación</option>
-          <option value="INSPECTION">Inspección</option>
-        </select>
-        <select value={toFilterSelectValue(priorityFilter)} onChange={e => updateFilters({ priority: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>Todas las prioridades</option>
-          <option value="LOW">Baja</option>
-          <option value="MEDIUM">Media</option>
-          <option value="HIGH">Alta</option>
-          <option value="CRITICAL">Crítica</option>
-        </select>
         <div className="flex items-center gap-2">
           <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           <button onClick={() => updateFilters({ vesselCode: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">{t("common.apply")}</button>
-          {(statusFilter || typeFilter || priorityFilter || vesselFilter) && (
+          {vesselFilter && (
             <button onClick={() => updateFilters({ status: "", type: "", priority: "", vesselCode: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40">{t("common.clear")}</button>
           )}
         </div>
