@@ -49,6 +49,8 @@ interface WorkOrder {
   riskLevel: string | null;
   riskAnalysisResult: string | null;
   checklistDocUrl: string | null;
+  consequenceCategory: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale: string | null;
   // Result fields
   woResult: string | null;
   executedByName: string | null;
@@ -264,8 +266,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loto, setLoto]                     = useState(workOrder.loto ?? "");
   const [riskLevel, setRiskLevel]           = useState(workOrder.riskLevel ?? "");
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(workOrder.riskAnalysisResult ?? "");
-  const [consequenceCategory, setConsequenceCategory]   = useState<string>((workOrder as any).consequenceCategory ?? "");
-  const [consequenceRationale, setConsequenceRationale] = useState<string>((workOrder as any).consequenceRationale ?? "");
+  const [consequenceCategory, setConsequenceCategory]   = useState<string>(workOrder.consequenceCategory ?? "");
+  const [consequenceRationale, setConsequenceRationale] = useState<string>(workOrder.consequenceRationale ?? "");
   const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
   const [checklistDocUrl] = useState(workOrder.checklistDocUrl ?? "");
 
