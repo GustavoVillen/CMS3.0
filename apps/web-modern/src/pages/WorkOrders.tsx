@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, Wrench, X } from "lucide-react";
+import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, Sparkles, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -698,33 +698,34 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} ${isEditable ? `cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : "hover:opacity-80"}` : ""}`}
-                style={sectionLabelStyle}
-                onClick={handleAcceptanceCriteriaClick}
+                onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
                 title={isEditable ? "Click para que la IA genere los criterios de aceptación" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
+                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 Criterios de aceptación{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
               <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder="Condiciones que deben cumplirse para dar la tarea por completada" />
             </div>
             <div className="space-y-1.5">
               <label
-                className={`${sectionLabelCls} ${isEditable ? `cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : "hover:opacity-80"}` : ""}`}
-                style={sectionLabelStyle}
-                onClick={handleLotoClick}
+                onClick={isEditable ? handleLotoClick : undefined}
                 title={isEditable ? "Click para que la IA genere el procedimiento LOTO" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
+                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 LOTO{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
               <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder="Procedimiento de bloqueo y etiquetado" />
             </div>
             <div className="space-y-1.5">
               <label
-                className={`${labelCls} ${isEditable ? `cursor-pointer transition-colors ${loadingRisk ? "text-accent/60 animate-pulse" : "hover:text-accent"}` : ""}`}
-                onClick={handleRiskClick}
+                onClick={isEditable ? handleRiskClick : undefined}
                 title={isEditable ? "Click para que la IA analice el nivel de riesgo" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
-                Nivel de Riesgo{loadingRisk && <span className="ml-1 text-[9px] text-accent/60 normal-case font-normal">analizando...</span>}
+                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Nivel de Riesgo{loadingRisk && <span className="ml-1 text-[9px] normal-case font-normal">analizando...</span>}
               </label>
               <div className="flex gap-1.5">
                 {([
