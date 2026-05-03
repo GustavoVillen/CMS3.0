@@ -64,9 +64,13 @@ interface OpenWoRow {
   isOverdue: boolean;
 }
 
-export async function buildOpenWorkOrdersReportPdf(session: TenantAccessSession): Promise<Buffer> {
+export async function buildOpenWorkOrdersReportPdf(
+  session: TenantAccessSession,
+  options: { vesselCode?: string | null } = {},
+): Promise<Buffer> {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new Error("Database unavailable");
+  const requestedVessel = options.vesselCode?.trim() || null;
 
   // Resolver tenantId
   const tenantRow = await (prismaRaw as any).tenant.findUnique({
@@ -91,12 +95,19 @@ export async function buildOpenWorkOrdersReportPdf(session: TenantAccessSession)
     deletedAt: null,
     status: { in: ["PLANNED", "IN_PROGRESS"] },
   };
-  if (session.user.role !== "TENANT_ADMIN") {
-    if (session.user.assignedVesselCodes.length === 0) {
+  // Vessel scope: combina el filtro pedido con el scope del usuario
+  if (session.user.role === "TENANT_ADMIN") {
+    if (requestedVessel) where.vesselCode = requestedVessel;
+  } else if (requestedVessel) {
+    if (!session.user.assignedVesselCodes.includes(requestedVessel)) {
       where.vesselCode = "__NO_ASSIGNED_VESSEL__";
     } else {
-      where.vesselCode = { in: session.user.assignedVesselCodes };
+      where.vesselCode = requestedVessel;
     }
+  } else if (session.user.assignedVesselCodes.length === 0) {
+    where.vesselCode = "__NO_ASSIGNED_VESSEL__";
+  } else {
+    where.vesselCode = { in: session.user.assignedVesselCodes };
   }
 
   const orders = await (prismaRaw as any).workOrder.findMany({
@@ -235,8 +246,11 @@ export async function buildOpenWorkOrdersReportPdf(session: TenantAccessSession)
     doc.rect(ML + LOGO_W, y, TITLE_W, HDR_H).strokeColor(BORDER).lineWidth(0.4).stroke();
     doc.fontSize(14).font("Helvetica-Bold").fillColor(NAVY)
       .text("Reporte de Órdenes de Trabajo Abiertas", ML + LOGO_W + 8, y + 12, { width: TITLE_W - 16, align: "center" });
+    const scopeText = requestedVessel
+      ? `Embarcación: ${requestedVessel} — agrupadas por responsable (incluye OTs vencidas)`
+      : "Todas las embarcaciones — agrupadas por responsable (incluye OTs vencidas)";
     doc.fontSize(9).font("Helvetica").fillColor(BLACK)
-      .text("Agrupadas por responsable — incluye OTs vencidas", ML + LOGO_W + 8, y + 32, { width: TITLE_W - 16, align: "center" });
+      .text(scopeText, ML + LOGO_W + 8, y + 32, { width: TITLE_W - 16, align: "center" });
 
     const INFO_X = ML + LOGO_W + TITLE_W;
     const INFO_W = 180;

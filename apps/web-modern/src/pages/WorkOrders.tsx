@@ -3,8 +3,8 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
-import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
+import { DataTable, type Column } from "../components/DataTable";
+import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
@@ -1235,12 +1235,12 @@ export const WorkOrdersPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
         <button
-          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(); } finally { setGeneratingReport(false); } }}
+          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(vesselFilter); } finally { setGeneratingReport(false); } }}
           disabled={generatingReport}
-          title="Imprimir todas las OTs abiertas agrupadas por responsable"
+          title={vesselFilter ? `Imprimir OTs abiertas de ${vesselFilter}` : "Imprimir todas las OTs abiertas agrupadas por responsable"}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
         >
-          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas
+          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} Reporte OTs Abiertas{vesselFilter ? ` (${vesselFilter})` : ""}
         </button>
         <div className="flex items-center gap-2">
           <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />

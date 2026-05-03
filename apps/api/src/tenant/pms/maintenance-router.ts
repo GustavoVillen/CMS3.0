@@ -292,8 +292,10 @@ export async function handleMaintenanceRoutes(
 
   if (method === "GET" && url.pathname === "/app/pms/work-orders/open-report.pdf") {
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
-    const buffer = await buildOpenWorkOrdersReportPdf(session);
-    const filename = `OTs-Abiertas-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const vesselCode = url.searchParams.get("vesselCode")?.trim() || null;
+    const buffer = await buildOpenWorkOrdersReportPdf(session, { vesselCode });
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode ? `OTs-Abiertas-${vesselCode}-${today}.pdf` : `OTs-Abiertas-${today}.pdf`;
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
