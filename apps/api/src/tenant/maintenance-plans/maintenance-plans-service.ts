@@ -244,6 +244,22 @@ function ensureCanManagePlans(session: TenantAccessSession) {
   }
 }
 
+// Abrir una OT desde un plan no modifica el plan — es una acción operativa.
+// Los técnicos a bordo y los managers de mantenimiento pueden hacerlo.
+function canOpenWorkOrderFromPlan(session: TenantAccessSession): boolean {
+  const role = session.user.role;
+  return role === "TENANT_ADMIN"
+    || role === "FLEET_SUPERINTENDENT"
+    || role === "MAINTENANCE_MANAGER"
+    || role === "TECHNICIAN_OPERATOR";
+}
+
+function ensureCanOpenWorkOrderFromPlan(session: TenantAccessSession) {
+  if (!canOpenWorkOrderFromPlan(session)) {
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para crear órdenes de trabajo desde planes.");
+  }
+}
+
 function normalizeRequiredText(value: unknown, field: string): string {
   const text = String(value ?? "").trim();
   if (!text) throw new RouteError(400, "VALIDATION_ERROR", `El campo ${field} es requerido.`);
@@ -869,7 +885,7 @@ export async function openFormalWorkOrder(
   id: string,
   payload: OpenFormalWorkOrderInput,
 ) {
-  ensureCanManagePlans(session);
+  ensureCanOpenWorkOrderFromPlan(session);
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
