@@ -42,6 +42,7 @@ export interface TenantBootstrapPayload {
     enabledLocales: LocaleCode[];
     timezone: string;
     currency: string;
+    workOrderPdfTemplate?: string | null;
   };
   auth: TenantBootstrapAuth;
 }
@@ -77,4 +78,5 @@ export interface TenantBootstrapSource {
   enabledLocales: LocaleCode[];
   timezone: string;
   currency: string;
+  workOrderPdfTemplate?: string | null;
 }

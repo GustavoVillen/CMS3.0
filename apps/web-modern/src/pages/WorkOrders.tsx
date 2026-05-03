@@ -224,6 +224,8 @@ interface WorkOrderModalProps {
 const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction }) => {
   const t = useT();
   const navigate = useNavigate();
+  const { tenant } = useAuth();
+  const isMercurio = tenant?.workOrderPdfTemplate === "MERCURIO";
   const isEditable = canEditStatus(workOrder.status);
 
   // Linked deferral status (when WO is ON_HOLD)
@@ -684,29 +686,31 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           <section className="space-y-4">
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">Plan</p>
 
-            {/* ── Departamento + Ubicación ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>Departamento</label>
-                <div className="flex flex-wrap gap-2">
-                  {(["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const).map(d => (
-                    <button key={d} type="button" disabled={!isEditable}
-                      onClick={() => setDepartment(department === d ? "" : d)}
-                      className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
-                        department === d
-                          ? "bg-accent text-white border-accent"
-                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
-                      }`}
-                    >{d}</button>
-                  ))}
+            {/* ── Departamento + Ubicación (solo Mercurio) ── */}
+            {isMercurio && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Departamento</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const).map(d => (
+                      <button key={d} type="button" disabled={!isEditable}
+                        onClick={() => setDepartment(department === d ? "" : d)}
+                        className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
+                          department === d
+                            ? "bg-accent text-white border-accent"
+                            : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                        }`}
+                      >{d}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Ubicación</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable}
+                    className={inputCls} placeholder="Ej: Sala de máquinas, Cubierta proa…" />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>Ubicación</label>
-                <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable}
-                  className={inputCls} placeholder="Ej: Sala de máquinas, Cubierta proa…" />
-              </div>
-            </div>
+            )}
 
             <div className="space-y-1.5">
               <label className={labelCls}>Título de la OT</label>
@@ -1035,39 +1039,42 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </section>
 
-          {/* ── Medio de comunicación ── */}
-          <section className="space-y-3 border-t border-white/10 pt-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Medio de comunicación utilizado</p>
-            <div className="flex gap-3 flex-wrap">
-              {(["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const).map(opt => (
-                <button key={opt} type="button" disabled={!isEditable}
-                  onClick={() => toggleArr(commMethod, setCommMethod, opt)}
-                  className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
-                    commMethod.includes(opt)
-                      ? "bg-accent text-white border-accent"
-                      : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
-                  }`}
-                >{opt}</button>
-              ))}
-            </div>
-          </section>
+          {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
+          {isMercurio && (
+            <>
+              <section className="space-y-3 border-t border-white/10 pt-4">
+                <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Medio de comunicación utilizado</p>
+                <div className="flex gap-3 flex-wrap">
+                  {(["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const).map(opt => (
+                    <button key={opt} type="button" disabled={!isEditable}
+                      onClick={() => toggleArr(commMethod, setCommMethod, opt)}
+                      className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                        commMethod.includes(opt)
+                          ? "bg-accent text-white border-accent"
+                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                      }`}
+                    >{opt}</button>
+                  ))}
+                </div>
+              </section>
 
-          {/* ── Distribución ── */}
-          <section className="space-y-3 border-t border-white/10 pt-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Distribución</p>
-            <div className="flex gap-2 flex-wrap">
-              {(["GGE","PDT","JTE","JOP","JRH","JVE","JCO","JSE","JUR","ADM","CAP","JMA"] as const).map(code => (
-                <button key={code} type="button" disabled={!isEditable}
-                  onClick={() => toggleArr(distribution, setDistribution, code)}
-                  className={`w-12 py-1 rounded text-xs font-bold border transition-colors ${
-                    distribution.includes(code)
-                      ? "bg-accent text-white border-accent"
-                      : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
-                  }`}
-                >{code}</button>
-              ))}
-            </div>
-          </section>
+              <section className="space-y-3 border-t border-white/10 pt-4">
+                <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Distribución</p>
+                <div className="flex gap-2 flex-wrap">
+                  {(["GGE","PDT","JTE","JOP","JRH","JVE","JCO","JSE","JUR","ADM","CAP","JMA"] as const).map(code => (
+                    <button key={code} type="button" disabled={!isEditable}
+                      onClick={() => toggleArr(distribution, setDistribution, code)}
+                      className={`w-12 py-1 rounded text-xs font-bold border transition-colors ${
+                        distribution.includes(code)
+                          ? "bg-accent text-white border-accent"
+                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                      }`}
+                    >{code}</button>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
 
           {closingWarning && (
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">

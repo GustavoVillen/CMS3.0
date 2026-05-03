@@ -24,5 +24,6 @@ export async function findTenantBootstrapSourceBySlug(
     enabledLocales: tenant.settings.enabledLocales,
     timezone: tenant.settings.timezone,
     currency: tenant.settings.currency,
+    workOrderPdfTemplate: (tenant.settings as any).workOrderPdfTemplate ?? null,
   };
 }

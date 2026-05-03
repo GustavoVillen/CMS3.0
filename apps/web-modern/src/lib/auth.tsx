@@ -19,6 +19,7 @@ export interface AuthTenant {
   currency: string;
   logoUrl?: string | null;
   logoUrlLight?: string | null;
+  workOrderPdfTemplate?: string | null;
 }
 
 interface AuthState {
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.post<{
         session: { accessToken: string; refreshToken: string };
         user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[] };
-        bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null } };
+        bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null; workOrderPdfTemplate?: string | null } };
       }>("/app/auth/login", { identifier, password });
 
       // Persist refresh token so api.ts can recover from 401 (access token expiry)
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           currency: t?.currency ?? "USD",
           logoUrl: t?.logoUrl ?? null,
           logoUrlLight: t?.logoUrlLight ?? null,
+          workOrderPdfTemplate: t?.workOrderPdfTemplate ?? null,
         },
         isAuthenticated: true,
       };

@@ -30,6 +30,7 @@ export function buildTenantBootstrapPayload(
       enabledLocales: tenant.enabledLocales,
       timezone: tenant.timezone,
       currency: tenant.currency,
+      workOrderPdfTemplate: tenant.workOrderPdfTemplate ?? null,
     },
     auth: {
       loginMode: PRODUCT_CONFIG.tenantLoginMode,
