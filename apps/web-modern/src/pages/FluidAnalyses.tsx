@@ -8,6 +8,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/utils";
@@ -649,9 +650,10 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
         </div>
       </div>
       <div className="p-3 rounded-xl bg-accent/5 border border-accent/20">
-        <pre className="text-xs text-text-industrial/80 whitespace-pre-wrap font-sans leading-relaxed">
-          {result.aiAnalysis}
-        </pre>
+        <MarkdownText
+          text={result.aiAnalysis}
+          className="text-xs text-text-industrial/80 font-sans"
+        />
       </div>
     </div>
   );
