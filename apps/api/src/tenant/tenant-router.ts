@@ -65,7 +65,6 @@ import { buildFluidAnalysisPdf } from "./fluid-analyses/fluid-analyses-pdf-servi
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
 import { handleProfileRoutes } from "./profile/profile-router";
-import { handleWeeklyBackupRoutes } from "./weekly-backup/weekly-backup-router";
 import { listTenantAuditLog, type AuditLogItem } from "./audit/audit-log-service";
 import ExcelJS from "exceljs";
 
@@ -272,10 +271,6 @@ export async function handleTenantRoutes(
 
   if (url.pathname.startsWith("/app/profile")) {
     if (await handleProfileRoutes(method, url, request, response, env)) return true;
-  }
-
-  if (url.pathname.startsWith("/app/settings/weekly-backup")) {
-    if (await handleWeeklyBackupRoutes(method, url, request, response, env)) return true;
   }
 
   // ── Vessels ────────────────────────────────────────────────────────────────
