@@ -93,11 +93,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       if (overdue) vencidas++; else abiertas++;
     }
     return [
-      { key: "open",       name: "Abiertas",    value: abiertas,    fill: "#06D6A0" },
-      { key: "overdue",    name: "Vencidas",     value: vencidas,    fill: "#EF4444" },
-      { key: "postponed",  name: "Postergadas",  value: postergadas, fill: "#EAB308" },
+      { key: "open",       name: t("dashboard.wo.open"),      value: abiertas,    fill: "#06D6A0" },
+      { key: "overdue",    name: t("dashboard.wo.overdue"),   value: vencidas,    fill: "#EF4444" },
+      { key: "postponed",  name: t("dashboard.wo.postponed"), value: postergadas, fill: "#EAB308" },
     ].filter(s => s.value > 0);
-  }, [workOrders.data]);
+  }, [workOrders.data, t]);
 
   // Donut chart: deferrals by status (excluding CLOSED)
   const deferralCounts = React.useMemo(() => {
@@ -105,13 +105,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     const map: Record<string, number> = { REQUESTED: 0, UNDER_REVIEW: 0, APPROVED: 0, ACTIVE: 0, REJECTED: 0 };
     for (const d of items) if (d.status in map) map[d.status]++;
     return [
-      { key: "REQUESTED",    name: "Solicitados",  value: map.REQUESTED,    fill: "#60A5FA" },
-      { key: "UNDER_REVIEW", name: "En Revisión",  value: map.UNDER_REVIEW, fill: "#EAB308" },
-      { key: "APPROVED",     name: "Aprobados",    value: map.APPROVED,     fill: "#06D6A0" },
-      { key: "ACTIVE",       name: "Activos",      value: map.ACTIVE,       fill: "#A78BFA" },
-      { key: "REJECTED",     name: "Rechazados",   value: map.REJECTED,     fill: "#EF4444" },
+      { key: "REQUESTED",    name: t("dashboard.def.requested"),    value: map.REQUESTED,    fill: "#60A5FA" },
+      { key: "UNDER_REVIEW", name: t("dashboard.def.underReview"),  value: map.UNDER_REVIEW, fill: "#EAB308" },
+      { key: "APPROVED",     name: t("dashboard.def.approved"),     value: map.APPROVED,     fill: "#06D6A0" },
+      { key: "ACTIVE",       name: t("dashboard.def.active"),       value: map.ACTIVE,       fill: "#A78BFA" },
+      { key: "REJECTED",     name: t("dashboard.def.rejected"),     value: map.REJECTED,     fill: "#EF4444" },
     ].filter(s => s.value > 0);
-  }, [deferrals.data]);
+  }, [deferrals.data, t]);
 
   // Donut chart: maintenance plans by execution status — same logic as computeStatus() in MaintenancePlans.tsx
   const mpStatusCounts = React.useMemo(() => {
@@ -138,14 +138,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       map.FUTURE++;
     }
     return [
-      { key: "NEVER_EXECUTED", name: "Sin ejecutar", value: map.NEVER_EXECUTED, fill: "#64748b" },
-      { key: "OVERDUE",        name: "Vencidas",      value: map.OVERDUE,        fill: "#EF4444" },
-      { key: "DUE",            name: "Por Vencer",    value: map.DUE,            fill: "#F97316" },
-      { key: "IN_WINDOW",      name: "En Proceso",    value: map.IN_WINDOW,      fill: "#EAB308" },
-      { key: "UPCOMING",       name: "Próximas",      value: map.UPCOMING,       fill: "#F97316" },
-      { key: "FUTURE",         name: "Al Día",        value: map.FUTURE,         fill: "#06D6A0" },
+      { key: "NEVER_EXECUTED", name: t("dashboard.mp.neverExecuted"), value: map.NEVER_EXECUTED, fill: "#64748b" },
+      { key: "OVERDUE",        name: t("dashboard.mp.overdue"),        value: map.OVERDUE,        fill: "#EF4444" },
+      { key: "DUE",            name: t("dashboard.mp.due"),            value: map.DUE,            fill: "#F97316" },
+      { key: "IN_WINDOW",      name: t("dashboard.mp.inWindow"),       value: map.IN_WINDOW,      fill: "#EAB308" },
+      { key: "UPCOMING",       name: t("dashboard.mp.upcoming"),       value: map.UPCOMING,       fill: "#F97316" },
+      { key: "FUTURE",         name: t("dashboard.mp.future"),         value: map.FUTURE,         fill: "#06D6A0" },
     ].filter(s => s.value > 0);
-  }, [maintenancePlans.data]);
+  }, [maintenancePlans.data, t]);
 
   const spareReqCounts = React.useMemo(() => {
     const allItems = (spareRequests.data?.items ?? []).flatMap(r => r.items);
@@ -156,11 +156,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       else map.PENDING++;
     }
     return [
-      { key: "PENDING",   name: "Pendientes",  value: map.PENDING,   fill: "#EAB308" },
-      { key: "FULFILLED", name: "Recibidos",   value: map.FULFILLED, fill: "#06D6A0" },
-      { key: "CANCELLED", name: "Cancelados",  value: map.CANCELLED, fill: "#475569" },
+      { key: "PENDING",   name: t("dashboard.sr.pending"),   value: map.PENDING,   fill: "#EAB308" },
+      { key: "FULFILLED", name: t("dashboard.sr.fulfilled"), value: map.FULFILLED, fill: "#06D6A0" },
+      { key: "CANCELLED", name: t("dashboard.sr.cancelled"), value: map.CANCELLED, fill: "#475569" },
     ].filter(s => s.value > 0);
-  }, [spareRequests.data]);
+  }, [spareRequests.data, t]);
 
   const critSparesCounts = React.useMemo(() => {
     const items = criticalSpares.data?.items ?? [];
@@ -171,11 +171,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       ok++;
     }
     return [
-      { key: "sin_stock",    name: "Sin Stock",     value: sinStock,    fill: "#EF4444" },
-      { key: "bajo_reorden", name: "Bajo Reorden",  value: bajoReorden, fill: "#F97316" },
-      { key: "ok",           name: "OK",            value: ok,          fill: "#06D6A0" },
+      { key: "sin_stock",    name: t("dashboard.cs.outOfStock"),   value: sinStock,    fill: "#EF4444" },
+      { key: "bajo_reorden", name: t("dashboard.cs.belowReorder"), value: bajoReorden, fill: "#F97316" },
+      { key: "ok",           name: t("dashboard.cs.ok"),           value: ok,          fill: "#06D6A0" },
     ].filter(s => s.value > 0);
-  }, [criticalSpares.data]);
+  }, [criticalSpares.data, t]);
 
   const insightCount = insights.data?.total ?? 0;
 
@@ -232,7 +232,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-bold text-white">{workOrders.data?.items.length ?? 0}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Total</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
@@ -259,8 +259,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]" style={mpStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">Planes de Mantenimiento</h2>
-              <p className="text-[10px] text-text-industrial/40">Estado de ejecución</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.mpTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.mpSubtitle")}</p>
             </div>
             {maintenancePlans.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
@@ -277,7 +277,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-bold text-white">{maintenancePlans.data?.items.length ?? 0}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Total</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
@@ -300,15 +300,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">Aplazamientos</h2>
-              <p className="text-[10px] text-text-industrial/40">Estado activo</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.deferralsTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.deferralsSubtitle")}</p>
             </div>
             {deferrals.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
           {deferrals.error ? <ErrorMsg msg={deferrals.error} /> : deferralCounts.length === 0 && !deferrals.loading ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
               <Clock className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">Sin aplazamientos activos</p>
+              <p className="text-xs text-text-industrial/40">{t("dashboard.deferralsEmpty")}</p>
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
@@ -323,7 +323,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-bold text-white">{deferralCounts.reduce((a, s) => a + s.value, 0)}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Total</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
@@ -350,15 +350,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]" style={csStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">Repuestos Críticos</h2>
-              <p className="text-[10px] text-text-industrial/40">Estado de stock (criticidad A)</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.criticalSparesTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.criticalSparesSubtitle")}</p>
             </div>
             {criticalSpares.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
           {criticalSpares.error ? <ErrorMsg msg={criticalSpares.error} /> : critSparesCounts.length === 0 && !criticalSpares.loading ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
               <Package className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">Sin repuestos críticos registrados</p>
+              <p className="text-xs text-text-industrial/40">{t("dashboard.criticalSparesEmpty")}</p>
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
@@ -373,7 +373,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-bold text-white">{criticalSpares.data?.total ?? 0}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Total</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
@@ -396,15 +396,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">Solicitudes de Repuestos</h2>
-              <p className="text-[10px] text-text-industrial/40">Ítems por estado de recepción</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.spareReqTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.spareReqSubtitle")}</p>
             </div>
             {spareRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
           {spareRequests.error ? <ErrorMsg msg={spareRequests.error} /> : spareReqCounts.length === 0 && !spareRequests.loading ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
               <Package className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">Sin solicitudes registradas</p>
+              <p className="text-xs text-text-industrial/40">{t("dashboard.spareReqEmpty")}</p>
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
@@ -419,7 +419,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-bold text-white">{spareReqCounts.reduce((a, s) => a + s.value, 0)}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">Ítems</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.itemsLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
@@ -462,7 +462,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             data={fuelData.data?.items ?? []}
             loading={fuelData.loading}
             error={fuelData.error}
-            vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : "Todos los buques"}
+            vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : t("dashboard.allVessels")}
           />
         </div>
       </div>
@@ -517,6 +517,7 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
   loading: boolean;
   onClick?: () => void;
 }) => {
+  const t = useT();
   const alert = !loading && !hasToday;
   const wrapCls = "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
   // .bento-card sets `background` in plain CSS (higher specificity than
@@ -549,7 +550,7 @@ const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
       </div>
       <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
       <p className={valueCls}>
-        {loading ? "—" : (alert ? "Sin reporte hoy" : formatted)}
+        {loading ? "—" : (alert ? t("dashboard.noReportToday") : formatted)}
       </p>
     </div>
   );
@@ -582,24 +583,27 @@ const ErrorMsg = ({ msg }: { msg: string }) => (
   </div>
 );
 
-const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => (
-  <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
-    <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
-    <div className="flex items-start justify-between mb-3">
-      <div className="p-1.5 rounded-lg bg-accent/10 border border-accent/20">
-        <Sparkles className="w-3.5 h-3.5 text-accent" />
+const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => {
+  const t = useT();
+  return (
+    <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
+      <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-1.5 rounded-lg bg-accent/10 border border-accent/20">
+          <Sparkles className="w-3.5 h-3.5 text-accent" />
+        </div>
+        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
       </div>
-      {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">AI Insights</p>
+      <div className="flex items-end justify-between">
+        <p className="text-xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
+        {!loading && count > 0 && (
+          <span className="text-[9px] text-accent/60 font-bold uppercase tracking-widest group-hover:text-accent transition-colors pb-1">{t("dashboard.viewArrow")}</span>
+        )}
+      </div>
     </div>
-    <p className="text-[10px] text-text-industrial/40 font-medium mb-1">AI Insights</p>
-    <div className="flex items-end justify-between">
-      <p className="text-xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
-      {!loading && count > 0 && (
-        <span className="text-[9px] text-accent/60 font-bold uppercase tracking-widest group-hover:text-accent transition-colors pb-1">Ver →</span>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Droplets consumption helpers
@@ -659,6 +663,7 @@ const FuelConsumptionWidget = ({
   error: string | null;
   vesselName: string;
 }) => {
+  const t = useT();
   const chartData = React.useMemo(() => buildDropletsChartData(data), [data]);
   const hasData = data.length > 0;
 
@@ -668,9 +673,9 @@ const FuelConsumptionWidget = ({
         <div>
           <h2 className="text-xs font-bold text-white flex items-center gap-2">
             <Droplets className="w-3.5 h-3.5 text-accent" />
-            Consumo de Combustible
+            {t("dashboard.fuelTitle")}
           </h2>
-          <p className="text-[10px] text-text-industrial/40">Últimos 30 días · {vesselName}</p>
+          <p className="text-[10px] text-text-industrial/40">{t("dashboard.fuelLast30")} · {vesselName}</p>
         </div>
         <div className="flex items-center gap-3">
           {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -678,11 +683,11 @@ const FuelConsumptionWidget = ({
             <div className="flex items-center gap-3 text-[10px] text-text-industrial/50">
               <span className="flex items-center gap-1">
                 <span className="inline-block w-5 h-0.5 bg-[#4FC3F7] rounded" />
-                Real
+                {t("dashboard.fuelReal")}
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-5 h-0.5 bg-[#94A3B8] rounded" style={{ borderTop: "2px dashed #94A3B8", height: 0 }} />
-                Estimado
+                {t("dashboard.fuelEstimated")}
               </span>
             </div>
           )}
@@ -694,7 +699,7 @@ const FuelConsumptionWidget = ({
       ) : !loading && !hasData ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
           <Droplets className="w-6 h-6 text-text-industrial/40" />
-          <p className="text-xs text-text-industrial/40">Sin reportes de combustible en los últimos 30 días</p>
+          <p className="text-xs text-text-industrial/40">{t("dashboard.fuelEmpty")}</p>
         </div>
       ) : (
         <div className="flex-1 min-h-0">
@@ -721,7 +726,7 @@ const FuelConsumptionWidget = ({
                 labelStyle={{ color: "rgba(224,225,221,0.5)", fontSize: 11 }}
                 formatter={(value: number, name: string) => [
                   `${value.toLocaleString("es")} L`,
-                  name === "realValue" ? "Real" : "Estimado",
+                  name === "realValue" ? t("dashboard.fuelReal") : t("dashboard.fuelEstimated"),
                 ]}
               />
               {/* Solid line for real data */}

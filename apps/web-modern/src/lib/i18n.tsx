@@ -913,6 +913,56 @@ const dict = {
   "mp.statusBadge.valid":      { es: "VÁLIDO",                 en: "VALID",                 pt: "VÁLIDO" },
   "mp.sfiTab.all":             { es: "TODOS",                  en: "ALL",                   pt: "TODOS" },
 
+  // Dashboard — chart titles and subtitles
+  "dashboard.totalLabel":      { es: "Total",                  en: "Total",                pt: "Total" },
+  "dashboard.itemsLabel":      { es: "Ítems",                  en: "Items",                pt: "Itens" },
+  "dashboard.viewArrow":       { es: "Ver →",                  en: "View →",               pt: "Ver →" },
+  "dashboard.allVessels":      { es: "Todos los buques",       en: "All vessels",          pt: "Todas as embarcações" },
+  "dashboard.fuelTitle":       { es: "Consumo de Combustible", en: "Fuel Consumption",     pt: "Consumo de Combustível" },
+  "dashboard.fuelLast30":      { es: "Últimos 30 días",        en: "Last 30 days",         pt: "Últimos 30 dias" },
+  "dashboard.fuelReal":        { es: "Real",                   en: "Actual",               pt: "Real" },
+  "dashboard.fuelEstimated":   { es: "Estimado",               en: "Estimated",            pt: "Estimado" },
+  "dashboard.fuelEmpty":       { es: "Sin reportes de combustible en los últimos 30 días", en: "No fuel reports in the last 30 days", pt: "Sem relatórios de combustível nos últimos 30 dias" },
+  "dashboard.noReportToday":   { es: "Sin reporte hoy",        en: "No report today",      pt: "Sem relatório hoje" },
+
+  "dashboard.mpTitle":         { es: "Planes de Mantenimiento", en: "Maintenance Plans",   pt: "Planos de Manutenção" },
+  "dashboard.mpSubtitle":      { es: "Estado de ejecución",    en: "Execution status",     pt: "Status de execução" },
+  "dashboard.deferralsTitle":  { es: "Aplazamientos",          en: "Deferrals",            pt: "Adiamentos" },
+  "dashboard.deferralsSubtitle":{ es: "Estado activo",         en: "Active status",        pt: "Status ativo" },
+  "dashboard.deferralsEmpty":  { es: "Sin aplazamientos activos", en: "No active deferrals", pt: "Sem adiamentos ativos" },
+  "dashboard.criticalSparesTitle":{ es: "Repuestos Críticos", en: "Critical Spares",       pt: "Sobressalentes Críticos" },
+  "dashboard.criticalSparesSubtitle":{ es: "Estado de stock (criticidad A)", en: "Stock status (criticality A)", pt: "Status de estoque (criticidade A)" },
+  "dashboard.criticalSparesEmpty":{ es: "Sin repuestos críticos registrados", en: "No critical spares registered", pt: "Sem sobressalentes críticos registrados" },
+  "dashboard.spareReqTitle":   { es: "Solicitudes de Repuestos", en: "Spare Requests",     pt: "Solicitações de Sobressalentes" },
+  "dashboard.spareReqSubtitle":{ es: "Ítems por estado de recepción", en: "Items by receipt status", pt: "Itens por status de recebimento" },
+  "dashboard.spareReqEmpty":   { es: "Sin solicitudes registradas", en: "No requests registered", pt: "Sem solicitações registradas" },
+
+  // Dashboard — chart segment names
+  "dashboard.wo.open":         { es: "Abiertas",               en: "Open",                 pt: "Abertas" },
+  "dashboard.wo.overdue":      { es: "Vencidas",               en: "Overdue",              pt: "Vencidas" },
+  "dashboard.wo.postponed":    { es: "Postergadas",            en: "Postponed",            pt: "Adiadas" },
+
+  "dashboard.mp.neverExecuted":{ es: "Sin ejecutar",           en: "Not executed",         pt: "Sem executar" },
+  "dashboard.mp.overdue":      { es: "Vencidas",               en: "Overdue",              pt: "Vencidas" },
+  "dashboard.mp.due":          { es: "Por Vencer",             en: "Due",                  pt: "A Vencer" },
+  "dashboard.mp.inWindow":     { es: "En Proceso",             en: "In Window",            pt: "Em Andamento" },
+  "dashboard.mp.upcoming":     { es: "Próximas",               en: "Upcoming",             pt: "Próximas" },
+  "dashboard.mp.future":       { es: "Al Día",                 en: "On Track",             pt: "Em Dia" },
+
+  "dashboard.def.requested":   { es: "Solicitados",            en: "Requested",            pt: "Solicitados" },
+  "dashboard.def.underReview": { es: "En Revisión",            en: "Under Review",         pt: "Em Análise" },
+  "dashboard.def.approved":    { es: "Aprobados",              en: "Approved",             pt: "Aprovados" },
+  "dashboard.def.active":      { es: "Activos",                en: "Active",               pt: "Ativos" },
+  "dashboard.def.rejected":    { es: "Rechazados",             en: "Rejected",             pt: "Rejeitados" },
+
+  "dashboard.cs.outOfStock":   { es: "Sin Stock",              en: "Out of Stock",         pt: "Sem Estoque" },
+  "dashboard.cs.belowReorder": { es: "Bajo Reorden",           en: "Below Reorder",        pt: "Abaixo do Reordenamento" },
+  "dashboard.cs.ok":           { es: "OK",                     en: "OK",                   pt: "OK" },
+
+  "dashboard.sr.pending":      { es: "Pendientes",             en: "Pending",              pt: "Pendentes" },
+  "dashboard.sr.fulfilled":    { es: "Recibidos",              en: "Received",             pt: "Recebidos" },
+  "dashboard.sr.cancelled":    { es: "Cancelados",             en: "Cancelled",            pt: "Cancelados" },
+
   // Spare Parts Module (sm.*)
   "sm.onHand":           { es: "En mano",           en: "On hand",          pt: "Em mãos" },
   "sm.available":        { es: "Disponible",         en: "Available",        pt: "Disponível" },
