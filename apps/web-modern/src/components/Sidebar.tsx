@@ -9,6 +9,7 @@ import {
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useResizable } from "../lib/hooks";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,14 +19,14 @@ type Role = string;
 
 type NavItem = {
   icon: React.ElementType;
-  label: string;
+  labelKey: TranslationKey;
   path: string;
   end?: boolean;
   roles?: Role[];
 };
 
 type NavSection = {
-  title: string;
+  titleKey: TranslationKey;
   items: NavItem[];
 };
 
@@ -35,45 +36,45 @@ type NavSection = {
 
 const NAV: NavSection[] = [
   {
-    title: "Operación",
+    titleKey: "nav.section.operation",
     items: [
-      { icon: LayoutDashboard, label: "Dashboard",             path: "/",                   end: true },
-      { icon: ClipboardList,   label: "Plan de Mantenimiento", path: "/maintenance-plans" },
-      { icon: Wrench,          label: "Órdenes de Trabajo",    path: "/work-orders" },
-      { icon: FileText,        label: "Reportes Diarios",      path: "/daily-reports" },
-      { icon: FileBarChart,    label: "Reportes Mensuales",    path: "/reports" },
-      { icon: AlertTriangle,   label: "Defectos",              path: "/defects" },
-      { icon: ScrollText,      label: "Bitácora",              path: "/bitacora",
+      { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
+      { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
+      { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
+      { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
+      { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
+      { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
+      { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",
         roles: ["TENANT_ADMIN"] },
     ],
   },
   {
-    title: "Control",
+    titleKey: "nav.section.control",
     items: [
-      { icon: Clock,           label: "Diferimientos",         path: "/deferrals" },
-      { icon: Microscope,      label: "CAPA",                  path: "/capa" },
-      { icon: ShieldCheck,     label: "Certificados",          path: "/certificates" },
-      { icon: FlaskConical,    label: "Análisis de Fluidos",   path: "/fluid-analyses" },
-      { icon: Gauge,           label: "Solicitud de Repuestos", path: "/spare-requests" },
+      { icon: Clock,           labelKey: "nav.deferrals",        path: "/deferrals" },
+      { icon: Microscope,      labelKey: "nav.capa",             path: "/capa" },
+      { icon: ShieldCheck,     labelKey: "nav.certificates",     path: "/certificates" },
+      { icon: FlaskConical,    labelKey: "nav.fluidAnalyses",    path: "/fluid-analyses" },
+      { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
     ],
   },
   {
-    title: "Maestros",
+    titleKey: "nav.section.masters",
     items: [
-      { icon: Ship,            label: "Buques",                path: "/vessels" },
-      { icon: SlidersHorizontal, label: "Equipos",            path: "/assets" },
-      { icon: Package,         label: "Repuestos",             path: "/spares" },
-      { icon: Truck,           label: "Proveedores",           path: "/providers" },
+      { icon: Ship,              labelKey: "nav.vessels",        path: "/vessels" },
+      { icon: SlidersHorizontal, labelKey: "nav.assets",         path: "/assets" },
+      { icon: Package,           labelKey: "nav.spares",         path: "/spares" },
+      { icon: Truck,             labelKey: "nav.providers",      path: "/providers" },
     ],
   },
   {
-    title: "Sistema",
+    titleKey: "nav.section.system",
     items: [
-      { icon: Bot,             label: "AI Documents",           path: "/ai-documents",
+      { icon: Bot,               labelKey: "nav.aiDocuments",    path: "/ai-documents",
         roles: ["TENANT_ADMIN"] },
-      { icon: SlidersHorizontal, label: "Configuración",      path: "/configuration",
+      { icon: SlidersHorizontal, labelKey: "nav.configuration",  path: "/configuration",
         roles: ["TENANT_ADMIN"] },
-      { icon: UsersRound,      label: "Usuarios y Roles",      path: "/team",
+      { icon: UsersRound,        labelKey: "nav.team",           path: "/team",
         roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"] },
     ],
   },
@@ -101,6 +102,7 @@ const COLLAPSED_W = 56;
 
 export const Sidebar: React.FC = () => {
   const { tenant, user } = useAuth();
+  const t = useT();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("gpms_sidebar_collapsed") === "true",
@@ -174,7 +176,7 @@ export const Sidebar: React.FC = () => {
         {/* Collapse toggle */}
         <button
           onClick={toggle}
-          title={collapsed ? "Expandir menú" : "Colapsar menú"}
+          title={collapsed ? t("header.expandMenu") : t("header.collapseMenu")}
           className="w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-all shrink-0"
         >
           {collapsed
@@ -192,30 +194,31 @@ export const Sidebar: React.FC = () => {
           if (visible.length === 0) return null;
 
           return (
-            <div key={section.title}>
+            <div key={section.titleKey}>
               {/* Section header */}
               {collapsed ? (
                 <div className="mx-3 border-t border-white/10 mb-2" />
               ) : (
                 <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-white/25 select-none">
-                  {section.title}
+                  {t(section.titleKey)}
                 </p>
               )}
 
               {/* Items */}
               <div className={collapsed ? "space-y-0.5" : "px-2 space-y-0.5"}>
                 {visible.map(item => {
+                  const label = t(item.labelKey);
                   return (
                     <NavLink
                       key={item.path}
                       to={item.path}
                       end={item.end}
-                      title={collapsed ? item.label : undefined}
+                      title={collapsed ? label : undefined}
                       className={({ isActive }) => navItemCls(isActive, collapsed)}
                     >
                       <item.icon className="w-4 h-4 shrink-0" />
                       {!collapsed && (
-                        <span className="text-xs font-medium truncate">{item.label}</span>
+                        <span className="text-xs font-medium truncate">{label}</span>
                       )}
                     </NavLink>
                   );
@@ -230,18 +233,18 @@ export const Sidebar: React.FC = () => {
       <div className={`border-t border-white/10 shrink-0 ${collapsed ? "py-3 px-0" : "p-2"}`}>
         <NavLink
           to="/profile"
-          title={collapsed ? "Mi Perfil" : undefined}
+          title={collapsed ? t("nav.profile") : undefined}
           className={({ isActive }) => navItemCls(isActive, collapsed)}
         >
           <UserCircle className="w-4 h-4 shrink-0" />
-          {!collapsed && <span className="text-xs font-medium">Mi Perfil</span>}
+          {!collapsed && <span className="text-xs font-medium">{t("nav.profile")}</span>}
         </NavLink>
 
         {!collapsed && (
           <div className="mt-2 px-3 py-2 rounded-xl bg-linear-to-br from-accent/10 to-transparent border border-accent/10">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse shrink-0" />
-              <span className="text-[11px] text-white/40">Sistemas OK</span>
+              <span className="text-[11px] text-white/40">{t("nav.statusOk")}</span>
               {aiBadgeText && (
                 <span className="text-[10px] text-white/30 ml-auto" title={aiBadgeTitle}>
                   {aiBadgeText}
@@ -252,7 +255,7 @@ export const Sidebar: React.FC = () => {
         )}
         {collapsed && (
           <div className="flex justify-center mt-2">
-            <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse" title="Sistemas OK" />
+            <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse" title={t("nav.statusOk")} />
           </div>
         )}
       </div>

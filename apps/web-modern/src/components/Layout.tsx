@@ -4,32 +4,39 @@ import { Header } from "./Header";
 import { CopilotoPanel } from "./CopilotoPanel";
 import { Outlet, useLocation } from "react-router-dom";
 import { CopilotContextProvider } from "../lib/copilot-context";
+import { useT, type TranslationKey } from "../lib/i18n";
 
-const TITLES: Record<string, string> = {
-  "/":                  "Dashboard Principal",
-  "/vessels":           "Gestión de Flota",
-  "/assets":            "Inventario de Activos",
-  "/maintenance-plans":  "Planes de Mantenimiento",
-  "/maintenance-gantt":  "Gantt de Mantenimiento",
-  "/work-orders":       "Órdenes de Trabajo",
-  "/daily-reports":     "Reportes Diarios",
-  "/defects":           "Defectos",
-  "/deferrals":         "Postergaciones",
-  "/inspections":       "Inspecciones",
-  "/certificates":      "Certificados",
-  "/spares":            "Repuestos & Stock",
-  "/spare-requests":    "Solicitudes de Repuestos",
-  "/spare-receipts":    "Recepción de Repuestos",
-  "/providers":         "Proveedores",
-  "/ai-insights":       "Inteligencia Predictiva",
-  "/ai-documents":      "AI Documents",
-  "/fluid-analyses":    "Análisis de Fluidos",
-  "/bitacora":          "Bitácora del Sistema",
+const TITLE_KEYS: Record<string, TranslationKey> = {
+  "/":                  "page.dashboard",
+  "/vessels":           "page.vessels",
+  "/assets":            "page.assets",
+  "/maintenance-plans": "page.maintenancePlans",
+  "/maintenance-gantt": "page.maintenanceGantt",
+  "/work-orders":       "page.workOrders",
+  "/daily-reports":     "page.dailyReports",
+  "/reports":           "page.monthlyReports",
+  "/defects":           "page.defects",
+  "/deferrals":         "page.deferrals",
+  "/capa":              "page.capa",
+  "/inspections":       "page.inspections",
+  "/certificates":      "page.certificates",
+  "/spares":            "page.spares",
+  "/spare-requests":    "page.spareRequests",
+  "/spare-receipts":    "page.spareReceipts",
+  "/providers":         "page.providers",
+  "/ai-insights":       "page.aiInsights",
+  "/ai-documents":      "page.aiDocuments",
+  "/fluid-analyses":    "page.fluidAnalyses",
+  "/bitacora":          "page.bitacora",
+  "/team":              "page.team",
+  "/configuration":     "page.configuration",
 };
 
 export const Layout: React.FC = () => {
   const location = useLocation();
-  const title = TITLES[location.pathname] ?? "CMS";
+  const t = useT();
+  const titleKey = TITLE_KEYS[location.pathname];
+  const title = titleKey ? t(titleKey) : "CMS";
 
   return (
     <CopilotContextProvider>

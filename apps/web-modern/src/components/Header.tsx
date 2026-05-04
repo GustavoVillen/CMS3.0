@@ -3,11 +3,14 @@ import { Bell, User, LogOut, ChevronDown, Ship } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useNavigate } from "react-router-dom";
+import { useT } from "../lib/i18n";
 
 export const Header: React.FC<{ title: string }> = ({ title }) => {
+  void title;
   const { user, tenant, logout } = useAuth();
   const { vessels, selectedVesselCode, setSelectedVesselCode } = useVesselContext();
   const navigate = useNavigate();
+  const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const showSelector = vessels.length > 1;
 
@@ -43,7 +46,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
               onChange={e => setSelectedVesselCode(e.target.value || null)}
               className="text-xs bg-transparent text-white focus:outline-none cursor-pointer appearance-none pr-1"
             >
-              <option value="">Todos los buques</option>
+              <option value="">{t("header.allVessels")}</option>
               {vessels.map(v => (
                 <option key={v.code} value={v.code}>{v.name}</option>
               ))}
@@ -67,7 +70,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
             </div>
             <div className="flex flex-col text-left">
               <span className="text-xs font-bold text-white leading-tight">
-                {user?.name ?? user?.identifier ?? "Usuario"}
+                {user?.name ?? user?.identifier ?? t("header.userFallback")}
               </span>
               <span className="text-[10px] text-text-industrial/50 leading-tight">
                 {user?.role?.replace(/_/g, " ") ?? ""}
@@ -79,7 +82,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
           {menuOpen && (
             <div className="absolute right-0 top-12 w-48 bg-surface border border-white/10 rounded-xl shadow-2xl overflow-hidden z-200">
               <div className="px-4 py-3 border-b border-white/10">
-                <p className="text-xs text-text-industrial/50 uppercase tracking-wider">Sesión activa</p>
+                <p className="text-xs text-text-industrial/50 uppercase tracking-wider">{t("header.activeSession")}</p>
                 <p className="text-sm font-medium text-white mt-0.5">{tenant?.name}</p>
               </div>
               <button
@@ -87,7 +90,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
-                Cerrar sesión
+                {t("header.logout")}
               </button>
             </div>
           )}

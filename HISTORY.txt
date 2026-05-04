@@ -1,5 +1,57 @@
 HISTORY.txt
 
+[2026-05-04] Backup semanal Excel por tenant — envío automático por mail (Resend)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- prisma/schema.prisma: campos weeklyBackup* en TenantSetting + modelo BackupRun + enum BackupRunStatus
+- apps/api/src/platform/mail/mail-service.ts: wrapper Resend (fetch nativo, sin SDK), fail-closed sin envs
+- apps/api/src/platform/backups/backup-data-export.ts: 14 datasets (Buques, Equipos, Plan de Mantenimiento, Órdenes de Trabajo, Reportes Diarios, Reportes Mensuales, Defectos, Bitácora, Diferimientos, Certificados, Análisis de Fluidos, Solicitudes de Repuestos, Repuestos, Proveedores)
+- apps/api/src/platform/backups/weekly-backup-runner.ts: arma ZIP con JSZip, envía mail, registra BackupRun, audita éxito/fallo
+- apps/api/src/platform/backups/weekly-backup-scheduler.ts: tick horario, respeta timezone del tenant, idempotencia 6h
+- apps/api/src/server.ts: enchufa el scheduler con setInterval cada 1h
+- apps/api/src/tenant/excel/excel-export-service.ts: exporta escapeFormula y toExcelValue para reuso
+- apps/api/src/tenant/weekly-backup/{service,router}.ts: endpoints TenantAdmin
+- apps/api/src/tenant/tenant-router.ts: subdelega /app/settings/weekly-backup
+- apps/web-modern/src/pages/WeeklyBackup.tsx: UI de configuración + historial (TenantAdmin)
+- apps/web-modern/src/{App.tsx,components/Sidebar.tsx}: route /weekly-backup + entrada sidebar Sistema
+- apps/web-modern/src/lib/i18n.tsx: claves weeklyBackup.* en es/en/pt
+- .env.example: documenta MAIL_PROVIDER / MAIL_API_KEY / MAIL_FROM
+- apps/api/package.json: dep nueva jszip ^3.10.1
+
+FUNCIONALIDAD:
+- TenantAdmin activa el backup semanal en /weekly-backup con email destino + día (default lunes) + hora local (default 03:00).
+- Scheduler corre cada hora; cuando para un tenant coincide día+hora local (timezone del tenant) y no hubo BackupRun en las últimas 6h → corre runner.
+- Runner genera 14 Excel (uno por módulo, scope tenantId, sin filters), los empaqueta en un ZIP nombrado gpms_backup_{slug}_{YYYY-MM-DD}.zip y lo envía a Resend como adjunto base64.
+- Respuesta del provider: BackupRun.status SUCCESS/FAILED + audit event WEEKLY_BACKUP_SUCCESS/WEEKLY_BACKUP_FAILED + WEEKLY_BACKUP_CONFIG_UPDATED al editar config.
+- Si MAIL_PROVIDER/MAIL_API_KEY/MAIL_FROM no están seteadas: scheduler skip + endpoint run-now devuelve FAILED con MAIL_NOT_CONFIGURED + UI muestra warning.
+- Endpoint POST /app/settings/weekly-backup/run-now permite probar el envío on-demand desde la UI.
+- Inyección de fórmula Excel mitigada: toExcelValue prefija con apóstrofo cuando el string arranca con =,+,-,@,\t,\r (mismo helper del export interactivo).
+
+PENDIENTES:
+- Configurar Resend en VPS (crear cuenta, verificar dominio, generar API key, setear envs en .env del VPS).
+- Etapa V2 si se necesita: política "MFA obligatorio por tenant", flag a nivel TenantSetting para forzar backup en todos los tenants, retención del ZIP en disco para descarga posterior.
+
+[2026-05-04] Auditoría de seguridad IP/business logic + fixes inmediatos
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/config/env.ts: guard fail-closed para APP_ALLOW_TENANT_HEADER_FALLBACK en producción
+- scripts/seed-donchi.js: credenciales DB y tenant/user IDs movidos a env vars
+
+FUNCIONALIDAD:
+- env.ts: parseAppEnv() ahora crashea al arranque si APP_ALLOW_TENANT_HEADER_FALLBACK=true && NODE_ENV=production. Previene bypass de aislamiento multi-tenant vía header X-Tenant-Slug en producción.
+- seed-donchi.js: usa DATABASE_URL, SEED_TENANT_ID, SEED_USER_ID (con SEED_VESSEL_CODE/NAME opcionales). Falla rápido si faltan vars críticas.
+
+AUDITORÍA — HALLAZGOS PENDIENTES (no aplicados):
+- CRITICAL falso-positivo: ANTHROPIC_API_KEY en .env NO está en git (.gitignore correcto, git log vacío). El key sigue siendo válido localmente; rotar solo si se sospecha exposición fuera del repo.
+- HIGH: docker-compose.yml e infra/docker-compose.yml exponen puerto 5434 en todas las interfaces con postgres:postgres (e infra/ con trust auth). Recomendado bind a 127.0.0.1 + scram-sha-256 — pendiente de aprobación porque podría afectar setup local de otros devs.
+- HIGH: rutas /uploads/* (certificates, checklists, fluid-reports) sirven archivos públicamente sin checkear sesión. Pendiente: añadir requireTenantAccessSession o signed URLs.
+- HIGH: páginas admin-only (AiDocuments, Assets, Certificates, MaintenancePlans) gating por user.role en frontend — verificar enforcement server-side en cada endpoint de escritura.
+- HIGH: cero enforcement de plan/subscription tier — todos los tenants tienen acceso a Copiloto, AiInsights, AiDocuments, FluidAnalyses sin metering. Falta tenant.featureFlags + middleware.
+- MEDIUM: tokens en localStorage (XSS), session store y rate limiter en memoria (no distribuido), CSP con 'unsafe-eval' + unpkg CDN, vite.config sin sourcemap:false explícito, Excel import action construido en frontend.
+- Reporte completo: C:\Users\gvill\.claude\plans\refactored-cooking-penguin.md
+
 [2026-05-03] OTs: análisis RCM (consecuencia + fundamento) en pantalla de Orden de Trabajo
 Agent: Claude Opus 4.7
 
@@ -10338,3 +10390,115 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - Pestañas nuevas en navegación
     - Training requerido para el usuario
     - Carga cognitiva mayor en CRUD existentes (todo es opt-in)
+
+
+──────────────────────────────────────────────────────────────────────────────
+2026-05-04 — Backup semanal: implementación, deploy fallido y rollback
+──────────────────────────────────────────────────────────────────────────────
+
+  Contexto: sesión anterior implementó feature de backup semanal (ZIP con 14
+  Excel + envío por mail vía Resend, scheduler horario, UI en /weekly-backup).
+  Esta sesión cubrió el deploy en VPS y el rollback.
+
+  Implementación commiteada (c73247c) y pusheada — 18 archivos, 1316 inserts:
+    - Backend: prisma/schema (BackupRun + 4 settings en TenantSetting),
+      platform/backups/ (data-export, runner, scheduler), platform/mail/,
+      tenant/weekly-backup/ (router + service)
+    - Frontend: pages/WeeklyBackup.tsx, ruta + sidebar item (TENANT_ADMIN),
+      30+ keys i18n
+    - server.ts: scheduler horario con setTimeout(60s) + setInterval(1h)
+    - Mail provider: Resend vía fetch nativo, fail-closed sin env vars
+    - Domain shipcms.cloud verificado en Resend (DKIM/SPF/DMARC en Hostinger)
+
+  Deploy en VPS desencadenó cascada de issues:
+    1. git pull falló por drift en pnpm-lock.yaml → resolvió con git stash
+    2. pnpm filter incorrecto: paquete se llama "web-modern" no
+       "@pms-saas/web-modern"
+    3. tsc -b falla con 59 errores TS preexistentes (no del backup) →
+       solución: build con npx vite build, salteando tsc
+    4. prisma db push falla porque prisma.config.ts requiere DATABASE_URL
+       en process.env y no auto-carga .env → solución: export DATABASE_URL
+       inline desde sed -n del .env
+    5. jszip MODULE_NOT_FOUND: el primer pnpm install respetó NODE_ENV=
+       production y skippeó devDependencies, además rompió node_modules
+       removiendo tsx/prisma/typescript → solución: NODE_ENV=development
+       pnpm install --no-frozen-lockfile
+    6. Crash al arranque por security check de Tanda 4 (commit 0fb0f11):
+       APP_ALLOW_TENANT_HEADER_FALLBACK=true + NODE_ENV=production →
+       throw. PM2 tenía cacheado APP_ALLOW=true desde un arranque previo
+       (anterior a la Tanda 4) y load-dotenv.ts skippea vars ya en
+       process.env (línea 49 — comportamiento intencional)
+    7. MAIL_FROM en .env sin comillas (GPMS <noreply@...>): los <> se
+       interpretaron como redirección al sourcear → quedó truncado a
+       "GPMS" en PM2 cache
+
+  Decisión: el costo de seguir debuggeando superaba el valor del feature en
+  pre-launch. Revert completo (commit 941d0e4) y rollback en VPS:
+    - git revert c73247c, push
+    - VPS: git pull, pnpm install (NODE_ENV=development), npx vite build
+    - PM2 delete + start fresco para vaciar caché de env vars
+    - .env: NODE_ENV=development, APP_ALLOW_TENANT_HEADER_FALLBACK=true
+      (volver al estado pre-Tanda-4 mientras GPMS sea pre-launch)
+
+  Estado final: shipcms.cloud online, login OK, sin trazas del backup.
+  Tabla BackupRun queda en DB (inofensiva, sin uso) — limpieza posible a
+  futuro con DROP TABLE si se desea.
+
+  Lecciones para próximo deploy:
+    - load-dotenv.ts NO pisa vars de process.env → cambios en .env requieren
+      pm2 delete + start (no alcanza con --update-env)
+    - VPS está corriendo NODE_ENV=production — cualquier feature nueva debe
+      ser compatible con eso, o queda en pre-launch hasta migrar a subdominios
+    - Build en VPS usar siempre npx vite build (los 59 errores de tsc son
+      preexistentes y no se van a resolver pronto)
+    - Antes de tocar .env del VPS, verificar si PM2 ya lo tiene cacheado con
+      pm2 env 0
+    - Para launch real: configurar wildcard DNS (*.shipcms.cloud) y revertir
+      a NODE_ENV=production + APP_ALLOW_TENANT_HEADER_FALLBACK=false
+
+
+──────────────────────────────────────────────────────────────────────────────
+2026-05-04 — Sidebar/Header/Layout: i18n end-to-end (fix menu en español)
+──────────────────────────────────────────────────────────────────────────────
+
+  Bug detectado por usuario: tenant Capital Marine configurado en idioma
+  portugués pero el menú lateral seguía mostrándose en español.
+
+  Causa raíz: el sistema i18n existía y el I18nProvider recibía el locale
+  correcto del tenant (App.tsx líneas 155-167), pero Sidebar.tsx, Layout.tsx
+  y Header.tsx tenían los strings hardcodeados en español, sin invocar t().
+
+  Además, varias keys nav.* del diccionario tenían valores ES desactualizados
+  o incompletos (por ejemplo nav.vessels.es decía "Vessels" en lugar de
+  "Buques", nav.assets.es decía "Assets" en lugar de "Equipos").
+
+  Cambios:
+    - i18n.tsx:
+      · Corregidos valores ES de 7 keys nav.* desactualizadas (team, vessels,
+        assets, maintenancePlans, deferrals, capa, spareRequests)
+      · 8 keys nav.* nuevas (monthlyReports, bitacora, fluidAnalyses,
+        configuration, y los 4 nav.section.*)
+      · 23 keys page.* nuevas (títulos de páginas en Layout)
+      · 6 keys header.* nuevas (vessel selector, user fallback, session
+        label, logout, expand/collapse menu)
+    - Sidebar.tsx: tipos NavItem.label y NavSection.title cambiados a
+      labelKey/titleKey con TranslationKey. Componente usa useT() y t() en
+      todos los renders. Footer (Mi Perfil, Sistemas OK) y tooltips
+      (Expandir/Colapsar) también traducidos.
+    - Layout.tsx: diccionario TITLES reemplazado por TITLE_KEYS, traduce
+      con t() al render.
+    - Header.tsx: useT() agregado, "Todos los buques" / "Usuario" / "Sesión
+      activa" / "Cerrar sesión" reemplazados por t(). Prop title sigue
+      llegando pero no se renderiza (header no muestra el título de la
+      página, solo el tenant) — marcado con `void title;` para silenciar
+      TS6133. Limpieza pendiente: remover el prop si no se va a usar.
+
+  Verificado: vite build local OK (1490 KB, 968ms). Sin errores TS nuevos.
+  Pendiente verificar visualmente en VPS que cambiar tenant.locale=pt
+  realmente traduzca todo el chrome.
+
+  Pendiente futuro (no urgente):
+    - MobileLayout.tsx tiene un tab bar con strings hardcodeados ("Defectos"
+      etc.) — mismo patrón pero menos visible. Aplicar i18n cuando toque.
+    - Revisar PageHeader.tsx por si recibe strings en lugar de keys
+
