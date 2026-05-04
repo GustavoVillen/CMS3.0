@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Droplets, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,14 +29,14 @@ export interface WoPrefill {
   samplingFluidType?: string | null;
 }
 
-const FLUID_TYPE_LABELS: Record<string, string> = {
-  ENGINE_OIL:    "Aceite motor",
-  HYDRAULIC_OIL: "Aceite hidráulico",
-  GEAR_OIL:      "Aceite de transmisión",
-  FUEL:          "Combustible",
-  COOLANT:       "Refrigerante",
-  REFRIGERANT:   "Refrigerante",
-  OTHER:         "Fluido",
+const FLUID_TYPE_KEYS: Record<string, TranslationKey> = {
+  ENGINE_OIL:    "fluid.type.engineOil",
+  HYDRAULIC_OIL: "fluid.type.hydraulicOil",
+  GEAR_OIL:      "fluid.type.gearOil",
+  FUEL:          "fluid.type.fuel",
+  COOLANT:       "fluid.type.coolant",
+  REFRIGERANT:   "fluid.type.coolant",
+  OTHER:         "fluid.type.other",
 };
 
 interface Asset { id: string; assetCode: string; name: string; }
@@ -61,9 +61,10 @@ const RISK_LEVEL_OPTS: [string, string, string, string][] = [
 ];
 
 function TypeBadge({ type }: { type: string }) {
-  if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">Inspección</span>;
-  if (type === "CORRECTIVE")  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">Reparación</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">Mantenimiento</span>;
+  const t = useT();
+  if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+  if (type === "CORRECTIVE")  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const handleCriteriaClick = useCallback(async () => {
     if (loadingCriteria) return;
     if (!aiTaskDesc) {
-      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      setErr(t("wo.ai.completeTaskFirstError"));
       return;
     }
     setLoadingCriteria(true);
@@ -124,18 +125,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         taskDesc: aiTaskDesc,
       });
       if (res.text) setAcceptanceCriteria(res.text);
-      else setErr("La IA no devolvió texto.");
+      else setErr(t("wo.ai.noText"));
     } catch (e) {
       console.error("[suggest-acceptance] failed:", e);
-      setErr(e instanceof ApiError ? `Criterios IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+      setErr(e instanceof ApiError ? `${t("wo.ai.criteriaPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingCriteria(false); }
-  }, [loadingCriteria, aiAssetLabel, aiTaskDesc]);
+  }, [loadingCriteria, aiAssetLabel, aiTaskDesc, t]);
 
   const handleLotoClick = useCallback(async () => {
     if (loadingLoto) return;
     if (!aiTaskDesc) {
-      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      setErr(t("wo.ai.completeTaskFirstError"));
       return;
     }
     setLoadingLoto(true);
@@ -147,18 +148,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         acceptanceCriteria: acceptanceCriteria || null,
       });
       if (res.text) setLoto(res.text);
-      else setErr("La IA no devolvió texto.");
+      else setErr(t("wo.ai.noText"));
     } catch (e) {
       console.error("[suggest-loto] failed:", e);
-      setErr(e instanceof ApiError ? `LOTO IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+      setErr(e instanceof ApiError ? `${t("wo.ai.lotoPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingLoto(false); }
-  }, [loadingLoto, aiAssetLabel, aiTaskDesc, acceptanceCriteria]);
+  }, [loadingLoto, aiAssetLabel, aiTaskDesc, acceptanceCriteria, t]);
 
   const handleRiskClick = useCallback(async () => {
     if (loadingRisk) return;
     if (!aiTaskDesc) {
-      setErr("Completá la Tarea antes de pedir sugerencia IA.");
+      setErr(t("wo.ai.completeTaskFirstError"));
       return;
     }
     setLoadingRisk(true);
@@ -174,10 +175,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       if (res.analysis) setRiskAnalysisResult(res.analysis);
     } catch (e) {
       console.error("[suggest-risk] failed:", e);
-      setErr(e instanceof ApiError ? `Riesgo IA: ${e.message}` : "No se pudo obtener la sugerencia.");
+      setErr(e instanceof ApiError ? `${t("wo.ai.riskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingRisk(false); }
-  }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto]);
+  }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto, t]);
 
   // Vessel list for standalone mode
   useEffect(() => {
@@ -220,8 +221,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const onSave = useCallback(async () => {
     setErr(null);
     if (!prefill) {
-      if (!vesselCode.trim()) { setErr("Embarcación es requerida."); return; }
-      if (!assetId)           { setErr("Equipo es requerido."); return; }
+      if (!vesselCode.trim()) { setErr(t("wo.modal.vesselRequired")); return; }
+      if (!assetId)           { setErr(t("wo.modal.equipmentRequired")); return; }
     }
     setSaving(true);
     try {
@@ -293,10 +294,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           <div className="flex items-center gap-3">
             <Wrench className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">Nueva Orden de Trabajo</h2>
+              <h2 className="text-sm font-bold text-white">{t("wo.modal.title")}</h2>
               {prefill && (
                 <p className="text-[10px] text-text-industrial/50 mt-0.5">
-                  Desde {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
+                  {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
                 </p>
               )}
             </div>
@@ -309,18 +310,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
           {/* ── INFORMACIÓN ── */}
           <section>
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">Información</p>
+            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">{t("wo.modal.section.info")}</p>
 
             {prefill ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {([
-                  ["Embarcación", prefill.vesselCode,                "font-mono text-accent"],
-                  ["Equipo",      resolvedAssetName ?? prefill.assetId, "text-white"],
-                  ["Tipo",        null, null, <TypeBadge key="t" type={prefill.type} />],
-                  ["Prioridad",   prefill.priority   ?? "MEDIUM",    "text-white"],
-                  ["Criticidad",  prefill.criticality ?? "B",        "text-white"],
+                  [t("wo.modal.vessel"),    prefill.vesselCode,                   "font-mono text-accent"],
+                  [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-white"],
+                  [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
+                  [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-white"],
+                  [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-white"],
                   prefill.dueDate
-                    ? ["Próx. vencimiento", prefill.dueDate.slice(0, 10), "text-white"]
+                    ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-white"]
                     : null,
                 ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
                   <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-2.5">
@@ -333,49 +334,49 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Embarcación *</label>
+                    <label className={labelCls}>{t("wo.modal.vessel")} *</label>
                     <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
-                      <option value="">— Seleccionar embarcación —</option>
+                      <option value="">{t("wo.modal.selectVessel")}</option>
                       {vessels.map(v => (
                         <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Equipo *</label>
+                    <label className={labelCls}>{t("wo.modal.equipment")} *</label>
                     {loadingAssets
-                      ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">Cargando...</span></div>
+                      ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
                       : assets.length > 0
                         ? <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls}>
-                            <option value="">— Seleccionar equipo —</option>
+                            <option value="">{t("wo.modal.selectEquipment")}</option>
                             {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode} — {a.name}</option>)}
                           </select>
                         : <input value={assetId} onChange={e => setAssetId(e.target.value)}
-                            placeholder={vesselCode ? "Sin equipos — ingresá ID" : "Ingresá la embarcación primero"}
+                            placeholder={vesselCode ? t("wo.modal.noEquipmentEnterId") : t("wo.modal.enterVesselFirst")}
                             className={inputCls} />
                     }
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Tipo</label>
+                    <label className={labelCls}>{t("wo.modal.type")}</label>
                     <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                      <option value="PREVENTIVE">Mantenimiento</option>
-                      <option value="CORRECTIVE">Reparación</option>
-                      <option value="INSPECTION">Inspección</option>
+                      <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
+                      <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
+                      <option value="INSPECTION">{t("wo.type.inspection")}</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Prioridad</label>
+                    <label className={labelCls}>{t("wo.modal.priority")}</label>
                     <select value={priority} onChange={e => setPriority(e.target.value)} className={inputCls}>
-                      <option value="LOW">Baja</option>
-                      <option value="MEDIUM">Media</option>
-                      <option value="HIGH">Alta</option>
-                      <option value="CRITICAL">Crítica</option>
+                      <option value="LOW">{t("priority.low")}</option>
+                      <option value="MEDIUM">{t("priority.medium")}</option>
+                      <option value="HIGH">{t("priority.high")}</option>
+                      <option value="CRITICAL">{t("priority.critical")}</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Criticidad</label>
+                    <label className={labelCls}>{t("wo.modal.criticality")}</label>
                     <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
                       <option value="A">A</option>
                       <option value="B">B</option>
@@ -385,11 +386,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className={labelCls}>F. Apertura</label>
+                    <label className={labelCls}>{t("wo.modal.openDate")}</label>
                     <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>F. Vencimiento</label>
+                    <label className={labelCls}>{t("wo.modal.dueDate")}</label>
                     <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
                   </div>
                 </div>
@@ -399,61 +400,61 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
           {/* ── PLAN ── */}
           <section className="space-y-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">Plan</p>
+            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">{t("wo.modal.section.plan")}</p>
 
             <div className="space-y-1.5">
-              <label className={labelCls}>Título de la OT</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} placeholder="Descripción breve de la tarea" />
+              <label className={labelCls}>{t("wo.modal.titleField")}</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} placeholder={t("wo.modal.titlePlaceholder")} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Tarea</label>
+              <label className={labelCls}>{t("wo.modal.task")}</label>
               <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} className={`${inputCls} resize-y`} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className={labelCls}>Responsable</label>
-                <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className={inputCls} placeholder="Nombre del responsable" />
+                <label className={labelCls}>{t("wo.modal.assignee")}</label>
+                <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className={inputCls} placeholder={t("wo.modal.assigneePlaceholder")} />
               </div>
               <div className="space-y-1.5">
-                <label className={labelCls}>F. Vencimiento</label>
+                <label className={labelCls}>{t("wo.modal.dueDate")}</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
               </div>
             </div>
             <div className="space-y-1.5">
               <label
                 onClick={handleCriteriaClick}
-                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA genere los criterios de aceptación"}
+                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Criterios de aceptación
+                {t("wo.modal.acceptanceCriteria")}
               </label>
               <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
                 disabled={loadingCriteria}
-                className={`${inputCls} resize-y`} placeholder="Condiciones que deben cumplirse para dar la tarea por completada" />
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
             </div>
             <div className="space-y-1.5">
               <label
                 onClick={handleLotoClick}
-                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA genere el procedimiento LOTO"}
+                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                LOTO
+                {t("wo.modal.loto")}
               </label>
               <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)}
                 disabled={loadingLoto}
-                className={`${inputCls} resize-y`} placeholder="Procedimiento de bloqueo y etiquetado" />
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
             </div>
             <div className="space-y-1.5">
               <label
                 onClick={handleRiskClick}
-                title={!aiTaskDesc ? "Completá la Tarea primero" : "Click para que la IA analice el nivel de riesgo"}
+                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Nivel de Riesgo
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— ¿Qué riesgo tiene HACER la tarea? (JSA)</span>
+                {t("wo.modal.riskLevel")}
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
               </label>
               <div className="flex gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
@@ -467,13 +468,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Resultado Análisis de Riesgo</label>
+              <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
               <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
                 disabled={loadingRisk}
-                className={`${inputCls} resize-y`} placeholder="Ej: Aceptable con controles" />
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Documento Checklist</label>
+              <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
               {prefill?.checklistDocUrl ? (
                 <a href={prefill.checklistDocUrl} target="_blank" rel="noreferrer"
                   className="block text-xs text-accent underline truncate">{prefill.checklistDocUrl}</a>
@@ -481,7 +482,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 <input type="file" onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
                   className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 cursor-pointer" />
               ) : (
-                <p className="text-xs text-text-industrial/40 italic">Sin documento asociado</p>
+                <p className="text-xs text-text-industrial/40 italic">{t("wo.modal.noChecklistDoc")}</p>
               )}
             </div>
           </section>
@@ -490,7 +491,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
               <Droplets className="w-4 h-4 text-teal-400 mt-0.5 shrink-0" />
               <p className="text-xs text-teal-300 leading-relaxed">
-                Al cerrar esta OT se creará automáticamente una muestra de <span className="font-semibold">{FLUID_TYPE_LABELS[prefill.samplingFluidType] ?? prefill.samplingFluidType}</span> en estado DRAFT para análisis de fluidos.
+                {t("wo.modal.fluidSampleNotice").split("{fluid}").map((part, i, arr) => (
+                  <React.Fragment key={i}>
+                    {part}
+                    {i < arr.length - 1 && (
+                      <span className="font-semibold">
+                        {FLUID_TYPE_KEYS[prefill.samplingFluidType!]
+                          ? t(FLUID_TYPE_KEYS[prefill.samplingFluidType!])
+                          : prefill.samplingFluidType}
+                      </span>
+                    )}
+                  </React.Fragment>
+                ))}
               </p>
             </div>
           )}
@@ -503,7 +515,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving}
             className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Crear OT"}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.modal.create")}
           </button>
         </div>
       </div>
