@@ -220,7 +220,7 @@ async function fetchRecords(
  * dispara ejecución. Prefijamos con apóstrofo para forzar interpretación
  * literal sin alterar el rendering.
  */
-function escapeFormula(s: string): string {
+export function escapeFormula(s: string): string {
   if (!s) return s;
   const first = s.charCodeAt(0);
   // = + - @  \t  \r
@@ -230,7 +230,7 @@ function escapeFormula(s: string): string {
   return s;
 }
 
-function toExcelValue(val: unknown): string | number | null {
+export function toExcelValue(val: unknown): string | number | null {
   if (val === null || val === undefined) return null;
   if (val instanceof Date) return val.toISOString().split("T")[0];
   if (typeof val === "boolean") return val ? "true" : "false";

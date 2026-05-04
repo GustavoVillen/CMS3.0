@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
   AlertTriangle, Clock, ShieldCheck, Microscope, Package, Truck,
   UsersRound, UserCircle, ScrollText, ChevronLeft, ChevronRight, Gauge, Bot,
-  FlaskConical, FileBarChart,
+  FlaskConical, FileBarChart, Archive,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -70,6 +70,8 @@ const NAV: NavSection[] = [
     title: "Sistema",
     items: [
       { icon: Bot,             label: "AI Documents",           path: "/ai-documents",
+        roles: ["TENANT_ADMIN"] },
+      { icon: Archive,         label: "Backup semanal",        path: "/weekly-backup",
         roles: ["TENANT_ADMIN"] },
       { icon: SlidersHorizontal, label: "Configuración",      path: "/configuration",
         roles: ["TENANT_ADMIN"] },

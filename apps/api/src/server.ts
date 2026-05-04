@@ -189,4 +189,20 @@ async function runInsightScheduler(): Promise<void> {
 setTimeout(() => { runInsightScheduler().catch(() => {}); }, 30_000);
 setInterval(() => { runInsightScheduler().catch(() => {}); }, 6 * 60 * 60 * 1_000);
 
+// ── Weekly backup scheduler — hourly tick, runs per-tenant when local window opens ─
+
+async function runWeeklyBackupTick(): Promise<void> {
+  try {
+    const { runWeeklyBackupScheduler } = await import("./platform/backups/weekly-backup-scheduler");
+    await runWeeklyBackupScheduler();
+  } catch {
+    // non-fatal
+  }
+}
+
+// First tick 60 s after startup so we don't block boot. Then hourly: granular
+// enough for "once per week at HH:00 local" semantics.
+setTimeout(() => { runWeeklyBackupTick().catch(() => {}); }, 60_000);
+setInterval(() => { runWeeklyBackupTick().catch(() => {}); }, 60 * 60 * 1_000).unref();
+
 // restart: 1776615000000

@@ -590,6 +590,7 @@ model Tenant {
   refreshTokens RefreshToken[]
   auditEvents   AuditEvent[]
   aiDocuments   AiDocument[]
+  backupRuns    BackupRun[]
 }
 
 model TenantDomain {
@@ -630,10 +631,36 @@ model TenantSetting {
   // Satellite link cost (USD per MB) — used to estimate communication cost per user/vessel
   satelliteUsdPerMbIn       Float @default(0)
   satelliteUsdPerMbOut      Float @default(0)
+  // Weekly Excel backup — TenantAdmin configures destination email and schedule.
+  // Scheduler ships ZIP with all module exports once per week to weeklyBackupEmail.
+  weeklyBackupEnabled       Boolean @default(false)
+  weeklyBackupEmail         String?
+  weeklyBackupDayOfWeek     Int     @default(1) // 0=Sun, 1=Mon, ..., 6=Sat
+  weeklyBackupHourLocal     Int     @default(3) // 0–23, in tenant timezone
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum BackupRunStatus {
+  SUCCESS
+  FAILED
+}
+
+model BackupRun {
+  id              String          @id @default(cuid())
+  tenantId        String
+  startedAt       DateTime        @default(now())
+  finishedAt      DateTime?
+  status          BackupRunStatus
+  recipientEmail  String?
+  fileSizeBytes   Int?
+  errorMessage    String?
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startedAt])
 }
 
 model PlatformUser {

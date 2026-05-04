@@ -40,6 +40,7 @@ import { PlatformAuditPage } from "./pages/platform/PlatformAudit";
 import { PlatformUsagePage } from "./pages/platform/PlatformUsage";
 import { PlatformPromptsPage } from "./pages/platform/PlatformPrompts";
 import { BitacoraPage } from "./pages/Bitacora";
+import { WeeklyBackupPage } from "./pages/WeeklyBackup";
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -136,6 +137,7 @@ export default function App() {
               <Route path="/fluid-analyses"    element={<FluidAnalysesPage />} />
               <Route path="/bitacora"          element={<BitacoraPage />} />
               <Route path="/profile"           element={<ProfilePage />} />
+              <Route path="/weekly-backup"     element={<WeeklyBackupPage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />
             </Route>
           </Routes>
