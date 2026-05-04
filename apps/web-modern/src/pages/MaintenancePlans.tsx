@@ -113,12 +113,13 @@ function computeStatus(plan: MaintenancePlan): string {
 }
 
 function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClickWo?: () => void }) {
+  const t = useT();
   const es = computeStatus(plan);
   if (es === "OVERDUE")
     return (
       <div className="flex flex-col items-start gap-0.5">
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20 whitespace-nowrap">
-          <AlertTriangle className="w-2.5 h-2.5" /> VENCIDA
+          <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.overdue")}
         </span>
       </div>
     );
@@ -126,7 +127,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
     return (
       <div className="flex flex-col items-start gap-0.5">
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 whitespace-nowrap">
-          <AlertTriangle className="w-2.5 h-2.5" /> POR VENCER
+          <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.due")}
         </span>
       </div>
     );
@@ -134,7 +135,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
     return (
       <div className="flex flex-col items-start gap-1">
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-300 border-orange-500/20 whitespace-nowrap">
-          <Clock className="w-2.5 h-2.5" /> EN PROCESO
+          <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.inWindow")}
         </span>
         {plan.activeWorkOrderCode && (
           <button
@@ -152,25 +153,25 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
   if (es === "NEVER_EXECUTED")
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-500/10 text-slate-400 border-slate-500/20 whitespace-nowrap">
-        <Clock className="w-2.5 h-2.5" /> SIN EJECUTAR
+        <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.neverExecuted")}
       </span>
     );
   if (es === "UPCOMING")
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20 whitespace-nowrap">
-        <Clock className="w-2.5 h-2.5" /> PRÓXIMO
+        <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.upcoming")}
       </span>
     );
   if (es === "COMPLETED")
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 whitespace-nowrap">
-        <CheckCircle2 className="w-2.5 h-2.5" /> VÁLIDO
+        <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
       </span>
     );
   // FUTURE
   return (
     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 whitespace-nowrap">
-      <CheckCircle2 className="w-2.5 h-2.5" /> VÁLIDO
+      <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
     </span>
   );
 }
@@ -1177,7 +1178,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const handleAcceptanceCriteriaClick = useCallback(async () => {
     if (!plan || loadingCriteria) return;
     setLoadingCriteria(true);
-    setAcceptanceCriteria("Analizando...");
+    setAcceptanceCriteria(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-acceptance-criteria", {
         assetLabel: plan.assetName ?? plan.assetId ?? null,
@@ -1194,7 +1195,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const handleLotoClick = useCallback(async () => {
     if (!plan || loadingLoto) return;
     setLoadingLoto(true);
-    setLoto("Analizando...");
+    setLoto(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-loto", {
         assetLabel: plan.assetName ?? plan.assetId ?? null,
@@ -1571,7 +1572,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               {!isNew && <StatusBadgeInline plan={plan} onClickWo={plan.activeWorkOrderCode ? () => { onClose(); navigate(`/work-orders?autoCode=${plan.activeWorkOrderCode}`); } : undefined} />}
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
               <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
@@ -1580,7 +1581,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
           {readOnly && (
             <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
-              Solo lectura — la edición de planes está restringida al administrador.
+              {t("mp.modal.readOnly")}
             </div>
           )}
           <fieldset disabled={readOnly} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto disabled:opacity-70">
@@ -1608,7 +1609,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 {/* Last / Next execution info */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Última ejecución</p>
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.lastExecution")}</p>
                     <p className="text-sm text-white font-mono">
                       {needsHours(plan.triggerType)
                         ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()}h` : "—")
@@ -1616,7 +1617,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     </p>
                   </div>
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Próximo vencimiento</p>
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.nextDueDate")}</p>
                     <p className="text-sm font-mono text-accent">
                       {needsHours(plan.triggerType)
                         ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
@@ -1627,7 +1628,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("mp.asset")}</label>
                   {loadingAssets
-                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando activos…</div>
+                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
                     : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
                   }
                 </div>
@@ -1641,9 +1642,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   <div className="space-y-1.5">
                     <label className={labelCls}>{t("mp.vesselCode")}</label>
                     {loadingVessels
-                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando…</div>
+                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</div>
                       : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={selectCls}>
-                          <option value="">— Seleccioná un buque —</option>
+                          <option value="">{t("mp.modal.selectVessel")}</option>
                           {vessels.map(v => <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>)}
                         </select>
                     }
@@ -1651,18 +1652,18 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className={labelCls}>{t("mp.taskCode")}</label>
-                      {taskCodeAuto && taskCode && <span className="text-[9px] text-accent/60 font-mono uppercase tracking-wider">Auto</span>}
+                      {taskCodeAuto && taskCode && <span className="text-[9px] text-accent/60 font-mono uppercase tracking-wider">{t("mp.modal.codeAuto")}</span>}
                     </div>
                     <div className="relative">
                       <input
                         value={loadingCode ? "" : taskCode}
                         onChange={e => { setTaskCode(e.target.value.toUpperCase()); setTaskCodeAuto(false); }}
-                        placeholder={loadingCode ? "Generando…" : "o dejá vacío para auto-generar"}
+                        placeholder={loadingCode ? t("mp.modal.codeGenerating") : t("mp.modal.codePlaceholder")}
                         className={`${inputCls} pr-8 ${taskCodeAuto && taskCode ? "text-accent/80 font-mono" : ""}`}
                       />
                       {loadingCode && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent/50 animate-spin" />}
                       {!loadingCode && !taskCodeAuto && vesselCode && (
-                        <button type="button" onClick={() => setTaskCodeAuto(true)} title="Regenerar código"
+                        <button type="button" onClick={() => setTaskCodeAuto(true)} title={t("mp.modal.regenerateCode")}
                           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-accent transition-colors">↺</button>
                       )}
                     </div>
@@ -1671,13 +1672,13 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("mp.asset")}</label>
                   {loadingAssets
-                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando activos…</div>
+                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
                     : <AssetSearchDropdown
                         assets={assets}
                         value={assetId}
                         onChange={setAssetId}
                         disabled={!vesselCode || assets.length === 0}
-                        placeholder={!vesselCode ? "Seleccioná un buque primero" : assets.length === 0 ? "Sin activos para este buque" : "Seleccioná un activo…"}
+                        placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
                       />
                   }
                 </div>
@@ -1730,7 +1731,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className={labelCls}>TAREAS A REALIZAR</label>
+              <label className={labelCls}>{t("mp.modal.tasksToPerform")}</label>
               <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
             </div>
 
@@ -1762,23 +1763,23 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Ventana de ejecución anticipada */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className={labelCls}>Modo de ventana anticipada</label>
+                <label className={labelCls}>{t("mp.modal.windowMode")}</label>
                 <select value={windowMode} onChange={e => { setWindowMode(e.target.value); if (e.target.value === "AUTO") setWindowLeadDays(""); }} className={selectCls} disabled={readOnly}>
-                  <option value="AUTO">AUTO — calculado por el sistema</option>
-                  <option value="MANUAL">MANUAL — días fijos</option>
+                  <option value="AUTO">{t("mp.modal.windowAuto")}</option>
+                  <option value="MANUAL">{t("mp.modal.windowManual")}</option>
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className={labelCls}>Días de anticipación</label>
+                <label className={labelCls}>{t("mp.modal.leadDays")}</label>
                 <input
                   type="number" min="0" value={windowLeadDays}
                   onChange={e => setWindowLeadDays(e.target.value)}
-                  placeholder={windowMode === "AUTO" ? "Calculado automáticamente" : "Ej: 7"}
+                  placeholder={windowMode === "AUTO" ? t("mp.modal.leadDaysAuto") : t("mp.modal.leadDaysManualPlaceholder")}
                   disabled={readOnly || windowMode === "AUTO"}
                   className={inputCls}
                 />
                 {windowMode === "AUTO" && (
-                  <p className="text-[10px] text-text-industrial/40">El sistema calcula ~10–15% de la frecuencia del plan.</p>
+                  <p className="text-[10px] text-text-industrial/40">{t("mp.modal.leadDaysHint")}</p>
                 )}
               </div>
             </div>
@@ -1786,24 +1787,24 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Análisis de fluido — si está set, al cerrar la OT del plan se crea automáticamente una muestra DRAFT */}
             <div className="space-y-1.5">
               <label className={labelCls}>
-                Plan de muestreo de fluido <span className="text-text-industrial/40 normal-case font-normal">(opcional)</span>
+                {t("mp.modal.fluidSampleLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
               </label>
               <select value={samplingFluidType} onChange={e => setSamplingFluidType(e.target.value)} className={selectCls} disabled={readOnly}>
-                <option value="">— No es plan de muestreo —</option>
-                <option value="ENGINE_OIL">Aceite motor</option>
-                <option value="HYDRAULIC_OIL">Hidráulico</option>
-                <option value="GEARBOX_OIL">Reductora</option>
-                <option value="TRANSMISSION_OIL">Transmisión</option>
-                <option value="FUEL_DIESEL">Diesel</option>
-                <option value="FUEL_GASOIL">Gasoil</option>
-                <option value="COOLING_WATER">Agua refrigeración</option>
-                <option value="BOILER_WATER">Agua caldera</option>
-                <option value="POTABLE_WATER">Agua potable</option>
-                <option value="REFRIGERANT">Refrigerante</option>
-                <option value="OTHER">Otro</option>
+                <option value="">{t("mp.modal.notFluidPlan")}</option>
+                <option value="ENGINE_OIL">{t("fluid.plan.engineOil")}</option>
+                <option value="HYDRAULIC_OIL">{t("fluid.plan.hydraulic")}</option>
+                <option value="GEARBOX_OIL">{t("fluid.plan.gearbox")}</option>
+                <option value="TRANSMISSION_OIL">{t("fluid.plan.transmission")}</option>
+                <option value="FUEL_DIESEL">{t("fluid.plan.diesel")}</option>
+                <option value="FUEL_GASOIL">{t("fluid.plan.gasoil")}</option>
+                <option value="COOLING_WATER">{t("fluid.plan.coolingWater")}</option>
+                <option value="BOILER_WATER">{t("fluid.plan.boilerWater")}</option>
+                <option value="POTABLE_WATER">{t("fluid.plan.potableWater")}</option>
+                <option value="REFRIGERANT">{t("fluid.plan.refrigerant")}</option>
+                <option value="OTHER">{t("fluid.plan.other")}</option>
               </select>
               {samplingFluidType && (
-                <p className="text-[10px] text-accent/70">Al cerrar la OT generada por este plan, se creará automáticamente una muestra de fluido en estado DRAFT.</p>
+                <p className="text-[10px] text-accent/70">{t("mp.modal.fluidSampleHint")}</p>
               )}
             </div>
 
@@ -1825,7 +1826,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             <div className="space-y-1.5">
               <label
                 onClick={handleAcceptanceCriteriaClick}
-                title="Click para que la IA genere los criterios y herramientas"
+                title={t("mp.modal.aiCriteriaTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : ""}`}
               >
                 {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
@@ -1838,7 +1839,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             <div className="space-y-1.5">
               <label
                 onClick={handleLotoClick}
-                title="Click para que la IA genere el procedimiento LOTO"
+                title={t("wo.ai.lotoTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : ""}`}
               >
                 {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
@@ -1851,12 +1852,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             <div className="space-y-1.5">
               <label
                 onClick={handleRiskClick}
-                title="Click para que la IA analice el nivel de riesgo y PPE requerido"
+                title={t("mp.modal.aiRiskTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingRisk ? "opacity-60 animate-pulse" : ""}`}
               >
                 {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("mp.riskLevel")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— ¿Qué riesgo tiene HACER la tarea? (JSA)</span>
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
               </label>
               <div className="flex items-center gap-1.5">
                 {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
@@ -1880,12 +1881,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             <div className="space-y-1.5">
               <label
                 onClick={handleConsequenceClick}
-                title="Click para que la IA sugiera la consecuencia (RCM)"
+                title={t("wo.modal.consequenceTooltip")}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingConsequence ? "opacity-60 animate-pulse" : ""}`}
               >
                 {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Si no se hace, ¿qué pasa?
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">— Consecuencia de la falla (RCM)</span>
+                {t("wo.modal.consequenceTitle")}
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
               </label>
               <select
                 value={consequenceCategory}
@@ -1893,11 +1894,11 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 disabled={readOnly || loadingConsequence}
                 className={inputCls}
               >
-                <option value="">— Sin clasificar —</option>
-                <option value="SAFETY">🔴 Riesgo a personas (lesión / fatalidad)</option>
-                <option value="ENVIRONMENTAL">🟢 Daño ambiental (vertido, emisión)</option>
-                <option value="OPERATIONAL">🟡 Pérdida de operación (paro, retraso)</option>
-                <option value="NON_OPERATIONAL">⚪ Solo costo de reparación</option>
+                <option value="">{t("wo.modal.consequenceUnclassified")}</option>
+                <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
               </select>
               <RichTextArea
                 value={consequenceRationale}
@@ -1926,7 +1927,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     <p className="text-xs text-text-industrial/40">{t("mp.checklistNoFile")}</p>
                   )}
                   {isNew ? (
-                    <p className="text-[10px] text-yellow-400/70">Guardá el plan primero para poder subir el documento.</p>
+                    <p className="text-[10px] text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
                   ) : (
                     <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                       checklistUploading ? "border-white/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-400 hover:bg-green-500/10"
@@ -1969,7 +1970,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   onClick={() => setConfirmDelete(true)}
                   className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                  <Trash2 className="w-3.5 h-3.5" /> {t("mp.modal.delete")}
                 </button>
               )}
               {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
@@ -1977,7 +1978,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
                   className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 transition-all"
                 >
-                  <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Abrir OT</span>
+                  <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {t("mp.modal.openWO")}</span>
                 </button>
               )}
               {canExecute && !needsWO && (
@@ -1985,7 +1986,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   onClick={() => setShowExecution(true)}
                   className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/15 transition-all"
                 >
-                  Reportar Resultado
+                  {t("mp.modal.reportResult")}
                 </button>
               )}
             </div>
@@ -1994,19 +1995,19 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <button
                   onClick={downloadPdf}
                   className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:text-white hover:border-white/20 transition-all flex items-center gap-1.5"
-                  title="Imprimir / Guardar PDF"
+                  title={t("mp.modal.pdfTooltip")}
                 >
                   <FileText className="w-3.5 h-3.5" />
                   PDF
                 </button>
               )}
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
-                {readOnly ? "Cerrar" : t("common.cancel")}
+                {readOnly ? t("mp.modal.close") : t("common.cancel")}
               </button>
               {!readOnly && (
                 <button onClick={() => { void onSave(); }} disabled={saving}
                   className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${savedOk ? "bg-success-sea text-primary-bg" : "bg-accent text-primary-bg hover:brightness-110"}`}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedOk ? <><CheckCircle2 className="w-3.5 h-3.5" /> Guardado</> : t("common.save")}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedOk ? <><CheckCircle2 className="w-3.5 h-3.5" /> {t("mp.modal.saved")}</> : t("common.save")}
                 </button>
               )}
             </div>
@@ -2022,11 +2023,11 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <Zap className="w-4 h-4 text-yellow-400" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">OT ya abierta para esta tarea</p>
+                <p className="text-sm font-bold text-white">{t("mp.modal.duplicateWoTitle")}</p>
                 <p className="text-xs text-text-industrial/70 mt-1">
-                  Esta tarea ya tiene una Orden de Trabajo abierta:{" "}
+                  {t("mp.modal.duplicateWoText")}{" "}
                   <span className="font-mono font-bold text-yellow-400">#{plan.activeWorkOrderCode}</span>.
-                  <br />¿Está seguro que quiere abrir una nueva OT?
+                  <br />{t("mp.modal.duplicateWoConfirm")}
                 </p>
               </div>
             </div>
@@ -2035,13 +2036,13 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 onClick={() => setConfirmDuplicateWO(false)}
                 className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors"
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
               <button
                 onClick={() => { setConfirmDuplicateWO(false); setShowExecution(true); }}
                 className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all"
               >
-                Abrir OT de todas formas
+                {t("mp.modal.openWoAnyway")}
               </button>
             </div>
           </div>
@@ -2054,7 +2055,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             source: "plan",
             sourceId: plan.id,
             sourceCode: plan.taskCode,
-            sourceLabel: "Plan de Mantenimiento",
+            sourceLabel: t("mp.modal.maintenancePlanLabel"),
             vesselCode: plan.vesselCode,
             assetId: plan.assetId,
             assetName: plan.assetName,
@@ -2098,10 +2099,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <Trash2 className="w-4 h-4 text-red-400" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">Eliminar plan de mantenimiento</p>
+                <p className="text-sm font-bold text-white">{t("mp.modal.deleteTitle")}</p>
                 <p className="text-xs text-text-industrial/70 mt-1">
-                  Esta acción no puede deshacerse. El plan{" "}
-                  <span className="font-mono font-bold text-white">{plan.taskCode}</span> será eliminado.
+                  {t("mp.modal.deleteText1")}{" "}
+                  <span className="font-mono font-bold text-white">{plan.taskCode}</span> {t("mp.modal.deleteText2")}
                 </p>
               </div>
             </div>
@@ -2111,7 +2112,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 onClick={() => setConfirmDelete(false)}
                 className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors"
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
               <button
                 disabled={deleting}
@@ -2123,14 +2124,14 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     setConfirmDelete(false);
                     void onSaved();
                   } catch (err) {
-                    setActionError(err instanceof Error ? err.message : "Error al eliminar");
+                    setActionError(err instanceof Error ? err.message : t("mp.modal.deleteError"));
                     setDeleting(false);
                   }
                 }}
                 className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
               >
                 {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                Confirmar eliminación
+                {t("mp.modal.deleteConfirm")}
               </button>
             </div>
           </div>
@@ -2247,7 +2248,7 @@ export const MaintenancePlansPage: React.FC = () => {
       setEditing(detail);
       setShowModal(true);
     } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : "No se pudo cargar el detalle del plan.");
+      setPageError(err instanceof ApiError ? err.message : t("mp.page.detailLoadError"));
     } finally {
       setLoadingDetailId(null);
     }
@@ -2270,7 +2271,7 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 1: EMBARCACIÓN / TASKID / SFI ──────────────────────────────────
     {
       key: "vesselCode",
-      header: "EMBARCACIÓN / TASKID / SFI",
+      header: t("mp.col.vesselTaskSfi"),
       sortValue: row => `${row.vesselCode} ${row.taskCode}`,
       render: row => (
         <div className="flex flex-col gap-0.5 min-w-[130px]">
@@ -2290,7 +2291,7 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 2: EQUIPO / TAREA ───────────────────────────────────────────────
     {
       key: "title",
-      header: "EQUIPO / TAREA",
+      header: t("mp.col.equipmentTask"),
       className: "w-96",
       sortValue: row => (row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.title,
       render: row => (
@@ -2305,14 +2306,14 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 4: FRECUENCIA ───────────────────────────────────────────────────
     {
       key: "frequency",
-      header: "FRECUENCIA (HS / MES)",
+      header: t("mp.col.frequency"),
       sortValue: row => row.frequencyMonths ?? row.frequencyHours ?? 0,
       render: row => (
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs text-text-industrial/80 whitespace-nowrap">{formatFrequency(row)}</span>
           {needsHours(row.triggerType) && (
             <span className="font-mono text-[10px] text-text-industrial/45 whitespace-nowrap">
-              Acum: {row.assetCurrentHours != null ? `${row.assetCurrentHours.toLocaleString()} hs` : "—"}
+              {t("mp.col.accumulated")}: {row.assetCurrentHours != null ? `${row.assetCurrentHours.toLocaleString()} hs` : "—"}
             </span>
           )}
         </div>
@@ -2321,7 +2322,7 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 5: ÚLTIMA EJECUCIÓN ─────────────────────────────────────────────
     {
       key: "lastExecutionDate",
-      header: "ÚLTIMA EJECUCIÓN",
+      header: t("mp.col.lastExecution"),
       sortValue: row => row.lastExecutionDate ?? row.lastExecutionHours ?? null,
       render: row => {
         if (needsHours(row.triggerType)) {
@@ -2337,7 +2338,7 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 6: PRÓXIMO VENCIMIENTO ──────────────────────────────────────────
     {
       key: "nextDueDate",
-      header: "PRÓXIMO VENCIMIENTO",
+      header: t("mp.col.nextDue"),
       sortValue: row => row.nextDueDate ?? row.nextDueHours ?? null,
       render: row => {
         const isOverdue = row.executionStatus === "OVERDUE";
@@ -2354,14 +2355,14 @@ export const MaintenancePlansPage: React.FC = () => {
     // ── Col 7: STATUS ───────────────────────────────────────────────────────
     {
       key: "situacion",
-      header: "STATUS",
+      header: t("mp.col.status"),
       sortValue: row => computeStatus(row),
       render: row => <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />,
     },
     // ── Col 8: ACCIONES ─────────────────────────────────────────────────────
     {
       key: "taskCode" as keyof MaintenancePlan,
-      header: "ACCIONES",
+      header: t("mp.col.actions"),
       sortable: false,
       render: row => {
         if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
@@ -2373,7 +2374,7 @@ export const MaintenancePlansPage: React.FC = () => {
             onClick={e => { e.stopPropagation(); setExecuting(row); }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
           >
-            <Zap className="w-3 h-3" /> EJECUTAR OT
+            <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
           </button>
           ) : null
         ) : (
@@ -2381,7 +2382,7 @@ export const MaintenancePlansPage: React.FC = () => {
             onClick={e => { e.stopPropagation(); setReporting(row); }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
           >
-            <CheckCircle2 className="w-3 h-3" /> REPORTAR
+            <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
           </button>
         );
       },
@@ -2397,7 +2398,7 @@ export const MaintenancePlansPage: React.FC = () => {
           onClick={() => { setEditing(null); setShowModal(true); }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
         >
-          <Plus className="w-3.5 h-3.5" /> NUEVA TAREA
+          <Plus className="w-3.5 h-3.5" /> {t("mp.page.newTask")}
         </button>
         {/* Excel */}
         <button
@@ -2416,7 +2417,7 @@ export const MaintenancePlansPage: React.FC = () => {
           }`}
         >
           <AlertTriangle className="w-3.5 h-3.5" />
-          VENCIDOS / PRÓX. 7 DÍAS
+          {t("mp.page.overdueToggle")}
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
             overdueOnly ? "bg-orange-500/30 text-orange-200" : "bg-white/10 text-text-industrial/50"
           }`}>{urgentCount}</span>
@@ -2427,7 +2428,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <input
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            placeholder="Buscar por código, tarea, equipo, responsable…"
+            placeholder={t("mp.page.searchPlaceholder")}
             className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
           />
           {searchText && (
@@ -2454,7 +2455,7 @@ export const MaintenancePlansPage: React.FC = () => {
             onChange={e => updateFilters({ vesselCode: fromFilterSelectValue(e.target.value) })}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
           >
-            <option value={FILTER_ALL_VALUE}>Todos los buques</option>
+            <option value={FILTER_ALL_VALUE}>{t("mp.page.allVessels")}</option>
             {vessels.map(v => (
               <option key={v.code} value={v.code}>{v.name}</option>
             ))}
@@ -2490,7 +2491,7 @@ export const MaintenancePlansPage: React.FC = () => {
                   : "bg-white/5 text-text-industrial/60 border-white/10 hover:bg-white/10 hover:text-white"
               }`}
             >
-              {tab.label}
+              {tab.key === "ALL" ? t("mp.sfiTab.all") : tab.label}
               {count > 0 && (
                 <span className={`ml-1 text-[10px] ${isActive ? "opacity-70" : "text-text-industrial/40"}`}>
                   ({count})
@@ -2506,7 +2507,7 @@ export const MaintenancePlansPage: React.FC = () => {
       )}
       {loadingDetailId && (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60">
-          <Loader2 className="w-4 h-4 animate-spin text-accent" /> Cargando detalle del plan...
+          <Loader2 className="w-4 h-4 animate-spin text-accent" /> {t("mp.page.loadingDetail")}
         </div>
       )}
 
@@ -2528,7 +2529,7 @@ export const MaintenancePlansPage: React.FC = () => {
             source: "plan",
             sourceId: executing.id,
             sourceCode: executing.taskCode,
-            sourceLabel: "Plan de Mantenimiento",
+            sourceLabel: t("mp.modal.maintenancePlanLabel"),
             vesselCode: executing.vesselCode,
             assetId: executing.assetId,
             assetName: executing.assetName,
