@@ -651,6 +651,126 @@ const dict = {
   "fluid.type.coolant":        { es: "Refrigerante",           en: "Coolant",              pt: "Refrigerante" },
   "fluid.type.other":          { es: "Fluido",                 en: "Fluid",                pt: "Fluido" },
 
+  // Common chrome
+  "common.minimize":           { es: "Reducir",                en: "Minimize",             pt: "Reduzir" },
+  "common.maximize":           { es: "Ampliar",                en: "Maximize",             pt: "Ampliar" },
+  "common.loadingDetail":      { es: "Cargando detalle…",      en: "Loading detail…",      pt: "Carregando detalhes…" },
+  "common.noResults":          { es: "Sin resultados",         en: "No results",           pt: "Sem resultados" },
+  "common.analyzing":          { es: "analizando…",            en: "analyzing…",           pt: "analisando…" },
+  "common.add":                { es: "Agregar",                en: "Add",                  pt: "Adicionar" },
+  "common.accept":             { es: "Aceptar",                en: "Accept",                pt: "Aceitar" },
+  "common.acceptAndClose":     { es: "Aceptar y cerrar",       en: "Accept and close",     pt: "Aceitar e fechar" },
+
+  // Work Order — labels visibles en lista, modal y badges
+  "wo.entityLabel":            { es: "Orden de Trabajo",       en: "Work Order",           pt: "Ordem de Serviço" },
+  "wo.entityLabelShort":       { es: "OT",                     en: "WO",                   pt: "OS" },
+  "wo.col.codeVessel":         { es: "Código / Embarcación",   en: "Code / Vessel",        pt: "Código / Embarcação" },
+  "wo.col.equipmentTask":      { es: "Equipo / Tarea",         en: "Equipment / Task",     pt: "Equipamento / Tarefa" },
+  "wo.col.category":           { es: "Categoría",              en: "Category",             pt: "Categoria" },
+  "wo.col.assignee":           { es: "Responsable",            en: "Assignee",             pt: "Responsável" },
+  "wo.col.openDate":           { es: "F. Apertura",            en: "Open date",            pt: "Data abertura" },
+  "wo.col.dueDate":            { es: "F. Vencimiento",         en: "Due date",             pt: "Data vencimento" },
+  "wo.col.status":             { es: "Estado",                 en: "Status",               pt: "Estado" },
+
+  // Work Order status badges
+  "wo.status.closed":          { es: "Cerrada",                en: "Closed",               pt: "Fechada" },
+  "wo.status.postponed":       { es: "Postergada",             en: "Postponed",            pt: "Adiada" },
+  "wo.status.overdue":         { es: "Vencida",                en: "Overdue",              pt: "Vencida" },
+  "wo.status.open":            { es: "Abierta",                en: "Open",                 pt: "Aberta" },
+
+  // Deferral badges (vinculados a WO ON_HOLD)
+  "wo.deferral.requested":     { es: "Solicitada",             en: "Requested",            pt: "Solicitada" },
+  "wo.deferral.underReview":   { es: "En revisión",            en: "Under review",         pt: "Em análise" },
+  "wo.deferral.approved":      { es: "Aprobada",               en: "Approved",             pt: "Aprovada" },
+  "wo.deferral.approvedActive":{ es: "Aprobada · Activa",      en: "Approved · Active",    pt: "Aprovada · Ativa" },
+  "wo.deferral.rejected":      { es: "Rechazada",              en: "Rejected",             pt: "Rejeitada" },
+  "wo.deferral.expired":       { es: "Vencida",                en: "Expired",              pt: "Vencida" },
+  "wo.deferral.closed":        { es: "Cerrada",                en: "Closed",               pt: "Fechada" },
+
+  // Hold/postpone modal & info block
+  "wo.holdTargetDate":         { es: "Fecha estimada de reanudación", en: "Estimated resumption date", pt: "Data estimada de retomada" },
+  "wo.holdReasonLabel":        { es: "Motivo de postergación", en: "Postponement reason",  pt: "Motivo do adiamento" },
+  "wo.cancelReasonLabel":      { es: "Motivo de cancelación",  en: "Cancellation reason",  pt: "Motivo de cancelamento" },
+  "wo.originalDue":            { es: "Vencimiento original",   en: "Original due date",    pt: "Vencimento original" },
+  "wo.targetDate":             { es: "Fecha objetivo",         en: "Target date",          pt: "Data alvo" },
+  "wo.postponedBy":             { es: "Postergado",             en: "Postponed",            pt: "Adiado" },
+  "wo.days":                   { es: "días",                   en: "days",                 pt: "dias" },
+
+  // WorkOrderModal — Mercurio extras
+  "wo.modal.department":       { es: "Departamento",           en: "Department",           pt: "Departamento" },
+  "wo.modal.location":         { es: "Ubicación",              en: "Location",             pt: "Localização" },
+  "wo.modal.locationPlaceholder": { es: "Ej: Sala de máquinas, Cubierta proa…", en: "E.g.: Engine room, Foredeck…", pt: "Ex: Casa de máquinas, Convés de proa…" },
+  "wo.modal.commMethodSection": { es: "Medio de comunicación utilizado", en: "Communication method used", pt: "Meio de comunicação utilizado" },
+  "wo.modal.distribution":     { es: "Distribución",           en: "Distribution",         pt: "Distribuição" },
+
+  // WorkOrderModal — Consecuencia / RCM
+  "wo.modal.consequenceTitle": { es: "Si no se hace, ¿qué pasa?", en: "If not done, what happens?", pt: "Se não for feito, o que acontece?" },
+  "wo.modal.consequenceHint":  { es: "— Consecuencia de la falla (RCM)", en: "— Failure consequence (RCM)", pt: "— Consequência da falha (RCM)" },
+  "wo.modal.consequenceTooltip": { es: "Click para que la IA sugiera la consecuencia (RCM)", en: "Click to have AI suggest the consequence (RCM)", pt: "Clique para que a IA sugira a consequência (RCM)" },
+  "wo.modal.consequenceUnclassified": { es: "— Sin clasificar —", en: "— Unclassified —",   pt: "— Sem classificar —" },
+  "wo.modal.consequence.safety":         { es: "🔴 Riesgo a personas (lesión / fatalidad)", en: "🔴 Risk to people (injury / fatality)", pt: "🔴 Risco a pessoas (lesão / fatalidade)" },
+  "wo.modal.consequence.environmental":  { es: "🟢 Daño ambiental (vertido, emisión)",     en: "🟢 Environmental damage (spill, emission)", pt: "🟢 Dano ambiental (derramamento, emissão)" },
+  "wo.modal.consequence.operational":    { es: "🟡 Pérdida de operación (paro, retraso)",  en: "🟡 Operational loss (stoppage, delay)", pt: "🟡 Perda operacional (parada, atraso)" },
+  "wo.modal.consequence.nonOperational": { es: "⚪ Solo costo de reparación",              en: "⚪ Repair cost only",                  pt: "⚪ Apenas custo de reparo" },
+  "wo.modal.consequencePlaceholder": { es: "Fundamento de la categoría (ej: si la bomba CI no se prueba, no arranca en incendio)", en: "Category rationale (e.g.: if the fire pump isn't tested, it won't start during a fire)", pt: "Fundamento da categoria (ex: se a bomba de incêndio não for testada, não liga em incêndio)" },
+
+  // WorkOrderModal — Resultado section
+  "wo.modal.resultSection":    { es: "Resultado de la Orden de Trabajo", en: "Work Order Result", pt: "Resultado da Ordem de Serviço" },
+  "wo.modal.result":           { es: "Resultado",              en: "Result",               pt: "Resultado" },
+  "wo.modal.result.satisfactory":  { es: "Satisfactorio",      en: "Satisfactory",          pt: "Satisfatório" },
+  "wo.modal.result.withDeficiencies":{ es: "Con deficiencias",  en: "With deficiencies",    pt: "Com deficiências" },
+  "wo.modal.deficiencies":     { es: "Deficiencias encontradas", en: "Deficiencies found", pt: "Deficiências encontradas" },
+  "wo.modal.deficienciesPlaceholder": { es: "Descripción detallada de las deficiencias encontradas", en: "Detailed description of deficiencies found", pt: "Descrição detalhada das deficiências encontradas" },
+  "wo.modal.executedBy":       { es: "Ejecutado por",          en: "Executed by",          pt: "Executado por" },
+  "wo.modal.executedByPlaceholder": { es: "Nombre del ejecutante", en: "Executor name",    pt: "Nome do executor" },
+  "wo.modal.executionDate":    { es: "Fecha de ejecución",     en: "Execution date",       pt: "Data de execução" },
+  "wo.modal.runningHours":     { es: "Horas del motor al momento de ejecución", en: "Engine hours at execution time", pt: "Horas do motor no momento da execução" },
+  "wo.modal.runningHoursPlaceholder": { es: "ej. 3500",         en: "e.g. 3500",            pt: "ex. 3500" },
+  "wo.modal.observations":     { es: "Observaciones",          en: "Observations",         pt: "Observações" },
+  "wo.modal.observationsPlaceholder": { es: "Observaciones, hallazgos o notas de cierre", en: "Observations, findings or closing notes", pt: "Observações, achados ou notas de fechamento" },
+  "wo.modal.supportingDoc":    { es: "Documento respaldatorio", en: "Supporting document", pt: "Documento de respaldo" },
+
+  // Rewrite IA
+  "wo.modal.rewriteAI":        { es: "Reescribir IA",          en: "Rewrite with AI",      pt: "Reescrever IA" },
+  "wo.modal.rewriteEmptyError":{ es: "Escribí algo primero",   en: "Write something first",pt: "Escreva algo primeiro" },
+  "wo.modal.rewriteTooltip":   { es: "Reescribir profesionalmente con IA", en: "Rewrite professionally with AI", pt: "Reescrever profissionalmente com IA" },
+
+  // Repuestos utilizados
+  "wo.spares.section":         { es: "Repuestos utilizados",   en: "Spare parts used",     pt: "Sobressalentes utilizados" },
+  "wo.spares.add":             { es: "+ Agregar repuesto",     en: "+ Add spare",          pt: "+ Adicionar sobressalente" },
+  "wo.spares.colSpare":        { es: "Repuesto",               en: "Spare",                pt: "Sobressalente" },
+  "wo.spares.colQty":          { es: "Cant.",                  en: "Qty.",                 pt: "Qtd." },
+  "wo.spares.colUnit":         { es: "Ud.",                    en: "Unit",                 pt: "Un." },
+  "wo.spares.empty":           { es: "Sin repuestos registrados.", en: "No spare parts registered.", pt: "Sem sobressalentes registrados." },
+  "wo.spares.searchPlaceholder": { es: "Buscar por SKU o nombre…", en: "Search by SKU or name…", pt: "Buscar por SKU ou nome…" },
+  "wo.spares.qtyPlaceholder":  { es: "Cant.",                  en: "Qty.",                 pt: "Qtd." },
+  "wo.spares.outOfStock":      { es: "SIN STOCK",              en: "OUT OF STOCK",         pt: "SEM ESTOQUE" },
+  "wo.spares.available":       { es: "disp",                   en: "avail",                pt: "disp" },
+  "wo.spares.exceedsStock":    { es: "⚠ Algunos repuestos superan el stock disponible. El cierre continuará, pero verifique el inventario.", en: "⚠ Some spare parts exceed available stock. Closing will proceed, but verify inventory.", pt: "⚠ Alguns sobressalentes excedem o estoque disponível. O fechamento continuará, mas verifique o inventário." },
+  "wo.spares.insufficientStock": { es: "⚠ Stock insuficiente: disponible {avail} {unit}, solicitado {req}", en: "⚠ Insufficient stock: available {avail} {unit}, requested {req}", pt: "⚠ Estoque insuficiente: disponível {avail} {unit}, solicitado {req}" },
+
+  // Defect prompt al cerrar OT con deficiencias
+  "wo.defectPrompt.question":  { es: "¿Deseas abrir un registro en el Log de Defectos?", en: "Do you want to open a record in the Defect Log?", pt: "Deseja abrir um registro no Log de Defeitos?" },
+  "wo.defectPrompt.openRecord":{ es: "Abrir Registro DEF",     en: "Open DEF Record",      pt: "Abrir Registro DEF" },
+  "wo.defectPrompt.skipRecord":{ es: "No abrir Registro DEF",  en: "Don't open DEF Record",pt: "Não abrir Registro DEF" },
+  "wo.defectPrompt.creating":  { es: "Creando registro…",      en: "Creating record…",     pt: "Criando registro…" },
+  "wo.defectPrompt.created":   { es: "Registro de defecto creado",  en: "Defect record created", pt: "Registro de defeito criado" },
+  "wo.defectPrompt.declined":  { es: "No se abrirá registro de defecto.", en: "No defect record will be opened.", pt: "Nenhum registro de defeito será aberto." },
+
+  // WorkOrderModal — botones del footer
+  "wo.modal.generatePdf":      { es: "Generar PDF",            en: "Generate PDF",          pt: "Gerar PDF" },
+  "wo.modal.postpone":         { es: "Postergar",              en: "Postpone",              pt: "Adiar" },
+  "wo.modal.closeWO":          { es: "Cerrar OT",              en: "Close WO",              pt: "Fechar OS" },
+  "wo.modal.cancelWO":         { es: "Cancelar OT",            en: "Cancel WO",             pt: "Cancelar OS" },
+  "wo.modal.closeBeforeError": { es: "Completar el Resultado de la OT antes de cerrar", en: "Complete the WO Result before closing", pt: "Conclua o Resultado da OS antes de fechar" },
+  "wo.modal.resultRequired":   { es: "El resultado de la OT es requerido para cerrar.", en: "WO Result is required before closing.", pt: "O Resultado da OS é obrigatório para fechar." },
+  "wo.modal.closeStockWarning":{ es: "OT cerrada. No se pudo registrar el movimiento de stock para {count} repuesto(s). Verifique el stock manualmente.", en: "WO closed. Could not register stock movement for {count} spare(s). Verify stock manually.", pt: "OS fechada. Não foi possível registrar o movimento de estoque para {count} sobressalente(s). Verifique o estoque manualmente." },
+
+  // WorkOrders page
+  "wo.page.openReport":        { es: "Reporte OTs Abiertas",   en: "Open WOs Report",      pt: "Relatório de OS Abertas" },
+  "wo.page.printOpenForVessel":{ es: "Imprimir OTs abiertas de {vessel}", en: "Print open WOs for {vessel}", pt: "Imprimir OS abertas de {vessel}" },
+  "wo.page.printOpenAll":      { es: "Imprimir todas las OTs abiertas agrupadas por responsable", en: "Print all open WOs grouped by assignee", pt: "Imprimir todas as OS abertas agrupadas por responsável" },
+
   // Spare Parts Module (sm.*)
   "sm.onHand":           { es: "En mano",           en: "On hand",          pt: "Em mãos" },
   "sm.available":        { es: "Disponible",         en: "Available",        pt: "Disponível" },
