@@ -37,6 +37,7 @@ const dict = {
   "nav.spareRequests":     { es: "Solicitud de Repuestos", en: "Spare Requests",   pt: "Solicitação de Sobressalentes" },
   "nav.providers":         { es: "Proveedores",         en: "Providers",           pt: "Fornecedores" },
   "nav.aiInsights":        { es: "AI Insights",         en: "AI Insights",         pt: "AI Insights" },
+  "nav.vesselMap":         { es: "Mapa de Buques",      en: "Vessel Map",          pt: "Mapa de Navios" },
   "nav.aiDocuments":       { es: "AI Documents",        en: "AI Documents",        pt: "AI Documentos" },
   "nav.configuration":     { es: "Configuración",       en: "Configuration",       pt: "Configuração" },
   "nav.statusOk":          { es: "Sistemas OK",         en: "Systems OK",          pt: "Sistemas OK" },

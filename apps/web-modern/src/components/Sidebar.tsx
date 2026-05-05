@@ -245,7 +245,7 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse shrink-0" />
               <span className="text-[11px] text-white/40">{t("nav.statusOk")}</span>
-              {aiBadgeText && (
+              {aiBadgeText && user?.role === "TENANT_ADMIN" && (
                 <span className="text-[10px] text-white/30 ml-auto" title={aiBadgeTitle}>
                   {aiBadgeText}
                 </span>

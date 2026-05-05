@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Ship, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { Ship, FileSpreadsheet, Plus, Trash2, X, Map } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -7,6 +8,7 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -266,6 +268,8 @@ const DeleteConfirm: React.FC<{ vessel: Vessel; onClose: () => void; onDeleted: 
 
 export const VesselsPage: React.FC = () => {
   const t = useT();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("");
   const [showExcel, setShowExcel] = useState(false);
   const [formVessel, setFormVessel] = useState<Vessel | null | undefined>(undefined);
@@ -318,6 +322,11 @@ export const VesselsPage: React.FC = () => {
       {formVessel !== undefined && <VesselForm initial={formVessel} onClose={() => setFormVessel(undefined)} onSaved={() => { setFormVessel(undefined); reload(); }} />}
       {deleteTarget && <DeleteConfirm vessel={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={() => { setDeleteTarget(null); reload(); }} />}
       <PageHeader icon={Ship} title={t("page.vessels")} total={data?.total} onReload={reload}>
+        {user?.role === "TENANT_ADMIN" && (
+          <button onClick={() => navigate("/vessel-map")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+            <Map className="w-3.5 h-3.5 text-accent" /> {t("nav.vesselMap")}
+          </button>
+        )}
         <button onClick={() => setFormVessel(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>

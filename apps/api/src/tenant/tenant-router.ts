@@ -12,7 +12,7 @@ import { acceptTenantInvitation } from "./invitations/tenant-invitations-service
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
-import { getMonthlyAiUsageForUser } from "./usage/usage-service";
+import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments } from "./attachments/attachments-service";
@@ -271,6 +271,17 @@ export async function handleTenantRoutes(
 
   if (url.pathname.startsWith("/app/profile")) {
     if (await handleProfileRoutes(method, url, request, response, env)) return true;
+  }
+
+  // ── Vessel positions (last known GPS per vessel, TECHNICIAN_OPERATOR only) ──
+  if (method === "GET" && url.pathname === "/app/vessel-positions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await (prisma as any).tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
+    if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found");
+    const positions = await getLatestVesselPositionsByTenant(tenant.id);
+    sendJson(response, 200, { items: positions });
+    return true;
   }
 
   // ── Vessels ────────────────────────────────────────────────────────────────

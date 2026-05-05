@@ -815,6 +815,9 @@ model UsageEvent {
   latencyMs             Int?
   errored               Boolean   @default(false)
   ipAddress             String?                         // client IP (X-Forwarded-For first hop, validated)
+  latitude              Float?                          // browser geolocation — vessel position when TECHNICIAN_OPERATOR
+  longitude             Float?
+  userRole              String?                         // TenantRole at time of request (denormalized)
   createdAt             DateTime  @default(now())
 
   @@index([tenantId, createdAt])

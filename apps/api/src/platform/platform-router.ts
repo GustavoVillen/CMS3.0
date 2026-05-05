@@ -7,7 +7,7 @@ import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
 import { listPlatformAuditEvents } from "./audit/platform-audit-service";
-import { listUsageEvents, aiCostUsd } from "../tenant/usage/usage-service";
+import { listUsageEvents, aiCostUsd, getLatestVesselPositions } from "../tenant/usage/usage-service";
 import {
   createPlatformTenant, getPlatformTenant, listPlatformTenants, updatePlatformTenant,
 } from "./tenants/platform-tenants-service";
@@ -255,6 +255,15 @@ export async function handlePlatformRoutes(
       "Content-Length": String(buffer.length),
     });
     response.end(buffer);
+    return true;
+  }
+
+  // ── Vessel positions (latest per vessel, TECHNICIAN_OPERATOR only) ──────────
+  if (method === "GET" && url.pathname === "/platform/vessel-positions") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const positions = await getLatestVesselPositions();
+    sendJson(response, 200, { items: positions });
     return true;
   }
 

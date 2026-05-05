@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, LogOut, ChevronRight } from "lucide-react";
+import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, LogOut, ChevronRight, Map } from "lucide-react";
 import { usePlatformAuth } from "../lib/platform-auth";
 
 const NAV = [
@@ -8,6 +8,7 @@ const NAV = [
   { icon: Users,        label: "Platform Users",  path: "/platform/users" },
   { icon: ScrollText,   label: "Audit Events",    path: "/platform/audit" },
   { icon: Activity,     label: "Consumo IA + Sat", path: "/platform/usage" },
+  { icon: Map,          label: "Mapa Buques",      path: "/platform/vessel-map" },
   { icon: MessageSquare,label: "Prompts",         path: "/platform/prompts" },
 ];
 

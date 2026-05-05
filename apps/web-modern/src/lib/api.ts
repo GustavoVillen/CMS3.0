@@ -5,6 +5,22 @@
 
 const BASE = "";
 
+// ── Geolocation cache — requested once, refreshed every 5 min ────────────────
+let _geo: { lat: number; lng: number } | null = null;
+
+function _updateGeo() {
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { _geo = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+    () => { /* permission denied or unavailable — no header sent */ },
+    { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
+  );
+}
+
+if (typeof window !== "undefined" && "geolocation" in navigator) {
+  _updateGeo();
+  setInterval(_updateGeo, 5 * 60 * 1000);
+}
+
 // Called only after both the access token AND refresh token have failed.
 // Auth provider sets this to clear localStorage and redirect to /login.
 let onUnauthorized: (() => void) | null = null;
@@ -27,6 +43,7 @@ function getHeaders(): Record<string, string> {
   const slug  = localStorage.getItem("gpms_tenant_slug");
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (slug)  headers["X-Tenant-Slug"] = slug;
+  if (_geo)  { headers["X-Geo-Lat"] = String(_geo.lat); headers["X-Geo-Long"] = String(_geo.lng); }
   return headers;
 }
 

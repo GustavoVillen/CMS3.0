@@ -53,6 +53,9 @@ export interface RecordAiUsageInput {
   latencyMs?: number;
   errored?: boolean;
   ipAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  userRole?: string | null;
 }
 
 export function recordAiUsage(input: RecordAiUsageInput): void {
@@ -77,6 +80,9 @@ export function recordAiUsage(input: RecordAiUsageInput): void {
         latencyMs: input.latencyMs ?? null,
         errored: input.errored ?? false,
         ipAddress: input.ipAddress ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        userRole: input.userRole ?? null,
       },
     })
     .catch(() => { /* never fail the request because of telemetry */ });
@@ -96,6 +102,9 @@ export interface RecordHttpUsageInput {
   latencyMs: number;
   errored?: boolean;
   ipAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  userRole?: string | null;
 }
 
 export function recordHttpUsage(input: RecordHttpUsageInput): void {
@@ -119,6 +128,9 @@ export function recordHttpUsage(input: RecordHttpUsageInput): void {
         latencyMs: input.latencyMs,
         errored: input.errored ?? input.statusCode >= 500,
         ipAddress: input.ipAddress ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        userRole: input.userRole ?? null,
       },
     })
     .catch(() => { /* swallow */ });
@@ -273,6 +285,61 @@ export async function listUsageEvents(filters: ListUsageFilters): Promise<{ item
   ]);
 
   return { items, total };
+}
+
+// ── Vessel positions ─────────────────────────────────────────────────────────
+// Returns the latest known position per vessel, only for TECHNICIAN_OPERATOR users.
+
+export interface VesselPositionRow {
+  vesselCode: string;
+  tenantSlug: string;
+  userEmail: string;
+  latitude: number;
+  longitude: number;
+  seenAt: Date;
+}
+
+export async function getLatestVesselPositions(): Promise<VesselPositionRow[]> {
+  const prisma = getPrismaClient();
+  if (!prisma) return [];
+
+  return prisma.$queryRaw<VesselPositionRow[]>`
+    SELECT DISTINCT ON ("vesselCode", "tenantSlug")
+      "vesselCode",
+      "tenantSlug",
+      "userEmail",
+      "latitude",
+      "longitude",
+      "createdAt" AS "seenAt"
+    FROM "UsageEvent"
+    WHERE "userRole" = 'TECHNICIAN_OPERATOR'
+      AND "latitude"   IS NOT NULL
+      AND "longitude"  IS NOT NULL
+      AND "vesselCode" IS NOT NULL
+    ORDER BY "vesselCode", "tenantSlug", "createdAt" DESC
+  `;
+}
+
+export async function getLatestVesselPositionsByTenant(tenantId: string): Promise<VesselPositionRow[]> {
+  const prisma = getPrismaClient();
+  if (!prisma) return [];
+
+  return prisma.$queryRaw<VesselPositionRow[]>`
+    SELECT DISTINCT ON ("vesselCode")
+      "vesselCode",
+      "tenantSlug",
+      "userEmail",
+      "latitude",
+      "longitude",
+      "createdAt" AS "seenAt"
+    FROM "UsageEvent"
+    WHERE "tenantId"   = ${tenantId}
+      AND "userRole"   = 'TECHNICIAN_OPERATOR'
+      AND "latitude"   IS NOT NULL
+      AND "longitude"  IS NOT NULL
+      AND "vesselCode" IS NOT NULL
+    ORDER BY "vesselCode", "createdAt" DESC
+  `;
 }
 
 // ── Retention ────────────────────────────────────────────────────────────────

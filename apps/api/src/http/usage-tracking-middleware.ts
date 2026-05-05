@@ -24,6 +24,13 @@ function parseAuthBearer(headerValue: string | undefined): string | null {
   return m ? m[1].trim() : null;
 }
 
+function readGeoHeader(headerValue: string | string[] | undefined): number | null {
+  if (!headerValue) return null;
+  const v = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function readContentLength(headerValue: string | string[] | undefined): number {
   if (!headerValue) return 0;
   const v = Array.isArray(headerValue) ? headerValue[0] : headerValue;
@@ -108,6 +115,9 @@ export function attachUsageTracking(request: IncomingMessage, response: ServerRe
           bytesOut,
           latencyMs:   Date.now() - startedAt,
           ipAddress:   getClientIp(request),
+          latitude:    readGeoHeader(request.headers["x-geo-lat"]),
+          longitude:   readGeoHeader(request.headers["x-geo-long"]),
+          userRole:    session.user.role,
         });
       })().catch(() => { /* swallow */ });
     } catch {

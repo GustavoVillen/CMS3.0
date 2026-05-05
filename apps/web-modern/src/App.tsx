@@ -39,6 +39,8 @@ import { PlatformUsersPage } from "./pages/platform/PlatformUsers";
 import { PlatformAuditPage } from "./pages/platform/PlatformAudit";
 import { PlatformUsagePage } from "./pages/platform/PlatformUsage";
 import { PlatformPromptsPage } from "./pages/platform/PlatformPrompts";
+import { PlatformVesselMapPage } from "./pages/platform/PlatformVesselMap";
+import { VesselMapPage } from "./pages/VesselMap";
 import { BitacoraPage } from "./pages/Bitacora";
 
 // ---------------------------------------------------------------------------
@@ -101,8 +103,9 @@ export default function App() {
               <Route path="tenants" element={<PlatformTenantsPage />} />
               <Route path="users"   element={<PlatformUsersPage />} />
               <Route path="audit"   element={<PlatformAuditPage />} />
-              <Route path="usage"   element={<PlatformUsagePage />} />
-              <Route path="prompts" element={<PlatformPromptsPage />} />
+              <Route path="usage"      element={<PlatformUsagePage />} />
+              <Route path="vessel-map" element={<PlatformVesselMapPage />} />
+              <Route path="prompts"    element={<PlatformPromptsPage />} />
             </Route>
 
             {/* ── Tenant mobile ── */}
@@ -135,6 +138,7 @@ export default function App() {
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />
               <Route path="/fluid-analyses"    element={<FluidAnalysesPage />} />
               <Route path="/bitacora"          element={<BitacoraPage />} />
+              <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />
             </Route>

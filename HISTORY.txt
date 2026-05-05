@@ -1,5 +1,43 @@
 HISTORY.txt
 
+[2026-05-04] Fix nginx VPS: frontend no se servía, API quedaba expuesta en raíz
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- /etc/nginx/sites-enabled/gpms (VPS — no está en repo)
+
+PROBLEMA:
+- shipcms.cloud/ mostraba respuestas de la API desnuda (exponía info sensible)
+- nginx tenía un único `location /` que proxy_pass-aba todo al puerto 3105 (API)
+- El frontend React (dist/) nunca se servía
+
+SOLUCIÓN:
+- nginx separado en: location /auth + /app + /uploads + /platform → proxy 127.0.0.1:3105
+- location / → try_files $uri $uri/ /index.html (serve SPA estático desde /app/apps/web-modern/dist)
+- `nginx -t && systemctl reload nginx` exitoso
+
+[2026-05-04] i18n Fase 1 — sweep completo de strings hardcodeados en frontend
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/web-modern/src/lib/i18n.tsx: ~200+ claves nuevas (nav.*, page.*, header.*, wo.*, mp.*, dashboard.*, fluid.*, common.*)
+- apps/web-modern/src/components/Sidebar.tsx: NavItem.labelKey + NavSection.titleKey + useT()
+- apps/web-modern/src/components/Layout.tsx: TITLE_KEYS con TranslationKey en vez de strings fijos
+- apps/web-modern/src/components/Header.tsx: vessel selector, user fallback, sesión activa, cerrar sesión
+- apps/web-modern/src/components/CreateWorkOrderModal.tsx: FLUID_TYPE_KEYS + todo JSX via t()
+- apps/web-modern/src/pages/WorkOrders.tsx: CategoryBadge, WoStatusBadge, HoldModal, CancelModal, WorkOrderModal completo
+- apps/web-modern/src/pages/MaintenancePlans.tsx: StatusBadgeInline, ExecutionModal, PostponeModal, MaintenancePlanModal, página completa
+- apps/web-modern/src/pages/Dashboard.tsx: 5 charts, 19 segmentos, empty states, FuelConsumptionWidget, AiInsightBadge, DailyReportCard
+
+FUNCIONALIDAD:
+- tenant.locale controla todo el texto visible (es/pt/en)
+- Capital Marine (pt) y Mercurio (es) ven la UI en su idioma correcto
+- AI token badge en sidebar restringido a TENANT_ADMIN (no visible para tripulación)
+
+PENDIENTE Fase 2:
+- Defects, Deferrals, CAPA, DailyReports, MonthlyReports
+- PDF template en downloadPdfLegacy() (~30 strings)
+
 [2026-05-04] Backup semanal Excel por tenant — envío automático por mail (Resend)
 Agent: Claude Opus 4.7
 
