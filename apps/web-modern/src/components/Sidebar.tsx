@@ -154,7 +154,7 @@ export const Sidebar: React.FC = () => {
                 <img
                   src={(tenant.logoUrlLight || tenant.logoUrl)!}
                   alt=""
-                  className="w-8 h-8 object-contain shrink-0"
+                  className="w-16 h-16 object-contain shrink-0"
                 />
               )}
               <p className="text-sm font-bold text-white leading-tight truncate">{tenant.name}</p>
@@ -164,7 +164,7 @@ export const Sidebar: React.FC = () => {
             <img
               src={(tenant.logoUrlLight || tenant.logoUrl)!}
               alt=""
-              className="w-8 h-8 object-contain shrink-0"
+              className="w-16 h-16 object-contain shrink-0"
             />
           )}
           {/* Sistema — abajo */}
@@ -177,7 +177,7 @@ export const Sidebar: React.FC = () => {
             />
             {!collapsed && (
               <div className="min-w-0">
-                <p className="font-bold text-xs tracking-widest text-white/50 leading-tight uppercase">CMS · Copilot Management System</p>
+                <p className="font-bold text-[8px] tracking-widest text-teal-400 leading-tight uppercase">CMS · Copilot Management System</p>
               </div>
             )}
           </div>
