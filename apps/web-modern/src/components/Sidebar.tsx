@@ -151,7 +151,7 @@ export const Sidebar: React.FC = () => {
             src="/logo-white.png"
             alt="CMS"
             className="shrink-0 object-contain"
-            style={{ width: 32, height: 32 }}
+            style={{ width: 16, height: 16 }}
           />
           {!collapsed && (
             <div className="min-w-0">
