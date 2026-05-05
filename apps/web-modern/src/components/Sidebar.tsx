@@ -146,31 +146,41 @@ export const Sidebar: React.FC = () => {
     >
       {/* ── Logo ─────────────────────────────────────────────────────────── */}
       <div className={`flex items-center border-b border-white/10 shrink-0 ${collapsed ? "flex-col gap-2 py-3 px-0" : "justify-between px-4 py-4"}`}>
-        <div className={`flex items-center gap-2.5 min-w-0 ${collapsed ? "" : "flex-1"}`}>
-          <img
-            src="/logo-white.png"
-            alt="CMS"
-            className="shrink-0 object-contain"
-            style={{ width: 16, height: 16 }}
-          />
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="font-bold text-sm tracking-widest text-white leading-tight uppercase">CMS</p>
-              <p className="text-[9px] font-bold tracking-widest text-teal-400 leading-tight uppercase">Copilot Management System</p>
-              {tenant && (
-                <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
-                  {(tenant.logoUrlLight || tenant.logoUrl) && (
-                    <img
-                      src={(tenant.logoUrlLight || tenant.logoUrl)!}
-                      alt=""
-                      className="w-8 h-8 object-contain shrink-0"
-                    />
-                  )}
-                  <p className="text-xs font-semibold text-white/70 leading-tight truncate">{tenant.name}</p>
-                </div>
+        <div className={`flex flex-col gap-2 min-w-0 ${collapsed ? "items-center" : "flex-1"}`}>
+          {/* Tenant — arriba */}
+          {tenant && !collapsed && (
+            <div className="flex items-center gap-2 min-w-0">
+              {(tenant.logoUrlLight || tenant.logoUrl) && (
+                <img
+                  src={(tenant.logoUrlLight || tenant.logoUrl)!}
+                  alt=""
+                  className="w-8 h-8 object-contain shrink-0"
+                />
               )}
+              <p className="text-sm font-bold text-white leading-tight truncate">{tenant.name}</p>
             </div>
           )}
+          {tenant && collapsed && (tenant.logoUrlLight || tenant.logoUrl) && (
+            <img
+              src={(tenant.logoUrlLight || tenant.logoUrl)!}
+              alt=""
+              className="w-8 h-8 object-contain shrink-0"
+            />
+          )}
+          {/* Sistema — abajo */}
+          <div className="flex items-center gap-2 min-w-0">
+            <img
+              src="/logo-white.png"
+              alt="CMS"
+              className="shrink-0 object-contain"
+              style={{ width: 16, height: 16 }}
+            />
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="font-bold text-xs tracking-widest text-white/50 leading-tight uppercase">CMS · Copilot Management System</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Collapse toggle */}
