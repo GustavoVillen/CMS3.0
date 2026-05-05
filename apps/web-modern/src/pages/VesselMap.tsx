@@ -12,6 +12,7 @@ L.Icon.Default.mergeOptions({ iconUrl: markerIcon, iconRetinaUrl: markerIcon2x, 
 
 interface VesselPosition {
   vesselCode: string;
+  vesselName: string;
   tenantSlug: string;
   userEmail: string;
   latitude: number;
@@ -73,13 +74,25 @@ export function VesselMapPage() {
 
     positions.forEach(pos => {
       const reportDate = pos.userEmail ? new Date(pos.userEmail).toLocaleDateString() : fmtAge(pos.seenAt);
+      const label = L.divIcon({
+        className: "",
+        html: `
+          <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+            <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png" style="width:16px;height:26px;flex-shrink:0"/>
+            <span style="background:rgba(10,20,40,0.85);color:#e2e8f0;font-size:11px;font-weight:700;
+              padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);
+              font-family:monospace;letter-spacing:0.03em">${pos.vesselName}</span>
+          </div>`,
+        iconAnchor: [8, 26],
+      });
       const popup = `
         <div style="font-family:monospace;font-size:13px;line-height:1.7">
-          <strong style="font-size:15px">🚢 ${pos.vesselCode}</strong><br/>
+          <strong style="font-size:15px">🚢 ${pos.vesselName}</strong>
+          <span style="color:#888;font-size:11px"> (${pos.vesselCode})</span><br/>
           <span style="color:#888;font-size:11px">Último reporte: ${reportDate}</span><br/>
           <span style="color:#888;font-size:11px">${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)}</span>
         </div>`;
-      L.marker([pos.latitude, pos.longitude]).addTo(map).bindPopup(popup);
+      L.marker([pos.latitude, pos.longitude], { icon: label }).addTo(map).bindPopup(popup);
     });
 
     if (positions.length > 0) {
@@ -133,7 +146,7 @@ export function VesselMapPage() {
             <tbody>
               {positions.map((p, i) => (
                 <tr key={i} className="border-b border-white/5 hover:bg-white/3 transition-colors">
-                  <td className="px-4 py-2 font-mono font-bold text-white">{p.vesselCode}</td>
+                  <td className="px-4 py-2 font-bold text-white">{p.vesselName} <span className="text-white/30 font-mono text-[10px]">{p.vesselCode}</span></td>
                   <td className="px-4 py-2 text-white/50">{p.userEmail ? new Date(p.userEmail).toLocaleDateString() : "—"}</td>
                   <td className="px-4 py-2 font-mono text-white/40">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</td>
                   <td className="px-4 py-2 text-white/30">{fmtAge(p.seenAt)}</td>

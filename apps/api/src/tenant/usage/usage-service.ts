@@ -292,6 +292,7 @@ export async function listUsageEvents(filters: ListUsageFilters): Promise<{ item
 
 export interface VesselPositionRow {
   vesselCode: string;
+  vesselName: string;
   tenantSlug: string;
   userEmail: string;
   latitude: number;
@@ -307,6 +308,7 @@ export async function getLatestVesselPositions(): Promise<VesselPositionRow[]> {
   return prisma.$queryRaw<VesselPositionRow[]>`
     SELECT DISTINCT ON (dr."vesselCode", t."slug")
       dr."vesselCode"                        AS "vesselCode",
+      COALESCE(v."name", dr."vesselCode")    AS "vesselName",
       t."slug"                               AS "tenantSlug",
       dr."reportDate"::text                  AS "userEmail",
       dr."positionLat"                       AS "latitude",
@@ -314,6 +316,7 @@ export async function getLatestVesselPositions(): Promise<VesselPositionRow[]> {
       dr."reportDate"::timestamptz           AS "seenAt"
     FROM "DailyReport" dr
     JOIN "Tenant" t ON t."id" = dr."tenantId"
+    LEFT JOIN "Vessel" v ON v."code" = dr."vesselCode" AND v."tenantId" = dr."tenantId"
     WHERE dr."positionLat" IS NOT NULL
       AND dr."positionLon" IS NOT NULL
     ORDER BY dr."vesselCode", t."slug", dr."reportDate" DESC
@@ -325,18 +328,20 @@ export async function getLatestVesselPositionsByTenant(tenantId: string): Promis
   if (!prisma) return [];
 
   return prisma.$queryRaw<VesselPositionRow[]>`
-    SELECT DISTINCT ON ("vesselCode")
-      "vesselCode"                  AS "vesselCode",
-      ''                            AS "tenantSlug",
-      "reportDate"::text            AS "userEmail",
-      "positionLat"                 AS "latitude",
-      "positionLon"                 AS "longitude",
-      "reportDate"::timestamptz     AS "seenAt"
-    FROM "DailyReport"
-    WHERE "tenantId"    = ${tenantId}
-      AND "positionLat" IS NOT NULL
-      AND "positionLon" IS NOT NULL
-    ORDER BY "vesselCode", "reportDate" DESC
+    SELECT DISTINCT ON (dr."vesselCode")
+      dr."vesselCode"                        AS "vesselCode",
+      COALESCE(v."name", dr."vesselCode")    AS "vesselName",
+      ''                                     AS "tenantSlug",
+      dr."reportDate"::text                  AS "userEmail",
+      dr."positionLat"                       AS "latitude",
+      dr."positionLon"                       AS "longitude",
+      dr."reportDate"::timestamptz           AS "seenAt"
+    FROM "DailyReport" dr
+    LEFT JOIN "Vessel" v ON v."code" = dr."vesselCode" AND v."tenantId" = dr."tenantId"
+    WHERE dr."tenantId"    = ${tenantId}
+      AND dr."positionLat" IS NOT NULL
+      AND dr."positionLon" IS NOT NULL
+    ORDER BY dr."vesselCode", dr."reportDate" DESC
   `;
 }
 
