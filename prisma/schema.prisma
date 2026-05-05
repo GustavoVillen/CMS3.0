@@ -1001,6 +1001,7 @@ model MaintenancePlan {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
+  @@index([tenantId, deletedAt, nextDueDate])
 }
 
 model WorkOrder {
@@ -1384,6 +1385,7 @@ model DailyEquipmentHours {
 
   @@index([dailyReportId])
   @@index([tenantId, vesselCode])
+  @@index([assetId, tenantId, createdAt])
 }
 
 model DailyMaintenanceEntry {
