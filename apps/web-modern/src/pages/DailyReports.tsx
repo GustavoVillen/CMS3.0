@@ -1550,7 +1550,8 @@ export const DailyReportsPage: React.FC = () => {
 
   const canManage = user?.role === "TENANT_ADMIN"
     || user?.role === "MAINTENANCE_MANAGER"
-    || user?.role === "FLEET_SUPERINTENDENT";
+    || user?.role === "FLEET_SUPERINTENDENT"
+    || user?.role === "TECHNICIAN_OPERATOR";
 
   const COLUMNS: Column<DailyReport>[] = [
     {
