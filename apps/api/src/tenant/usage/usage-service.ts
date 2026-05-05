@@ -303,20 +303,20 @@ export async function getLatestVesselPositions(): Promise<VesselPositionRow[]> {
   const prisma = getPrismaClient();
   if (!prisma) return [];
 
+  // Latest position per vessel per tenant, sourced from daily reports.
   return prisma.$queryRaw<VesselPositionRow[]>`
-    SELECT DISTINCT ON ("vesselCode", "tenantSlug")
-      "vesselCode",
-      "tenantSlug",
-      "userEmail",
-      "latitude",
-      "longitude",
-      "createdAt" AS "seenAt"
-    FROM "UsageEvent"
-    WHERE "userRole" = 'TECHNICIAN_OPERATOR'
-      AND "latitude"   IS NOT NULL
-      AND "longitude"  IS NOT NULL
-      AND "vesselCode" IS NOT NULL
-    ORDER BY "vesselCode", "tenantSlug", "createdAt" DESC
+    SELECT DISTINCT ON (dr."vesselCode", t."slug")
+      dr."vesselCode"                        AS "vesselCode",
+      t."slug"                               AS "tenantSlug",
+      dr."reportDate"::text                  AS "userEmail",
+      dr."positionLat"                       AS "latitude",
+      dr."positionLon"                       AS "longitude",
+      dr."reportDate"::timestamptz           AS "seenAt"
+    FROM "DailyReport" dr
+    JOIN "Tenant" t ON t."id" = dr."tenantId"
+    WHERE dr."positionLat" IS NOT NULL
+      AND dr."positionLon" IS NOT NULL
+    ORDER BY dr."vesselCode", t."slug", dr."reportDate" DESC
   `;
 }
 
@@ -326,19 +326,17 @@ export async function getLatestVesselPositionsByTenant(tenantId: string): Promis
 
   return prisma.$queryRaw<VesselPositionRow[]>`
     SELECT DISTINCT ON ("vesselCode")
-      "vesselCode",
-      "tenantSlug",
-      "userEmail",
-      "latitude",
-      "longitude",
-      "createdAt" AS "seenAt"
-    FROM "UsageEvent"
-    WHERE "tenantId"   = ${tenantId}
-      AND "userRole"   = 'TECHNICIAN_OPERATOR'
-      AND "latitude"   IS NOT NULL
-      AND "longitude"  IS NOT NULL
-      AND "vesselCode" IS NOT NULL
-    ORDER BY "vesselCode", "createdAt" DESC
+      "vesselCode"                  AS "vesselCode",
+      ''                            AS "tenantSlug",
+      "reportDate"::text            AS "userEmail",
+      "positionLat"                 AS "latitude",
+      "positionLon"                 AS "longitude",
+      "reportDate"::timestamptz     AS "seenAt"
+    FROM "DailyReport"
+    WHERE "tenantId"    = ${tenantId}
+      AND "positionLat" IS NOT NULL
+      AND "positionLon" IS NOT NULL
+    ORDER BY "vesselCode", "reportDate" DESC
   `;
 }
 

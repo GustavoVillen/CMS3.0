@@ -72,11 +72,11 @@ export function VesselMapPage() {
     map.eachLayer(layer => { if (layer instanceof L.Marker) map.removeLayer(layer); });
 
     positions.forEach(pos => {
+      const reportDate = pos.userEmail ? new Date(pos.userEmail).toLocaleDateString() : fmtAge(pos.seenAt);
       const popup = `
         <div style="font-family:monospace;font-size:13px;line-height:1.7">
           <strong style="font-size:15px">🚢 ${pos.vesselCode}</strong><br/>
-          <span>${pos.userEmail}</span><br/>
-          <span style="color:#888;font-size:11px">${fmtAge(pos.seenAt)}</span><br/>
+          <span style="color:#888;font-size:11px">Último reporte: ${reportDate}</span><br/>
           <span style="color:#888;font-size:11px">${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)}</span>
         </div>`;
       L.marker([pos.latitude, pos.longitude]).addTo(map).bindPopup(popup);
@@ -125,16 +125,16 @@ export function VesselMapPage() {
             <thead>
               <tr className="border-b border-white/10 bg-white/5">
                 <th className="px-4 py-2 text-left text-white/30 font-medium">Buque</th>
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Usuario a bordo</th>
+                <th className="px-4 py-2 text-left text-white/30 font-medium">Último reporte</th>
                 <th className="px-4 py-2 text-left text-white/30 font-medium">Lat / Long</th>
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Última señal</th>
+                <th className="px-4 py-2 text-left text-white/30 font-medium">Posición</th>
               </tr>
             </thead>
             <tbody>
               {positions.map((p, i) => (
                 <tr key={i} className="border-b border-white/5 hover:bg-white/3 transition-colors">
                   <td className="px-4 py-2 font-mono font-bold text-white">{p.vesselCode}</td>
-                  <td className="px-4 py-2 text-white/50">{p.userEmail}</td>
+                  <td className="px-4 py-2 text-white/50">{p.userEmail ? new Date(p.userEmail).toLocaleDateString() : "—"}</td>
                   <td className="px-4 py-2 font-mono text-white/40">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</td>
                   <td className="px-4 py-2 text-white/30">{fmtAge(p.seenAt)}</td>
                 </tr>
