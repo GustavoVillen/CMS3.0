@@ -1,5 +1,26 @@
 HISTORY.txt
 
+[2026-05-04] Pre-presentación: i18n completo, índices DB, paginación Deferrals
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/web-modern/src/lib/i18n.tsx: claves nuevas error.userRequired, error.vesselAssignedRequired + reestructuración
+- apps/web-modern/src/pages/Capa.tsx: ai.capaDisclaimer via t()
+- apps/web-modern/src/pages/Team.tsx: error.userRequired, error.emailRequired, confirm.deleteTeamMember via t()
+- apps/web-modern/src/pages/Spares.tsx: error.vesselRequired/skuRequired/nameRequired/unitRequired/invalidQuantity/sameQuantity via t()
+- apps/web-modern/src/pages/SpareRequests.tsx: error.skuNameUnitRequired/vesselAssignedRequired/selectSpare/rejectReasonRequired + confirm.confirmReceipt/confirmRejection via t()
+- apps/web-modern/src/pages/Defects.tsx: 5 strings → t()
+- apps/web-modern/src/pages/Deferrals.tsx: 5 strings → t()
+- apps/api/src/tenant/deferrals/deferrals-service.ts: take:500 para evitar consulta sin límite
+- prisma/schema.prisma: 5 índices nuevos (WorkOrder, Defect, Deferral, InspectionLog, Attachment) + índices DailyEquipmentHours y MaintenancePlan del commit anterior
+- generated/prisma: regenerado localmente para incluir latitude/longitude/userRole de UsageEvent (gitignored, VPS regenera via db push)
+
+FUNCIONALIDAD:
+- Todos los mensajes de error y validación en Capa, Team, Spares, SpareRequests, Defects y Deferrals usan el sistema i18n
+- Los tenants con locale pt/en verán mensajes traducidos en sus idiomas
+- Consulta de Deferrals bounded a 500 registros máximo
+- 5 índices DB adicionales mejoran rendimiento en Defects, Deferrals, WorkOrders, Inspecciones y Attachments
+
 [2026-05-04] Fix nginx VPS: frontend no se servía, API quedaba expuesta en raíz
 Agent: Claude Sonnet 4.6
 
