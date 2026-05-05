@@ -116,7 +116,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
     : "";
 
   const handleCreate = async () => {
-    if (!displayName.trim()) { setError("El USER es requerido."); return; }
+    if (!displayName.trim()) { setError(t("error.userRequired")); return; }
     setSaving(true); setError(null);
     try {
       await api.post("/app/team/members", { firstName: displayName.trim(), email: email.trim() || undefined, role });
@@ -130,7 +130,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
   };
 
   const handleInvite = async () => {
-    if (!email.trim()) { setError("El email es requerido para invitar."); return; }
+    if (!email.trim()) { setError(t("error.emailRequired")); return; }
     setSaving(true); setError(null);
     try {
       const res = await api.post<{ token: string; email: string }>("/app/team/invitations", { email: email.trim(), role });
@@ -547,7 +547,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                 </button>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-xs text-text-industrial/60">¿Eliminar a <span className="text-white font-semibold">{fullName(member)}</span> del equipo? Esta acción no se puede deshacer.</p>
+                  <p className="text-xs text-text-industrial/60">{t("confirm.deleteTeamMember").replace("{name}", fullName(member))}</p>
                   <div className="flex gap-2">
                     <button onClick={() => setConfirmDeactivate(false)} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
                     <button

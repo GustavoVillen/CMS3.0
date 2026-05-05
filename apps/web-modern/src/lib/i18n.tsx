@@ -594,6 +594,45 @@ const dict = {
   "common.no":             { es: "No",                  en: "No",                 pt: "Não" },
   "common.ok":             { es: "OK",                  en: "OK",                 pt: "OK" },
 
+  // Validation errors
+  "error.vesselRequired":       { es: "Seleccionar un buque es requerido.",      en: "Vessel is required.",                    pt: "Selecionar uma embarcação é obrigatório." },
+  "error.assetRequired":        { es: "Seleccionar un equipo es requerido.",     en: "Equipment is required.",                 pt: "Selecionar um equipamento é obrigatório." },
+  "error.classificationRequired":{ es: "La clasificación es requerida.",         en: "Classification is required.",            pt: "A classificação é obrigatória." },
+  "error.descriptionRequired":  { es: "La descripción es requerida.",            en: "Description is required.",               pt: "A descrição é obrigatória." },
+  "error.briefDescRequired":    { es: "La descripción breve es requerida.",      en: "Brief description is required.",         pt: "A descrição breve é obrigatória." },
+  "error.skuRequired":          { es: "SKU es requerido.",                       en: "SKU is required.",                       pt: "SKU é obrigatório." },
+  "error.nameRequired":         { es: "Nombre es requerido.",                    en: "Name is required.",                      pt: "Nome é obrigatório." },
+  "error.unitRequired":         { es: "Unidad es requerida.",                    en: "Unit is required.",                      pt: "Unidade é obrigatória." },
+  "error.skuNameUnitRequired":  { es: "SKU, nombre y unidad son requeridos.",    en: "SKU, name and unit are required.",        pt: "SKU, nome e unidade são obrigatórios." },
+  "error.invalidQuantity":      { es: "Cantidad inválida.",                      en: "Invalid quantity.",                      pt: "Quantidade inválida." },
+  "error.sameQuantity":         { es: "La cantidad ingresada es igual al stock actual. No se realizó ningún cambio.", en: "Quantity entered equals current stock. No changes made.", pt: "A quantidade inserida é igual ao estoque atual. Nenhuma alteração foi feita." },
+  "error.selectSpare":          { es: "Seleccioná un repuesto del catálogo.",    en: "Select a spare part from the catalog.",  pt: "Selecione uma peça do catálogo." },
+  "error.rejectReasonRequired": { es: "La razón de rechazo es requerida.",       en: "Rejection reason is required.",          pt: "O motivo de rejeição é obrigatório." },
+  "error.emailRequired":        { es: "El email es requerido para invitar.",     en: "Email is required to send an invitation.", pt: "O email é obrigatório para convidar." },
+  "error.userRequired":         { es: "El nombre de usuario es requerido.",      en: "User name is required.",                 pt: "O nome de usuário é obrigatório." },
+  "error.vesselAssignedRequired": { es: "La solicitud debe tener un vessel asignado.", en: "The request must have an assigned vessel.", pt: "A solicitação deve ter uma embarcação atribuída." },
+  "error.aiNoAnalysis":         { es: "La IA no devolvió un análisis estructurado. Intentá de nuevo.", en: "AI did not return a structured analysis. Please try again.", pt: "A IA não retornou uma análise estruturada. Tente novamente." },
+
+  // Confirmations
+  "confirm.approveRca":         { es: "¿Aprobar el análisis RCA? Esta acción se registra con tu usuario y la fecha actual.", en: "Approve RCA analysis? This action is recorded with your user and current date.", pt: "Aprovar a análise RCA? Esta ação é registrada com seu usuário e a data atual." },
+  "confirm.deleteTeamMember":   { es: "¿Eliminar a {name} del equipo? Esta acción no se puede deshacer.", en: "Remove {name} from the team? This action cannot be undone.", pt: "Remover {name} da equipe? Esta ação não pode ser desfeita." },
+  "confirm.cancelDeferral":     { es: "Cancelar postergación",                  en: "Cancel deferral",                        pt: "Cancelar adiamento" },
+  "confirm.confirmQ":           { es: "¿Confirmar?",                            en: "Confirm?",                               pt: "Confirmar?" },
+  "confirm.confirmReceipt":     { es: "Confirmar recepción",                    en: "Confirm receipt",                        pt: "Confirmar recebimento" },
+  "confirm.confirmRejection":   { es: "Confirmar rechazo",                      en: "Confirm rejection",                      pt: "Confirmar rejeição" },
+  "confirm.registering":        { es: "Registrando…",                           en: "Registering…",                           pt: "Registrando…" },
+
+  // Labels (status display)
+  "label.approvedBy":           { es: "Aprobado por",                           en: "Approved by",                            pt: "Aprovado por" },
+  "label.rejectedBy":           { es: "Rechazado por",                          en: "Rejected by",                            pt: "Rejeitado por" },
+  "label.decision":             { es: "Decisión",                               en: "Decision",                               pt: "Decisão" },
+
+  // AI disclaimer
+  "ai.capaDisclaimer":          { es: "La IA sugiere acciones correctivas y preventivas. Siempre validar con criterio técnico.", en: "AI suggests corrective and preventive actions. Always validate with technical criteria.", pt: "A IA sugere ações corretivas e preventivas. Sempre valide com critério técnico." },
+
+  // Empty states (additional)
+  "empty.spareRequests":        { es: "No hay solicitudes de repuestos.",        en: "No spare requests.",                     pt: "Sem solicitações de peças." },
+
   // Work Order create/edit modal
   "wo.modal.title":            { es: "Nueva Orden de Trabajo", en: "New Work Order",       pt: "Nova Ordem de Serviço" },
   "wo.modal.fromSource":       { es: "Desde",                  en: "From",                 pt: "De" },

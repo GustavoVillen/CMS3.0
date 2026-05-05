@@ -153,6 +153,7 @@ interface SpareModalProps {
 const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const isNew = spare === null;
   const { user } = useAuth();
+  const t = useT();
   const canAdjustStock = !isNew && (user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT");
 
   const [vesselCode,              setVesselCode]              = useState(spare?.vesselCode              ?? "");
@@ -235,10 +236,10 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
         sfiCode:                sfiCode.trim() || null,
         leadTimeDays:           leadTimeDays.trim() ? parseInt(leadTimeDays, 10) : null,
       };
-      if (!payload.vesselCode) { setError("Vessel es requerido."); setSaving(false); return; }
-      if (!payload.sku)        { setError("SKU es requerido.");    setSaving(false); return; }
-      if (!payload.name)       { setError("Nombre es requerido."); setSaving(false); return; }
-      if (!payload.unit)       { setError("Unidad es requerida."); setSaving(false); return; }
+      if (!payload.vesselCode) { setError(t("error.vesselRequired")); setSaving(false); return; }
+      if (!payload.sku)        { setError(t("error.skuRequired"));    setSaving(false); return; }
+      if (!payload.name)       { setError(t("error.nameRequired"));   setSaving(false); return; }
+      if (!payload.unit)       { setError(t("error.unitRequired"));   setSaving(false); return; }
 
       const result = isNew
         ? await api.post<Spare>("/app/pms/spares", payload)
@@ -462,7 +463,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
                 disabled={adjSaving}
                 onClick={async () => {
                   const newQty = parseFloat(adjQty);
-                  if (isNaN(newQty) || newQty < 0) { setAdjError("Cantidad inválida."); return; }
+                  if (isNaN(newQty) || newQty < 0) { setAdjError(t("error.invalidQuantity")); return; }
                   setAdjSaving(true); setAdjError(null); setAdjSuccess(false);
                   try {
                     const currentOnHand = spare.onHand;
@@ -483,7 +484,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
                       setAdjNotes("");
                       onSaved({ ...spare, onHand: newQty, available: newQty });
                     } else {
-                      setAdjError("La cantidad ingresada es igual al stock actual. No se realizó ningún cambio.");
+                      setAdjError(t("error.sameQuantity"));
                     }
                   } catch (e) {
                     setAdjError(e instanceof Error ? e.message : "Error al ajustar stock.");

@@ -183,6 +183,7 @@ const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreated }) => {
+  const t = useT();
   const [vessels, setVessels]                 = useState<{ code: string; name: string }[]>([]);
   const [assets, setAssets]                   = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets]     = useState(false);
@@ -241,10 +242,10 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vesselCode)           { setErr("Seleccionar un buque es requerido."); return; }
-    if (!assetId)              { setErr("Seleccionar un equipo es requerido."); return; }
-    if (!classification.trim()) { setErr("La clasificación es requerida."); return; }
-    if (!description.trim())   { setErr("La descripción es requerida."); return; }
+    if (!vesselCode)           { setErr(t("error.vesselRequired")); return; }
+    if (!assetId)              { setErr(t("error.assetRequired")); return; }
+    if (!classification.trim()) { setErr(t("error.classificationRequired")); return; }
+    if (!description.trim())   { setErr(t("error.descriptionRequired")); return; }
     setSaving(true); setErr(null);
     try {
       const defect = await api.post<Defect>("/app/pms/defects", {
@@ -510,10 +511,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           if (fields.rcaRootCause)         setRcaRootCause(fields.rcaRootCause);
           if (fields.rcaPreventiveActions) setRcaPreventiveActions(fields.rcaPreventiveActions);
         } catch {
-          setRcaAnalysisError("No se pudieron parsear los campos del análisis.");
+          setRcaAnalysisError(t("common.saveError"));
         }
       } else {
-        setRcaAnalysisError("La IA no devolvió un análisis estructurado. Intentá de nuevo.");
+        setRcaAnalysisError(t("error.aiNoAnalysis"));
       }
     } catch (e: any) {
       setRcaAnalysisError(e?.message ?? "Error al conectar con el copiloto.");
@@ -536,7 +537,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   } : null);
 
   const patchDefect = useCallback(async () => {
-    if (!description.trim()) { setActionError("La descripción breve es requerida."); return false; }
+    if (!description.trim()) { setActionError(t("error.briefDescRequired")); return false; }
     if (!classification.trim()) { setActionError(t("def.classification")); return false; }
     setSaving(true); setActionError(null);
     try {
@@ -821,7 +822,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!confirm("¿Aprobar el análisis RCA? Esta acción se registra con tu usuario y la fecha actual.")) return;
+                    if (!confirm(t("confirm.approveRca"))) return;
                     try {
                       const now = new Date().toISOString();
                       await api.patch(`/app/pms/defects/${defect.id}`, {

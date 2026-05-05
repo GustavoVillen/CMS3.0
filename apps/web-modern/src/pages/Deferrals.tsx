@@ -199,7 +199,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Aprobado por *</label>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.approvedBy")} *</label>
             <input type="text" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder="Nombre y apellido del aprobador" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           <div className="space-y-1.5">
@@ -272,7 +272,7 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Rechazado por *</label>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.rejectedBy")} *</label>
             <input type="text" value={rejectorName} onChange={e => setRejectorName(e.target.value)} placeholder="Nombre y apellido del rechazador" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           <div className="space-y-1.5">
@@ -638,7 +638,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
               {deferral.decisionAt && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">
-                    {deferral.status === "APPROVED" ? "Aprobado por" : deferral.status === "REJECTED" ? "Rechazado por" : "Decisión"}
+                    {deferral.status === "APPROVED" ? t("label.approvedBy") : deferral.status === "REJECTED" ? t("label.rejectedBy") : t("label.decision")}
                   </p>
                   <p className="text-sm text-white">
                     {deferral.status === "APPROVED"
@@ -714,7 +714,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   }`}
                 >
                   {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  {confirmCancel ? "¿Confirmar?" : "Cancelar postergación"}
+                  {confirmCancel ? t("confirm.confirmQ") : t("confirm.cancelDeferral")}
                 </button>
               )}
               {showRequestedActions && (

@@ -1064,6 +1064,7 @@ model WorkOrder {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
+  @@index([tenantId, openDate])
 }
 
 model Defect {
@@ -1105,6 +1106,7 @@ model Defect {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
+  @@index([tenantId, reportedAt])
 }
 
 model Deferral {
@@ -1146,6 +1148,7 @@ model Deferral {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
+  @@index([tenantId, requestedAt])
 }
 
 model CapaRecord {
@@ -1235,6 +1238,7 @@ model InspectionLog {
 
   @@index([tenantId])
   @@index([inspectionId])
+  @@index([tenantId, observedAt])
 }
 
 model Certificate {
@@ -1741,6 +1745,7 @@ model Attachment {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([targetType, targetId])
+  @@index([tenantId, uploadedAt])
 }
 
 // ─── Block 09: AI Documents & Prompt Governance ───────────────────────────────

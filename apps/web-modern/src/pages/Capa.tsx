@@ -362,7 +362,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
 
             {!isTerminal && (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/20 bg-accent/5 px-3 py-2">
-                <p className="text-xs text-text-industrial/80">La IA sugiere acciones correctivas y preventivas. Siempre validar con criterio técnico.</p>
+                <p className="text-xs text-text-industrial/80">{t("ai.capaDisclaimer")}</p>
                 <button
                   type="button"
                   onClick={() => setRequestMessage(`Analizá esta CAPA y ayúdame a refinar el título, descripción y definir el responsable y fecha límite apropiados.`)}

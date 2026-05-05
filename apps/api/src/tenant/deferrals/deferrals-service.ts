@@ -23,7 +23,7 @@ export async function listTenantDeferrals(session: TenantAccessSession, filters:
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
 
-  const deferrals = await prisma.deferral.findMany({ where, orderBy: { requestedAt: "desc" } });
+  const deferrals = await prisma.deferral.findMany({ where, orderBy: { requestedAt: "desc" }, take: 500 });
   if (deferrals.length === 0) return [];
 
   // Batch-resolve source codes (one query per type)

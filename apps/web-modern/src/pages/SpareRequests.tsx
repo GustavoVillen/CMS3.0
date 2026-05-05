@@ -96,6 +96,7 @@ interface ItemsTabProps {
 }
 
 const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onItemsChange, vesselCode }) => {
+  const t = useT();
   const [qty,      setQty]     = useState("1");
   const [notes,    setNotes]   = useState("");
   const [adding,   setAdding]  = useState(false);
@@ -148,9 +149,9 @@ const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onIte
 
   const handleRegisterSpare = async () => {
     if (!newSpareSku.trim() || !newSpareName.trim() || !newSpareUnit.trim()) {
-      setNewSpareErr("SKU, nombre y unidad son requeridos."); return;
+      setNewSpareErr(t("error.skuNameUnitRequired")); return;
     }
-    if (!vesselCode) { setNewSpareErr("La solicitud debe tener un vessel asignado."); return; }
+    if (!vesselCode) { setNewSpareErr(t("error.vesselAssignedRequired")); return; }
     setSavingSpare(true); setNewSpareErr(null);
     try {
       const created = await api.post<SpareOption>("/app/pms/spares", {
@@ -175,7 +176,7 @@ const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onIte
 
   const handleAdd = async () => {
     setAddErr(null);
-    if (!spareId) { setAddErr("Seleccioná un repuesto del catálogo."); return; }
+    if (!spareId) { setAddErr(t("error.selectSpare")); return; }
     setAdding(true);
     try {
       await api.post(`/app/pms/spare-requests/${request.id}/items`, {
@@ -238,7 +239,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
                             onClick={() => { setReceiving(item.id); setReceivedAt(new Date().toISOString().slice(0,10)); setReceiptNotes(""); setDeliverErr(null); }}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-lg hover:bg-yellow-500/20 transition-all"
                           >
-                            <PackageCheck className="w-3 h-3" /> Confirmar recepción
+                            <PackageCheck className="w-3 h-3" /> {t("confirm.confirmReceipt")}
                           </button>
                         )}
                         {canEdit && (
@@ -409,6 +410,7 @@ interface ModalProps {
 const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) => {
   const isNew = request === null;
   const { user } = useAuth();
+  const t = useT();
   const canApprove = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"].includes(user?.role ?? "");
   const [tab, setTab] = useState<"data" | "items">("data");
 
@@ -458,7 +460,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
   };
 
   const doReject = async () => {
-    if (!rejectReason.trim()) { setError("La razón de rechazo es requerida."); return; }
+    if (!rejectReason.trim()) { setError(t("error.rejectReasonRequired")); return; }
     setSaving(true);
     try {
       const result = await api.post<SpareRequest>(`/app/pms/spare-requests/${request!.id}/reject`, { reason: rejectReason.trim() });
@@ -561,7 +563,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
               <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Motivo del rechazo…" />
               <div className="flex gap-2">
                 <button onClick={() => void doReject()} disabled={saving} className="px-3 py-1.5 text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 disabled:opacity-40">
-                  Confirmar rechazo
+                  {t("confirm.confirmRejection")}
                 </button>
                 <button onClick={() => setRejecting(false)} className="px-3 py-1.5 text-xs text-white/40 hover:text-white border border-white/10 rounded-lg">
                   Cancelar
