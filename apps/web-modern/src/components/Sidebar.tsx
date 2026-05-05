@@ -163,7 +163,7 @@ export const Sidebar: React.FC = () => {
                     <img
                       src={(tenant.logoUrlLight || tenant.logoUrl)!}
                       alt=""
-                      className="w-4 h-4 object-contain shrink-0"
+                      className="w-8 h-8 object-contain shrink-0"
                     />
                   )}
                   <p className="text-xs font-semibold text-white/70 leading-tight truncate">{tenant.name}</p>
