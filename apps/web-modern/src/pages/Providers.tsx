@@ -283,29 +283,6 @@ export const ProvidersPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
 
-        {/* Vessel filter */}
-        <input
-          value={vesselInput}
-          onChange={e => setVesselInput(e.target.value.toUpperCase())}
-          onKeyDown={e => { if (e.key === "Enter") setVesselFilter(vesselInput.trim()); }}
-          onBlur={() => setVesselFilter(vesselInput.trim())}
-          placeholder="Vessel…"
-          className="w-28 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-        />
-
-        {/* Category filter — dynamic from loaded data */}
-        <select value={toFilterSelectValue(catFilter)} onChange={e => setCatFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>Todas las categorías</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        {/* Status filter */}
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="ACTIVE">{t("status.active")}</option>
-          <option value="INACTIVE">{t("status.inactive")}</option>
-        </select>
-
         {/* Create */}
         <button onClick={() => setSelected("new")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
           <Plus className="w-3.5 h-3.5" /> Nuevo proveedor

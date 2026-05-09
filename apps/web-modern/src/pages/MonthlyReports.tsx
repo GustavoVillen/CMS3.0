@@ -601,16 +601,6 @@ export const MonthlyReportsPage: React.FC = () => {
       )}
 
       <PageHeader icon={FileBarChart} title={t("page.reports") || "Reportes Mensuales"} total={data?.total} onReload={reload}>
-        <input
-          value={vesselFilter}
-          onChange={e => setVesselFilter(e.target.value.toUpperCase())}
-          placeholder="Filtrar por vessel…"
-          className="w-36 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-        />
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value="">Todos los estados</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
         <button
           onClick={() => setSelected("new")}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110"

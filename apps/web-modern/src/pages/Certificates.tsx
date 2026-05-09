@@ -451,29 +451,6 @@ export const CertificatesPage: React.FC = () => {
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        <select
-          value={toFilterSelectValue(statusFilter)}
-          onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
-        >
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="ACTIVE">{t("status.active")}</option>
-          <option value="EXPIRING_SOON">{t("status.expiring")}</option>
-          <option value="EXPIRED">{t("status.expired")}</option>
-        </select>
-        <div className="flex items-center gap-2">
-          <input
-            value={vesselInput}
-            onChange={e => setVesselInput(e.target.value.toUpperCase())}
-            onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }}
-            placeholder={t("common.filterByVessel")}
-            className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-          />
-          <button onClick={() => updateFilters({ vesselCode: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
-          {(statusFilter || vesselFilter) && (
-            <button onClick={() => updateFilters({ status: "", vesselCode: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
-          )}
-        </div>
       </PageHeader>
 
       <DataTable

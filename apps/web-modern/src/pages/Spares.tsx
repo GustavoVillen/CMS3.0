@@ -624,16 +624,6 @@ export const SparesPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
 
-        {/* Vessel filter */}
-        <input
-          value={vesselInput}
-          onChange={e => setVesselInput(e.target.value.toUpperCase())}
-          onKeyDown={e => { if (e.key === "Enter") setVesselFilter(vesselInput.trim()); }}
-          onBlur={() => setVesselFilter(vesselInput.trim())}
-          placeholder="Vessel…"
-          className="w-28 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-        />
-
         {/* Criticality filter */}
         <select value={toFilterSelectValue(criticalityFilter)} onChange={e => setCriticalityFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>Toda criticidad</option>

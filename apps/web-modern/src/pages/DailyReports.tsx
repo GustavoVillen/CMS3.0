@@ -1587,21 +1587,6 @@ export const DailyReportsPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={FileText} title={t("page.dailyReports")} total={data?.total} onReload={reload}>
-        <input
-          type="text"
-          value={vesselFilter}
-          onChange={e => setFilter("vesselCode", e.target.value)}
-          placeholder={t("common.filterVesselShort")}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-36"
-        />
-        <select
-          value={toFilterSelectValue(statusFilter)}
-          onChange={e => setFilter("status", fromFilterSelectValue(e.target.value))}
-          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
-        >
-          <option value={FILTER_ALL_VALUE}>Todos los estados</option>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
         {canManage && (
           <button
             onClick={() => setDetailReport("new")}

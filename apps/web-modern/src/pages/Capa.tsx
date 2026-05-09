@@ -529,30 +529,6 @@ export const CapaPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={ShieldCheck} title={t("page.capa")} total={data?.total} onReload={reload}>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="OPEN">{t("status.open")}</option>
-          <option value="IN_PROGRESS">{t("status.inProgress")}</option>
-          <option value="PENDING_VERIFICATION">PENDING_VERIFICATION</option>
-          <option value="CLOSED">{t("status.closed")}</option>
-          <option value="CANCELLED">{t("status.cancelled")}</option>
-        </select>
-
-        <select value={toFilterSelectValue(priorityFilter)} onChange={e => updateFilters({ priority: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="LOW">LOW</option>
-          <option value="MEDIUM">MEDIUM</option>
-          <option value="HIGH">HIGH</option>
-          <option value="CRITICAL">CRITICAL</option>
-        </select>
-
-        <div className="flex items-center gap-2">
-          <input value={vesselInput} onChange={e => setVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
-          <button onClick={() => updateFilters({ vesselCode: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
-          {(statusFilter || priorityFilter || vesselFilter) && (
-            <button onClick={() => updateFilters({ status: "", priority: "", vesselCode: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
-          )}
-        </div>
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del CAPA...</div>}
