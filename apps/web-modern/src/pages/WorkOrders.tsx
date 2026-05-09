@@ -101,13 +101,16 @@ function CategoryBadge({ type }: { type: string }) {
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
 
-function WoStatusBadge({ status, dueDate }: { status: string; dueDate: string | null }) {
+function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; dueDate: string | null; deferralStatus?: string | null }) {
   const t = useT();
   const isClosed = status === "CLOSED" || status === "CANCELLED";
   const isOpen   = !isClosed;
   const isOverdue = isOpen && !!dueDate && parseLocalDate(dueDate) < new Date();
   if (isClosed)          return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">{t("wo.status.closed")}</span>;
-  if (status === "ON_HOLD") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
+  if (status === "ON_HOLD") {
+    if (deferralStatus === "REJECTED") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("wo.status.postponedRejected")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
+  }
   if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
   return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("wo.status.open")}</span>;
 }
@@ -619,7 +622,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("wo.entityLabel")}</p>
               <h2 className="text-sm font-bold text-white font-mono">{workOrder.workOrderCode}</h2>
             </div>
-            <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} />
+            <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
@@ -640,7 +643,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
                 [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-white"],
                 [t("wo.modal.type"),       null, null, <CategoryBadge key="cat" type={workOrder.type} />],
-                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} />],
+                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
                 [t("wo.modal.priority"),   workOrder.priority,              "text-white"],
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-white"],
                 [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-white"],
@@ -1197,18 +1200,18 @@ export const WorkOrdersPage: React.FC = () => {
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
 
-  // Map of workOrderId → {id, deferralCode} for ON_HOLD WOs
-  const [deferralMap, setDeferralMap] = useState<Map<string, { id: string; deferralCode: string }>>(new Map());
+  // Map of workOrderId → {id, deferralCode, status} for ON_HOLD WOs
+  const [deferralMap, setDeferralMap] = useState<Map<string, { id: string; deferralCode: string; status: string }>>(new Map());
   useEffect(() => {
     const onHoldIds = (data?.items ?? []).filter(w => w.status === "ON_HOLD").map(w => w.id);
     if (onHoldIds.length === 0) { setDeferralMap(new Map()); return; }
     let cancelled = false;
-    api.get<{ items: { id: string; deferralCode: string; sourceId: string }[] }>("/app/pms/deferrals")
+    api.get<{ items: { id: string; deferralCode: string; sourceId: string; status: string }[] }>("/app/pms/deferrals")
       .then(r => {
         if (cancelled) return;
-        const map = new Map<string, { id: string; deferralCode: string }>();
+        const map = new Map<string, { id: string; deferralCode: string; status: string }>();
         for (const d of r.items ?? []) {
-          if (onHoldIds.includes(d.sourceId)) map.set(d.sourceId, { id: d.id, deferralCode: d.deferralCode });
+          if (onHoldIds.includes(d.sourceId)) map.set(d.sourceId, { id: d.id, deferralCode: d.deferralCode, status: d.status });
         }
         setDeferralMap(map);
       })
@@ -1301,7 +1304,7 @@ export const WorkOrdersPage: React.FC = () => {
         const deferral = r.status === "ON_HOLD" ? deferralMap.get(r.id) : undefined;
         return (
           <div className="flex flex-col items-start gap-1">
-            <WoStatusBadge status={r.status} dueDate={r.dueDate} />
+            <WoStatusBadge status={r.status} dueDate={r.dueDate} deferralStatus={deferral?.status} />
             {deferral && (
               <button
                 type="button"

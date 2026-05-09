@@ -713,10 +713,11 @@ const dict = {
   "wo.col.status":             { es: "Estado",                 en: "Status",               pt: "Estado" },
 
   // Work Order status badges
-  "wo.status.closed":          { es: "Cerrada",                en: "Closed",               pt: "Fechada" },
-  "wo.status.postponed":       { es: "Postergada",             en: "Postponed",            pt: "Adiada" },
-  "wo.status.overdue":         { es: "Vencida",                en: "Overdue",              pt: "Vencida" },
-  "wo.status.open":            { es: "Abierta",                en: "Open",                 pt: "Aberta" },
+  "wo.status.closed":              { es: "Cerrada",                   en: "Closed",                  pt: "Fechada" },
+  "wo.status.postponed":           { es: "Postergada",                en: "Postponed",               pt: "Adiada" },
+  "wo.status.postponedRejected":   { es: "Posterg. rechazada",        en: "Deferral rejected",        pt: "Adiamento rejeitado" },
+  "wo.status.overdue":             { es: "Vencida",                   en: "Overdue",                 pt: "Vencida" },
+  "wo.status.open":                { es: "Abierta",                   en: "Open",                    pt: "Aberta" },
 
   // Deferral badges (vinculados a WO ON_HOLD)
   "wo.deferral.requested":     { es: "Solicitada",             en: "Requested",            pt: "Solicitada" },
