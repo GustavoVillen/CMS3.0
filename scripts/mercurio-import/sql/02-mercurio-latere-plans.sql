@@ -1042,6 +1042,483 @@ BEGIN
     ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
     v_count := v_count + 1;
   END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 250h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-250H-M',
+      '[Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 250h', '• FILTRO DE ACEITE Y ACEITE — Cambio de filtro y aceite del carter
+• FILTRO AIRE — Cambio o limpeza del filtro',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      250.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 500h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-500H-M',
+      '[Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 500h', '• FILTRO COMBUSTIBLE — Cambio de filtros de gas-oil',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      500.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Inspección Cada 2000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-2000H-I',
+      '[Motor Auxiliar N°1 (Babor)] Inspección Cada 2000h', '• TERMOSTATO — Verificacion de funcionamiento
+• LUZ DE VALVULAS Y TIMING DE INYECTORES — Luz de valvulas y timing de inyectores - verificar luz 0,40y timing de inyectores',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      2000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 3000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-3000H-M',
+      '[Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 3000h', '• LIMPIEZA ENFRIADOR — Limpiar el enfriador de agua de mar',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      3000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-26000H-M',
+      '[Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 26000h', '• GENERADOR — Limpieza con electro cleaner
+• INYECTORES — Cambio por recorridos con elementos nuevos
+• GENERADOR — Cambio de rodamientos
+• GENERADOR — Damping - chequeo y cambio de damper antivibratorio de cigüeñal',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Inspección Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-26000H-I',
+      '[Motor Auxiliar N°1 (Babor)] Inspección Cada 26000h', '• MOVIMIENTOS, RECORRIDO COMPLETO — Recorrido,culata,piston,bielas, mediciones,cojinetes biela y bancada',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 18 meses
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-01' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-01-18M-M',
+      '[Motor Auxiliar N°1 (Babor)] Mantenimiento Cada 18 meses', '• BATERIA DE ARRANQUE — Reemplazo de bateria',
+      CAST('MONTHS' AS "MaintenancePlanTrigger"),
+      NULL, 18,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 250h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-250H-M',
+      '[Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 250h', '• FILTRO DE ACEITE Y ACEITE — Cambio de filtro y aceite del carter
+• FILTRO AIRE — Cambio o limpeza del filtro',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      250.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 500h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-500H-M',
+      '[Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 500h', '• FILTRO COMBUSTIBLE — Cambio de filtros de gas-oil',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      500.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Inspección Cada 2000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-2000H-I',
+      '[Motor Auxiliar N°2 (Estribor)] Inspección Cada 2000h', '• TERMOSTATO — Verificacion de funcionamiento
+• LUZ DE VALVULAS Y TIMING DE INYECTORES — Luz de valvulas y timing de inyectores - verificar luz 0,40y timing de inyectores',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      2000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 3000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-3000H-M',
+      '[Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 3000h', '• LIMPIEZA ENFRIADOR — Limpiar el enfriador de agua de mar',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      3000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-26000H-M',
+      '[Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 26000h', '• GENERADOR — Limpieza con electro cleaner
+• INYECTORES — Cambio por recorridos con elementos nuevos
+• GENERADOR — Cambio de rodamientos
+• GENERADOR — Damping - chequeo y cambio de damper antivibratorio de cigüeñal',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Inspección Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-26000H-I',
+      '[Motor Auxiliar N°2 (Estribor)] Inspección Cada 26000h', '• MOVIMIENTOS, RECORRIDO COMPLETO — Recorrido,culata,piston,bielas, mediciones,cojinetes biela y bancada',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 18 meses
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-02' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-02-18M-M',
+      '[Motor Auxiliar N°2 (Estribor)] Mantenimiento Cada 18 meses', '• BATERIA DE ARRANQUE — Reemplazo de bateria',
+      CAST('MONTHS' AS "MaintenancePlanTrigger"),
+      NULL, 18,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 250h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-250H-M',
+      '[Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 250h', '• FILTRO DE ACEITE Y ACEITE — Cambio de filtro y aceite del carter
+• FILTRO AIRE — Cambio o limpeza del filtro',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      250.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 500h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-500H-M',
+      '[Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 500h', '• FILTRO COMBUSTIBLE — Cambio de filtros de gas-oil',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      500.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Inspección Cada 2000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-2000H-I',
+      '[Motor Auxiliar N°3 (Puerto)] Inspección Cada 2000h', '• TERMOSTATO — Verificacion de funcionamiento
+• LUZ DE VALVULAS Y TIMING DE INYECTORES — Luz de valvulas y timing de inyectores - verificar luz 0,40y timing de inyectores',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      2000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 3000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-3000H-M',
+      '[Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 3000h', '• LIMPIEZA ENFRIADOR — Limpiar el enfriador de agua de mar',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      3000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-26000H-M',
+      '[Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 26000h', '• GENERADOR — Limpieza con electro cleaner
+• INYECTORES — Cambio por recorridos con elementos nuevos
+• GENERADOR — Cambio de rodamientos
+• GENERADOR — Damping - chequeo y cambio de damper antivibratorio de cigüeñal',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Inspección Cada 26000h
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-26000H-I',
+      '[Motor Auxiliar N°3 (Puerto)] Inspección Cada 26000h', '• MOVIMIENTOS, RECORRIDO COMPLETO — Recorrido,culata,piston,bielas, mediciones,cojinetes biela y bancada',
+      CAST('HOURS' AS "MaintenancePlanTrigger"),
+      26000.0, NULL,
+      CAST('INSPECTION' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
+  -- [Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 18 meses
+  SELECT id INTO v_asset_id FROM "Asset"
+   WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-AUX-03' AND "deletedAt" IS NULL LIMIT 1;
+  IF v_asset_id IS NOT NULL THEN
+    INSERT INTO "MaintenancePlan" (
+      id, "tenantId", "vesselCode", "assetId", "taskCode", title, description,
+      "triggerType", "frequencyHours", "frequencyMonths", "taskType", status, "executionStatus",
+      "createdAt", "createdByUserId", "updatedAt", "updatedByUserId"
+    )
+    VALUES (
+      gen_random_uuid()::text, v_tenant_id, 'LATERE', v_asset_id, 'LATERE-AUX-03-18M-M',
+      '[Motor Auxiliar N°3 (Puerto)] Mantenimiento Cada 18 meses', '• BATERIA DE ARRANQUE — Reemplazo de bateria',
+      CAST('MONTHS' AS "MaintenancePlanTrigger"),
+      NULL, 18,
+      CAST('MAINTENANCE' AS "TaskType"),
+      CAST('ACTIVE' AS "MaintenancePlanStatus"),
+      CAST('FUTURE' AS "ExecutionStatus"),
+      NOW(), v_user_id, NOW(), v_user_id
+    )
+    ON CONFLICT ("tenantId", "vesselCode", "taskCode") DO NOTHING;
+    v_count := v_count + 1;
+  END IF;
   -- [Cajas Reductoras] Inspección Mensual
   SELECT id INTO v_asset_id FROM "Asset"
    WHERE "tenantId" = v_tenant_id AND "vesselCode" = 'LATERE' AND "assetCode" = 'LATERE-SYS-CAJ' AND "deletedAt" IS NULL LIMIT 1;

@@ -37,6 +37,7 @@ run "05-mercurio-barcazas-assets.sql"
 run "06-mercurio-barcazas-plans.sql"
 run "07-mercurio-spares.sql"
 run "08-mercurio-certificates.sql"
+run "09-mercurio-fluid-sampling.sql"
 
 echo ""
 echo "═════════════════════════════════════════════════════════════════════════"

@@ -53,6 +53,15 @@ BEGIN
   VALUES (gen_random_uuid()::text, v_tenant_id, 'LATERE', 'LATERE-SYS-ALT', 'Alternadores', 'A', 'OPERATIONAL', false, false, NOW(), v_user_id, NOW(), v_user_id)
   ON CONFLICT ("tenantId", "vesselCode", "assetCode") DO NOTHING;
   INSERT INTO "Asset" (id, "tenantId", "vesselCode", "assetCode", name, criticality, status, "isSafetyCritical", "trackDailyReport", "createdAt", "createdByUserId", "updatedAt", "updatedByUserId")
+  VALUES (gen_random_uuid()::text, v_tenant_id, 'LATERE', 'LATERE-SYS-AUX-01', 'Motor Auxiliar N°1 (Babor)', 'A', 'OPERATIONAL', true, false, NOW(), v_user_id, NOW(), v_user_id)
+  ON CONFLICT ("tenantId", "vesselCode", "assetCode") DO NOTHING;
+  INSERT INTO "Asset" (id, "tenantId", "vesselCode", "assetCode", name, criticality, status, "isSafetyCritical", "trackDailyReport", "createdAt", "createdByUserId", "updatedAt", "updatedByUserId")
+  VALUES (gen_random_uuid()::text, v_tenant_id, 'LATERE', 'LATERE-SYS-AUX-02', 'Motor Auxiliar N°2 (Estribor)', 'A', 'OPERATIONAL', true, false, NOW(), v_user_id, NOW(), v_user_id)
+  ON CONFLICT ("tenantId", "vesselCode", "assetCode") DO NOTHING;
+  INSERT INTO "Asset" (id, "tenantId", "vesselCode", "assetCode", name, criticality, status, "isSafetyCritical", "trackDailyReport", "createdAt", "createdByUserId", "updatedAt", "updatedByUserId")
+  VALUES (gen_random_uuid()::text, v_tenant_id, 'LATERE', 'LATERE-SYS-AUX-03', 'Motor Auxiliar N°3 (Puerto)', 'A', 'OPERATIONAL', true, false, NOW(), v_user_id, NOW(), v_user_id)
+  ON CONFLICT ("tenantId", "vesselCode", "assetCode") DO NOTHING;
+  INSERT INTO "Asset" (id, "tenantId", "vesselCode", "assetCode", name, criticality, status, "isSafetyCritical", "trackDailyReport", "createdAt", "createdByUserId", "updatedAt", "updatedByUserId")
   VALUES (gen_random_uuid()::text, v_tenant_id, 'LATERE', 'LATERE-SYS-BBA', 'Bombas', 'B', 'OPERATIONAL', false, false, NOW(), v_user_id, NOW(), v_user_id)
   ON CONFLICT ("tenantId", "vesselCode", "assetCode") DO NOTHING;
   INSERT INTO "Asset" (id, "tenantId", "vesselCode", "assetCode", name, criticality, status, "isSafetyCritical", "trackDailyReport", "createdAt", "createdByUserId", "updatedAt", "updatedByUserId")

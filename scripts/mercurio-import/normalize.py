@@ -21,8 +21,6 @@ Normalize the raw JSON dumps into a unified structure:
 import json
 import re
 from pathlib import Path
-from datetime import datetime
-from collections import defaultdict
 
 DATA = Path(r"c:\NPMS\GPMS\scripts\mercurio-import\data")
 OUT = Path(r"c:\NPMS\GPMS\scripts\mercurio-import\normalized")
@@ -143,9 +141,13 @@ SYSTEM_MAP_DONCHI_LATERE = {
     "MM.PP Bb.":          ("PROP-BB", "Motor Principal Babor"),
     "MM.PP Bb. Centro":   ("PROP-BBC","Motor Principal Babor Centro"),
     "MM.PP Eb. Centro":   ("PROP-EBC","Motor Principal Estribor Centro"),
-    "MM.AA. N°1 Bb": ("AUX-01", "Motor Auxiliar N°1 Babor"),
-    "MM.AA. N°2 Eb.":("AUX-02", "Motor Auxiliar N°2 Estribor"),
-    "MM.AA. N°3 Puerto":("AUX-03","Motor Auxiliar N°3 Puerto"),
+    "MM.AA. Nº1 Bb": ("AUX-01", "Motor Auxiliar Nº1 Babor"),
+    "MM.AA. Nº2 Eb.":("AUX-02", "Motor Auxiliar Nº2 Estribor"),
+    "MM.AA. Nº3 Puerto":("AUX-03","Motor Auxiliar Nº3 Puerto"),
+    # Variants with degree sign (just in case)
+    "MM.AA. N°1 Bb": ("AUX-01", "Motor Auxiliar Nº1 Babor"),
+    "MM.AA. N°2 Eb.":("AUX-02", "Motor Auxiliar Nº2 Estribor"),
+    "MM.AA. N°3 Puerto":("AUX-03","Motor Auxiliar Nº3 Puerto"),
     "CAJAS":              ("CAJ",    "Cajas Reductoras"),
     "ALTERNADORES":       ("ALT",    "Alternadores"),
     "BOMBAS":             ("BBA",    "Bombas"),
