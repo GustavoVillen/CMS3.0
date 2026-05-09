@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, Search, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
@@ -567,6 +567,7 @@ export const SparesPage: React.FC = () => {
   const [criticalityFilter,setCriticalityFilter] = useState(() => searchParams.get("criticality") ?? "");
   const [belowReorder,     setBelowReorder]      = useState(false);
   const [stockStatusFilter,setStockStatusFilter] = useState<string>(() => searchParams.get("stockStatus") ?? "");
+  const [searchText,       setSearchText]        = useState("");
   const [showExcel,        setShowExcel]         = useState(false);
   const [selected,         setSelected]          = useState<Spare | null | "new">(null);
 
@@ -583,14 +584,29 @@ export const SparesPage: React.FC = () => {
   const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [vesselFilter, statusFilter, criticalityFilter, belowReorder]);
 
   const filteredItems = (() => {
-    const items = data?.items ?? null;
-    if (!items || !stockStatusFilter) return items;
-    return items.filter(s => {
-      if (stockStatusFilter === "sin_stock")    return s.available <= 0;
-      if (stockStatusFilter === "bajo_reorden") return s.available > 0 && s.available < s.reorderPoint;
-      if (stockStatusFilter === "ok")           return s.available >= s.reorderPoint;
-      return true;
-    });
+    let items = data?.items ?? null;
+    if (!items) return items;
+    if (stockStatusFilter) {
+      items = items.filter(s => {
+        if (stockStatusFilter === "sin_stock")    return s.available <= 0;
+        if (stockStatusFilter === "bajo_reorden") return s.available > 0 && s.available < s.reorderPoint;
+        if (stockStatusFilter === "ok")           return s.available >= s.reorderPoint;
+        return true;
+      });
+    }
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      items = items.filter(s =>
+        s.sku.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.vesselCode.toLowerCase().includes(q) ||
+        (s.sfiCode?.toLowerCase().includes(q) ?? false) ||
+        (s.manufacturer?.toLowerCase().includes(q) ?? false) ||
+        (s.manufacturerPartNumber?.toLowerCase().includes(q) ?? false) ||
+        (s.internalPartNumber?.toLowerCase().includes(q) ?? false)
+      );
+    }
+    return items;
   })();
 
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
@@ -619,6 +635,22 @@ export const SparesPage: React.FC = () => {
       )}
 
       <PageHeader icon={Package} title={t("page.spares")} total={data?.total} onReload={reload}>
+        {/* Search */}
+        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
+          <input
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder={t("spares.page.searchPlaceholder")}
+            className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
+          />
+          {searchText && (
+            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-white transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
         {/* Excel */}
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
