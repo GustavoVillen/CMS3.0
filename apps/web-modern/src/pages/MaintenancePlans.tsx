@@ -2438,43 +2438,21 @@ export const MaintenancePlansPage: React.FC = () => {
             </button>
           )}
         </div>
-        {/* Status filter */}
-        <select
-          value={toFilterSelectValue(statusFilter)}
-          onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
-        >
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="ACTIVE">{t("mp.status.ACTIVE")}</option>
-          <option value="INACTIVE">{t("mp.status.INACTIVE")}</option>
-          <option value="DRAFT">{t("mp.status.DRAFT")}</option>
-        </select>
-        {/* Vessel filter */}
-        <div className="flex items-center gap-2">
-          <select
-            value={toFilterSelectValue(vesselFilter)}
-            onChange={e => updateFilters({ vesselCode: fromFilterSelectValue(e.target.value) })}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
+        {/* Filtro por buque: usa el selector global del header (VesselContext).
+            Filtro por estado: removido — ACTIVE es el caso 99% del tiempo. */}
+        {(overdueOnly || searchText) && (
+          <button
+            onClick={() => {
+              setOverdueOnly(false);
+              setSfiTextFilter("");
+              setSfiTab("ALL");
+              setSearchText("");
+            }}
+            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all"
           >
-            <option value={FILTER_ALL_VALUE}>{t("mp.page.allVessels")}</option>
-            {vessels.map(v => (
-              <option key={v.code} value={v.code}>{v.name}</option>
-            ))}
-          </select>
-          {(statusFilter || vesselFilter || overdueOnly || searchText) && (
-            <button
-              onClick={() => {
-                updateFilters({ status: "", vesselCode: "" });
-                setOverdueOnly(false);
-                setSfiTextFilter("");
-                setSfiTab("ALL");
-              }}
-              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all"
-            >
-              {t("common.clear")}
-            </button>
-          )}
-        </div>
+            {t("common.clear")}
+          </button>
+        )}
       </PageHeader>
 
       {/* ── Tabs SFI ─────────────────────────────────────────────────────────── */}
