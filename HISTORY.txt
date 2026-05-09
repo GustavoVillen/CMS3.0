@@ -1,5 +1,42 @@
 HISTORY.txt
 
+[2026-05-09] Tenant Mercurio: import masivo de assets, planes, repuestos y certificados
+Agent: Claude Sonnet 4.6 + Opus 4.7
+
+SCOPE:
+- scripts/mercurio-import/extract.py — extractor Python (openpyxl) que vuelca los 10 Excel de MANTENIMIENTO/ a JSON
+- scripts/mercurio-import/normalize.py — normalizador: parsea hojas PMP estilo (header detection), agrupa tareas por sistema, clasifica inspección vs trabajo real, mapea frecuencias texto→meses + horómetros→horas
+- scripts/mercurio-import/build_sql.py — generador SQL idempotente. Cada hoja del Excel = 1 sistema (Asset bucket). Las tareas se agrupan en planes por (vessel × sistema × frecuencia × tipo) con descripción bulleted (equipo + tarea)
+- scripts/mercurio-import/sql/00..08-mercurio-*.sql — 9 scripts SQL idempotentes (ON CONFLICT DO NOTHING contra unique constraints)
+- scripts/mercurio-import/sql/run-all.sh — runner bash con summary final
+- scripts/mercurio-import/sql/verify.sql — reporte read-only para auditar antes/después
+- scripts/mercurio-import/README.md — orden de ejecución, idempotencia, modelo de datos
+
+DATOS GENERADOS (al volcarlos al VPS):
+- 45 Vessels (LATERE, DONCHI, MAO 01/02, MGT 01-27, GLT 001/007/008, YT 001/004-022, YERUTI 3, BARRANQUERAS 1)
+- 19 sistemas LATERE + 109 planes (de 401 tareas raw)
+- 16 sistemas DONCHI + 93 planes (de 320 tareas raw)
+- 36 vessels × ~11 sistemas barcazas = 391 system assets + 545 planes (de 664 tareas)
+- ~941 repuestos (filtros, bombas, retenes, válvulas) cruzados motor↔vessel: CAT, John Deere, MWM, Detroit, Cummins
+- 1022 certificados de Naviera Mercurio (453 saltados por falta de fecha de vencimiento parseable)
+
+MODELO DE DATOS:
+- Plan de mantenimiento titulado por sistema (regla del usuario): "[Sistema X] Inspección Cada N" o "[Sistema X] Mantenimiento Cada N"
+- Inspecciones puras (verificar/inspección/control) agrupadas: 1 plan por (vessel, sistema, frecuencia)
+- Tareas con trabajo real (cambio/engrase/ajuste/limpieza): 1 plan por (vessel, sistema, frecuencia)
+- Description del plan: bulleted list de items "• <equipo> — <tarea>"
+- assetId del plan apunta al system asset (Asset bucket): {VESSEL}-SYS-{COD}
+- Spares vinculados a vessel via SKU; aplican a múltiples vessels según motor (CAT C7 → MGT 10-15 + GLT 001, John Deere → 21 barcazas, etc.)
+- Trigger HOURS o MONTHS según fuente Excel (algunas hojas usan horómetro, otras fechas/intervalos texto)
+
+DESPLIEGUE EN VPS:
+  cd /app && git pull
+  cd scripts/mercurio-import/sql && bash run-all.sh
+  # o uno a uno:
+  psql "$DATABASE_URL" -f /app/scripts/mercurio-import/sql/00-mercurio-vessels.sql
+  ...
+  psql "$DATABASE_URL" -f /app/scripts/mercurio-import/sql/08-mercurio-certificates.sql
+
 [2026-05-04] Pre-presentación: i18n completo, índices DB, paginación Deferrals
 Agent: Claude Sonnet 4.6
 

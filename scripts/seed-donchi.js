@@ -1,10 +1,16 @@
 const { Pool } = require("pg");
-const pool = new Pool({ connectionString: "postgresql://postgres:postgres@localhost:5434/pms_saas?sslmode=disable" });
 
-const TENANT      = "cmodx8zt6007o3g38sevvp09y";
-const VESSEL_CODE = "DONCHI";
-const VESSEL_NAME = "Embarcación Donchi";
-const USER        = "cmodxei4h007p3g38yxsdps3i";
+const DATABASE_URL = process.env.DATABASE_URL;
+const TENANT       = process.env.SEED_TENANT_ID;
+const USER         = process.env.SEED_USER_ID;
+const VESSEL_CODE  = process.env.SEED_VESSEL_CODE || "DONCHI";
+const VESSEL_NAME  = process.env.SEED_VESSEL_NAME || "Embarcación Donchi";
+
+if (!DATABASE_URL) { console.error("Missing DATABASE_URL env var");   process.exit(1); }
+if (!TENANT)       { console.error("Missing SEED_TENANT_ID env var"); process.exit(1); }
+if (!USER)         { console.error("Missing SEED_USER_ID env var");   process.exit(1); }
+
+const pool = new Pool({ connectionString: DATABASE_URL });
 
 function genId() { return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12); }
 

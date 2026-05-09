@@ -23,3 +23,14 @@ apps/api/uploads/
 # Docs / legacy files
 docs/
 "Check Lists/"
+
+# Source Excel files (large, owner-controlled)
+MANTENIMIENTO/
+
+# Mercurio import: regenerable JSON dumps (keep .py + .sql)
+scripts/mercurio-import/data/
+scripts/mercurio-import/normalized/
+
+# Python bytecode
+__pycache__/
+*.pyc
