@@ -204,7 +204,7 @@ interface WorkOrderRecord {
 }
 
 type MaintenancePlanDelegate = {
-  findMany(args: { where: Record<string, unknown>; orderBy?: unknown }): Promise<MaintenancePlanRecord[]>;
+  findMany(args: { where: Record<string, unknown>; orderBy?: unknown; omit?: Record<string, true>; select?: Record<string, true> }): Promise<MaintenancePlanRecord[]>;
   findFirst(args: { where: Record<string, unknown>; include?: Record<string, unknown> }): Promise<MaintenancePlanRecord | null>;
   create(args: { data: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
   update(args: { where: { id: string }; data: Record<string, unknown>; include?: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
@@ -461,8 +461,18 @@ export async function listTenantMaintenancePlans(
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
   if (filters.taskMasterId) where.taskMasterId = filters.taskMasterId;
 
+  // Omit heavy AI-generated text fields from the list response — they are
+  // refetched on demand via getTenantMaintenancePlan when the user opens a row.
+  // This drops ~10 KB per plan from the payload.
   const plans = await prisma.maintenancePlan.findMany({
     where,
+    omit: {
+      acceptanceCriteria: true,
+      loto: true,
+      riskAnalysisResult: true,
+      consequenceRationale: true,
+      checklistTemplate: true,
+    },
     orderBy: [{ nextDueDate: "asc" }, { nextDueHours: "asc" }, { taskCode: "asc" }],
   });
 
