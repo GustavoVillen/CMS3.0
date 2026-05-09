@@ -1,11 +1,15 @@
 /**
- * Bulk-fill MaintenancePlan.acceptanceCriteria + loto + riskLevel + riskAnalysisResult
- * for every plan in tenant Mercurio that has any of those fields NULL.
+ * Bulk-fill 4 AI-generated fields for every plan in tenant Mercurio
+ * that has any of them NULL:
  *
- * Mirrors the same prompts and logic that the UI buttons use:
- *   - "Criterios de Aceptación"  -> /app/pms/maintenance-plans/suggest-acceptance-criteria
- *   - "LOTO"                     -> /app/pms/maintenance-plans/suggest-loto
- *   - "Nivel de Riesgo"          -> /app/pms/maintenance-plans/suggest-risk
+ *   - acceptanceCriteria  (button "Criterios de Aceptación")
+ *   - loto                (button "LOTO")
+ *   - riskLevel + riskAnalysisResult  (button "Nivel de Riesgo")
+ *   - consequenceCategory + consequenceRationale  (button "Si no se hace, ¿qué pasa? — RCM")
+ *
+ * Mirrors the same prompts and logic the UI buttons use (see
+ *   apps/api/src/tenant/maintenance-plans/maintenance-plans-ai-suggestions.ts
+ *   apps/api/src/tenant/maintenance-plans/maintenance-plans-rcm-ai.ts ).
  *
  * Run from apps/api so dependencies resolve:
  *   cd /app/apps/api
@@ -14,8 +18,8 @@
  * Idempotent: only fills fields that are NULL. Skips plans that already have content.
  *
  * Concurrency: CONCURRENCY plans in parallel (default 3). Each plan triggers up to
- * 3 sequential Claude calls (criteria -> loto -> risk). Failed calls log and skip
- * that field; the script continues with the next plan.
+ * 4 sequential Claude calls (criteria -> loto -> risk -> RCM). Failed calls log
+ * and skip that field; the script continues with the next plan.
  */
 "use strict";
 
@@ -49,6 +53,30 @@ HERRAMIENTAS E INSTRUMENTOS NECESARIOS:
 const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.
 
 Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
+
+const PROMPT_RCM = `Sos experto en RCM (Reliability-Centered Maintenance) aplicado a buques.
+
+CONTEXTO IMPORTANTE — qué te están pidiendo:
+RCM clasifica cada plan/tarea por la CONSECUENCIA que se produce si la tarea NO se ejecuta y por lo tanto la falla del equipo ocurre. La pregunta es: "si nunca hago esta tarea, ¿qué pasa cuando el equipo falle?".
+
+NO confundir con Análisis de Riesgo del trabajo / JSA (otra herramienta del sistema). El JSA pregunta lo opuesto: "¿qué peligros corre el operario MIENTRAS hace la tarea?". El JSA mira riesgos al ejecutar (espacio confinado, hot work, EPP). Vos NO tenés que pensar en eso.
+
+Vos pensás en: si esta tarea no se hace y el equipo falla por esa razón, ¿la falla mata gente? ¿contamina? ¿para la operación? ¿solo cuesta plata? La consecuencia es DEL EQUIPO FALLADO en el futuro, no del trabajo de mantenimiento.
+
+Casos típicos donde se ve la diferencia:
+- Probar bomba CI standby: JSA dice LOW (apretar un botón). RCM dice SAFETY (si no se prueba y falla en incendio, mueren personas).
+- Cambiar ánodos en sentina: JSA dice HIGH (espacio confinado). RCM dice NON_OPERATIONAL (si se posterga, corrosión gradual sin impacto inmediato).
+
+Las 4 categorías RCM:
+- SAFETY: la falla pone en riesgo a personas (lesión, fatalidad). Ej: bomba CI standby no probada → no arranca en incendio.
+- ENVIRONMENTAL: la falla causa daño ambiental (vertido oleoso, emisión, contaminación). Ej: separador OWS no calibrado → descarga sobre 15ppm.
+- OPERATIONAL: la falla detiene o degrada operación (paro, retraso, pérdida de carga). Ej: motor principal sin cambio de filtros → derate.
+- NON_OPERATIONAL: la falla solo genera costo de reparación, sin impacto en seguridad/ambiente/operación. Ej: pintura de bandejas, cambio de ojos de buey rotos.
+
+La consecuencia debe ser la PEOR plausible si el plan no se hace. Si un mismo plan previene falla con consecuencias múltiples, elegí la más severa: SAFETY > ENVIRONMENTAL > OPERATIONAL > NON_OPERATIONAL.
+
+Te paso el activo + descripción del plan. Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra):
+{"category": "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL", "rationale": "1-2 oraciones técnicas explicando QUÉ pasa cuando la falla ocurra"}`;
 
 const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
 
@@ -129,6 +157,31 @@ async function suggestRisk(assetLabel, taskDesc, acceptanceCriteria, loto) {
   return { level, analysis };
 }
 
+const VALID_RCM_CATEGORIES = new Set(["SAFETY", "ENVIRONMENTAL", "OPERATIONAL", "NON_OPERATIONAL"]);
+
+function stripCodeFence(text) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+}
+
+async function suggestRcm(assetName, assetSfiCode, planTitle, planDescription) {
+  if (!assetName || !assetName.trim()) return null;
+  const payload = {
+    activo:      assetName,
+    sfi:         assetSfiCode || null,
+    plan:        planTitle || null,
+    descripcion: planDescription || null,
+  };
+  const raw = await callClaude(PROMPT_RCM, JSON.stringify(payload, null, 2), 512);
+  let parsed;
+  try { parsed = JSON.parse(stripCodeFence(raw)); }
+  catch { return null; }
+  const category = String(parsed?.category ?? "").toUpperCase();
+  if (!VALID_RCM_CATEGORIES.has(category)) return null;
+  const rationale = String(parsed?.rationale ?? "").trim();
+  if (!rationale) return null;
+  return { category, rationale };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Worker pool
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +190,14 @@ async function processPlan(plan, stats) {
   const taskDesc = plan.description || plan.title;
   const assetLabel = plan.asset_name || plan.asset_id || null;
 
-  let { acceptance_criteria: acceptance, loto, risk_level: riskLevel, risk_analysis_result: riskAnalysis } = plan;
+  let {
+    acceptance_criteria:  acceptance,
+    loto,
+    risk_level:           riskLevel,
+    risk_analysis_result: riskAnalysis,
+    consequence_category: rcmCategory,
+    consequence_rationale: rcmRationale,
+  } = plan;
 
   // 1) Acceptance criteria
   if (!acceptance) {
@@ -175,6 +235,22 @@ async function processPlan(plan, stats) {
     }
   }
 
+  // 4) RCM consequence (uses asset name + plan title + description)
+  if (!rcmCategory) {
+    try {
+      const r = await suggestRcm(assetLabel, plan.asset_sfi_code, plan.title, plan.description);
+      if (r) {
+        rcmCategory = r.category;
+        rcmRationale = r.rationale;
+        stats.rcm++;
+      } else {
+        console.error(`  ⚠ ${plan.task_code}: RCM parse failed`);
+      }
+    } catch (e) {
+      console.error(`  ✗ ${plan.task_code}: RCM failed: ${e.message}`);
+    }
+  }
+
   if (DRY_RUN) {
     console.log(`  ✓ ${plan.task_code} (DRY_RUN, no DB write)`);
     return;
@@ -183,13 +259,23 @@ async function processPlan(plan, stats) {
   // Persist whatever we got
   await pool.query(`
     UPDATE "MaintenancePlan"
-       SET "acceptanceCriteria"  = COALESCE($1, "acceptanceCriteria"),
-           "loto"                = COALESCE($2, "loto"),
-           "riskLevel"           = COALESCE($3, "riskLevel"),
-           "riskAnalysisResult"  = COALESCE($4, "riskAnalysisResult"),
-           "updatedAt"           = NOW()
-     WHERE id = $5
-  `, [acceptance || null, loto || null, riskLevel || null, riskAnalysis || null, plan.id]);
+       SET "acceptanceCriteria"   = COALESCE($1, "acceptanceCriteria"),
+           "loto"                 = COALESCE($2, "loto"),
+           "riskLevel"            = COALESCE($3, "riskLevel"),
+           "riskAnalysisResult"   = COALESCE($4, "riskAnalysisResult"),
+           "consequenceCategory"  = COALESCE($5::"ConsequenceCategory", "consequenceCategory"),
+           "consequenceRationale" = COALESCE($6, "consequenceRationale"),
+           "updatedAt"            = NOW()
+     WHERE id = $7
+  `, [
+    acceptance || null,
+    loto || null,
+    riskLevel || null,
+    riskAnalysis || null,
+    rcmCategory || null,
+    rcmRationale || null,
+    plan.id,
+  ]);
 
   console.log(`  ✓ ${plan.task_code}`);
 }
@@ -228,21 +314,27 @@ async function main() {
   }
   const tenantId = t.rows[0].id;
 
-  // Find plans missing any of the 3 fields
+  // Find plans missing any of the 4 AI fields
   const limitClause = LIMIT ? `LIMIT ${LIMIT}` : "";
   const planQ = await pool.query(`
     SELECT mp.id, mp."taskCode" AS task_code, mp.title, mp.description,
-           mp."acceptanceCriteria" AS acceptance_criteria,
+           mp."acceptanceCriteria"   AS acceptance_criteria,
            mp.loto,
-           mp."riskLevel" AS risk_level,
-           mp."riskAnalysisResult" AS risk_analysis_result,
-           mp."assetId" AS asset_id,
-           a.name AS asset_name
+           mp."riskLevel"            AS risk_level,
+           mp."riskAnalysisResult"   AS risk_analysis_result,
+           mp."consequenceCategory"  AS consequence_category,
+           mp."consequenceRationale" AS consequence_rationale,
+           mp."assetId"              AS asset_id,
+           a.name                    AS asset_name,
+           a."sfiCode"               AS asset_sfi_code
       FROM "MaintenancePlan" mp
       LEFT JOIN "Asset" a ON a.id = mp."assetId"
      WHERE mp."tenantId" = $1
        AND mp."deletedAt" IS NULL
-       AND (mp."acceptanceCriteria" IS NULL OR mp.loto IS NULL OR mp."riskLevel" IS NULL)
+       AND (mp."acceptanceCriteria"  IS NULL
+         OR mp.loto                  IS NULL
+         OR mp."riskLevel"           IS NULL
+         OR mp."consequenceCategory" IS NULL)
      ORDER BY mp."vesselCode", mp."taskCode"
      ${limitClause}
   `, [tenantId]);
@@ -251,7 +343,7 @@ async function main() {
   console.log(`Found ${plans.length} plans needing AI completion.`);
   if (plans.length === 0) { await pool.end(); return; }
 
-  const stats = { acceptance: 0, loto: 0, risk: 0 };
+  const stats = { acceptance: 0, loto: 0, risk: 0, rcm: 0 };
   const t0 = Date.now();
 
   await runPool(plans, (plan) => processPlan(plan, stats), CONCURRENCY);
@@ -263,6 +355,7 @@ async function main() {
   console.log(`  Acceptance criteria filled: ${stats.acceptance}`);
   console.log(`  LOTO filled:                ${stats.loto}`);
   console.log(`  Risk level filled:          ${stats.risk}`);
+  console.log(`  RCM consequence filled:     ${stats.rcm}`);
   console.log(`════════════════════════════════════════════════════════════════════`);
 
   await pool.end();
