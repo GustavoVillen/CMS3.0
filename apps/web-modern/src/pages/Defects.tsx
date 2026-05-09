@@ -11,6 +11,7 @@ import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { RichTextArea } from "../components/RichTextArea";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useVesselContext } from "../lib/vessel-context";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -184,7 +185,8 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 
 const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreated }) => {
   const t = useT();
-  const [vessels, setVessels]                 = useState<{ code: string; name: string }[]>([]);
+  // Reuse VesselContext (loaded once for the header) instead of re-fetching /app/vessels.
+  const { vessels } = useVesselContext();
   const [assets, setAssets]                   = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets]     = useState(false);
   const [vesselCode, setVesselCode]           = useState("");
@@ -198,15 +200,10 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
   const [err, setErr]                         = useState<string | null>(null);
   const [expanded, setExpanded]               = useState(true);
 
+  // Auto-select sole vessel (preserves prior behavior).
   useEffect(() => {
-    api.get<{ items: { code: string; name: string }[] }>("/app/vessels")
-      .then(r => {
-        const list = r.items ?? [];
-        setVessels(list);
-        if (list.length === 1 && list[0]) setVesselCode(list[0].code);
-      })
-      .catch(() => {});
-  }, []);
+    if (vessels.length === 1 && vessels[0] && !vesselCode) setVesselCode(vessels[0].code);
+  }, [vessels, vesselCode]);
 
   const selectedAsset = assets.find(a => a.id === assetId);
 

@@ -3,6 +3,7 @@ import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlu
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { fmtDate } from "../lib/utils";
@@ -260,8 +261,8 @@ interface FleetAssignmentPanelProps {
 }
 
 const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onChanged }) => {
-  const { data } = useFetch<{ items: Vessel[] }>("/app/vessels");
-  const vessels = data?.items ?? [];
+  // Reuse VesselContext instead of re-fetching /app/vessels.
+  const { vessels } = useVesselContext();
   const [selected, setSelected] = useState<Set<string>>(new Set(member.assignedVesselCodes));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

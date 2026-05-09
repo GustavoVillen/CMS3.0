@@ -6,6 +6,7 @@ import {
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -953,13 +954,8 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   });
-  const [vessels, setVessels]             = useState<{ code: string; name: string }[]>([]);
-  useEffect(() => {
-    if (!isNew) return;
-    api.get<{ items: { code: string; name: string }[] }>("/app/vessels")
-      .then(r => setVessels(r.items ?? []))
-      .catch(() => {});
-  }, [isNew]);
+  // Reuse VesselContext instead of re-fetching /app/vessels.
+  const { vessels } = useVesselContext();
 
   // Info tab local state
   const [status, setStatus]           = useState(report?.status ?? "DRAFT");

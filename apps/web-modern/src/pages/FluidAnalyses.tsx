@@ -11,6 +11,7 @@ import { api, ApiError } from "../lib/api";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -144,7 +145,8 @@ export const FluidAnalysesPage: React.FC = () => {
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
   const { data: assetsData } = useFetch<{ items: AssetItem[] }>("/app/assets", []);
-  const { data: vesselsData } = useFetch<{ items: Array<{ code: string; name: string | null }> }>("/app/vessels", []);
+  // Reuse VesselContext instead of re-fetching /app/vessels.
+  const { vessels: contextVessels } = useVesselContext();
 
   const assets = useMemo(() => assetsData?.items ?? [], [assetsData?.items]);
 
@@ -175,7 +177,7 @@ export const FluidAnalysesPage: React.FC = () => {
         <SampleFormModal
           mode="create"
           assets={assetsData?.items ?? []}
-          vessels={vesselsData?.items ?? []}
+          vessels={contextVessels}
           onClose={() => setCreatingSample(false)}
           onSaved={() => { setCreatingSample(false); reload(); }}
         />

@@ -43,15 +43,9 @@ interface ListResponse {
 }
 
 interface Vessel {
-  id: string;
   code: string;
   name: string;
   status: string;
-}
-
-interface VesselListResponse {
-  items: Vessel[];
-  total: number;
 }
 
 interface SfiNode {
@@ -567,7 +561,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               >
                 <option value="">Seleccionar vessel</option>
                 {vessels.map(vessel => (
-                  <option key={vessel.id} value={vessel.code}>
+                  <option key={vessel.code} value={vessel.code}>
                     {vessel.code} - {vessel.name}
                   </option>
                 ))}
@@ -885,7 +879,8 @@ export const AssetsPage: React.FC = () => {
   }, [criticalityFilter, statusFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
-  const { data: vesselsData } = useFetch<VesselListResponse>("/app/vessels", ["/app/vessels"]);
+  // Reuse VesselContext instead of re-fetching /app/vessels.
+  const { vessels: contextVessels } = useVesselContext();
   const { data: sfiData, loading: sfiLoading, error: sfiError } = useFetch<SfiListResponse>("/app/pms/sfi", ["/app/pms/sfi"]);
   const { data: tenantAssetsData, reload: reloadTenantAssets } = useFetch<ListResponse>("/app/pms/assets", ["/app/pms/assets"]);
 
@@ -987,7 +982,7 @@ export const AssetsPage: React.FC = () => {
         <AssetModal
           initial={editing}
           defaultVesselCode={selectedVesselCode}
-          vessels={vesselsData?.items ?? []}
+          vessels={contextVessels}
           sfiNodes={sfiData?.items ?? []}
           sfiLoading={sfiLoading}
           sfiError={sfiError}

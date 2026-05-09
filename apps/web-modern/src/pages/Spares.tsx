@@ -10,6 +10,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useVesselContext } from "../lib/vessel-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -175,9 +176,8 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const [sfiCode,                 setSfiCode]                 = useState(spare?.sfiCode                 ?? "");
   const [leadTimeDays,            setLeadTimeDays]            = useState(String(spare?.leadTimeDays     ?? ""));
 
-  // Vessel list for dropdown
-  const { data: vesselsData } = useFetch<{ items: { code: string; name: string }[] }>("/app/vessels", []);
-  const vessels = vesselsData?.items ?? [];
+  // Reuse VesselContext instead of re-fetching /app/vessels.
+  const { vessels } = useVesselContext();
 
   // SFI selectors — group is derived from the first digit of the existing code on edit
   const { data: sfiData } = useFetch<{ items: SfiNode[] }>("/app/pms/sfi");
