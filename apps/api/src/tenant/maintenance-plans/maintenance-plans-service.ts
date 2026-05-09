@@ -536,6 +536,150 @@ export async function listTenantMaintenancePlans(
   }));
 }
 
+// ─── Dashboard summary ─────────────────────────────────────────────────────
+// Returns only execution-status counts. ~50 bytes vs 755 KB of the full list.
+// Logic mirrors mpStatusCounts in apps/web-modern/src/pages/Dashboard.tsx.
+
+export interface MaintenancePlansSummary {
+  counts: {
+    NEVER_EXECUTED: number;
+    OVERDUE: number;
+    DUE: number;
+    IN_WINDOW: number;
+    UPCOMING: number;
+    FUTURE: number;
+  };
+  total: number;
+}
+
+export async function getTenantMaintenancePlansSummary(
+  session: TenantAccessSession,
+  filters: { vesselCode?: string | null } = {},
+): Promise<MaintenancePlansSummary> {
+  const counts = { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
+  const prismaRaw = getPrismaClient();
+
+  if (!prismaRaw) {
+    const devItems = listDevMaintenancePlansForTenant(
+      session.tenantSlug,
+      session.user.role,
+      session.user.assignedVesselCodes,
+      { vesselCode: filters.vesselCode },
+    );
+    for (const item of devItems) {
+      const status = deriveDashboardStatus({
+        executionStatus: null, // Dev store does not track execution status
+        lastExecutionDate: item.lastExecutionDate ?? null,
+        lastExecutionHours: item.lastExecutionHours ?? null,
+        nextDueDate: item.nextDueDate ?? null,
+        nextDueHours: item.nextDueHours ?? null,
+        assetCurrentHours: null,
+      });
+      counts[status]++;
+    }
+    return { counts, total: devItems.length };
+  }
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) return { counts, total: 0 };
+
+  const where: Record<string, unknown> = { tenantId, deletedAt: null };
+  applyVesselScope(session, where, filters.vesselCode ?? null);
+
+  // Minimal select — only the fields needed to compute the dashboard status.
+  const planDelegate = (prismaRaw as unknown as {
+    maintenancePlan: {
+      findMany(args: unknown): Promise<{
+        executionStatus: string | null;
+        lastExecutionDate: Date | null;
+        lastExecutionHours: number | null;
+        nextDueDate: Date | null;
+        nextDueHours: number | null;
+        assetId: string;
+      }[]>;
+    };
+  }).maintenancePlan;
+
+  const plans = await planDelegate.findMany({
+    where,
+    select: {
+      executionStatus: true,
+      lastExecutionDate: true,
+      lastExecutionHours: true,
+      nextDueDate: true,
+      nextDueHours: true,
+      assetId: true,
+    },
+  });
+
+  if (plans.length === 0) return { counts, total: 0 };
+
+  // Latest running hours per asset (only needed when any plan is hours-based).
+  const hoursPlanAssetIds = [...new Set(plans.filter(p => p.nextDueHours != null).map(p => p.assetId))];
+  let assetCurrentHoursMap = new Map<string, number>();
+  if (hoursPlanAssetIds.length > 0) {
+    const placeholders = hoursPlanAssetIds.map((_: string, i: number) => `$${i + 1}`).join(", ");
+    const tenantPlaceholder = `$${hoursPlanAssetIds.length + 1}`;
+    const rows = await prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
+      `SELECT "assetId", "runningHoursTotal"
+       FROM (
+         SELECT "assetId", "runningHoursTotal",
+                ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
+         FROM "DailyEquipmentHours"
+         WHERE "assetId" IN (${placeholders})
+           AND "tenantId" = ${tenantPlaceholder}
+           AND "runningHoursTotal" IS NOT NULL
+       ) sub WHERE rn = 1`,
+      ...hoursPlanAssetIds, tenantId,
+    );
+    assetCurrentHoursMap = new Map(rows.map(r => [r.assetId, Number(r.runningHoursTotal)]));
+  }
+
+  for (const p of plans) {
+    const status = deriveDashboardStatus({
+      executionStatus: p.executionStatus,
+      lastExecutionDate: p.lastExecutionDate,
+      lastExecutionHours: p.lastExecutionHours,
+      nextDueDate: p.nextDueDate,
+      nextDueHours: p.nextDueHours,
+      assetCurrentHours: assetCurrentHoursMap.get(p.assetId) ?? null,
+    });
+    counts[status]++;
+  }
+
+  return { counts, total: plans.length };
+}
+
+type DashboardStatus = "NEVER_EXECUTED" | "OVERDUE" | "DUE" | "IN_WINDOW" | "UPCOMING" | "FUTURE";
+
+function deriveDashboardStatus(p: {
+  executionStatus: string | null;
+  lastExecutionDate: Date | string | null;
+  lastExecutionHours: number | null;
+  nextDueDate: Date | string | null;
+  nextDueHours: number | null;
+  assetCurrentHours: number | null;
+}): DashboardStatus {
+  if (p.executionStatus === "IN_WINDOW") return "IN_WINDOW";
+  if (p.lastExecutionDate == null && p.lastExecutionHours == null) return "NEVER_EXECUTED";
+  if (p.nextDueHours != null) {
+    const hours = p.assetCurrentHours ?? 0;
+    const diff = p.nextDueHours - hours;
+    if (diff <= 0) return "OVERDUE";
+    if (diff <= 50) return "DUE";
+    if (diff <= 250) return "UPCOMING";
+    return "FUTURE";
+  }
+  if (p.nextDueDate) {
+    const due = typeof p.nextDueDate === "string" ? new Date(p.nextDueDate) : p.nextDueDate;
+    const days = (due.getTime() - Date.now()) / 86_400_000;
+    if (days < 0) return "OVERDUE";
+    if (days <= 7) return "DUE";
+    if (days <= 30) return "UPCOMING";
+  }
+  return "FUTURE";
+}
+
 export async function getTenantMaintenancePlan(session: TenantAccessSession, id: string) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");

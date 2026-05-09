@@ -13,6 +13,7 @@ import {
   deleteTenantMaintenancePlan,
   generateUniqueTaskCode,
   getTenantMaintenancePlan,
+  getTenantMaintenancePlansSummary,
   listTenantMaintenancePlans,
   openFormalWorkOrder,
   postponePlan,

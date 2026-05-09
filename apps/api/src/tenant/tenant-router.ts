@@ -33,7 +33,7 @@ import { getDailyReportPeriodSuggestions } from "./daily-reports/daily-report-su
 import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
-import { listTenantMaintenancePlans } from "./maintenance-plans/maintenance-plans-service";
+import { listTenantMaintenancePlans, getTenantMaintenancePlansSummary } from "./maintenance-plans/maintenance-plans-service";
 import { listTenantInspectionLogs } from "./inspection-logs/inspection-logs-service";
 import { listTenantInspections } from "./inspections/inspections-service";
 import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
@@ -515,6 +515,15 @@ export async function handleTenantRoutes(
     const days = Math.min(90, Math.max(7, parseInt(url.searchParams.get("days") ?? "30", 10) || 30));
     const points = await getFuelConsumptionTrend(session, vesselCode, days);
     sendJson(response, 200, { items: points });
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/dashboard/mp-summary") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const summary = await getTenantMaintenancePlansSummary(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+    });
+    sendJson(response, 200, summary);
     return true;
   }
 

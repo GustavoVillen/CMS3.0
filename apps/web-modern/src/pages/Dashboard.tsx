@@ -15,9 +15,8 @@ import { useVesselContext } from "../lib/vessel-context";
 // Types (minimal — only fields we render)
 // ---------------------------------------------------------------------------
 
-interface Vessel { code: string; name: string; status: string; }
 interface WorkOrder { id: string; status: string; criticality?: string; dueDate?: string; }
-interface MaintenancePlan { id: string; executionStatus: string; nextDueDate: string | null; nextDueHours: number | null; lastExecutionDate: string | null; lastExecutionHours: number | null; }
+interface MpSummary { counts: { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number }; total: number; }
 interface Defect { id: string; status: string; severity: string; }
 interface Certificate { id: string; status: string; expiryDate?: string; }
 interface Deferral   { id: string; status: string; sourceId: string; }
@@ -39,9 +38,8 @@ interface ListResponse<T> { items: T[]; total: number; }
 // ---------------------------------------------------------------------------
 
 export const Dashboard: React.FC = () => {
-  const vessels           = useFetch<ListResponse<Vessel>>("/app/vessels");
   const workOrders        = useFetch<ListResponse<WorkOrder>>("/app/work-orders");
-  const maintenancePlans  = useFetch<ListResponse<MaintenancePlan>>("/app/pms/maintenance-plans");
+  const mpSummary         = useFetch<MpSummary>("/app/dashboard/mp-summary");
   const defects           = useFetch<ListResponse<Defect>>("/app/defects");
   const certificates      = useFetch<ListResponse<Certificate>>("/app/certificates");
   const deferrals         = useFetch<ListResponse<Deferral>>("/app/pms/deferrals");
@@ -53,7 +51,7 @@ export const Dashboard: React.FC = () => {
   const t            = useT();
   const locale       = useLocale();
   const [showInsights, setShowInsights] = React.useState(false);
-  const { selectedVessel, isVesselScoped } = useVesselContext();
+  const { vessels: contextVessels, selectedVessel, isVesselScoped } = useVesselContext();
 
   // useFetch injects vesselCode automatically from VesselContext
   const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
@@ -124,30 +122,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ].filter(s => s.value > 0);
   }, [deferrals.data, t]);
 
-  // Donut chart: maintenance plans by execution status — same logic as computeStatus() in MaintenancePlans.tsx
+  // Donut chart: maintenance plans by execution status — counts come directly
+  // from /app/dashboard/mp-summary (server-side computation). ~50 bytes vs
+  // 755 KB of the full plan list.
   const mpStatusCounts = React.useMemo(() => {
-    const items = maintenancePlans.data?.items ?? [];
-    const map: Record<string, number> = { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
-    const now = Date.now();
-    for (const p of items) {
-      if (p.executionStatus === "IN_WINDOW") { map.IN_WINDOW++; continue; }
-      if (p.lastExecutionDate == null && p.lastExecutionHours == null) { map.NEVER_EXECUTED++; continue; }
-      if (p.nextDueHours != null) {
-        const hours = (p as any).assetCurrentHours ?? 0;
-        const diff = p.nextDueHours - hours;
-        if (diff <= 0)   { map.OVERDUE++;  continue; }
-        if (diff <= 50)  { map.DUE++;      continue; }
-        if (diff <= 250) { map.UPCOMING++; continue; }
-        map.FUTURE++; continue;
-      }
-      if (p.nextDueDate) {
-        const days = (parseLocalDate(p.nextDueDate).getTime() - now) / 86_400_000;
-        if (days < 0)   { map.OVERDUE++;  continue; }
-        if (days <= 7)  { map.DUE++;      continue; }
-        if (days <= 30) { map.UPCOMING++; continue; }
-      }
-      map.FUTURE++;
-    }
+    const map = mpSummary.data?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
     return [
       { key: "NEVER_EXECUTED", name: t("dashboard.mp.neverExecuted"), value: map.NEVER_EXECUTED, fill: "#64748b" },
       { key: "OVERDUE",        name: t("dashboard.mp.overdue"),        value: map.OVERDUE,        fill: "#EF4444" },
@@ -156,7 +135,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       { key: "UPCOMING",       name: t("dashboard.mp.upcoming"),       value: map.UPCOMING,       fill: "#F97316" },
       { key: "FUTURE",         name: t("dashboard.mp.future"),         value: map.FUTURE,         fill: "#06D6A0" },
     ].filter(s => s.value > 0);
-  }, [maintenancePlans.data, t]);
+  }, [mpSummary.data, t]);
 
   const spareReqCounts = React.useMemo(() => {
     const allItems = (spareRequests.data?.items ?? []).flatMap(r => r.items);
@@ -273,9 +252,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-white">{t("dashboard.mpTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.mpSubtitle")}</p>
             </div>
-            {maintenancePlans.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+            {mpSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
-          {maintenancePlans.error ? <ErrorMsg msg={maintenancePlans.error} /> : (
+          {mpSummary.error ? <ErrorMsg msg={mpSummary.error} /> : (
             <div className="flex items-center gap-2 flex-1">
               <div className="w-[160px] h-[160px] shrink-0 relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -287,7 +266,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{maintenancePlans.data?.items.length ?? 0}</span>
+                  <span className="text-xl font-bold text-white">{mpSummary.data?.total ?? 0}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
@@ -449,8 +428,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
         {/* Inactive vessels — compact alert strip */}
         {(() => {
-          const inactive = (vessels.data?.items ?? []).filter(v => v.status !== "ACTIVE");
-          if (vessels.loading || inactive.length === 0) return null;
+          const inactive = contextVessels.filter(v => v.status !== "ACTIVE");
+          if (inactive.length === 0) return null;
           return (
             <div className="lg:col-span-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-white/3 border border-white/8">
               <Ship className="w-4 h-4 text-text-industrial/40 shrink-0" />
