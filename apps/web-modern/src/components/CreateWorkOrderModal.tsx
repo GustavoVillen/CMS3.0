@@ -44,6 +44,7 @@ interface Vessel { code: string; name: string; }
 
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
+  initialVesselCode?: string;
   onClose: () => void;
   onSaved: (woId: string) => void | Promise<void>;
 }
@@ -69,12 +70,12 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, onClose, onSaved }) => {
   const t = useT();
   const today = new Date().toISOString().slice(0, 10);
 
   // ── INFO fields (standalone mode only) ────────────────────────────────────
-  const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? "");
+  const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? initialVesselCode ?? "");
   const [vessels, setVessels]         = useState<Vessel[]>([]);
   const [assetId, setAssetId]         = useState(prefill?.assetId ?? "");
   const [assets, setAssets]           = useState<Asset[]>([]);

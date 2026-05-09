@@ -1346,6 +1346,7 @@ export const WorkOrdersPage: React.FC = () => {
 
       {showCreate && (
         <CreateWorkOrderModal
+          initialVesselCode={selectedVesselCode ?? undefined}
           onClose={() => setShowCreate(false)}
           onSaved={() => { setShowCreate(false); void reload(); }}
         />
