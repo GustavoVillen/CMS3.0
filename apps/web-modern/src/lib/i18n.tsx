@@ -979,9 +979,10 @@ const dict = {
   "dashboard.spareReqEmpty":   { es: "Sin solicitudes registradas", en: "No requests registered", pt: "Sem solicitações registradas" },
 
   // Dashboard — chart segment names
-  "dashboard.wo.open":         { es: "Abiertas",               en: "Open",                 pt: "Abertas" },
-  "dashboard.wo.overdue":      { es: "Vencidas",               en: "Overdue",              pt: "Vencidas" },
-  "dashboard.wo.postponed":    { es: "Postergadas",            en: "Postponed",            pt: "Adiadas" },
+  "dashboard.wo.open":              { es: "Abiertas",               en: "Open",                  pt: "Abertas" },
+  "dashboard.wo.overdue":           { es: "Vencidas",               en: "Overdue",               pt: "Vencidas" },
+  "dashboard.wo.postponed":         { es: "Postergadas",            en: "Postponed",             pt: "Adiadas" },
+  "dashboard.wo.postponedRejected": { es: "Posterg. rechazadas",    en: "Deferral rejected",      pt: "Adiamento rejeitado" },
 
   "dashboard.mp.neverExecuted":{ es: "Sin ejecutar",           en: "Not executed",         pt: "Sem executar" },
   "dashboard.mp.overdue":      { es: "Vencidas",               en: "Overdue",              pt: "Vencidas" },

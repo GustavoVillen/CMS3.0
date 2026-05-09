@@ -20,7 +20,7 @@ interface WorkOrder { id: string; status: string; criticality?: string; dueDate?
 interface MaintenancePlan { id: string; executionStatus: string; nextDueDate: string | null; nextDueHours: number | null; lastExecutionDate: string | null; lastExecutionHours: number | null; }
 interface Defect { id: string; status: string; severity: string; }
 interface Certificate { id: string; status: string; expiryDate?: string; }
-interface Deferral   { id: string; status: string; }
+interface Deferral   { id: string; status: string; sourceId: string; }
 interface CritSpare  { id: string; available: number; reorderPoint: number | null; }
 interface SpareRequest { id: string; status: string; items: { id: string; status: string; quantity: number; quantityFulfilled: number }[]; }
 interface AiInsight {
@@ -80,24 +80,35 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ? { value: certsExpired,  label: t("dashboard.certificatesExpired") }
     : { value: certsExpiring, label: t("dashboard.certificates") };
 
-  // Donut chart: Abiertas / Vencidas / Cerradas
+  // Donut chart: Abiertas / Vencidas / Postergadas / Posterg. rechazadas
   const statusCounts = React.useMemo(() => {
     const items = workOrders.data?.items ?? [];
     const now = new Date();
     const CLOSED_STATUSES = new Set(["CLOSED", "CANCELLED"]);
-    let abiertas = 0, vencidas = 0, postergadas = 0;
+    // Map WO id → deferral status, prefer non-CLOSED if multiple
+    const deferralStatusByWo = new Map<string, string>();
+    for (const d of deferrals.data?.items ?? []) {
+      const prev = deferralStatusByWo.get(d.sourceId);
+      if (!prev || prev === "CLOSED") deferralStatusByWo.set(d.sourceId, d.status);
+    }
+    let abiertas = 0, vencidas = 0, postergadas = 0, postergadasRechazadas = 0;
     for (const w of items) {
       if (CLOSED_STATUSES.has(w.status)) continue;
-      if (w.status === "ON_HOLD") { postergadas++; continue; }
+      if (w.status === "ON_HOLD") {
+        if (deferralStatusByWo.get(w.id) === "REJECTED") postergadasRechazadas++;
+        else postergadas++;
+        continue;
+      }
       const overdue = !!w.dueDate && parseLocalDate(w.dueDate) < now;
       if (overdue) vencidas++; else abiertas++;
     }
     return [
-      { key: "open",       name: t("dashboard.wo.open"),      value: abiertas,    fill: "#06D6A0" },
-      { key: "overdue",    name: t("dashboard.wo.overdue"),   value: vencidas,    fill: "#EF4444" },
-      { key: "postponed",  name: t("dashboard.wo.postponed"), value: postergadas, fill: "#EAB308" },
+      { key: "open",              name: t("dashboard.wo.open"),              value: abiertas,             fill: "#06D6A0" },
+      { key: "overdue",           name: t("dashboard.wo.overdue"),           value: vencidas,             fill: "#EF4444" },
+      { key: "postponed",         name: t("dashboard.wo.postponed"),         value: postergadas,          fill: "#EAB308" },
+      { key: "postponedRejected", name: t("dashboard.wo.postponedRejected"), value: postergadasRechazadas, fill: "#F97316" },
     ].filter(s => s.value > 0);
-  }, [workOrders.data, t]);
+  }, [workOrders.data, deferrals.data, t]);
 
   // Donut chart: deferrals by status (excluding CLOSED)
   const deferralCounts = React.useMemo(() => {
