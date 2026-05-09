@@ -24,6 +24,7 @@ import {
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -2187,8 +2188,8 @@ export const MaintenancePlansPage: React.FC = () => {
   }, [statusFilter, vesselFilter]);
 
   const { data: rawData, loading, error, reload } = useFetch<ListResponse>(path, [path]);
-  const { data: vesselsData } = useFetch<{ items: { id: string; code: string; name: string }[] }>("/app/vessels", []);
-  const vessels = vesselsData?.items ?? [];
+  // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
+  const { vessels } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
 
   // ── Client-side filters: SFI tab + overdue toggle + SFI text ──────────────
