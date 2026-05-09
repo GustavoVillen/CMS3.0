@@ -1176,47 +1176,62 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     if (fields.frequencyHours     !== undefined) setFrequencyHours(fields.frequencyHours);
   });
 
+  // Asset label resolver: works for both new and existing plans.
+  // For new plans: looks up name in the assets list using current assetId.
+  // For existing plans: prefers plan.assetName, falls back to assetId.
+  const resolveAssetLabel = useCallback((): string | null => {
+    if (plan?.assetName) return plan.assetName;
+    if (assetId) {
+      const found = assets.find(a => a.id === assetId);
+      if (found) return found.name ?? found.assetCode ?? null;
+      return assetId;
+    }
+    return plan?.assetId ?? null;
+  }, [plan, assetId, assets]);
+
   const handleAcceptanceCriteriaClick = useCallback(async () => {
-    if (!plan || loadingCriteria) return;
+    if (loadingCriteria) return;
+    const prev = acceptanceCriteria;
     setLoadingCriteria(true);
     setAcceptanceCriteria(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-acceptance-criteria", {
-        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
       });
-      setAcceptanceCriteria(res.text || "");
+      setAcceptanceCriteria(res.text || prev);
     } catch {
-      setAcceptanceCriteria("");
+      setAcceptanceCriteria(prev);
     } finally {
       setLoadingCriteria(false);
     }
-  }, [plan, description, title, loadingCriteria]);
+  }, [acceptanceCriteria, description, title, loadingCriteria, resolveAssetLabel, t]);
 
   const handleLotoClick = useCallback(async () => {
-    if (!plan || loadingLoto) return;
+    if (loadingLoto) return;
+    const prev = loto;
     setLoadingLoto(true);
     setLoto(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-loto", {
-        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
         acceptanceCriteria: acceptanceCriteria || null,
       });
-      setLoto(res.text || "");
+      setLoto(res.text || prev);
     } catch {
-      setLoto("");
+      setLoto(prev);
     } finally {
       setLoadingLoto(false);
     }
-  }, [plan, description, title, acceptanceCriteria, loadingLoto]);
+  }, [loto, description, title, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
 
   const handleRiskClick = useCallback(async () => {
-    if (!plan || loadingRisk) return;
+    if (loadingRisk) return;
     setLoadingRisk(true);
     try {
       const res = await api.post<{ level: string; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
-        assetLabel: plan.assetName ?? plan.assetId ?? null,
+        assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
@@ -1229,17 +1244,17 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     finally {
       setLoadingRisk(false);
     }
-  }, [plan, description, title, acceptanceCriteria, loto, loadingRisk]);
+  }, [description, title, acceptanceCriteria, loto, loadingRisk, resolveAssetLabel]);
 
   const handleConsequenceClick = useCallback(async () => {
-    if (!plan || loadingConsequence) return;
+    if (loadingConsequence) return;
     setLoadingConsequence(true);
     try {
       const res = await api.post<{ category: string; rationale: string }>(
         "/app/pms/maintenance-plans/suggest-consequence",
         {
-          assetName: plan.assetName ?? plan.assetId ?? "",
-          assetSfiCode: plan.sfiSubgroupCode ?? null,
+          assetName: resolveAssetLabel() ?? "",
+          assetSfiCode: plan?.sfiSubgroupCode ?? sfiSubgroupCode ?? null,
           planTitle: title || null,
           planDescription: description || null,
         },
@@ -1252,7 +1267,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     finally {
       setLoadingConsequence(false);
     }
-  }, [plan, title, description, loadingConsequence]);
+  }, [plan, title, description, loadingConsequence, resolveAssetLabel, sfiSubgroupCode]);
 
   const sfiGroups = useMemo(() => {
     const map = new Map<number, string>();
