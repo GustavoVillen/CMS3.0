@@ -145,7 +145,7 @@ export async function suggestPlanAcceptanceCriteria(
     "plan_acceptance_criteria_suggestion",
     PROMPT_ACCEPTANCE,
     buildContext(input),
-    1024,
+    4096,
   );
   return { text };
 }
@@ -159,7 +159,7 @@ export async function suggestPlanLoto(
     "plan_loto_suggestion",
     PROMPT_LOTO,
     buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }),
-    1024,
+    4096,
   );
   return { text };
 }
@@ -176,7 +176,7 @@ export async function suggestPlanRisk(
       "Criterios de aceptación": input.acceptanceCriteria,
       "LOTO": input.loto,
     }),
-    1024,
+    4096,
   );
 
   const levelMatch = raw.match(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)/im);

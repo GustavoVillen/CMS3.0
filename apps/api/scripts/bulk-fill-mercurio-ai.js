@@ -121,7 +121,7 @@ function buildContext(assetLabel, taskDesc, extras = {}) {
   return lines.join("\n");
 }
 
-async function callClaude(systemPrompt, userContent, maxTokens = 1024) {
+async function callClaude(systemPrompt, userContent, maxTokens = 4096) {
   const r = await claude.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
@@ -171,7 +171,7 @@ async function suggestRcm(assetName, assetSfiCode, planTitle, planDescription) {
     plan:        planTitle || null,
     descripcion: planDescription || null,
   };
-  const raw = await callClaude(PROMPT_RCM, JSON.stringify(payload, null, 2), 512);
+  const raw = await callClaude(PROMPT_RCM, JSON.stringify(payload, null, 2), 1024);
   let parsed;
   try { parsed = JSON.parse(stripCodeFence(raw)); }
   catch { return null; }

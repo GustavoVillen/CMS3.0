@@ -73,7 +73,7 @@ export async function suggestPlanConsequence(
   try {
     response = await client.messages.create({
       model: MODEL,
-      max_tokens: 512,
+      max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
