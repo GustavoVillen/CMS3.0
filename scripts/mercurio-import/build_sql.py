@@ -530,7 +530,11 @@ MOTOR_VESSEL_MAP = {
     "DETROIT":         ["YT005","YT010","YT012","YT013","YT015","YT022"],
     "DETROIT-FULL":    ["YT005","YT010","YT012","YT013","YT015","YT022"],
     "DETROIT-EXT":     ["YT005","YT010","YT012","YT013","YT015","YT022"],
-    "CUMMINS":         ["YT007","LATERE"],
+    # Note: el Cummins de la lista (LF670, LFP815FN…) corresponde al motor
+    # del YT 007. LATERE también tiene Cummins, pero modelos distintos
+    # (K50/N855-DM/6BT5.9D) — no se asignan acá. Cuando se consigan los
+    # part numbers reales se cargan en un seed específico.
+    "CUMMINS":         ["YT007"],
 }
 
 
