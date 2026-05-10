@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-05-10] Mercurio — inicialización de stock (onHand = minStock)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- scripts/mercurio-import/sql/12-mercurio-init-spare-stock.sql — script SQL idempotente que inserta un StockMovement ADJUSTMENT_PLUS por cada Spare activo del tenant Mercurio con minStock > 0 que aún no tenga movimientos cargados. Cantidad = minStock, unit del Spare, notes = "Carga inicial post-import (onHand = minStock)".
+- scripts/mercurio-import/sql/run-all.sh — agrega 12-mercurio-init-spare-stock.sql al pipeline después del cleanup.
+
+POR QUÉ:
+La columna Spare.currentStock está deprecada. El stock visible (onHand) se
+calcula sumando StockMovement vía stock-calc-service.getOnHandMap. Tras el
+import masivo de 941 repuestos quedaron todos con onHand = 0; este script
+los inicializa con stock = minStock para reflejar el estado declarado de
+cada nave.
+
+ALCANCE:
+Solo tenant Mercurio. Solo repuestos sin movimientos (idempotente).
+Repuestos con movimientos previos quedan intactos.
+
+REVERSIÓN:
+DELETE FROM "StockMovement" WHERE "tenantId"='<mercurio>' AND notes='Carga inicial post-import (onHand = minStock)';
+
+[2026-05-10] UX: Plan de Mantenimiento — Guardar cierra el modal
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/web-modern/src/pages/MaintenancePlans.tsx — tras guardar un plan, el modal se cierra y vuelve al listado (antes: quedaba abierto con badge verde 2.5s). Si la API falla, el modal sigue abierto mostrando actionError.
+
 [2026-05-10] Carga de Mantenimiento — gráfico de líneas para Jefe de Máquinas
 Agent: Claude Opus 4.7
 
