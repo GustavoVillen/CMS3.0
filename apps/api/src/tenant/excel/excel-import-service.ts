@@ -123,12 +123,24 @@ export async function confirmImport(
     }
 
     try {
-      if (module === "maintenance_plans" && row.data.assetCode && !row.data.assetId) {
-        const asset = await prisma.asset.findFirst({
-          where: { tenantId: tenant.id, vesselCode: String(row.data.vesselCode ?? ""), assetCode: String(row.data.assetCode) },
-          select: { id: true },
-        });
-        if (asset) row.data.assetId = asset.id;
+      if (module === "maintenance_plans") {
+        // Strip any assetId that came from the Excel (it may be stale — exported
+        // files carry assetId as a dynamic column but the source of truth is
+        // always assetCode → DB lookup).
+        delete row.data.assetId;
+        if (row.data.assetCode) {
+          const asset = await prisma.asset.findFirst({
+            where: { tenantId: tenant.id, vesselCode: String(row.data.vesselCode ?? ""), assetCode: String(row.data.assetCode) },
+            select: { id: true },
+          });
+          if (asset) row.data.assetId = asset.id;
+        }
+        // CREATE requires assetId to be present (NOT NULL in schema).
+        // UPDATE without a resolved assetId omits the field so the existing
+        // correctly-linked assetId is preserved.
+        if (row.action === "CREATE" && !("assetId" in row.data)) {
+          row.data.assetId = "";
+        }
       }
 
       const rawData = buildModelData(module, row.data, tenant.id);
@@ -300,7 +312,6 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       const r: Record<string, unknown> = {
         tenantId,
         vesselCode:        d.vesselCode,
-        assetId:           d.assetId ?? "",
         taskCode:          d.taskCode,
         title:             d.title             ?? "",
         taskType:          d.taskType          ?? "MAINTENANCE",
@@ -309,6 +320,8 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         windowMode:        d.windowMode        ?? "AUTO",
         status:            d.status            ?? "ACTIVE",
       };
+      // assetId: only include when resolved; UPDATE preserves existing value when absent
+      if ("assetId" in d) r.assetId = (d.assetId as string) ?? "";
       if ("sfiGroupNumber"    in d) r.sfiGroupNumber    = d.sfiGroupNumber ? Number(d.sfiGroupNumber) : null;
       if ("sfiCode"           in d) r.sfiSubgroupCode   = d.sfiCode != null ? String(d.sfiCode) : null;
       if ("description"       in d) r.description       = d.description       ?? null;
