@@ -112,8 +112,21 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
         body: buffer,
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { error?: { message?: string } }).error?.message ?? "Error al procesar archivo");
+        // Surface the real server error: try JSON first, fall back to text body,
+        // then to status code. Always log full payload so the browser console has detail.
+        const text = await res.text();
+        let serverMsg: string | null = null;
+        try {
+          const json = JSON.parse(text) as { error?: { code?: string; message?: string } };
+          if (json.error?.message) {
+            serverMsg = json.error.code
+              ? `${json.error.code}: ${json.error.message}`
+              : json.error.message;
+          }
+        } catch { /* not JSON */ }
+        if (!serverMsg) serverMsg = text.slice(0, 300) || `HTTP ${res.status}`;
+        console.error("[ExcelPanel] preview failed", { status: res.status, body: text });
+        throw new Error(`Error ${res.status}: ${serverMsg}`);
       }
       const data: PreviewResult = await res.json();
       setPreview(data);
@@ -124,6 +137,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
       setStep("preview");
       // fixes are shown inline in PreviewSummary — no need for top-level error
     } catch (err) {
+      console.error("[ExcelPanel] upload error", err);
       setError(err instanceof Error ? err.message : "Error desconocido");
       setStep("idle");
     }
