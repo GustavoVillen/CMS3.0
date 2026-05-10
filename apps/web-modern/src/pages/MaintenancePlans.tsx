@@ -1037,7 +1037,6 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [loadingCriteria, setLoadingCriteria] = useState(false);
   const [loadingLoto, setLoadingLoto] = useState(false);
   const [loadingRisk, setLoadingRisk] = useState(false);
-  const [savedOk, setSavedOk] = useState(false);
 
   const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -1347,8 +1346,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
         savedId = plan.id;
       }
       await onSaved(savedId);
-      setSavedOk(true);
-      setTimeout(() => setSavedOk(false), 2500);
+      onClose();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t("common.saveError"));
     } finally {
@@ -2022,8 +2020,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               </button>
               {!readOnly && (
                 <button onClick={() => { void onSave(); }} disabled={saving}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${savedOk ? "bg-success-sea text-primary-bg" : "bg-accent text-primary-bg hover:brightness-110"}`}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedOk ? <><CheckCircle2 className="w-3.5 h-3.5" /> {t("mp.modal.saved")}</> : t("common.save")}
+                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-primary-bg hover:brightness-110">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
                 </button>
               )}
             </div>
