@@ -40,6 +40,7 @@ run "08-mercurio-certificates.sql"
 run "09-mercurio-fluid-sampling.sql"
 run "10-mercurio-cleanup-latere-spares.sql"
 run "12-mercurio-init-spare-stock.sql"
+run "13-mercurio-fix-trigger-result-mode.sql"
 
 echo ""
 echo "═════════════════════════════════════════════════════════════════════════"

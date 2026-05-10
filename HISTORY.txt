@@ -1,5 +1,19 @@
 HISTORY.txt
 
+[2026-05-10] Mercurio — ajuste de triggerResultMode según taskType
+Agent: Claude Opus 4.7
+
+SCOPE:
+- scripts/mercurio-import/sql/13-mercurio-fix-trigger-result-mode.sql — script idempotente que corrige el triggerResultMode de los planes importados:
+  - taskType=MAINTENANCE  → triggerResultMode=APPROVAL_WO  (UI muestra "Abrir OT")
+  - taskType=INSPECTION   → triggerResultMode=DUE_ONLY     (UI muestra "Reportar")
+- scripts/mercurio-import/sql/run-all.sh — agrega 13-* al pipeline.
+
+POR QUÉ:
+El import masivo dejó todos los planes con DUE_ONLY (default del schema), así que la UI mostraba el botón "Reportar" en todos. Las inspecciones puras se cierran rápido sin OT, pero los mantenimientos reales (cambios, ajustes, reemplazos) deben pasar por OT con aprobación.
+
+PRESERVA configuración manual: no toca planes con triggerResultMode = AUTO_WO o CHECKLIST.
+
 [2026-05-10] Mercurio — inicialización de stock (onHand = minStock)
 Agent: Claude Opus 4.7
 
