@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDefect } from "./defects-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo } from "./pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "./pdf-helpers";
 
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -152,39 +152,57 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
     }
 
     // ── Text section with page-break awareness ────────────────────────────────
+    // Renderiza una sección con label en gris arriba y texto en caja.
+    // Si el contenido excede la página, se parte en segmentos con caja propia
+    // (cada uno con el label correspondiente "(cont.)").
     function textSection(label: string, rawText: string) {
       const text  = rawText === "—" ? "—" : stripMarkdown(rawText);
       const color = text === "—" ? gray : black;
+      const LABEL_H = 14;
+      const BOX_PAD_TOP = 10;
+      const BOX_PAD_BOT = 10;
+      const SECTION_GAP = 14;
+      const TOTAL_RESERVED = LABEL_H + BOX_PAD_TOP + BOX_PAD_BOT + SECTION_GAP;
 
-      // Measure cleaned text
-      doc.fontSize(10).font("Helvetica");
-      const textH = doc.heightOfString(text, { width: W - 20, lineGap: 2 });
-      const boxH  = Math.max(44, textH + 20);
-
-      // If the whole section fits on remaining page, render in one go
-      if (y + 14 + boxH <= CONTENT_BOTTOM) {
+      // Caso "—": single line, render simple
+      if (text === "—") {
+        doc.fontSize(10).font("Helvetica");
+        const oneH = doc.heightOfString("—", { width: W - 20, lineGap: 2 });
+        const boxH = Math.max(44, oneH + BOX_PAD_TOP + BOX_PAD_BOT);
+        ensureSpace(LABEL_H + boxH + SECTION_GAP);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(gray)
           .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.8 });
-        y += 14;
-        doc.roundedRect(ML, y, W, boxH, 4).strokeColor(border).lineWidth(1).stroke().fillColor(bgBox).fill();
+        y += LABEL_H;
+        doc.roundedRect(ML, y, W, boxH, 4).fillColor(bgBox).fill();
         doc.roundedRect(ML, y, W, boxH, 4).strokeColor(border).lineWidth(1).stroke();
         doc.fontSize(10).font("Helvetica").fillColor(color)
-          .text(text, ML + 10, y + 10, { width: W - 20, lineGap: 2 });
-        y = Math.max(y + boxH, doc.y) + 14;
+          .text("—", ML + 10, y + BOX_PAD_TOP, { width: W - 20, lineGap: 2 });
+        y += boxH + SECTION_GAP;
         return;
       }
 
-      // Content too long for current page: render label + text without a fixed box,
-      // letting PDFKit auto-paginate the text naturally.
-      ensureSpace(30); // at least label + a few lines
-      doc.fontSize(8).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.8 });
-      y += 14;
+      const firstAvailable = CONTENT_BOTTOM - y - TOTAL_RESERVED;
+      const continuationAvailable = CONTENT_BOTTOM - MARGIN_V - TOTAL_RESERVED;
+      const segments = splitTextIntoPageSegments(
+        doc, text, W - 20,
+        { font: "Helvetica", fontSize: 10, lineGap: 2 },
+        firstAvailable, continuationAvailable,
+      );
 
-      // Light left-border accent instead of a full box
-      doc.fontSize(10).font("Helvetica").fillColor(color)
-        .text(text, ML + 10, y, { width: W - 20, lineGap: 3 });
-      y = doc.y + 14;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (i > 0) { doc.addPage(); y = MARGIN_V; }
+        const segLabel = seg.isContinuation ? `${label.toUpperCase()} (CONT.)` : label.toUpperCase();
+        const boxH = Math.max(segments.length === 1 ? 44 : 24, seg.contentHeight + BOX_PAD_TOP + BOX_PAD_BOT);
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(gray)
+          .text(segLabel, ML, y, { width: W, characterSpacing: 0.8 });
+        y += LABEL_H;
+        doc.roundedRect(ML, y, W, boxH, 4).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, W, boxH, 4).strokeColor(border).lineWidth(1).stroke();
+        doc.fontSize(10).font("Helvetica").fillColor(color)
+          .text(seg.text, ML + 10, y + BOX_PAD_TOP, { width: W - 20, lineGap: 2 });
+        y += boxH + SECTION_GAP;
+      }
     }
 
     // ── Row 1: Fecha + Clasificación ──────────────────────────────────────────

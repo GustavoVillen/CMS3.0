@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getTenantMaintenancePlan } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, splitTextIntoPageSegments } from "./pdf-helpers";
 
 function fmt(d: unknown): string {
   if (!d) return "—";
@@ -179,22 +179,53 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       y += boxH;
     }
 
+    // Renderiza una caja con label arriba y texto. Si el contenido excede la
+    // página, se divide en segmentos: cada uno con su propia caja completa,
+    // y el label en continuaciones lleva sufijo "(cont.)".
     function textBox(label: string, text: string, span = 1, totalCols = 3) {
       const clean = text === "—" ? text : sanitizePdfText(text);
       const innerW = (W / totalCols) * span - 20;
-      const contentH = clean === "—"
-        ? 14
-        : doc.fontSize(9.5).font(FONT_REGULAR).heightOfString(clean, { width: innerW, lineGap: 2 });
-      const boxH = Math.max(38, contentH + 22);
-      ensureSpace(boxH);
       const boxW = (W / totalCols) * span;
-      doc.roundedRect(ML, y, boxW, boxH, 0).fillColor(bgBox).fill();
-      doc.roundedRect(ML, y, boxW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-      doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
-        .text(label.toUpperCase(), ML + 10, y + 6, { width: innerW, characterSpacing: 0.5 });
-      doc.fontSize(9.5).font(FONT_REGULAR).fillColor(clean === "—" ? gray : black)
-        .text(clean, ML + 10, y + 18, { width: innerW, lineGap: 2 });
-      y += boxH;
+      const LABEL_H = 18;
+      const TOP_PAD = 6;
+      const BOTTOM_PAD = 4;
+
+      // Caso "—": solo una línea, render directo
+      if (clean === "—") {
+        const boxH = Math.max(38, 14 + LABEL_H + BOTTOM_PAD);
+        ensureSpace(boxH);
+        doc.roundedRect(ML, y, boxW, boxH, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, boxW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
+        doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
+          .text(label.toUpperCase(), ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
+        doc.fontSize(9.5).font(FONT_REGULAR).fillColor(gray)
+          .text("—", ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
+        y += boxH;
+        return;
+      }
+
+      const firstAvailable = CONTENT_BOTTOM - y - LABEL_H - BOTTOM_PAD;
+      const continuationAvailable = CONTENT_BOTTOM - MARGIN_V - LABEL_H - BOTTOM_PAD;
+      const segments = splitTextIntoPageSegments(
+        doc, clean, innerW,
+        { font: FONT_REGULAR, fontSize: 9.5, lineGap: 2 },
+        firstAvailable, continuationAvailable,
+      );
+
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (i > 0) { doc.addPage(); y = MARGIN_V; }
+        const segH = Math.max(segments.length === 1 ? 38 : LABEL_H + 8,
+                              LABEL_H + seg.contentHeight + BOTTOM_PAD);
+        doc.roundedRect(ML, y, boxW, segH, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, boxW, segH, 0).strokeColor(border).lineWidth(0.5).stroke();
+        const segLabel = seg.isContinuation ? `${label.toUpperCase()} (CONT.)` : label.toUpperCase();
+        doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
+          .text(segLabel, ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
+        doc.fontSize(9.5).font(FONT_REGULAR).fillColor(black)
+          .text(seg.text, ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
+        y += segH;
+      }
     }
 
     function renderMarkdownTable(rows: string[][]) {

@@ -4,7 +4,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getSpareRequest } from "../spare-requests/spare-requests-service";
 import { listRequestItems } from "../spare-requests/spare-request-items-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo } from "./pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "./pdf-helpers";
 
 function fmt(d: Date | string | null | undefined, tz = "UTC", locale = "es-AR"): string {
   if (!d) return "—";
@@ -147,20 +147,54 @@ export async function buildSpareRequestPdf(session: TenantAccessSession, id: str
       y += boxH;
     }
 
+    // Renderiza un cuadro con label arriba y texto. Si el contenido excede
+    // la página, se parte en segmentos con caja propia (con "(cont.)" en el
+    // label de las continuaciones).
     function textRow(label: string, rawText: string) {
       const text  = val(rawText);
       const color = text === "—" ? gray : black;
-      doc.fontSize(10).font("Helvetica");
-      const textH = doc.heightOfString(text, { width: W - 20, lineGap: 2 });
-      const boxH  = Math.max(38, textH + 18);
-      ensureSpace(boxH);
-      doc.roundedRect(ML, y, W, boxH, 0).fillColor(bgBox).fill();
-      doc.roundedRect(ML, y, W, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), ML + 10, y + 6, { width: W - 20, characterSpacing: 0.5 });
-      doc.fontSize(10).font("Helvetica").fillColor(color)
-        .text(text, ML + 10, y + 18, { width: W - 20, lineGap: 2 });
-      y += boxH;
+      const innerW = W - 20;
+      const LABEL_H = 18;
+      const TOP_PAD = 6;
+      const BOTTOM_PAD = 4;
+
+      if (text === "—") {
+        doc.fontSize(10).font("Helvetica");
+        const oneH = doc.heightOfString("—", { width: innerW, lineGap: 2 });
+        const boxH = Math.max(38, oneH + LABEL_H + BOTTOM_PAD);
+        ensureSpace(boxH);
+        doc.roundedRect(ML, y, W, boxH, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, W, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+          .text(label.toUpperCase(), ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
+        doc.fontSize(10).font("Helvetica").fillColor(color)
+          .text("—", ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
+        y += boxH;
+        return;
+      }
+
+      const firstAvailable = CONTENT_BOTTOM - y - LABEL_H - BOTTOM_PAD;
+      const continuationAvailable = CONTENT_BOTTOM - MARGIN_V - LABEL_H - BOTTOM_PAD;
+      const segments = splitTextIntoPageSegments(
+        doc, text, innerW,
+        { font: "Helvetica", fontSize: 10, lineGap: 2 },
+        firstAvailable, continuationAvailable,
+      );
+
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (i > 0) { doc.addPage(); y = MARGIN_V; }
+        const segH = Math.max(segments.length === 1 ? 38 : LABEL_H + 8,
+                              LABEL_H + seg.contentHeight + BOTTOM_PAD);
+        const segLabel = seg.isContinuation ? `${label.toUpperCase()} (CONT.)` : label.toUpperCase();
+        doc.roundedRect(ML, y, W, segH, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y, W, segH, 0).strokeColor(border).lineWidth(0.5).stroke();
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+          .text(segLabel, ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
+        doc.fontSize(10).font("Helvetica").fillColor(black)
+          .text(seg.text, ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
+        y += segH;
+      }
     }
 
     // ── HEADER ──────────────────────────────────────────────────────────────────

@@ -68,6 +68,87 @@ export function sanitizePdfText(s: string): string {
 
 export const LOGO_PATH = join(PUBLIC_DIR, "logo.png");
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-page text segmentation
+//
+// Use case: an information box (label + multi-line text) that may not fit in
+// the remaining space of the current page. The naive approach (`ensureSpace`
+// → draw single rectangle → render text) breaks visually when the rectangle
+// height exceeds available space: text overflows the rectangle, the border
+// gets clipped, and subsequent pages show text without any box around it.
+//
+// `splitTextIntoPageSegments` solves this by pre-measuring each line of the
+// text and grouping them into segments that respect page breaks. Each segment
+// can then be rendered independently with its own box + label, giving a clean
+// "(cont.)" continuation experience.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TextSegment = {
+  /** Lines joined with \n that fit in this segment. */
+  text: string;
+  /** Total content height (sum of line heights), no padding. */
+  contentHeight: number;
+  /** True for segments after the first one. */
+  isContinuation: boolean;
+};
+
+/**
+ * Splits `text` into segments that respect page boundaries.
+ *
+ * Caller passes available content space for the first segment (usually the
+ * remaining space on the current page minus label + padding) and for any
+ * continuation segment (usually a full page of content space minus label +
+ * padding). The function measures each `\n`-separated line at the given font
+ * settings, then groups lines greedily.
+ *
+ * If a single line is taller than the available space, it goes alone in its
+ * segment (PDFKit will wrap it to multiple visual lines and the rectangle
+ * may still overflow — this case is rare in practice).
+ */
+export function splitTextIntoPageSegments(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  width: number,
+  fontConfig: { font: string; fontSize: number; lineGap?: number },
+  firstSegmentAvailable: number,
+  continuationAvailable: number,
+): TextSegment[] {
+  const safeText = text || " ";
+  doc.fontSize(fontConfig.fontSize).font(fontConfig.font);
+  const lines = safeText.split("\n");
+  const lineHeights = lines.map((l) =>
+    doc.heightOfString(l || " ", { width, lineGap: fontConfig.lineGap ?? 0 }),
+  );
+
+  const segments: TextSegment[] = [];
+  let curLines: string[] = [];
+  let curHeight = 0;
+  let available = firstSegmentAvailable;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (curHeight + lineHeights[i] > available && curLines.length > 0) {
+      segments.push({
+        text: curLines.join("\n"),
+        contentHeight: curHeight,
+        isContinuation: segments.length > 0,
+      });
+      curLines = [];
+      curHeight = 0;
+      available = continuationAvailable;
+    }
+    curLines.push(lines[i]);
+    curHeight += lineHeights[i];
+  }
+
+  segments.push({
+    text: curLines.join("\n"),
+    contentHeight: curHeight,
+    isContinuation: segments.length > 0,
+  });
+
+  return segments;
+}
+
 /**
  * Resolves the tenant logo buffer from local files only.
  * Looks for public/{slug}.{ext} (case-insensitive). Returns null if not found.
