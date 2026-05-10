@@ -147,46 +147,81 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     const BULLET_GUTTER = 12; // total horizontal space reserved before the text
     const LINE_PAD = 5;
 
+    // Renderiza un cuadro de texto con borde y soporta SPLIT entre páginas:
+    // si el contenido excede el espacio disponible, cierra el cuadro en la
+    // página actual, mete un page break y continúa en una nueva caja arriba
+    // de la página siguiente. Esto evita que un LOTO largo se "salga" del
+    // marco y desaparezca el borde en las páginas siguientes.
     function textArea(cx: number, cy: number, cw: number, text: string, minH = 28): number {
       const innerW = cw - LINE_PAD * 2;
       const innerWBullet = innerW - BULLET_GUTTER;
-      const lines = text ? text.split("\n") : [""];
+      const rawLines = text ? text.split("\n") : [""];
 
-      // Pre-compute total height
       doc.fontSize(9).font("Helvetica");
-      let totalH = LINE_PAD * 2;
-      for (const line of lines) {
+      type Item = { content: string; bullet: boolean; width: number; height: number };
+      const items: Item[] = rawLines.map((line) => {
         const m = line.match(BULLET_RE);
         const content = m ? m[2] : line;
         const w = m ? innerWBullet : innerW;
-        totalH += doc.heightOfString(content || " ", { width: w });
+        return { content, bullet: !!m, width: w, height: doc.heightOfString(content || " ", { width: w }) };
+      });
+
+      // Pre-compute segments (one per page)
+      type Segment = { startY: number; items: Item[] };
+      const segments: Segment[] = [];
+      let segStartY = cy;
+      let segItems: Item[] = [];
+      let curLy = cy + LINE_PAD;
+      for (const item of items) {
+        // Si esta línea no entra en la página actual y ya hay contenido,
+        // cerramos el segmento y empezamos uno nuevo arriba de la siguiente.
+        if (curLy + item.height + LINE_PAD > CONTENT_BOTTOM && segItems.length > 0) {
+          segments.push({ startY: segStartY, items: segItems });
+          segItems = [];
+          segStartY = MARGIN_T;
+          curLy = MARGIN_T + LINE_PAD;
+        }
+        segItems.push(item);
+        curLy += item.height;
       }
-      const h = Math.max(minH, totalH);
+      segments.push({ startY: segStartY, items: segItems });
 
-      // Draw container
-      doc.rect(cx, cy, cw, h).fillColor(WHITE).fill();
-      doc.rect(cx, cy, cw, h).strokeColor(BORDER).lineWidth(0.4).stroke();
+      // Render: una caja por segmento, page break entre segmentos
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (i > 0) {
+          drawFooter();
+          doc.addPage();
+        }
+        const contentH = seg.items.reduce((s, it) => s + it.height, 0);
+        const isSinglePage = segments.length === 1;
+        const segH = isSinglePage ? Math.max(minH, contentH + LINE_PAD * 2) : contentH + LINE_PAD * 2;
 
-      // Render line by line
-      let ly = cy + LINE_PAD;
-      doc.fontSize(9).font("Helvetica").fillColor(BLACK);
-      for (const line of lines) {
-        const m = line.match(BULLET_RE);
-        if (m) {
-          const content = m[2];
-          // Empty closed square at the start of the line
-          doc.rect(cx + LINE_PAD, ly + 2, BULLET_BOX, BULLET_BOX)
-             .strokeColor(BLACK).lineWidth(0.7).stroke();
-          doc.fillColor(BLACK).font("Helvetica").fontSize(9)
-             .text(content || " ", cx + LINE_PAD + BULLET_GUTTER, ly, { width: innerWBullet });
-          ly += doc.heightOfString(content || " ", { width: innerWBullet });
-        } else {
-          doc.fillColor(BLACK).font("Helvetica").fontSize(9)
-             .text(line || " ", cx + LINE_PAD, ly, { width: innerW });
-          ly += doc.heightOfString(line || " ", { width: innerW });
+        doc.rect(cx, seg.startY, cw, segH).fillColor(WHITE).fill();
+        doc.rect(cx, seg.startY, cw, segH).strokeColor(BORDER).lineWidth(0.4).stroke();
+
+        let ly = seg.startY + LINE_PAD;
+        doc.fontSize(9).font("Helvetica").fillColor(BLACK);
+        for (const item of seg.items) {
+          if (item.bullet) {
+            doc.rect(cx + LINE_PAD, ly + 2, BULLET_BOX, BULLET_BOX)
+               .strokeColor(BLACK).lineWidth(0.7).stroke();
+            doc.fillColor(BLACK).font("Helvetica").fontSize(9)
+               .text(item.content || " ", cx + LINE_PAD + BULLET_GUTTER, ly, { width: item.width });
+          } else {
+            doc.fillColor(BLACK).font("Helvetica").fontSize(9)
+               .text(item.content || " ", cx + LINE_PAD, ly, { width: item.width });
+          }
+          ly += item.height;
         }
       }
-      return h;
+
+      // Si hubo page breaks, el handler `pageAdded` ya reseteó y = MARGIN_T.
+      // Devolvemos la altura del ÚLTIMO segmento para que el caller, con
+      // `y += textArea(...)`, quede al final del último segmento renderizado.
+      const lastSeg = segments[segments.length - 1];
+      const lastH = lastSeg.items.reduce((s, it) => s + it.height, 0) + LINE_PAD * 2;
+      return segments.length === 1 ? Math.max(minH, lastH) : lastH;
     }
 
     // ── HEADER ────────────────────────────────────────────────────────────────
