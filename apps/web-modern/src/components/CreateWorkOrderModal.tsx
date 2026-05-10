@@ -24,6 +24,9 @@ export interface WoPrefill {
   acceptanceCriteria?: string | null;
   riskLevel?: string | null;
   riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
+  estimatedHours?: number | null;
   checklistDocUrl?: string | null;
   loto?: string | null;
   samplingFluidType?: string | null;
@@ -96,6 +99,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [loto, setLoto]                         = useState(prefill?.loto ?? "");
   const [riskLevel, setRiskLevel]               = useState(prefill?.riskLevel ?? "");
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(prefill?.riskAnalysisResult ?? "");
+  const [consequenceCategory, setConsequenceCategory] = useState<string>(prefill?.consequenceCategory ?? "");
+  const [consequenceRationale, setConsequenceRationale] = useState(prefill?.consequenceRationale ?? "");
+  const [estimatedHours, setEstimatedHours] = useState(prefill?.estimatedHours != null ? String(prefill.estimatedHours) : "");
   const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -239,6 +245,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           loto,
           riskLevel:          riskLevel                 || null,
           riskAnalysisResult: riskAnalysisResult.trim() || null,
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: consequenceRationale.trim() || null,
+          estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
         });
         woId = created.id;
       } else {
@@ -257,6 +266,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           loto,
           riskLevel:          riskLevel                 || null,
           riskAnalysisResult: riskAnalysisResult.trim() || null,
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: consequenceRationale.trim() || null,
+          estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
         });
         woId = created.id;
       }
@@ -276,12 +288,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     finally { setSaving(false); }
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+      consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, onSaved, t]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
     vesselCode, assetId, type, priority, criticality, openDate, dueDate,
     title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    consequenceCategory, consequenceRationale, estimatedHours,
     checklistDocFileName: checklistDocFile?.name ?? "",
   });
   useEscapeGuard({ isDirty, onSave, onClose });
@@ -474,6 +488,34 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
             </div>
+
+            {/* RCM + horas estimadas — heredados del plan, editables */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.consequenceCategory")}</label>
+                <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                  <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                  <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                  <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
+                <input type="number" min="0" step="0.5" value={estimatedHours}
+                  onChange={e => setEstimatedHours(e.target.value)}
+                  className={inputCls} placeholder="—" />
+              </div>
+            </div>
+            {consequenceCategory && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
+                <textarea rows={2} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
+                  className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
               {prefill?.checklistDocUrl ? (

@@ -2101,9 +2101,12 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             dueDate: plan.nextDueDate,
             acceptanceCriteria: acceptanceCriteria || plan.acceptanceCriteria,
             responsible: responsible || plan.responsible,
-            loto: loto || plan.evidenceRequired,
+            loto: loto || plan.loto,
             riskLevel: riskLevel || plan.riskLevel,
             riskAnalysisResult: riskAnalysisResult || plan.riskAnalysisResult,
+            consequenceCategory: (consequenceCategory as ("SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | "")) || plan.consequenceCategory || null,
+            consequenceRationale: consequenceRationale || plan.consequenceRationale,
+            estimatedHours: estimatedHours ? Number(estimatedHours) : plan.estimatedHours,
             checklistDocUrl: plan.checklistTemplate,
             samplingFluidType: samplingFluidType || plan.samplingFluidType,
           }}
@@ -2561,6 +2564,9 @@ export const MaintenancePlansPage: React.FC = () => {
             loto: executing.loto,
             riskLevel: executing.riskLevel,
             riskAnalysisResult: executing.riskAnalysisResult,
+            consequenceCategory: executing.consequenceCategory,
+            consequenceRationale: executing.consequenceRationale,
+            estimatedHours: executing.estimatedHours,
             checklistDocUrl: executing.checklistTemplate,
             samplingFluidType: executing.samplingFluidType,
           }}
