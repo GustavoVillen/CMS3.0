@@ -43,6 +43,7 @@ run "12-mercurio-init-spare-stock.sql"
 run "13-mercurio-fix-trigger-result-mode.sql"
 run "14-mercurio-relink-orphan-plans.sql"
 run "15-mercurio-yt-missing-assets.sql"
+run "16-mercurio-fleet-missing-assets.sql"
 
 echo ""
 echo "═════════════════════════════════════════════════════════════════════════"

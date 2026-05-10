@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-05-10] Mercurio — Assets faltantes en GLT/MGT/MAO (cierre de huérfanos)
+Agent: Claude Opus 4.7
+
+SCOPE:
+- scripts/mercurio-import/sql/16-mercurio-fleet-missing-assets.sql — crea 26 Assets faltantes y cierra los 29 huérfanos restantes:
+  - Navegación: GLT001, GLT007, GLT008, MGT01-09, MGT16-26 (23 vessels)
+  - Compresores y Botellones de Aire: GLT007, GLT008
+  - Cajas Reductoras: MAO01
+
 [2026-05-10] Mercurio — Assets faltantes en YT + re-link final
 Agent: Claude Opus 4.7
 
