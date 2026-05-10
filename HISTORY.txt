@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-05-10] Mercurio — Assets faltantes en YT + re-link final
+Agent: Claude Opus 4.7
+
+SCOPE:
+- scripts/mercurio-import/sql/15-mercurio-yt-missing-assets.sql — crea 5 Assets en cada una de las 6 YT (YT005, YT010, YT012, YT013, YT015, YT022): Motor Principal (A, safety), Navegación (A, safety), Sistema Eléctrico (A, safety), Paradas de Emergencia (A, safety), Tanques de Carga (B). 30 inserts idempotentes vía ON CONFLICT. Después re-linkea los 83 planes huérfanos restantes a esos nuevos Assets.
+
+POR QUÉ:
+83 planes de las YT apuntaban a sistemas (Motor Principal, etc.) que nunca se cargaron. El script 14 re-linkeó 721; estos 83 quedaron porque el target Asset no existía. Decisión del usuario: crear los Assets en lugar de soft-deletear los planes (las YT sí tienen esos sistemas en realidad).
+
 [2026-05-10] Mercurio — re-link de planes huérfanos a Assets activos
 Agent: Claude Opus 4.7
 
