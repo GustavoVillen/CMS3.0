@@ -1030,6 +1030,7 @@ model WorkOrder {
   description         String?
   assignedToUserId    String?
   estimatedHours      Float?
+  actualHours         Float?
   taskMasterId        String?
   // Plan fields
   acceptanceCriteria  String?

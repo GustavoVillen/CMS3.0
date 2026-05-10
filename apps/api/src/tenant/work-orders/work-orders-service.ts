@@ -65,6 +65,7 @@ export interface UpdateWorkOrderInput {
   executedByName?: string | null;
   completedDate?: string | Date | null;
   runningHoursAtExecution?: number | null;
+  actualHours?: number | null;
   observations?: string | null;
   supportingDocUrl?: string | null;
   // Mercurio form fields
@@ -89,6 +90,7 @@ export interface CloseWorkOrderInput {
   supportingDocUrl?: string | null;
   independentVerifier?: string | null;
   runningHoursAtExecution?: number | null;
+  actualHours?: number | null;
   spareUsages?: Array<{ spareId: string; qty: number; unit: string }>;
 }
 
@@ -535,6 +537,7 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.executedByName !== undefined) data.executedByName = normalizeOptionalText(payload.executedByName);
   if (payload.completedDate !== undefined) data.completedDate = parseOptionalDate(payload.completedDate, "completedDate");
   if (payload.runningHoursAtExecution !== undefined) data.runningHoursAtExecution = payload.runningHoursAtExecution ?? null;
+  if (payload.actualHours !== undefined) data.actualHours = payload.actualHours ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
   if (payload.department !== undefined) data.department = payload.department ?? null;
@@ -657,6 +660,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         independentVerifier: normalizeOptionalText(payload.independentVerifier),
         supportingDocUrl: normalizeOptionalText(payload.supportingDocUrl),
         runningHoursAtExecution: payload.runningHoursAtExecution ?? null,
+        actualHours: payload.actualHours ?? null,
         updatedByUserId: session.user.id,
       },
     });

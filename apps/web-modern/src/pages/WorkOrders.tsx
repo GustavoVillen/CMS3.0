@@ -43,6 +43,7 @@ interface WorkOrder {
   assignedToUserName: string | null;
   assetName: string | null;
   estimatedHours: number | null;
+  actualHours: number | null;
   // Plan fields
   acceptanceCriteria: string | null;
   loto: string | null;
@@ -280,6 +281,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [woResult, setWoResult]             = useState(workOrder.woResult ?? "");
   const [executedByName, setExecutedByName] = useState(workOrder.executedByName ?? "");
   const [executionDate, setExecutionDate]   = useState(toDateInputValue(workOrder.completedDate));
+  const [actualHours, setActualHours] = useState(
+    workOrder.actualHours != null ? String(workOrder.actualHours) : ""
+  );
   const [runningHoursAtExecution, setRunningHoursAtExecution] = useState(
     (workOrder as any).runningHoursAtExecution != null ? String((workOrder as any).runningHoursAtExecution) : ""
   );
@@ -550,6 +554,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         executedByName: normalizeOptionalText(executedByName),
         completedDate: executionDate || null,
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
+        actualHours: actualHours ? Number(actualHours) : null,
         observations: normalizeOptionalText(observations),
         supportingDocUrl: supUrl,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
@@ -561,7 +566,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       consequenceCategory, consequenceRationale,
       department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
-      woResult, executedByName, executionDate, runningHoursAtExecution, observations,
+      woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
       spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
 
   // ESC guard
@@ -570,7 +575,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     consequenceCategory, consequenceRationale,
     department, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
-    woResult, executedByName, executionDate, runningHoursAtExecution, observations,
+    woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
     supportingDocFileName: supportingDocFile?.name ?? "",
   });
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
@@ -593,6 +598,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         observations: normalizeOptionalText(observations),
         supportingDocUrl: supUrl,
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
+        actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
       });
       if (res.failedMovements && res.failedMovements.length > 0) {
@@ -603,7 +609,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setClosing(false); }
   }, [woResult, executedByName, executionDate, observations, supportingDocFile, supportingDocUrl,
-      runningHoursAtExecution, spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
+      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
@@ -899,21 +905,43 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
               </div>
             </div>
-            {workOrder.maintenancePlanId && (
+            <div className={workOrder.maintenancePlanId ? "grid grid-cols-2 gap-3" : ""}>
+              {workOrder.maintenancePlanId && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.runningHours")}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={runningHoursAtExecution}
+                    onChange={e => setRunningHoursAtExecution(e.target.value)}
+                    disabled={!isEditable}
+                    className={inputCls}
+                    placeholder={t("wo.modal.runningHoursPlaceholder")}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.runningHours")}</label>
+                <label className={labelCls}>
+                  {t("wo.modal.actualHours")}
+                  {workOrder.estimatedHours != null && (
+                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">
+                      {t("wo.modal.actualHoursEstHint").replace("{h}", String(workOrder.estimatedHours))}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number"
                   min="0"
-                  step="0.1"
-                  value={runningHoursAtExecution}
-                  onChange={e => setRunningHoursAtExecution(e.target.value)}
+                  step="0.25"
+                  value={actualHours}
+                  onChange={e => setActualHours(e.target.value)}
                   disabled={!isEditable}
                   className={inputCls}
-                  placeholder={t("wo.modal.runningHoursPlaceholder")}
+                  placeholder={t("wo.modal.actualHoursPlaceholder")}
                 />
               </div>
-            )}
+            </div>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.observations")}</label>
               <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
