@@ -33,7 +33,7 @@ import { getDailyReportPeriodSuggestions } from "./daily-reports/daily-report-su
 import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
-import { listTenantMaintenancePlans, getTenantMaintenancePlansSummary } from "./maintenance-plans/maintenance-plans-service";
+import { listTenantMaintenancePlans, getTenantMaintenancePlansSummary, getMaintenanceWorkloadProjection } from "./maintenance-plans/maintenance-plans-service";
 import { listTenantInspectionLogs } from "./inspection-logs/inspection-logs-service";
 import { listTenantInspections } from "./inspections/inspections-service";
 import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
@@ -524,6 +524,17 @@ export async function handleTenantRoutes(
       vesselCode: url.searchParams.get("vesselCode"),
     });
     sendJson(response, 200, summary);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/dashboard/maintenance-workload") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const weeksParam = parseInt(url.searchParams.get("weeks") ?? "52", 10);
+    const projection = await getMaintenanceWorkloadProjection(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      weeks: isNaN(weeksParam) ? 52 : weeksParam,
+    });
+    sendJson(response, 200, projection);
     return true;
   }
 

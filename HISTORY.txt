@@ -1,5 +1,25 @@
 HISTORY.txt
 
+[2026-05-10] Carga de Mantenimiento — gráfico de líneas para Jefe de Máquinas
+Agent: Claude Opus 4.7
+
+SCOPE:
+- apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts — agrega getMaintenanceWorkloadProjection(): proyecta ocurrencias de cada plan activo por semana (lunes UTC) sobre una ventana 4..104 semanas (default 52)
+- apps/api/src/tenant/tenant-router.ts — endpoint GET /app/dashboard/maintenance-workload?weeks=N&vesselCode=X
+- apps/web-modern/src/pages/MaintenanceWorkload.tsx — nueva página: LineChart Recharts con 3 series (total / por fecha / por horas), línea de promedio, KPIs (planes, proyectados, promedio, pico) y aviso de planes sin proyectar
+- apps/web-modern/src/App.tsx — ruta /maintenance-workload
+- apps/web-modern/src/components/Sidebar.tsx — entrada nueva con icono Activity en sección Operación, debajo de "Plan de Mantenimiento"
+- apps/web-modern/src/lib/i18n.tsx — clave nav.maintenanceWorkload (es/en/pt)
+
+ALGORITMO DE PROYECCIÓN:
+- Triggers de fecha (MONTHS / CALENDAR / DAY / WEEK): cursor = nextDueDate (o lastExecutionDate + freq), avanza con frequencyMonths interpretado en la unidad correspondiente, agrupa por semana hasta el fin de ventana
+- Triggers por horas (HOURS / RUNNING_HOURS): se calcula avgHoursPerDay por asset usando DailyEquipmentHours de los últimos 90 días → daysToNext = (nextDueHours - currentHours)/avg, daysBetween = frequencyHours/avg. Si no hay historial suficiente, el plan se reporta como "unscheduledHoursPlans"
+- Tope defensivo: 200 ocurrencias por plan
+- CONDITION/EVENT no se proyectan (no aplican a este uso)
+
+OBJETIVO:
+Permitir al Jefe de Máquinas detectar semanas sobrecargadas y redistribuir tareas. Etapa actual: cantidad de tareas. Próxima etapa: sumar horas-hombre estimadas cuando el modelo de plan tenga ese campo.
+
 [2026-05-09] Tenant Mercurio: import masivo de assets, planes, repuestos y certificados
 Agent: Claude Sonnet 4.6 + Opus 4.7
 

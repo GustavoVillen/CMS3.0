@@ -1278,3 +1278,323 @@ export async function restorePlanAfterWoCancellation(
     data: { executionStatus: restoredStatus, updatedByUserId: session.user.id },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Maintenance workload projection — line chart (next N weeks)
+// ---------------------------------------------------------------------------
+// Para cada plan activo, proyecta sus próximas ocurrencias dentro de la ventana
+// configurada y agrupa por semana (lunes UTC). Soporta:
+//   - Planes por fecha (MONTHS / CALENDAR / DAY / WEEK): itera nextDueDate +
+//     frecuencia en la unidad correspondiente.
+//   - Planes por horas (HOURS / RUNNING_HOURS): estima horas/día promedio del
+//     asset (últimos 90 días en DailyEquipmentHours) y traduce frequencyHours
+//     a días reales. Si no hay historia suficiente, se reporta como
+//     "unscheduledHoursPlans" para que la UI lo informe al usuario.
+//
+// Etapa actual: cuenta tareas. Etapa futura: cuando exista un campo
+// `estimatedExecutionHours` en MaintenancePlan, sumar horas en lugar de tareas.
+
+export interface MaintenanceWorkloadFilters {
+  vesselCode?: string | null;
+  weeks?: number;
+}
+
+export interface WorkloadWeek {
+  weekStart: string;   // YYYY-MM-DD del lunes UTC
+  taskCount: number;
+  dateBased: number;
+  hoursBased: number;
+}
+
+export interface MaintenanceWorkloadProjection {
+  weeks: WorkloadWeek[];
+  totalPlans: number;
+  projectedPlans: number;
+  unscheduledHoursPlans: number;
+  unscheduledDatePlans: number;
+}
+
+const DAY_MS = 86_400_000;
+const HOURS_HISTORY_WINDOW_DAYS = 90;
+
+function startOfWeekUtcMonday(d: Date): Date {
+  const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = out.getUTCDay(); // 0=Sun..6=Sat
+  const offsetToMonday = day === 0 ? -6 : 1 - day;
+  out.setUTCDate(out.getUTCDate() + offsetToMonday);
+  return out;
+}
+
+function addUtcDays(d: Date, days: number): Date {
+  const out = new Date(d.getTime());
+  out.setUTCDate(out.getUTCDate() + days);
+  return out;
+}
+
+function addUtcMonths(d: Date, months: number): Date {
+  const out = new Date(d.getTime());
+  out.setUTCMonth(out.getUTCMonth() + months);
+  return out;
+}
+
+function isoDateOnly(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Avanza una fecha según triggerType + frecuencia. Refleja la semántica usada
+ * en `recalculateNextDue` para los triggers de fecha.
+ *  - MONTHS / CALENDAR → meses
+ *  - WEEK              → semanas (frequencyMonths se usa como nº de semanas)
+ *  - DAY               → días   (frequencyMonths se usa como nº de días)
+ * Devuelve null si no aplica o si la frecuencia es inválida.
+ */
+function advanceDateOccurrence(
+  triggerType: string,
+  freq: number | null | undefined,
+  from: Date,
+): Date | null {
+  if (!freq || freq <= 0) return null;
+  if (triggerType === "MONTHS" || triggerType === "CALENDAR") return addUtcMonths(from, freq);
+  if (triggerType === "WEEK") return addUtcDays(from, freq * 7);
+  if (triggerType === "DAY") return addUtcDays(from, freq);
+  return null;
+}
+
+function isHoursTrigger(triggerType: string): boolean {
+  return triggerType === "HOURS" || triggerType === "RUNNING_HOURS";
+}
+
+function isDateTrigger(triggerType: string): boolean {
+  return triggerType === "MONTHS" || triggerType === "CALENDAR" || triggerType === "DAY" || triggerType === "WEEK";
+}
+
+export async function getMaintenanceWorkloadProjection(
+  session: TenantAccessSession,
+  filters: MaintenanceWorkloadFilters = {},
+): Promise<MaintenanceWorkloadProjection> {
+  const weeks = Math.max(4, Math.min(104, filters.weeks ?? 52));
+
+  // Inicializar estructura semanal vacía desde el lunes de la semana actual.
+  const today = new Date();
+  const firstWeek = startOfWeekUtcMonday(today);
+  const weekBuckets: WorkloadWeek[] = [];
+  for (let i = 0; i < weeks; i++) {
+    weekBuckets.push({
+      weekStart: isoDateOnly(addUtcDays(firstWeek, i * 7)),
+      taskCount: 0,
+      dateBased: 0,
+      hoursBased: 0,
+    });
+  }
+  const weekIndexByStart = new Map(weekBuckets.map((w, i) => [w.weekStart, i]));
+  const projectionEnd = addUtcDays(firstWeek, weeks * 7); // exclusivo
+
+  function bucketForDate(d: Date): WorkloadWeek | null {
+    if (d.getTime() < firstWeek.getTime() || d.getTime() >= projectionEnd.getTime()) return null;
+    const ws = isoDateOnly(startOfWeekUtcMonday(d));
+    const idx = weekIndexByStart.get(ws);
+    if (idx == null) return null;
+    return weekBuckets[idx];
+  }
+
+  const empty: MaintenanceWorkloadProjection = {
+    weeks: weekBuckets,
+    totalPlans: 0,
+    projectedPlans: 0,
+    unscheduledHoursPlans: 0,
+    unscheduledDatePlans: 0,
+  };
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) return empty;
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) return empty;
+
+  const where: Record<string, unknown> = { tenantId, deletedAt: null };
+  applyVesselScope(session, where, filters.vesselCode ?? null);
+
+  const planDelegate = (prismaRaw as unknown as {
+    maintenancePlan: {
+      findMany(args: unknown): Promise<{
+        id: string;
+        assetId: string;
+        triggerType: string;
+        frequencyHours: number | null;
+        frequencyMonths: number | null;
+        nextDueDate: Date | null;
+        nextDueHours: number | null;
+        lastExecutionDate: Date | null;
+        lastExecutionHours: number | null;
+      }[]>;
+    };
+  }).maintenancePlan;
+
+  const plans = await planDelegate.findMany({
+    where,
+    select: {
+      id: true,
+      assetId: true,
+      triggerType: true,
+      frequencyHours: true,
+      frequencyMonths: true,
+      nextDueDate: true,
+      nextDueHours: true,
+      lastExecutionDate: true,
+      lastExecutionHours: true,
+    },
+  });
+
+  if (plans.length === 0) return empty;
+
+  // ── Horas: traer current + history para los assets de planes hours-based ──
+  const hoursPlanAssetIds = [
+    ...new Set(plans.filter(p => isHoursTrigger(p.triggerType)).map(p => p.assetId)),
+  ];
+
+  const currentHoursMap = new Map<string, number>();
+  const avgHoursPerDayMap = new Map<string, number>();
+
+  if (hoursPlanAssetIds.length > 0) {
+    // Latest runningHoursTotal por asset
+    const placeholders = hoursPlanAssetIds.map((_, i) => `$${i + 1}`).join(", ");
+    const tenantPlaceholder = `$${hoursPlanAssetIds.length + 1}`;
+    const currentRows = await prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
+      `SELECT "assetId", "runningHoursTotal"
+       FROM (
+         SELECT "assetId", "runningHoursTotal",
+                ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
+         FROM "DailyEquipmentHours"
+         WHERE "assetId" IN (${placeholders})
+           AND "tenantId" = ${tenantPlaceholder}
+           AND "runningHoursTotal" IS NOT NULL
+       ) sub WHERE rn = 1`,
+      ...hoursPlanAssetIds, tenantId,
+    );
+    for (const r of currentRows) currentHoursMap.set(r.assetId, Number(r.runningHoursTotal));
+
+    // Promedio horas/día por asset usando últimos N días
+    const sinceDate = addUtcDays(today, -HOURS_HISTORY_WINDOW_DAYS);
+    const sincePlaceholder = `$${hoursPlanAssetIds.length + 2}`;
+    const historyRows = await prismaRaw.$queryRawUnsafe<{
+      assetId: string;
+      minHours: number;
+      maxHours: number;
+      minAt: Date;
+      maxAt: Date;
+    }[]>(
+      `SELECT "assetId",
+              MIN("runningHoursTotal")::float AS "minHours",
+              MAX("runningHoursTotal")::float AS "maxHours",
+              MIN("createdAt") AS "minAt",
+              MAX("createdAt") AS "maxAt"
+       FROM "DailyEquipmentHours"
+       WHERE "assetId" IN (${placeholders})
+         AND "tenantId" = ${tenantPlaceholder}
+         AND "runningHoursTotal" IS NOT NULL
+         AND "createdAt" >= ${sincePlaceholder}
+       GROUP BY "assetId"`,
+      ...hoursPlanAssetIds, tenantId, sinceDate,
+    );
+    for (const r of historyRows) {
+      const dayDiff = (new Date(r.maxAt).getTime() - new Date(r.minAt).getTime()) / DAY_MS;
+      if (dayDiff <= 0) continue;
+      const hoursDiff = Number(r.maxHours) - Number(r.minHours);
+      if (hoursDiff <= 0) continue;
+      avgHoursPerDayMap.set(r.assetId, hoursDiff / dayDiff);
+    }
+  }
+
+  // ── Proyección por plan ────────────────────────────────────────────────────
+  let projectedPlans = 0;
+  let unscheduledHoursPlans = 0;
+  let unscheduledDatePlans = 0;
+
+  // Tope defensivo: máximo de ocurrencias proyectadas por plan dentro de la ventana.
+  // Aún para planes semanales con ventana de 104 semanas, 200 alcanza con margen.
+  const MAX_OCCURRENCES_PER_PLAN = 200;
+
+  for (const plan of plans) {
+    const trigger = plan.triggerType;
+
+    if (isDateTrigger(trigger)) {
+      // Punto de partida
+      let cursor: Date | null = null;
+      if (plan.nextDueDate) {
+        cursor = new Date(plan.nextDueDate);
+      } else if (plan.lastExecutionDate) {
+        cursor = advanceDateOccurrence(trigger, plan.frequencyMonths, new Date(plan.lastExecutionDate));
+      }
+      if (!cursor) {
+        unscheduledDatePlans++;
+        continue;
+      }
+      // Adelantar el cursor hasta entrar en la ventana
+      while (cursor.getTime() < firstWeek.getTime()) {
+        const next = advanceDateOccurrence(trigger, plan.frequencyMonths, cursor);
+        if (!next || next.getTime() === cursor.getTime()) break;
+        cursor = next;
+      }
+      let scheduledThisPlan = false;
+      let count = 0;
+      while (cursor && cursor.getTime() < projectionEnd.getTime() && count < MAX_OCCURRENCES_PER_PLAN) {
+        const bucket = bucketForDate(cursor);
+        if (bucket) {
+          bucket.taskCount++;
+          bucket.dateBased++;
+          scheduledThisPlan = true;
+        }
+        const next = advanceDateOccurrence(trigger, plan.frequencyMonths, cursor);
+        if (!next || next.getTime() === cursor.getTime()) break;
+        cursor = next;
+        count++;
+      }
+      if (scheduledThisPlan) projectedPlans++;
+      else unscheduledDatePlans++;
+      continue;
+    }
+
+    if (isHoursTrigger(trigger)) {
+      const avgPerDay = avgHoursPerDayMap.get(plan.assetId) ?? 0;
+      if (avgPerDay <= 0 || !plan.frequencyHours || plan.frequencyHours <= 0 || plan.nextDueHours == null) {
+        unscheduledHoursPlans++;
+        continue;
+      }
+      const currentHrs = currentHoursMap.get(plan.assetId) ?? 0;
+      const hoursToNext = plan.nextDueHours - currentHrs;
+      const daysToNext = hoursToNext > 0 ? hoursToNext / avgPerDay : 0;
+      const daysBetween = plan.frequencyHours / avgPerDay;
+      if (!isFinite(daysBetween) || daysBetween <= 0) {
+        unscheduledHoursPlans++;
+        continue;
+      }
+      let occurrence = addUtcDays(today, Math.max(0, daysToNext));
+      let scheduledThisPlan = false;
+      let count = 0;
+      while (occurrence.getTime() < projectionEnd.getTime() && count < MAX_OCCURRENCES_PER_PLAN) {
+        const bucket = bucketForDate(occurrence);
+        if (bucket) {
+          bucket.taskCount++;
+          bucket.hoursBased++;
+          scheduledThisPlan = true;
+        }
+        occurrence = addUtcDays(occurrence, daysBetween);
+        count++;
+      }
+      if (scheduledThisPlan) projectedPlans++;
+      else unscheduledHoursPlans++;
+      continue;
+    }
+
+    // CONDITION / EVENT / desconocido → no proyectables
+  }
+
+  return {
+    weeks: weekBuckets,
+    totalPlans: plans.length,
+    projectedPlans,
+    unscheduledHoursPlans,
+    unscheduledDatePlans,
+  };
+}
