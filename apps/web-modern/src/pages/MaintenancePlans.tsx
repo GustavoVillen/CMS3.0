@@ -2415,7 +2415,19 @@ export const MaintenancePlansPage: React.FC = () => {
         return needsWO ? (
           !hasActiveWo ? (
           <button
-            onClick={e => { e.stopPropagation(); setExecuting(row); }}
+            onClick={async e => {
+              e.stopPropagation();
+              // El listado omite acceptanceCriteria, loto, riskAnalysisResult,
+              // consequenceRationale y checklistTemplate para reducir payload.
+              // Hay que traer el plan completo para que el modal de OT herede
+              // esos campos correctamente.
+              try {
+                const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
+                setExecuting(full);
+              } catch {
+                setExecuting(row);
+              }
+            }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
           >
             <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
