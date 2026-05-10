@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-05-10] Mercurio — re-link de planes huérfanos a Assets activos
+Agent: Claude Opus 4.7
+
+DIAGNÓSTICO:
+804 planes activos del tenant Mercurio apuntaban a un assetId que ya no existe en Asset (los Assets fueron hard-deleted en algún momento previo). En la UI se manifestaba como UUIDs en la columna "EQUIPO" en lugar del nombre del sistema.
+
+SCOPE:
+- scripts/mercurio-import/sql/14-mercurio-relink-orphan-plans.sql — script idempotente que parsea el nombre del sistema desde mp.title (formato '[Sistema X] ...') y re-linkea cada plan huérfano al Asset activo del mismo vessel con name = nombre parseado.
+- 721 de 804 son re-linkables por este método. 83 quedan para revisión manual (probablemente Assets que nunca se crearon).
+
 [2026-05-10] Mercurio — ajuste de triggerResultMode según taskType
 Agent: Claude Opus 4.7
 
