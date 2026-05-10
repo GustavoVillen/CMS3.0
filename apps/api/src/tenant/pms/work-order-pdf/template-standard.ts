@@ -75,25 +75,37 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       return doc.y - cy;
     }
     function estimateContentHeight(text: string, width: number): number {
+      return buildContentBlocks(text, width).reduce((s, b) => s + b.height, 0);
+    }
+
+    // Bloques pre-computados para soportar page breaks dentro de un cuadro
+    // largo (LOTO, criterios, etc.). Cada bloque conoce su altura.
+    type ContentBlock =
+      | { kind: "text"; line: string; height: number }
+      | { kind: "table"; rows: string[][]; height: number };
+    function buildContentBlocks(text: string, width: number): ContentBlock[] {
       const ROW_H = 16;
       const lines = text.split("\n");
-      let h = 0, i = 0;
+      const blocks: ContentBlock[] = [];
+      let i = 0;
       while (i < lines.length) {
         const l = lines[i];
         if (l.trimStart().startsWith("|") && l.trimEnd().endsWith("|")) {
-          const block: string[] = [];
+          const tableLines: string[] = [];
           while (i < lines.length && lines[i].trimStart().startsWith("|") && lines[i].trimEnd().endsWith("|")) {
-            block.push(lines[i]); i++;
+            tableLines.push(lines[i]); i++;
           }
-          const rows = parseMarkdownTable(block);
-          h += rows.length * ROW_H + 4;
+          const rows = parseMarkdownTable(tableLines);
+          blocks.push({ kind: "table", rows, height: rows.length * ROW_H + 4 });
         } else {
-          if (l.trim()) h += doc.fontSize(9.5).font("Helvetica").heightOfString(stripBold(l), { width, lineGap: 2 });
-          else h += 6;
+          const h = l.trim()
+            ? doc.fontSize(9.5).font("Helvetica").heightOfString(stripBold(l), { width, lineGap: 2 })
+            : 6;
+          blocks.push({ kind: "text", line: l, height: h });
           i++;
         }
       }
-      return h;
+      return blocks;
     }
     function renderContentAt(text: string, cx: number, cy: number, width: number): number {
       const ROW_H = 16;
@@ -154,28 +166,104 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       y += boxH;
     }
 
+    // Renderiza una caja con header oscuro y contenido. Si el contenido excede
+    // la página, divide en segmentos: cada uno con su propia caja. En las
+    // continuaciones se muestra "LABEL (cont.)" para que se entienda.
     function textRowHighlight(label: string, rawText: string, span = 1, totalCols = 3) {
       const text = val(rawText);
       const colW = W / totalCols;
       const boxW = colW * span;
       const innerW = boxW - 20;
       const LABEL_H = 22;
-      const contentH = text === "—"
-        ? doc.fontSize(10).font("Helvetica").heightOfString("—", { width: innerW, lineGap: 2 })
-        : estimateContentHeight(text, innerW);
-      const boxH = Math.max(44, contentH + LABEL_H + 8);
-      ensureSpace(boxH);
-      doc.rect(ML, y, boxW, LABEL_H).fillColor("#0f172a").fill();
-      doc.fontSize(11.2).font("Helvetica-Bold").fillColor("#ffffff")
-        .text(label.toUpperCase(), ML + 10, y + 5, { width: boxW - 20, characterSpacing: 0.8 });
-      doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).fillColor(bgBox).fill();
-      doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).strokeColor(border).lineWidth(0.5).stroke();
+      const TOP_PAD = 5;
+      const BOTTOM_PAD = 3;
+
       if (text === "—") {
-        doc.fontSize(10).font("Helvetica").fillColor(gray).text("—", ML + 10, y + LABEL_H + 5, { width: innerW, lineGap: 2 });
-      } else {
-        renderContentAt(text, ML + 10, y + LABEL_H + 5, innerW);
+        const emptyH = doc.fontSize(10).font("Helvetica").heightOfString("—", { width: innerW, lineGap: 2 });
+        const boxH = Math.max(44, emptyH + LABEL_H + 8);
+        ensureSpace(boxH);
+        doc.rect(ML, y, boxW, LABEL_H).fillColor("#0f172a").fill();
+        doc.fontSize(11.2).font("Helvetica-Bold").fillColor("#ffffff")
+          .text(label.toUpperCase(), ML + 10, y + 5, { width: boxW - 20, characterSpacing: 0.8 });
+        doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).strokeColor(border).lineWidth(0.5).stroke();
+        doc.fontSize(10).font("Helvetica").fillColor(gray)
+          .text("—", ML + 10, y + LABEL_H + TOP_PAD, { width: innerW, lineGap: 2 });
+        y += boxH;
+        return;
       }
-      y += boxH;
+
+      const blocks = buildContentBlocks(text, innerW);
+
+      // Agrupar en segmentos (uno por página). El primer segmento incluye
+      // la barra de label oscura. Las continuaciones usan label más liviano.
+      type Segment = { blocks: ContentBlock[]; isFirst: boolean };
+      const segments: Segment[] = [];
+      let curSeg: Segment = { blocks: [], isFirst: true };
+      let availableSpace = CONTENT_BOTTOM - y;
+      let curUsed = LABEL_H + TOP_PAD + BOTTOM_PAD;
+      for (const block of blocks) {
+        if (curUsed + block.height > availableSpace && curSeg.blocks.length > 0) {
+          segments.push(curSeg);
+          curSeg = { blocks: [], isFirst: false };
+          availableSpace = CONTENT_BOTTOM - MARGIN_V;
+          curUsed = LABEL_H + TOP_PAD + BOTTOM_PAD;
+        }
+        curSeg.blocks.push(block);
+        curUsed += block.height;
+      }
+      segments.push(curSeg);
+
+      // Render
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments[si];
+        if (!seg.isFirst) {
+          doc.addPage();
+          y = MARGIN_V;
+        }
+        const contentH = seg.blocks.reduce((s, b) => s + b.height, 0);
+        const boxH = Math.max(seg.isFirst && segments.length === 1 ? 44 : LABEL_H + 8,
+                              LABEL_H + contentH + TOP_PAD + BOTTOM_PAD);
+
+        // Label bar (con sufijo "(cont.)" si es continuación)
+        const segLabel = seg.isFirst ? label.toUpperCase() : `${label.toUpperCase()} (CONT.)`;
+        doc.rect(ML, y, boxW, LABEL_H).fillColor("#0f172a").fill();
+        doc.fontSize(11.2).font("Helvetica-Bold").fillColor("#ffffff")
+          .text(segLabel, ML + 10, y + 5, { width: boxW - 20, characterSpacing: 0.8 });
+
+        // Content box
+        doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).fillColor(bgBox).fill();
+        doc.roundedRect(ML, y + LABEL_H, boxW, boxH - LABEL_H, 0).strokeColor(border).lineWidth(0.5).stroke();
+
+        // Render blocks dentro del cuadro
+        let ry = y + LABEL_H + TOP_PAD;
+        for (const block of seg.blocks) {
+          if (block.kind === "table") {
+            const colCount = block.rows[0]?.length ?? 1;
+            const colW2 = innerW / colCount;
+            const ROW_H = 16;
+            block.rows.forEach((row, ri) => {
+              const isHeader = ri === 0;
+              const rowBg = isHeader ? "#e2e8f0" : (ri % 2 === 0 ? "#f8fafc" : "#ffffff");
+              doc.rect(ML + 10, ry, innerW, ROW_H).fillColor(rowBg).fill();
+              doc.rect(ML + 10, ry, innerW, ROW_H).strokeColor(border).lineWidth(0.4).stroke();
+              row.forEach((cellVal, ci) => {
+                doc.fontSize(8).font(isHeader ? "Helvetica-Bold" : "Helvetica").fillColor(black)
+                  .text(stripBold(cellVal), ML + 10 + ci * colW2 + 4, ry + 4, { width: colW2 - 8, lineBreak: false });
+              });
+              ry += ROW_H;
+            });
+            ry += 4;
+          } else {
+            if (block.line.trim()) {
+              renderLineWithBold(block.line, ML + 10, ry, innerW);
+            }
+            ry += block.height;
+          }
+        }
+
+        y += boxH;
+      }
     }
 
     function inlineRow(fields: Array<{ label: string; value: string; color?: string }>) {
