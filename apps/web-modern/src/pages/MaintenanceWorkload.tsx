@@ -14,6 +14,7 @@ interface WorkloadWeek {
   taskCount: number;
   dateBased: number;
   hoursBased: number;
+  laborHours: number;
 }
 
 interface WorkloadProjection {
@@ -22,7 +23,10 @@ interface WorkloadProjection {
   projectedPlans: number;
   unscheduledHoursPlans: number;
   unscheduledDatePlans: number;
+  plansWithoutEstimate: number;
 }
+
+type Mode = "count" | "hours";
 
 const WEEK_OPTIONS: { value: number; label: string }[] = [
   { value: 26, label: "6 meses" },
@@ -54,6 +58,7 @@ function formatWeekTooltip(iso: string): string {
 
 export const MaintenanceWorkloadPage: React.FC = () => {
   const [weeks, setWeeks] = useState<number>(52);
+  const [mode, setMode] = useState<Mode>("count");
 
   const { data, loading, error, reload } = useFetch<WorkloadProjection>(
     `/app/dashboard/maintenance-workload?weeks=${weeks}`,
@@ -65,27 +70,36 @@ export const MaintenanceWorkloadPage: React.FC = () => {
     return data.weeks.map(w => ({
       weekStart: w.weekStart,
       label: formatWeekLabel(w.weekStart),
+      // count mode
       total: w.taskCount,
       dateBased: w.dateBased,
       hoursBased: w.hoursBased,
+      // hours mode
+      laborHours: Math.round(w.laborHours * 10) / 10,
     }));
   }, [data]);
 
   const stats = useMemo(() => {
     if (!data) return { avg: 0, max: 0, maxWeek: null as string | null };
-    const counts = data.weeks.map(w => w.taskCount);
-    const total = counts.reduce((a, b) => a + b, 0);
-    const avg = counts.length > 0 ? total / counts.length : 0;
+    const values = mode === "count"
+      ? data.weeks.map(w => w.taskCount)
+      : data.weeks.map(w => w.laborHours);
+    const total = values.reduce((a, b) => a + b, 0);
+    const avg = values.length > 0 ? total / values.length : 0;
     let max = 0;
     let maxWeek: string | null = null;
     for (const w of data.weeks) {
-      if (w.taskCount > max) {
-        max = w.taskCount;
+      const v = mode === "count" ? w.taskCount : w.laborHours;
+      if (v > max) {
+        max = v;
         maxWeek = w.weekStart;
       }
     }
     return { avg, max, maxWeek };
-  }, [data]);
+  }, [data, mode]);
+
+  const unit = mode === "count" ? "tareas" : "hs-hombre";
+  const isHours = mode === "hours";
 
   return (
     <div className="space-y-4">
@@ -109,6 +123,33 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         </div>
       </PageHeader>
 
+      {/* Toggle modo */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-text-industrial/60">Métrica:</span>
+        <div className="inline-flex rounded-lg border border-white/10 bg-primary-bg/60 p-0.5">
+          <button
+            onClick={() => setMode("count")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              mode === "count"
+                ? "bg-accent text-primary-bg font-bold"
+                : "text-text-industrial/70 hover:text-white"
+            }`}
+          >
+            Por cantidad
+          </button>
+          <button
+            onClick={() => setMode("hours")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              mode === "hours"
+                ? "bg-accent text-primary-bg font-bold"
+                : "text-text-industrial/70 hover:text-white"
+            }`}
+          >
+            Por horas-hombre
+          </button>
+        </div>
+      </div>
+
       {/* Resumen ejecutivo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Planes activos" value={data?.totalPlans ?? 0} />
@@ -116,14 +157,26 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         <StatCard
           label="Promedio semanal"
           value={Math.round(stats.avg * 10) / 10}
-          hint="tareas/semana"
+          hint={`${unit}/semana`}
         />
         <StatCard
           label="Pico"
-          value={stats.max}
+          value={Math.round(stats.max * 10) / 10}
           hint={stats.maxWeek ? formatWeekTooltip(stats.maxWeek) : undefined}
         />
       </div>
+
+      {/* Aviso de planes sin estimación (solo en modo horas) */}
+      {isHours && data && data.plansWithoutEstimate > 0 && (
+        <div className="bento-card p-3! flex items-start gap-3 border-orange-500/30 bg-orange-500/5">
+          <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-text-industrial/70">
+            <span className="font-bold text-orange-300">{data.plansWithoutEstimate}</span>{" "}
+            plan{data.plansWithoutEstimate !== 1 ? "es" : ""} proyectado{data.plansWithoutEstimate !== 1 ? "s" : ""} sin horas estimadas
+            — la curva está subestimada hasta cargarles tiempo de ejecución en el formulario del plan.
+          </div>
+        </div>
+      )}
 
       {/* Aviso de planes sin proyectar */}
       {data && (data.unscheduledHoursPlans > 0 || data.unscheduledDatePlans > 0) && (
@@ -152,9 +205,13 @@ export const MaintenanceWorkloadPage: React.FC = () => {
       <div className="bento-card p-4!">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h2 className="text-sm font-bold text-white">Tareas por semana — próximos {weeks > 52 ? `${Math.round(weeks/4.33)} meses` : weeks === 52 ? "12 meses" : `${Math.round(weeks/4.33)} meses`}</h2>
+            <h2 className="text-sm font-bold text-white">
+              {isHours ? "Horas-hombre" : "Tareas"} por semana — próximos {weeks > 52 ? `${Math.round(weeks/4.33)} meses` : weeks === 52 ? "12 meses" : `${Math.round(weeks/4.33)} meses`}
+            </h2>
             <p className="text-[11px] text-text-industrial/40">
-              Suma de ocurrencias proyectadas. Planes por horas estimados según historial reciente del motor.
+              {isHours
+                ? "Suma de horas estimadas (estimatedHours del plan) por cada ocurrencia proyectada en la semana."
+                : "Suma de ocurrencias proyectadas. Planes por horas estimados según historial reciente del motor."}
             </p>
           </div>
           {loading && <Loader2 className="w-4 h-4 text-accent animate-spin" />}
@@ -178,7 +235,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                 />
                 <YAxis
                   tick={{ fill: "rgba(224,225,221,0.5)", fontSize: 10 }}
-                  allowDecimals={false}
+                  allowDecimals={isHours}
                 />
                 <Tooltip
                   contentStyle={{
@@ -207,44 +264,52 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                     }}
                   />
                 )}
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  name="Total tareas"
-                  stroke="#22d3ee"
-                  strokeWidth={2}
-                  dot={{ r: 2, fill: "#22d3ee" }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="dateBased"
-                  name="Por fecha"
-                  stroke="#a78bfa"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="hoursBased"
-                  name="Por horas"
-                  stroke="#f97316"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  dot={false}
-                />
+                {isHours ? (
+                  <Line
+                    type="monotone"
+                    dataKey="laborHours"
+                    name="Horas-hombre estimadas"
+                    stroke="#22d3ee"
+                    strokeWidth={2}
+                    dot={{ r: 2, fill: "#22d3ee" }}
+                    activeDot={{ r: 5 }}
+                  />
+                ) : (
+                  <>
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      name="Total tareas"
+                      stroke="#22d3ee"
+                      strokeWidth={2}
+                      dot={{ r: 2, fill: "#22d3ee" }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="dateBased"
+                      name="Por fecha"
+                      stroke="#a78bfa"
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="hoursBased"
+                      name="Por horas"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
+                      dot={false}
+                    />
+                  </>
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
-
-      <p className="text-[11px] text-text-industrial/40">
-        Etapa actual: cantidad de tareas por semana. Próxima etapa: estimar la
-        carga real en horas-hombre a medida que cada tarea tenga su tiempo
-        estimado de ejecución.
-      </p>
     </div>
   );
 };

@@ -23,6 +23,7 @@ export interface CreateMaintenancePlanInput {
   triggerType: "HOURS" | "MONTHS" | "CONDITION" | "EVENT" | "CALENDAR" | "RUNNING_HOURS";
   frequencyHours?: number | null;
   frequencyMonths?: number | null;
+  estimatedHours?: number | null;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
@@ -57,6 +58,7 @@ export interface UpdateMaintenancePlanInput {
   triggerType?: "HOURS" | "MONTHS" | "CONDITION" | "EVENT" | "CALENDAR" | "RUNNING_HOURS";
   frequencyHours?: number | null;
   frequencyMonths?: number | null;
+  estimatedHours?: number | null;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
@@ -184,6 +186,7 @@ interface MaintenancePlanRecord {
   triggerType: string;
   frequencyHours: number | null;
   frequencyMonths: number | null;
+  estimatedHours: number | null;
   status: string;
   lastExecutionDate: Date | null;
   nextDueDate: Date | null;
@@ -805,6 +808,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     triggerType: payload.triggerType,
     frequencyHours: normalizeOptionalNumber(payload.frequencyHours, "frequencyHours"),
     frequencyMonths: normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths"),
+    estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
     responsible: normalizeOptionalText(payload.responsible),
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
     loto: normalizeOptionalText(payload.loto),
@@ -887,6 +891,7 @@ export async function updateTenantMaintenancePlan(
   if (payload.triggerType !== undefined) data.triggerType = payload.triggerType;
   if (payload.frequencyHours !== undefined) data.frequencyHours = normalizeOptionalNumber(payload.frequencyHours, "frequencyHours");
   if (payload.frequencyMonths !== undefined) data.frequencyMonths = normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths");
+  if (payload.estimatedHours !== undefined) data.estimatedHours = normalizeOptionalNumber(payload.estimatedHours, "estimatedHours");
   if (payload.responsible !== undefined) data.responsible = normalizeOptionalText(payload.responsible);
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
@@ -1077,7 +1082,9 @@ export async function openFormalWorkOrder(
         title: normalizeOptionalText(payload.title) ?? plan.title,
         description: normalizeOptionalText(payload.description) ?? plan.description,
         assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
-        estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
+        estimatedHours: payload.estimatedHours !== undefined
+          ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")
+          : (planAny.estimatedHours ?? null),
         taskMasterId: plan.taskMasterId ?? null,
         acceptanceCriteria: inherit<string>(payload.acceptanceCriteria, planAny.acceptanceCriteria),
         loto: inherit<string>(payload.loto, planAny.loto),
@@ -1304,6 +1311,8 @@ export interface WorkloadWeek {
   taskCount: number;
   dateBased: number;
   hoursBased: number;
+  /** Horas-hombre estimadas que caen en esta semana (suma de plan.estimatedHours por cada ocurrencia proyectada). */
+  laborHours: number;
 }
 
 export interface MaintenanceWorkloadProjection {
@@ -1312,6 +1321,8 @@ export interface MaintenanceWorkloadProjection {
   projectedPlans: number;
   unscheduledHoursPlans: number;
   unscheduledDatePlans: number;
+  /** Cantidad de planes proyectados que no tienen estimatedHours definido. Indica cuánto de la curva de horas no está siendo contado. */
+  plansWithoutEstimate: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -1385,6 +1396,7 @@ export async function getMaintenanceWorkloadProjection(
       taskCount: 0,
       dateBased: 0,
       hoursBased: 0,
+      laborHours: 0,
     });
   }
   const weekIndexByStart = new Map(weekBuckets.map((w, i) => [w.weekStart, i]));
@@ -1404,6 +1416,7 @@ export async function getMaintenanceWorkloadProjection(
     projectedPlans: 0,
     unscheduledHoursPlans: 0,
     unscheduledDatePlans: 0,
+    plansWithoutEstimate: 0,
   };
 
   const prismaRaw = getPrismaClient();
@@ -1423,6 +1436,7 @@ export async function getMaintenanceWorkloadProjection(
         triggerType: string;
         frequencyHours: number | null;
         frequencyMonths: number | null;
+        estimatedHours: number | null;
         nextDueDate: Date | null;
         nextDueHours: number | null;
         lastExecutionDate: Date | null;
@@ -1439,6 +1453,7 @@ export async function getMaintenanceWorkloadProjection(
       triggerType: true,
       frequencyHours: true,
       frequencyMonths: true,
+      estimatedHours: true,
       nextDueDate: true,
       nextDueHours: true,
       lastExecutionDate: true,
@@ -1510,6 +1525,7 @@ export async function getMaintenanceWorkloadProjection(
   let projectedPlans = 0;
   let unscheduledHoursPlans = 0;
   let unscheduledDatePlans = 0;
+  let plansWithoutEstimate = 0;
 
   // Tope defensivo: máximo de ocurrencias proyectadas por plan dentro de la ventana.
   // Aún para planes semanales con ventana de 104 semanas, 200 alcanza con margen.
@@ -1517,6 +1533,7 @@ export async function getMaintenanceWorkloadProjection(
 
   for (const plan of plans) {
     const trigger = plan.triggerType;
+    const estHours = plan.estimatedHours ?? 0;
 
     if (isDateTrigger(trigger)) {
       // Punto de partida
@@ -1543,6 +1560,7 @@ export async function getMaintenanceWorkloadProjection(
         if (bucket) {
           bucket.taskCount++;
           bucket.dateBased++;
+          bucket.laborHours += estHours;
           scheduledThisPlan = true;
         }
         const next = advanceDateOccurrence(trigger, plan.frequencyMonths, cursor);
@@ -1550,8 +1568,12 @@ export async function getMaintenanceWorkloadProjection(
         cursor = next;
         count++;
       }
-      if (scheduledThisPlan) projectedPlans++;
-      else unscheduledDatePlans++;
+      if (scheduledThisPlan) {
+        projectedPlans++;
+        if (plan.estimatedHours == null) plansWithoutEstimate++;
+      } else {
+        unscheduledDatePlans++;
+      }
       continue;
     }
 
@@ -1577,13 +1599,18 @@ export async function getMaintenanceWorkloadProjection(
         if (bucket) {
           bucket.taskCount++;
           bucket.hoursBased++;
+          bucket.laborHours += estHours;
           scheduledThisPlan = true;
         }
         occurrence = addUtcDays(occurrence, daysBetween);
         count++;
       }
-      if (scheduledThisPlan) projectedPlans++;
-      else unscheduledHoursPlans++;
+      if (scheduledThisPlan) {
+        projectedPlans++;
+        if (plan.estimatedHours == null) plansWithoutEstimate++;
+      } else {
+        unscheduledHoursPlans++;
+      }
       continue;
     }
 
@@ -1596,5 +1623,6 @@ export async function getMaintenanceWorkloadProjection(
     projectedPlans,
     unscheduledHoursPlans,
     unscheduledDatePlans,
+    plansWithoutEstimate,
   };
 }

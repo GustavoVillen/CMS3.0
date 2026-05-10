@@ -52,6 +52,7 @@ interface MaintenancePlan {
   triggerType: string;
   frequencyHours: number | null;
   frequencyMonths: number | null;
+  estimatedHours: number | null;
   status: string;
   executionStatus: string;
   lastExecutionDate: string | null;
@@ -1027,6 +1028,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [triggerType, setTriggerType] = useState<TriggerType>((plan?.triggerType as TriggerType) ?? "MONTHS");
   const [frequencyMonths, setFrequencyMonths] = useState(String(plan?.frequencyMonths ?? ""));
   const [frequencyHours, setFrequencyHours] = useState(String(plan?.frequencyHours ?? ""));
+  const [estimatedHours, setEstimatedHours] = useState(String(plan?.estimatedHours ?? ""));
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
@@ -1127,6 +1129,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setTriggerType((plan.triggerType as TriggerType) ?? "MONTHS");
     setFrequencyMonths(String(plan.frequencyMonths ?? ""));
     setFrequencyHours(String(plan.frequencyHours ?? ""));
+    setEstimatedHours(String(plan.estimatedHours ?? ""));
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
@@ -1310,6 +1313,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           triggerType,
           frequencyMonths: freqMonths,
           frequencyHours: freqHours,
+          estimatedHours: estimatedHours ? Number(estimatedHours) : null,
           triggerResultMode,
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
@@ -1337,6 +1341,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           triggerType,
           frequencyMonths: freqMonths,
           frequencyHours: freqHours,
+          estimatedHours: estimatedHours ? Number(estimatedHours) : null,
           triggerResultMode,
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
@@ -1771,6 +1776,23 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 <select value={triggerResultMode} onChange={e => setTriggerResultMode(e.target.value)} className={selectCls}>
                   {TRIGGER_RESULT_MODES.map(m => <option key={m} value={m}>{t(`mp.trm.${m}` as any)}</option>)}
                 </select>
+              </div>
+            </div>
+
+            {/* Horas estimadas para ejecutar la tarea */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("mp.estimatedHours")}</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={estimatedHours}
+                  onChange={e => setEstimatedHours(e.target.value)}
+                  placeholder="—"
+                  className={inputCls}
+                  disabled={readOnly}
+                />
               </div>
             </div>
 
@@ -2325,6 +2347,11 @@ export const MaintenancePlansPage: React.FC = () => {
       render: row => (
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs text-text-industrial/80 whitespace-nowrap">{formatFrequency(row)}</span>
+          {row.estimatedHours != null && (
+            <span className="font-mono text-[10px] text-accent/70 whitespace-nowrap">
+              {t("mp.col.estimatedShort")}: {row.estimatedHours} hs
+            </span>
+          )}
           {needsHours(row.triggerType) && (
             <span className="font-mono text-[10px] text-text-industrial/45 whitespace-nowrap">
               {t("mp.col.accumulated")}: {row.assetCurrentHours != null ? `${row.assetCurrentHours.toLocaleString()} hs` : "—"}

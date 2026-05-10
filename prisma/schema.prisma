@@ -954,6 +954,7 @@ model MaintenancePlan {
   triggerType          MaintenancePlanTrigger
   frequencyHours       Float?
   frequencyMonths      Int?
+  estimatedHours       Float?
   responsible          String?
   acceptanceCriteria   String?
   loto                 String?
