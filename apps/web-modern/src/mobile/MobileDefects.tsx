@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { ChevronLeft, Plus, Loader2 } from "lucide-react";
+import { ChevronLeft, Plus, Loader2, Camera, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
@@ -42,8 +42,23 @@ export const MobileDefects: React.FC = () => {
   const [description, setDescription]         = useState("");
   const [severity, setSeverity]               = useState("MEDIUM");
   const [operationalState, setOperationalState] = useState("NORMAL");
+  const [photoFile, setPhotoFile]             = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview]       = useState<string | null>(null);
   const [saving, setSaving]                   = useState(false);
   const [err, setErr]                         = useState<string | null>(null);
+
+  const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setPhotoFile(f);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(f ? URL.createObjectURL(f) : null);
+  };
+
+  const clearPhoto = () => {
+    setPhotoFile(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(null);
+  };
 
   const openDefects = useMemo(
     () => (data?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED"),
@@ -53,6 +68,7 @@ export const MobileDefects: React.FC = () => {
   const openCreate = () => {
     setAssetId(""); setClassification("Mecánico"); setDescription("");
     setSeverity("MEDIUM"); setOperationalState("NORMAL"); setErr(null);
+    clearPhoto();
     setView("create");
   };
 
@@ -62,7 +78,7 @@ export const MobileDefects: React.FC = () => {
     if (!description.trim()) { setErr("La descripción es requerida.");  return; }
     setSaving(true); setErr(null);
     try {
-      await api.post("/app/pms/defects", {
+      const created = await api.post<{ id: string }>("/app/pms/defects", {
         vesselCode:     selectedVesselCode,
         assetId,
         classification: classification.trim(),
@@ -70,6 +86,13 @@ export const MobileDefects: React.FC = () => {
         severity,
         operationalState,
       });
+      // Subir foto si fue capturada (no bloquea el flujo si falla la subida)
+      if (photoFile && created.id) {
+        try {
+          await api.upload(`/app/attachments/upload?entityType=Defect&entityId=${created.id}`, photoFile);
+        } catch { /* non-blocking */ }
+      }
+      clearPhoto();
       await reload();
       setView("list");
     } catch (e) {
@@ -77,7 +100,7 @@ export const MobileDefects: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedVesselCode, assetId, classification, description, severity, operationalState, reload]);
+  }, [selectedVesselCode, assetId, classification, description, severity, operationalState, photoFile, reload]);
 
   // ─── ESC guard ──────────────────────────────────────────────────────────────
   const createDirty =
@@ -160,6 +183,37 @@ export const MobileDefects: React.FC = () => {
               className={inputCls + " resize-none"}
             />
           </div>
+
+          {/* Foto opcional: usa la cámara trasera del celular */}
+          <div className="space-y-1.5">
+            <p className={labelCls}>Foto (opcional)</p>
+            {photoPreview ? (
+              <div className="relative">
+                <img src={photoPreview} alt="Vista previa" className="w-full rounded-xl border border-white/10 object-cover max-h-72" />
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white"
+                  aria-label="Quitar foto"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
+                <Camera className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={onPhotoSelect}
+                />
+              </label>
+            )}
+          </div>
+
           {err && <p className="text-xs text-red-400">{err}</p>}
           <button
             type="button"

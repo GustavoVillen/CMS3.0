@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, Camera, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
@@ -97,8 +97,23 @@ export const MobileWorkOrders: React.FC = () => {
   const [runningHours, setRunningHours] = useState("");
   const [executedByName, setExecutedByName] = useState("");
   const [executionDate, setExecutionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [photoFile, setPhotoFile]   = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving]       = useState(false);
   const [err, setErr]             = useState<string | null>(null);
+
+  const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setPhotoFile(f);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(f ? URL.createObjectURL(f) : null);
+  };
+
+  const clearPhoto = () => {
+    setPhotoFile(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(null);
+  };
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const isOverdue = (wo: WO) => !!wo.dueDate && new Date(wo.dueDate) < today;
@@ -117,6 +132,7 @@ export const MobileWorkOrders: React.FC = () => {
     setRunningHours("");
     setExecutedByName("");
     setExecutionDate(new Date().toISOString().slice(0, 10));
+    clearPhoto();
     setErr(null);
   };
 
@@ -146,6 +162,13 @@ export const MobileWorkOrders: React.FC = () => {
         actualHours: actualHours ? Number(actualHours) : null,
         runningHoursAtExecution: runningHours ? Number(runningHours) : null,
       });
+      // Subir foto si fue capturada (no bloquea el cierre si la subida falla)
+      if (photoFile) {
+        try {
+          await api.upload(`/app/attachments/upload?entityType=WorkOrder&entityId=${selected.id}`, photoFile);
+        } catch { /* non-blocking */ }
+      }
+      clearPhoto();
       await reload();
       back();
     } catch (e) {
@@ -153,7 +176,7 @@ export const MobileWorkOrders: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, reload]);
+  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, photoFile, reload]);
 
   // ─── ESC guard: cierre con confirmación según vista ─────────────────────────
   const closeFormDirty =
@@ -282,6 +305,37 @@ export const MobileWorkOrders: React.FC = () => {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
             />
           </div>
+
+          {/* Foto opcional: usa la cámara trasera del celular */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Foto (opcional)</p>
+            {photoPreview ? (
+              <div className="relative">
+                <img src={photoPreview} alt="Vista previa" className="w-full rounded-xl border border-white/10 object-cover max-h-72" />
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white"
+                  aria-label="Quitar foto"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
+                <Camera className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={onPhotoSelect}
+                />
+              </label>
+            )}
+          </div>
+
           {err && <p className="text-xs text-red-400">{err}</p>}
           <button
             type="button"

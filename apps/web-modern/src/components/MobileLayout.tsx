@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { LayoutDashboard, Bot, LogOut, Wrench, AlertTriangle, ClipboardList, Package } from "lucide-react";
+import { LayoutDashboard, Bot, LogOut, Wrench, AlertTriangle, ClipboardList, Package, CalendarClock } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { CopilotContextProvider } from "../lib/copilot-context";
@@ -9,8 +9,9 @@ import { MobileWorkOrders } from "../mobile/MobileWorkOrders";
 import { MobileDefects } from "../mobile/MobileDefects";
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares } from "../mobile/MobileSpares";
+import { MobilePlans } from "../mobile/MobilePlans";
 
-type Tab = "dashboard" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
+type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
 
 interface TabDef {
   id: Tab;
@@ -20,6 +21,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "dashboard", label: "Panel",     Icon: LayoutDashboard },
+  { id: "planes",    label: "Planes",    Icon: CalendarClock   },
   { id: "ots",       label: "OTs",       Icon: Wrench          },
   { id: "defectos",  label: "Defectos",  Icon: AlertTriangle   },
   { id: "diario",    label: "Diario",    Icon: ClipboardList   },
@@ -72,6 +74,7 @@ export const MobileLayout: React.FC = () => {
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-hidden">
           {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard /></div>}
+          {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans /></div>}
           {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders /></div>}
           {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects /></div>}
           {tab === "diario"     && <div className="h-full overflow-hidden flex flex-col"><MobileDailyReport /></div>}
@@ -80,18 +83,18 @@ export const MobileLayout: React.FC = () => {
         </main>
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
-        <nav className="shrink-0 grid grid-cols-6 border-t border-white/10 bg-[#0D1B2A]">
+        <nav className="shrink-0 grid grid-cols-7 border-t border-white/10 bg-[#0D1B2A]">
           {TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
+              className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors min-w-0 ${
                 tab === id ? "text-accent" : "text-text-industrial/40 hover:text-white/60"
               }`}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider truncate w-full text-center px-0.5">{label}</span>
             </button>
           ))}
         </nav>
