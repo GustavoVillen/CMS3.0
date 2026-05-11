@@ -120,7 +120,10 @@ export const MobileDailyReport: React.FC = () => {
     setHoursByAsset(prev => ({ ...prev, [assetId]: val }));
   };
 
-  const handleCreate = useCallback(async () => {
+  // Guarda el reporte (POST si nuevo, PATCH si edición) + horas por equipo.
+  // Si submit=true → transiciona a SUBMITTED y llama confirm-and-integrate
+  // para propagar horas a los planes de mantenimiento (igual que desktop).
+  const saveReport = useCallback(async (submit: boolean) => {
     if (!selectedVesselCode) { setErr("Seleccioná un buque primero."); return; }
     setSaving(true); setErr(null);
     try {
@@ -159,6 +162,14 @@ export const MobileDailyReport: React.FC = () => {
         } catch { /* no bloquea — el reporte base ya quedó guardado */ }
       }
 
+      // 3) Si submit=true: transicionar a SUBMITTED + integrar (propaga horas a planes)
+      if (submit && reportId) {
+        await api.patch(`/app/daily-reports/${reportId}`, { status: "SUBMITTED" });
+        try {
+          await api.post(`/app/daily-reports/${reportId}/confirm-and-integrate`);
+        } catch { /* no bloquea el cambio de status — la integración puede reintentarse */ }
+      }
+
       await reload();
       setView("list");
       setEditingId(null);
@@ -169,6 +180,10 @@ export const MobileDailyReport: React.FC = () => {
     }
   }, [editingId, selectedVesselCode, todayStr, opStatus, fuel, oil, notes, hoursByAsset, trackedAssets, reload]);
 
+  // Aliases para los handlers de escape-guard y para los onClick de botones
+  const handleSaveDraft = useCallback(() => saveReport(false), [saveReport]);
+  const handleSubmit    = useCallback(() => saveReport(true),  [saveReport]);
+
   // ─── ESC guard ──────────────────────────────────────────────────────────────
   const anyHoursTyped = Object.values(hoursByAsset).some(v => v.trim() !== "");
   const createDirty =
@@ -178,7 +193,7 @@ export const MobileDailyReport: React.FC = () => {
   useEscapeGuard({
     enabled: view === "create",
     isDirty: createDirty,
-    onSave: handleCreate,
+    onSave: handleSaveDraft,
     onClose: () => setView("list"),
   });
 
@@ -258,14 +273,29 @@ export const MobileDailyReport: React.FC = () => {
             />
           </div>
           {err && <p className="text-xs text-red-400">{err}</p>}
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar reporte"}
-          </button>
+
+          {/* Dos acciones: guardar como borrador (DRAFT) o enviar (SUBMITTED + integrar) */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={saving}
+              className="py-3 rounded-xl bg-white/5 border border-white/15 text-text-industrial text-sm font-bold disabled:opacity-40 hover:bg-white/10"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar borrador"}
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Enviar"}
+            </button>
+          </div>
+          <p className="text-[10px] text-text-industrial/40 leading-snug">
+            <span className="font-bold">Enviar</span> propaga las horas a los planes de mantenimiento y deja el reporte como definitivo. <span className="font-bold">Guardar borrador</span> permite seguir editando.
+          </p>
         </div>
       </div>
     );
