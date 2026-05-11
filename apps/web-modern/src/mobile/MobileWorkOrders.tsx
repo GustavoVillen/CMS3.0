@@ -8,6 +8,7 @@ interface WO {
   id: string;
   workOrderCode: string;
   title: string | null;
+  description: string | null;
   status: string;
   criticality: string;
   dueDate: string | null;
@@ -19,7 +20,37 @@ interface WO {
   maintenancePlanId: string | null;
   executedByName: string | null;
   completedDate: string | null;
+  // Plan fields
+  acceptanceCriteria: string | null;
+  loto: string | null;
+  riskLevel: string | null;
+  riskAnalysisResult: string | null;
+  consequenceCategory: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale: string | null;
 }
+
+const RISK_LABEL: Record<string, string> = {
+  LOW:      "Bajo",
+  MEDIUM:   "Medio",
+  HIGH:     "Alto",
+  CRITICAL: "Crítico",
+};
+
+const RISK_COLOR: Record<string, string> = {
+  LOW:      "text-success-sea",
+  MEDIUM:   "text-yellow-400",
+  HIGH:     "text-orange-400",
+  CRITICAL: "text-red-400",
+};
+
+const CONSEQUENCE_LABEL: Record<string, string> = {
+  SAFETY:          "Seguridad",
+  ENVIRONMENTAL:   "Ambiental",
+  OPERATIONAL:     "Operacional",
+  NON_OPERATIONAL: "No operacional",
+};
+
+type InfoTab = "tarea" | "criteria" | "loto" | "riesgo" | "rcm";
 
 const STATUS_LABEL: Record<string, string> = {
   PLANNED:     "Planificada",
@@ -46,6 +77,107 @@ const CRIT_COLOR: Record<string, string> = {
 };
 
 type View = "list" | "detail" | "close";
+
+// Acordeón con 5 chips de info del plan/OT.
+// Solo se puede tener un panel abierto a la vez. Si el campo correspondiente
+// está vacío, el chip queda deshabilitado y atenuado.
+const InfoAccordion: React.FC<{
+  wo: WO;
+  active: InfoTab | null;
+  onToggle: (tab: InfoTab | null) => void;
+}> = ({ wo, active, onToggle }) => {
+  const tabs: Array<{ id: InfoTab; label: string; hasContent: boolean }> = [
+    { id: "tarea",    label: "Tarea",     hasContent: !!wo.description },
+    { id: "criteria", label: "Criterios", hasContent: !!wo.acceptanceCriteria },
+    { id: "loto",     label: "LOTO",      hasContent: !!wo.loto },
+    { id: "riesgo",   label: "Riesgo",    hasContent: !!wo.riskLevel || !!wo.riskAnalysisResult },
+    { id: "rcm",      label: "RCM",       hasContent: !!wo.consequenceCategory || !!wo.consequenceRationale },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-5 gap-1.5">
+        {tabs.map(({ id, label, hasContent }) => {
+          const isActive = active === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onToggle(isActive ? null : id)}
+              disabled={!hasContent}
+              className={`py-2 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                !hasContent
+                  ? "bg-white/5 border-white/5 text-text-industrial/20 cursor-not-allowed"
+                  : isActive
+                  ? "bg-accent/15 text-accent border-accent/40"
+                  : "bg-white/5 text-text-industrial/60 border-white/10 hover:bg-white/10 active:bg-white/15"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {active === "tarea" && wo.description && (
+        <InfoPanel label="Tarea a ejecutar">
+          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.description}</p>
+        </InfoPanel>
+      )}
+
+      {active === "criteria" && wo.acceptanceCriteria && (
+        <InfoPanel label="Criterios de aceptación">
+          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.acceptanceCriteria}</p>
+        </InfoPanel>
+      )}
+
+      {active === "loto" && wo.loto && (
+        <InfoPanel label="LOTO (Lockout / Tagout)">
+          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.loto}</p>
+        </InfoPanel>
+      )}
+
+      {active === "riesgo" && (wo.riskLevel || wo.riskAnalysisResult) && (
+        <InfoPanel label="Nivel de riesgo">
+          {wo.riskLevel && (
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-text-industrial/40">Nivel</span>
+              <span className={`text-sm font-bold ${RISK_COLOR[wo.riskLevel] ?? "text-white"}`}>
+                {RISK_LABEL[wo.riskLevel] ?? wo.riskLevel}
+              </span>
+            </div>
+          )}
+          {wo.riskAnalysisResult && (
+            <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.riskAnalysisResult}</p>
+          )}
+        </InfoPanel>
+      )}
+
+      {active === "rcm" && (wo.consequenceCategory || wo.consequenceRationale) && (
+        <InfoPanel label="RCM — Consecuencia">
+          {wo.consequenceCategory && (
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-text-industrial/40">Categoría</span>
+              <span className="text-sm font-bold text-accent">
+                {CONSEQUENCE_LABEL[wo.consequenceCategory] ?? wo.consequenceCategory}
+              </span>
+            </div>
+          )}
+          {wo.consequenceRationale && (
+            <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.consequenceRationale}</p>
+          )}
+        </InfoPanel>
+      )}
+    </div>
+  );
+};
+
+const InfoPanel: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="bg-white/5 border border-accent/20 rounded-xl p-3 space-y-1.5">
+    <p className="text-[10px] uppercase tracking-wider text-accent/70 font-bold">{label}</p>
+    {children}
+  </div>
+);
 
 // Panel de horas: muestra estimado vs real con código de color de desvío.
 // Verde si abs(desvío) <= 20% del estimado, ámbar si entre 20-50%, rojo > 50%.
@@ -91,6 +223,7 @@ export const MobileWorkOrders: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<WO | null>(null);
+  const [infoTab, setInfoTab]     = useState<InfoTab | null>(null);
   const [woResult, setWoResult]   = useState<"SATISFACTORY" | "WITH_DEFICIENCIES">("SATISFACTORY");
   const [observations, setObs]    = useState("");
   const [actualHours, setActualHours] = useState("");
@@ -122,8 +255,8 @@ export const MobileWorkOrders: React.FC = () => {
     w => w.status === "PLANNED" || w.status === "IN_PROGRESS" || w.status === "ON_HOLD",
   );
 
-  const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setErr(null); };
-  const back      = ()       => { setView("list"); setSelected(null); setErr(null); };
+  const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setInfoTab(null); setErr(null); };
+  const back      = ()       => { setView("list"); setSelected(null); setInfoTab(null); setErr(null); };
   const openClose = ()       => {
     setView("close");
     setWoResult("SATISFACTORY");
@@ -380,6 +513,9 @@ export const MobileWorkOrders: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {/* Acordeón de info: 5 chips expandibles con los campos del plan */}
+          <InfoAccordion wo={selected} active={infoTab} onToggle={setInfoTab} />
 
           {/* Bloque de horas — siempre que haya estimación o reales */}
           {(selected.estimatedHours != null || selected.actualHours != null) && (
