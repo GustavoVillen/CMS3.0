@@ -67,6 +67,9 @@ export const MobileDailyReport: React.FC = () => {
 
   const [view, setView]     = useState<View>("list");
   const [selected, setSel]  = useState<DailyReport | null>(null);
+  // editingId: si está set, el form está editando un reporte existente (PATCH);
+  //            si es null, está creando uno nuevo (POST).
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [fuel, setFuel]     = useState("");
   const [oil, setOil]       = useState("");
   const [opStatus, setOp]   = useState("UNDERWAY");
@@ -84,11 +87,34 @@ export const MobileDailyReport: React.FC = () => {
   const trackedAssets = assetsData?.items ?? [];
 
   const openCreate = () => {
+    setEditingId(null);
     setFuel(""); setOil(""); setNotes(""); setOp("UNDERWAY");
     setHoursByAsset({});
     setErr(null);
     setView("create");
   };
+
+  // Abre el form en modo edición: trae el /full del reporte y pre-carga todo.
+  const openEdit = useCallback(async (r: DailyReport) => {
+    setEditingId(r.id);
+    setFuel(r.fuelConsumedLiters != null ? String(r.fuelConsumedLiters) : "");
+    setOil(r.oilConsumedLiters != null ? String(r.oilConsumedLiters) : "");
+    setOp(r.operationalStatus ?? "UNDERWAY");
+    setNotes(r.notes ?? "");
+    setHoursByAsset({});
+    setErr(null);
+    setView("create");
+    try {
+      const full = await api.get<FullReport>(`/app/daily-reports/${r.id}/full`);
+      const map: Record<string, string> = {};
+      for (const e of (full.equipmentHours ?? [])) {
+        if (e.assetId && e.runningHoursTotal != null) {
+          map[e.assetId] = String(e.runningHoursTotal);
+        }
+      }
+      setHoursByAsset(map);
+    } catch { /* non-blocking — el form queda con assets vacíos */ }
+  }, []);
 
   const updateAssetHours = (assetId: string, val: string) => {
     setHoursByAsset(prev => ({ ...prev, [assetId]: val }));
@@ -98,18 +124,29 @@ export const MobileDailyReport: React.FC = () => {
     if (!selectedVesselCode) { setErr("Seleccioná un buque primero."); return; }
     setSaving(true); setErr(null);
     try {
-      // 1) Crear el reporte base
-      const created = await api.post<{ id: string }>("/app/daily-reports", {
-        vesselCode:         selectedVesselCode,
-        reportDate:         todayStr,
+      const payload = {
         operationalStatus:  opStatus,
         fuelConsumedLiters: fuel ? parseFloat(fuel) : null,
         oilConsumedLiters:  oil  ? parseFloat(oil)  : null,
         notes: notes.trim() || null,
-      });
+      };
+
+      // 1) Crear o actualizar el reporte base
+      let reportId: string;
+      if (editingId) {
+        await api.patch(`/app/daily-reports/${editingId}`, payload);
+        reportId = editingId;
+      } else {
+        const created = await api.post<{ id: string }>("/app/daily-reports", {
+          ...payload,
+          vesselCode: selectedVesselCode,
+          reportDate: todayStr,
+        });
+        reportId = created.id;
+      }
 
       // 2) Guardar las horas por activo (uno por cada activo con trackDailyReport=true)
-      if (created.id && trackedAssets.length > 0) {
+      if (reportId && trackedAssets.length > 0) {
         const entries = trackedAssets.map(a => ({
           assetId: a.id,
           equipmentLabel: a.name,
@@ -118,18 +155,19 @@ export const MobileDailyReport: React.FC = () => {
           standby: false,
         }));
         try {
-          await api.put(`/app/daily-reports/${created.id}/equipment-hours`, { entries });
+          await api.put(`/app/daily-reports/${reportId}/equipment-hours`, { entries });
         } catch { /* no bloquea — el reporte base ya quedó guardado */ }
       }
 
       await reload();
       setView("list");
+      setEditingId(null);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Error al guardar reporte");
     } finally {
       setSaving(false);
     }
-  }, [selectedVesselCode, todayStr, opStatus, fuel, oil, notes, hoursByAsset, trackedAssets, reload]);
+  }, [editingId, selectedVesselCode, todayStr, opStatus, fuel, oil, notes, hoursByAsset, trackedAssets, reload]);
 
   // ─── ESC guard ──────────────────────────────────────────────────────────────
   const anyHoursTyped = Object.values(hoursByAsset).some(v => v.trim() !== "");
@@ -155,10 +193,12 @@ export const MobileDailyReport: React.FC = () => {
     return (
       <div className="flex flex-col h-full">
         <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+          <button type="button" onClick={() => { setView("list"); setEditingId(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white">Reporte diario — {todayStr}</span>
+          <span className="font-bold text-sm text-white">
+            {editingId ? "Editar reporte" : "Reporte diario"} — {todayStr}
+          </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-1.5">
@@ -248,13 +288,23 @@ export const MobileDailyReport: React.FC = () => {
               <p className="text-xs font-bold text-success-sea">Reporte de hoy registrado</p>
               <p className="text-[11px] text-text-industrial/40">{STATUS_LABEL[todayRpt.status] ?? todayRpt.status}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => { setSel(todayRpt); setView("detail"); }}
-              className="text-xs text-accent font-bold shrink-0"
-            >
-              Ver
-            </button>
+            {todayRpt.status === "DRAFT" ? (
+              <button
+                type="button"
+                onClick={() => { void openEdit(todayRpt); }}
+                className="text-xs text-accent font-bold shrink-0 px-3 py-1.5 rounded-lg bg-accent/15 border border-accent/30"
+              >
+                Editar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setSel(todayRpt); setView("detail"); }}
+                className="text-xs text-accent font-bold shrink-0"
+              >
+                Ver
+              </button>
+            )}
           </div>
         ) : (
           <button
