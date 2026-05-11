@@ -11,11 +11,30 @@ interface DailyReport {
   reportDate: string;
   status: string;
   fuelConsumedLiters?: number | null;
-  engineHoursMain?: number | null;
-  generatorHours?: number | null;
   oilConsumedLiters?: number | null;
   notes?: string | null;
   operationalStatus?: string | null;
+}
+
+interface Asset {
+  id: string;
+  name: string;
+  assetCode?: string | null;
+}
+
+interface EquipmentHourEntry {
+  assetId?: string | null;
+  equipmentLabel: string;
+  runningHoursTotal: number | null;
+  fuelConsumptionLiters?: number | null;
+  oilConsumptionLiters?: number | null;
+  inService?: boolean;
+  standby?: boolean;
+}
+
+interface FullReport {
+  report: DailyReport;
+  equipmentHours: EquipmentHourEntry[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -49,33 +68,60 @@ export const MobileDailyReport: React.FC = () => {
   const [view, setView]     = useState<View>("list");
   const [selected, setSel]  = useState<DailyReport | null>(null);
   const [fuel, setFuel]     = useState("");
-  const [engineH, setEngH]  = useState("");
-  const [genH, setGenH]     = useState("");
   const [oil, setOil]       = useState("");
   const [opStatus, setOp]   = useState("UNDERWAY");
   const [notes, setNotes]   = useState("");
+  // Mapa assetId → horas totales del motor para ese activo
+  const [hoursByAsset, setHoursByAsset] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
 
+  // Activos con trackDailyReport=true para el buque seleccionado
+  const { data: assetsData } = useFetch<{ items: Asset[] }>(
+    selectedVesselCode ? `/app/pms/assets?vesselCode=${selectedVesselCode}&trackDailyReport=true` : null,
+    [selectedVesselCode],
+  );
+  const trackedAssets = assetsData?.items ?? [];
+
   const openCreate = () => {
-    setFuel(""); setEngH(""); setGenH(""); setOil(""); setNotes(""); setOp("UNDERWAY"); setErr(null);
+    setFuel(""); setOil(""); setNotes(""); setOp("UNDERWAY");
+    setHoursByAsset({});
+    setErr(null);
     setView("create");
+  };
+
+  const updateAssetHours = (assetId: string, val: string) => {
+    setHoursByAsset(prev => ({ ...prev, [assetId]: val }));
   };
 
   const handleCreate = useCallback(async () => {
     if (!selectedVesselCode) { setErr("Seleccioná un buque primero."); return; }
     setSaving(true); setErr(null);
     try {
-      await api.post("/app/daily-reports", {
+      // 1) Crear el reporte base
+      const created = await api.post<{ id: string }>("/app/daily-reports", {
         vesselCode:         selectedVesselCode,
         reportDate:         todayStr,
         operationalStatus:  opStatus,
-        fuelConsumedLiters: fuel    ? parseFloat(fuel)    : null,
-        engineHoursMain:    engineH ? parseFloat(engineH) : null,
-        generatorHours:     genH    ? parseFloat(genH)    : null,
-        oilConsumedLiters:  oil     ? parseFloat(oil)     : null,
+        fuelConsumedLiters: fuel ? parseFloat(fuel) : null,
+        oilConsumedLiters:  oil  ? parseFloat(oil)  : null,
         notes: notes.trim() || null,
       });
+
+      // 2) Guardar las horas por activo (uno por cada activo con trackDailyReport=true)
+      if (created.id && trackedAssets.length > 0) {
+        const entries = trackedAssets.map(a => ({
+          assetId: a.id,
+          equipmentLabel: a.name,
+          runningHoursTotal: hoursByAsset[a.id] ? parseFloat(hoursByAsset[a.id]) : null,
+          inService: true,
+          standby: false,
+        }));
+        try {
+          await api.put(`/app/daily-reports/${created.id}/equipment-hours`, { entries });
+        } catch { /* no bloquea — el reporte base ya quedó guardado */ }
+      }
+
       await reload();
       setView("list");
     } catch (e) {
@@ -83,13 +129,13 @@ export const MobileDailyReport: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedVesselCode, todayStr, opStatus, fuel, engineH, genH, oil, notes, reload]);
+  }, [selectedVesselCode, todayStr, opStatus, fuel, oil, notes, hoursByAsset, trackedAssets, reload]);
 
   // ─── ESC guard ──────────────────────────────────────────────────────────────
+  const anyHoursTyped = Object.values(hoursByAsset).some(v => v.trim() !== "");
   const createDirty =
     view === "create" &&
-    (fuel !== "" || engineH !== "" || genH !== "" || oil !== "" ||
-     notes.trim() !== "" || opStatus !== "UNDERWAY");
+    (fuel !== "" || oil !== "" || notes.trim() !== "" || opStatus !== "UNDERWAY" || anyHoursTyped);
 
   useEscapeGuard({
     enabled: view === "create",
@@ -123,6 +169,7 @@ export const MobileDailyReport: React.FC = () => {
               ))}
             </select>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <p className={labelCls}>Combustible (L)</p>
@@ -132,15 +179,34 @@ export const MobileDailyReport: React.FC = () => {
               <p className={labelCls}>Aceite (L)</p>
               <input type="number" inputMode="decimal" value={oil} onChange={e => setOil(e.target.value)} className={inputCls} placeholder="0" />
             </div>
-            <div className="space-y-1.5">
-              <p className={labelCls}>Motor (h)</p>
-              <input type="number" inputMode="decimal" value={engineH} onChange={e => setEngH(e.target.value)} className={inputCls} placeholder="0" />
-            </div>
-            <div className="space-y-1.5">
-              <p className={labelCls}>Generador (h)</p>
-              <input type="number" inputMode="decimal" value={genH} onChange={e => setGenH(e.target.value)} className={inputCls} placeholder="0" />
-            </div>
           </div>
+
+          {/* Horas por equipo: una fila por cada asset con trackDailyReport=true */}
+          <div className="space-y-2">
+            <p className={labelCls}>Horas por equipo</p>
+            {trackedAssets.length === 0 ? (
+              <p className="text-[11px] text-text-industrial/40 italic">
+                Este buque no tiene equipos registrados para reporte diario.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {trackedAssets.map(a => (
+                  <div key={a.id} className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1.5">
+                    <p className="text-[11px] font-semibold text-white truncate">{a.name}</p>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={hoursByAsset[a.id] ?? ""}
+                      onChange={e => updateAssetHours(a.id, e.target.value)}
+                      placeholder="Horas totales (h)"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <p className={labelCls}>Notas</p>
             <textarea
@@ -167,48 +233,7 @@ export const MobileDailyReport: React.FC = () => {
 
   // ── Detail ───────────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
-    const metrics: [string, number | null | undefined, string][] = [
-      ["Combustible", selected.fuelConsumedLiters, "L"],
-      ["Aceite",      selected.oilConsumedLiters,  "L"],
-      ["Motor",       selected.engineHoursMain,     "h"],
-      ["Generador",   selected.generatorHours,      "h"],
-    ];
-    return (
-      <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => { setView("list"); setSel(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="font-bold text-sm text-white flex-1">{selected.reportDate.slice(0, 10)}</span>
-          <span className="text-xs text-text-industrial/40">{STATUS_LABEL[selected.status] ?? selected.status}</span>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {metrics.map(([label, val, unit]) => (
-              <div key={label} className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">{label}</p>
-                <p className="text-xl font-bold text-white tabular-nums">
-                  {val != null ? `${val}` : "—"}
-                  {val != null && <span className="text-xs font-normal text-text-industrial/40 ml-1">{unit}</span>}
-                </p>
-              </div>
-            ))}
-          </div>
-          {selected.operationalStatus && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Estado</p>
-              <p className="text-sm font-bold text-white">{OP_STATUS_LABEL[selected.operationalStatus] ?? selected.operationalStatus}</p>
-            </div>
-          )}
-          {selected.notes && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
-              <p className="text-sm text-white/80 leading-relaxed">{selected.notes}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    return <ReportDetail report={selected} onBack={() => { setView("list"); setSel(null); }} />;
   }
 
   // ── List ─────────────────────────────────────────────────────────────────────
@@ -278,6 +303,79 @@ export const MobileDailyReport: React.FC = () => {
               </div>
             </button>
           ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Detail component (fetches /full for equipment hours) ─────────────────────
+
+const ReportDetail: React.FC<{ report: DailyReport; onBack: () => void }> = ({ report, onBack }) => {
+  const { data, loading } = useFetch<FullReport>(`/app/daily-reports/${report.id}/full`, [report.id]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
+        <button type="button" onClick={onBack} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <span className="font-bold text-sm text-white flex-1">{report.reportDate.slice(0, 10)}</span>
+        <span className="text-xs text-text-industrial/40">{STATUS_LABEL[report.status] ?? report.status}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Consumos generales */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Combustible</p>
+            <p className="text-xl font-bold text-white tabular-nums">
+              {report.fuelConsumedLiters != null ? report.fuelConsumedLiters : "—"}
+              {report.fuelConsumedLiters != null && <span className="text-xs font-normal text-text-industrial/40 ml-1">L</span>}
+            </p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Aceite</p>
+            <p className="text-xl font-bold text-white tabular-nums">
+              {report.oilConsumedLiters != null ? report.oilConsumedLiters : "—"}
+              {report.oilConsumedLiters != null && <span className="text-xs font-normal text-text-industrial/40 ml-1">L</span>}
+            </p>
+          </div>
+        </div>
+
+        {/* Horas por equipo */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">Horas por equipo</p>
+          {loading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            </div>
+          ) : (data?.equipmentHours?.length ?? 0) === 0 ? (
+            <p className="text-[11px] text-text-industrial/40 italic">Sin horas de equipo registradas.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data!.equipmentHours.map((e, i) => (
+                <div key={(e.assetId ?? "x") + i} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                  <p className="text-sm text-white truncate flex-1 mr-3">{e.equipmentLabel}</p>
+                  <p className="text-sm font-bold text-white tabular-nums shrink-0">
+                    {e.runningHoursTotal != null ? `${e.runningHoursTotal} h` : "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {report.operationalStatus && (
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Estado</p>
+            <p className="text-sm font-bold text-white">{OP_STATUS_LABEL[report.operationalStatus] ?? report.operationalStatus}</p>
+          </div>
+        )}
+        {report.notes && (
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
+            <p className="text-sm text-white/80 leading-relaxed">{report.notes}</p>
+          </div>
         )}
       </div>
     </div>
