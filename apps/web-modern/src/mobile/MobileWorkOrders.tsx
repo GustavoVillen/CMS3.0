@@ -13,6 +13,12 @@ interface WO {
   dueDate: string | null;
   assetName: string | null;
   vesselCode: string;
+  estimatedHours: number | null;
+  actualHours: number | null;
+  runningHoursAtExecution: number | null;
+  maintenancePlanId: string | null;
+  executedByName: string | null;
+  completedDate: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -41,12 +47,56 @@ const CRIT_COLOR: Record<string, string> = {
 
 type View = "list" | "detail" | "close";
 
+// Panel de horas: muestra estimado vs real con código de color de desvío.
+// Verde si abs(desvío) <= 20% del estimado, ámbar si entre 20-50%, rojo > 50%.
+const HoursPanel: React.FC<{ estimated: number | null; actual: number | null; isClosed: boolean }> = ({ estimated, actual, isClosed }) => {
+  const hasBoth = estimated != null && actual != null;
+  let deviation: { pct: number; color: string; label: string } | null = null;
+  if (hasBoth && estimated > 0) {
+    const diff = (actual as number) - (estimated as number);
+    const pct = (diff / (estimated as number)) * 100;
+    const abs = Math.abs(pct);
+    const color =
+      abs <= 20 ? "text-success-sea"
+      : abs <= 50 ? "text-yellow-400"
+      : "text-red-400";
+    const sign = diff > 0 ? "+" : "";
+    deviation = { pct, color, label: `${sign}${pct.toFixed(0)}%` };
+  }
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+      <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Horas de la tarea</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[10px] text-text-industrial/40">Estimadas</p>
+          <p className="text-base font-bold text-white tabular-nums">{estimated != null ? `${estimated} h` : "—"}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-text-industrial/40">{isClosed ? "Reales" : "Reales (al cerrar)"}</p>
+          <p className="text-base font-bold text-white tabular-nums">{actual != null ? `${actual} h` : "—"}</p>
+        </div>
+      </div>
+      {deviation && (
+        <div className="flex items-center justify-between pt-1 border-t border-white/10">
+          <span className="text-[10px] text-text-industrial/50 uppercase tracking-wider">Desvío</span>
+          <span className={`text-sm font-bold tabular-nums ${deviation.color}`}>{deviation.label}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const MobileWorkOrders: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<WO | null>(null);
   const [woResult, setWoResult]   = useState<"SATISFACTORY" | "WITH_DEFICIENCIES">("SATISFACTORY");
   const [observations, setObs]    = useState("");
+  const [actualHours, setActualHours] = useState("");
+  const [runningHours, setRunningHours] = useState("");
+  const [executedByName, setExecutedByName] = useState("");
+  const [executionDate, setExecutionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving]       = useState(false);
   const [err, setErr]             = useState<string | null>(null);
 
@@ -59,7 +109,16 @@ export const MobileWorkOrders: React.FC = () => {
 
   const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setErr(null); };
   const back      = ()       => { setView("list"); setSelected(null); setErr(null); };
-  const openClose = ()       => { setView("close"); setWoResult("SATISFACTORY"); setObs(""); setErr(null); };
+  const openClose = ()       => {
+    setView("close");
+    setWoResult("SATISFACTORY");
+    setObs("");
+    setActualHours("");
+    setRunningHours("");
+    setExecutedByName("");
+    setExecutionDate(new Date().toISOString().slice(0, 10));
+    setErr(null);
+  };
 
   const handleStart = useCallback(async () => {
     if (!selected) return;
@@ -82,7 +141,10 @@ export const MobileWorkOrders: React.FC = () => {
       await api.post(`/app/pms/work-orders/${selected.id}/close`, {
         woResult,
         observations: observations.trim() || null,
-        completedDate: new Date().toISOString().slice(0, 10),
+        completedDate: executionDate || new Date().toISOString().slice(0, 10),
+        executedByName: executedByName.trim() || null,
+        actualHours: actualHours ? Number(actualHours) : null,
+        runningHoursAtExecution: runningHours ? Number(runningHours) : null,
       });
       await reload();
       back();
@@ -91,11 +153,17 @@ export const MobileWorkOrders: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selected, woResult, observations, reload]);
+  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, reload]);
 
   // ─── ESC guard: cierre con confirmación según vista ─────────────────────────
   const closeFormDirty =
-    view === "close" && (woResult !== "SATISFACTORY" || observations.trim() !== "");
+    view === "close" && (
+      woResult !== "SATISFACTORY" ||
+      observations.trim() !== "" ||
+      actualHours.trim() !== "" ||
+      runningHours.trim() !== "" ||
+      executedByName.trim() !== ""
+    );
 
   useEscapeGuard({
     enabled: view === "close",
@@ -142,6 +210,68 @@ export const MobileWorkOrders: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Ejecutado por + Fecha */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Ejecutado por</p>
+              <input
+                value={executedByName}
+                onChange={e => setExecutedByName(e.target.value)}
+                placeholder="Nombre"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Fecha</p>
+              <input
+                type="date"
+                value={executionDate}
+                onChange={e => setExecutionDate(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/50"
+              />
+            </div>
+          </div>
+
+          {/* Horas reales + Horas motor */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
+                Horas reales
+                {selected.estimatedHours != null && (
+                  <span className="ml-1 text-[9px] normal-case font-normal text-text-industrial/40">
+                    (est: {selected.estimatedHours}h)
+                  </span>
+                )}
+              </p>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.25"
+                value={actualHours}
+                onChange={e => setActualHours(e.target.value)}
+                placeholder={selected.estimatedHours != null ? String(selected.estimatedHours) : "ej. 2.5"}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+              />
+            </div>
+            {selected.maintenancePlanId && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Horas motor</p>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={runningHours}
+                  onChange={e => setRunningHours(e.target.value)}
+                  placeholder="ej. 3500"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Observaciones</p>
             <textarea
@@ -196,6 +326,41 @@ export const MobileWorkOrders: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {/* Bloque de horas — siempre que haya estimación o reales */}
+          {(selected.estimatedHours != null || selected.actualHours != null) && (
+            <HoursPanel
+              estimated={selected.estimatedHours}
+              actual={selected.actualHours}
+              isClosed={selected.status === "CLOSED"}
+            />
+          )}
+
+          {/* Datos de ejecución cuando ya está cerrada */}
+          {selected.status === "CLOSED" && (selected.executedByName || selected.completedDate || selected.runningHoursAtExecution != null) && (
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Ejecución</p>
+              {selected.executedByName && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-text-industrial/50">Ejecutado por</span>
+                  <span className="text-white">{selected.executedByName}</span>
+                </div>
+              )}
+              {selected.completedDate && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-text-industrial/50">Fecha</span>
+                  <span className="text-white">{selected.completedDate.slice(0, 10)}</span>
+                </div>
+              )}
+              {selected.runningHoursAtExecution != null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-text-industrial/50">Horas motor</span>
+                  <span className="text-white tabular-nums">{selected.runningHoursAtExecution} h</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {err && <p className="text-xs text-red-400">{err}</p>}
           <div className="space-y-2 pt-2">
             {selected.status === "PLANNED" && (
