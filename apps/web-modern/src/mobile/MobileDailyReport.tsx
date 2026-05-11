@@ -70,6 +70,10 @@ export const MobileDailyReport: React.FC = () => {
   // editingId: si está set, el form está editando un reporte existente (PATCH);
   //            si es null, está creando uno nuevo (POST).
   const [editingId, setEditingId] = useState<string | null>(null);
+  // editingStatus: status del reporte que se está editando. Si es SUBMITTED,
+  // se oculta "Guardar borrador" — la única acción coherente es re-Enviar
+  // (re-integra horas en planes de mantenimiento).
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [fuel, setFuel]     = useState("");
   const [oil, setOil]       = useState("");
   const [opStatus, setOp]   = useState("UNDERWAY");
@@ -88,6 +92,7 @@ export const MobileDailyReport: React.FC = () => {
 
   const openCreate = () => {
     setEditingId(null);
+    setEditingStatus(null);
     setFuel(""); setOil(""); setNotes(""); setOp("UNDERWAY");
     setHoursByAsset({});
     setErr(null);
@@ -97,6 +102,7 @@ export const MobileDailyReport: React.FC = () => {
   // Abre el form en modo edición: trae el /full del reporte y pre-carga todo.
   const openEdit = useCallback(async (r: DailyReport) => {
     setEditingId(r.id);
+    setEditingStatus(r.status);
     setFuel(r.fuelConsumedLiters != null ? String(r.fuelConsumedLiters) : "");
     setOil(r.oilConsumedLiters != null ? String(r.oilConsumedLiters) : "");
     setOp(r.operationalStatus ?? "UNDERWAY");
@@ -173,6 +179,7 @@ export const MobileDailyReport: React.FC = () => {
       await reload();
       setView("list");
       setEditingId(null);
+      setEditingStatus(null);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Error al guardar reporte");
     } finally {
@@ -208,7 +215,7 @@ export const MobileDailyReport: React.FC = () => {
     return (
       <div className="flex flex-col h-full">
         <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => { setView("list"); setEditingId(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+          <button type="button" onClick={() => { setView("list"); setEditingId(null); setEditingStatus(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
             <ChevronLeft className="w-5 h-5" />
           </button>
           <span className="font-bold text-sm text-white">
@@ -274,28 +281,47 @@ export const MobileDailyReport: React.FC = () => {
           </div>
           {err && <p className="text-xs text-red-400">{err}</p>}
 
-          {/* Dos acciones: guardar como borrador (DRAFT) o enviar (SUBMITTED + integrar) */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={saving}
-              className="py-3 rounded-xl bg-white/5 border border-white/15 text-text-industrial text-sm font-bold disabled:opacity-40 hover:bg-white/10"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar borrador"}
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving}
-              className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Enviar"}
-            </button>
-          </div>
-          <p className="text-[10px] text-text-industrial/40 leading-snug">
-            <span className="font-bold">Enviar</span> propaga las horas a los planes de mantenimiento y deja el reporte como definitivo. <span className="font-bold">Guardar borrador</span> permite seguir editando.
-          </p>
+          {/* Dos acciones para DRAFT (Guardar borrador / Enviar).
+              Para SUBMITTED solo "Re-Enviar" — re-integra las horas a los planes. */}
+          {editingStatus === "SUBMITTED" ? (
+            <>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={saving}
+                className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar y re-enviar"}
+              </button>
+              <p className="text-[10px] text-text-industrial/40 leading-snug">
+                El reporte ya está enviado. Al guardar se propagan las nuevas horas a los planes de mantenimiento.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={saving}
+                  className="py-3 rounded-xl bg-white/5 border border-white/15 text-text-industrial text-sm font-bold disabled:opacity-40 hover:bg-white/10"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar borrador"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={saving}
+                  className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Enviar"}
+                </button>
+              </div>
+              <p className="text-[10px] text-text-industrial/40 leading-snug">
+                <span className="font-bold">Enviar</span> propaga las horas a los planes de mantenimiento y deja el reporte como definitivo. <span className="font-bold">Guardar borrador</span> permite seguir editando.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -318,7 +344,8 @@ export const MobileDailyReport: React.FC = () => {
               <p className="text-xs font-bold text-success-sea">Reporte de hoy registrado</p>
               <p className="text-[11px] text-text-industrial/40">{STATUS_LABEL[todayRpt.status] ?? todayRpt.status}</p>
             </div>
-            {todayRpt.status === "DRAFT" ? (
+            {/* DRAFT y SUBMITTED se pueden editar. REVIEWED/CLOSED solo se ven. */}
+            {(todayRpt.status === "DRAFT" || todayRpt.status === "SUBMITTED") ? (
               <button
                 type="button"
                 onClick={() => { void openEdit(todayRpt); }}
