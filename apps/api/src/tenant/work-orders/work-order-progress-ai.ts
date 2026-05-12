@@ -92,21 +92,23 @@ export async function extractTextFromPhoto(
     return null;
   }
 
-  // Telemetría no bloqueante
-  recordAiUsage({
-    tenantId,
-    tenantSlug,
-    userId,
-    userEmail,
-    vesselCode,
-    feature: "wo_progress_ocr",
-    model: OCR_MODEL,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-    cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-    cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
-    latencyMs: Date.now() - started,
-  }).catch(() => { /* swallow */ });
+  // Telemetría — recordAiUsage es síncrono (void), no devuelve Promise
+  try {
+    recordAiUsage({
+      tenantId,
+      tenantSlug,
+      userId,
+      userEmail,
+      vesselCode,
+      feature: "wo_progress_ocr",
+      model: OCR_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs: Date.now() - started,
+    });
+  } catch { /* swallow */ }
 
   const rawText = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -198,20 +200,22 @@ export async function rewriteObservations(
     return null;
   }
 
-  recordAiUsage({
-    tenantId,
-    tenantSlug,
-    userId,
-    userEmail,
-    vesselCode,
-    feature: "wo_progress_rewrite_observations",
-    model: REWRITE_MODEL,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-    cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-    cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
-    latencyMs: Date.now() - started,
-  }).catch(() => { /* swallow */ });
+  try {
+    recordAiUsage({
+      tenantId,
+      tenantSlug,
+      userId,
+      userEmail,
+      vesselCode,
+      feature: "wo_progress_rewrite_observations",
+      model: REWRITE_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs: Date.now() - started,
+    });
+  } catch { /* swallow */ }
 
   const rawText = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
