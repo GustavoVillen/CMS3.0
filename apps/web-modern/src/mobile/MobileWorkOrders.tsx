@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ChevronLeft, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon } from "lucide-react";
+import { ChevronLeft, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
@@ -197,10 +197,12 @@ interface ProgressNote {
 const ProgressNotesPanel: React.FC<{
   workOrderId: string;
   onAdd: () => void;
+  onDeleted: () => void;
   reloadKey: number;
+  canDelete: boolean;
   canAdd: boolean;
-}> = ({ workOrderId, onAdd, reloadKey, canAdd }) => {
-  const { data, loading } = useFetch<{ items: ProgressNote[] }>(
+}> = ({ workOrderId, onAdd, onDeleted, reloadKey, canAdd, canDelete }) => {
+  const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
   );
@@ -211,6 +213,17 @@ const ProgressNotesPanel: React.FC<{
     if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
+
+  const handleDelete = useCallback(async (noteId: string) => {
+    if (!window.confirm("¿Borrar este avance? Las observaciones se regenerarán sin él.")) return;
+    try {
+      await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
+      await reload();
+      onDeleted();
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Error al borrar el avance");
+    }
+  }, [workOrderId, reload, onDeleted]);
 
   return (
     <div className="space-y-2">
@@ -238,7 +251,14 @@ const ProgressNotesPanel: React.FC<{
         <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
       ) : (
         <div className="space-y-2">
-          {notes.map(n => <NoteCard key={n.id} note={n} fmtTime={fmtTime} />)}
+          {notes.map(n => (
+            <NoteCard
+              key={n.id}
+              note={n}
+              fmtTime={fmtTime}
+              onDelete={canDelete ? () => handleDelete(n.id) : undefined}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -259,7 +279,11 @@ const KIND_LABEL: Record<string, string> = {
   AUDIO: "Audio",
 };
 
-const NoteCard: React.FC<{ note: ProgressNote; fmtTime: (iso: string) => string }> = ({ note, fmtTime }) => {
+const NoteCard: React.FC<{
+  note: ProgressNote;
+  fmtTime: (iso: string) => string;
+  onDelete?: () => void;
+}> = ({ note, fmtTime, onDelete }) => {
   const Icon = KIND_ICON[note.kind] ?? Type;
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
@@ -267,6 +291,17 @@ const NoteCard: React.FC<{ note: ProgressNote; fmtTime: (iso: string) => string 
         <Icon className="w-3 h-3" />
         <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
         <span className="ml-auto">{fmtTime(note.createdAt)}</span>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-1 -mr-1 text-text-industrial/40 hover:text-red-400 transition-colors"
+            aria-label="Borrar avance"
+            title="Borrar avance"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {note.kind === "PHOTO" && note.fileUrl && (
@@ -287,7 +322,43 @@ const NoteCard: React.FC<{ note: ProgressNote; fmtTime: (iso: string) => string 
 
 // Panel de horas: muestra estimado vs real con código de color de desvío.
 // Verde si abs(desvío) <= 20% del estimado, ámbar si entre 20-50%, rojo > 50%.
-const HoursPanel: React.FC<{ estimated: number | null; actual: number | null; isClosed: boolean }> = ({ estimated, actual, isClosed }) => {
+// Las horas reales son editables inline: tap en el lápiz → input → PATCH.
+const HoursPanel: React.FC<{
+  workOrderId: string;
+  estimated: number | null;
+  actual: number | null;
+  isClosed: boolean;
+  isEditable: boolean;
+  onUpdated: (newActual: number | null) => void;
+}> = ({ workOrderId, estimated, actual, isClosed, isEditable, onUpdated }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState("");
+  const [saving, setSaving]   = useState(false);
+
+  const startEdit = () => {
+    setDraft(actual != null ? String(actual) : "");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft("");
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const newVal = draft ? Number(draft) : null;
+      await api.patch(`/app/pms/work-orders/${workOrderId}`, { actualHours: newVal });
+      onUpdated(newVal);
+      setEditing(false);
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Error al actualizar horas");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const hasBoth = estimated != null && actual != null;
   let deviation: { pct: number; color: string; label: string } | null = null;
   if (hasBoth && estimated > 0) {
@@ -311,11 +382,58 @@ const HoursPanel: React.FC<{ estimated: number | null; actual: number | null; is
           <p className="text-base font-bold text-white tabular-nums">{estimated != null ? `${estimated} h` : "—"}</p>
         </div>
         <div>
-          <p className="text-[10px] text-text-industrial/40">{isClosed ? "Reales" : "Reales (al cerrar)"}</p>
-          <p className="text-base font-bold text-white tabular-nums">{actual != null ? `${actual} h` : "—"}</p>
+          <div className="flex items-center justify-between gap-1">
+            <p className="text-[10px] text-text-industrial/40">{isClosed ? "Reales" : "Reales"}</p>
+            {isEditable && !editing && (
+              <button
+                type="button"
+                onClick={startEdit}
+                className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors"
+                aria-label="Editar horas reales"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          {editing ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.25"
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="h"
+                className="flex-1 min-w-0 bg-white/5 border border-accent/40 rounded-md px-2 py-1 text-sm text-white focus:outline-none"
+                disabled={saving}
+              />
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={saving}
+                className="p-1 rounded-md bg-accent text-white disabled:opacity-50"
+                aria-label="Guardar"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={saving}
+                className="p-1 rounded-md bg-white/10 text-text-industrial/60"
+                aria-label="Cancelar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <p className="text-base font-bold text-white tabular-nums">{actual != null ? `${actual} h` : "—"}</p>
+          )}
         </div>
       </div>
-      {deviation && (
+      {deviation && !editing && (
         <div className="flex items-center justify-between pt-1 border-t border-white/10">
           <span className="text-[10px] text-text-industrial/50 uppercase tracking-wider">Desvío</span>
           <span className={`text-sm font-bold tabular-nums ${deviation.color}`}>{deviation.label}</span>
@@ -643,19 +761,32 @@ export const MobileWorkOrders: React.FC = () => {
             <ProgressNotesPanel
               workOrderId={selected.id}
               onAdd={() => setShowProgressSheet(true)}
+              onDeleted={async () => {
+                // Tras borrar, refetch del WO para reflejar observations regeneradas
+                const refetchWO = async () => {
+                  try {
+                    const fresh = await api.get<WO>(`/app/pms/work-orders/${selected.id}`);
+                    setSelected(fresh);
+                  } catch { /* non-blocking */ }
+                };
+                setTimeout(refetchWO, 2000);
+                setTimeout(refetchWO, 6000);
+              }}
               reloadKey={notesReloadKey}
               canAdd={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
+              canDelete={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
             />
           )}
 
-          {/* Bloque de horas — siempre que haya estimación o reales */}
-          {(selected.estimatedHours != null || selected.actualHours != null) && (
-            <HoursPanel
-              estimated={selected.estimatedHours}
-              actual={selected.actualHours}
-              isClosed={selected.status === "CLOSED"}
-            />
-          )}
+          {/* Bloque de horas — siempre visible (permite cargarlas desde el detalle) */}
+          <HoursPanel
+            workOrderId={selected.id}
+            estimated={selected.estimatedHours}
+            actual={selected.actualHours}
+            isClosed={selected.status === "CLOSED"}
+            isEditable={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
+            onUpdated={(newActual) => setSelected({ ...selected, actualHours: newActual })}
+          />
 
           {/* Datos de ejecución cuando ya está cerrada */}
           {selected.status === "CLOSED" && (selected.executedByName || selected.completedDate || selected.runningHoursAtExecution != null) && (

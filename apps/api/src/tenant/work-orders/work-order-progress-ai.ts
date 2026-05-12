@@ -306,16 +306,28 @@ export async function processNoteAndRegenerate(
   }
 
   // 2) Regenerar observations de la OT consolidando todas las notas
+  await regenerateObservationsForWorkOrder(note.workOrderId, session);
+}
+
+// Regenera wo.observations consolidando los processedText de TODAS las notas
+// activas (no borradas). Se llama después de crear/borrar/editar notas.
+// Si quedaron 0 notas con processedText, limpia wo.observations a null.
+export async function regenerateObservationsForWorkOrder(
+  workOrderId: string,
+  session: { tenantSlug: string; userId: string; userEmail: string },
+): Promise<void> {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) return;
+
   try {
     const allNotes = await (prismaRaw as any).workOrderProgressNote.findMany({
-      where: { workOrderId: note.workOrderId, deletedAt: null },
+      where: { workOrderId, deletedAt: null },
       orderBy: { createdAt: "asc" },
     });
 
-    // Cargar datos de la OT para contexto
     const wo = await (prismaRaw as any).workOrder.findUnique({
-      where: { id: note.workOrderId },
-      select: { id: true, title: true, assetId: true, vesselCode: true },
+      where: { id: workOrderId },
+      select: { id: true, tenantId: true, title: true, assetId: true, vesselCode: true },
     });
     if (!wo) return;
 
@@ -336,24 +348,28 @@ export async function processNoteAndRegenerate(
         createdAt: n.createdAt as Date,
       }));
 
-    if (noteTexts.length === 0) return;
+    // Si no hay notas con texto, limpiar observations (no llamar a la IA)
+    if (noteTexts.length === 0) {
+      await (prismaRaw as any).workOrder.update({
+        where: { id: wo.id },
+        data: { observations: null, updatedByUserId: session.userId },
+      });
+      return;
+    }
 
     const observations = await rewriteObservations(
-      note.tenantId,
+      wo.tenantId,
       session.tenantSlug,
       session.userId,
       session.userEmail,
-      note.vesselCode,
+      wo.vesselCode,
       { noteTexts, taskTitle: wo.title, assetName },
     );
 
     if (observations != null) {
       await (prismaRaw as any).workOrder.update({
         where: { id: wo.id },
-        data: {
-          observations,
-          updatedByUserId: session.userId,
-        },
+        data: { observations, updatedByUserId: session.userId },
       });
     }
   } catch (err) {

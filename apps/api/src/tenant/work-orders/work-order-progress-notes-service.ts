@@ -7,7 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { saveAttachment } from "../attachments/attachment-uploads-service";
-import { processNoteAndRegenerate } from "./work-order-progress-ai";
+import { processNoteAndRegenerate, regenerateObservationsForWorkOrder } from "./work-order-progress-ai";
 import { log } from "../../common/logger";
 
 export interface CreateProgressNoteInput {
@@ -189,4 +189,11 @@ export async function deleteProgressNote(
       deletedByUserId: session.user.id,
     },
   });
+
+  // Re-generar observations sin la nota borrada (fire-and-forget)
+  void regenerateObservationsForWorkOrder(wo.id, {
+    tenantSlug: session.tenantSlug,
+    userId: session.user.id,
+    userEmail: session.user.email,
+  }).catch((err) => log.error("[progress-notes] regenerate after delete failed:", err));
 }
