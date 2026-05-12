@@ -367,6 +367,22 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "query_daily_reports",
+    description:
+      "Query daily reports (reportes diarios / partes de zarpe) for the current tenant/vessel. Use this when the user asks for the latest daily report, engine hours, fuel/oil consumption, operational status, or any data captured in the daily log. Each report includes equipmentHours (running hours per asset registered for daily tracking like main engines, auxiliaries, generators). Always include includeEquipmentHours=true when the user asks about hours of specific equipment.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode:           { type: "string",  description: "Filter by vessel code (optional — omit to include all assigned vessels)" },
+        status:               { type: "string",  description: "Filter by status: DRAFT | SUBMITTED | REVIEWED | CLOSED (optional)" },
+        operationalStatus:    { type: "string",  description: "Filter by operational status: UNDERWAY | AT_PORT | ANCHORED | DRIFTING | REPAIR (optional)" },
+        sinceDate:            { type: "string",  description: "ISO date (YYYY-MM-DD) — only reports on/after this date (optional)" },
+        includeEquipmentHours:{ type: "boolean", description: "If true, also return per-asset running hours from DailyEquipmentHours (Babor/Estribor/auxiliars/generators). Default false." },
+        limit:                { type: "number",  description: "Max results to return (default 5, max 30)" },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -662,6 +678,68 @@ async function executeCopilotTool(
 
       return wrapUntrusted(JSON.stringify(
         result.length > 0 ? result : { message: "No spares found matching the criteria." },
+      ));
+    }
+
+    if (name === "query_daily_reports") {
+      const reportsLimit = Math.min(Number(input.limit ?? 5), 30);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      if (input.vesselCode)        where.vesselCode = input.vesselCode;
+      if (input.status)            where.status = input.status;
+      if (input.operationalStatus) where.operationalStatus = input.operationalStatus;
+      if (input.sinceDate)         where.reportDate = { gte: new Date(input.sinceDate as string) };
+
+      const reports = await (prisma as any).dailyReport.findMany({
+        where,
+        take: reportsLimit,
+        orderBy: { reportDate: "desc" },
+        select: {
+          id: true, reportDate: true, status: true, vesselCode: true,
+          operationalStatus: true,
+          fuelConsumedLiters: true, oilConsumedLiters: true,
+          engineHoursMain: true, generatorHours: true,
+          positionLat: true, positionLon: true,
+          nextPort: true, currentPort: true,
+          summary: true, notes: true,
+          maintenanceOpportunity: true, sparesReceiptPossible: true,
+        },
+      });
+
+      // Si se pidió, traer las horas por equipo de cada reporte
+      let equipmentHoursMap: Record<string, any[]> = {};
+      if (input.includeEquipmentHours && reports.length > 0) {
+        const reportIds = reports.map((r: any) => r.id);
+        const eqHours = await (prisma as any).dailyEquipmentHours.findMany({
+          where: { dailyReportId: { in: reportIds }, tenantId },
+          select: {
+            dailyReportId: true, equipmentLabel: true,
+            runningHoursTotal: true, fuelConsumptionLiters: true,
+            oilConsumptionLiters: true, inService: true, standby: true,
+          },
+        });
+        for (const e of eqHours) {
+          const key = e.dailyReportId as string;
+          if (!equipmentHoursMap[key]) equipmentHoursMap[key] = [];
+          equipmentHoursMap[key].push({
+            equipo: e.equipmentLabel,
+            horasTotales: e.runningHoursTotal,
+            combustibleL: e.fuelConsumptionLiters,
+            aceiteL: e.oilConsumptionLiters,
+            enServicio: e.inService,
+            standby: e.standby,
+          });
+        }
+      }
+
+      const enriched = reports.map((r: any) => ({
+        ...r,
+        equipmentHours: input.includeEquipmentHours
+          ? (equipmentHoursMap[r.id] ?? [])
+          : undefined,
+      }));
+
+      return wrapUntrusted(JSON.stringify(
+        enriched.length > 0 ? enriched : { message: "No daily reports found matching the criteria." },
       ));
     }
 
