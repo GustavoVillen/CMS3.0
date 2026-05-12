@@ -358,6 +358,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       const planCols = [
         { label: "Responsable", value: sanitizePdfText(assignedName ?? (wo as any).assignedToUserId ?? "—") },
         { label: "Horas estimadas", value: (wo as any).estimatedHours != null ? `${(wo as any).estimatedHours} h` : "—" },
+        { label: "Horas trabajadas", value: (wo as any).actualHours != null ? `${(wo as any).actualHours} h` : "—" },
         { label: "Prioridad", value: sanitizePdfText(priorityLabel((wo as any).priority ?? "")), color: PRIORITY_COLOR[(wo as any).priority ?? ""] },
       ];
       const colW = Math.floor(W / planCols.length);
@@ -489,6 +490,61 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       }
     });
     y += SIG_H;
+
+    // ── ANEXO FOTOGRÁFICO ─────────────────────────────────────────────────────
+    // Si la OT tiene fotos cargadas como avances (kind=PHOTO), se anexan al
+    // final del documento. Grid de 2 columnas, una página por bloque de 4 fotos.
+    if (ctx.progressPhotos && ctx.progressPhotos.length > 0) {
+      const fotosConBuffer = ctx.progressPhotos.filter(p => p.buffer && p.buffer.length > 0);
+      if (fotosConBuffer.length > 0) {
+        drawFooter();
+        doc.addPage();
+        y = MARGIN_T;
+        sectionHeader("ANEXO FOTOGRÁFICO");
+
+        const COLS = 2;
+        const GAP_X = 12;
+        const GAP_Y = 16;
+        const cellW = (W - GAP_X * (COLS - 1)) / COLS;
+        const imgH = 200;
+        const captionH = 36;
+        const cellH = imgH + captionH;
+
+        for (let i = 0; i < fotosConBuffer.length; i++) {
+          const foto = fotosConBuffer[i];
+          const col = i % COLS;
+          if (col === 0 && i > 0) {
+            y += cellH + GAP_Y;
+          }
+          if (y + cellH > CONTENT_BOTTOM) {
+            drawFooter();
+            doc.addPage();
+            sectionHeader("ANEXO FOTOGRÁFICO (CONT.)");
+          }
+          const x = ML + col * (cellW + GAP_X);
+          try {
+            doc.image(foto.buffer!, x, y, { fit: [cellW, imgH], align: "center", valign: "center" });
+            doc.rect(x, y, cellW, imgH).strokeColor(BORDER).lineWidth(0.5).stroke();
+          } catch {
+            doc.rect(x, y, cellW, imgH).strokeColor(BORDER).lineWidth(0.5).stroke();
+            doc.fontSize(8).font("Helvetica").fillColor(GRAY)
+              .text("[Imagen no disponible]", x + 8, y + imgH / 2 - 4, { width: cellW - 16, align: "center" });
+          }
+          const captionY = y + imgH + 4;
+          const tsLabel = new Date(foto.createdAt).toLocaleString("es-AR", {
+            day: "2-digit", month: "2-digit", year: "2-digit",
+            hour: "2-digit", minute: "2-digit",
+          });
+          doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
+            .text(tsLabel, x, captionY, { width: cellW, lineBreak: false });
+          if (foto.text) {
+            doc.fontSize(8).font("Helvetica").fillColor(BLACK)
+              .text(sanitizePdfText(foto.text), x, captionY + 10, { width: cellW, height: captionH - 12, ellipsis: true, lineBreak: true });
+          }
+        }
+        y += cellH;
+      }
+    }
 
     drawFooter();
     doc.end();

@@ -90,6 +90,17 @@ export interface WorkOrderSpareUsage {
   unit: string;
 }
 
+export interface WorkOrderProgressPhoto {
+  id: string;
+  fileUrl: string;
+  text: string | null;
+  createdAt: Date;
+  /** Buffer del archivo leído del disk para embed directo en el PDF. */
+  buffer: Buffer | null;
+  /** MIME real del archivo (image/jpeg, image/png, image/webp, etc.). */
+  mimeType: string | null;
+}
+
 export interface WorkOrderPdfContext {
   /** Full WO record (typed loosely; templates use `(wo as any).field` for optional cols). */
   wo: any;
@@ -107,6 +118,8 @@ export interface WorkOrderPdfContext {
   tenantLogoBuffer: Buffer | null;
   /** Spare usages reconstructed from stock movements. */
   spareUsages: WorkOrderSpareUsage[];
+  /** Fotos de avances de trabajo (progress notes con kind=PHOTO). */
+  progressPhotos: WorkOrderProgressPhoto[];
   /** Selected template key for this tenant ("STANDARD" | "MERCURIO" | future…). */
   templateKey: string;
   /** Tenant slug (used by some templates as fallback header text). */

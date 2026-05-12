@@ -356,8 +356,15 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
         color: (wo as any).woResult === "SATISFACTORY" ? "#166534"
              : (wo as any).woResult === "WITH_DEFICIENCIES" ? "#991b1b" : undefined },
       { label: "Ejecutado por", value: val((wo as any).executedByName ?? (wo as any).assignedToUserId) },
+      { label: "Fecha de cierre", value: fmt((wo as any).completedDate) },
+    ]);
+    inlineRow([
+      { label: "Horas trabajadas",
+        value: (wo as any).actualHours != null ? `${(wo as any).actualHours} h` : "—" },
       { label: "Horas motor al ejecutar",
         value: (wo as any).runningHoursAtExecution != null ? `${(wo as any).runningHoursAtExecution} h` : "—" },
+      { label: "Horas estimadas (plan)",
+        value: (wo as any).estimatedHours != null ? `${(wo as any).estimatedHours} h` : "—" },
     ]);
     if ((wo as any).observations) textRow("Observaciones", val((wo as any).observations), 3, 3);
     if ((wo as any).holdReason)   textRow("Motivo de postergación", val((wo as any).holdReason), 3, 3);
@@ -383,6 +390,66 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       }
     });
     y += sigH + 8;
+
+    // ── ANEXO FOTOGRÁFICO ─────────────────────────────────────────────────────
+    // Si la OT tiene fotos cargadas como avances (kind=PHOTO), se anexan al
+    // final del documento. Grid de 2 columnas, una página por cada 4 fotos.
+    if (ctx.progressPhotos && ctx.progressPhotos.length > 0) {
+      const fotosConBuffer = ctx.progressPhotos.filter(p => p.buffer && p.buffer.length > 0);
+      if (fotosConBuffer.length > 0) {
+        doc.addPage();
+        y = MARGIN_V;
+
+        sectionHeader("Anexo Fotográfico");
+
+        const COLS = 2;
+        const GAP_X = 12;
+        const GAP_Y = 16;
+        const cellW = (W - GAP_X * (COLS - 1)) / COLS;
+        const imgH = 200;
+        const captionH = 36;
+        const cellH = imgH + captionH;
+
+        for (let i = 0; i < fotosConBuffer.length; i++) {
+          const foto = fotosConBuffer[i];
+          const col = i % COLS;
+          if (col === 0 && i > 0) {
+            y += cellH + GAP_Y;
+          }
+          // Si la próxima foto no entra, page break
+          if (y + cellH > CONTENT_BOTTOM) {
+            doc.addPage();
+            y = MARGIN_V;
+            sectionHeader("Anexo Fotográfico (cont.)");
+          }
+          const x = ML + col * (cellW + GAP_X);
+          // Imagen
+          try {
+            doc.image(foto.buffer!, x, y, { fit: [cellW, imgH], align: "center", valign: "center" });
+            // Borde de la imagen
+            doc.rect(x, y, cellW, imgH).strokeColor(border).lineWidth(0.5).stroke();
+          } catch {
+            // Si falla el embed, dibujar placeholder
+            doc.rect(x, y, cellW, imgH).strokeColor(border).lineWidth(0.5).stroke();
+            doc.fontSize(8).font("Helvetica").fillColor(gray)
+              .text("[Imagen no disponible]", x + 8, y + imgH / 2 - 4, { width: cellW - 16, align: "center" });
+          }
+          // Caption: timestamp + texto
+          const captionY = y + imgH + 4;
+          const tsLabel = new Date(foto.createdAt).toLocaleString("es-AR", {
+            day: "2-digit", month: "2-digit", year: "2-digit",
+            hour: "2-digit", minute: "2-digit",
+          });
+          doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+            .text(tsLabel, x, captionY, { width: cellW, lineBreak: false });
+          if (foto.text) {
+            doc.fontSize(8).font("Helvetica").fillColor(black)
+              .text(foto.text, x, captionY + 10, { width: cellW, height: captionH - 12, ellipsis: true, lineBreak: true });
+          }
+        }
+        y += cellH;
+      }
+    }
 
     // ── FOOTER ───────────────────────────────────────────────────────────────
     // Approval band on top (no background — same style as footer text)

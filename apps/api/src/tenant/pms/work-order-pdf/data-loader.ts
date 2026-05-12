@@ -1,10 +1,22 @@
 // Centralizes all data fetching for Work Order PDF rendering.
 // Templates consume the resulting context without re-querying Prisma.
 
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import type { TenantAccessSession } from "../../auth/session-store";
 import { getTenantWorkOrder } from "../../work-orders/work-orders-service";
 import { getPrismaClient } from "../../../platform/data/prisma-client";
-import { resolveTenantLogo, sanitizePdfText, type WorkOrderPdfContext, type WorkOrderSpareUsage } from "./shared";
+import { resolveTenantLogo, sanitizePdfText, type WorkOrderPdfContext, type WorkOrderSpareUsage, type WorkOrderProgressPhoto } from "./shared";
+
+const UPLOADS_ROOT = join(process.cwd(), "uploads", "attachments");
+
+function fileUrlToPath(url: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/^\/uploads\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/);
+  if (!m) return null;
+  const [, slug, entity, filename] = m;
+  return join(UPLOADS_ROOT, slug, entity, filename);
+}
 
 export async function loadWorkOrderPdfContext(
   session: TenantAccessSession,
@@ -111,6 +123,39 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
+  // ── Progress photos (avances con kind=PHOTO) ──
+  const progressPhotos: WorkOrderProgressPhoto[] = [];
+  if (prismaRaw) {
+    try {
+      const notes = await (prismaRaw as any).workOrderProgressNote.findMany({
+        where: {
+          workOrderId: wo.id,
+          tenantId: (wo as any).tenantId,
+          kind: "PHOTO",
+          deletedAt: null,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fileUrl: true, text: true, mimeType: true, createdAt: true },
+      });
+      for (const n of notes) {
+        if (!n.fileUrl) continue;
+        const fp = fileUrlToPath(n.fileUrl);
+        let buffer: Buffer | null = null;
+        if (fp && existsSync(fp)) {
+          try { buffer = readFileSync(fp); } catch { /* skip if read fails */ }
+        }
+        progressPhotos.push({
+          id: n.id,
+          fileUrl: n.fileUrl,
+          text: n.text ?? null,
+          createdAt: n.createdAt,
+          buffer,
+          mimeType: n.mimeType ?? null,
+        });
+      }
+    } catch { /* non-blocking */ }
+  }
+
   return {
     wo,
     assetLabel,
@@ -120,6 +165,7 @@ export async function loadWorkOrderPdfContext(
     tenant,
     tenantLogoBuffer,
     spareUsages,
+    progressPhotos,
     templateKey,
     tenantSlug: session.tenantSlug,
   };
