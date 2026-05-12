@@ -28,20 +28,31 @@ function injectVesselCode(path: string, vesselCode: string): string {
   return `${base}?${params.toString()}`;
 }
 
-export function useFetch<T>(path: string, deps: unknown[] = []) {
+// useFetch — wrapper de api.get con scoping automático por vessel.
+//
+// path puede ser null/empty para "no fetchear" — varios callers usan eso para
+// hooks condicionales (ej. `initial?.id ? "/x" : null`). En ese caso el hook
+// no dispara request, devuelve data=null y loading=false.
+export function useFetch<T>(path: string | null, deps: unknown[] = []) {
   const { selectedVesselCode } = useVesselContext();
 
-  const effectivePath = useMemo(
-    () => selectedVesselCode ? injectVesselCode(path, selectedVesselCode) : path,
+  const effectivePath = useMemo(() => {
+    if (!path) return null;
+    return selectedVesselCode ? injectVesselCode(path, selectedVesselCode) : path;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [path, selectedVesselCode],
-  );
+  }, [path, selectedVesselCode]);
 
   const [data, setData]       = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!!effectivePath);
   const [error, setError]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!effectivePath) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
