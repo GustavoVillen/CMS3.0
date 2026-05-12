@@ -27,6 +27,11 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // SpeechRecognition: transcribe audio en el navegador. Cuando termina la
+  // grabación, el transcript se envía como `text` junto con el archivo,
+  // y el backend lo usa directamente como processedText (sin OCR/AI extra).
+  const speechRecognitionRef = useRef<any>(null);
+  const transcriptRef = useRef<string>("");
 
   // Limpiar URL de preview al desmontar
   useEffect(() => {
@@ -38,6 +43,9 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       if (mr && mr.state !== "inactive") {
         try { mr.stop(); } catch { /* noop */ }
         mr.stream.getTracks().forEach(t => t.stop());
+      }
+      if (speechRecognitionRef.current) {
+        try { speechRecognitionRef.current.stop(); } catch { /* noop */ }
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,6 +73,12 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   };
 
   // ─── Audio recording handlers ─────────────────────────────────────────────
+  // Estrategia: grabar audio con MediaRecorder Y en paralelo correr Web Speech
+  // Recognition. El transcript se almacena en transcriptRef y se manda como
+  // `text` junto con el blob. El backend lo usa como processedText (sin OCR).
+  // Si SpeechRecognition no está disponible (Firefox/iOS Safari viejo), el
+  // audio se manda sin transcript — el supervisor puede escucharlo, no hay
+  // texto en observations para esa nota.
   const startRecording = useCallback(async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -76,6 +90,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       const mr = new MediaRecorder(stream);
       mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
+      transcriptRef.current = "";
+
       mr.ondataavailable = (ev) => {
         if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
       };
@@ -85,10 +101,35 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         setFile(audioFile);
         if (filePreview) URL.revokeObjectURL(filePreview);
         setFilePreview(URL.createObjectURL(blob));
+        // Si Speech Recognition produjo transcript, lo seteamos como caption.
+        const tx = transcriptRef.current.trim();
+        if (tx && !text.trim()) setText(tx);
         // Liberar el micrófono
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
+
+      // Arrancar Speech Recognition en paralelo (no bloqueante si no existe)
+      const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SR) {
+        try {
+          const recog = new SR();
+          recog.continuous = true;
+          recog.interimResults = true;
+          recog.lang = "es-AR";
+          recog.onresult = (ev: any) => {
+            let finalText = "";
+            for (let i = 0; i < ev.results.length; i++) {
+              if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript + " ";
+            }
+            if (finalText) transcriptRef.current = finalText.trim();
+          };
+          recog.onerror = () => { /* swallow — el audio se sube igual */ };
+          recog.start();
+          speechRecognitionRef.current = recog;
+        } catch { /* SR no soportado o sin permisos — silencioso */ }
+      }
+
       setRecording(true);
       setAudioElapsed(0);
       elapsedTimerRef.current = setInterval(() => {
@@ -98,11 +139,16 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       const msg = e instanceof Error ? e.message : "No se pudo acceder al micrófono.";
       setErr(`Permiso de micrófono denegado: ${msg}`);
     }
-  }, [filePreview]);
+  }, [filePreview, text]);
 
   const stopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
     if (mr && mr.state !== "inactive") mr.stop();
+    const sr = speechRecognitionRef.current;
+    if (sr) {
+      try { sr.stop(); } catch { /* noop */ }
+      speechRecognitionRef.current = null;
+    }
     setRecording(false);
     if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     elapsedTimerRef.current = null;

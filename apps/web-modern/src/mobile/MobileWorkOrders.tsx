@@ -21,6 +21,7 @@ interface WO {
   maintenancePlanId: string | null;
   executedByName: string | null;
   completedDate: string | null;
+  observations: string | null;
   // Plan fields
   acceptanceCriteria: string | null;
   loto: string | null;
@@ -624,6 +625,19 @@ export const MobileWorkOrders: React.FC = () => {
           {/* Acordeón de info: 5 chips expandibles con los campos del plan */}
           <InfoAccordion wo={selected} active={infoTab} onToggle={setInfoTab} />
 
+          {/* Observaciones consolidadas por AI (se actualizan tras cada avance) */}
+          {selected.observations && (
+            <div className="bg-accent/5 border border-accent/30 rounded-xl p-3 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[10px] uppercase tracking-wider text-accent/80 font-bold">Observaciones</p>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/15 text-accent/70 border border-accent/30">
+                  generado por IA
+                </span>
+              </div>
+              <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{selected.observations}</p>
+            </div>
+          )}
+
           {/* Registro de avances de trabajo */}
           {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD" || selected.status === "CLOSED") && (
             <ProgressNotesPanel
@@ -687,7 +701,20 @@ export const MobileWorkOrders: React.FC = () => {
           <ProgressNoteSheet
             workOrderId={selected.id}
             onClose={() => setShowProgressSheet(false)}
-            onSaved={() => setNotesReloadKey(k => k + 1)}
+            onSaved={async () => {
+              setNotesReloadKey(k => k + 1);
+              // El pipeline AI corre en background y puede tardar unos segundos.
+              // Refetcheo la OT a los 3s para ver observations actualizadas;
+              // y de nuevo a los 8s por si la primera vez todavía no procesó.
+              const refetchWO = async () => {
+                try {
+                  const fresh = await api.get<WO>(`/app/pms/work-orders/${selected.id}`);
+                  setSelected(fresh);
+                } catch { /* non-blocking */ }
+              };
+              setTimeout(refetchWO, 3000);
+              setTimeout(refetchWO, 8000);
+            }}
           />
         )}
       </div>

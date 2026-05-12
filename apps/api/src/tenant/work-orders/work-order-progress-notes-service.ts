@@ -7,6 +7,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { saveAttachment } from "../attachments/attachment-uploads-service";
+import { processNoteAndRegenerate } from "./work-order-progress-ai";
+import { log } from "../../common/logger";
 
 export interface CreateProgressNoteInput {
   kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
@@ -105,10 +107,19 @@ export async function createProgressNote(
     }
   }
 
-  // Para TEXT: processedText = text (no requiere pipeline AI).
-  // Para PHOTO/VIDEO/AUDIO: processedText queda null hasta que corra el pipeline.
-  const processedText = input.kind === "TEXT" ? (input.text ?? "").trim() : null;
-  const processed = input.kind === "TEXT";
+  // Política inicial de processedText/processed:
+  // - TEXT  : el texto crudo ya es definitivo (no requiere pipeline AI)
+  // - AUDIO : el cliente envía la transcripción client-side (Web Speech API)
+  //           como input.text → se toma como processedText
+  // - VIDEO : si vino caption, se usa; no procesamos el video todavía
+  // - PHOTO : queda processed=false; el pipeline AI corre OCR
+  let processedText: string | null = null;
+  let processed = false;
+  if (input.kind === "TEXT" || input.kind === "AUDIO" || input.kind === "VIDEO") {
+    const t = (input.text ?? "").trim();
+    processedText = t || null;
+    processed = true;
+  }
 
   const created = await (prismaRaw as any).workOrderProgressNote.create({
     data: {
@@ -125,6 +136,16 @@ export async function createProgressNote(
       createdByUserId: session.user.id,
     },
   });
+
+  // Fire-and-forget: pipeline AI procesa la nota (OCR si es foto) y regenera
+  // observations consolidando todas las notas de la OT. No bloquea la respuesta.
+  // Para AUDIO/VIDEO sin transcripción client-side (text vacío), se salta el OCR
+  // pero igual regenera observations con las otras notas procesadas.
+  void processNoteAndRegenerate(created.id, {
+    tenantSlug: session.tenantSlug,
+    userId: session.user.id,
+    userEmail: session.user.email,
+  }).catch((err) => log.error("[progress-notes] AI pipeline failed:", err));
 
   return created as ProgressNoteRow;
 }
