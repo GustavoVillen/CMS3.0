@@ -14,7 +14,17 @@ const MIME_MAP: Record<string, string> = {
   ".png":  "image/png",
   ".jpg":  "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
   ".txt":  "text/plain; charset=utf-8",
+  // Audio
+  ".webm": "audio/webm",
+  ".mp3":  "audio/mpeg",
+  ".m4a":  "audio/mp4",
+  ".ogg":  "audio/ogg",
+  ".wav":  "audio/wav",
+  // Video
+  ".mp4":  "video/mp4",
+  ".mov":  "video/quicktime",
 };
 
 function entityDir(tenantSlug: string, entityType: string): string {

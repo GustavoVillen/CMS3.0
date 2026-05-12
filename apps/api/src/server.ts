@@ -9,6 +9,7 @@ import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa }
 import { serveCertificateUpload } from "./tenant/certificates/cert-uploads-service";
 import { serveChecklistUpload } from "./tenant/pms/checklist-uploads-service";
 import { serveFluidReportUpload } from "./tenant/fluid-analyses/fluid-uploads-service";
+import { serveAttachment } from "./tenant/attachments/attachment-uploads-service";
 import { buildHealthcheckPayload } from "./health/health-route";
 import { buildHomePage } from "./platform/home/home-page";
 import { handlePublicBootstrapRequest } from "./tenant/bootstrap/public-bootstrap-route";
@@ -88,6 +89,17 @@ const server = createServer(async (request, response) => {
   if (method === "GET" && fluidReportMatch) {
     const [, tenantSlug, filename] = fluidReportMatch;
     const served = serveFluidReportUpload(response, tenantSlug, filename);
+    if (served) return;
+    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
+    return;
+  }
+
+  // ── Uploaded attachments (work orders, defects, etc.) ───────────────────────
+  // Pattern: /uploads/attachments/{tenantSlug}/{entityType}/{filename}
+  const attachmentMatch = url.pathname.match(/^\/uploads\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/);
+  if (method === "GET" && attachmentMatch) {
+    const [, tenantSlug, entityType, filename] = attachmentMatch;
+    const served = serveAttachment(response, tenantSlug, entityType, filename);
     if (served) return;
     sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
     return;

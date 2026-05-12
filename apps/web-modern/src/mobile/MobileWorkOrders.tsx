@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from "react";
-import { ChevronLeft, Loader2, Camera, X } from "lucide-react";
+import { ChevronLeft, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { ProgressNoteSheet } from "./ProgressNoteSheet";
 
 interface WO {
   id: string;
@@ -179,6 +180,110 @@ const InfoPanel: React.FC<{ label: string; children: React.ReactNode }> = ({ lab
   </div>
 );
 
+// Lista de avances de la OT: cada entrada muestra timestamp + media + texto.
+// canAdd: solo OTs abiertas pueden recibir nuevas notas.
+interface ProgressNote {
+  id: string;
+  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+  text: string | null;
+  fileUrl: string | null;
+  mimeType: string | null;
+  processedText: string | null;
+  processed: boolean;
+  createdAt: string;
+}
+
+const ProgressNotesPanel: React.FC<{
+  workOrderId: string;
+  onAdd: () => void;
+  reloadKey: number;
+  canAdd: boolean;
+}> = ({ workOrderId, onAdd, reloadKey, canAdd }) => {
+  const { data, loading } = useFetch<{ items: ProgressNote[] }>(
+    `/app/pms/work-orders/${workOrderId}/progress-notes`,
+    [workOrderId, reloadKey],
+  );
+  const notes = data?.items ?? [];
+
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
+          Avances {notes.length > 0 && `(${notes.length})`}
+        </p>
+        {canAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Registrar avance
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-3">
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+        </div>
+      ) : notes.length === 0 ? (
+        <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
+      ) : (
+        <div className="space-y-2">
+          {notes.map(n => <NoteCard key={n.id} note={n} fmtTime={fmtTime} />)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const KIND_ICON: Record<string, React.FC<{ className?: string }>> = {
+  TEXT:  Type,
+  PHOTO: Camera,
+  VIDEO: VideoIcon,
+  AUDIO: Mic,
+};
+
+const KIND_LABEL: Record<string, string> = {
+  TEXT:  "Texto",
+  PHOTO: "Foto",
+  VIDEO: "Video",
+  AUDIO: "Audio",
+};
+
+const NoteCard: React.FC<{ note: ProgressNote; fmtTime: (iso: string) => string }> = ({ note, fmtTime }) => {
+  const Icon = KIND_ICON[note.kind] ?? Type;
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+      <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
+        <Icon className="w-3 h-3" />
+        <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
+        <span className="ml-auto">{fmtTime(note.createdAt)}</span>
+      </div>
+
+      {note.kind === "PHOTO" && note.fileUrl && (
+        <img src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-72" />
+      )}
+      {note.kind === "VIDEO" && note.fileUrl && (
+        <video src={note.fileUrl} controls className="w-full rounded-lg max-h-72" />
+      )}
+      {note.kind === "AUDIO" && note.fileUrl && (
+        <audio src={note.fileUrl} controls className="w-full" />
+      )}
+      {note.text && (
+        <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>
+      )}
+    </div>
+  );
+};
+
 // Panel de horas: muestra estimado vs real con código de color de desvío.
 // Verde si abs(desvío) <= 20% del estimado, ámbar si entre 20-50%, rojo > 50%.
 const HoursPanel: React.FC<{ estimated: number | null; actual: number | null; isClosed: boolean }> = ({ estimated, actual, isClosed }) => {
@@ -224,6 +329,8 @@ export const MobileWorkOrders: React.FC = () => {
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<WO | null>(null);
   const [infoTab, setInfoTab]     = useState<InfoTab | null>(null);
+  const [showProgressSheet, setShowProgressSheet] = useState(false);
+  const [notesReloadKey, setNotesReloadKey] = useState(0);
   const [woResult, setWoResult]   = useState<"SATISFACTORY" | "WITH_DEFICIENCIES">("SATISFACTORY");
   const [observations, setObs]    = useState("");
   const [actualHours, setActualHours] = useState("");
@@ -517,6 +624,16 @@ export const MobileWorkOrders: React.FC = () => {
           {/* Acordeón de info: 5 chips expandibles con los campos del plan */}
           <InfoAccordion wo={selected} active={infoTab} onToggle={setInfoTab} />
 
+          {/* Registro de avances de trabajo */}
+          {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD" || selected.status === "CLOSED") && (
+            <ProgressNotesPanel
+              workOrderId={selected.id}
+              onAdd={() => setShowProgressSheet(true)}
+              reloadKey={notesReloadKey}
+              canAdd={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
+            />
+          )}
+
           {/* Bloque de horas — siempre que haya estimación o reales */}
           {(selected.estimatedHours != null || selected.actualHours != null) && (
             <HoursPanel
@@ -553,17 +670,7 @@ export const MobileWorkOrders: React.FC = () => {
 
           {err && <p className="text-xs text-red-400">{err}</p>}
           <div className="space-y-2 pt-2">
-            {selected.status === "PLANNED" && (
-              <button
-                type="button"
-                onClick={handleStart}
-                disabled={saving}
-                className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Iniciar ejecución"}
-              </button>
-            )}
-            {selected.status === "IN_PROGRESS" && (
+            {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD") && (
               <button
                 type="button"
                 onClick={openClose}
@@ -574,6 +681,15 @@ export const MobileWorkOrders: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Bottom sheet de registrar avance */}
+        {showProgressSheet && (
+          <ProgressNoteSheet
+            workOrderId={selected.id}
+            onClose={() => setShowProgressSheet(false)}
+            onSaved={() => setNotesReloadKey(k => k + 1)}
+          />
+        )}
       </div>
     );
   }

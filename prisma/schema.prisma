@@ -1061,12 +1061,54 @@ model WorkOrder {
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]
+  progressNotes       WorkOrderProgressNote[]
 
   @@unique([tenantId, vesselCode, workOrderCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([tenantId, openDate])
+}
+
+enum WorkOrderProgressKind {
+  TEXT
+  PHOTO
+  VIDEO
+  AUDIO
+}
+
+// Notas de avance que el técnico carga durante la ejecución de una OT.
+// Cada nota puede ser texto, foto, video o audio. La AI (en una iteración
+// posterior) las procesa: transcribe audio, hace OCR de fotos, y reescribe
+// el texto consolidado en formato técnico hacia WorkOrder.observations.
+model WorkOrderProgressNote {
+  id              String                @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  workOrderId     String
+  kind            WorkOrderProgressKind
+  // Texto crudo: lo que el usuario tipeó (TEXT) o caption (PHOTO/VIDEO/AUDIO)
+  text            String?               @db.Text
+  // Archivo asociado (solo PHOTO/VIDEO/AUDIO)
+  fileUrl         String?
+  mimeType        String?
+  sizeBytes       Int?
+  // Resultado del pipeline AI: texto efectivo a sumar al "texto1"
+  // (transcripción de audio, OCR de foto, o text crudo si es TEXT).
+  processedText   String?               @db.Text
+  processed       Boolean               @default(false)
+  // Error si el pipeline AI falla, para no quedar trabados
+  processError    String?               @db.Text
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  workOrder       WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([tenantId, vesselCode])
 }
 
 model Defect {

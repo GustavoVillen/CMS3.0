@@ -133,6 +133,38 @@ export const api = {
   patch:  <T>(path: string, body: unknown) => request<T>("PATCH",  path, body),
   delete: <T>(path: string)               => request<T>("DELETE",  path),
 
+  /** Upload a raw binary body with arbitrary headers (for endpoints that take
+   * file + metadata via headers like x-mime-type or x-caption). Returns parsed JSON. */
+  async uploadRaw<T>(path: string, body: ArrayBuffer | Blob, extraHeaders: Record<string, string> = {}): Promise<T> {
+    const buildHeaders = (): Record<string, string> => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/octet-stream",
+        ...extraHeaders,
+      };
+      const token = localStorage.getItem("gpms_token");
+      const slug  = localStorage.getItem("gpms_tenant_slug");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (slug)  headers["X-Tenant-Slug"] = slug;
+      return headers;
+    };
+
+    let res = await fetch(`${BASE}${path}`, { method: "POST", headers: buildHeaders(), body });
+    if (res.status === 401) {
+      const newToken = await refreshTenantToken();
+      if (newToken) {
+        res = await fetch(`${BASE}${path}`, { method: "POST", headers: buildHeaders(), body });
+      }
+    }
+    if (!res.ok) {
+      let code = "ERROR"; let message = res.statusText;
+      try { const j = await res.json(); code = j?.error?.code ?? code; message = j?.error?.message ?? message; } catch {/* ignore */}
+      if (res.status === 401) onUnauthorized?.();
+      throw new ApiError(res.status, code, message);
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  },
+
   /** Upload a raw file (binary body). Sends X-Filename header with the original name. */
   async upload<T>(path: string, file: File): Promise<T> {
     const buildHeaders = (): Record<string, string> => {
