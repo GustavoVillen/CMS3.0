@@ -297,10 +297,37 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
     if (!reason || reason.trim().length < 5) return;
     void callAction("reopen", { reason: reason.trim() });
   };
-  const onDownloadPdf = () => {
+  const onDownloadPdf = useCallback(async () => {
     if (!permit) return;
-    window.open(`/app/permits/${permit.id}/pdf`, "_blank");
-  };
+    // Bajamos el PDF vía fetch + blob — window.open no carga el header
+    // X-Tenant-Slug que el SPA usa para resolver tenant, y devolvería
+    // TENANT_UNRESOLVED en una tab nueva.
+    setSaving(true); setErr(null);
+    try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem("gpms_token");
+      const slug  = localStorage.getItem("gpms_tenant_slug");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (slug)  headers["X-Tenant-Slug"] = slug;
+
+      const res = await fetch(`/app/permits/${permit.id}/pdf`, { headers });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `${permit.permitCode}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setErr(e instanceof Error ? `No se pudo generar el PDF (${e.message}).` : "No se pudo generar el PDF.");
+    } finally {
+      setSaving(false);
+    }
+  }, [permit]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -448,7 +475,7 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0 flex-wrap">
           <div className="flex gap-2 flex-wrap">
             {!isNew && (
-              <button onClick={onDownloadPdf} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
+              <button onClick={() => { void onDownloadPdf(); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
                 <FileText className="w-3.5 h-3.5" /> PDF
               </button>
             )}
