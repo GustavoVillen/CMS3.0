@@ -1,11 +1,14 @@
 import React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 
 interface WO { status: string; dueDate: string | null; }
 interface Defect { status: string; }
 interface Spare { currentStock: number; minStock: number; reorderPoint: number; }
+interface Certificate { status: string; expiryDate: string | null; }
 interface Insight { id: string; title: string; summary: string; priority: string; }
+interface MpSummaryCounts { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number; }
+interface DailyReport { reportDate: string; createdAt: string; status: string; }
 
 const PRIORITY_BG: Record<string, string> = {
   CRITICAL: "border-red-500/40 bg-red-500/5",
@@ -13,48 +16,139 @@ const PRIORITY_BG: Record<string, string> = {
   MEDIUM:   "border-yellow-500/40 bg-yellow-500/5",
 };
 
-function KpiCard({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
+interface KpiProps {
+  label: string;
+  value: number;
+  icon: React.FC<{ className?: string }>;
+  warn?: boolean;
+  onClick?: () => void;
+}
+
+function KpiCard({ label, value, icon: Icon, warn, onClick }: KpiProps) {
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/40 mb-1">{label}</div>
-      <div className={`text-3xl font-bold tabular-nums ${warn ? "text-amber-400" : "text-white"}`}>{value}</div>
-    </div>
+    <Wrapper
+      onClick={onClick}
+      className={`bg-white/5 border ${warn ? "border-amber-500/40" : "border-white/10"} rounded-xl p-3 text-left w-full ${onClick ? "hover:bg-white/10 active:bg-white/15 transition-colors" : ""}`}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className={`w-3 h-3 ${warn ? "text-amber-400" : "text-text-industrial/40"}`} />
+        <div className="text-[9px] font-bold uppercase tracking-wider text-text-industrial/50 leading-tight">{label}</div>
+      </div>
+      <div className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-400" : "text-white"}`}>{value}</div>
+    </Wrapper>
   );
 }
 
-export const MobileDashboard: React.FC = () => {
-  const { data: woData,  loading: woLoading  } = useFetch<{ items: WO[]      }>("/app/pms/work-orders");
-  const { data: defData, loading: defLoading } = useFetch<{ items: Defect[]  }>("/app/pms/defects");
-  const { data: spData                        } = useFetch<{ items: Spare[]   }>("/app/pms/spares");
-  const { data: aiData                        } = useFetch<{ items: Insight[] }>("/app/ai-insights");
+export type DashboardTab = "panel" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
+
+interface Props {
+  onNavigate?: (tab: DashboardTab) => void;
+}
+
+export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
+  const { data: woData,    loading: woLoading    } = useFetch<{ items: WO[]            }>("/app/pms/work-orders");
+  const { data: defData,   loading: defLoading   } = useFetch<{ items: Defect[]        }>("/app/pms/defects");
+  const { data: spData                            } = useFetch<{ items: Spare[]         }>("/app/pms/spares");
+  const { data: aiData                            } = useFetch<{ items: Insight[]      }>("/app/ai-insights?status=OPEN");
+  const { data: certData                          } = useFetch<{ items: Certificate[] }>("/app/certificates");
+  const { data: mpSummary                         } = useFetch<{ counts: MpSummaryCounts }>("/app/dashboard/mp-summary");
+  const { data: drData                            } = useFetch<{ items: DailyReport[] }>("/app/daily-reports");
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const openWOs    = (woData?.items  ?? []).filter(w => w.status === "PLANNED" || w.status === "IN_PROGRESS");
   const overdueWOs = openWOs.filter(w => w.dueDate && new Date(w.dueDate) < today);
-  const openDefs   = (defData?.items ?? []).filter(d => d.status === "OPEN");
+  const openDefs   = (defData?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
   const lowSpares  = (spData?.items  ?? []).filter(s => s.currentStock <= s.reorderPoint);
-  const insights   = (aiData?.items  ?? []).slice(0, 6);
+
+  // Certificados: vencidos + próximos a vencer
+  const certWarn   = (certData?.items ?? []).filter(c => c.status === "EXPIRED" || c.status === "EXPIRING_SOON");
+
+  // Planes: vencidos + por vencer (OVERDUE + DUE)
+  const mpCounts   = mpSummary?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
+  const planAlert  = mpCounts.OVERDUE + mpCounts.DUE;
+
+  const insights   = (aiData?.items ?? []).slice(0, 5);
   const loading    = woLoading || defLoading;
 
+  // Reporte diario de hoy
+  const todayReport = (drData?.items ?? []).find(r => String(r.reportDate).slice(0, 10) === todayStr);
+
   return (
-    <div className="p-4 space-y-5 pb-6">
+    <div className="p-4 space-y-4 pb-6">
+      {/* KPIs — 6 cards en grid 2x3 */}
       {loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="w-6 h-6 animate-spin text-accent" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <KpiCard label="OTs abiertas"      value={openWOs.length} />
-          <KpiCard label="OTs vencidas"      value={overdueWOs.length} warn={overdueWOs.length > 0} />
-          <KpiCard label="Defectos abiertos" value={openDefs.length}   warn={openDefs.length > 0} />
-          <KpiCard label="Bajo reorden"      value={lowSpares.length}  warn={lowSpares.length > 0} />
+        <div className="grid grid-cols-2 gap-2.5">
+          <KpiCard label="OTs abiertas"   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots")} />
+          <KpiCard label="OTs vencidas"   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots")} />
+          <KpiCard label="Planes vencidos" icon={CalendarClock} value={planAlert}        warn={planAlert > 0}        onClick={() => onNavigate?.("planes")} />
+          <KpiCard label="Defectos"       icon={AlertTriangle} value={openDefs.length}  warn={openDefs.length > 0}  onClick={() => onNavigate?.("defectos")} />
+          <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos")} />
+          <KpiCard label="Certif. atención" icon={FileCheck}   value={certWarn.length}  warn={certWarn.length > 0} />
         </div>
       )}
 
+      {/* Reporte diario de hoy — status banner */}
+      <button
+        type="button"
+        onClick={() => onNavigate?.("diario")}
+        className={`w-full rounded-xl border p-3 flex items-center gap-3 text-left ${
+          todayReport
+            ? "border-success-sea/30 bg-success-sea/5"
+            : "border-orange-500/30 bg-orange-500/5"
+        }`}
+      >
+        {todayReport ? (
+          <>
+            <CheckCircle className="w-5 h-5 text-success-sea shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-success-sea">Reporte diario de hoy: {todayReport.status === "SUBMITTED" ? "Enviado" : "En borrador"}</p>
+              <p className="text-[10px] text-text-industrial/40">{todayStr}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <XCircle className="w-5 h-5 text-orange-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-orange-300">Falta reporte diario de hoy</p>
+              <p className="text-[10px] text-text-industrial/50">Tocá para registrarlo</p>
+            </div>
+          </>
+        )}
+      </button>
+
+      {/* Plan de mantenimiento — detalle por estado si hay foco */}
+      {mpSummary && (mpCounts.OVERDUE + mpCounts.DUE + mpCounts.IN_WINDOW + mpCounts.UPCOMING > 0) && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/50">Plan de mantenimiento</p>
+            <button
+              type="button"
+              onClick={() => onNavigate?.("planes")}
+              className="text-[10px] text-accent font-bold uppercase tracking-wider"
+            >
+              Ver todos
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <PlanStat label="Vencidos"  value={mpCounts.OVERDUE}   color="text-red-400" />
+            <PlanStat label="Próximos"  value={mpCounts.DUE}        color="text-orange-400" />
+            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW} color="text-yellow-400" />
+            <PlanStat label="Por vencer" value={mpCounts.UPCOMING}  color="text-blue-400" />
+          </div>
+        </div>
+      )}
+
+      {/* Alertas IA */}
       {insights.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">Alertas IA</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/50">Alertas IA</p>
           {insights.map(ins => (
             <div
               key={ins.id}
@@ -69,3 +163,10 @@ export const MobileDashboard: React.FC = () => {
     </div>
   );
 };
+
+const PlanStat: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
+  <div>
+    <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+    <p className="text-[9px] text-text-industrial/50 uppercase tracking-wider mt-0.5 leading-tight">{label}</p>
+  </div>
+);

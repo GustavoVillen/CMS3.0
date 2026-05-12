@@ -14,6 +14,10 @@ import { MobilePlans } from "../mobile/MobilePlans";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
 
+// Alias para los tabs accesibles desde dashboard (omite "dashboard" — no
+// tiene sentido navegar a sí mismo)
+type DashboardTabTarget = Exclude<Tab, "dashboard"> | "panel";
+
 interface TabDef {
   id: Tab;
   label: string;
@@ -72,7 +76,10 @@ export const MobileLayout: React.FC = () => {
 
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-hidden">
-          {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard /></div>}
+          {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard onNavigate={(target: DashboardTabTarget) => {
+            if (target === "panel") setTab("dashboard");
+            else setTab(target);
+          }} /></div>}
           {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans /></div>}
           {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders /></div>}
           {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects /></div>}
