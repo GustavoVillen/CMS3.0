@@ -132,7 +132,8 @@ async function callClaude(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
-  const client = new Anthropic({ apiKey });
+  // Timeout explícito de 60s — sin esto el SDK puede colgar 10 min
+  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   let response;
@@ -143,8 +144,9 @@ async function callClaude(
       system: systemPrompt,
       messages: [{ role: "user", content: userContent }],
     });
+    log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);
   } catch (err) {
-    log.error(`[${feature}] Anthropic call failed:`, err);
+    log.error(`[${feature}] Anthropic call failed after ${Date.now() - aiStarted}ms:`, err);
     throw new RouteError(502, "AI_CALL_FAILED", "No se pudo obtener sugerencia de la IA.");
   }
 
@@ -243,11 +245,25 @@ export async function suggestRisk(
     1500,
   );
 
+  log.info(`[suggestRisk] raw response (${raw.length} chars): ${raw.slice(0, 200)}...`);
+
   let parsed: any;
   try {
     parsed = JSON.parse(stripCodeFence(raw));
   } catch (err) {
-    log.error("[suggestRisk] JSON parse failed. Raw:", raw.slice(0, 500), err);
+    // Fallback: si el JSON está roto (típicamente porque max_tokens cortó al
+    // medio), tratamos de extraer level + narrative con regex y seguir.
+    log.warn("[suggestRisk] JSON parse failed, intentando fallback regex. Raw:", raw.slice(0, 500));
+    const levelMatch = raw.match(/"level"\s*:\s*"(LOW|MEDIUM|HIGH|CRITICAL)"/);
+    const narrativeMatch = raw.match(/"(?:narrative|analysis)"\s*:\s*"([\s\S]*?)(?:"(?:\s*,|\s*}))/);
+    if (levelMatch) {
+      const level = levelMatch[1] as RiskResult["level"];
+      const narrative = (narrativeMatch?.[1] ?? "").replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() ||
+        "Análisis truncado por la IA. Completá manualmente o re-intentá.";
+      log.info(`[suggestRisk] fallback usado — level=${level}, narrative=${narrative.length} chars`);
+      return { level, analysis: narrative };
+    }
+    log.error("[suggestRisk] Fallback regex también falló:", err);
     throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvió una respuesta inválida.");
   }
 
