@@ -53,46 +53,40 @@ Niveles de riesgo (operacional):
 - HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
 - CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
 
-REGLAS DE CONCISIÓN (aplican a todas las secciones):
+REGLAS DE CONCISIÓN (aplican a todas las secciones del narrative):
 - Cada bullet es UNA LÍNEA, máximo 15 palabras.
 - Máximo 5 bullets por sección — solo los MÁS importantes/críticos.
 - Específico y accionable: no "tener cuidado" sino "verificar temperatura ≤ 40°C con IR antes de tocar".
 - Si una sección no aplica, escribí "- No aplica" — pero mantené las 4 secciones siempre.
 
-ESTRUCTURA del campo "analysis" SEGÚN NIVEL:
+ESTRUCTURA DEL RESPONSE (JSON):
 
-· Si el nivel es LOW o MEDIUM → "analysis" es texto narrativo con estas 4 secciones (sin tabla):
+· "level": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
 
-  Peligros identificados:
-  - [hasta 5 bullets]
+· "narrative": texto plano con las 4 secciones, USANDO \\n PARA SEPARAR LÍNEAS (escape JSON estándar):
 
-  Consecuencias:
-  - [hasta 5 bullets]
+  "narrative": "Peligros identificados:\\n- [bullet 1]\\n- [bullet 2]\\n\\nConsecuencias:\\n- [bullet 1]\\n\\nMedidas de control:\\n- [bullet 1]\\n\\nEPP requerido:\\n- [bullet 1]"
 
-  Medidas de control:
-  - [hasta 5 bullets]
+  IMPORTANTE: Solo texto con \\n, NUNCA tabla Markdown adentro del narrative.
 
-  EPP requerido:
-  - [hasta 5 bullets]
+· "jsaMatrix": array de objetos con la matriz paso a paso JSA. ES OBLIGATORIO si level es HIGH o CRITICAL. ES OMITIDO (o array vacío) si level es LOW o MEDIUM.
 
-· Si el nivel es HIGH o CRITICAL → "analysis" es lo mismo de arriba (4 secciones concisas) PERO ADEMÁS al final agregás una matriz JSA paso a paso en formato tabla Markdown:
+  Cada objeto: {"step": "...", "hazard": "...", "control": "...", "ppe": "..."}
 
-JSA — Matriz paso a paso:
+  Reglas de la matriz:
+  - Entre 4 y 8 elementos en el array (pasos REALES de la tarea, no genéricos).
+  - Cada string corto — máximo 60 caracteres, sin saltos de línea (\\n NO permitido en strings de la matriz).
+  - Si en un paso hay varios peligros, separalos con "; " dentro del mismo string.
+  - Pasos típicos: aislar, esperar/enfriar, abrir/desmontar, inspeccionar, intervenir, ensamblar, probar, cerrar permiso.
+  - "control" debe ser ACCIONABLE y MEDIBLE.
 
-| # | Paso | Peligro | Control / Mitigación | EPP |
-|---|------|---------|---------------------|-----|
-| 1 | [paso 1] | [peligro principal] | [control específico] | [EPP requerido] |
-| 2 | ... | ... | ... | ... |
+EJEMPLO COMPLETO de respuesta para nivel HIGH:
+{"level":"HIGH","narrative":"Peligros identificados:\\n- Espacio confinado\\n- Vapores oleosos\\n\\nConsecuencias:\\n- Asfixia\\n\\nMedidas de control:\\n- Gas test antes de entrar\\n- Standby afuera\\n\\nEPP requerido:\\n- Respirador con suministro de aire","jsaMatrix":[{"step":"Drenar tanque","hazard":"Salpicadura aceite","control":"Conexión cerrada al colector","ppe":"Guantes nitrilo, gafas"},{"step":"Gas test del espacio","hazard":"Atmósfera deficiente O2","control":"Medir O2 >19.5%, LEL <10%","ppe":"Detector multigas"},{"step":"Entrar con standby","hazard":"Asfixia / pérdida conciencia","control":"Arnés + standby afuera con radio","ppe":"Arnés 5 puntos, casco"},{"step":"Inspección visual interna","hazard":"Tropezar / caer","control":"Iluminación 12V, sin obstáculos","ppe":"Botas antideslizantes"}]}
 
-Reglas de la tabla:
-- Entre 4 y 8 filas (pasos REALES de la tarea, no genéricos).
-- Cada celda corta — máximo 60 caracteres, sin saltos de línea.
-- Si en un paso hay varios peligros, separalos con "; ".
-- Pasos típicos: aislar, esperar/enfriar, abrir/desmontar, inspeccionar, intervenir, ensamblar, probar, cerrar permiso.
-- "Control" debe ser ACCIONABLE y MEDIBLE.
+EJEMPLO de respuesta para nivel LOW (sin jsaMatrix):
+{"level":"LOW","narrative":"Peligros identificados:\\n- No aplica\\n\\nConsecuencias:\\n- No aplica\\n\\nMedidas de control:\\n- Verificar correcto montaje\\n\\nEPP requerido:\\n- Guantes mecánicos básicos"}
 
-Respondé ÚNICAMENTE con este JSON válido (sin texto adicional fuera del JSON, sin code fence):
-{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis siguiendo la estructura"}`;
+Respondé ÚNICAMENTE con el JSON válido, sin texto adicional fuera del JSON, sin code fence.`;
 
 interface BaseInput {
   assetLabel?: string | null;
@@ -214,6 +208,26 @@ export async function suggestLoto(
   return { text };
 }
 
+// Construye una tabla Markdown con los headers fijos a partir del array
+// jsaMatrix devuelto por la IA. Sanitiza cada celda: trim, sin pipes, sin
+// saltos de línea (los reemplaza por "; ").
+function formatJsaMatrix(rows: Array<{ step?: unknown; hazard?: unknown; control?: unknown; ppe?: unknown }>): string {
+  if (!Array.isArray(rows) || rows.length === 0) return "";
+  const clean = (v: unknown) => String(v ?? "").trim()
+    .replace(/\r?\n/g, "; ")
+    .replace(/\|/g, "/");
+  const lines: string[] = [
+    "JSA — Matriz paso a paso:",
+    "",
+    "| # | Paso | Peligro | Control / Mitigación | EPP |",
+    "|---|------|---------|---------------------|-----|",
+  ];
+  rows.forEach((r, i) => {
+    lines.push(`| ${i + 1} | ${clean(r.step)} | ${clean(r.hazard)} | ${clean(r.control)} | ${clean(r.ppe)} |`);
+  });
+  return lines.join("\n");
+}
+
 export async function suggestRisk(
   session: TenantAccessSession,
   input: RiskInput,
@@ -226,13 +240,14 @@ export async function suggestRisk(
       "Criterios de aceptación": input.acceptanceCriteria,
       "LOTO": input.loto,
     }),
-    1024,
+    1500,
   );
 
   let parsed: any;
   try {
     parsed = JSON.parse(stripCodeFence(raw));
-  } catch {
+  } catch (err) {
+    log.error("[suggestRisk] JSON parse failed. Raw:", raw.slice(0, 500), err);
     throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvió una respuesta inválida.");
   }
 
@@ -240,9 +255,20 @@ export async function suggestRisk(
   if (!["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(level)) {
     throw new RouteError(502, "AI_PARSE_ERROR", `Nivel de riesgo inválido: ${level}`);
   }
-  const analysis = String(parsed?.analysis ?? "").trim();
-  if (!analysis) {
+
+  // Compat: si Claude devolvió el campo legacy "analysis" (todo en uno) lo
+  // usamos. Si devolvió el nuevo formato "narrative" + "jsaMatrix", armamos
+  // la tabla Markdown nosotros (más robusto, evita errores de escape).
+  let narrative = String(parsed?.narrative ?? "").trim();
+  if (!narrative) narrative = String(parsed?.analysis ?? "").trim();
+  if (!narrative) {
     throw new RouteError(502, "AI_PARSE_ERROR", "Falta el análisis.");
+  }
+
+  let analysis = narrative;
+  if (Array.isArray(parsed?.jsaMatrix) && parsed.jsaMatrix.length > 0) {
+    const table = formatJsaMatrix(parsed.jsaMatrix);
+    if (table) analysis = `${narrative}\n\n${table}`;
   }
 
   return { level: level as RiskResult["level"], analysis };
