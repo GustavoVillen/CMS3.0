@@ -350,6 +350,23 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       required: ["assetId"],
     },
   },
+  {
+    name: "query_spares",
+    description:
+      "Query the spares (repuestos) catalog for the current tenant/vessel. Use this when the user asks about inventory, stock levels, available parts, critical/low-stock items, parts location, or wants to find a specific spare by name/SKU/part number. Returns current stock derived from StockMovement (sum of receipts minus issues). For 'what's running low' queries, filter by lowStock=true (stock <= reorderPoint).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode:  { type: "string", description: "Filter by vessel code (optional — omit to include all vessels)" },
+        textSearch:  { type: "string", description: "Search across name, sku, manufacturerPartNumber, internalPartNumber and longDescription (optional)" },
+        category:    { type: "string", description: "Filter by category (optional, exact match)" },
+        criticality: { type: "string", description: "Filter by criticality: A | B | C (optional)" },
+        lowStock:    { type: "boolean", description: "If true, return only spares where current stock <= reorderPoint" },
+        outOfStock:  { type: "boolean", description: "If true, return only spares with current stock 0 or below" },
+        limit:       { type: "number", description: "Max results to return (default 10, max 30)" },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -563,6 +580,89 @@ async function executeCopilotTool(
         return { sampleCode: s.sampleCode, sampledAt: s.sampledAt, runningHours: s.runningHours, fluidType: s.fluidType, verdict: s.result?.verdict ?? null, values };
       });
       return wrapUntrusted(JSON.stringify(trend.length > 0 ? trend : { message: "No samples for this asset." }));
+    }
+
+    if (name === "query_spares") {
+      // Stock derivado de StockMovement: sum(receipts) - sum(issues). El campo
+      // legacy Spare.currentStock está deprecated y no refleja la realidad.
+      const sparesLimit = Math.min(Number(input.limit ?? 10), 30);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      if (input.vesselCode) where.vesselCode = input.vesselCode;
+      if (input.category)   where.category   = input.category;
+      if (input.criticality) where.criticality = input.criticality;
+      if (input.textSearch) {
+        const q = input.textSearch as string;
+        where.OR = [
+          { name:                   { contains: q, mode: "insensitive" } },
+          { sku:                    { contains: q, mode: "insensitive" } },
+          { manufacturerPartNumber: { contains: q, mode: "insensitive" } },
+          { internalPartNumber:     { contains: q, mode: "insensitive" } },
+          { longDescription:        { contains: q, mode: "insensitive" } },
+        ];
+      }
+
+      // Sin filtro de stock: traer top N por nombre.
+      // Con filtro de stock: traemos más (para filtrar después) y limitamos.
+      const wantsStockFilter = !!input.lowStock || !!input.outOfStock;
+      const rawSpares = await (prisma as any).spare.findMany({
+        where,
+        take: wantsStockFilter ? 200 : sparesLimit,
+        orderBy: [{ vesselCode: "asc" }, { name: "asc" }],
+        select: {
+          id: true, sku: true, name: true, category: true, criticality: true,
+          unit: true, minStock: true, reorderPoint: true, location: true,
+          manufacturerPartNumber: true, vesselCode: true,
+        },
+      });
+
+      // Calcular currentStock por spare desde StockMovement
+      const ids = rawSpares.map((s: any) => s.id);
+      const stockByGroup = new Map<string, number>();
+      if (ids.length > 0) {
+        const grouped = await (prisma as any).stockMovement.groupBy({
+          by: ["spareId", "movementType"],
+          where: { tenantId, spareId: { in: ids } },
+          _sum: { quantity: true },
+        });
+        const sumBy: Record<string, { in: number; out: number }> = {};
+        for (const g of grouped) {
+          const k = g.spareId as string;
+          if (!sumBy[k]) sumBy[k] = { in: 0, out: 0 };
+          const q = Number(g._sum?.quantity ?? 0);
+          // RECEIPT y ADJUSTMENT_PLUS suman; ISSUE y ADJUSTMENT_MINUS restan
+          const t = g.movementType as string;
+          if (t === "RECEIPT" || t === "ADJUSTMENT_PLUS" || t === "TRANSFER_IN") sumBy[k].in += q;
+          else if (t === "ISSUE" || t === "ADJUSTMENT_MINUS" || t === "TRANSFER_OUT") sumBy[k].out += q;
+          else sumBy[k].in += q; // ADJUSTMENT viejo / otros: sumar por compatibilidad
+        }
+        for (const id of ids) {
+          const s = sumBy[id as string] ?? { in: 0, out: 0 };
+          stockByGroup.set(id as string, s.in - s.out);
+        }
+      }
+
+      let result = rawSpares.map((s: any) => {
+        const currentStock = stockByGroup.get(s.id) ?? 0;
+        const reorderPoint = Number(s.reorderPoint ?? 0);
+        const minStock     = Number(s.minStock ?? 0);
+        let stockStatus: "OUT" | "LOW" | "OK" = "OK";
+        if (currentStock <= 0) stockStatus = "OUT";
+        else if (currentStock <= reorderPoint || currentStock < minStock) stockStatus = "LOW";
+        return {
+          id: s.id, sku: s.sku, name: s.name, category: s.category, criticality: s.criticality,
+          unit: s.unit, vesselCode: s.vesselCode, location: s.location,
+          partNumber: s.manufacturerPartNumber,
+          currentStock, minStock, reorderPoint, stockStatus,
+        };
+      });
+
+      if (input.outOfStock) result = result.filter((r: any) => r.stockStatus === "OUT");
+      else if (input.lowStock) result = result.filter((r: any) => r.stockStatus !== "OK");
+      result = result.slice(0, sparesLimit);
+
+      return wrapUntrusted(JSON.stringify(
+        result.length > 0 ? result : { message: "No spares found matching the criteria." },
+      ));
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });
