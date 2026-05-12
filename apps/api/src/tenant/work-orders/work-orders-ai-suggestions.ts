@@ -7,13 +7,36 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea. Los criterios deben indicar cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables.
+const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea.
 
-Responde ÚNICAMENTE con los criterios, en texto plano, sin introducción ni explicación adicional.`;
+REGLAS DE CONCISIÓN:
+- Máximo 5 criterios (los MÁS importantes, no listado exhaustivo).
+- Cada criterio en una sola línea como bullet "- ".
+- Cada criterio debe ser MEDIBLE: incluir valor numérico, rango, tolerancia, o estado verificable. Ej: "- Presión de descarga 4-6 bar" / "- Sin fugas visibles tras 10 min de operación" / "- Torque de bridas 80 Nm ±5%".
+- Si no podés definir un valor medible, omitilo (no incluyas bullets vagos como "verificar correcto funcionamiento").
 
-const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo.
+Responde ÚNICAMENTE con los bullets, en texto plano, sin introducción, sin numeración, sin explicación adicional.`;
 
-Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
+const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí el procedimiento de seguridad para esta tarea.
+
+ESTRUCTURA FIJA — usá EXACTAMENTE estas 3 secciones con sus encabezados:
+
+LOTO:
+- [punto de aislación 1 — máximo 5 puntos]
+
+INSTRUMENTOS NECESARIOS:
+- [instrumento/herramienta 1 — máximo 5 ítems]
+
+EQUIPOS DE PROTECCIÓN PERSONAL NECESARIOS:
+- [EPP 1 — máximo 5 ítems]
+
+REGLAS DE CONCISIÓN:
+- Solo los ítems CRÍTICOS, no listado exhaustivo.
+- Bullets cortos: máximo 15 palabras cada uno.
+- Específicos: en LOTO indicá qué bloquear y cómo (ej. "Desconectar breaker X, candado + tarjeta, verificar tensión cero con multímetro"). En instrumentos indicá tipo y rango (ej. "Multímetro 600V CAT III"). En EPP indicá tipo y nivel (ej. "Guantes anticorte nivel 4").
+- Si una sección no aplica (ej. tarea sin energía a aislar), escribí "- No aplica" — pero MANTENÉ las 3 secciones siempre.
+
+Responde ÚNICAMENTE con las 3 secciones en texto plano, sin introducción, sin explicación.`;
 
 const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
 
@@ -30,37 +53,46 @@ Niveles de riesgo (operacional):
 - HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
 - CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
 
+REGLAS DE CONCISIÓN (aplican a todas las secciones):
+- Cada bullet es UNA LÍNEA, máximo 15 palabras.
+- Máximo 5 bullets por sección — solo los MÁS importantes/críticos.
+- Específico y accionable: no "tener cuidado" sino "verificar temperatura ≤ 40°C con IR antes de tocar".
+- Si una sección no aplica, escribí "- No aplica" — pero mantené las 4 secciones siempre.
+
 ESTRUCTURA del campo "analysis" SEGÚN NIVEL:
 
-· Si el nivel es LOW o MEDIUM → "analysis" es texto narrativo organizado en estas 4 secciones (sin tabla):
-  Peligros identificados:
-  - [bullet]
-  Consecuencias:
-  - [bullet]
-  Medidas de control:
-  - [bullet]
-  EPP requerido:
-  - [bullet]
+· Si el nivel es LOW o MEDIUM → "analysis" es texto narrativo con estas 4 secciones (sin tabla):
 
-· Si el nivel es HIGH o CRITICAL → "analysis" es lo mismo de arriba PERO ADEMÁS al final agregás una matriz JSA paso a paso en formato tabla Markdown. La tabla DEBE tener exactamente estos encabezados y formato:
+  Peligros identificados:
+  - [hasta 5 bullets]
+
+  Consecuencias:
+  - [hasta 5 bullets]
+
+  Medidas de control:
+  - [hasta 5 bullets]
+
+  EPP requerido:
+  - [hasta 5 bullets]
+
+· Si el nivel es HIGH o CRITICAL → "analysis" es lo mismo de arriba (4 secciones concisas) PERO ADEMÁS al final agregás una matriz JSA paso a paso en formato tabla Markdown:
 
 JSA — Matriz paso a paso:
 
 | # | Paso | Peligro | Control / Mitigación | EPP |
 |---|------|---------|---------------------|-----|
-| 1 | [descripción corta del paso 1] | [peligro principal del paso] | [control específico] | [EPP requerido en ese paso] |
+| 1 | [paso 1] | [peligro principal] | [control específico] | [EPP requerido] |
 | 2 | ... | ... | ... | ... |
 
 Reglas de la tabla:
-- Mínimo 4 filas, máximo 10 filas (los pasos REALES de la tarea, no genéricos)
-- Cada celda debe ser corta y específica — máximo 80 caracteres
-- NUNCA usar saltos de línea dentro de las celdas (rompe el formato Markdown)
-- Si en un paso hay varios peligros, ponelos separados por "; "
-- Pasos típicos: aislar, esperar/enfriar, abrir/desmontar, inspeccionar, intervenir, ensamblar, probar, cerrar permiso
-- Para cada peligro de la matriz, el "Control" debe ser ACCIONABLE y MEDIBLE (no "ser cuidadoso")
+- Entre 4 y 8 filas (pasos REALES de la tarea, no genéricos).
+- Cada celda corta — máximo 60 caracteres, sin saltos de línea.
+- Si en un paso hay varios peligros, separalos con "; ".
+- Pasos típicos: aislar, esperar/enfriar, abrir/desmontar, inspeccionar, intervenir, ensamblar, probar, cerrar permiso.
+- "Control" debe ser ACCIONABLE y MEDIBLE.
 
 Respondé ÚNICAMENTE con este JSON válido (sin texto adicional fuera del JSON, sin code fence):
-{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis siguiendo la estructura definida según el nivel"}`;
+{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis siguiendo la estructura"}`;
 
 interface BaseInput {
   assetLabel?: string | null;

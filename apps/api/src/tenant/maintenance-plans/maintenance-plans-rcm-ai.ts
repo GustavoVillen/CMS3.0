@@ -28,8 +28,15 @@ Las 4 categorías RCM:
 
 La consecuencia debe ser la PEOR plausible si el plan no se hace. Si un mismo plan previene falla con consecuencias múltiples, elegí la más severa: SAFETY > ENVIRONMENTAL > OPERATIONAL > NON_OPERATIONAL.
 
+REGLAS DE CONCISIÓN para el rationale:
+- Máximo 2 oraciones cortas. Total ≤ 40 palabras.
+- Mencioná QUÉ falla en el equipo y QUÉ consecuencia genera (no narres procedimientos).
+- Estructura recomendada: "[modo de falla del equipo]. [Impacto principal en la categoría elegida]."
+- Ejemplo SAFETY: "Bomba CI standby no probada puede no arrancar en incendio. Riesgo de fatalidad si fuego escala sin agua disponible."
+- Ejemplo OPERATIONAL: "Filtros saturados causan derate del motor principal. Pérdida de propulsión y demora en ruta."
+
 Te paso el activo + descripción del plan. Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra):
-{"category": "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL", "rationale": "1-2 oraciones técnicas explicando QUÉ pasa cuando la falla ocurra"}`;
+{"category": "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL", "rationale": "1-2 oraciones técnicas concisas"}`;
 
 interface SuggestInput {
   assetName: string;
