@@ -46,6 +46,7 @@ Immutable rules:
 - When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
 - IMPORTANT: Before asking the user a question that can be answered by querying the system (e.g. "Does a maintenance plan exist?", "Are there open work orders?"), ALWAYS use the available query tools to look it up yourself first.
 - RCA / DEFECT PROACTIVE SEARCH: When you are in DEFECTS or RCA module and you are about to ask the user ANY question about maintenance history, previous work orders, last service date, last fluid/filter/component change, inspection records, or any operational record related to the asset — STOP before asking. First call query_maintenance_plans and query_work_orders using the assetId and vesselCode from the screen context (relatedEntities.assetId). Then in your response: (1) explicitly state what you found — plan name, last execution date/hours, or work orders — or state "No encontré registros de [X] para este activo en el sistema"; (2) only ask the user for additional context if the records were insufficient or absent. Never ask "¿Cuándo fue el último cambio de X?" without first querying the system yourself.
+- "ALREADY DONE?" CHECKS: When the user asks "¿se hizo X?", "¿cambiaron Y?", "¿cuándo fue el último cambio de Z?" or similar — call query_work_orders WITHOUT a status filter (to include PLANNED, IN_PROGRESS, ON_HOLD, CLOSED). Then for each row inspect the fields "observations" (AI-consolidated technician progress notes), "description" and "title" — these contain the actual work performed even on OTs that are still open. Only conclude "no se hizo" if no match is found in any of those fields across all statuses. When citing evidence, mention the OT code and whether it is CLOSED or still in progress.
 - RCA USER HYPOTHESIS FIRST: When you are about to start or guide an RCA (root cause analysis) — triggered by the user asking to "analizar la causa", "hacer el RCA", "iniciar RCA", "investigar el defecto", or any similar phrase — ALWAYS start with ONE single question before any analysis: "¿Ya tenés alguna hipótesis sobre la posible causa de este defecto?" Wait for the user's answer before proceeding. If the user already provided a hypothesis in their message, do NOT ask again — instead, critically evaluate it before incorporating it: check if it (1) identifies a specific, actionable cause (not just a symptom), (2) is technically plausible given the defect description and any maintenance records found, (3) is falsifiable — i.e., there is a way to confirm or rule it out. If the hypothesis is vague, symptom-level, or incomplete, point it out respectfully and help the user refine it to a proper root cause before proceeding with the full RCA. If the hypothesis is well-formed, confirm it explicitly and build the analysis from there.
 - FILL FIELDS: When the user asks to "completar campos faltantes", "complete missing fields", "fill the form", "llenar campos", "rellenar campos", or any similar phrase, analyze the screen context fieldValues (provided in ACTIVE RECORD above), identify fields whose value is null or empty, and propose expert-quality values for them based on domain knowledge and any already-filled fields. Embed the proposed values at the END of your response using EXACTLY this format with no spaces between the markers and the JSON:
 [CAMPOS]{"fieldKey": "proposed value", "fieldKey2": "proposed value 2"}[/CAMPOS]
@@ -193,7 +194,7 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_work_orders",
     description:
-      "Query work orders for the current tenant/vessel. Use this to check open/in-progress work orders, find work order history for an asset, or verify whether a corrective action already exists.",
+      "Query work orders for the current tenant/vessel. Use this to check open/in-progress work orders, find work order history for an asset, or verify whether a corrective action already exists. Returns also `observations` (AI-consolidated technician progress notes) and `woResult` (SATISFACTORY/WITH_DEFICIENCIES). The `observations` field reflects actual work performed even on OTs that are still IN_PROGRESS or ON_HOLD — search it to answer 'was task X already done?' queries before assuming nothing happened.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -201,7 +202,7 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
         assetId: { type: "string", description: "Filter by asset ID (optional)" },
         status: {
           type: "string",
-          description: "Filter by status: PLANNED | IN_PROGRESS | ON_HOLD | DEFERRED | CLOSED | CANCELLED (optional)",
+          description: "Filter by status: PLANNED | IN_PROGRESS | ON_HOLD | DEFERRED | CLOSED | CANCELLED (optional). Omit to include all statuses — useful when checking if work was already in progress/closed.",
         },
         type: {
           type: "string",
@@ -360,6 +361,7 @@ async function executeCopilotTool(
         orderBy: { openDate: "desc" },
         select: {
           workOrderCode: true,
+          assetId: true,
           title: true,
           type: true,
           status: true,
@@ -368,6 +370,16 @@ async function executeCopilotTool(
           openDate: true,
           completedDate: true,
           description: true,
+          // Campos del resultado: para responder "se hizo X?" hay que mirar
+          // observations (consolidado por IA de los avances del técnico),
+          // woResult, executedByName y horas. Funcionan incluso en OTs
+          // IN_PROGRESS/ON_HOLD que aún no se cerraron.
+          observations: true,
+          woResult: true,
+          executedByName: true,
+          actualHours: true,
+          runningHoursAtExecution: true,
+          acceptanceCriteria: true,
         },
       });
 
