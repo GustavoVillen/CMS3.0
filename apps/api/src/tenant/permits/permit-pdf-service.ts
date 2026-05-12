@@ -130,29 +130,61 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
 
     doc.moveTo(40, 115).lineTo(555, 115).strokeColor("#cbd5e1").lineWidth(1).stroke();
 
+    // Geometría de página + tracker de cursor.
+    // IMPORTANTE: pdfkit auto-pagina cuando un text() largo desborda. Si no
+    // sincronizamos `y = doc.y` después de cada text(), `y` queda apuntando
+    // al "pasado" de la página vieja y los siguientes elementos se dibujan
+    // off-page, generando hojas en blanco en cascada. Fix: sync siempre.
+    const A4_H = 841.89;
+    const TOP_Y = 40;
+    const BOTTOM_Y = A4_H - 40; // 801
     let y = 125;
     const labelCol = 40;
     const valueCol = 165;
     const lineH = 14;
 
+    function ensureSpace(needed: number) {
+      if (y + needed > BOTTOM_Y) {
+        doc.addPage();
+        y = TOP_Y;
+      }
+    }
+
     function row(label: string, value: string) {
+      ensureSpace(lineH);
       doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold").text(label.toUpperCase(), labelCol, y, { width: 120 });
       doc.fontSize(9).fillColor("#0f172a").font("Helvetica").text(value, valueCol, y, { width: 390 });
-      y += lineH;
+      // doc.y refleja la posición real del cursor después del último text();
+      // sumarle un pequeño padding fijo de baseline. Si el value se wrapeó a
+      // varias líneas, doc.y avanzó solo; row sigue avanzando lineH mínimo.
+      y = Math.max(doc.y, y + lineH);
     }
+
     function sectionTitle(text: string) {
+      // El rect coloreado no puede partirse entre páginas — asegurar espacio
+      // para el rect (16) + padding superior (6) + padding inferior (6).
+      ensureSpace(28);
       y += 6;
       doc.fontSize(9).fillColor("#ffffff").font("Helvetica-Bold").rect(40, y, 515, 16).fill("#0f172a");
       doc.fillColor("#ffffff").text(text.toUpperCase(), 46, y + 4);
       y += 22;
     }
+
     function block(label: string, content: string) {
-      doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold").text(label.toUpperCase(), labelCol, y);
-      y += 11;
+      doc.fontSize(9).font("Helvetica"); // setear font ANTES de heightOfString
       const opts = { width: 515 };
-      const height = doc.heightOfString(content, opts);
+      const contentH = doc.heightOfString(content, opts);
+      // Si el bloque entero no entra, ir a nueva página primero.
+      // (No intentamos partir un bloque entre páginas — pdfkit lo hace solo si
+      // hace falta, pero al menos arrancamos limpio.)
+      const labelH = label ? 11 : 0;
+      ensureSpace(labelH + Math.min(contentH, 200) + 8);
+      if (label) {
+        doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold").text(label.toUpperCase(), labelCol, y);
+        y += 11;
+      }
       doc.fontSize(9).fillColor("#0f172a").font("Helvetica").text(content, labelCol, y, opts);
-      y += height + 8;
+      y = doc.y + 8;
     }
 
     sectionTitle("Identificación");
@@ -197,10 +229,14 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
       }
     }
 
-    // Gas tests (enclosed space)
+    // Gas tests (enclosed space).
+    // Cita: SOLAS XI-1/7 exige el equipamiento de medición; los umbrales
+    // operativos vienen de ISGOTT 6 Cap. 11 (estándar industrial), no de
+    // IMO A.1050(27) directamente (esa es procedural, no numérica).
     if (permit.gasTests.length > 0) {
-      sectionTitle("Gas Tests (IMO A.1050(27))");
-      // Tabla simple
+      sectionTitle("Gas Tests (SOLAS XI-1/7 + ISGOTT 6 Cap. 11)");
+      // Header de tabla
+      ensureSpace(20);
       doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold");
       doc.text("Fecha/Hora", 40, y, { width: 90 });
       doc.text("Medido por", 130, y, { width: 100 });
@@ -214,6 +250,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
       y += 4;
       doc.font("Helvetica").fillColor("#0f172a").fontSize(8);
       for (const g of permit.gasTests) {
+        ensureSpace(13);
         doc.text(fmt(g.testedAt), 40, y, { width: 90 });
         doc.text(g.testedByName, 130, y, { width: 100 });
         doc.text(g.o2Pct !== null ? g.o2Pct.toFixed(1) : "—", 230, y, { width: 40 });
@@ -237,9 +274,9 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     if (permit.rejectionReason) block("Motivo de rechazo", permit.rejectionReason);
     if (permit.cancelReason) block("Motivo de cancelación", permit.cancelReason);
 
-    // Signature block — boxes for printed signatures
-    if (y > 700) doc.addPage();
-    else y += 10;
+    // Signature block — cajas para firmas impresas.
+    // ensureSpace tiene en cuenta: sectionTitle (28) + altura del box (55) + 10
+    ensureSpace(28 + 55 + 10);
     sectionTitle("Firmas (a completar a bordo)");
     const sigBoxY = y;
     const sigW = 165;
@@ -255,7 +292,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     sigBox("Cierre", 40 + 2 * (sigW + sigGap));
     y = sigBoxY + sigH + 10;
 
-    // Footer
+    // Footer en la última página (la página actual al hacer end()).
     doc.fontSize(7).fillColor("#94a3b8")
       .text(`Generado ${new Date().toLocaleString("es-AR")}  ·  ${permit.permitCode}`, 40, 815, { width: 515, align: "center" });
 

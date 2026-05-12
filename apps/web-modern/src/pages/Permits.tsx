@@ -440,6 +440,12 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
                   </label>
                   <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder="Arnés, máscara con suministro de aire, guantes ignífugos, etc." />
                 </div>
+                <div className="col-span-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                  <Sparkles className="w-3 h-3 text-blue-400 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-blue-200/80 leading-snug">
+                    Las sugerencias de Peligros / Controles / EPP son orientativas (asistente IA). Cada aseveración cuantitativa debería estar respaldada por la regulación aplicable. Para entrada a espacio confinado, los umbrales son ISGOTT 6 Cap. 11 (O₂ 19.5–23%, LEL &lt;1%, H₂S &lt;10 ppm, CO &lt;50 ppm); el sistema los valida server-side al hacer el gas test.
+                  </p>
+                </div>
                 {permit?.rejectionReason && (
                   <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-red-400 font-bold mb-1">Motivo de rechazo</p>

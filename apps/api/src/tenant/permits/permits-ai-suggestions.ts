@@ -4,56 +4,57 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { buildPermitTypeRegulationContext } from "../../common/regulations/maritime";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-const PERMIT_TYPE_CONTEXT: Record<string, string> = {
-  HOT_WORK: "TRABAJO EN CALIENTE (soldadura, oxicorte, esmerilado). Riesgos típicos: fuego/explosión, escorias, vapores tóxicos, atmósferas inflamables, quemaduras, deslumbramiento.",
-  ENCLOSED_SPACE_ENTRY: "ENTRADA A ESPACIO CONFINADO (tanques, sentinas, pañoles cerrados, voids). Riesgos típicos: atmósfera deficiente en O2, gases tóxicos (H2S, CO), atmósferas inflamables (LEL), atrapamiento, hipertermia, comms perdidas.",
-  WORKING_ALOFT: "TRABAJO EN ALTURA (mástiles, antenas, exterior de casco, escaleras de gato). Riesgos típicos: caída de altura, caída de herramientas/personas al agua, exposición climática, viento, contacto con energizados.",
-  ELECTRICAL_ISOLATION: "AISLAMIENTO ELÉCTRICO / LOTO. Riesgos típicos: electrocución, arco eléctrico, energización accidental, energía residual (capacitores, UPS), efectos en sistemas críticos al desenergizar.",
-};
-
 const PROMPT_HAZARDS = `Sos experto en HSE marítimo. Identificá los peligros específicos para el trabajo descrito EN ESTE PERMISO.
 
-CONTEXTO DEL PERMISO según tipo (úsalo como base obligatoria, no te limites solo a éstos):
+CONTEXTO REGULATORIO DEL PERMISO:
 {TYPE_CONTEXT}
 
 REGLAS DE CONCISIÓN:
 - Máximo 6 bullets — solo los peligros REALES y aplicables al trabajo descrito.
 - Cada bullet en una línea como "- ".
-- Específico y accionable: NO "puede haber riesgo" sino "concentración H2S esperable >50 ppm por restos de combustible".
-- Mencioná peligros concretos del tipo (atmósfera deficiente, fuego, caída, electrocución) + peligros DEL LUGAR (sala de máquinas caliente, tanque con residuos, etc.).
+- Específico y accionable: NO "puede haber riesgo" sino, por ejemplo, "atmósfera potencialmente deficiente en O₂ por descomposición de residuos en el void".
+- Mencioná peligros concretos del tipo + peligros DEL LUGAR (sala de máquinas caliente, tanque con residuos, etc.).
+- Si citás un umbral cuantitativo, usá los del CONTEXTO REGULATORIO de arriba y ponelo entre paréntesis (ej. "atmósfera inflamable LEL ≥1%, ISGOTT 6 Cap. 11").
+- NO INVENTES un número que no esté en el contexto.
 
 Responde ÚNICAMENTE con los bullets en texto plano, sin introducción, sin numeración.`;
 
 const PROMPT_CONTROLS = `Sos experto en HSE marítimo. Definí las medidas de control para mitigar los peligros del trabajo descrito EN ESTE PERMISO.
 
-CONTEXTO DEL PERMISO según tipo:
+CONTEXTO REGULATORIO DEL PERMISO:
 {TYPE_CONTEXT}
 
 REGLAS DE CONCISIÓN:
 - Máximo 6 bullets — las medidas MÁS importantes / críticas.
 - Cada bullet en una línea como "- ".
-- Cada medida debe ser ACCIONABLE: indicá QUÉ hacer y CÓMO verificar. Ej: "- Aislar línea de combustible: cerrar válvula V-12, candado + tarjeta, verificar presión 0 con manómetro" en vez de "asegurar líneas".
-- Pensá en: aislamientos físicos (LOTO), aislamientos atmosféricos (ventilación, gas test), barreras (mantas ignífugas, rebordes), procedimientos (briefing, comms, standby), inspección previa (gas test, lecturas).
+- Cada medida ACCIONABLE: QUÉ hacer y CÓMO verificar. Ej: "- Aislar línea de combustible: cerrar válvula V-12, candado + tarjeta, verificar presión 0 con manómetro".
+- Pensá en: aislamientos físicos (LOTO), aislamientos atmosféricos (ventilación, gas test), barreras, procedimientos (briefing, comms, standby), inspección previa.
+
+SOURCING DE NÚMEROS:
+- Cualquier umbral cuantitativo (concentración, tiempo, distancia) DEBE coincidir con los del CONTEXTO REGULATORIO. Citá la fuente entre paréntesis.
+- NO confundas umbrales: ENTRADA a espacio confinado es LEL <1% (ISGOTT 6 Cap. 11). NO escribas LEL >10% — ese es el threshold de alarma sonora del detector personal, NO el de autorización de entrada.
+- Si no hay umbral aplicable en el contexto, describí la medida cualitativamente — no inventes un número.
 
 Responde ÚNICAMENTE con los bullets en texto plano, sin introducción, sin numeración.`;
 
-const PROMPT_PPE = `Sos experto en HSE marítimo. Definí el EPP (Equipo de Protección Personal) específico para el trabajo descrito EN ESTE PERMISO.
+const PROMPT_PPE = `Sos experto en HSE marítimo. Definí el EPP específico para el trabajo descrito EN ESTE PERMISO.
 
-CONTEXTO DEL PERMISO según tipo:
+CONTEXTO REGULATORIO DEL PERMISO:
 {TYPE_CONTEXT}
 
 REGLAS DE CONCISIÓN:
-- Máximo 6 bullets — solo el EPP REALMENTE necesario, no listado genérico exhaustivo.
+- Máximo 6 bullets — solo el EPP REALMENTE necesario, no listado genérico.
 - Cada bullet en una línea como "- ".
-- Específico: indicá tipo/nivel, no genérico. Ej:
+- Específico: indicá tipo/nivel:
   - "Guantes anticorte nivel 4" en vez de "guantes".
-  - "Máscara con suministro de aire externo" en vez de "protección respiratoria".
-  - "Arnés cuerpo completo 5 puntos con anclaje doble" en vez de "arnés".
-  - "Gafas anti-impacto + careta para chispas" en vez de "protección ocular".
-- Listá EPP que matchee los peligros concretos del trabajo y las medidas de control sugeridas, evitando duplicar EPP genérico ya implícito (uniforme, calzado de seguridad básico) salvo que el caso lo amerite.
+  - "Máscara con suministro de aire externo (línea de aire comprimido certificada)" en vez de "protección respiratoria".
+  - "Arnés cuerpo completo 5 puntos con anclaje doble certificado" en vez de "arnés".
+- Listá EPP que matchee los peligros y controles. Evitá duplicar EPP genérico (uniforme, casco básico) salvo que el caso lo amerite.
+- Si una norma/estándar del CONTEXTO obliga un tipo específico de EPP, citala entre paréntesis.
 
 Responde ÚNICAMENTE con los bullets en texto plano, sin introducción, sin numeración.`;
 
@@ -78,7 +79,10 @@ function buildContext(input: PermitAiInput, extras: Record<string, string | null
 }
 
 function resolvePrompt(template: string, type: string): string {
-  const ctx = PERMIT_TYPE_CONTEXT[type] ?? "Tipo desconocido. Aplicá criterio general de seguridad marítima.";
+  // El bloque de contexto trae thresholds + lista de regulaciones aplicables
+  // + la regla "no inventes números, citá la fuente". Es el corazón de la
+  // protección anti-alucinación numérica.
+  const ctx = buildPermitTypeRegulationContext(type);
   return template.replace("{TYPE_CONTEXT}", ctx);
 }
 

@@ -2,8 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
+import { buildFluidAnalysisRegulationContext } from "../../common/regulations/maritime";
 
-const SYSTEM_PROMPT = `Sos un experto en mantenimiento predictivo y análisis de fluidos para flotas marítimas.
+const SYSTEM_PROMPT_BASE = `Sos un experto en mantenimiento predictivo y análisis de fluidos para flotas marítimas.
 Te paso el resultado de UN análisis de fluido (con sus parámetros) más el HISTORIAL de muestras anteriores
 del mismo equipo y mismo tipo de fluido. Tu tarea es generar un informe técnico breve y operativo en español
 con TRES secciones, en formato Markdown:
@@ -23,6 +24,8 @@ Reglas:
 - No inventes parámetros que no aparezcan en los datos.
 - Si solo hay 1 muestra (la actual), aclará que no hay base de comparación y limitate a interpretar la muestra puntual.
 - Tono: técnico, directo, sin marketing.
+
+{REGULATORY_CONTEXT}
 `;
 
 interface GenerateInput {
@@ -95,6 +98,11 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
     })),
   };
 
+  // Resolver el contexto regulatorio para este tipo de fluido — anchorea los
+  // estándares aplicables y le prohíbe a la IA inventar números.
+  const regulatoryContext = buildFluidAnalysisRegulationContext(sample.fluidType);
+  const systemPrompt = SYSTEM_PROMPT_BASE.replace("{REGULATORY_CONTEXT}", regulatoryContext);
+
   const client = new Anthropic({ apiKey });
   const model = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
@@ -104,7 +112,7 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
     response = await client.messages.create({
       model,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: "user", content: JSON.stringify(dataPayload, null, 2) }],
     });
   } catch (err) {

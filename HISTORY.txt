@@ -1,5 +1,84 @@
 HISTORY.txt
 
+[2026-05-12] IA — anti-alucinación de umbrales numéricos + DB de regulaciones marítimas
+Agent: Claude Sonnet 4.6
+
+CONTEXTO:
+La IA del módulo PTW sugirió "rechazar entrada si LEL >10%" para espacio confinado.
+Eso está mal por un factor 10: la norma operativa exige LEL <1% para autorizar
+entrada (ISGOTT 6 Cap. 11). El backend ya enforce ≥1% como FAIL server-side
+(gas-tests-service.ts:computeVerdict), pero el prompt no tenía los umbrales
+anchorados y la IA inventó un número plausible pero incorrecto.
+
+SCOPE:
+- apps/api/src/common/regulations/maritime.ts (NUEVO) — Base de datos
+  estructurada de regulaciones marítimas con:
+  - Sección 1 (PTW): ENCLOSED_SPACE_ENTRY, HOT_WORK, WORKING_ALOFT,
+    ELECTRICAL_ISOLATION. Cada uno con SOLAS / IMO Res / ISGOTT / MLC / ISM /
+    IEC según corresponda.
+  - Sección 2 (Fluid analyses): ENGINE_OIL (CIMAC + ASTM D4378),
+    HYDRAULIC_OIL (ISO 4406, ISO 11171), GEARBOX_OIL (OEM-driven),
+    FUEL_DIESEL/HFO (ISO 8217 + MARPOL Anexo VI Reg 14), COOLING_WATER
+    (OEM), BOILER_WATER (ASME), POTABLE_WATER (WHO GDWQ + MLC 2006).
+  - Cada entrada tiene: source (cita exacta), note (contexto + matices),
+    confidence ('verified' o 'industry-standard'), verifiedBy/verifiedDate
+    para trazabilidad.
+  - Constante numérica ENCLOSED_SPACE_ENTRY_THRESHOLDS export: O₂ 19.5–23%,
+    LEL <1%, H₂S <10 ppm, CO <50 ppm — single source of truth.
+  - Helpers buildPermitTypeRegulationContext() y
+    buildFluidAnalysisRegulationContext() que arman el bloque de contexto
+    a inyectar en el system prompt.
+
+- apps/api/src/tenant/permits/permits-ai-suggestions.ts — Reemplaza el
+  PERMIT_TYPE_CONTEXT inline (genérico, sin umbrales) por
+  buildPermitTypeRegulationContext(). Los 3 prompts (hazards/controls/PPE)
+  ahora incluyen los umbrales numéricos + lista de regulaciones aplicables
+  + regla explícita "NO inventes números, si citás un valor poné la fuente
+  entre paréntesis, LEL <1% es entrada — 10% es alarma de detector,
+  cosas distintas".
+
+- apps/api/src/tenant/fluid-analyses/fluid-analyses-ai-insights.ts —
+  Agrega buildFluidAnalysisRegulationContext(fluidType) al system prompt.
+  Anchorea las regulaciones aplicables al tipo de fluido y le prohíbe a la
+  IA inventar rangos.
+
+- apps/api/src/tenant/permits/permit-pdf-service.ts — Fix de bug:
+  hojas en blanco en el PDF. El tracker manual de `y` se desincronizaba
+  cuando pdfkit auto-paginaba en un text() largo. Solución: ensureSpace()
+  antes de elementos rect-backed + sync y=doc.y después de cada text().
+  Bonus: la cita "IMO A.1050(27)" en el título de la tabla de gas tests se
+  reemplazó por la cita correcta "SOLAS XI-1/7 + ISGOTT 6 Cap. 11" (la
+  resolución IMO es procedural, no la fuente numérica).
+
+- apps/web-modern/src/pages/Permits.tsx — Disclaimer chico bajo los 3
+  campos IA del modal, citando los umbrales ISGOTT 6 Cap. 11 y aclarando
+  que el sistema los valida server-side.
+
+POR QUÉ:
+LLMs alucinan números cuantitativos cuando no se les pasan como contexto.
+Es un patrón conocido. La defensa es: pasar los umbrales explícitamente,
+forzar citación de fuente, mantener autoridad de validación server-side.
+Esto reduce el riesgo a casi cero PARA los umbrales que están en la DB;
+para parámetros no cubiertos, la regla "no inventes y citá fuente o
+descríbelo cualitativo" hace que la IA admita su límite.
+
+VERIFICACIÓN:
+- typecheck backend: limpio.
+- typecheck frontend: 0 errores nuevos.
+- IMPORTANTE: las regulaciones del DB están marcadas 'verified' o
+  'industry-standard' según mi nivel de confianza al citarlas. Una revisión
+  humana especializada conviene antes de uso productivo crítico.
+
+PENDIENTE:
+- Auditoría humana de cada entrada de la DB de regulaciones antes de
+  certificar para vetting real. Especialmente las marcadas
+  'industry-standard' donde la cita es composite (CIMAC + OEM).
+- Auditoría de los otros prompts IA (WO acceptance/LOTO/risk/RCM,
+  daily report defects, copilot). Cada uno puede tener sus propios
+  números inventados.
+- Eventualmente migrar DEFAULT_THRESHOLDS de fluid-analyses-service.ts
+  a la DB de regulaciones (hoy están separadas).
+
 [2026-05-12] PTW — sugerencias IA para peligros / controles / EPP (clickeable)
 Agent: Claude Sonnet 4.6
 
