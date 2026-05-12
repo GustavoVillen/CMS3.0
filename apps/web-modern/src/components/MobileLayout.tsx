@@ -10,7 +10,7 @@ import { MobileWorkOrders } from "../mobile/MobileWorkOrders";
 import { MobileDefects } from "../mobile/MobileDefects";
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares } from "../mobile/MobileSpares";
-import { MobilePlans } from "../mobile/MobilePlans";
+import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
 
@@ -38,6 +38,15 @@ export const MobileLayout: React.FC = () => {
   const { tenant, logout }   = useAuth();
   const { vessels, selectedVesselCode, setSelectedVesselCode, selectedVessel } = useVesselContext();
   const [tab, setTab]        = useState<Tab>("dashboard");
+  // Filtro inicial para el tab Planes — lo seta el dashboard cuando navega
+  // con foco específico (ej. tocar "Vencidos" → filter "due")
+  const [plansFilter, setPlansFilter] = useState<PlansFilter | undefined>(undefined);
+
+  const navigateFromDashboard = (target: DashboardTabTarget, opts?: { plansFilter?: PlansFilter }) => {
+    if (opts?.plansFilter) setPlansFilter(opts.plansFilter);
+    if (target === "panel") setTab("dashboard");
+    else setTab(target);
+  };
 
   return (
     <CopilotContextProvider>
@@ -76,11 +85,8 @@ export const MobileLayout: React.FC = () => {
 
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-hidden">
-          {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard onNavigate={(target: DashboardTabTarget) => {
-            if (target === "panel") setTab("dashboard");
-            else setTab(target);
-          }} /></div>}
-          {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans /></div>}
+          {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard onNavigate={navigateFromDashboard} /></div>}
+          {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans initialFilter={plansFilter} /></div>}
           {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders /></div>}
           {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects /></div>}
           {tab === "diario"     && <div className="h-full overflow-hidden flex flex-col"><MobileDailyReport /></div>}

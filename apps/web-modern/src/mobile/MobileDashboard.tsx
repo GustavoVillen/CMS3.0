@@ -41,9 +41,15 @@ function KpiCard({ label, value, icon: Icon, warn, onClick }: KpiProps) {
 }
 
 export type DashboardTab = "panel" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
+export type DashboardPlansFilter = "due" | "upcoming" | "all";
+
+interface NavigateOpts {
+  /** Filtro inicial al ir al tab Planes (due | upcoming | all). */
+  plansFilter?: DashboardPlansFilter;
+}
 
 interface Props {
-  onNavigate?: (tab: DashboardTab) => void;
+  onNavigate?: (tab: DashboardTab, opts?: NavigateOpts) => void;
 }
 
 export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
@@ -87,7 +93,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         <div className="grid grid-cols-2 gap-2.5">
           <KpiCard label="OTs abiertas"   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots")} />
           <KpiCard label="OTs vencidas"   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots")} />
-          <KpiCard label="Planes vencidos" icon={CalendarClock} value={planAlert}        warn={planAlert > 0}        onClick={() => onNavigate?.("planes")} />
+          <KpiCard label="Planes vencidos" icon={CalendarClock} value={planAlert}        warn={planAlert > 0}        onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
           <KpiCard label="Defectos"       icon={AlertTriangle} value={openDefs.length}  warn={openDefs.length > 0}  onClick={() => onNavigate?.("defectos")} />
           <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos")} />
           <KpiCard label="Certif. atención" icon={FileCheck}   value={certWarn.length}  warn={certWarn.length > 0} />
@@ -137,10 +143,10 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
             </button>
           </div>
           <div className="grid grid-cols-4 gap-2 text-center">
-            <PlanStat label="Vencidos"  value={mpCounts.OVERDUE}   color="text-red-400" />
-            <PlanStat label="Próximos"  value={mpCounts.DUE}        color="text-orange-400" />
-            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW} color="text-yellow-400" />
-            <PlanStat label="Por vencer" value={mpCounts.UPCOMING}  color="text-blue-400" />
+            <PlanStat label="Vencidos"   value={mpCounts.OVERDUE}    color="text-red-400"    onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
+            <PlanStat label="Próximos"   value={mpCounts.DUE}         color="text-orange-400" onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
+            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW}   color="text-yellow-400" onClick={() => onNavigate?.("planes", { plansFilter: "all" })} />
+            <PlanStat label="Por vencer" value={mpCounts.UPCOMING}    color="text-blue-400"   onClick={() => onNavigate?.("planes", { plansFilter: "upcoming" })} />
           </div>
         </div>
       )}
@@ -164,9 +170,20 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
   );
 };
 
-const PlanStat: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
-  <div>
-    <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
-    <p className="text-[9px] text-text-industrial/50 uppercase tracking-wider mt-0.5 leading-tight">{label}</p>
-  </div>
-);
+const PlanStat: React.FC<{
+  label: string;
+  value: number;
+  color: string;
+  onClick?: () => void;
+}> = ({ label, value, color, onClick }) => {
+  const Wrapper = onClick ? "button" : "div";
+  return (
+    <Wrapper
+      onClick={onClick}
+      className={`w-full text-center ${onClick ? "rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors py-1" : ""}`}
+    >
+      <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+      <p className="text-[9px] text-text-industrial/50 uppercase tracking-wider mt-0.5 leading-tight">{label}</p>
+    </Wrapper>
+  );
+};

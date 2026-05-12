@@ -25,7 +25,8 @@ interface Plan {
   taskType: "MAINTENANCE" | "INSPECTION";
 }
 
-type Filter = "due" | "upcoming" | "all";
+export type PlansFilter = "due" | "upcoming" | "all";
+type Filter = PlansFilter;
 type View = "list" | "detail";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -52,9 +53,21 @@ function formatDue(plan: Plan): string {
   return "—";
 }
 
-export const MobilePlans: React.FC = () => {
+interface MobilePlansProps {
+  /** Filtro inicial al montar — útil cuando el dashboard navega aquí con un foco concreto. */
+  initialFilter?: PlansFilter;
+}
+
+export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
   const { data, loading, reload } = useFetch<{ items: Plan[] }>("/app/pms/maintenance-plans?status=ACTIVE");
-  const [filter, setFilter]       = useState<Filter>("due");
+  const [filter, setFilter]       = useState<Filter>(initialFilter ?? "due");
+
+  // Si llega un nuevo initialFilter desde el parent (ej. usuario tap distintos
+  // chips desde dashboard), actualizamos el filtro local.
+  React.useEffect(() => {
+    if (initialFilter && initialFilter !== filter) setFilter(initialFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilter]);
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<Plan | null>(null);
   const [saving, setSaving]       = useState(false);
