@@ -130,18 +130,27 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
 
     doc.moveTo(40, 115).lineTo(555, 115).strokeColor("#cbd5e1").lineWidth(1).stroke();
 
-    // Geometría de página + tracker de cursor.
-    // IMPORTANTE: pdfkit auto-pagina cuando un text() largo desborda. Si no
-    // sincronizamos `y = doc.y` después de cada text(), `y` queda apuntando
-    // al "pasado" de la página vieja y los siguientes elementos se dibujan
-    // off-page, generando hojas en blanco en cascada. Fix: sync siempre.
+    // Geometría de página.
+    //
+    // pdfkit respeta el margen inferior incluso cuando pasás `y` explícito en
+    // doc.text(): si la línea que querés dibujar caería bajo el margen, agrega
+    // una página y la dibuja en la nueva (mi y manual queda desfasado).
+    //
+    // Estrategia: dejar buffer ancho debajo del contenido para que ningún
+    // text() quede pegado al borde. El footer y los sigBoxes viven adentro
+    // de ese buffer, en y conocidas.
+    //
+    // Layout vertical:
+    //   - margen top 40
+    //   - contenido 40..770  (BOTTOM_Y)
+    //   - sigBoxes y footer cabe en 770..801 si vinimos sin paginar
+    //   - footer al final en y=790
     const A4_H = 841.89;
     const TOP_Y = 40;
-    const BOTTOM_Y = A4_H - 40; // 801
+    const BOTTOM_Y = 770; // mi cap de contenido — deja 31pt para footer/sigs
     let y = 125;
     const labelCol = 40;
     const valueCol = 165;
-    const lineH = 14;
 
     function ensureSpace(needed: number) {
       if (y + needed > BOTTOM_Y) {
@@ -151,18 +160,19 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     }
 
     function row(label: string, value: string) {
-      ensureSpace(lineH);
+      ensureSpace(14);
       doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold").text(label.toUpperCase(), labelCol, y, { width: 120 });
       doc.fontSize(9).fillColor("#0f172a").font("Helvetica").text(value, valueCol, y, { width: 390 });
-      // doc.y refleja la posición real del cursor después del último text();
-      // sumarle un pequeño padding fijo de baseline. Si el value se wrapeó a
-      // varias líneas, doc.y avanzó solo; row sigue avanzando lineH mínimo.
-      y = Math.max(doc.y, y + lineH);
+      // doc.y es la posición real del cursor de pdfkit después del último text.
+      // Si el value se wrapeó a varias líneas, doc.y refleja eso correctamente.
+      // Si pdfkit auto-paginó, doc.y está en la nueva página — y mi y sigue
+      // alineado porque siempre lo asignamos desde acá.
+      y = doc.y;
     }
 
     function sectionTitle(text: string) {
       // El rect coloreado no puede partirse entre páginas — asegurar espacio
-      // para el rect (16) + padding superior (6) + padding inferior (6).
+      // para padding superior (6) + rect (16) + padding inferior (6).
       ensureSpace(28);
       y += 6;
       doc.fontSize(9).fillColor("#ffffff").font("Helvetica-Bold").rect(40, y, 515, 16).fill("#0f172a");
@@ -173,15 +183,14 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     function block(label: string, content: string) {
       doc.fontSize(9).font("Helvetica"); // setear font ANTES de heightOfString
       const opts = { width: 515 };
+      // Estimar el alto del bloque para decidir si paginar preventivamente.
+      // Para textos largos, dejamos que pdfkit haga split interno si hace falta.
       const contentH = doc.heightOfString(content, opts);
-      // Si el bloque entero no entra, ir a nueva página primero.
-      // (No intentamos partir un bloque entre páginas — pdfkit lo hace solo si
-      // hace falta, pero al menos arrancamos limpio.)
       const labelH = label ? 11 : 0;
-      ensureSpace(labelH + Math.min(contentH, 200) + 8);
+      ensureSpace(labelH + Math.min(contentH, 100) + 8);
       if (label) {
         doc.fontSize(8).fillColor("#64748b").font("Helvetica-Bold").text(label.toUpperCase(), labelCol, y);
-        y += 11;
+        y = doc.y;
       }
       doc.fontSize(9).fillColor("#0f172a").font("Helvetica").text(content, labelCol, y, opts);
       y = doc.y + 8;
@@ -292,9 +301,11 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     sigBox("Cierre", 40 + 2 * (sigW + sigGap));
     y = sigBoxY + sigH + 10;
 
-    // Footer en la última página (la página actual al hacer end()).
+    // Footer en la última página, DENTRO del área de contenido (margen
+    // inferior es 40 → contenido 40..801). y=790 deja 11pt de respiro y NO
+    // dispara la auto-paginación de pdfkit que ocurría con y=815.
     doc.fontSize(7).fillColor("#94a3b8")
-      .text(`Generado ${new Date().toLocaleString("es-AR")}  ·  ${permit.permitCode}`, 40, 815, { width: 515, align: "center" });
+      .text(`Generado ${new Date().toLocaleString("es-AR")}  ·  ${permit.permitCode}`, 40, 790, { width: 515, align: "center" });
 
     doc.end();
   });
