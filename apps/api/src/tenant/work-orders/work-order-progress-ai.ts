@@ -507,9 +507,16 @@ export async function regenerateObservationsForWorkOrder(
 
     const wo = await (prismaRaw as any).workOrder.findUnique({
       where: { id: workOrderId },
-      select: { id: true, tenantId: true, title: true, assetId: true, vesselCode: true },
+      select: { id: true, tenantId: true, title: true, assetId: true, vesselCode: true, status: true },
     });
     if (!wo) return;
+
+    // Lockdown: si la OT ya está cerrada/cancelada, no reescribimos observations
+    // automáticamente. Para corregirla hace falta /reopen explícito.
+    if (wo.status === "CLOSED" || wo.status === "CANCELLED") {
+      log.info(`[progress-ai] skip regenerate for WO ${workOrderId}: locked (status=${wo.status})`);
+      return;
+    }
 
     let assetName: string | null = null;
     try {

@@ -46,7 +46,10 @@ const dict = {
   "nav.section.operation": { es: "Operación",           en: "Operations",          pt: "Operação" },
   "nav.section.control":   { es: "Control",             en: "Control",             pt: "Controle" },
   "nav.section.masters":   { es: "Maestros",            en: "Masters",             pt: "Mestres" },
+  "nav.section.crew":      { es: "Tripulación",         en: "Crew",                pt: "Tripulação" },
   "nav.section.system":    { es: "Sistema",             en: "System",              pt: "Sistema" },
+  "nav.crew":              { es: "Tripulantes",         en: "Crew",                pt: "Tripulantes" },
+  "nav.drills":            { es: "Simulacros",          en: "Drills",              pt: "Simulados" },
 
   // Page titles (Layout header)
   "page.dashboard":         { es: "Dashboard Principal",       en: "Main Dashboard",          pt: "Painel Principal" },
@@ -114,6 +117,11 @@ const dict = {
   "wo.holdReason": { es: "Motivo de pausa", en: "Hold reason", pt: "Motivo de pausa" },
   "wo.closeNotes": { es: "Notas de cierre", en: "Close notes", pt: "Notas de fechamento" },
   "wo.cancelReason": { es: "Motivo de cancelación", en: "Cancel reason", pt: "Motivo de cancelamento" },
+  "wo.reopen":                  { es: "Re-abrir",                  en: "Reopen",                  pt: "Reabrir" },
+  "wo.reopenReason":            { es: "Justificación de re-apertura", en: "Reopen justification", pt: "Justificativa de reabertura" },
+  "wo.reopenReasonPlaceholder": { es: "Por qué se necesita re-abrir esta OT…", en: "Why this WO needs to be reopened…", pt: "Por que esta OS precisa ser reaberta…" },
+  "wo.reopenReasonRequired":    { es: "La justificación es obligatoria (mín. 5 caracteres).", en: "Justification is required (min. 5 characters).", pt: "A justificativa é obrigatória (mín. 5 caracteres)." },
+  "wo.reopenWarning":           { es: "Re-abrir una OT cerrada queda registrado en auditoría. Sólo hacelo para corregir un error documentado.", en: "Reopening a closed WO is audited. Only do this to correct a documented mistake.", pt: "Reabrir uma OS fechada fica registrado em auditoria. Faça isso apenas para corrigir um erro documentado." },
   "wo.indVerifier": { es: "Verificador independiente", en: "Independent verifier", pt: "Verificador independente" },
   "wo.testResult": { es: "Resultado de prueba", en: "Test result", pt: "Resultado de teste" },
   "wo.estimatedHours": { es: "Horas estimadas",    en: "Estimated hours",   pt: "Horas estimadas" },

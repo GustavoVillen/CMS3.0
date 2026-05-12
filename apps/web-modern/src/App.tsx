@@ -43,6 +43,8 @@ import { PlatformPromptsPage } from "./pages/platform/PlatformPrompts";
 import { PlatformVesselMapPage } from "./pages/platform/PlatformVesselMap";
 import { VesselMapPage } from "./pages/VesselMap";
 import { BitacoraPage } from "./pages/Bitacora";
+import { CrewPage } from "./pages/Crew";
+import { DrillsPage } from "./pages/Drills";
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -140,6 +142,8 @@ export default function App() {
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />
               <Route path="/fluid-analyses"    element={<FluidAnalysesPage />} />
               <Route path="/bitacora"          element={<BitacoraPage />} />
+              <Route path="/crew"              element={<CrewPage />} />
+              <Route path="/drills"            element={<DrillsPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />

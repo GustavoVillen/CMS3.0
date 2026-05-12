@@ -7,6 +7,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 import { log } from "../../common/logger";
+import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -515,6 +516,10 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   const prisma = workOrdersClient(prismaRaw);
 
   const current = await getTenantWorkOrder(session, id);
+  // Lockdown vetting: una OT CLOSED/CANCELLED no se edita.
+  // Para corregirla hace falta /reopen explícito por TENANT_ADMIN.
+  assertNotLocked("WORK_ORDER", current.status);
+
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (payload.assetId !== undefined) data.assetId = normalizeRequiredText(payload.assetId, "assetId");
   if (payload.type !== undefined) data.type = payload.type;
@@ -862,4 +867,62 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
       .catch((err: unknown) => { log.error("[cancelWorkOrder] plan restore failed:", err); });
   }
   return cancelled;
+}
+
+export interface ReopenWorkOrderInput {
+  reason: string;
+}
+
+/**
+ * Re-abre una OT cerrada o cancelada. Solo TENANT_ADMIN.
+ *
+ * - CLOSED  → IN_PROGRESS (vuelve a estar editable)
+ * - CANCELLED → PLANNED   (vuelve al backlog)
+ *
+ * El motivo queda auditado en lastReopenReason + auditoría central.
+ */
+export async function reopenWorkOrder(session: TenantAccessSession, id: string, payload: ReopenWorkOrderInput) {
+  assertCanReopen(session.user.role);
+  const reason = assertReopenReason(payload?.reason);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = workOrdersClient(prismaRaw);
+
+  const current = await getTenantWorkOrder(session, id);
+  if (current.status !== "CLOSED" && current.status !== "CANCELLED") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo OTs CLOSED o CANCELLED pueden re-abrirse (actual: ${current.status}).`);
+  }
+
+  const nextStatus = current.status === "CANCELLED" ? "PLANNED" : "IN_PROGRESS";
+  const now = new Date();
+
+  const reopened = await prisma.workOrder.update({
+    where: { id: current.id },
+    data: {
+      status: nextStatus,
+      reopenCount: { increment: 1 },
+      lastReopenAt: now,
+      lastReopenReason: reason,
+      lastReopenByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    } as Record<string, unknown>,
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.reopened",
+    entityType: "WorkOrder",
+    entityId: current.id,
+    metadata: {
+      workOrderCode: current.workOrderCode,
+      vesselCode: current.vesselCode,
+      previousStatus: current.status,
+      newStatus: nextStatus,
+      reason,
+    },
+  });
+
+  return reopened;
 }

@@ -1,5 +1,70 @@
 HISTORY.txt
 
+[2026-05-12] Vetting Sprint 1 — Crew + Certifications + Drills (TMSA 4 Elem. 3, SIRE 2.0 Ch. 3, ISM 6)
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- prisma/schema.prisma — 3 modelos nuevos + 5 enums:
+  - Crew (tripulación a bordo): firstName, lastName, rank, nationality, passport, signOn/signOffDate, status (ONBOARD / SIGNED_OFF), + 4 campos de reopen audit
+  - CrewCertification: STCW (II/1, II/2, III/1, III/2, IV/2, V/1, VI/1-4), GMDSS GOC/ROC, BST, MEDICAL_ENOG, ADVANCED_FIRE_FIGHTING, SSO, PASSPORT, SEAMANS_BOOK, etc. Status derivado de expiryDate (VALID / EXPIRING_SOON / EXPIRED).
+  - Drill: FIRE, ABANDON_SHIP, ENCLOSED_SPACE, MAN_OVERBOARD, POLLUTION, SECURITY, MEDICAL, STEERING_GEAR, BLACKOUT, OIL_SPILL. participantCrewIds como JSON (simplifica vs DrillParticipant separado).
+  - Vessel.crew y Vessel.drills agregadas.
+- prisma/migrations/20260514_crew_drills/migration.sql — CREATE 3 tablas + 5 enums + FK Crew/Drill→Vessel y CrewCertification→Crew (CASCADE).
+- apps/api/src/tenant/crew/crew-service.ts — listCrew / getCrew / createCrew (auto-genera CR-{vessel}-{yy}-NNNN) / updateCrew (lock inline al SIGNED_OFF) / signOffCrew / reopenCrew (TENANT_ADMIN + justificación) / deleteCrew.
+- apps/api/src/tenant/crew/certifications-service.ts — list/create/update/delete con status computado por expiryDate (umbral 30 días).
+- apps/api/src/tenant/crew/crew-summary-service.ts — agrega onboard + certsExpired + certsExpiringSoon + drillsScheduled (mes) + drillsCompletedYear, respetando vessel scope.
+- apps/api/src/tenant/drills/drills-service.ts — CRUD + completeDrill / cancelDrill / reopenDrill (TENANT_ADMIN + justificación). Lock al COMPLETED/CANCELLED.
+- apps/api/src/tenant/tenant-router.ts — 16 rutas nuevas: /app/crew (CRUD + sign-off + reopen + certifications anidadas), /app/drills (CRUD + complete + cancel + reopen), /app/dashboard/crew-summary.
+- apps/web-modern/src/pages/Crew.tsx — lista con filtro ONBOARD/SIGNED_OFF/all, modal con tabs Detalles+Certificaciones (sub-form para alta/edición/borrado de certs), botón "Re-abrir" para admin.
+- apps/web-modern/src/pages/Drills.tsx — lista con filtro upcoming/completed/all, modal con selección de participantes (checkboxes contra crew ONBOARD), botones "Marcar realizado" y "Re-abrir".
+- apps/web-modern/src/App.tsx — rutas /crew y /drills agregadas.
+- apps/web-modern/src/components/Sidebar.tsx — nueva sección "Tripulación" con items Crew + Drills.
+- apps/web-modern/src/lib/i18n.tsx — 4 keys nuevas (nav.section.crew, nav.crew, nav.drills) en es/en/pt.
+- apps/web-modern/src/pages/Dashboard.tsx — widget bento "Tripulación y Simulacros" con 4 mini-KPIs: a bordo, certs atención, simulacros mes (programados), simulacros año (realizados). Click navega a /crew o /drills.
+- apps/web-modern/src/mobile/MobileDashboard.tsx — chip strip de 3 KPIs (a bordo / certs atención / simulacros mes) bajo el banner de reporte diario (sólo se muestra si hay datos).
+
+POR QUÉ:
+TMSA 4 Elemento 3 (Crew Management) exige evidencia auditable de quién está a bordo, sus competencias vigentes (STCW/GMDSS/BST) y los simulacros periódicos según SOLAS III/19. SIRE 2.0 Chapter 3 audita lo mismo desde el lado del operador. ISM Code 6 (Resources and Personnel) hace lo propio. Antes de este sprint, GPMS no tenía representación de tripulación ni de simulacros — un vetting fail evidente. Con este cambio, el inspector tiene un panel único que muestra crew onboard, certificados próximos a vencer y simulacros del mes.
+
+VERIFICACIÓN:
+- typecheck backend (apps/api): pasa (sólo deprecation warnings preexistentes).
+- typecheck frontend (apps/web-modern): 0 errores nuevos (5 preexistentes sin relación con este sprint).
+- Lockdown integrado: SIGNED_OFF (crew) y COMPLETED/CANCELLED (drill) son inmutables, requieren /reopen explícito con justificación auditada.
+
+PENDIENTE:
+- PDF imprimible de Drill (para imprimir y archivar a bordo). Posible en una iteración menor.
+- Notificaciones automáticas por vencimientos de certificaciones (hoy es pull, no push).
+- Sprint 1 — Tanda 3 pendiente: Permit to Work (PTW) con tipos HOT_WORK, ENCLOSED_SPACE_ENTRY, WORKING_ALOFT, ELECTRICAL_ISOLATION + gas testing + workflow DRAFT→REQUESTED→APPROVED→ACTIVE→CLOSED.
+
+[2026-05-12] Vetting Sprint 1 — Record Lockdown (registros cerrados son inmutables)
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- prisma/schema.prisma — agrega 4 campos de auditoría de re-apertura (reopenCount, lastReopenAt, lastReopenReason, lastReopenByUserId) a WorkOrder, Defect, Deferral, CapaRecord e Inspection.
+- prisma/migrations/20260513_record_lockdown/migration.sql — ALTER TABLE para los 5 modelos.
+- apps/api/src/common/record-lock.ts — helper isLockedStatus / assertNotLocked / assertCanReopen / assertReopenReason. Define los estados terminales por tipo (WO: CLOSED+CANCELLED; Defect: RESOLVED+CLOSED; Deferral: CLOSED+EXPIRED+REJECTED; CAPA: VERIFIED_EFFECTIVE+CLOSED+CANCELLED; Inspection: COMPLETED+CANCELLED).
+- apps/api/src/tenant/work-orders/work-orders-service.ts — updateTenantWorkOrder ahora rechaza con 409 RECORD_LOCKED si la OT está CLOSED/CANCELLED. Nueva función reopenWorkOrder (TENANT_ADMIN, justificación ≥5 chars).
+- apps/api/src/tenant/work-orders/work-order-progress-ai.ts — el pipeline de regeneración de observations skipea OTs lockeadas (no reescribe el campo de una OT cerrada).
+- apps/api/src/tenant/work-orders/work-order-progress-notes-service.ts — createProgressNote y deleteProgressNote fallan con 409 si la OT está lockeada.
+- apps/api/src/tenant/pms/defects-service.ts — updateDefect rechaza si el defecto está terminal. Nueva reopenDefect.
+- apps/api/src/tenant/pms/deferrals-service.ts — reopenDeferral (CLOSED/EXPIRED/REJECTED → REQUESTED).
+- apps/api/src/tenant/pms/capa-service.ts — updateCapaRecord ahora usa assertNotLocked (en vez de check inline). Nueva reopenCapaRecord.
+- apps/api/src/tenant/pms/maintenance-router.ts — POST /app/pms/work-orders/:id/reopen.
+- apps/api/src/tenant/pms/quality-router.ts — POST /app/pms/{defects,deferrals,capa}/:id/reopen.
+- apps/web-modern/src/pages/WorkOrders.tsx — ReopenModal + botón "Re-abrir" (sólo visible si isClosed && user.role === "TENANT_ADMIN"). Pide justificación.
+- apps/web-modern/src/lib/i18n.tsx — 5 strings nuevas (wo.reopen*) en es/en/pt.
+
+POR QUÉ:
+Vetting (SIRE 2.0 / TMSA 4) inspecciona la trazabilidad de cambios. Si un usuario puede editar silenciosamente una OT cerrada o un CAPA verificado, el registro pierde valor evidencial. Con este cambio: una vez que el registro cae en estado terminal, queda inmutable hasta que un TENANT_ADMIN dispare /reopen explícito con justificación, que queda auditado vía audit-publisher (WorkOrder.reopened, Defect.reopened, etc.) y vía los campos lastReopen* del propio registro.
+
+VERIFICACIÓN:
+- typecheck backend (apps/api): pasa (sólo deprecation warnings preexistentes de baseUrl/moduleResolution).
+- typecheck frontend (apps/web-modern): 0 errores nuevos introducidos (20 TS1117 preexistentes, no relacionados).
+
+PENDIENTE:
+- UI mobile no se modificó (el lock se aplica server-side, devolviendo 409). Se puede agregar en una iteración futura si se considera necesario.
+- Inspection no tiene endpoint de update expuesto todavía; sus campos de reopen quedan preparados para cuando se exponga.
+
 [2026-05-10] Mercurio — Assets faltantes en GLT/MGT/MAO (cierre de huérfanos)
 Agent: Claude Opus 4.7
 

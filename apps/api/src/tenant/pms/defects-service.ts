@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 
 export interface DefectListFilters {
   vesselCode?: string | null;
@@ -308,6 +309,9 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
   const defect = defectDelegate(prismaRaw);
 
   const current = await getDefect(session, id);
+  // Lockdown vetting: defectos RESOLVED/CLOSED no se editan sin /reopen.
+  assertNotLocked("DEFECT", current.status);
+
   if (payload.vesselCode !== undefined) {
     const requested = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
     if (requested !== current.vesselCode) {
@@ -382,6 +386,54 @@ export async function closeDefect(session: TenantAccessSession, id: string, payl
     metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode },
   });
   return closed;
+}
+
+export async function reopenDefect(
+  session: TenantAccessSession,
+  id: string,
+  payload: { reason: string },
+) {
+  assertCanReopen(session.user.role);
+  const reason = assertReopenReason(payload?.reason);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const defect = defectDelegate(prismaRaw);
+
+  const current = await getDefect(session, id);
+  if (current.status !== "RESOLVED" && current.status !== "CLOSED") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo defectos RESOLVED o CLOSED pueden re-abrirse (actual: ${current.status}).`);
+  }
+
+  const now = new Date();
+  const reopened = await defect.update({
+    where: { id: current.id },
+    data: {
+      status: "IN_PROGRESS",
+      reopenCount: { increment: 1 },
+      lastReopenAt: now,
+      lastReopenReason: reason,
+      lastReopenByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    } as Record<string, unknown>,
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "Defect.reopened",
+    entityType: "Defect",
+    entityId: current.id,
+    metadata: {
+      defectCode: current.defectCode,
+      vesselCode: current.vesselCode,
+      previousStatus: current.status,
+      newStatus: "IN_PROGRESS",
+      reason,
+    },
+  });
+
+  return reopened;
 }
 
 export async function softDeleteDefect(session: TenantAccessSession, id: string) {

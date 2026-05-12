@@ -9,6 +9,7 @@ import { RouteError } from "../../http/route-error";
 import { saveAttachment } from "../attachments/attachment-uploads-service";
 import { processNoteAndRegenerate, regenerateObservationsForWorkOrder } from "./work-order-progress-ai";
 import { log } from "../../common/logger";
+import { assertNotLocked } from "../../common/record-lock";
 
 export interface CreateProgressNoteInput {
   kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
@@ -37,7 +38,7 @@ export interface ProgressNoteRow {
 async function getWorkOrderOrThrow(
   session: TenantAccessSession,
   workOrderId: string,
-): Promise<{ id: string; tenantId: string; vesselCode: string }> {
+): Promise<{ id: string; tenantId: string; vesselCode: string; status: string }> {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
@@ -49,7 +50,7 @@ async function getWorkOrderOrThrow(
 
   const wo = await (prismaRaw as any).workOrder.findFirst({
     where: { id: workOrderId, tenantId: tenant.id, deletedAt: null },
-    select: { id: true, tenantId: true, vesselCode: true },
+    select: { id: true, tenantId: true, vesselCode: true, status: true },
   });
   if (!wo) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Orden de trabajo no encontrada.");
 
@@ -69,6 +70,8 @@ export async function createProgressNote(
   input: CreateProgressNoteInput,
 ): Promise<ProgressNoteRow> {
   const wo = await getWorkOrderOrThrow(session, workOrderId);
+  // Lockdown vetting: no se pueden agregar notas a una OT cerrada/cancelada.
+  assertNotLocked("WORK_ORDER", wo.status);
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -173,6 +176,8 @@ export async function deleteProgressNote(
   noteId: string,
 ): Promise<void> {
   const wo = await getWorkOrderOrThrow(session, workOrderId);
+  // Lockdown vetting: tampoco se pueden borrar notas de una OT cerrada.
+  assertNotLocked("WORK_ORDER", wo.status);
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");

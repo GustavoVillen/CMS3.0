@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 
 export interface CapaListFilters {
   vesselCode?: string | null;
@@ -269,9 +270,8 @@ export async function updateCapaRecord(session: TenantAccessSession, id: string,
   const capa = capaDelegate(prismaRaw);
 
   const current = await getCapaRecord(session, id);
-  if (current.status === "CLOSED" || current.status === "CANCELLED") {
-    throw new RouteError(409, "INVALID_STATUS_TRANSITION", "No se puede editar un CAPA cerrado o cancelado.");
-  }
+  // Lockdown vetting: CAPA VERIFIED_EFFECTIVE / CLOSED / CANCELLED → /reopen.
+  assertNotLocked("CAPA", current.status);
   if (payload.vesselCode !== undefined) {
     const requested = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
     if (requested !== current.vesselCode) {
@@ -347,6 +347,60 @@ export async function closeCapaRecord(session: TenantAccessSession, id: string, 
       updatedByUserId: session.user.id,
     },
   });
+}
+
+export async function reopenCapaRecord(
+  session: TenantAccessSession,
+  id: string,
+  payload: { reason: string },
+) {
+  assertCanReopen(session.user.role);
+  const reason = assertReopenReason(payload?.reason);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const capa = capaDelegate(prismaRaw);
+
+  const current = await getCapaRecord(session, id);
+  if (current.status !== "CLOSED" && current.status !== "CANCELLED" && current.status !== "VERIFIED_EFFECTIVE") {
+    throw new RouteError(
+      409,
+      "INVALID_STATUS_TRANSITION",
+      `Solo CAPAs CLOSED, CANCELLED o VERIFIED_EFFECTIVE pueden re-abrirse (actual: ${current.status}).`,
+    );
+  }
+
+  const now = new Date();
+  const reopened = await capa.update({
+    where: { id: current.id },
+    data: {
+      status: "IN_PROGRESS",
+      completedAt: null,
+      cancelReason: null,
+      reopenCount: { increment: 1 },
+      lastReopenAt: now,
+      lastReopenReason: reason,
+      lastReopenByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    } as Record<string, unknown>,
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: reopened.tenantId,
+    actorUserId: session.user.id,
+    action: "Capa.reopened",
+    entityType: "Capa",
+    entityId: reopened.id,
+    metadata: {
+      capaCode: reopened.capaCode,
+      vesselCode: reopened.vesselCode,
+      previousStatus: current.status,
+      newStatus: "IN_PROGRESS",
+      reason,
+    },
+  });
+
+  return reopened;
 }
 
 export async function cancelCapaRecord(session: TenantAccessSession, id: string, payload: { cancelReason: string }) {

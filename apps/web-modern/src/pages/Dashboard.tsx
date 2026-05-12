@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
@@ -47,6 +47,7 @@ export const Dashboard: React.FC = () => {
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
+  const crewSummary       = useFetch<{ onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number }>("/app/dashboard/crew-summary");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -424,6 +425,67 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               </div>
             </div>
           )}
+        </div>
+
+        {/* Crew & Drills summary (vetting widget) */}
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-xs font-bold text-white">Tripulación y Simulacros</h2>
+              <p className="text-[10px] text-text-industrial/40">Onboard, certificados, simulacros</p>
+            </div>
+            {crewSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          </div>
+          {(() => {
+            const c = crewSummary.data ?? { onboard: 0, certsExpired: 0, certsExpiringSoon: 0, drillsScheduled: 0, drillsCompletedYear: 0 };
+            return (
+              <div className="flex-1 grid grid-cols-2 gap-2 content-start">
+                <button onClick={() => navigate("/crew")}
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Users className="w-3 h-3 text-text-industrial/40" />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A bordo</span>
+                  </div>
+                  <p className="text-xl font-bold text-white tabular-nums">{c.onboard}</p>
+                </button>
+                <button onClick={() => navigate("/crew")}
+                  className={`text-left rounded-lg p-3 transition-colors ${
+                    c.certsExpired + c.certsExpiringSoon > 0
+                      ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  }`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Certs. atención</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
+                    {c.certsExpired + c.certsExpiringSoon}
+                  </p>
+                  {c.certsExpired > 0 && (
+                    <p className="text-[10px] text-red-400 mt-0.5">{c.certsExpired} vencidos</p>
+                  )}
+                </button>
+                <button onClick={() => navigate("/drills")}
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros mes</span>
+                  </div>
+                  <p className="text-xl font-bold text-white tabular-nums">{c.drillsScheduled}</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-0.5">programados</p>
+                </button>
+                <button onClick={() => navigate("/drills?status=COMPLETED")}
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CalendarCheck className="w-3 h-3 text-success-sea" />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros año</span>
+                  </div>
+                  <p className="text-xl font-bold text-success-sea tabular-nums">{c.drillsCompletedYear}</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-0.5">realizados</p>
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Inactive vessels — compact alert strip */}

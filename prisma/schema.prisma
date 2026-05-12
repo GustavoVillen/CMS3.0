@@ -290,6 +290,85 @@ enum CertificateStatus {
   CLOSED
 }
 
+// ── Crew / Tripulación ────────────────────────────────────────────────────────
+
+enum CrewRank {
+  CAPTAIN
+  CHIEF_OFFICER
+  SECOND_OFFICER
+  THIRD_OFFICER
+  CHIEF_ENGINEER
+  SECOND_ENGINEER
+  THIRD_ENGINEER
+  FOURTH_ENGINEER
+  ELECTRICIAN
+  BOSUN
+  AB_SEAMAN
+  OS_SEAMAN
+  OILER
+  WIPER
+  COOK
+  STEWARD
+  CADET
+  RADIO_OPERATOR
+  OTHER
+}
+
+enum CrewStatus {
+  ONBOARD
+  SIGNED_OFF
+}
+
+enum CrewCertificationType {
+  STCW_II_1
+  STCW_II_2
+  STCW_III_1
+  STCW_III_2
+  STCW_IV_2
+  STCW_V_1
+  STCW_VI_1
+  STCW_VI_2
+  STCW_VI_3
+  STCW_VI_4
+  GMDSS_GOC
+  GMDSS_ROC
+  BST
+  MEDICAL_ENOG
+  MEDICAL_FIRST_AID
+  ADVANCED_FIRE_FIGHTING
+  SHIP_SECURITY_OFFICER
+  CROWD_MANAGEMENT
+  PASSPORT
+  SEAMANS_BOOK
+  OTHER
+}
+
+enum CrewCertificationStatus {
+  VALID
+  EXPIRING_SOON
+  EXPIRED
+}
+
+enum DrillType {
+  FIRE
+  ABANDON_SHIP
+  ENCLOSED_SPACE
+  MAN_OVERBOARD
+  POLLUTION
+  SECURITY
+  MEDICAL
+  STEERING_GEAR
+  BLACKOUT
+  OIL_SPILL
+  OTHER
+}
+
+enum DrillStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
 enum DailyReportStatus {
   DRAFT
   SUBMITTED
@@ -894,6 +973,8 @@ model Vessel {
   providerEvals    ProviderEvaluation[]
   providerNcs      ProviderNonconformity[]
   attachments      Attachment[]
+  crew             Crew[]
+  drills           Drill[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1058,6 +1139,12 @@ model WorkOrder {
   updatedByUserId     String
   deletedAt           DateTime?
   deletedByUserId     String?
+  // Audit trail de re-aperturas. Una OT CLOSED/CANCELLED solo puede modificarse
+  // tras un reopen explícito por TENANT_ADMIN con justificación obligatoria.
+  reopenCount         Int               @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]
@@ -1143,6 +1230,11 @@ model Defect {
   updatedByUserId        String
   deletedAt              DateTime?
   deletedByUserId        String?
+  // Audit trail de re-aperturas (cuando un defecto CLOSED/RESOLVED se re-abre)
+  reopenCount            Int                    @default(0)
+  lastReopenAt           DateTime?
+  lastReopenReason       String?
+  lastReopenByUserId     String?
 
   vessel                 Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
 
@@ -1186,6 +1278,12 @@ model Deferral {
   deletedAt            DateTime?
   deletedByUserId      String?
 
+  // Audit trail de re-aperturas (cuando un deferral CLOSED se re-abre)
+  reopenCount          Int                @default(0)
+  lastReopenAt         DateTime?
+  lastReopenReason     String?
+  lastReopenByUserId   String?
+
   vessel               Vessel             @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
 
   @@unique([tenantId, vesselCode, deferralCode])
@@ -1222,6 +1320,12 @@ model CapaRecord {
   deletedAt        DateTime?
   deletedByUserId  String?
 
+  // Audit trail de re-aperturas (cuando un CAPA CLOSED se re-abre)
+  reopenCount         Int          @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
+
   vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
 
   @@unique([tenantId, vesselCode, capaCode])
@@ -1252,6 +1356,12 @@ model Inspection {
   updatedByUserId  String
   deletedAt        DateTime?
   deletedByUserId  String?
+
+  // Audit trail de re-aperturas (cuando una inspección COMPLETED se re-abre)
+  reopenCount         Int             @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
 
   vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   provider         Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
@@ -2303,4 +2413,107 @@ model FluidParameterThreshold {
 
   @@unique([tenantId, fluidType, parameter])
   @@index([tenantId, fluidType])
+}
+
+// ── Block: Crew / Certificaciones / Drills (Vetting Sprint 1 — TMSA 4 Elem. 3) ─
+
+model Crew {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  crewCode           String
+  firstName          String
+  lastName           String
+  rank               CrewRank
+  nationality        String?
+  dateOfBirth        DateTime?
+  passportNumber     String?
+  signOnDate         DateTime
+  signOffDate        DateTime?
+  status             CrewStatus      @default(ONBOARD)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un crew SIGNED_OFF se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  certifications     CrewCertification[]
+
+  @@unique([tenantId, vesselCode, crewCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model CrewCertification {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  crewId             String
+  type               CrewCertificationType
+  certificateNumber  String?
+  issuingAuthority   String?
+  issuedDate         DateTime?
+  expiryDate         DateTime?
+  docUrl             String?
+  status             CrewCertificationStatus @default(VALID)
+  notes              String?
+  createdAt          DateTime                @default(now())
+  createdByUserId    String
+  updatedAt          DateTime                @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  crew               Crew                    @relation(fields: [crewId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([tenantId, status])
+  @@index([expiryDate])
+}
+
+model Drill {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  drillCode          String
+  type               DrillType
+  status             DrillStatus     @default(SCHEDULED)
+  scheduledDate      DateTime
+  completedDate      DateTime?
+  scenario           String?
+  observations       String?
+  lessonsLearned     String?
+  // JSON array de crewId; simplifica vs tabla DrillParticipant separada
+  participantCrewIds Json            @default("[]")
+  pdfUrl             String?
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un drill COMPLETED/CANCELLED se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, drillCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([scheduledDate])
 }

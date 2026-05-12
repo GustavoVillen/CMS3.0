@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { log } from "../../common/logger";
+import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
 
 export interface DeferralListFilters {
   vesselCode?: string | null;
@@ -555,4 +556,59 @@ export async function closeDeferral(session: TenantAccessSession, id: string, pa
       updatedByUserId: session.user.id,
     },
   });
+}
+
+export async function reopenDeferral(
+  session: TenantAccessSession,
+  id: string,
+  payload: { reason: string },
+) {
+  assertCanReopen(session.user.role);
+  const reason = assertReopenReason(payload?.reason);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const deferral = deferralDelegate(prismaRaw);
+
+  const current = await getDeferral(session, id);
+  if (current.status !== "CLOSED" && current.status !== "EXPIRED" && current.status !== "REJECTED") {
+    throw new RouteError(
+      409,
+      "INVALID_STATUS_TRANSITION",
+      `Solo deferrals CLOSED, EXPIRED o REJECTED pueden re-abrirse (actual: ${current.status}).`,
+    );
+  }
+
+  const now = new Date();
+  const reopened = await deferral.update({
+    where: { id: current.id },
+    data: {
+      status: "REQUESTED",
+      closedAt: null,
+      closeNotes: null,
+      rejectionReason: null,
+      reopenCount: { increment: 1 },
+      lastReopenAt: now,
+      lastReopenReason: reason,
+      lastReopenByUserId: session.user.id,
+      updatedByUserId: session.user.id,
+    } as Record<string, unknown>,
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "Deferral.reopened",
+    entityType: "Deferral",
+    entityId: current.id,
+    metadata: {
+      deferralCode: current.deferralCode,
+      vesselCode: current.vesselCode,
+      previousStatus: current.status,
+      newStatus: "REQUESTED",
+      reason,
+    },
+  });
+
+  return reopened;
 }

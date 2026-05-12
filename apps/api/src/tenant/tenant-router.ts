@@ -44,6 +44,16 @@ import { listBitacoraEntries, createBitacoraEntry, updateBitacoraEntry, deleteBi
 import { listTenantStockMovements } from "./stock-movements/stock-movements-service";
 import { listTenantVessels, getTenantVesselById, createTenantVessel, updateTenantVessel, deleteTenantVessel } from "./vessels/vessels-service";
 import { listTenantWorkOrders } from "./work-orders/work-orders-service";
+import {
+  listCrew, getCrew, createCrew, updateCrew, signOffCrew, reopenCrew, deleteCrew,
+} from "./crew/crew-service";
+import {
+  listCertifications, createCertification, updateCertification, deleteCertification,
+} from "./crew/certifications-service";
+import {
+  listDrills, getDrill, createDrill, updateDrill, completeDrill, cancelDrill, reopenDrill, deleteDrill,
+} from "./drills/drills-service";
+import { getCrewSummary } from "./crew/crew-summary-service";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
 import { generateTemplate } from "./excel/excel-template";
 import { previewImport, confirmImport } from "./excel/excel-import-service";
@@ -1152,6 +1162,151 @@ export async function handleTenantRoutes(
       sendJson(response, 200, { ok: true });
       return true;
     }
+  }
+
+  // ── Crew / Tripulación ─────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/crew") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listCrew(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      rank:       url.searchParams.get("rank"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/crew") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createCrew>[1];
+    sendJson(response, 201, await createCrew(session, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/crew\/[^/]+\/sign-off$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof signOffCrew>[2];
+    sendJson(response, 200, await signOffCrew(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/crew\/[^/]+\/reopen$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenCrew>[2];
+    sendJson(response, 200, await reopenCrew(session, id, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/crew\/[^/]+\/certifications$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const crewId = url.pathname.split("/")[3]!;
+    const items = await listCertifications(session, crewId);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/crew\/[^/]+\/certifications$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const crewId = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof createCertification>[2];
+    sendJson(response, 201, await createCertification(session, crewId, body));
+    return true;
+  }
+  if (/^\/app\/crew\/[^/]+\/certifications\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    const crewId = parts[3]!;
+    const certId = parts[5]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateCertification>[3];
+      sendJson(response, 200, await updateCertification(session, crewId, certId, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteCertification(session, crewId, certId);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+  if (/^\/app\/crew\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") {
+      sendJson(response, 200, await getCrew(session, id));
+      return true;
+    }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateCrew>[2];
+      sendJson(response, 200, await updateCrew(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteCrew(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Drills / Simulacros ────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/drills") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listDrills(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      type:       url.searchParams.get("type"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/drills") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createDrill>[1];
+    sendJson(response, 201, await createDrill(session, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/drills\/[^/]+\/complete$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof completeDrill>[2];
+    sendJson(response, 200, await completeDrill(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/drills\/[^/]+\/cancel$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof cancelDrill>[2];
+    sendJson(response, 200, await cancelDrill(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/drills\/[^/]+\/reopen$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenDrill>[2];
+    sendJson(response, 200, await reopenDrill(session, id, body));
+    return true;
+  }
+  if (/^\/app\/drills\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") {
+      sendJson(response, 200, await getDrill(session, id));
+      return true;
+    }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateDrill>[2];
+      sendJson(response, 200, await updateDrill(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteDrill(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Crew dashboard summary ─────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/dashboard/crew-summary") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const summary = await getCrewSummary(session, { vesselCode: url.searchParams.get("vesselCode") });
+    sendJson(response, 200, summary);
+    return true;
   }
 
   // ── Audit Log (TENANT_ADMIN only) ─────────────────────────────────────────

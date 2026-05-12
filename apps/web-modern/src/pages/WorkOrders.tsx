@@ -67,7 +67,7 @@ interface WorkOrder {
 
 
 interface ListResponse { items: WorkOrder[]; total: number; }
-type ActionType = "hold" | "close" | "cancel";
+type ActionType = "hold" | "close" | "cancel" | "reopen";
 interface ActionTarget { workOrder: WorkOrder; type: ActionType; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -203,6 +203,58 @@ const CancelModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
   );
 };
 
+// ── ReopenModal ───────────────────────────────────────────────────────────────
+// Vetting / record lockdown: re-abrir una OT CLOSED o CANCELLED.
+// Solo TENANT_ADMIN, requiere justificación (≥5 chars). Queda auditado.
+
+const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess: () => void }> = ({ workOrder, onClose, onSuccess }) => {
+  const t = useT();
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const onSave = useCallback(async () => {
+    if (reason.trim().length < 5) {
+      setErr(t("wo.reopenReasonRequired"));
+      return;
+    }
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/reopen`, { reason: reason.trim() });
+      onSuccess();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("common.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }, [reason, onSuccess, t, workOrder.id]);
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+          <h2 className="text-sm font-bold text-white">{t("wo.reopen")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-[11px] text-text-industrial/70 leading-snug">
+            {t("wo.reopenWarning")}
+          </p>
+          <label className={labelCls}>{t("wo.reopenReason")}</label>
+          <textarea rows={4} value={reason} onChange={e => setReason(e.target.value)} className={inputCls} placeholder={t("wo.reopenReasonPlaceholder")} />
+          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-300 font-bold text-xs hover:bg-orange-500/30 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.reopen")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── AddWorkLogModal (unused — kept for future reference) ─────────────────────
 
 // ── CritBadge ─────────────────────────────────────────────────────────────────
@@ -232,9 +284,10 @@ interface WorkOrderModalProps {
 const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction }) => {
   const t = useT();
   const navigate = useNavigate();
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
   const isMercurio = tenant?.workOrderPdfTemplate === "MERCURIO";
   const isEditable = canEditStatus(workOrder.status);
+  const isAdmin = user?.role === "TENANT_ADMIN";
 
   // Linked deferral status (when WO is ON_HOLD)
   const [deferralStatus, setDeferralStatus] = useState<string | null>(null);
@@ -1176,6 +1229,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.cancelWO")}
             </button>
+            {isClosed && isAdmin && (
+              <button onClick={() => onOpenAction(workOrder, "reopen")}
+                className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20">
+                {t("wo.reopen")}
+              </button>
+            )}
             {isEditable && canManage && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
@@ -1393,6 +1452,7 @@ export const WorkOrdersPage: React.FC = () => {
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
       {actionTarget?.type === "cancel" && <CancelModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
+      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
       {showExcel && <ExcelPanel module="work_orders" onClose={() => setShowExcel(false)} />}
     </div>
   );

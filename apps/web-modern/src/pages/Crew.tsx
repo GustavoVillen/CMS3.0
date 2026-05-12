@@ -1,0 +1,502 @@
+import React, { useState, useMemo, useCallback } from "react";
+import { Users, Plus, X, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
+import { useFetch } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
+import { api, ApiError } from "../lib/api";
+import { PageHeader } from "../components/PageHeader";
+
+interface Certification {
+  id: string;
+  type: string;
+  certificateNumber: string | null;
+  issuingAuthority: string | null;
+  issuedDate: string | null;
+  expiryDate: string | null;
+  docUrl: string | null;
+  status: "VALID" | "EXPIRING_SOON" | "EXPIRED";
+  notes: string | null;
+}
+
+interface Crew {
+  id: string;
+  tenantId: string;
+  vesselCode: string;
+  crewCode: string;
+  firstName: string;
+  lastName: string;
+  rank: string;
+  nationality: string | null;
+  dateOfBirth: string | null;
+  passportNumber: string | null;
+  signOnDate: string;
+  signOffDate: string | null;
+  status: "ONBOARD" | "SIGNED_OFF";
+  notes: string | null;
+  certifications: Certification[];
+}
+
+const RANK_LABEL: Record<string, string> = {
+  CAPTAIN: "Capitán",
+  CHIEF_OFFICER: "Primer Oficial",
+  SECOND_OFFICER: "Segundo Oficial",
+  THIRD_OFFICER: "Tercer Oficial",
+  CHIEF_ENGINEER: "Jefe de Máquinas",
+  SECOND_ENGINEER: "Segundo Maquinista",
+  THIRD_ENGINEER: "Tercer Maquinista",
+  FOURTH_ENGINEER: "Cuarto Maquinista",
+  ELECTRICIAN: "Electricista",
+  BOSUN: "Contramaestre",
+  AB_SEAMAN: "Marinero AB",
+  OS_SEAMAN: "Marinero OS",
+  OILER: "Aceitero",
+  WIPER: "Limpiador",
+  COOK: "Cocinero",
+  STEWARD: "Camarero",
+  CADET: "Cadete",
+  RADIO_OPERATOR: "Operador Radio",
+  OTHER: "Otro",
+};
+
+const CERT_TYPE_LABEL: Record<string, string> = {
+  STCW_II_1: "STCW II/1 (Oficial Cubierta)",
+  STCW_II_2: "STCW II/2 (Capitán/Oficial)",
+  STCW_III_1: "STCW III/1 (Oficial Máquinas)",
+  STCW_III_2: "STCW III/2 (Jefe Máquinas)",
+  STCW_IV_2: "STCW IV/2 (Radioperador)",
+  STCW_V_1: "STCW V/1 (Tanqueros)",
+  STCW_VI_1: "STCW VI/1 (Familiarización)",
+  STCW_VI_2: "STCW VI/2 (Botes/Balsas)",
+  STCW_VI_3: "STCW VI/3 (Lucha c/Fuego Avanzada)",
+  STCW_VI_4: "STCW VI/4 (Primeros Auxilios)",
+  GMDSS_GOC: "GMDSS GOC",
+  GMDSS_ROC: "GMDSS ROC",
+  BST: "BST (Basic Safety Training)",
+  MEDICAL_ENOG: "Médico Embarque (ENOG)",
+  MEDICAL_FIRST_AID: "Primeros Auxilios Médicos",
+  ADVANCED_FIRE_FIGHTING: "Lucha c/Fuego Avanzada",
+  SHIP_SECURITY_OFFICER: "SSO (Oficial Seguridad)",
+  CROWD_MANAGEMENT: "Manejo de Multitudes",
+  PASSPORT: "Pasaporte",
+  SEAMANS_BOOK: "Libreta de Embarco",
+  OTHER: "Otro",
+};
+
+function fmtDate(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function CertStatusBadge({ status }: { status: string }) {
+  if (status === "EXPIRED") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">Vencido</span>;
+  if (status === "EXPIRING_SOON") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">Por vencer</span>;
+  return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">Vigente</span>;
+}
+
+const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
+
+// ─── Crew Modal ──────────────────────────────────────────────────────────────
+
+const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () => void }> = ({ crew, onClose, onSaved }) => {
+  const { vessels } = useVesselContext();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
+  const isNew = !crew;
+  const isLocked = crew?.status === "SIGNED_OFF";
+
+  const [vesselCode, setVesselCode] = useState(crew?.vesselCode ?? vessels[0]?.code ?? "");
+  const [firstName, setFirstName]   = useState(crew?.firstName ?? "");
+  const [lastName, setLastName]     = useState(crew?.lastName ?? "");
+  const [rank, setRank]             = useState(crew?.rank ?? "AB_SEAMAN");
+  const [nationality, setNationality] = useState(crew?.nationality ?? "");
+  const [passportNumber, setPassportNumber] = useState(crew?.passportNumber ?? "");
+  const [signOnDate, setSignOnDate] = useState((crew?.signOnDate ?? "").slice(0, 10));
+  const [notes, setNotes]           = useState(crew?.notes ?? "");
+
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+
+  // Tab: details | certifications
+  const [tab, setTab] = useState<"details" | "certs">("details");
+
+  const onSave = useCallback(async () => {
+    if (!firstName.trim() || !lastName.trim() || !vesselCode || !signOnDate) {
+      setErr("Completá vessel, nombre, apellido y fecha de embarque."); return;
+    }
+    setSaving(true); setErr(null);
+    try {
+      const payload = {
+        vesselCode, firstName: firstName.trim(), lastName: lastName.trim(),
+        rank, nationality: nationality.trim() || null,
+        passportNumber: passportNumber.trim() || null,
+        signOnDate, notes: notes.trim() || null,
+      };
+      if (isNew) await api.post("/app/crew", payload);
+      else await api.patch(`/app/crew/${crew!.id}`, payload);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al guardar.");
+    } finally {
+      setSaving(false);
+    }
+  }, [isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, onSaved]);
+
+  const onSignOff = useCallback(async () => {
+    if (!crew) return;
+    if (!confirm(`¿Confirmás el desembarque de ${crew.firstName} ${crew.lastName}?`)) return;
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/crew/${crew.id}/sign-off`, { signOffDate: new Date().toISOString().slice(0, 10) });
+      onSaved();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al desembarcar."); }
+    finally { setSaving(false); }
+  }, [crew, onSaved]);
+
+  const onReopen = useCallback(async () => {
+    if (!crew) return;
+    const reason = prompt("Motivo de re-apertura (mín. 5 caracteres):");
+    if (!reason || reason.trim().length < 5) return;
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/crew/${crew.id}/reopen`, { reason: reason.trim() });
+      onSaved();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al re-abrir."); }
+    finally { setSaving(false); }
+  }, [crew, onSaved]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3">
+            <Users className="w-4 h-4 text-accent" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Tripulante</p>
+              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo tripulante" : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
+            </div>
+            {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">Desembarcado</span>}
+            {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">A bordo</span>}
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        </div>
+
+        {!isNew && (
+          <div className="flex border-b border-white/10 px-6 shrink-0">
+            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Detalles</button>
+            <button onClick={() => setTab("certs")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "certs" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Certificaciones</button>
+          </div>
+        )}
+
+        <div className="overflow-y-auto flex-1 p-6">
+          {(isNew || tab === "details") && (
+            <div className="space-y-4">
+              {isLocked && (
+                <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-orange-200">Este tripulante está SIGNED_OFF. Para editarlo, un administrador debe re-abrirlo con justificación.</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Vessel</label>
+                  <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
+                    {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Rango</label>
+                  <select value={rank} onChange={e => setRank(e.target.value)} disabled={isLocked} className={inputCls}>
+                    {Object.entries(RANK_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Nombre</label>
+                  <input value={firstName} onChange={e => setFirstName(e.target.value)} disabled={isLocked} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Apellido</label>
+                  <input value={lastName} onChange={e => setLastName(e.target.value)} disabled={isLocked} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Nacionalidad</label>
+                  <input value={nationality} onChange={e => setNationality(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
+                </div>
+                <div>
+                  <label className={labelCls}>Pasaporte / Libreta</label>
+                  <input value={passportNumber} onChange={e => setPassportNumber(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
+                </div>
+                <div>
+                  <label className={labelCls}>Fecha embarque</label>
+                  <input type="date" value={signOnDate} onChange={e => setSignOnDate(e.target.value)} disabled={isLocked} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Fecha desembarque</label>
+                  <input type="date" value={(crew?.signOffDate ?? "").slice(0, 10)} disabled className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>Notas</label>
+                  <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls} />
+                </div>
+              </div>
+              {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+            </div>
+          )}
+
+          {!isNew && tab === "certs" && crew && (
+            <CertificationsTab crew={crew} isLocked={isLocked} onChanged={onSaved} />
+          )}
+        </div>
+
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+          <div className="flex gap-2">
+            {!isNew && crew?.status === "ONBOARD" && (
+              <button onClick={() => { void onSignOff(); }} disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
+                <LogOut className="w-3.5 h-3.5" /> Desembarcar
+              </button>
+            )}
+            {!isNew && crew?.status === "SIGNED_OFF" && isAdmin && (
+              <button onClick={() => { void onReopen(); }} disabled={saving}
+                className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
+                Re-abrir
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            {(isNew || tab === "details") && !isLocked && (
+              <button onClick={() => { void onSave(); }} disabled={saving}
+                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Certifications Tab ──────────────────────────────────────────────────────
+
+const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: () => void }> = ({ crew, isLocked, onChanged }) => {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Certification | null>(null);
+  const [type, setType]               = useState("STCW_VI_1");
+  const [certificateNumber, setCN]    = useState("");
+  const [issuingAuthority, setAuth]   = useState("");
+  const [issuedDate, setIssued]       = useState("");
+  const [expiryDate, setExpiry]       = useState("");
+  const [docUrl, setDocUrl]           = useState("");
+  const [notes, setNotes]             = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [err, setErr]                 = useState<string | null>(null);
+
+  const resetForm = () => {
+    setType("STCW_VI_1"); setCN(""); setAuth(""); setIssued(""); setExpiry(""); setDocUrl(""); setNotes("");
+    setAdding(false); setEditing(null); setErr(null);
+  };
+
+  const openEdit = (c: Certification) => {
+    setEditing(c); setAdding(true);
+    setType(c.type);
+    setCN(c.certificateNumber ?? "");
+    setAuth(c.issuingAuthority ?? "");
+    setIssued((c.issuedDate ?? "").slice(0, 10));
+    setExpiry((c.expiryDate ?? "").slice(0, 10));
+    setDocUrl(c.docUrl ?? "");
+    setNotes(c.notes ?? "");
+  };
+
+  const onSave = useCallback(async () => {
+    setSaving(true); setErr(null);
+    try {
+      const payload = {
+        type,
+        certificateNumber: certificateNumber.trim() || null,
+        issuingAuthority: issuingAuthority.trim() || null,
+        issuedDate: issuedDate || null,
+        expiryDate: expiryDate || null,
+        docUrl: docUrl.trim() || null,
+        notes: notes.trim() || null,
+      };
+      if (editing) await api.patch(`/app/crew/${crew.id}/certifications/${editing.id}`, payload);
+      else await api.post(`/app/crew/${crew.id}/certifications`, payload);
+      resetForm();
+      onChanged();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
+    finally { setSaving(false); }
+  }, [editing, crew.id, type, certificateNumber, issuingAuthority, issuedDate, expiryDate, docUrl, notes, onChanged]);
+
+  const onDelete = useCallback(async (certId: string) => {
+    if (!confirm("¿Eliminar esta certificación?")) return;
+    try { await api.delete(`/app/crew/${crew.id}/certifications/${certId}`); onChanged(); }
+    catch (e) { alert(e instanceof ApiError ? e.message : "Error al eliminar."); }
+  }, [crew.id, onChanged]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        {!adding && !isLocked && (
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20">
+            <Plus className="w-3.5 h-3.5" /> Agregar certificación
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className={labelCls}>Tipo</label>
+              <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
+                {Object.entries(CERT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Nº Certificado</label>
+              <input value={certificateNumber} onChange={e => setCN(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Autoridad emisora</label>
+              <input value={issuingAuthority} onChange={e => setAuth(e.target.value)} className={inputCls} placeholder="ej. Prefectura Naval Arg." />
+            </div>
+            <div>
+              <label className={labelCls}>Emitida</label>
+              <input type="date" value={issuedDate} onChange={e => setIssued(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Vence</label>
+              <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} className={inputCls} />
+            </div>
+            <div className="col-span-2">
+              <label className={labelCls}>URL / Documento</label>
+              <input value={docUrl} onChange={e => setDocUrl(e.target.value)} className={inputCls} placeholder="https:// o ruta de red" />
+            </div>
+            <div className="col-span-2">
+              <label className={labelCls}>Notas</label>
+              <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {crew.certifications.length === 0 && !adding ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin certificaciones registradas</div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {crew.certifications.map(c => (
+            <div key={c.id} className="py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <span className="text-sm font-medium text-white">{CERT_TYPE_LABEL[c.type] ?? c.type}</span>
+                  <CertStatusBadge status={c.status} />
+                  {c.certificateNumber && <span className="text-[10px] font-mono text-text-industrial/40">#{c.certificateNumber}</span>}
+                </div>
+                <div className="text-xs text-text-industrial/50 flex flex-wrap gap-3">
+                  {c.issuingAuthority && <span>{c.issuingAuthority}</span>}
+                  {c.issuedDate && <span>Emitida: {fmtDate(c.issuedDate)}</span>}
+                  {c.expiryDate && <span>Vence: {fmtDate(c.expiryDate)}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-white/5 text-text-industrial/40 hover:text-accent" title="Ver documento"><FileText className="w-4 h-4" /></a>}
+                {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">Editar</button>}
+                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-400 hover:underline ml-2">Eliminar</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export const CrewPage: React.FC = () => {
+  const [status, setStatus] = useState<"ONBOARD" | "SIGNED_OFF" | "">("ONBOARD");
+  const path = useMemo(() => {
+    const p = new URLSearchParams();
+    if (status) p.set("status", status);
+    return `/app/crew${p.toString() ? `?${p.toString()}` : ""}`;
+  }, [status]);
+
+  const { data, loading, reload } = useFetch<{ items: Crew[]; total: number }>(path, [path]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<Crew | null>(null);
+
+  return (
+    <div className="p-6 space-y-4">
+      <PageHeader icon={Users} title="Tripulación" total={data?.total} onReload={reload}>
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+          <Plus className="w-3.5 h-3.5" /> Nuevo tripulante
+        </button>
+      </PageHeader>
+
+      <div className="flex gap-2">
+        {([["ONBOARD", "A bordo"], ["SIGNED_OFF", "Desembarcados"], ["", "Todos"]] as const).map(([v, l]) => (
+          <button key={v || "all"} onClick={() => setStatus(v)}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
+              status === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+            }`}
+          >{l}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+      ) : !data?.items?.length ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin tripulantes</div>
+      ) : (
+        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+          {data.items.map(c => {
+            const expiringCount = c.certifications.filter(x => x.status === "EXPIRING_SOON" || x.status === "EXPIRED").length;
+            return (
+              <button key={c.id} onClick={() => setEditing(c)}
+                className="w-full text-left p-4 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-[10px] font-mono text-text-industrial/40">{c.crewCode}</span>
+                    {c.status === "ONBOARD"
+                      ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">A bordo</span>
+                      : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">Desembarcado</span>}
+                    <span className="text-[10px] text-accent font-mono">{c.vesselCode}</span>
+                    {expiringCount > 0 && (
+                      <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">
+                        {expiringCount} cert. atención
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-bold text-white">{c.firstName} {c.lastName}</p>
+                  <p className="text-xs text-text-industrial/50">{RANK_LABEL[c.rank] ?? c.rank}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-text-industrial/40">Embarcado</p>
+                  <p className="text-xs text-white font-mono">{fmtDate(c.signOnDate)}</p>
+                </div>
+                {c.status === "ONBOARD" && expiringCount === 0 && <CheckCircle className="w-4 h-4 text-success-sea" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {(showCreate || editing) && (
+        <CrewModal
+          crew={editing}
+          onClose={() => { setShowCreate(false); setEditing(null); }}
+          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+        />
+      )}
+    </div>
+  );
+};

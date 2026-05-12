@@ -30,6 +30,7 @@ import {
   listTenantWorkOrders,
   startWorkOrder,
   updateTenantWorkOrder,
+  reopenWorkOrder,
 } from "../work-orders/work-orders-service";
 import {
   createProgressNote,
@@ -293,6 +294,14 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof cancelWorkOrder>[2];
     sendJson(response, 200, await cancelWorkOrder(session, id, body));
+    return true;
+  }
+
+  // Record lockdown — re-abrir una OT CLOSED/CANCELLED (solo TENANT_ADMIN, con justificación)
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/reopen$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenWorkOrder>[2];
+    sendJson(response, 200, await reopenWorkOrder(session, id, body));
     return true;
   }
 

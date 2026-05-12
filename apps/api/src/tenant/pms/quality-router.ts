@@ -11,6 +11,7 @@ import {
   createDefect,
   getDefect,
   listDefects,
+  reopenDefect,
   softDeleteDefect,
   updateDefect,
 } from "./defects-service";
@@ -25,6 +26,7 @@ import {
   getDeferral,
   listDeferrals,
   rejectDeferral,
+  reopenDeferral,
   reviewDeferral,
   updateDeferral,
 } from "./deferrals-service";
@@ -36,6 +38,7 @@ import {
   createCapaRecord,
   getCapaRecord,
   listCapaRecords,
+  reopenCapaRecord,
   updateCapaRecord,
 } from "./capa-service";
 
@@ -101,6 +104,12 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof closeDefect>[2];
     sendJson(response, 200, await closeDefect(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/defects\/[^/]+\/reopen$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenDefect>[2];
+    sendJson(response, 200, await reopenDefect(session, id, body));
     return true;
   }
   if (/^\/app\/pms\/defects\/[^/]+$/.test(url.pathname)) {
@@ -198,6 +207,12 @@ export async function handleQualityRoutes(
     sendJson(response, 200, await closeDeferral(session, id, body));
     return true;
   }
+  if (method === "POST" && /^\/app\/pms\/deferrals\/[^/]+\/reopen$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenDeferral>[2];
+    sendJson(response, 200, await reopenDeferral(session, id, body));
+    return true;
+  }
   if (method === "GET" && /^\/app\/pms\/deferrals\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await getDeferral(session, id));
@@ -236,6 +251,12 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof cancelCapaRecord>[2];
     sendJson(response, 200, await cancelCapaRecord(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/capa\/[^/]+\/reopen$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenCapaRecord>[2];
+    sendJson(response, 200, await reopenCapaRecord(session, id, body));
     return true;
   }
   if (/^\/app\/pms\/capa\/[^/]+$/.test(url.pathname)) {

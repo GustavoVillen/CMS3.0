@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 
 interface WO { status: string; dueDate: string | null; }
@@ -9,6 +9,7 @@ interface Certificate { status: string; expiryDate: string | null; }
 interface Insight { id: string; title: string; summary: string; priority: string; }
 interface MpSummaryCounts { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number; }
 interface DailyReport { reportDate: string; createdAt: string; status: string; }
+interface CrewSummary { onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number; }
 
 const PRIORITY_BG: Record<string, string> = {
   CRITICAL: "border-red-500/40 bg-red-500/5",
@@ -60,6 +61,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
   const { data: certData                          } = useFetch<{ items: Certificate[] }>("/app/certificates");
   const { data: mpSummary                         } = useFetch<{ counts: MpSummaryCounts }>("/app/dashboard/mp-summary");
   const { data: drData                            } = useFetch<{ items: DailyReport[] }>("/app/daily-reports");
+  const { data: crewData                          } = useFetch<CrewSummary>("/app/dashboard/crew-summary");
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -128,6 +130,35 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           </>
         )}
       </button>
+
+      {/* Tripulación & Simulacros — mini chip strip */}
+      {crewData && (crewData.onboard > 0 || crewData.certsExpired > 0 || crewData.certsExpiringSoon > 0 || crewData.drillsScheduled > 0) && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3 grid grid-cols-3 gap-2">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 mb-0.5">
+              <Users className="w-3 h-3 text-text-industrial/40" />
+              <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A bordo</span>
+            </div>
+            <p className="text-lg font-bold text-white tabular-nums">{crewData.onboard}</p>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 mb-0.5">
+              <AlertTriangle className={`w-3 h-3 ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+              <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Cert. atención</span>
+            </div>
+            <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
+              {crewData.certsExpired + crewData.certsExpiringSoon}
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 mb-0.5">
+              <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
+              <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros mes</span>
+            </div>
+            <p className="text-lg font-bold text-white tabular-nums">{crewData.drillsScheduled}</p>
+          </div>
+        </div>
+      )}
 
       {/* Plan de mantenimiento — detalle por estado si hay foco */}
       {mpSummary && (mpCounts.OVERDUE + mpCounts.DUE + mpCounts.IN_WINDOW + mpCounts.UPCOMING > 0) && (
