@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { CopilotContextProvider } from "../lib/copilot-context";
 import { MobileCopilot } from "./MobileCopilot";
+import { CmsLogo } from "./CmsLogo";
 import { MobileDashboard } from "../mobile/MobileDashboard";
 import { MobileWorkOrders } from "../mobile/MobileWorkOrders";
 import { MobileDefects } from "../mobile/MobileDefects";
@@ -40,9 +41,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="shrink-0 px-4 py-2.5 border-b border-white/10 flex items-center gap-3 bg-[#0D1B2A]">
-          <span className="text-xs font-bold text-white/60 truncate shrink-0">
-            {tenant?.displayName ?? "GPMS"}
-          </span>
+          <CmsLogo className="w-6 h-6 text-accent shrink-0" title={tenant?.displayName ?? "CMS"} />
 
           {vessels.length > 1 ? (
             <select
