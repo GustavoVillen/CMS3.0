@@ -32,6 +32,14 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   // y el backend lo usa directamente como processedText (sin OCR/AI extra).
   const speechRecognitionRef = useRef<any>(null);
   const transcriptRef = useRef<string>("");
+  // Estado visual del SR: si el browser lo soporta, si está activo, y el
+  // transcript que se va viendo en vivo (final + interim).
+  const SR_AVAILABLE = typeof window !== "undefined" &&
+    (!!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition);
+  const [srStatus, setSrStatus] = useState<"idle" | "active" | "error" | "unavailable">(
+    SR_AVAILABLE ? "idle" : "unavailable"
+  );
+  const [liveTranscript, setLiveTranscript] = useState("");
 
   // Limpiar URL de preview al desmontar
   useEffect(() => {
@@ -74,11 +82,13 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
 
   // ─── Audio recording handlers ─────────────────────────────────────────────
   // Estrategia: grabar audio con MediaRecorder Y en paralelo correr Web Speech
-  // Recognition. El transcript se almacena en transcriptRef y se manda como
-  // `text` junto con el blob. El backend lo usa como processedText (sin OCR).
-  // Si SpeechRecognition no está disponible (Firefox/iOS Safari viejo), el
-  // audio se manda sin transcript — el supervisor puede escucharlo, no hay
-  // texto en observations para esa nota.
+  // Recognition. El transcript final se almacena en transcriptRef y se manda
+  // como `text` junto con el blob. El usuario VE el transcript en vivo (final
+  // + interim) durante la grabación; tras detenerla, puede editarlo en el
+  // textarea antes de guardar.
+  //
+  // Si SR no está disponible (Firefox, iOS Safari pre-14.5), el audio igual
+  // se sube — el supervisor puede escucharlo. Mensaje visual claro al usuario.
   const startRecording = useCallback(async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -91,6 +101,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
       transcriptRef.current = "";
+      setLiveTranscript("");
 
       mr.ondataavailable = (ev) => {
         if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
@@ -101,7 +112,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         setFile(audioFile);
         if (filePreview) URL.revokeObjectURL(filePreview);
         setFilePreview(URL.createObjectURL(blob));
-        // Si Speech Recognition produjo transcript, lo seteamos como caption.
+        // Si Speech Recognition produjo transcript, lo seteamos como caption
+        // editable. Si el usuario ya tipeó algo, no lo sobreescribimos.
         const tx = transcriptRef.current.trim();
         if (tx && !text.trim()) setText(tx);
         // Liberar el micrófono
@@ -109,7 +121,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       };
       mr.start();
 
-      // Arrancar Speech Recognition en paralelo (no bloqueante si no existe)
+      // Arrancar Speech Recognition en paralelo
       const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SR) {
         try {
@@ -118,16 +130,42 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
           recog.interimResults = true;
           recog.lang = "es-AR";
           recog.onresult = (ev: any) => {
-            let finalText = "";
-            for (let i = 0; i < ev.results.length; i++) {
-              if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript + " ";
+            let finalAccum = transcriptRef.current;
+            let interimText = "";
+            for (let i = ev.resultIndex; i < ev.results.length; i++) {
+              const transcript = ev.results[i][0].transcript;
+              if (ev.results[i].isFinal) {
+                finalAccum = (finalAccum + " " + transcript).trim();
+              } else {
+                interimText += transcript;
+              }
             }
-            if (finalText) transcriptRef.current = finalText.trim();
+            transcriptRef.current = finalAccum;
+            // El usuario ve final + interim (con interim en gris semi-transparente)
+            setLiveTranscript(finalAccum + (interimText ? ` ${interimText}` : ""));
+            setSrStatus("active");
           };
-          recog.onerror = () => { /* swallow — el audio se sube igual */ };
+          recog.onerror = (ev: any) => {
+            // Errores comunes: 'no-speech', 'audio-capture', 'not-allowed', 'network'
+            // 'no-speech' es esperable si el usuario está en silencio
+            if (ev?.error && ev.error !== "no-speech") {
+              setSrStatus("error");
+            }
+          };
+          recog.onend = () => {
+            // Si el usuario sigue grabando pero SR terminó (típico cada 60s en
+            // Android), reintentar automáticamente.
+            if (mediaRecorderRef.current?.state === "recording") {
+              try { recog.start(); } catch { /* ya está corriendo */ }
+            }
+          };
           recog.start();
           speechRecognitionRef.current = recog;
-        } catch { /* SR no soportado o sin permisos — silencioso */ }
+          setSrStatus("active");
+        } catch (e) {
+          setSrStatus("error");
+          // SR rechazó el start — el audio se sube igual, sin transcript
+        }
       }
 
       setRecording(true);
@@ -307,7 +345,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   <audio src={filePreview} controls className="w-full" />
                   <button
                     type="button"
-                    onClick={resetMedia}
+                    onClick={() => { resetMedia(); setLiveTranscript(""); }}
                     className="w-full py-2 text-xs text-text-industrial/60 hover:text-white flex items-center justify-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -315,9 +353,24 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   </button>
                 </div>
               ) : recording ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-8 rounded-xl border border-red-500/30 bg-red-500/5">
-                  <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                  <p className="text-sm font-bold text-white tabular-nums">{minSec(audioElapsed)}</p>
+                <div className="flex flex-col items-center justify-center gap-3 py-6 rounded-xl border border-red-500/30 bg-red-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <p className="text-sm font-bold text-white tabular-nums">{minSec(audioElapsed)}</p>
+                  </div>
+                  {/* Indicador de estado de la transcripción */}
+                  <div className="text-[10px] text-text-industrial/60 flex items-center gap-1.5">
+                    {srStatus === "active" && <span className="text-success-sea">● Transcribiendo en vivo</span>}
+                    {srStatus === "error" && <span className="text-orange-400">⚠ Transcripción falló — el audio se guarda igual</span>}
+                    {srStatus === "unavailable" && <span className="text-text-industrial/40">Transcripción no soportada por el navegador</span>}
+                    {srStatus === "idle" && <span>Iniciando transcripción...</span>}
+                  </div>
+                  {/* Transcripción en vivo (final + interim) */}
+                  {liveTranscript && (
+                    <div className="w-full max-h-32 overflow-y-auto bg-black/20 rounded-lg px-3 py-2 text-xs text-white/85 leading-relaxed">
+                      {liveTranscript}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={stopRecording}
@@ -335,15 +388,25 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 >
                   <Mic className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Tocá para grabar</span>
+                  {srStatus === "unavailable" && (
+                    <span className="text-[10px] text-text-industrial/40 normal-case font-normal mt-1 text-center px-4">
+                      Tu navegador no soporta transcripción automática.<br />Tras grabar, tipeá la descripción manualmente.
+                    </span>
+                  )}
                 </button>
               )}
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                rows={2}
-                placeholder="Descripción opcional"
+                rows={3}
+                placeholder={filePreview ? "Transcripción editable" : "Descripción opcional"}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
+              {filePreview && !text.trim() && (
+                <p className="text-[10px] text-orange-400/80">
+                  ⚠ Sin texto, la nota se guarda pero no contribuye a las Observaciones.
+                </p>
+              )}
             </>
           )}
 
