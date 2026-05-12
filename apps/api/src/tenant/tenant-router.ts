@@ -54,6 +54,14 @@ import {
   listDrills, getDrill, createDrill, updateDrill, completeDrill, cancelDrill, reopenDrill, deleteDrill,
 } from "./drills/drills-service";
 import { getCrewSummary } from "./crew/crew-summary-service";
+import {
+  listPermits, getPermit, createPermit, updatePermit,
+  requestPermit, approvePermit, rejectPermit, activatePermit, closePermit, cancelPermit, reopenPermit, deletePermit,
+} from "./permits/permits-service";
+import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-service";
+import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
+import { buildPermitPdf } from "./permits/permit-pdf-service";
+import { getPermitsSummary } from "./permits/permits-summary-service";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
 import { generateTemplate } from "./excel/excel-template";
 import { previewImport, confirmImport } from "./excel/excel-import-service";
@@ -1307,6 +1315,153 @@ export async function handleTenantRoutes(
     const summary = await getCrewSummary(session, { vesselCode: url.searchParams.get("vesselCode") });
     sendJson(response, 200, summary);
     return true;
+  }
+
+  // ── Permits dashboard summary ──────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/dashboard/permits-summary") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const summary = await getPermitsSummary(session, { vesselCode: url.searchParams.get("vesselCode") });
+    sendJson(response, 200, summary);
+    return true;
+  }
+
+  // ── Permits (PTW) ──────────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/permits") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listPermits(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      type:       url.searchParams.get("type"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/permits") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createPermit>[1];
+    sendJson(response, 201, await createPermit(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/permits\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[3]!;
+    const permit = await getPermit(session, id) as unknown as { permitCode: string };
+    const buffer = await buildPermitPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${permit.permitCode}.pdf"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/request$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await requestPermit(session, id));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/approve$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof approvePermit>[2];
+    sendJson(response, 200, await approvePermit(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/reject$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof rejectPermit>[2];
+    sendJson(response, 200, await rejectPermit(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/activate$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await activatePermit(session, id));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/close$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof closePermit>[2];
+    sendJson(response, 200, await closePermit(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/cancel$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof cancelPermit>[2];
+    sendJson(response, 200, await cancelPermit(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/reopen$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof reopenPermit>[2];
+    sendJson(response, 200, await reopenPermit(session, id, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/permits\/[^/]+\/gas-tests$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const items = await listGasTests(session, permitId);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/gas-tests$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof createGasTest>[2];
+    sendJson(response, 201, await createGasTest(session, permitId, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/permits\/[^/]+\/gas-tests\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    await deleteGasTest(session, parts[3]!, parts[5]!);
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
+  if (method === "GET" && /^\/app\/permits\/[^/]+\/participants$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const items = await listParticipants(session, permitId);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/participants$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof createParticipant>[2];
+    sendJson(response, 201, await createParticipant(session, permitId, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/permits\/[^/]+\/participants\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    await deleteParticipant(session, parts[3]!, parts[5]!);
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
+  if (/^\/app\/permits\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") {
+      sendJson(response, 200, await getPermit(session, id));
+      return true;
+    }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updatePermit>[2];
+      sendJson(response, 200, await updatePermit(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deletePermit(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
   }
 
   // ── Audit Log (TENANT_ADMIN only) ─────────────────────────────────────────

@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, Users, CalendarCheck } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
@@ -48,6 +48,7 @@ export const Dashboard: React.FC = () => {
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   const crewSummary       = useFetch<{ onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number }>("/app/dashboard/crew-summary");
+  const permitsSummary    = useFetch<{ active: number; pendingApproval: number; expiringSoon: number; expired: number }>("/app/dashboard/permits-summary");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -482,6 +483,68 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   </div>
                   <p className="text-xl font-bold text-success-sea tabular-nums">{c.drillsCompletedYear}</p>
                   <p className="text-[10px] text-text-industrial/40 mt-0.5">realizados</p>
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Permits to Work summary (vetting widget) */}
+        <div className="bento-card p-4! flex flex-col h-[226px]">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-xs font-bold text-white">Permisos de Trabajo</h2>
+              <p className="text-[10px] text-text-industrial/40">Activos, pendientes, próximos a vencer</p>
+            </div>
+            {permitsSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          </div>
+          {(() => {
+            const p = permitsSummary.data ?? { active: 0, pendingApproval: 0, expiringSoon: 0, expired: 0 };
+            return (
+              <div className="flex-1 grid grid-cols-2 gap-2 content-start">
+                <button onClick={() => navigate("/permits?status=ACTIVE")}
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <ShieldAlert className="w-3 h-3 text-success-sea" />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Activos</span>
+                  </div>
+                  <p className="text-xl font-bold text-success-sea tabular-nums">{p.active}</p>
+                </button>
+                <button onClick={() => navigate("/permits?status=REQUESTED")}
+                  className={`text-left rounded-lg p-3 transition-colors ${
+                    p.pendingApproval > 0
+                      ? "bg-yellow-500/5 border border-yellow-500/30 hover:bg-yellow-500/10"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  }`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Clock className={`w-3 h-3 ${p.pendingApproval > 0 ? "text-yellow-400" : "text-text-industrial/40"}`} />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A aprobar</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${p.pendingApproval > 0 ? "text-yellow-400" : "text-white"}`}>{p.pendingApproval}</p>
+                </button>
+                <button onClick={() => navigate("/permits?status=ACTIVE")}
+                  className={`text-left rounded-lg p-3 transition-colors ${
+                    p.expiringSoon > 0
+                      ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  }`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle className={`w-3 h-3 ${p.expiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Vencen &lt;24h</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${p.expiringSoon > 0 ? "text-orange-400" : "text-white"}`}>{p.expiringSoon}</p>
+                </button>
+                <button onClick={() => navigate("/permits?status=ACTIVE")}
+                  className={`text-left rounded-lg p-3 transition-colors ${
+                    p.expired > 0
+                      ? "bg-red-500/5 border border-red-500/30 hover:bg-red-500/10"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  }`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertCircle className={`w-3 h-3 ${p.expired > 0 ? "text-red-400" : "text-text-industrial/40"}`} />
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Vencidos sin cerrar</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${p.expired > 0 ? "text-red-400" : "text-white"}`}>{p.expired}</p>
                 </button>
               </div>
             );

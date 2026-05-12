@@ -1,0 +1,712 @@
+import React, { useState, useMemo, useCallback } from "react";
+import {
+  ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle,
+} from "lucide-react";
+import { useFetch } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
+import { api, ApiError } from "../lib/api";
+import { PageHeader } from "../components/PageHeader";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type PermitType = "HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION";
+type PermitStatus = "DRAFT" | "REQUESTED" | "APPROVED" | "REJECTED" | "ACTIVE" | "CLOSED" | "CANCELLED";
+type ParticipantRole = "PERFORMER" | "FIRE_WATCH" | "STAND_BY" | "ATTENDANT" | "SUPERVISOR";
+type GasVerdict = "PASS" | "FAIL";
+
+interface GasTest {
+  id: string;
+  testedAt: string;
+  testedByName: string;
+  location: string | null;
+  o2Pct: number | null;
+  lelPct: number | null;
+  h2sPpm: number | null;
+  coPpm: number | null;
+  verdict: GasVerdict;
+  notes: string | null;
+}
+interface Participant {
+  id: string;
+  crewId: string | null;
+  name: string;
+  role: ParticipantRole;
+}
+interface Permit {
+  id: string;
+  tenantId: string;
+  vesselCode: string;
+  permitCode: string;
+  type: PermitType;
+  status: PermitStatus;
+  location: string;
+  description: string;
+  plannedStart: string;
+  plannedEnd: string;
+  validFrom: string | null;
+  validTo: string | null;
+  hazardsIdentified: string | null;
+  controlMeasures: string | null;
+  ppeRequired: string | null;
+  details: Record<string, unknown>;
+  requestedAt: string | null;
+  approvedAt: string | null;
+  activatedAt: string | null;
+  closedAt: string | null;
+  closeNotes: string | null;
+  rejectionReason: string | null;
+  cancelReason: string | null;
+  gasTests: GasTest[];
+  participants: Participant[];
+}
+
+interface CrewItem {
+  id: string;
+  vesselCode: string;
+  firstName: string;
+  lastName: string;
+  rank: string;
+  status: string;
+}
+
+// ─── Labels ──────────────────────────────────────────────────────────────────
+
+const TYPE_LABEL: Record<PermitType, string> = {
+  HOT_WORK: "Trabajo en caliente",
+  ENCLOSED_SPACE_ENTRY: "Espacio confinado",
+  WORKING_ALOFT: "Trabajo en altura",
+  ELECTRICAL_ISOLATION: "Aislamiento eléctrico",
+};
+
+const TYPE_ICON: Record<PermitType, React.FC<{ className?: string }>> = {
+  HOT_WORK: Flame,
+  ENCLOSED_SPACE_ENTRY: Wind,
+  WORKING_ALOFT: ArrowUp,
+  ELECTRICAL_ISOLATION: Zap,
+};
+
+const STATUS_LABEL: Record<PermitStatus, string> = {
+  DRAFT: "Borrador",
+  REQUESTED: "Solicitado",
+  APPROVED: "Aprobado",
+  REJECTED: "Rechazado",
+  ACTIVE: "Activo",
+  CLOSED: "Cerrado",
+  CANCELLED: "Cancelado",
+};
+
+const STATUS_COLOR: Record<PermitStatus, string> = {
+  DRAFT: "bg-white/5 text-text-industrial/60 border-white/10",
+  REQUESTED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  APPROVED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
+  ACTIVE: "bg-green-500/10 text-green-400 border-green-500/20",
+  CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
+  CANCELLED: "bg-white/5 text-text-industrial/50 border-white/10",
+};
+
+const ROLE_LABEL: Record<ParticipantRole, string> = {
+  PERFORMER: "Ejecutante",
+  FIRE_WATCH: "Vigía de fuego",
+  STAND_BY: "Stand-by",
+  ATTENDANT: "Atendente",
+  SUPERVISOR: "Supervisor",
+};
+
+function fmtDateTime(s: string | null): string {
+  if (!s) return "—";
+  return new Date(s).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function toLocalDateTimeInput(s: string | null): string {
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  // Format YYYY-MM-DDTHH:MM for datetime-local
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
+
+// ─── Permit Modal ────────────────────────────────────────────────────────────
+
+const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSaved: () => void }> = ({ permit, onClose, onSaved }) => {
+  const { vessels } = useVesselContext();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
+  const canApprove = isAdmin || user?.role === "FLEET_SUPERINTENDENT";
+  const isNew = !permit;
+
+  const isTerminal = permit && ["CLOSED", "CANCELLED", "REJECTED"].includes(permit.status);
+  const isEditable = !permit || permit.status === "DRAFT" || permit.status === "REQUESTED";
+
+  // Form state
+  const [vesselCode, setVesselCode]   = useState(permit?.vesselCode ?? vessels[0]?.code ?? "");
+  const [type, setType]               = useState<PermitType>(permit?.type ?? "HOT_WORK");
+  const [location, setLocation]       = useState(permit?.location ?? "");
+  const [description, setDescription] = useState(permit?.description ?? "");
+  const [plannedStart, setPlannedStart] = useState(toLocalDateTimeInput(permit?.plannedStart ?? null));
+  const [plannedEnd, setPlannedEnd]     = useState(toLocalDateTimeInput(permit?.plannedEnd ?? null));
+  const [hazards, setHazards]         = useState(permit?.hazardsIdentified ?? "");
+  const [controls, setControls]       = useState(permit?.controlMeasures ?? "");
+  const [ppe, setPpe]                 = useState(permit?.ppeRequired ?? "");
+
+  const [tab, setTab] = useState<"details" | "participants" | "gas">("details");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const onSave = useCallback(async () => {
+    if (!vesselCode || !location.trim() || !description.trim() || !plannedStart || !plannedEnd) {
+      setErr("Completá vessel, ubicación, descripción y fechas planeadas."); return;
+    }
+    setSaving(true); setErr(null);
+    try {
+      const payload = {
+        vesselCode, type,
+        location: location.trim(),
+        description: description.trim(),
+        plannedStart: new Date(plannedStart).toISOString(),
+        plannedEnd: new Date(plannedEnd).toISOString(),
+        hazardsIdentified: hazards.trim() || null,
+        controlMeasures: controls.trim() || null,
+        ppeRequired: ppe.trim() || null,
+      };
+      if (isNew) await api.post("/app/permits", payload);
+      else await api.patch(`/app/permits/${permit!.id}`, payload);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al guardar.");
+    } finally {
+      setSaving(false);
+    }
+  }, [isNew, permit, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, onSaved]);
+
+  const callAction = useCallback(async (action: string, body?: unknown) => {
+    if (!permit) return;
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/permits/${permit.id}/${action}`, body ?? {});
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : `Error al ${action}.`);
+    } finally {
+      setSaving(false);
+    }
+  }, [permit, onSaved]);
+
+  const onRequest = () => callAction("request");
+  const onApprove = () => callAction("approve", {});
+  const onReject = () => {
+    const reason = prompt("Motivo de rechazo:");
+    if (!reason || !reason.trim()) return;
+    void callAction("reject", { reason: reason.trim() });
+  };
+  const onActivate = () => callAction("activate");
+  const onClose_ = () => {
+    const notes = prompt("Notas de cierre (opcional):");
+    void callAction("close", { closeNotes: notes?.trim() || null });
+  };
+  const onCancel = () => {
+    const reason = prompt("Motivo de cancelación:");
+    if (!reason || !reason.trim()) return;
+    void callAction("cancel", { reason: reason.trim() });
+  };
+  const onReopen = () => {
+    const reason = prompt("Motivo de re-apertura (mín. 5 caracteres):");
+    if (!reason || reason.trim().length < 5) return;
+    void callAction("reopen", { reason: reason.trim() });
+  };
+  const onDownloadPdf = () => {
+    if (!permit) return;
+    window.open(`/app/permits/${permit.id}/pdf`, "_blank");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-4xl max-h-[92vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3">
+            <ShieldAlert className="w-4 h-4 text-accent" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Permiso de trabajo</p>
+              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo permiso" : `${permit!.permitCode} — ${TYPE_LABEL[permit!.type]}`}</h2>
+            </div>
+            {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{STATUS_LABEL[permit.status]}</span>}
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        </div>
+
+        {!isNew && (
+          <div className="flex border-b border-white/10 px-6 shrink-0">
+            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Detalles</button>
+            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Participantes ({permit!.participants.length})</button>
+            {permit!.type === "ENCLOSED_SPACE_ENTRY" && (
+              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Gas Tests ({permit!.gasTests.length})</button>
+            )}
+          </div>
+        )}
+
+        <div className="overflow-y-auto flex-1 p-6">
+          {(isNew || tab === "details") && (
+            <div className="space-y-4">
+              {isTerminal && (
+                <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-orange-200">Este permiso está {STATUS_LABEL[permit!.status]}. Para corregirlo, un administrador debe re-abrirlo con justificación.</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Vessel</label>
+                  <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || !isEditable} className={inputCls}>
+                    {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Tipo</label>
+                  <select value={type} onChange={e => setType(e.target.value as PermitType)} disabled={!isNew || !isEditable} className={inputCls}>
+                    {(Object.keys(TYPE_LABEL) as PermitType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>Ubicación</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="ej. Sala de máquinas, tanque #3" />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>Descripción del trabajo</label>
+                  <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Inicio planeado</label>
+                  <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Fin planeado</label>
+                  <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
+                </div>
+                {permit && (permit.validFrom || permit.validTo) && (
+                  <div className="col-span-2 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Válido desde</label>
+                      <input value={fmtDateTime(permit.validFrom)} disabled className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Válido hasta</label>
+                      <input value={fmtDateTime(permit.validTo)} disabled className={inputCls} />
+                    </div>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <label className={labelCls}>Peligros identificados</label>
+                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Riesgos específicos del trabajo y ubicación" />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>Medidas de control</label>
+                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Aislamientos, ventilación, vigía, comms, etc." />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>EPP requerido</label>
+                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Arnés, máscara con suministro de aire, guantes ignífugos, etc." />
+                </div>
+                {permit?.rejectionReason && (
+                  <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-red-400 font-bold mb-1">Motivo de rechazo</p>
+                    <p className="text-xs text-red-200">{permit.rejectionReason}</p>
+                  </div>
+                )}
+                {permit?.cancelReason && (
+                  <div className="col-span-2 bg-white/5 border border-white/10 rounded-xl p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold mb-1">Motivo de cancelación</p>
+                    <p className="text-xs text-text-industrial/70">{permit.cancelReason}</p>
+                  </div>
+                )}
+                {permit?.closeNotes && (
+                  <div className="col-span-2 bg-success-sea/5 border border-success-sea/20 rounded-xl p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-success-sea font-bold mb-1">Notas de cierre</p>
+                    <p className="text-xs text-text-industrial/80">{permit.closeNotes}</p>
+                  </div>
+                )}
+              </div>
+              {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+            </div>
+          )}
+
+          {!isNew && tab === "participants" && permit && (
+            <ParticipantsTab permit={permit} canEdit={!isTerminal} onChanged={onSaved} />
+          )}
+
+          {!isNew && tab === "gas" && permit && permit.type === "ENCLOSED_SPACE_ENTRY" && (
+            <GasTestsTab permit={permit} canEdit={!isTerminal} onChanged={onSaved} />
+          )}
+        </div>
+
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            {!isNew && (
+              <button onClick={onDownloadPdf} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
+                <FileText className="w-3.5 h-3.5" /> PDF
+              </button>
+            )}
+            {!isNew && permit?.status === "DRAFT" && (
+              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">Pedir aprobación</button>
+            )}
+            {!isNew && permit?.status === "REQUESTED" && canApprove && (
+              <>
+                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">Aprobar</button>
+                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">Rechazar</button>
+              </>
+            )}
+            {!isNew && permit?.status === "APPROVED" && (
+              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">Activar</button>
+            )}
+            {!isNew && permit?.status === "ACTIVE" && (
+              <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">Cerrar</button>
+            )}
+            {!isNew && permit && !isTerminal && (
+              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 font-bold text-xs hover:bg-white/10 disabled:opacity-50">Cancelar</button>
+            )}
+            {!isNew && isTerminal && isAdmin && (
+              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">Re-abrir</button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            {(isNew || tab === "details") && isEditable && (
+              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Participants Tab ────────────────────────────────────────────────────────
+
+const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () => void }> = ({ permit, canEdit, onChanged }) => {
+  const [adding, setAdding] = useState(false);
+  const [crewId, setCrewId] = useState<string>("");
+  const [name, setName]     = useState("");
+  const [role, setRole]     = useState<ParticipantRole>("PERFORMER");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+
+  const { data: crewData } = useFetch<{ items: CrewItem[] }>(`/app/crew?status=ONBOARD&vesselCode=${permit.vesselCode}`, [permit.vesselCode]);
+  const crewOptions = crewData?.items ?? [];
+
+  const onAdd = useCallback(async () => {
+    if (!crewId && !name.trim()) { setErr("Elegí un tripulante o ingresá un nombre."); return; }
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/permits/${permit.id}/participants`, {
+        crewId: crewId || null,
+        name: crewId ? null : name.trim(),
+        role,
+      });
+      setCrewId(""); setName(""); setRole("PERFORMER"); setAdding(false);
+      onChanged();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al agregar."); }
+    finally { setSaving(false); }
+  }, [permit.id, crewId, name, role, onChanged]);
+
+  const onDelete = useCallback(async (id: string) => {
+    if (!confirm("¿Quitar este participante?")) return;
+    try { await api.delete(`/app/permits/${permit.id}/participants/${id}`); onChanged(); }
+    catch (e) { alert(e instanceof ApiError ? e.message : "Error al borrar."); }
+  }, [permit.id, onChanged]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        {!adding && canEdit && (
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20">
+            <Plus className="w-3.5 h-3.5" /> Agregar
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Tripulante a bordo</label>
+              <select value={crewId} onChange={e => { setCrewId(e.target.value); if (e.target.value) setName(""); }} className={inputCls}>
+                <option value="">— Otro / contratista —</option>
+                {crewOptions.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.rank})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Nombre (si no es crew)</label>
+              <input value={name} onChange={e => setName(e.target.value)} disabled={!!crewId} className={inputCls} placeholder="Contratista / externo" />
+            </div>
+            <div>
+              <label className={labelCls}>Rol</label>
+              <select value={role} onChange={e => setRole(e.target.value as ParticipantRole)} className={inputCls}>
+                {(Object.keys(ROLE_LABEL) as ParticipantRole[]).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              </select>
+            </div>
+          </div>
+          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setAdding(false); setErr(null); }} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Agregar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {permit.participants.length === 0 ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin participantes registrados</div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {permit.participants.map(p => (
+            <div key={p.id} className="py-2.5 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">{p.name}</p>
+                <p className="text-[10px] text-text-industrial/40">{ROLE_LABEL[p.role]}</p>
+              </div>
+              {canEdit && <button onClick={() => { void onDelete(p.id); }} className="text-[10px] text-red-400 hover:underline">Quitar</button>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Gas Tests Tab ───────────────────────────────────────────────────────────
+
+const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () => void }> = ({ permit, canEdit, onChanged }) => {
+  const [adding, setAdding] = useState(false);
+  const [testedByName, setTestedByName] = useState("");
+  const [location, setLocation]         = useState("");
+  const [o2, setO2]                     = useState("");
+  const [lel, setLel]                   = useState("");
+  const [h2s, setH2s]                   = useState("");
+  const [co, setCo]                     = useState("");
+  const [notes, setNotes]               = useState("");
+  const [saving, setSaving]             = useState(false);
+  const [err, setErr]                   = useState<string | null>(null);
+
+  const reset = () => {
+    setTestedByName(""); setLocation(""); setO2(""); setLel(""); setH2s(""); setCo(""); setNotes("");
+    setAdding(false); setErr(null);
+  };
+
+  const onAdd = useCallback(async () => {
+    if (!testedByName.trim()) { setErr("Nombre de quien midió es obligatorio."); return; }
+    setSaving(true); setErr(null);
+    try {
+      await api.post(`/app/permits/${permit.id}/gas-tests`, {
+        testedAt: new Date().toISOString(),
+        testedByName: testedByName.trim(),
+        location: location.trim() || null,
+        o2Pct: o2 ? Number(o2) : null,
+        lelPct: lel ? Number(lel) : null,
+        h2sPpm: h2s ? Number(h2s) : null,
+        coPpm: co ? Number(co) : null,
+        notes: notes.trim() || null,
+      });
+      reset();
+      onChanged();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al registrar gas test."); }
+    finally { setSaving(false); }
+  }, [permit.id, testedByName, location, o2, lel, h2s, co, notes, onChanged]);
+
+  const onDelete = useCallback(async (id: string) => {
+    if (!confirm("¿Borrar este gas test?")) return;
+    try { await api.delete(`/app/permits/${permit.id}/gas-tests/${id}`); onChanged(); }
+    catch (e) { alert(e instanceof ApiError ? e.message : "Error al borrar."); }
+  }, [permit.id, onChanged]);
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-[11px] text-text-industrial/70 leading-snug">
+        <p className="font-bold text-text-industrial mb-1">Umbrales IMO A.1050(27):</p>
+        <p>O₂ entre 19.5% – 23% · LEL &lt; 1% · H₂S &lt; 10 ppm · CO &lt; 50 ppm. El verdict se computa server-side.</p>
+      </div>
+
+      <div className="flex justify-end">
+        {!adding && canEdit && (
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20">
+            <Plus className="w-3.5 h-3.5" /> Registrar test
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Medido por</label>
+              <input value={testedByName} onChange={e => setTestedByName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Ubicación de la medición</label>
+              <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} placeholder="ej. boca de hombre, fondo del tanque" />
+            </div>
+            <div>
+              <label className={labelCls}>O₂ (%)</label>
+              <input type="number" step="0.1" value={o2} onChange={e => setO2(e.target.value)} className={inputCls} placeholder="19.5 - 23" />
+            </div>
+            <div>
+              <label className={labelCls}>LEL (%)</label>
+              <input type="number" step="0.1" value={lel} onChange={e => setLel(e.target.value)} className={inputCls} placeholder="&lt; 1" />
+            </div>
+            <div>
+              <label className={labelCls}>H₂S (ppm)</label>
+              <input type="number" step="1" value={h2s} onChange={e => setH2s(e.target.value)} className={inputCls} placeholder="&lt; 10" />
+            </div>
+            <div>
+              <label className={labelCls}>CO (ppm)</label>
+              <input type="number" step="1" value={co} onChange={e => setCo(e.target.value)} className={inputCls} placeholder="&lt; 50" />
+            </div>
+            <div className="col-span-2">
+              <label className={labelCls}>Notas</label>
+              <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={reset} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Registrar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {permit.gasTests.length === 0 ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin gas tests registrados</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-text-industrial/50 border-b border-white/10">
+                <th className="text-left p-2">Fecha/Hora</th>
+                <th className="text-left p-2">Por</th>
+                <th className="text-right p-2">O₂%</th>
+                <th className="text-right p-2">LEL%</th>
+                <th className="text-right p-2">H₂S</th>
+                <th className="text-right p-2">CO</th>
+                <th className="text-center p-2">Verdict</th>
+                {canEdit && <th></th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {permit.gasTests.map(g => (
+                <tr key={g.id}>
+                  <td className="p-2 text-white/80 font-mono">{fmtDateTime(g.testedAt)}</td>
+                  <td className="p-2 text-white/80">{g.testedByName}</td>
+                  <td className="p-2 text-right tabular-nums">{g.o2Pct != null ? g.o2Pct.toFixed(1) : "—"}</td>
+                  <td className="p-2 text-right tabular-nums">{g.lelPct != null ? g.lelPct.toFixed(2) : "—"}</td>
+                  <td className="p-2 text-right tabular-nums">{g.h2sPpm != null ? g.h2sPpm.toFixed(0) : "—"}</td>
+                  <td className="p-2 text-right tabular-nums">{g.coPpm != null ? g.coPpm.toFixed(0) : "—"}</td>
+                  <td className="p-2 text-center">
+                    {g.verdict === "PASS"
+                      ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-success-sea"><CheckCircle className="w-3 h-3" /> PASS</span>
+                      : <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400"><XCircle className="w-3 h-3" /> FAIL</span>}
+                  </td>
+                  {canEdit && <td className="p-2 text-right"><button onClick={() => { void onDelete(g.id); }} className="text-[10px] text-red-400 hover:underline">Borrar</button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export const PermitsPage: React.FC = () => {
+  const [statusFilter, setStatusFilter] = useState<"" | PermitStatus>("");
+  const [typeFilter, setTypeFilter]     = useState<"" | PermitType>("");
+
+  const path = useMemo(() => {
+    const p = new URLSearchParams();
+    if (statusFilter) p.set("status", statusFilter);
+    if (typeFilter) p.set("type", typeFilter);
+    return `/app/permits${p.toString() ? `?${p.toString()}` : ""}`;
+  }, [statusFilter, typeFilter]);
+
+  const { data, loading, reload } = useFetch<{ items: Permit[]; total: number }>(path, [path]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing]       = useState<Permit | null>(null);
+
+  return (
+    <div className="p-6 space-y-4">
+      <PageHeader icon={ShieldAlert} title="Permisos de Trabajo" total={data?.total} onReload={reload}>
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+          <Plus className="w-3.5 h-3.5" /> Nuevo permiso
+        </button>
+      </PageHeader>
+
+      <div className="flex gap-2 flex-wrap">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as "" | PermitStatus)}
+          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+          <option value="">— Estado: todos —</option>
+          {(Object.keys(STATUS_LABEL) as PermitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as "" | PermitType)}
+          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+          <option value="">— Tipo: todos —</option>
+          {(Object.keys(TYPE_LABEL) as PermitType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+      ) : !data?.items?.length ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin permisos</div>
+      ) : (
+        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+          {data.items.map(p => {
+            const Icon = TYPE_ICON[p.type];
+            return (
+              <button key={p.id} onClick={() => setEditing(p)}
+                className="w-full text-left p-4 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+                <Icon className="w-4 h-4 text-text-industrial/50 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-[10px] font-mono text-text-industrial/40">{p.permitCode}</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
+                    <span className="text-[10px] text-accent font-mono">{p.vesselCode}</span>
+                    <span className="text-[10px] text-text-industrial/50">{TYPE_LABEL[p.type]}</span>
+                    {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-white/5 border-white/10 text-text-industrial/60">
+                        {p.gasTests.length} gas test{p.gasTests.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-white truncate">{p.description}</p>
+                  <p className="text-xs text-text-industrial/50 truncate">{p.location}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-text-industrial/40">{p.status === "ACTIVE" ? "Vence" : "Planeado"}</p>
+                  <p className="text-xs text-white font-mono">{fmtDateTime(p.status === "ACTIVE" ? p.validTo : p.plannedStart)}</p>
+                  <p className="text-[10px] text-text-industrial/40">{p.participants.length} participantes</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {(showCreate || editing) && (
+        <PermitModal
+          permit={editing}
+          onClose={() => { setShowCreate(false); setEditing(null); }}
+          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+        />
+      )}
+    </div>
+  );
+};

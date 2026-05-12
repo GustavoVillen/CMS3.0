@@ -50,6 +50,7 @@ const dict = {
   "nav.section.system":    { es: "Sistema",             en: "System",              pt: "Sistema" },
   "nav.crew":              { es: "Tripulantes",         en: "Crew",                pt: "Tripulantes" },
   "nav.drills":            { es: "Simulacros",          en: "Drills",              pt: "Simulados" },
+  "nav.permits":           { es: "Permisos de Trabajo", en: "Permits to Work",     pt: "Permissões de Trabalho" },
 
   // Page titles (Layout header)
   "page.dashboard":         { es: "Dashboard Principal",       en: "Main Dashboard",          pt: "Painel Principal" },

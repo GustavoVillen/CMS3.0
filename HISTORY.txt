@@ -1,5 +1,41 @@
 HISTORY.txt
 
+[2026-05-12] Vetting Sprint 1 — Permit to Work (SOLAS II-2/10, XI-1/7, SIRE 2.0 Ch. 7/8, ISM 7)
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- prisma/schema.prisma — 3 modelos nuevos + 4 enums:
+  - PermitToWork: type (HOT_WORK / ENCLOSED_SPACE_ENTRY / WORKING_ALOFT / ELECTRICAL_ISOLATION), status (DRAFT / REQUESTED / APPROVED / REJECTED / ACTIVE / CLOSED / CANCELLED), planned start/end + valid from/to, hazards/controls/PPE, details JSON por tipo, workflow timestamps + autores, + 4 campos reopen audit
+  - PermitGasTest: O2/LEL/H2S/CO con verdict PASS/FAIL para enclosed space
+  - PermitParticipant: crewId opcional + name + role (PERFORMER/FIRE_WATCH/STAND_BY/ATTENDANT/SUPERVISOR)
+- prisma/migrations/20260515_permits/migration.sql — CREATE 3 tablas + 4 enums + FK con CASCADE adecuado
+- apps/api/src/tenant/permits/permits-service.ts — CRUD + workflow (request, approve, reject, activate, close, cancel, reopen). Activación de ENCLOSED_SPACE_ENTRY exige gas test PASS reciente (<30 min).
+- apps/api/src/tenant/permits/gas-tests-service.ts — list/create/delete. Verdict computado server-side a partir de umbrales IMO Res. A.1050(27): O2 19.5-23%, LEL <1%, H2S <10 ppm, CO <50 ppm.
+- apps/api/src/tenant/permits/participants-service.ts — list/create/delete. Si vino crewId hace snapshot del nombre.
+- apps/api/src/tenant/permits/permit-pdf-service.ts — PDF A4 imprimible con identificación, descripción, peligros/controles/EPP, participantes, tabla de gas tests, trazabilidad y 3 cajas de firma para llenar a bordo.
+- apps/api/src/tenant/permits/permits-summary-service.ts — counts: active / pendingApproval / expiringSoon (<24h) / expired (vencidos sin cerrar).
+- apps/api/src/tenant/tenant-router.ts — 17 rutas nuevas: /app/permits CRUD + workflow actions + sub-rutas gas-tests y participants + /app/permits/:id/pdf + /app/dashboard/permits-summary.
+- apps/web-modern/src/pages/Permits.tsx — lista filtrable por status + type, modal con tabs Detalles / Participantes / Gas Tests (sólo enclosed). Botones de workflow contextuales según status. PDF download.
+- apps/web-modern/src/App.tsx — ruta /permits.
+- apps/web-modern/src/components/Sidebar.tsx — item "Permisos de Trabajo" en sección "Tripulación".
+- apps/web-modern/src/lib/i18n.tsx — nav.permits (es/en/pt).
+- apps/web-modern/src/pages/Dashboard.tsx — widget bento "Permisos de Trabajo" con 4 KPIs (activos / a aprobar / vencen <24h / vencidos sin cerrar). Cada uno con color según severidad y click navega filtrando.
+
+POR QUÉ:
+SOLAS II-2/10 exige PTW formal para hot work especialmente en tankers. SOLAS XI-1/7 + IMO Res. A.1050(27) lo exigen para entrada a espacios confinados — una de las muertes a bordo más comunes y un foco principal del vetting. SIRE 2.0 Chapter 7 (Hot Work) y Chapter 8 (Enclosed Spaces) audita evidencia documental. ISM Code 7 (Shipboard Operations) cierra el loop. Sin PTW en la app, un inspector tenía que pedir papeles aparte y el operador no podía demostrar consistencia entre el sistema de mantenimiento y la operación segura del buque.
+
+VERIFICACIÓN:
+- typecheck backend: limpio (sólo warnings preexistentes de baseUrl/moduleResolution).
+- typecheck frontend: 0 errores nuevos (120 preexistentes sin relación con este sprint).
+- Lockdown integrado: terminal (CLOSED/CANCELLED/REJECTED) requiere /reopen explícito.
+- Server-side enforcement: verdict de gas test se computa en backend (cliente no puede mentir), y la activación de enclosed space rechaza si no hay gas test PASS reciente.
+
+PENDIENTE:
+- Mobile view (lectura) de permisos — los permisos típicamente se firman en papel a bordo, pero un view read-only en /m sería útil para que un operario vea si tiene PTW activo. Iteración futura.
+- Approval workflow multi-step (un permit crítico puede requerir doble firma — Capitán + Jefe Máq). Por ahora 1 aprobador.
+- Notificaciones automáticas al cambiar status.
+- Sprint 1 completo después de esta tanda. Próximo: Sprint 2 (lo que el usuario decida del análisis de vetting previo).
+
 [2026-05-12] Vetting Sprint 1 — Crew + Certifications + Drills (TMSA 4 Elem. 3, SIRE 2.0 Ch. 3, ISM 6)
 Agent: Claude Sonnet 4.6
 

@@ -369,6 +369,38 @@ enum DrillStatus {
   CANCELLED
 }
 
+// ── Permit to Work (PTW) ──────────────────────────────────────────────────────
+
+enum PermitType {
+  HOT_WORK
+  ENCLOSED_SPACE_ENTRY
+  WORKING_ALOFT
+  ELECTRICAL_ISOLATION
+}
+
+enum PermitStatus {
+  DRAFT
+  REQUESTED
+  APPROVED
+  REJECTED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum PermitParticipantRole {
+  PERFORMER
+  FIRE_WATCH
+  STAND_BY
+  ATTENDANT
+  SUPERVISOR
+}
+
+enum PermitGasVerdict {
+  PASS
+  FAIL
+}
+
 enum DailyReportStatus {
   DRAFT
   SUBMITTED
@@ -975,6 +1007,7 @@ model Vessel {
   attachments      Attachment[]
   crew             Crew[]
   drills           Drill[]
+  permits          PermitToWork[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2516,4 +2549,108 @@ model Drill {
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([scheduledDate])
+}
+
+// ── Block: Permit to Work (Vetting Sprint 1 — SOLAS II-2/10, XI-1/7, SIRE 2.0) ─
+
+model PermitToWork {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  permitCode         String
+  type               PermitType
+  status             PermitStatus    @default(DRAFT)
+  // Refs opcionales: un PTW puede originarse de una OT/asset, o ser libre.
+  assetId            String?
+  workOrderId        String?
+  location           String
+  description        String
+  // Ventana de validez del permiso (típicamente <= 24 h en hot work).
+  plannedStart       DateTime
+  plannedEnd         DateTime
+  validFrom          DateTime?
+  validTo            DateTime?
+  // Workflow timestamps + autores.
+  requestedAt        DateTime?
+  requestedByUserId  String?
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  activatedAt        DateTime?
+  activatedByUserId  String?
+  closedAt           DateTime?
+  closedByUserId     String?
+  closeNotes         String?
+  rejectionReason    String?
+  cancelReason       String?
+  // Contenido principal (texto libre, derivable de la operación).
+  hazardsIdentified  String?
+  controlMeasures    String?
+  ppeRequired        String?
+  // Campos específicos por tipo (isolationPoints / harnessType / hotWorkClass / etc.).
+  details            Json            @default("{}")
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un permiso terminal se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  gasTests           PermitGasTest[]
+  participants       PermitParticipant[]
+
+  @@unique([tenantId, vesselCode, permitCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([validTo])
+}
+
+model PermitGasTest {
+  id              String           @id @default(cuid())
+  tenantId        String
+  permitId        String
+  testedAt        DateTime
+  testedByName    String
+  location        String?
+  // Lecturas: nullable porque algunos sensores miden subset.
+  o2Pct           Float?
+  lelPct          Float?
+  h2sPpm          Float?
+  coPpm           Float?
+  verdict         PermitGasVerdict
+  notes           String?
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+
+  permit          PermitToWork     @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([permitId])
+  @@index([tenantId, testedAt])
+}
+
+model PermitParticipant {
+  id              String                @id @default(cuid())
+  tenantId        String
+  permitId        String
+  // crewId es opcional — admite participantes externos (contratistas) por nombre libre.
+  crewId          String?
+  name            String
+  role            PermitParticipantRole
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+
+  permit          PermitToWork          @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([permitId])
+  @@index([crewId])
 }
