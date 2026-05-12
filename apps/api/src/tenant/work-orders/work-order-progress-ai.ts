@@ -236,6 +236,182 @@ export async function rewriteObservations(
   }
 }
 
+// ─── Detección automática de repuestos usados ───────────────────────────────
+//
+// Después de regenerar las observations, llamamos a Claude con la lista de
+// spares del vessel para que detecte cuáles se mencionan en el texto y con
+// qué cantidad. Los movimientos auto-detectados llevan un prefijo "[Auto]"
+// en notes para distinguirlos de los manuales — al re-correr la detección,
+// solo se borran los auto, no los que el usuario cargó a mano.
+
+const SPARE_DETECTION_PROMPT = `Sos asistente para mantenimiento naval. Te paso el texto de observaciones de una OT y un catálogo de repuestos disponibles en la embarcación.
+
+Tu tarea: detectar qué repuestos del catálogo se mencionan como UTILIZADOS o CONSUMIDOS en el texto, y con qué cantidad.
+
+Reglas:
+- Solo incluir matches con CERTEZA alta. Si el texto menciona "filtro de aceite" y hay un repuesto con ese nombre exacto o muy similar, es un match.
+- Si el texto dice "se cambió el filtro" sin especificar, NO matchear (ambiguo).
+- Si la cantidad NO está explícita pero se infiere claramente del contexto (ej. "cambié el filtro de aire" → 1), usar 1 como default.
+- Si el texto dice "se inspeccionó", "se verificó", "se midió" — eso NO consume repuestos, NO matchear.
+- Si el texto menciona varios items del mismo tipo (ej. "ambos filtros de aire"), incrementar la cantidad.
+- Usar exactamente el unit del repuesto del catálogo.
+
+Respondé EXCLUSIVAMENTE con JSON válido (sin markdown):
+{"detected": [{"spareId": "id_del_catalogo", "quantity": 1, "unit": "unit_del_catalogo"}]}
+
+Si NO hay coincidencias claras, devolver: {"detected": []}`;
+
+interface SpareCatalogItem {
+  id: string;
+  sku: string;
+  name: string;
+  manufacturerPartNumber: string | null;
+  unit: string;
+}
+
+interface DetectedSpareUsage {
+  spareId: string;
+  quantity: number;
+  unit: string;
+}
+
+async function detectSparesFromText(
+  tenantId: string,
+  tenantSlug: string,
+  userId: string,
+  userEmail: string,
+  vesselCode: string | null,
+  text: string,
+  spares: SpareCatalogItem[],
+): Promise<DetectedSpareUsage[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return [];
+  if (!text || !text.trim() || spares.length === 0) return [];
+
+  const client = new Anthropic({ apiKey });
+  const started = Date.now();
+
+  const payload = {
+    observaciones: text.trim(),
+    catalogo: spares.map(s => ({
+      id: s.id,
+      sku: s.sku,
+      nombre: s.name,
+      partNumber: s.manufacturerPartNumber,
+      unit: s.unit,
+    })),
+  };
+
+  let response;
+  try {
+    response = await client.messages.create({
+      model: REWRITE_MODEL,
+      max_tokens: 1024,
+      system: SPARE_DETECTION_PROMPT,
+      messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
+    });
+  } catch (err) {
+    log.error("[progress-ai] Spare detection call failed:", err);
+    return [];
+  }
+
+  try {
+    recordAiUsage({
+      tenantId,
+      tenantSlug,
+      userId,
+      userEmail,
+      vesselCode,
+      feature: "wo_progress_detect_spares",
+      model: REWRITE_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs: Date.now() - started,
+    });
+  } catch { /* swallow */ }
+
+  const rawText = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map(b => b.text)
+    .join("\n")
+    .trim();
+
+  log.info(`[progress-ai] Claude spare detection raw: ${rawText.slice(0, 300)}`);
+
+  try {
+    const parsed = JSON.parse(rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim());
+    const detected = Array.isArray(parsed?.detected) ? parsed.detected : [];
+    const validIds = new Set(spares.map(s => s.id));
+    const sane: DetectedSpareUsage[] = detected
+      .filter((d: any) =>
+        d && typeof d.spareId === "string" && validIds.has(d.spareId) &&
+        typeof d.quantity === "number" && d.quantity > 0 && d.quantity <= 100 &&
+        typeof d.unit === "string"
+      )
+      .map((d: any) => ({ spareId: d.spareId, quantity: d.quantity, unit: d.unit }));
+    log.info(`[progress-ai] Claude spare detection parsed: ${sane.length} matches`);
+    return sane;
+  } catch (err) {
+    log.error("[progress-ai] Spare detection JSON parse failed:", err);
+    return [];
+  }
+}
+
+const AUTO_NOTES_PREFIX = "[Auto] Detectado del avance";
+
+async function applyAutoDetectedSpareUsages(
+  wo: { id: string; tenantId: string; vesselCode: string; workOrderCode: string },
+  usages: DetectedSpareUsage[],
+  actorUserId: string,
+): Promise<void> {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) return;
+
+  // 1) Borrar solo los movimientos previos auto-detectados de esta OT
+  //    (los manuales con notes="Utilizado en OT X" quedan intactos)
+  try {
+    await (prismaRaw as any).stockMovement.deleteMany({
+      where: {
+        tenantId: wo.tenantId,
+        referenceType: "WORK_ORDER",
+        referenceId: wo.id,
+        notes: { startsWith: AUTO_NOTES_PREFIX },
+      },
+    });
+  } catch (err) {
+    log.error("[progress-ai] applyAutoDetected delete failed:", err);
+    return;
+  }
+
+  // 2) Crear nuevos movimientos auto-detectados
+  for (const u of usages) {
+    try {
+      await (prismaRaw as any).stockMovement.create({
+        data: {
+          tenantId: wo.tenantId,
+          vesselCode: wo.vesselCode,
+          spareId: u.spareId,
+          movementCode: `MOV-${wo.vesselCode}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          movementType: "ISSUE",
+          quantity: u.quantity,
+          unit: u.unit,
+          occurredAt: new Date(),
+          referenceType: "WORK_ORDER",
+          referenceId: wo.id,
+          notes: `${AUTO_NOTES_PREFIX} — OT ${wo.workOrderCode}`,
+          createdByUserId: actorUserId,
+        },
+      });
+    } catch (err) {
+      log.error("[progress-ai] applyAutoDetected create failed:", err, u);
+    }
+  }
+
+  log.info(`[progress-ai] applyAutoDetected WO ${wo.id}: ${usages.length} movements created`);
+}
+
 // ─── Orquestador del pipeline completo ───────────────────────────────────────
 //
 // Llamado tras la creación de una nota. Trabaja en background:
@@ -379,6 +555,36 @@ export async function regenerateObservationsForWorkOrder(
         data: { observations, updatedByUserId: session.userId },
       });
       log.info(`[progress-ai] regenerate WO ${workOrderId}: updated observations (${observations.length} chars)`);
+
+      // ─── Detección automática de repuestos usados ──────────────────────────
+      try {
+        const woFull = await (prismaRaw as any).workOrder.findUnique({
+          where: { id: wo.id },
+          select: { id: true, tenantId: true, vesselCode: true, workOrderCode: true },
+        });
+        if (woFull) {
+          const spares = await (prismaRaw as any).spare.findMany({
+            where: { tenantId: woFull.tenantId, vesselCode: woFull.vesselCode, deletedAt: null },
+            select: { id: true, sku: true, name: true, manufacturerPartNumber: true, unit: true },
+            // Limitar a 200 spares para no exceder tokens (suficiente para la mayoría de vessels)
+            take: 200,
+          });
+          if (spares.length > 0) {
+            const detected = await detectSparesFromText(
+              woFull.tenantId,
+              session.tenantSlug,
+              session.userId,
+              session.userEmail,
+              woFull.vesselCode,
+              observations,
+              spares,
+            );
+            await applyAutoDetectedSpareUsages(woFull, detected, session.userId);
+          }
+        }
+      } catch (err) {
+        log.error("[progress-ai] spare detection failed:", err);
+      }
     } else {
       log.warn(`[progress-ai] regenerate WO ${workOrderId}: AI returned empty/null observations, skipping update`);
     }
