@@ -164,6 +164,69 @@ export const ELECTRICAL_ISOLATION_REGS: MaritimeRegulation[] = [
   },
 ];
 
+// ─── Checklists regulatorios por tipo de PTW ────────────────────────────────
+//
+// Lista de verificación que se imprime al final del PDF del permit. Cada item
+// es accionable, breve, y cita la regulación que lo respalda. El operador
+// marca los checkboxes a bordo antes de firmar.
+
+export interface ChecklistItem {
+  /** Acción/condición a verificar (breve, accionable). */
+  item: string;
+  /** Cita de la regulación o estándar que respalda el item. */
+  reference: string;
+}
+
+export const PERMIT_CHECKLIST_BY_TYPE: Record<string, ChecklistItem[]> = {
+  ENCLOSED_SPACE_ENTRY: [
+    { item: "Espacio identificado y entrada autorizada por Capitán o Jefe de Máquinas", reference: "IMO Res. A.1050(27)" },
+    { item: "Ventilación natural o forzada iniciada antes del gas test y mantenida durante toda la entrada", reference: "ISGOTT 6 Cap. 11" },
+    { item: "Gas test con instrumento calibrado: O₂ 19.5–23 %, LEL < 1 %, H₂S < 10 ppm, CO < 50 ppm", reference: "SOLAS XI-1/7 + ISGOTT 6 Cap. 11" },
+    { item: "Comms bidireccionales con vigilante exterior establecidas y testeadas antes de entrar", reference: "IMO Res. A.1050(27)" },
+    { item: "Standby person designado, equipado para rescate, presente al lado del acceso durante toda la operación", reference: "IMO Res. A.1050(27)" },
+    { item: "Equipos de rescate listos: arnés de cuerpo completo, línea de vida, respirador de emergencia", reference: "IMO Res. A.1050(27)" },
+    { item: "Iluminación portátil intrínsecamente segura (ATEX si aplica) disponible", reference: "ISGOTT 6 Cap. 11" },
+    { item: "Drill de entrada y rescate practicado en los últimos 2 meses (registrado en módulo Drills)", reference: "SOLAS III/19.3.6" },
+  ],
+
+  HOT_WORK: [
+    { item: "Zona clasificada como segura para hot work, autorizada por Capitán", reference: "SOLAS II-2/10 + ISGOTT 6 Cap. 9" },
+    { item: "Si trabajo cerca de hidrocarburos: gas freeing verificado, LEL < 1 % antes de autorizar y monitoreo continuo durante", reference: "ISGOTT 6 Cap. 9" },
+    { item: "Fire watch designado y presente durante el trabajo + 30 min posteriores", reference: "ISGOTT 6 Cap. 9" },
+    { item: "Extintor adecuado a la mano: polvo seco + CO₂ según el caso", reference: "SOLAS II-2/10" },
+    { item: "Mantas ignífugas / pantallas para contener escorias y chispas", reference: "ISGOTT 6 Cap. 9" },
+    { item: "Equipos de soldadura / oxicorte inspeccionados, mangueras sin fugas, manómetros calibrados", reference: "Práctica industrial + SMS operador" },
+    { item: "EPP completo: traje ignífugo, careta de soldar, guantes de cuero, calzado dieléctrico", reference: "MLC 2006 A4.3" },
+    { item: "Aislamiento eléctrico verificado si el trabajo lo requiere (línea separada con LOTO)", reference: "IEC 60092" },
+  ],
+
+  WORKING_ALOFT: [
+    { item: "Área debajo del trabajo demarcada con cinta y despejada de personal", reference: "ISM Code 7" },
+    { item: "Condiciones meteorológicas evaluadas y registradas (viento, lluvia, visibilidad, hielo)", reference: "ISM Code 7 + SMS operador" },
+    { item: "Arnés de cuerpo completo (5 puntos) con anclaje doble certificado en punto fijo estructural", reference: "MLC 2006 A4.3 + SMS operador" },
+    { item: "Línea de vida y sistema anticaídas con absorbedor inspeccionados antes del uso", reference: "Práctica industrial + SMS operador" },
+    { item: "Herramientas con cordel de seguridad para evitar caída al agua o cubierta", reference: "ISM Code 7" },
+    { item: "Comms bidireccionales con puente o cubierta operativas y testeadas", reference: "ISM Code 7" },
+    { item: "EPP: casco con barboquejo, calzado antideslizante, guantes anticorte", reference: "MLC 2006 A4.3" },
+    { item: "Criterio de suspensión claro y comunicado al equipo (viento, lluvia, fatiga)", reference: "ISM Code 7" },
+  ],
+
+  ELECTRICAL_ISOLATION: [
+    { item: "Puntos de aislamiento identificados sobre el diagrama unifilar del SMS", reference: "SOLAS II-1 Part D + SMS operador" },
+    { item: "Apertura mecánica ejecutada en cada fuente (breaker, seccionador, switch)", reference: "IEC 60092" },
+    { item: "Candado físico individual + tarjeta con nombre, fecha y motivo aplicados a cada punto", reference: "Práctica industrial (LOTO)" },
+    { item: "Verificación de tensión cero con instrumento calibrado, en TODOS los conductores (incl. neutro)", reference: "IEC 60092" },
+    { item: "Puesta a tierra de los conductores si aplica al circuito", reference: "IEC 60092" },
+    { item: "Energías residuales identificadas y descargadas: capacitores, UPS, transformadores ferro-resonantes", reference: "IEC 60092" },
+    { item: "EPP eléctrico según clase de tensión: guantes dieléctricos, careta arc-flash, calzado dieléctrico", reference: "Práctica industrial + SMS operador" },
+    { item: "Notificación a personal afectado por el corte de energía registrada", reference: "ISM Code 7" },
+  ],
+};
+
+export function buildPermitChecklist(type: string): ChecklistItem[] {
+  return PERMIT_CHECKLIST_BY_TYPE[type] ?? [];
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // BLOCK 2 — Fluid analyses (oil / water / fuel)
 // ═════════════════════════════════════════════════════════════════════════════

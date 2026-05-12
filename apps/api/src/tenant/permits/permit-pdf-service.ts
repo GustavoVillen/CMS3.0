@@ -3,6 +3,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPermit } from "./permits-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { resolveTenantLogo } from "../pms/pdf-helpers";
+import { buildPermitChecklist } from "../../common/regulations/maritime";
 
 /**
  * PDF imprimible para Permit to Work. SOLAS/class lo exigen impreso y firmado a bordo
@@ -282,6 +283,32 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     if (permit.closeNotes) block("Notas de cierre", permit.closeNotes);
     if (permit.rejectionReason) block("Motivo de rechazo", permit.rejectionReason);
     if (permit.cancelReason) block("Motivo de cancelación", permit.cancelReason);
+
+    // Checklist regulatorio por tipo — items accionables con cita normativa.
+    // Se imprime antes de las firmas: el operador lo verifica y después firma.
+    const checklist = buildPermitChecklist(permit.type);
+    if (checklist.length > 0) {
+      sectionTitle("Checklist regulatorio");
+      for (const c of checklist) {
+        // Estimar alto del item: texto del item a 380pt + padding bottom 4pt.
+        doc.fontSize(8).font("Helvetica");
+        const itemH = doc.heightOfString(c.item, { width: 380 });
+        ensureSpace(Math.max(itemH, 12) + 6);
+        // Checkbox vacío (9x9pt) alineado con la primera línea del texto.
+        doc.rect(labelCol, y + 1, 9, 9).strokeColor("#0f172a").lineWidth(0.7).stroke();
+        // Texto del item en columna izquierda (380pt de ancho).
+        doc.fillColor("#0f172a").font("Helvetica").fontSize(8)
+          .text(c.item, labelCol + 14, y, { width: 380 });
+        const afterItemY = doc.y;
+        // Referencia normativa a la derecha, italic gris claro, 7pt — alineada
+        // a la base del primer renglón del item.
+        doc.fillColor("#94a3b8").font("Helvetica-Oblique").fontSize(7)
+          .text(c.reference, labelCol + 400, y + 1, { width: 115, align: "right" });
+        // Reset font
+        doc.font("Helvetica").fontSize(8).fillColor("#0f172a");
+        y = afterItemY + 4;
+      }
+    }
 
     // Signature block — cajas para firmas impresas.
     // ensureSpace tiene en cuenta: sectionTitle (28) + altura del box (55) + 10
