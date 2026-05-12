@@ -4,6 +4,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
+import { MarkdownText } from "../components/MarkdownText";
 
 interface WO {
   id: string;
@@ -150,7 +151,10 @@ const InfoAccordion: React.FC<{
             </div>
           )}
           {wo.riskAnalysisResult && (
-            <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.riskAnalysisResult}</p>
+            <MarkdownText
+              text={wo.riskAnalysisResult}
+              className="text-xs text-white/85 leading-relaxed"
+            />
           )}
         </InfoPanel>
       )}

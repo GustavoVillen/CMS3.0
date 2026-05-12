@@ -30,8 +30,37 @@ Niveles de riesgo (operacional):
 - HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
 - CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
 
-Respondé ÚNICAMENTE con este JSON (sin texto adicional):
-{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"peligros identificados durante la ejecución, consecuencias para el operario, medidas de control y EPP recomendado"}`;
+ESTRUCTURA del campo "analysis" SEGÚN NIVEL:
+
+· Si el nivel es LOW o MEDIUM → "analysis" es texto narrativo organizado en estas 4 secciones (sin tabla):
+  Peligros identificados:
+  - [bullet]
+  Consecuencias:
+  - [bullet]
+  Medidas de control:
+  - [bullet]
+  EPP requerido:
+  - [bullet]
+
+· Si el nivel es HIGH o CRITICAL → "analysis" es lo mismo de arriba PERO ADEMÁS al final agregás una matriz JSA paso a paso en formato tabla Markdown. La tabla DEBE tener exactamente estos encabezados y formato:
+
+JSA — Matriz paso a paso:
+
+| # | Paso | Peligro | Control / Mitigación | EPP |
+|---|------|---------|---------------------|-----|
+| 1 | [descripción corta del paso 1] | [peligro principal del paso] | [control específico] | [EPP requerido en ese paso] |
+| 2 | ... | ... | ... | ... |
+
+Reglas de la tabla:
+- Mínimo 4 filas, máximo 10 filas (los pasos REALES de la tarea, no genéricos)
+- Cada celda debe ser corta y específica — máximo 80 caracteres
+- NUNCA usar saltos de línea dentro de las celdas (rompe el formato Markdown)
+- Si en un paso hay varios peligros, ponelos separados por "; "
+- Pasos típicos: aislar, esperar/enfriar, abrir/desmontar, inspeccionar, intervenir, ensamblar, probar, cerrar permiso
+- Para cada peligro de la matriz, el "Control" debe ser ACCIONABLE y MEDIBLE (no "ser cuidadoso")
+
+Respondé ÚNICAMENTE con este JSON válido (sin texto adicional fuera del JSON, sin code fence):
+{"level":"LOW|MEDIUM|HIGH|CRITICAL","analysis":"texto del análisis siguiendo la estructura definida según el nivel"}`;
 
 interface BaseInput {
   assetLabel?: string | null;
