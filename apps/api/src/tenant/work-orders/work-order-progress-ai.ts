@@ -144,7 +144,7 @@ Reglas:
 - Estilo conciso, claro, en tercera persona o impersonal ("se desmontó", "se verificó", "se observó").
 - Estructurar en oraciones cortas. Si hay acciones cronológicas, usar viñetas con "-".
 - Si el técnico mencionó un repuesto/material usado (cantidad + nombre), preservarlo literalmente entre comillas.
-- Si los avances están vacíos o son irrelevantes, devolver un string vacío.
+- SIEMPRE devolver algo, incluso si los avances son cortos o de prueba. Si el contenido es mínimo (ej. una palabra "test"), reflejalo tal cual ("Nota de prueba: 'test'"). NUNCA devolver string vacío.
 
 Respondé EXCLUSIVAMENTE con JSON válido (sin markdown):
 {"observations": "texto consolidado profesional"}`;
@@ -223,11 +223,15 @@ export async function rewriteObservations(
     .join("\n")
     .trim();
 
+  log.info(`[progress-ai] Claude rewrite raw response: ${rawText.slice(0, 300)}`);
+
   try {
     const parsed = JSON.parse(rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim());
     const observations = String(parsed?.observations ?? "").trim();
+    log.info(`[progress-ai] Claude rewrite parsed: ${observations.length} chars`);
     return observations;
-  } catch {
+  } catch (err) {
+    log.error("[progress-ai] Claude rewrite JSON parse failed:", err, "rawText:", rawText.slice(0, 500));
     return null;
   }
 }
@@ -348,12 +352,15 @@ export async function regenerateObservationsForWorkOrder(
         createdAt: n.createdAt as Date,
       }));
 
+    log.info(`[progress-ai] regenerate WO ${workOrderId}: ${allNotes.length} total notes, ${noteTexts.length} with text`);
+
     // Si no hay notas con texto, limpiar observations (no llamar a la IA)
     if (noteTexts.length === 0) {
       await (prismaRaw as any).workOrder.update({
         where: { id: wo.id },
         data: { observations: null, updatedByUserId: session.userId },
       });
+      log.info(`[progress-ai] regenerate WO ${workOrderId}: cleared observations (no text notes)`);
       return;
     }
 
@@ -366,11 +373,14 @@ export async function regenerateObservationsForWorkOrder(
       { noteTexts, taskTitle: wo.title, assetName },
     );
 
-    if (observations != null) {
+    if (observations != null && observations.length > 0) {
       await (prismaRaw as any).workOrder.update({
         where: { id: wo.id },
         data: { observations, updatedByUserId: session.userId },
       });
+      log.info(`[progress-ai] regenerate WO ${workOrderId}: updated observations (${observations.length} chars)`);
+    } else {
+      log.warn(`[progress-ai] regenerate WO ${workOrderId}: AI returned empty/null observations, skipping update`);
     }
   } catch (err) {
     log.error("[progress-ai] regenerate observations failed:", err);
