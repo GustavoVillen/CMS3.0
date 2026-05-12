@@ -1,5 +1,37 @@
 HISTORY.txt
 
+[2026-05-12] PTW — sugerencias IA para peligros / controles / EPP (clickeable)
+Agent: Claude Sonnet 4.6
+
+SCOPE:
+- apps/api/src/tenant/permits/permits-ai-suggestions.ts — 3 funciones:
+  suggestPermitHazards, suggestPermitControls, suggestPermitPpe. Cada prompt
+  recibe contexto específico del PermitType (HOT_WORK / ENCLOSED_SPACE_ENTRY /
+  WORKING_ALOFT / ELECTRICAL_ISOLATION) con la lista de riesgos típicos de
+  cada uno. Controls toma además peligros previos como input; PPE toma
+  peligros + controles. Modelo claude-haiku-4-5-20251001, timeout 60s,
+  reglas de concisión (máx 6 bullets, accionables, medibles).
+- apps/api/src/tenant/tenant-router.ts — 3 endpoints nuevos:
+  POST /app/permits/suggest-hazards
+  POST /app/permits/suggest-controls
+  POST /app/permits/suggest-ppe
+  Cada uno con rate-limit ai:userId 30 req/min (mismo patrón que WO).
+- apps/web-modern/src/pages/Permits.tsx — labels "Peligros identificados",
+  "Medidas de control" y "EPP requerido" ahora son clickeables. Cada uno
+  muestra Sparkles, hace pulse al cargar, y completa el textarea con la
+  sugerencia. Reusa el patrón visual de WorkOrders (label accent
+  uppercase + Sparkles icon + Loader2 + texto "analizando…").
+
+POR QUÉ:
+Continuidad con los otros módulos que ya tenían IA contextual (criterios de
+aceptación, LOTO, análisis de riesgos, RCM, consecuencias). Cumple el
+"copiloto contextual" del CLAUDE.md sin reemplazar la decisión humana — el
+operador siempre puede editar el textarea después.
+
+VERIFICACIÓN:
+- typecheck backend: limpio.
+- typecheck frontend: 0 errores nuevos en Permits.tsx.
+
 [2026-05-12] Vetting Sprint 1 — Permit to Work (SOLAS II-2/10, XI-1/7, SIRE 2.0 Ch. 7/8, ISM 7)
 Agent: Claude Sonnet 4.6
 

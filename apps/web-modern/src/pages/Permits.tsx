@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import {
-  ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle,
+  ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
@@ -158,6 +158,84 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // AI suggestions — loading flags
+  const [loadingHazards, setLoadingHazards]   = useState(false);
+  const [loadingControls, setLoadingControls] = useState(false);
+  const [loadingPpe, setLoadingPpe]           = useState(false);
+
+  const aiBaseInput = useCallback(() => ({
+    type,
+    location: location.trim() || null,
+    description: description.trim() || null,
+  }), [type, location, description]);
+
+  const onSuggestHazards = useCallback(async () => {
+    if (!isEditable || loadingHazards) return;
+    if (!description.trim() && !location.trim()) {
+      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      return;
+    }
+    setLoadingHazards(true);
+    const prev = hazards;
+    setHazards("Analizando...");
+    try {
+      const res = await api.post<{ text: string }>("/app/permits/suggest-hazards", aiBaseInput());
+      setHazards(res.text || prev);
+    } catch (e) {
+      setHazards(prev);
+      setErr(e instanceof ApiError ? e.message : "Error al sugerir peligros.");
+    } finally {
+      setLoadingHazards(false);
+    }
+  }, [isEditable, loadingHazards, description, location, hazards, aiBaseInput]);
+
+  const onSuggestControls = useCallback(async () => {
+    if (!isEditable || loadingControls) return;
+    if (!description.trim() && !location.trim()) {
+      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      return;
+    }
+    setLoadingControls(true);
+    const prev = controls;
+    setControls("Analizando...");
+    try {
+      const res = await api.post<{ text: string }>("/app/permits/suggest-controls", {
+        ...aiBaseInput(),
+        hazardsIdentified: hazards.trim() || null,
+      });
+      setControls(res.text || prev);
+    } catch (e) {
+      setControls(prev);
+      setErr(e instanceof ApiError ? e.message : "Error al sugerir controles.");
+    } finally {
+      setLoadingControls(false);
+    }
+  }, [isEditable, loadingControls, description, location, hazards, controls, aiBaseInput]);
+
+  const onSuggestPpe = useCallback(async () => {
+    if (!isEditable || loadingPpe) return;
+    if (!description.trim() && !location.trim()) {
+      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      return;
+    }
+    setLoadingPpe(true);
+    const prev = ppe;
+    setPpe("Analizando...");
+    try {
+      const res = await api.post<{ text: string }>("/app/permits/suggest-ppe", {
+        ...aiBaseInput(),
+        hazardsIdentified: hazards.trim() || null,
+        controlMeasures: controls.trim() || null,
+      });
+      setPpe(res.text || prev);
+    } catch (e) {
+      setPpe(prev);
+      setErr(e instanceof ApiError ? e.message : "Error al sugerir EPP.");
+    } finally {
+      setLoadingPpe(false);
+    }
+  }, [isEditable, loadingPpe, description, location, hazards, controls, ppe, aiBaseInput]);
+
   const onSave = useCallback(async () => {
     if (!vesselCode || !location.trim() || !description.trim() || !plannedStart || !plannedEnd) {
       setErr("Completá vessel, ubicación, descripción y fechas planeadas."); return;
@@ -299,17 +377,41 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
                     </div>
                   </div>
                 )}
-                <div className="col-span-2">
-                  <label className={labelCls}>Peligros identificados</label>
-                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Riesgos específicos del trabajo y ubicación" />
+                <div className="col-span-2 space-y-1.5">
+                  <label
+                    onClick={isEditable ? onSuggestHazards : undefined}
+                    title={isEditable ? "Sugerir peligros con IA" : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingHazards ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingHazards ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    Peligros identificados
+                    {loadingHazards && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+                  </label>
+                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder="Riesgos específicos del trabajo y ubicación" />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>Medidas de control</label>
-                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Aislamientos, ventilación, vigía, comms, etc." />
+                <div className="col-span-2 space-y-1.5">
+                  <label
+                    onClick={isEditable ? onSuggestControls : undefined}
+                    title={isEditable ? "Sugerir medidas de control con IA" : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingControls ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingControls ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    Medidas de control
+                    {loadingControls && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+                  </label>
+                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder="Aislamientos, ventilación, vigía, comms, etc." />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>EPP requerido</label>
-                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="Arnés, máscara con suministro de aire, guantes ignífugos, etc." />
+                <div className="col-span-2 space-y-1.5">
+                  <label
+                    onClick={isEditable ? onSuggestPpe : undefined}
+                    title={isEditable ? "Sugerir EPP con IA" : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingPpe ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingPpe ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    EPP requerido
+                    {loadingPpe && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+                  </label>
+                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder="Arnés, máscara con suministro de aire, guantes ignífugos, etc." />
                 </div>
                 {permit?.rejectionReason && (
                   <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">

@@ -62,6 +62,7 @@ import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-
 import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
 import { buildPermitPdf } from "./permits/permit-pdf-service";
 import { getPermitsSummary } from "./permits/permits-summary-service";
+import { suggestPermitHazards, suggestPermitControls, suggestPermitPpe } from "./permits/permits-ai-suggestions";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
 import { generateTemplate } from "./excel/excel-template";
 import { previewImport, confirmImport } from "./excel/excel-import-service";
@@ -1322,6 +1323,29 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const summary = await getPermitsSummary(session, { vesselCode: url.searchParams.get("vesselCode") });
     sendJson(response, 200, summary);
+    return true;
+  }
+
+  // ── Permits AI suggestions ─────────────────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/permits/suggest-hazards") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestPermitHazards>[1]>(request);
+    sendJson(response, 200, await suggestPermitHazards(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/permits/suggest-controls") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestPermitControls>[1]>(request);
+    sendJson(response, 200, await suggestPermitControls(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/permits/suggest-ppe") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestPermitPpe>[1]>(request);
+    sendJson(response, 200, await suggestPermitPpe(session, body));
     return true;
   }
 
