@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Send, Loader2, Bot, Mic, VolumeX, AudioLines } from "lucide-react";
 import { api } from "../lib/api";
 import { useCopilotScreenContext } from "../lib/copilot-context";
+import { useVesselContext } from "../lib/vessel-context";
 import { MarkdownText } from "./MarkdownText";
 
 interface ChatMessage {
@@ -53,6 +54,28 @@ const MIN_HOLD_MS = 400;
 
 export const MobileCopilot: React.FC = () => {
   const screenContext = useCopilotScreenContext();
+  const { selectedVesselCode, selectedVessel } = useVesselContext();
+  // Construye un contexto efectivo que SIEMPRE incluya el buque seleccionado
+  // en mobile (que es el contexto principal del técnico). Si una pantalla ya
+  // emitió un screenContext específico (ej. abrir una OT), lo respetamos y
+  // mergeamos el vesselCode encima si no estaba.
+  const effectiveContext = useMemo(() => {
+    if (screenContext) {
+      return {
+        ...screenContext,
+        vesselCode: screenContext.vesselCode ?? selectedVesselCode ?? undefined,
+      };
+    }
+    if (selectedVesselCode) {
+      return {
+        module: "MOBILE_COPILOT",
+        screen: "MOBILE_CHAT",
+        vesselCode: selectedVesselCode,
+        ...(selectedVessel?.name ? { entityCode: selectedVessel.name } : {}),
+      };
+    }
+    return null;
+  }, [screenContext, selectedVesselCode, selectedVessel]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -127,7 +150,7 @@ export const MobileCopilot: React.FC = () => {
         capability: "knowledge_assistant",
         locale: navigator.language?.split("-")[0] ?? "es",
         messages: apiMessages,
-        screenContext: screenContext ?? undefined,
+        screenContext: effectiveContext ?? undefined,
         mode: "voice",
       });
 
@@ -167,7 +190,7 @@ export const MobileCopilot: React.FC = () => {
     } finally {
       setStreaming(false);
     }
-  }, [messages, streaming, screenContext, speakText, stopSpeaking]);
+  }, [messages, streaming, effectiveContext, speakText, stopSpeaking]);
 
   sendMessageRef.current = sendMessage;
 
