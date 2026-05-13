@@ -1915,7 +1915,7 @@ export const WorkOrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
-  const [viewMode, setViewMode]       = useState<"list" | "kanban">("list");
+  const [viewMode, setViewMode]       = useState<"list" | "kanban">("kanban");
 
   useCopilotEmitter(!editing && !showCreate ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
   const [showExcel, setShowExcel]     = useState(false);
