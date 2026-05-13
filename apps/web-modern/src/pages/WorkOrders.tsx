@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, ShieldAlert, Sparkles, Wrench, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -16,6 +16,7 @@ import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
+import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
 
 // Mini reference data for showing linked permits inside WO modal
 const PTW_STATUS_LABEL: Record<string, string> = {
@@ -321,6 +322,121 @@ function CritBadge({ crit }: { crit: string }) {
   );
 }
 
+// ── Progress Notes (avances de trabajo) ──────────────────────────────────────
+
+interface ProgressNote {
+  id: string;
+  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+  text: string | null;
+  fileUrl: string | null;
+  createdAt: string;
+}
+
+const KIND_ICON: Record<string, React.FC<{ className?: string }>> = {
+  TEXT: Type, PHOTO: Camera, VIDEO: VideoIcon, AUDIO: Mic,
+};
+const KIND_LABEL: Record<string, string> = {
+  TEXT: "Texto", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio",
+};
+
+const ProgressNoteCard: React.FC<{
+  note: ProgressNote;
+  onDelete?: () => void;
+}> = ({ note, onDelete }) => {
+  const Icon = KIND_ICON[note.kind] ?? Type;
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+      <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
+        <Icon className="w-3 h-3" />
+        <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
+        <span className="ml-auto">{fmtTime(note.createdAt)}</span>
+        {onDelete && (
+          <button type="button" onClick={onDelete}
+            className="p-1 -mr-1 text-text-industrial/40 hover:text-red-400 transition-colors"
+            title="Borrar avance">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {note.kind === "PHOTO" && note.fileUrl && (
+        <img src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-60" />
+      )}
+      {note.kind === "VIDEO" && note.fileUrl && (
+        <video src={note.fileUrl} controls className="w-full rounded-lg max-h-60" />
+      )}
+      {note.kind === "AUDIO" && note.fileUrl && (
+        <audio src={note.fileUrl} controls className="w-full" />
+      )}
+      {note.text && (
+        <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>
+      )}
+    </div>
+  );
+};
+
+const ProgressNotesPanel: React.FC<{
+  workOrderId: string;
+  canAdd: boolean;
+  canDelete: boolean;
+  onAdd: () => void;
+  reloadKey: number;
+}> = ({ workOrderId, canAdd, canDelete, onAdd, reloadKey }) => {
+  const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
+    `/app/pms/work-orders/${workOrderId}/progress-notes`,
+    [workOrderId, reloadKey],
+  );
+  const notes = data?.items ?? [];
+
+  const handleDelete = useCallback(async (noteId: string) => {
+    if (!window.confirm("¿Borrar este avance?")) return;
+    try {
+      await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
+      await reload();
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Error al borrar el avance");
+    }
+  }, [workOrderId, reload]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
+          Avances {notes.length > 0 && `(${notes.length})`}
+        </p>
+        {canAdd && (
+          <button type="button" onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110">
+            <Plus className="w-3.5 h-3.5" />
+            Registrar avance
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-3">
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+        </div>
+      ) : notes.length === 0 ? (
+        <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
+      ) : (
+        <div className="space-y-2">
+          {notes.map(n => (
+            <ProgressNoteCard
+              key={n.id}
+              note={n}
+              onDelete={canDelete ? () => { void handleDelete(n.id); } : undefined}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── WorkOrderModal ────────────────────────────────────────────────────────────
 
 interface WorkOrderModalProps {
@@ -485,6 +601,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingRisk,     setLoadingRisk]    = useState(false);
   const [loadingConsequence, setLoadingConsequence] = useState(false);
   const [loadingRewrite,   setLoadingRewrite]    = useState(false);
+  const [showProgressSheet, setShowProgressSheet] = useState(false);
+  const [notesReloadKey,    setNotesReloadKey]    = useState(0);
 
   useCopilotEmitter({
     module: "WORK_ORDERS",
@@ -1055,6 +1173,19 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </section>
 
+          {/* ── AVANCES ── */}
+          {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
+            <section className="space-y-3 border-t border-white/10 pt-4">
+              <ProgressNotesPanel
+                workOrderId={workOrder.id}
+                canAdd={isEditable}
+                canDelete={isEditable || isAdmin}
+                onAdd={() => setShowProgressSheet(true)}
+                reloadKey={notesReloadKey}
+              />
+            </section>
+          )}
+
           {/* ── RESULTADO ── */}
           <section className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
             <p className="text-[10px] uppercase tracking-widest text-blue-300 font-semibold">{t("wo.modal.resultSection")}</p>
@@ -1392,6 +1523,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         </div>
       </div>
     </div>
+
+    {/* Modal registrar avance */}
+    {showProgressSheet && (
+      <ProgressNoteSheet
+        workOrderId={workOrder.id}
+        onClose={() => setShowProgressSheet(false)}
+        onSaved={() => { setNotesReloadKey(k => k + 1); }}
+      />
+    )}
 
     {/* PTW modal anidado — abre encima de la OT por z-index propio */}
     {permitModalState?.kind === "create" && (
