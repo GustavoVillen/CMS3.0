@@ -1353,9 +1353,10 @@ export async function handleTenantRoutes(
   if (method === "GET" && url.pathname === "/app/permits") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const items = await listPermits(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status:     url.searchParams.get("status"),
-      type:       url.searchParams.get("type"),
+      vesselCode:  url.searchParams.get("vesselCode"),
+      status:      url.searchParams.get("status"),
+      type:        url.searchParams.get("type"),
+      workOrderId: url.searchParams.get("workOrderId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;

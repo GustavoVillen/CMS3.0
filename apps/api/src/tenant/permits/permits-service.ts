@@ -15,6 +15,7 @@ export interface PermitListFilters {
   vesselCode?: string | null;
   status?: string | null;
   type?: string | null;
+  workOrderId?: string | null;
 }
 
 export interface PermitWriteInput {
@@ -116,6 +117,7 @@ export async function listPermits(session: TenantAccessSession, filters: PermitL
   applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
   if (filters.type) where.type = filters.type;
+  if (filters.workOrderId) where.workOrderId = filters.workOrderId;
 
   return permitClient(prisma).permitToWork.findMany({
     where,

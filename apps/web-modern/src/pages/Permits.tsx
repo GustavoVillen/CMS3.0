@@ -133,7 +133,22 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 // ─── Permit Modal ────────────────────────────────────────────────────────────
 
-const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSaved: () => void }> = ({ permit, onClose, onSaved }) => {
+export interface PermitModalPrefill {
+  vesselCode?: string;
+  type?: PermitType;
+  workOrderId?: string;
+  location?: string;
+  description?: string;
+}
+
+interface PermitModalProps {
+  permit: Permit | null;
+  prefill?: PermitModalPrefill;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved }) => {
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -143,11 +158,11 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
   const isTerminal = permit && ["CLOSED", "CANCELLED", "REJECTED"].includes(permit.status);
   const isEditable = !permit || permit.status === "DRAFT" || permit.status === "REQUESTED";
 
-  // Form state
-  const [vesselCode, setVesselCode]   = useState(permit?.vesselCode ?? vessels[0]?.code ?? "");
-  const [type, setType]               = useState<PermitType>(permit?.type ?? "HOT_WORK");
-  const [location, setLocation]       = useState(permit?.location ?? "");
-  const [description, setDescription] = useState(permit?.description ?? "");
+  // Form state — pre-cargado desde `permit` (edición) o `prefill` (creación desde WO)
+  const [vesselCode, setVesselCode]   = useState(permit?.vesselCode ?? prefill?.vesselCode ?? vessels[0]?.code ?? "");
+  const [type, setType]               = useState<PermitType>(permit?.type ?? prefill?.type ?? "HOT_WORK");
+  const [location, setLocation]       = useState(permit?.location ?? prefill?.location ?? "");
+  const [description, setDescription] = useState(permit?.description ?? prefill?.description ?? "");
   const [plannedStart, setPlannedStart] = useState(toLocalDateTimeInput(permit?.plannedStart ?? null));
   const [plannedEnd, setPlannedEnd]     = useState(toLocalDateTimeInput(permit?.plannedEnd ?? null));
   const [hazards, setHazards]         = useState(permit?.hazardsIdentified ?? "");
@@ -242,7 +257,7 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
     }
     setSaving(true); setErr(null);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         vesselCode, type,
         location: location.trim(),
         description: description.trim(),
@@ -252,6 +267,8 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
         controlMeasures: controls.trim() || null,
         ppeRequired: ppe.trim() || null,
       };
+      // Sólo al crear: si vinimos pre-cargados desde una OT, vincular.
+      if (isNew && prefill?.workOrderId) payload.workOrderId = prefill.workOrderId;
       if (isNew) await api.post("/app/permits", payload);
       else await api.patch(`/app/permits/${permit!.id}`, payload);
       onSaved();
@@ -260,7 +277,7 @@ const PermitModal: React.FC<{ permit: Permit | null; onClose: () => void; onSave
     } finally {
       setSaving(false);
     }
-  }, [isNew, permit, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, onSaved]);
+  }, [isNew, permit, prefill, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, onSaved]);
 
   const callAction = useCallback(async (action: string, body?: unknown) => {
     if (!permit) return;

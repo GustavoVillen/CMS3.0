@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, Sparkles, Wrench, X } from "lucide-react";
+import { AlertTriangle, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, Plus, ShieldAlert, Sparkles, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -14,6 +14,56 @@ import { printWorkOrder, printOpenWorkOrdersReport } from "../lib/print-work-ord
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { PermitModal, type PermitModalPrefill } from "./Permits";
+import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
+
+// Mini reference data for showing linked permits inside WO modal
+const PTW_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador", REQUESTED: "Solicitado", APPROVED: "Aprobado",
+  REJECTED: "Rechazado", ACTIVE: "Activo", CLOSED: "Cerrado", CANCELLED: "Cancelado",
+};
+const PTW_STATUS_COLOR: Record<string, string> = {
+  DRAFT: "bg-white/5 text-text-industrial/60 border-white/10",
+  REQUESTED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  APPROVED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
+  ACTIVE: "bg-green-500/10 text-green-400 border-green-500/20",
+  CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
+  CANCELLED: "bg-white/5 text-text-industrial/50 border-white/10",
+};
+
+interface LinkedPermit {
+  id: string;
+  permitCode: string;
+  type: PermitType;
+  status: string;
+  description: string;
+  vesselCode: string;
+  location: string;
+  plannedStart: string;
+  plannedEnd: string;
+  validFrom: string | null;
+  validTo: string | null;
+  hazardsIdentified: string | null;
+  controlMeasures: string | null;
+  ppeRequired: string | null;
+  details: Record<string, unknown>;
+  requestedAt: string | null;
+  approvedAt: string | null;
+  activatedAt: string | null;
+  closedAt: string | null;
+  closeNotes: string | null;
+  rejectionReason: string | null;
+  cancelReason: string | null;
+  tenantId: string;
+  gasTests: Array<{ id: string; testedAt: string; testedByName: string; location: string | null; o2Pct: number | null; lelPct: number | null; h2sPpm: number | null; coPpm: number | null; verdict: "PASS" | "FAIL"; notes: string | null }>;
+  participants: Array<{ id: string; crewId: string | null; name: string; role: "PERFORMER" | "FIRE_WATCH" | "STAND_BY" | "ATTENDANT" | "SUPERVISOR" }>;
+}
+
+type PermitModalState =
+  | { kind: "create"; prefill: PermitModalPrefill }
+  | { kind: "edit"; permit: LinkedPermit }
+  | null;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -553,6 +603,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return res.url ?? null;
   }, [workOrder.id]);
 
+  // ── Linked Permits to Work (PTW) ──
+  // Trae permisos vinculados a esta OT vía workOrderId. Más una heurística
+  // que sugiere tipos de PTW por keywords en título/descripción.
+  const { data: linkedPermitsData, reload: reloadPermits } = useFetch<{ items: LinkedPermit[] }>(
+    `/app/permits?workOrderId=${workOrder.id}`,
+    [workOrder.id],
+  );
+  const linkedPermits = linkedPermitsData?.items ?? [];
+  const advisoryMatches = useMemo(
+    () => suggestPermitTypesFromText(`${title} ${description}`),
+    [title, description],
+  );
+  const [permitModalState, setPermitModalState] = useState<PermitModalState>(null);
+  const makePermitPrefill = useCallback((forcedType?: PermitType): PermitModalPrefill => ({
+    vesselCode: workOrder.vesselCode,
+    type: forcedType ?? advisoryMatches[0]?.type ?? "HOT_WORK",
+    workOrderId: workOrder.id,
+    location: workOrder.location ?? "",
+    description: title || description || workOrder.title || workOrder.description || "",
+  }), [workOrder, title, description, advisoryMatches]);
+
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const handleGeneratePdf = useCallback(async () => {
     setGeneratingPdf(true);
@@ -670,6 +741,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const canClose    = !isClosed && !!woResult.trim();
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
@@ -906,6 +978,81 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <input type="file" disabled={!isEditable} onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
                 className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
             </div>
+          </section>
+
+          {/* ── PERMISOS DE TRABAJO ── */}
+          <section className="space-y-3 border-t border-white/10 pt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Permisos de trabajo</p>
+              {isEditable && (
+                <button
+                  type="button"
+                  onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
+                >
+                  <Plus className="w-3 h-3" /> Nuevo permiso
+                </button>
+              )}
+            </div>
+
+            {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
+            {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
+              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-yellow-200 font-semibold mb-1">Esta OT podría requerir permiso de trabajo</p>
+                  <p className="text-[11px] text-yellow-200/80 leading-snug mb-2">
+                    Por el contenido del trabajo, sugerimos: <span className="font-bold">{advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}</span>.
+                    <span className="block text-[10px] text-yellow-200/60 mt-0.5">
+                      Coincidencias detectadas: {advisoryMatches.flatMap(m => m.matchedKeywords).slice(0, 6).join(", ")}
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {advisoryMatches.map(m => (
+                      <button
+                        key={m.type}
+                        type="button"
+                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
+                        className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
+                      >
+                        Crear {PERMIT_TYPE_LABEL[m.type]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de PTWs vinculados */}
+            {linkedPermits.length === 0 ? (
+              advisoryMatches.length === 0 && (
+                <p className="text-xs text-text-industrial/40 italic">Sin permisos vinculados.</p>
+              )
+            ) : (
+              <div className="space-y-1.5">
+                {linkedPermits.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPermitModalState({ kind: "edit", permit: p })}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:border-accent/30 text-left transition-colors"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-[10px] font-mono text-text-industrial/50">{p.permitCode}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${PTW_STATUS_COLOR[p.status]}`}>
+                          {PTW_STATUS_LABEL[p.status]}
+                        </span>
+                        <span className="text-[10px] text-text-industrial/70">{PERMIT_TYPE_LABEL[p.type as PermitType] ?? p.type}</span>
+                      </div>
+                      <p className="text-xs text-white/80 truncate">{p.description}</p>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ── RESULTADO ── */}
@@ -1245,6 +1392,24 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         </div>
       </div>
     </div>
+
+    {/* PTW modal anidado — abre encima de la OT por z-index propio */}
+    {permitModalState?.kind === "create" && (
+      <PermitModal
+        permit={null}
+        prefill={permitModalState.prefill}
+        onClose={() => setPermitModalState(null)}
+        onSaved={() => { setPermitModalState(null); void reloadPermits(); }}
+      />
+    )}
+    {permitModalState?.kind === "edit" && (
+      <PermitModal
+        permit={permitModalState.permit as unknown as Parameters<typeof PermitModal>[0]["permit"]}
+        onClose={() => setPermitModalState(null)}
+        onSaved={() => { setPermitModalState(null); void reloadPermits(); }}
+      />
+    )}
+    </>
   );
 };
 
