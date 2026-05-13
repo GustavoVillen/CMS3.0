@@ -262,7 +262,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
               value={compensatoryMeasures}
               onChange={e => setCompensatoryMeasures(e.target.value)}
               disabled={loadingAI}
-              placeholder="Medidas para mitigar el riesgo mientras dure el aplazamiento…"
+              placeholder="Medidas para mitigar el riesgo mientras dure el diferimiento…"
               className={`${inputCls} disabled:opacity-50`}
             />
           </div>

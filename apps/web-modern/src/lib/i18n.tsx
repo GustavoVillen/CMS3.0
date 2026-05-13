@@ -62,7 +62,7 @@ const dict = {
   "page.dailyReports":      { es: "Reportes Diarios",          en: "Daily Reports",           pt: "Relatórios Diários" },
   "page.monthlyReports":    { es: "Reportes Mensuales",        en: "Monthly Reports",         pt: "Relatórios Mensais" },
   "page.defects":           { es: "Defectos",                  en: "Defects",                 pt: "Defeitos" },
-  "page.deferrals":         { es: "Postergaciones",            en: "Deferrals",               pt: "Adiamentos" },
+  "page.deferrals":         { es: "Diferimientos",             en: "Deferrals",               pt: "Adiamentos" },
   "page.capa":              { es: "CAPA",                      en: "CAPA",                    pt: "CAPA" },
   "page.inspections":       { es: "Inspecciones",              en: "Inspections",             pt: "Inspeções" },
   "page.certificates":      { es: "Certificados",              en: "Certificates",            pt: "Certificados" },
@@ -154,7 +154,7 @@ const dict = {
   "def2.approve":         { es: "Aprobar",                    en: "Approve",               pt: "Aprovar" },
   "def2.reject":          { es: "Rechazar",                   en: "Reject",                pt: "Rejeitar" },
   "def2.activate":        { es: "Activar",                    en: "Activate",              pt: "Ativar" },
-  "def2.close":           { es: "Cerrar Aplazamiento",        en: "Close Deferral",        pt: "Fechar Adiamento" },
+  "def2.close":           { es: "Cerrar Diferimiento",        en: "Close Deferral",        pt: "Fechar Adiamento" },
   "def2.reviewNotes":     { es: "Notas de revisión",          en: "Review notes",          pt: "Notas de revisão" },
   "def2.rejectionReason": { es: "Razón de rechazo",           en: "Rejection reason",      pt: "Motivo de rejeição" },
   "def2.justification":   { es: "Justificación",              en: "Justification",         pt: "Justificativa" },
@@ -209,7 +209,7 @@ const dict = {
   "page.dailyReports":     { es: "Reportes Diarios",         en: "Daily Reports",           pt: "Relatórios Diários" },
   "page.maintenancePlans": { es: "Planes de Mantenimiento",  en: "Maintenance Plans",       pt: "Planos de Manutenção" },
   "page.dueItems":         { es: "Items Vencidos / Proximos",en: "Due / Upcoming Items",    pt: "Itens Vencidos / Proximos" },
-  "page.deferrals":        { es: "Aplazamientos",            en: "Deferrals",               pt: "Adiamentos" },
+  "page.deferrals":        { es: "Diferimientos",            en: "Deferrals",               pt: "Adiamentos" },
   "page.capa":             { es: "CAPA",                     en: "CAPA",                    pt: "CAPA" },
   "page.spareRequests":     { es: "Solicitudes de Repuestos",  en: "Spare Requests",          pt: "Solicitações de Sobressalentes" },
   "page.providers":        { es: "Proveedores",              en: "Providers",               pt: "Fornecedores" },
@@ -536,7 +536,7 @@ const dict = {
   "empty.dailyReports":     { es: "No hay reportes diarios",          en: "No daily reports",             pt: "Nenhum relatório diário" },
   "empty.maintenancePlans": { es: "Sin planes de mantenimiento",      en: "No maintenance plans",         pt: "Sem planos de manutencao" },
   "empty.dueItems":         { es: "Sin items vencidos",               en: "No due items",                 pt: "Sem itens vencidos" },
-  "empty.deferrals":        { es: "No hay aplazamientos registrados", en: "No deferrals registered",      pt: "Nenhum adiamento registrado" },
+  "empty.deferrals":        { es: "No hay diferimientos registrados", en: "No deferrals registered",      pt: "Nenhum adiamento registrado" },
   "empty.capa":             { es: "No hay acciones CAPA",             en: "No CAPA actions",              pt: "Nenhumas ações CAPA" },
   "empty.spareOrders":      { es: "No hay órdenes de repuestos",      en: "No spare orders",              pt: "Nenhuma ordem de peças" },
   "empty.providers":        { es: "No hay proveedores registrados",   en: "No providers registered",      pt: "Nenhum fornecedor registrado" },
@@ -627,7 +627,7 @@ const dict = {
   // Confirmations
   "confirm.approveRca":         { es: "¿Aprobar el análisis RCA? Esta acción se registra con tu usuario y la fecha actual.", en: "Approve RCA analysis? This action is recorded with your user and current date.", pt: "Aprovar a análise RCA? Esta ação é registrada com seu usuário e a data atual." },
   "confirm.deleteTeamMember":   { es: "¿Eliminar a {name} del equipo? Esta acción no se puede deshacer.", en: "Remove {name} from the team? This action cannot be undone.", pt: "Remover {name} da equipe? Esta ação não pode ser desfeita." },
-  "confirm.cancelDeferral":     { es: "Cancelar postergación",                  en: "Cancel deferral",                        pt: "Cancelar adiamento" },
+  "confirm.cancelDeferral":     { es: "Cancelar diferimiento",                  en: "Cancel deferral",                        pt: "Cancelar adiamento" },
   "confirm.confirmQ":           { es: "¿Confirmar?",                            en: "Confirm?",                               pt: "Confirmar?" },
   "confirm.confirmReceipt":     { es: "Confirmar recepción",                    en: "Confirm receipt",                        pt: "Confirmar recebimento" },
   "confirm.confirmRejection":   { es: "Confirmar rechazo",                      en: "Confirm rejection",                      pt: "Confirmar rejeição" },
@@ -734,8 +734,8 @@ const dict = {
 
   // Work Order status badges
   "wo.status.closed":              { es: "Cerrada",                   en: "Closed",                  pt: "Fechada" },
-  "wo.status.postponed":           { es: "Postergada",                en: "Postponed",               pt: "Adiada" },
-  "wo.status.postponedRejected":   { es: "Posterg. rechazada",        en: "Deferral rejected",        pt: "Adiamento rejeitado" },
+  "wo.status.postponed":           { es: "Diferida",                  en: "Deferred",                pt: "Adiada" },
+  "wo.status.postponedRejected":   { es: "Difer. rechazada",          en: "Deferral rejected",        pt: "Adiamento rejeitado" },
   "wo.status.overdue":             { es: "Vencida",                   en: "Overdue",                 pt: "Vencida" },
   "wo.status.open":                { es: "Abierta",                   en: "Open",                    pt: "Aberta" },
 
@@ -750,11 +750,11 @@ const dict = {
 
   // Hold/postpone modal & info block
   "wo.holdTargetDate":         { es: "Fecha estimada de reanudación", en: "Estimated resumption date", pt: "Data estimada de retomada" },
-  "wo.holdReasonLabel":        { es: "Motivo de postergación", en: "Postponement reason",  pt: "Motivo do adiamento" },
+  "wo.holdReasonLabel":        { es: "Motivo del diferimiento", en: "Deferral reason",      pt: "Motivo do adiamento" },
   "wo.cancelReasonLabel":      { es: "Motivo de cancelación",  en: "Cancellation reason",  pt: "Motivo de cancelamento" },
   "wo.originalDue":            { es: "Vencimiento original",   en: "Original due date",    pt: "Vencimento original" },
   "wo.targetDate":             { es: "Fecha objetivo",         en: "Target date",          pt: "Data alvo" },
-  "wo.postponedBy":             { es: "Postergado",             en: "Postponed",            pt: "Adiado" },
+  "wo.postponedBy":             { es: "Diferido",               en: "Deferred",             pt: "Adiado" },
   "wo.days":                   { es: "días",                   en: "days",                 pt: "dias" },
 
   // WorkOrderModal — Mercurio extras
@@ -825,7 +825,7 @@ const dict = {
 
   // WorkOrderModal — botones del footer
   "wo.modal.generatePdf":      { es: "Generar PDF",            en: "Generate PDF",          pt: "Gerar PDF" },
-  "wo.modal.postpone":         { es: "Postergar",              en: "Postpone",              pt: "Adiar" },
+  "wo.modal.postpone":         { es: "Diferir",                en: "Defer",                 pt: "Adiar" },
   "wo.modal.closeWO":          { es: "Cerrar OT",              en: "Close WO",              pt: "Fechar OS" },
   "wo.modal.cancelWO":         { es: "Cancelar OT",            en: "Cancel WO",             pt: "Cancelar OS" },
   "wo.modal.closeBeforeError": { es: "Completar el Resultado de la OT antes de cerrar", en: "Complete the WO Result before closing", pt: "Conclua o Resultado da OS antes de fechar" },
@@ -871,16 +871,16 @@ const dict = {
   "mp.exec.defectFromPlan":    { es: "Deficiencia encontrada durante ejecución de", en: "Deficiency found during execution of", pt: "Deficiência encontrada durante execução de" },
 
   // MaintenancePlans — PostponeModal
-  "mp.postpone.title":         { es: "Postergar Plan",         en: "Postpone Plan",        pt: "Adiar Plano" },
+  "mp.postpone.title":         { es: "Diferir Plan",           en: "Defer Plan",           pt: "Adiar Plano" },
   "mp.postpone.taskLabel":     { es: "Tarea",                  en: "Task",                 pt: "Tarefa" },
   "mp.postpone.currentDue":    { es: "Vencimiento actual",     en: "Current due",          pt: "Vencimento atual" },
   "mp.postpone.newDueHours":   { es: "Nuevas horas de vencimiento", en: "New due hours",   pt: "Novas horas de vencimento" },
   "mp.postpone.newDueHoursPlaceholder": { es: "ej. 4000",       en: "e.g. 4000",            pt: "ex. 4000" },
   "mp.postpone.newDueDate":    { es: "Nueva fecha de vencimiento", en: "New due date",     pt: "Nova data de vencimento" },
   "mp.postpone.justification": { es: "Justificación *",        en: "Justification *",      pt: "Justificativa *" },
-  "mp.postpone.justificationPlaceholder": { es: "Motivo de la postergación…", en: "Postponement reason…", pt: "Motivo do adiamento…" },
+  "mp.postpone.justificationPlaceholder": { es: "Motivo del diferimiento…", en: "Deferral reason…", pt: "Motivo do adiamento…" },
   "mp.postpone.compensatoryMeasures": { es: "Medidas compensatorias", en: "Compensatory measures", pt: "Medidas compensatórias" },
-  "mp.postpone.compensatoryPlaceholder": { es: "Medidas a tomar mientras el plan está postergado…", en: "Measures to take while the plan is postponed…", pt: "Medidas a tomar enquanto o plano está adiado…" },
+  "mp.postpone.compensatoryPlaceholder": { es: "Medidas a tomar mientras el plan está diferido…", en: "Measures to take while the plan is deferred…", pt: "Medidas a tomar enquanto o plano está adiado…" },
   "mp.postpone.copilotSuggest": { es: "Copiloto: sugerir mejoras", en: "Copilot: suggest improvements", pt: "Copiloto: sugerir melhorias" },
   "mp.postpone.copilotFail":   { es: "No se pudo obtener sugerencia del copiloto.", en: "Could not get suggestion from copilot.", pt: "Não foi possível obter sugestão do copiloto." },
   "mp.postpone.authorizedBy":  { es: "Autorizado por",         en: "Authorized by",         pt: "Autorizado por" },
@@ -995,9 +995,9 @@ const dict = {
 
   "dashboard.mpTitle":         { es: "Planes de Mantenimiento", en: "Maintenance Plans",   pt: "Planos de Manutenção" },
   "dashboard.mpSubtitle":      { es: "Estado de ejecución",    en: "Execution status",     pt: "Status de execução" },
-  "dashboard.deferralsTitle":  { es: "Aplazamientos",          en: "Deferrals",            pt: "Adiamentos" },
+  "dashboard.deferralsTitle":  { es: "Diferimientos",          en: "Deferrals",            pt: "Adiamentos" },
   "dashboard.deferralsSubtitle":{ es: "Estado activo",         en: "Active status",        pt: "Status ativo" },
-  "dashboard.deferralsEmpty":  { es: "Sin aplazamientos activos", en: "No active deferrals", pt: "Sem adiamentos ativos" },
+  "dashboard.deferralsEmpty":  { es: "Sin diferimientos activos", en: "No active deferrals", pt: "Sem adiamentos ativos" },
   "dashboard.criticalSparesTitle":{ es: "Repuestos Críticos", en: "Critical Spares",       pt: "Sobressalentes Críticos" },
   "dashboard.criticalSparesSubtitle":{ es: "Estado de stock (criticidad A)", en: "Stock status (criticality A)", pt: "Status de estoque (criticidade A)" },
   "dashboard.criticalSparesEmpty":{ es: "Sin repuestos críticos registrados", en: "No critical spares registered", pt: "Sem sobressalentes críticos registrados" },
@@ -1008,8 +1008,8 @@ const dict = {
   // Dashboard — chart segment names
   "dashboard.wo.open":              { es: "Abiertas",               en: "Open",                  pt: "Abertas" },
   "dashboard.wo.overdue":           { es: "Vencidas",               en: "Overdue",               pt: "Vencidas" },
-  "dashboard.wo.postponed":         { es: "Postergadas",            en: "Postponed",             pt: "Adiadas" },
-  "dashboard.wo.postponedRejected": { es: "Posterg. rechazadas",    en: "Deferral rejected",      pt: "Adiamento rejeitado" },
+  "dashboard.wo.postponed":         { es: "Diferidas",              en: "Deferred",              pt: "Adiadas" },
+  "dashboard.wo.postponedRejected": { es: "Difer. rechazadas",      en: "Deferral rejected",      pt: "Adiamento rejeitado" },
 
   "dashboard.mp.neverExecuted":{ es: "Sin ejecutar",           en: "Not executed",         pt: "Sem executar" },
   "dashboard.mp.overdue":      { es: "Vencidas",               en: "Overdue",              pt: "Vencidas" },

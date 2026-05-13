@@ -27,7 +27,7 @@ const ENTITY_LABELS: Record<string, string> = {
   Vessel:              "Buque",
   Asset:               "Activo",
   Defect:              "Defecto",
-  Deferral:            "Aplazamiento",
+  Deferral:            "Diferimiento",
   Certificate:         "Certificado",
   Spare:               "Repuesto",
   Capa:                "CAPA",
@@ -178,7 +178,7 @@ function detailLine(item: AuditLogItem): string {
     if (action.includes("deleted"))   return `Plan eliminado: ${code} — ${title}`.replace(/ —\s*$/, "");
     if (action.includes("created"))   return `Plan creado: ${code} — ${title}`.replace(/ —\s*$/, "");
     if (action.includes("postponed") || action.includes("deferred"))
-      return `Plan postergado: ${code}${s(m.newDueDate) ? ` → nuevo vencimiento: ${m.newDueDate}` : ""}`;
+      return `Plan diferido: ${code}${s(m.newDueDate) ? ` → nuevo vencimiento: ${m.newDueDate}` : ""}`;
     if (action.includes("executed") || action.includes("closed"))
       return `Ejecución registrada: ${code}${s(m.result) ? ` — Resultado: ${m.result}` : ""}`;
     if (action === "OPENEDFROMPLAN" || action.includes("opened"))

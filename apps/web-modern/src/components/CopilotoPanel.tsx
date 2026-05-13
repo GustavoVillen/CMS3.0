@@ -959,7 +959,7 @@ export const CopilotoPanel: React.FC = () => {
             className="w-full text-[10px] px-2.5 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 font-semibold hover:bg-purple-500/20 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5"
           >
             <BarChart2 className="w-2.5 h-2.5 shrink-0" />
-            Analizar aplazamiento
+            Analizar diferimiento
           </button>
         </div>
       )}

@@ -706,7 +706,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                     else { setConfirmCancel(true); }
                   }}
                   disabled={cancelling}
-                  title="Cancelar la postergación (eliminar)"
+                  title="Cancelar el diferimiento (eliminar)"
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${
                     confirmCancel
                       ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
@@ -863,7 +863,7 @@ export const DeferralsPage: React.FC = () => {
       setEditing(detailed);
     } catch (err) {
       setEditing(row);
-      setDetailError(err instanceof ApiError ? err.message : "No se pudo cargar el detalle del aplazamiento.");
+      setDetailError(err instanceof ApiError ? err.message : "No se pudo cargar el detalle del diferimiento.");
     } finally {
       setDetailLoadingId(null);
     }
@@ -929,7 +929,7 @@ export const DeferralsPage: React.FC = () => {
       <PageHeader icon={Clock} title={t("page.deferrals")} total={data?.total} onReload={reload}>
       </PageHeader>
 
-      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del aplazamiento...</div>}
+      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del diferimiento...</div>}
       {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
       <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => { void openDetail(row); }} />
