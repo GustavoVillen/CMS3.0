@@ -80,18 +80,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ? { value: certsExpired,  label: t("dashboard.certificatesExpired") }
     : { value: certsExpiring, label: t("dashboard.certificates") };
 
-  // Donut chart: Abiertas / Vencidas / Postergadas / Posterg. rechazadas
+  // Donut chart: Planificadas / En Progreso / Vencidas / Postergadas / Posterg. rechazadas
   const statusCounts = React.useMemo(() => {
     const items = workOrders.data?.items ?? [];
     const now = new Date();
     const CLOSED_STATUSES = new Set(["CLOSED", "CANCELLED"]);
-    // Map WO id → deferral status, prefer non-CLOSED if multiple
     const deferralStatusByWo = new Map<string, string>();
     for (const d of deferrals.data?.items ?? []) {
       const prev = deferralStatusByWo.get(d.sourceId);
       if (!prev || prev === "CLOSED") deferralStatusByWo.set(d.sourceId, d.status);
     }
-    let abiertas = 0, vencidas = 0, postergadas = 0, postergadasRechazadas = 0;
+    let planificadas = 0, enProgreso = 0, vencidas = 0, postergadas = 0, postergadasRechazadas = 0;
     for (const w of items) {
       if (CLOSED_STATUSES.has(w.status)) continue;
       if (w.status === "ON_HOLD") {
@@ -100,12 +99,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         continue;
       }
       const overdue = !!w.dueDate && parseLocalDate(w.dueDate) < now;
-      if (overdue) vencidas++; else abiertas++;
+      if (overdue) { vencidas++; continue; }
+      if (w.status === "IN_PROGRESS") enProgreso++;
+      else planificadas++;
     }
     return [
-      { key: "open",              name: t("dashboard.wo.open"),              value: abiertas,             fill: "#06D6A0" },
-      { key: "overdue",           name: t("dashboard.wo.overdue"),           value: vencidas,             fill: "#EF4444" },
-      { key: "postponed",         name: t("dashboard.wo.postponed"),         value: postergadas,          fill: "#EAB308" },
+      { key: "planned",           name: "Planificadas",                      value: planificadas,          fill: "#60A5FA" },
+      { key: "inProgress",        name: "En Progreso",                       value: enProgreso,            fill: "#06D6A0" },
+      { key: "overdue",           name: t("dashboard.wo.overdue"),           value: vencidas,              fill: "#EF4444" },
+      { key: "postponed",         name: t("dashboard.wo.postponed"),         value: postergadas,           fill: "#EAB308" },
       { key: "postponedRejected", name: t("dashboard.wo.postponedRejected"), value: postergadasRechazadas, fill: "#F97316" },
     ].filter(s => s.value > 0);
   }, [workOrders.data, deferrals.data, t]);
