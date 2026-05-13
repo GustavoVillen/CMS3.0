@@ -701,6 +701,7 @@ const dict = {
   "wo.ai.criteriaPrefix":      { es: "Criterios IA",           en: "AI Criteria",          pt: "Critérios IA" },
   "wo.ai.lotoPrefix":          { es: "LOTO IA",                en: "AI LOTO",              pt: "LOTO IA" },
   "wo.ai.riskPrefix":          { es: "Riesgo IA",              en: "AI Risk",              pt: "Risco IA" },
+  "wo.ai.consequencePrefix":   { es: "Consecuencia IA",        en: "AI Consequence",       pt: "Consequência IA" },
 
   // Fluid types
   "fluid.type.engineOil":      { es: "Aceite motor",           en: "Engine oil",           pt: "Óleo de motor" },

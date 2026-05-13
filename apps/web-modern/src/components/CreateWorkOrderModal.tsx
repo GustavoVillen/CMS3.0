@@ -107,10 +107,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
 
-  // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo ──
-  const [loadingCriteria, setLoadingCriteria] = useState(false);
-  const [loadingLoto,     setLoadingLoto]     = useState(false);
-  const [loadingRisk,     setLoadingRisk]     = useState(false);
+  // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo / Consecuencia ──
+  const [loadingCriteria,    setLoadingCriteria]    = useState(false);
+  const [loadingLoto,        setLoadingLoto]        = useState(false);
+  const [loadingRisk,        setLoadingRisk]        = useState(false);
+  const [loadingConsequence, setLoadingConsequence] = useState(false);
 
   // Etiqueta del activo a partir del prefill o de la lista cargada
   const aiAssetLabel = prefill?.sourceLabel
@@ -186,6 +187,29 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     }
     finally { setLoadingRisk(false); }
   }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto, t]);
+
+  const handleConsequenceClick = useCallback(async () => {
+    if (loadingConsequence) return;
+    if (!aiTaskDesc) {
+      setErr(t("wo.ai.completeTaskFirstError"));
+      return;
+    }
+    setLoadingConsequence(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ category: string; rationale: string }>("/app/pms/work-orders/suggest-consequence", {
+        assetName: aiAssetLabel ?? "",
+        planTitle: title.trim() || null,
+        planDescription: description.trim() || null,
+      });
+      if (res.category) setConsequenceCategory(res.category);
+      if (res.rationale) setConsequenceRationale(res.rationale);
+    } catch (e) {
+      console.error("[suggest-consequence] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.consequencePrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingConsequence(false); }
+  }, [loadingConsequence, aiAssetLabel, aiTaskDesc, title, description, t]);
 
   // Vessel list for standalone mode
   useEffect(() => {
@@ -489,32 +513,41 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
             </div>
 
-            {/* RCM + horas estimadas — heredados del plan, editables */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.consequenceCategory")}</label>
-                <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)} className={inputCls}>
-                  <option value="">—</option>
-                  <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
-                  <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
-                  <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
-                  <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
-                <input type="number" min="0" step="0.5" value={estimatedHours}
-                  onChange={e => setEstimatedHours(e.target.value)}
-                  className={inputCls} placeholder="—" />
-              </div>
+            {/* RCM consecuencia */}
+            <div className="space-y-1.5">
+              <label
+                onClick={handleConsequenceClick}
+                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              >
+                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("wo.modal.consequenceCategory")}
+              </label>
+              <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)}
+                disabled={loadingConsequence} className={inputCls}>
+                <option value="">—</option>
+                <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
+              </select>
             </div>
             {consequenceCategory && (
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
                 <textarea rows={2} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
+                  disabled={loadingConsequence}
                   className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
               </div>
             )}
+
+            {/* Horas estimadas */}
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
+              <input type="number" min="0" step="0.5" value={estimatedHours}
+                onChange={e => setEstimatedHours(e.target.value)}
+                className={inputCls} placeholder="—" />
+            </div>
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
