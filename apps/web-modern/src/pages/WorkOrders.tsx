@@ -1822,7 +1822,7 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
       draggable={isDraggable && !isLoading}
       onDragStart={e => {
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", wo.id);
+        e.dataTransfer.setData("text/plain", JSON.stringify({ id: wo.id, status: wo.status }));
         onDragStart(wo);
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
@@ -1853,32 +1853,34 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   // ref para evitar stale closure en handleDrop (React 18 batching)
   const draggingWoRef = React.useRef<WorkOrder | null>(null);
 
-  const handleDrop = useCallback(async (targetCol: string) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, targetCol: string) => {
     setOverCol(null);
-    const wo = draggingWoRef.current;
-    console.log("[kanban] drop", { targetCol, woStatus: wo?.status, woId: wo?.id });
-    if (!wo) { console.warn("[kanban] drop fired but draggingWoRef is null"); return; }
-    draggingWoRef.current = null;
     setDraggingWo(null);
-    if (wo.status === targetCol) return;
+    draggingWoRef.current = null;
 
-    if (wo.status === "PLANNED" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${wo.id}/start`, {}); onReload(); }
-      catch (e) { console.error("[kanban] start failed", e); }
+    let payload: { id: string; status: string } | null = null;
+    try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { /* noop */ }
+    if (!payload?.id || !payload?.status) return;
+
+    const { id, status } = payload;
+    if (status === targetCol) return;
+
+    if (status === "PLANNED" && targetCol === "IN_PROGRESS") {
+      try { await api.post(`/app/pms/work-orders/${id}/start`, {}); onReload(); }
+      catch (err) { console.error("[kanban] start failed", err); }
       return;
     }
-    if ((wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
-      setPendingHold(wo);
+    if ((status === "PLANNED" || status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
+      const wo = items.find(w => w.id === id);
+      if (wo) setPendingHold(wo);
       return;
     }
-    if (wo.status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      console.log("[kanban] calling /resume for", wo.id);
-      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); console.log("[kanban] resume OK"); onReload(); }
-      catch (e) { console.error("[kanban] resume failed", e); }
+    if (status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
+      try { await api.post(`/app/pms/work-orders/${id}/resume`, {}); onReload(); }
+      catch (err) { console.error("[kanban] resume failed", err); }
       return;
     }
-    console.warn("[kanban] unhandled transition", wo.status, "→", targetCol);
-  }, [onReload]);
+  }, [items, onReload]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
@@ -1893,7 +1895,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
               key={col.colId}
               onDragOver={e => { if (col.droppable) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
               onDragLeave={() => setOverCol(null)}
-              onDrop={e => { e.preventDefault(); void handleDrop(col.colId); }}
+              onDrop={e => { e.preventDefault(); void handleDrop(e, col.colId); }}
               className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-white/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
@@ -1910,7 +1912,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
                     isLoading={loadingId === wo.id}
                     draggingId={draggingWo?.id ?? null}
                     onOpen={onOpen}
-                    onDragStart={w => { console.log("[kanban] dragstart", w.status, w.id); draggingWoRef.current = w; setDraggingWo(w); }}
+                    onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
                   />
                 ))}
               </div>
