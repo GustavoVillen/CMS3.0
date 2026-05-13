@@ -887,15 +887,37 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
   const prisma = workOrdersClient(prismaRaw);
 
   const current = await getTenantWorkOrder(session, id);
-  if (current.status !== "PLANNED" && current.status !== "ON_HOLD") {
-    const reason = current.status === "IN_PROGRESS"
-      ? "Esta OT ya tiene trabajo en ejecución (horas, repuestos u observaciones registradas). Cancelarla rompería la trazabilidad. Para finalizarla, cerrala con resultado (ej. \"No completada\") o pasala a En Espera primero."
-      : current.status === "CLOSED"
-      ? "Esta OT ya está cerrada. Solo TENANT_ADMIN puede re-abrirla con justificación."
-      : current.status === "CANCELLED"
-      ? "Esta OT ya fue cancelada."
-      : `Solo OTs en estado Planificada o En Espera pueden cancelarse (actual: ${current.status}).`;
-    throw new RouteError(409, "INVALID_STATUS_TRANSITION", reason);
+  if (current.status === "CLOSED") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", "Esta OT ya está cerrada. Solo TENANT_ADMIN puede re-abrirla con justificación.");
+  }
+  if (current.status === "CANCELLED") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", "Esta OT ya fue cancelada.");
+  }
+  if (current.status === "IN_PROGRESS") {
+    // Permitir cancelar IN_PROGRESS solo si NO hay trabajo registrado todavía
+    const delegates = prismaRaw as unknown as {
+      workLog: { count(a: { where: Record<string, unknown> }): Promise<number> };
+      workOrderProgressNote: { count(a: { where: Record<string, unknown> }): Promise<number> };
+      stockMovement: { count(a: { where: Record<string, unknown> }): Promise<number> };
+    };
+    const [workLogCount, progressNoteCount, stockMovementCount] = await Promise.all([
+      delegates.workLog.count({ where: { workOrderId: current.id } }),
+      delegates.workOrderProgressNote.count({ where: { workOrderId: current.id } }),
+      delegates.stockMovement.count({ where: { referenceType: "WORK_ORDER", referenceId: current.id } }),
+    ]);
+    if (workLogCount > 0 || progressNoteCount > 0 || stockMovementCount > 0) {
+      const parts: string[] = [];
+      if (workLogCount > 0) parts.push(`${workLogCount} registro(s) de trabajo`);
+      if (progressNoteCount > 0) parts.push(`${progressNoteCount} nota(s) de avance`);
+      if (stockMovementCount > 0) parts.push(`${stockMovementCount} movimiento(s) de stock`);
+      throw new RouteError(
+        409,
+        "INVALID_STATUS_TRANSITION",
+        `Esta OT ya tiene trabajo registrado (${parts.join(", ")}). Cancelarla rompería la trazabilidad. Para finalizarla, cerrala con resultado (ej. "No completada") o pasala a En Espera primero.`,
+      );
+    }
+  } else if (current.status !== "PLANNED" && current.status !== "ON_HOLD") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo OTs en estado Planificada, En Progreso (sin trabajo registrado) o En Espera pueden cancelarse (actual: ${current.status}).`);
   }
 
   const cancelled = await prisma.workOrder.update({
