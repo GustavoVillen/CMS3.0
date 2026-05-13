@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DndContext, DragOverlay, useDraggable, useDroppable, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, useDraggable, useDroppable, type DragEndEvent, type DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -1724,7 +1724,7 @@ function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
   onOpen: (wo: WorkOrder) => void;
 }) {
   const isDraggable = wo.status === "PLANNED" || wo.status === "IN_PROGRESS" || wo.status === "ON_HOLD";
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: wo.id,
     data: { wo },
     disabled: !isDraggable || isLoading,
@@ -1736,12 +1736,9 @@ function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
     <div
       ref={setNodeRef}
       style={style}
-      role="button"
-      tabIndex={0}
+      {...listeners}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      onKeyDown={e => { if ((e.key === "Enter" || e.key === " ") && !isDragging && !isLoading) onOpen(wo); }}
-      className={`w-full text-left bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 ${prioLeft} ${isDragging ? "opacity-40" : "hover:bg-white/[0.07]"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isLoading ? "opacity-60" : ""} transition-colors`}
-      {...(isDraggable ? { ...listeners, ...attributes } : {})}
+      className={`w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 select-none ${prioLeft} ${isDragging ? "opacity-40" : "hover:bg-white/[0.07]"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isLoading ? "opacity-60" : ""} transition-colors`}
     >
       <KanbanCardContent wo={wo} deferralMap={deferralMap} />
     </div>
@@ -1783,7 +1780,10 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const [overCol, setOverCol]       = useState<string | null>(null);
   const transitioningRef            = useRef<Set<string>>(new Set());
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveWo((event.active.data.current as { wo: WorkOrder }).wo);
