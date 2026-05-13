@@ -637,7 +637,9 @@ export async function holdWorkOrder(session: TenantAccessSession, id: string, pa
 
 /**
  * Reanuda una OT en espera: ON_HOLD → IN_PROGRESS.
- * Cancela el diferimiento asociado (si sigue en REQUESTED) sin revertir la OT.
+ * Resuelve el diferimiento vinculado según su estado:
+ *   - REQUESTED / UNDER_REVIEW → cancelar (soft-delete)
+ *   - APPROVED / ACTIVE        → cerrar (status CLOSED)
  */
 export async function resumeWorkOrder(session: TenantAccessSession, id: string) {
   ensureCanOperateWorkOrders(session);
@@ -656,20 +658,45 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
     data: { status: "IN_PROGRESS", holdReason: null, updatedByUserId: session.user.id },
   });
 
-  // Cancel any REQUESTED deferral linked to this WO (no revert needed, we already moved to IN_PROGRESS)
+  // Resolver diferimiento vinculado según su estado
   try {
-    const deferralDelegate = (prismaRaw as unknown as { deferral: { findFirst(a: unknown): Promise<{ id: string; status: string } | null>; update(a: unknown): Promise<unknown> } }).deferral;
+    const deferralDelegate = (prismaRaw as unknown as {
+      deferral: {
+        findFirst(a: unknown): Promise<{ id: string; status: string } | null>;
+        update(a: unknown): Promise<unknown>;
+      };
+    }).deferral;
     const linked = await deferralDelegate.findFirst({
-      where: { sourceType: "WORK_ORDER", sourceId: current.id, status: "REQUESTED", deletedAt: null },
+      where: {
+        sourceType: "WORK_ORDER",
+        sourceId: current.id,
+        deletedAt: null,
+        status: { in: ["REQUESTED", "UNDER_REVIEW", "APPROVED", "ACTIVE"] },
+      },
     });
     if (linked) {
-      await deferralDelegate.update({
-        where: { id: linked.id },
-        data: { deletedAt: new Date(), deletedByUserId: session.user.id, updatedByUserId: session.user.id },
-      });
+      const now = new Date();
+      if (linked.status === "REQUESTED" || linked.status === "UNDER_REVIEW") {
+        // Cancelar: soft-delete
+        await deferralDelegate.update({
+          where: { id: linked.id },
+          data: { deletedAt: now, deletedByUserId: session.user.id, updatedByUserId: session.user.id },
+        });
+      } else {
+        // APPROVED o ACTIVE: cerrar
+        await deferralDelegate.update({
+          where: { id: linked.id },
+          data: {
+            status: "CLOSED",
+            closedAt: now,
+            closeNotes: "Cerrado al reanudar la OT.",
+            updatedByUserId: session.user.id,
+          },
+        });
+      }
     }
   } catch (err) {
-    log.error("[resumeWorkOrder] failed to cancel linked deferral:", err);
+    log.error("[resumeWorkOrder] failed to handle linked deferral:", err);
   }
 
   void publishAudit(prismaRaw, {
