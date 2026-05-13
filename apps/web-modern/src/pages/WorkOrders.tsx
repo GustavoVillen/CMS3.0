@@ -1762,7 +1762,7 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
 const KANBAN_COLS: Array<{ colId: string; statuses: string[]; label: string; headerCls: string; borderCls: string; droppable: boolean }> = [
   { colId: "PLANNED",     statuses: ["PLANNED"],              label: "Planificadas", headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
   { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          label: "En Progreso",  headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
-  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              label: "En Espera",    headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
+  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              label: "Diferida",     headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
   { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
 ];
 
