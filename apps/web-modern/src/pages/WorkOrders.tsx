@@ -1858,16 +1858,27 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
     setDraggingWo(null);
     draggingWoRef.current = null;
 
+    const raw = e.dataTransfer.getData("text/plain");
+    console.log("[kanban] drop raw dataTransfer:", JSON.stringify(raw), "targetCol:", targetCol);
+
     let payload: { id: string; status: string } | null = null;
-    try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { /* noop */ }
-    if (!payload?.id || !payload?.status) return;
+    try { payload = JSON.parse(raw); } catch { /* noop */ }
+    if (!payload?.id || !payload?.status) {
+      window.alert(`[kanban] drop sin datos. raw="${raw}" target=${targetCol}`);
+      return;
+    }
 
     const { id, status } = payload;
+    console.log("[kanban] drop parsed:", { id, status, targetCol });
     if (status === targetCol) return;
 
     if (status === "PLANNED" && targetCol === "IN_PROGRESS") {
       try { await api.post(`/app/pms/work-orders/${id}/start`, {}); onReload(); }
-      catch (err) { console.error("[kanban] start failed", err); }
+      catch (err) {
+        const msg = err instanceof ApiError ? `${err.status} ${err.code}: ${err.message}` : String(err);
+        console.error("[kanban] start failed", err);
+        window.alert(`Error al iniciar OT:\n${msg}`);
+      }
       return;
     }
     if ((status === "PLANNED" || status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
@@ -1876,10 +1887,18 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       return;
     }
     if (status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${id}/resume`, {}); onReload(); }
-      catch (err) { console.error("[kanban] resume failed", err); }
+      try {
+        const result = await api.post(`/app/pms/work-orders/${id}/resume`, {});
+        console.log("[kanban] resume success:", result);
+        onReload();
+      } catch (err) {
+        const msg = err instanceof ApiError ? `${err.status} ${err.code}: ${err.message}` : String(err);
+        console.error("[kanban] resume failed", err);
+        window.alert(`Error al reanudar OT:\n${msg}\n\nURL: /app/pms/work-orders/${id}/resume`);
+      }
       return;
     }
+    window.alert(`[kanban] transición no soportada: ${status} → ${targetCol}`);
   }, [items, onReload]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
