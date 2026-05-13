@@ -699,6 +699,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   const [saving,          setSaving]         = useState(false);
   const [starting,        setStarting]       = useState(false);
+  const [resuming,        setResuming]       = useState(false);
   const [closing,         setClosing]        = useState(false);
   const [err,             setErr]            = useState<string | null>(null);
   const [expanded,        setExpanded]       = useState(true);
@@ -971,6 +972,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : t("common.unknownError"));
     } finally { setStarting(false); }
+  }, [workOrder.id, onSaved, t]);
+
+  const handleResume = useCallback(async () => {
+    setResuming(true); setErr(null);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/resume`, {});
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("common.unknownError"));
+    } finally { setResuming(false); }
   }, [workOrder.id, onSaved, t]);
 
   const onClose_WO = useCallback(async () => {
@@ -1671,6 +1682,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 Iniciar OT
               </button>
             )}
+            {workOrder.status === "ON_HOLD" && (
+              <button onClick={() => { void handleResume(); }} disabled={resuming}
+                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
+                {t("wo.resume")}
+              </button>
+            )}
             <button onClick={() => canPostpone && onOpenAction(workOrder, "hold")} disabled={!canPostpone}
               className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.postpone")}
@@ -1849,7 +1867,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       return;
     }
     if (wo.status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${wo.id}/reopen`, {}); onReload(); } catch { /* noop */ }
+      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); onReload(); } catch { /* noop */ }
       return;
     }
   }, [draggingWo, onReload]);

@@ -635,6 +635,54 @@ export async function holdWorkOrder(session: TenantAccessSession, id: string, pa
   return { ...held, deferralId };
 }
 
+/**
+ * Reanuda una OT en espera: ON_HOLD → IN_PROGRESS.
+ * Cancela el diferimiento asociado (si sigue en REQUESTED) sin revertir la OT.
+ */
+export async function resumeWorkOrder(session: TenantAccessSession, id: string) {
+  ensureCanOperateWorkOrders(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = workOrdersClient(prismaRaw);
+
+  const current = await getTenantWorkOrder(session, id);
+  if (current.status !== "ON_HOLD") {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo ON_HOLD puede pasar a IN_PROGRESS vía resume (actual: ${current.status}).`);
+  }
+
+  const resumed = await prisma.workOrder.update({
+    where: { id: current.id },
+    data: { status: "IN_PROGRESS", holdReason: null, updatedByUserId: session.user.id },
+  });
+
+  // Cancel any REQUESTED deferral linked to this WO (no revert needed, we already moved to IN_PROGRESS)
+  try {
+    const deferralDelegate = (prismaRaw as unknown as { deferral: { findFirst(a: unknown): Promise<{ id: string; status: string } | null>; update(a: unknown): Promise<unknown> } }).deferral;
+    const linked = await deferralDelegate.findFirst({
+      where: { sourceType: "WORK_ORDER", sourceId: current.id, status: "REQUESTED", deletedAt: null },
+    });
+    if (linked) {
+      await deferralDelegate.update({
+        where: { id: linked.id },
+        data: { deletedAt: new Date(), deletedByUserId: session.user.id, updatedByUserId: session.user.id },
+      });
+    }
+  } catch (err) {
+    log.error("[resumeWorkOrder] failed to cancel linked deferral:", err);
+  }
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.resumed",
+    entityType: "WorkOrder",
+    entityId: current.id,
+    metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode },
+  });
+  return resumed;
+}
+
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
   ensureCanOperateWorkOrders(session);
 
