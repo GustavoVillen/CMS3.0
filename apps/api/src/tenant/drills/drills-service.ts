@@ -12,6 +12,38 @@ const DRILL_TYPES = [
 ] as const;
 type DrillType = typeof DRILL_TYPES[number];
 
+/**
+ * Frecuencias mínimas por tipo de simulacro según SOLAS / ISPS / MARPOL / SMS.
+ * Valor en días. Sirve para calcular el próximo vencimiento desde la última
+ * realización.
+ *
+ *  FIRE / ABANDON_SHIP : SOLAS III/19.3.2 — mensual
+ *  ENCLOSED_SPACE      : SOLAS III/19.3.3.3 (MSC.350(92)) — bimestral
+ *  STEERING_GEAR       : SOLAS V/26.4 — trimestral
+ *  SECURITY            : ISPS A/13.4 — trimestral (exercise anual aparte)
+ *  POLLUTION / OIL_SPILL : MARPOL + SOPEP — trimestral (práctica)
+ *  MAN_OVERBOARD       : Recomendación industrial / SMS — trimestral
+ *  MEDICAL             : MLC + SMS — trimestral (default)
+ *  BLACKOUT            : SMS de la compañía — semestral típico
+ *  OTHER               : default anual
+ */
+export const DRILL_FREQUENCY_DAYS: Record<DrillType, number> = {
+  FIRE:           30,
+  ABANDON_SHIP:   30,
+  ENCLOSED_SPACE: 60,
+  STEERING_GEAR:  90,
+  SECURITY:       90,
+  POLLUTION:      90,
+  OIL_SPILL:      90,
+  MAN_OVERBOARD:  90,
+  MEDICAL:        90,
+  BLACKOUT:       180,
+  OTHER:          365,
+};
+
+/** Días antes del vencimiento en los que la matriz marca DUE_SOON */
+const DUE_SOON_THRESHOLD_DAYS = 14;
+
 export interface DrillListFilters {
   vesselCode?: string | null;
   status?: string | null;
@@ -336,6 +368,221 @@ export async function reopenDrill(session: TenantAccessSession, id: string, payl
   });
 
   return reopened;
+}
+
+/**
+ * Matriz de cumplimiento de simulacros: por cada (vessel, tipo) calcula
+ * último COMPLETED, próximo vencimiento según DRILL_FREQUENCY_DAYS y estado.
+ *
+ * Estados:
+ *  - NEVER     : nunca se completó un simulacro de ese tipo en el vessel
+ *  - OVERDUE   : la fecha de próximo vencimiento ya pasó
+ *  - DUE_SOON  : faltan ≤ DUE_SOON_THRESHOLD_DAYS para el vencimiento
+ *  - OK        : todavía en plazo
+ */
+export interface DrillMatrixCell {
+  vesselCode: string;
+  type: DrillType;
+  lastCompletedDate: string | null;
+  lastDrillId: string | null;
+  nextDueDate: string | null;   // ISO date; null si NEVER
+  daysUntilDue: number | null;  // negativo si OVERDUE; null si NEVER
+  frequencyDays: number;
+  status: "NEVER" | "OVERDUE" | "DUE_SOON" | "OK";
+}
+
+type DrillConfigDelegate = {
+  drillConfig: {
+    findMany(args: { where: Record<string, unknown> }): Promise<{ type: DrillType; frequencyDays: number; enabled: boolean }[]>;
+    findFirst(args: { where: Record<string, unknown> }): Promise<{ id: string; type: DrillType; frequencyDays: number; enabled: boolean } | null>;
+    create(args: { data: Record<string, unknown> }): Promise<{ id: string; type: DrillType; frequencyDays: number; enabled: boolean }>;
+    update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<{ id: string; type: DrillType; frequencyDays: number; enabled: boolean }>;
+  };
+};
+
+/**
+ * Carga la configuración efectiva del tenant: si hay registros en DrillConfig
+ * los usa; para los tipos sin override aplica el default de DRILL_FREQUENCY_DAYS
+ * con enabled=true.
+ */
+async function loadEffectiveDrillConfig(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+): Promise<Record<DrillType, { frequencyDays: number; enabled: boolean }>> {
+  const rows = await (prisma as unknown as DrillConfigDelegate).drillConfig.findMany({
+    where: { tenantId },
+  });
+  const byType = new Map(rows.map(r => [r.type, r]));
+  const out = {} as Record<DrillType, { frequencyDays: number; enabled: boolean }>;
+  for (const t of DRILL_TYPES) {
+    const ov = byType.get(t);
+    out[t] = ov
+      ? { frequencyDays: ov.frequencyDays, enabled: ov.enabled }
+      : { frequencyDays: DRILL_FREQUENCY_DAYS[t], enabled: true };
+  }
+  return out;
+}
+
+export async function listDrillConfig(session: TenantAccessSession) {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: DRILL_TYPES.map(t => ({ type: t, frequencyDays: DRILL_FREQUENCY_DAYS[t], enabled: true, isDefault: true })) };
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const rows = await (prisma as unknown as DrillConfigDelegate).drillConfig.findMany({
+    where: { tenantId: tenant.id },
+  });
+  const byType = new Map(rows.map(r => [r.type, r]));
+  return {
+    items: DRILL_TYPES.map(t => {
+      const ov = byType.get(t);
+      return {
+        type: t,
+        frequencyDays: ov?.frequencyDays ?? DRILL_FREQUENCY_DAYS[t],
+        enabled:       ov?.enabled ?? true,
+        isDefault:     !ov,
+      };
+    }),
+  };
+}
+
+export interface DrillConfigInput { frequencyDays?: number; enabled?: boolean }
+
+export async function upsertDrillConfig(session: TenantAccessSession, rawType: string, input: DrillConfigInput) {
+  ensureCanManage(session);
+
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const type = parseType(rawType);
+
+  let frequencyDays: number | undefined;
+  if (input.frequencyDays !== undefined) {
+    const n = Number(input.frequencyDays);
+    if (!Number.isFinite(n) || n < 1 || n > 3650 || Math.floor(n) !== n) {
+      throw new RouteError(400, "VALIDATION_ERROR", "frequencyDays debe ser entero entre 1 y 3650.");
+    }
+    frequencyDays = n;
+  }
+  const enabled = input.enabled === undefined ? undefined : Boolean(input.enabled);
+
+  const cfg = (prisma as unknown as DrillConfigDelegate).drillConfig;
+  const existing = await cfg.findFirst({ where: { tenantId: tenant.id, type } });
+
+  const row = existing
+    ? await cfg.update({
+        where: { id: existing.id },
+        data: {
+          ...(frequencyDays !== undefined ? { frequencyDays } : {}),
+          ...(enabled !== undefined ? { enabled } : {}),
+          updatedByUserId: session.user.id,
+        },
+      })
+    : await cfg.create({
+        data: {
+          tenantId: tenant.id,
+          type,
+          frequencyDays: frequencyDays ?? DRILL_FREQUENCY_DAYS[type],
+          enabled: enabled ?? true,
+          updatedByUserId: session.user.id,
+        },
+      });
+
+  void publishAudit(prisma, {
+    tenantId: tenant.id,
+    actorUserId: session.user.id,
+    action: existing ? "DrillConfig.updated" : "DrillConfig.created",
+    entityType: "DrillConfig",
+    entityId: row.id,
+    metadata: { type, frequencyDays: row.frequencyDays, enabled: row.enabled },
+  });
+
+  return { type, frequencyDays: row.frequencyDays, enabled: row.enabled, isDefault: false };
+}
+
+export async function getDrillsMatrix(session: TenantAccessSession, filters: { vesselCode?: string | null } = {}) {
+  const prisma = getPrismaClient();
+  if (!prisma) return { cells: [] as DrillMatrixCell[] };
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) return { cells: [] as DrillMatrixCell[] };
+
+  // Vessels en scope: TENANT_ADMIN ve todos; resto, los asignados.
+  const vesselWhere: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
+  if (session.user.role !== "TENANT_ADMIN") {
+    if (session.user.assignedVesselCodes.length === 0) return { cells: [] as DrillMatrixCell[] };
+    vesselWhere.code = { in: session.user.assignedVesselCodes };
+  }
+  if (filters.vesselCode) vesselWhere.code = filters.vesselCode;
+
+  const vessels = await (prisma as unknown as {
+    vessel: { findMany(a: { where: Record<string, unknown>; orderBy?: unknown }): Promise<{ code: string }[]> };
+  }).vessel.findMany({ where: vesselWhere, orderBy: { code: "asc" } });
+  if (vessels.length === 0) return { cells: [] as DrillMatrixCell[] };
+
+  const effective = await loadEffectiveDrillConfig(prisma, tenant.id);
+
+  // Trae solo simulacros COMPLETED del tenant y vessels en scope; quedarse con el más reciente por (vessel,type).
+  const drills = await drillClient(prisma).drill.findMany({
+    where: {
+      tenantId: tenant.id,
+      status: "COMPLETED",
+      deletedAt: null,
+      vesselCode: { in: vessels.map(v => v.code) },
+    },
+    orderBy: { completedDate: "desc" },
+  }) as Array<{ id: string; vesselCode: string; type: DrillType; completedDate: Date | null }>;
+
+  // Mapa (vesselCode|type) → drill más reciente
+  const latest = new Map<string, { id: string; completedDate: Date | null }>();
+  for (const d of drills) {
+    const k = `${d.vesselCode}|${d.type}`;
+    if (!latest.has(k) && d.completedDate) latest.set(k, { id: d.id, completedDate: d.completedDate });
+  }
+
+  const now = new Date();
+  const MS_PER_DAY = 86_400_000;
+  const cells: DrillMatrixCell[] = [];
+
+  for (const v of vessels) {
+    for (const type of DRILL_TYPES) {
+      const cfg = effective[type];
+      if (!cfg.enabled) continue;
+      const freq = cfg.frequencyDays;
+      const found = latest.get(`${v.code}|${type}`);
+      if (!found || !found.completedDate) {
+        cells.push({
+          vesselCode: v.code, type,
+          lastCompletedDate: null, lastDrillId: null,
+          nextDueDate: null, daysUntilDue: null,
+          frequencyDays: freq,
+          status: "NEVER",
+        });
+        continue;
+      }
+      const nextDue = new Date(found.completedDate.getTime() + freq * MS_PER_DAY);
+      const daysUntilDue = Math.ceil((nextDue.getTime() - now.getTime()) / MS_PER_DAY);
+      const status: DrillMatrixCell["status"] =
+        daysUntilDue < 0 ? "OVERDUE" :
+        daysUntilDue <= DUE_SOON_THRESHOLD_DAYS ? "DUE_SOON" :
+        "OK";
+      cells.push({
+        vesselCode: v.code, type,
+        lastCompletedDate: found.completedDate.toISOString(),
+        lastDrillId: found.id,
+        nextDueDate: nextDue.toISOString(),
+        daysUntilDue,
+        frequencyDays: freq,
+        status,
+      });
+    }
+  }
+
+  return { cells };
 }
 
 export async function deleteDrill(session: TenantAccessSession, id: string) {

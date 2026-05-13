@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { CalendarCheck, Plus, X, Loader2, AlertTriangle } from "lucide-react";
+import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -67,16 +67,18 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 // ─── Drill Modal ─────────────────────────────────────────────────────────────
 
-const DrillModal: React.FC<{ drill: Drill | null; onClose: () => void; onSaved: () => void }> = ({ drill, onClose, onSaved }) => {
+interface DrillPrefill { vesselCode?: string; type?: string; scheduledDate?: string }
+
+const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClose: () => void; onSaved: () => void }> = ({ drill, prefill, onClose, onSaved }) => {
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
   const isNew = !drill;
   const isLocked = drill?.status === "COMPLETED" || drill?.status === "CANCELLED";
 
-  const [vesselCode, setVesselCode]     = useState(drill?.vesselCode ?? vessels[0]?.code ?? "");
-  const [type, setType]                 = useState(drill?.type ?? "FIRE");
-  const [scheduledDate, setScheduled]   = useState((drill?.scheduledDate ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10));
+  const [vesselCode, setVesselCode]     = useState(drill?.vesselCode ?? prefill?.vesselCode ?? vessels[0]?.code ?? "");
+  const [type, setType]                 = useState(drill?.type ?? prefill?.type ?? "FIRE");
+  const [scheduledDate, setScheduled]   = useState((drill?.scheduledDate ?? "").slice(0, 10) || prefill?.scheduledDate || new Date().toISOString().slice(0, 10));
   const [scenario, setScenario]         = useState(drill?.scenario ?? "");
   const [observations, setObservations] = useState(drill?.observations ?? "");
   const [lessonsLearned, setLessons]    = useState(drill?.lessonsLearned ?? "");
@@ -251,9 +253,261 @@ const DrillModal: React.FC<{ drill: Drill | null; onClose: () => void; onSaved: 
   );
 };
 
+// ─── Matriz de cumplimiento ──────────────────────────────────────────────────
+
+type MatrixStatus = "NEVER" | "OVERDUE" | "DUE_SOON" | "OK";
+
+interface MatrixCell {
+  vesselCode: string;
+  type: string;
+  lastCompletedDate: string | null;
+  lastDrillId: string | null;
+  nextDueDate: string | null;
+  daysUntilDue: number | null;
+  frequencyDays: number;
+  status: MatrixStatus;
+}
+
+const STATUS_CELL_CLS: Record<MatrixStatus, string> = {
+  OVERDUE:  "bg-red-500/15 text-red-300 border-red-500/30 hover:bg-red-500/25",
+  DUE_SOON: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25",
+  NEVER:    "bg-white/5 text-text-industrial/60 border-white/10 hover:bg-white/10",
+  OK:       "bg-success-sea/10 text-success-sea/80 border-success-sea/20 hover:bg-success-sea/15",
+};
+
+const STATUS_CELL_LABEL: Record<MatrixStatus, string> = {
+  OVERDUE:  "Vencido",
+  DUE_SOON: "Próximo",
+  NEVER:    "Sin registro",
+  OK:       "Al día",
+};
+
+const DrillsMatrix: React.FC<{ onPlan: (vesselCode: string, type: string) => void }> = ({ onPlan }) => {
+  const { data, loading, reload } = useFetch<{ cells: MatrixCell[] }>("/app/drills/matrix", []);
+  const [expanded, setExpanded] = useState(true);
+
+  // Agrupar: tipos × vessels
+  const { types, vessels, byKey } = useMemo(() => {
+    const cells = data?.cells ?? [];
+    const typeSet = new Set<string>();
+    const vesselSet = new Set<string>();
+    const m = new Map<string, MatrixCell>();
+    for (const c of cells) {
+      typeSet.add(c.type);
+      vesselSet.add(c.vesselCode);
+      m.set(`${c.vesselCode}|${c.type}`, c);
+    }
+    return {
+      types:   Array.from(typeSet),
+      vessels: Array.from(vesselSet).sort(),
+      byKey:   m,
+    };
+  }, [data]);
+
+  const overdueCount = (data?.cells ?? []).filter(c => c.status === "OVERDUE").length;
+  const dueSoonCount = (data?.cells ?? []).filter(c => c.status === "DUE_SOON").length;
+
+  return (
+    <section className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden">
+      <button onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.04] transition-colors text-left">
+        {expanded ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
+        <span className="text-xs font-bold uppercase tracking-wider text-white">Matriz de cumplimiento</span>
+        <span className="text-[10px] text-text-industrial/40">— SOLAS / ISPS / MARPOL</span>
+        <div className="ml-auto flex items-center gap-2">
+          {overdueCount > 0 && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/15 text-red-300 border-red-500/30">{overdueCount} vencidos</span>
+          )}
+          {dueSoonCount > 0 && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-300 border-yellow-500/30">{dueSoonCount} próximos</span>
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-white/10 overflow-x-auto">
+          {loading && !data ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+          ) : types.length === 0 || vessels.length === 0 ? (
+            <div className="text-center py-8 text-text-industrial/40 text-xs">Sin vessels o tipos habilitados.</div>
+          ) : (
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left px-3 py-2 font-bold text-text-industrial/60 uppercase tracking-wider sticky left-0 bg-[#0D1B2A] z-10">Tipo / Freq.</th>
+                  {vessels.map(v => (
+                    <th key={v} className="text-center px-3 py-2 font-mono font-bold text-accent">{v}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {types.map(t => {
+                  const sample = byKey.get(`${vessels[0]}|${t}`);
+                  return (
+                    <tr key={t} className="border-b border-white/5 last:border-b-0">
+                      <td className="px-3 py-2 sticky left-0 bg-[#0D1B2A] z-10">
+                        <div className="font-bold text-white">{DRILL_TYPE_LABEL[t] ?? t}</div>
+                        <div className="text-[9px] text-text-industrial/40">cada {sample?.frequencyDays ?? "?"} días</div>
+                      </td>
+                      {vessels.map(v => {
+                        const c = byKey.get(`${v}|${t}`);
+                        if (!c) return <td key={v} className="px-2 py-2 text-center text-text-industrial/20">—</td>;
+                        const cellCls = STATUS_CELL_CLS[c.status];
+                        const main =
+                          c.status === "NEVER"   ? "Nunca" :
+                          c.status === "OVERDUE" ? `Vencido hace ${Math.abs(c.daysUntilDue!)} d` :
+                          c.status === "DUE_SOON" ? `En ${c.daysUntilDue} d` :
+                          `En ${c.daysUntilDue} d`;
+                        return (
+                          <td key={v} className="px-2 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => onPlan(v, t)}
+                              title={`${STATUS_CELL_LABEL[c.status]}${c.lastCompletedDate ? ` — último: ${fmtDate(c.lastCompletedDate)}` : ""}${c.nextDueDate ? ` — próximo: ${fmtDate(c.nextDueDate)}` : ""}`}
+                              className={`w-full px-2 py-1 rounded-md border font-bold text-[10px] transition-colors ${cellCls}`}
+                            >
+                              {main}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 text-[10px] text-text-industrial/40">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/40" />Vencido</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/40" />Próximo (≤14d)</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-success-sea/40" />Al día</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/20" />Sin registro</span>
+            </div>
+            <button onClick={() => void reload()} className="hover:text-white">Refrescar</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
+
+// ─── Modal Configurar frecuencias ────────────────────────────────────────────
+
+interface ConfigRow { type: string; frequencyDays: number; enabled: boolean; isDefault: boolean }
+
+const DrillConfigModal: React.FC<{ onClose: () => void; onSaved: () => void }> = ({ onClose, onSaved }) => {
+  const { data, loading } = useFetch<{ items: ConfigRow[] }>("/app/drills/config", []);
+  const [rows, setRows] = useState<ConfigRow[]>([]);
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  React.useEffect(() => { if (data?.items) setRows(data.items); }, [data]);
+
+  const setField = (type: string, patch: Partial<ConfigRow>) => {
+    setRows(prev => prev.map(r => r.type === type ? { ...r, ...patch } : r));
+    setDirty(prev => new Set(prev).add(type));
+  };
+
+  const onSave = async () => {
+    if (dirty.size === 0) { onClose(); return; }
+    setSaving(true); setErr(null);
+    try {
+      for (const type of dirty) {
+        const r = rows.find(x => x.type === type);
+        if (!r) continue;
+        await api.patch(`/app/drills/config/${type}`, {
+          frequencyDays: r.frequencyDays,
+          enabled: r.enabled,
+        });
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al guardar configuración.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-2xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3">
+            <Settings className="w-4 h-4 text-accent" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Configuración</p>
+              <h2 className="text-sm font-bold text-white">Frecuencias de simulacros</h2>
+            </div>
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6">
+          <p className="text-xs text-text-industrial/60 mb-3">
+            Frecuencia mínima entre simulacros de cada tipo. Los valores por defecto siguen SOLAS / ISPS / MARPOL. Ajustá según el plan de simulacros de tu compañía.
+          </p>
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-text-industrial/50">
+                  <th className="text-left py-2 font-bold uppercase tracking-wider">Tipo</th>
+                  <th className="text-center py-2 font-bold uppercase tracking-wider w-32">Días</th>
+                  <th className="text-center py-2 font-bold uppercase tracking-wider w-24">Activo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.type} className="border-b border-white/5">
+                    <td className="py-2">
+                      <span className="text-white font-medium">{DRILL_TYPE_LABEL[r.type] ?? r.type}</span>
+                      {r.isDefault && !dirty.has(r.type) && (
+                        <span className="ml-2 text-[9px] text-text-industrial/40 uppercase">default</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-center">
+                      <input
+                        type="number" min={1} max={3650}
+                        value={r.frequencyDays}
+                        onChange={e => setField(r.type, { frequencyDays: Math.max(1, parseInt(e.target.value, 10) || 0) })}
+                        disabled={!r.enabled}
+                        className="w-24 text-center bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white disabled:opacity-40"
+                      />
+                    </td>
+                    <td className="py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={r.enabled}
+                        onChange={e => setField(r.type, { enabled: e.target.checked })}
+                        className="rounded"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {err && <p className="mt-3 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+          <button onClick={() => { void onSave(); }} disabled={saving || dirty.size === 0}
+            className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : `Guardar${dirty.size > 0 ? ` (${dirty.size})` : ""}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const DrillsPage: React.FC = () => {
+  const { user } = useAuth();
+  const canConfigure = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER" || user?.role === "FLEET_SUPERINTENDENT";
+
   const [filter, setFilter] = useState<"upcoming" | "completed" | "all">("upcoming");
 
   const path = useMemo(() => {
@@ -264,15 +518,31 @@ export const DrillsPage: React.FC = () => {
 
   const { data, loading, reload } = useFetch<{ items: Drill[]; total: number }>(path, [path]);
   const [showCreate, setShowCreate] = useState(false);
+  const [prefill, setPrefill] = useState<DrillPrefill | undefined>(undefined);
   const [editing, setEditing] = useState<Drill | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+  // bumpea para forzar re-mount de DrillsMatrix tras guardar config o crear drill
+  const [matrixKey, setMatrixKey] = useState(0);
+
+  const handlePlanFromMatrix = useCallback((vesselCode: string, type: string) => {
+    setPrefill({ vesselCode, type, scheduledDate: new Date().toISOString().slice(0, 10) });
+    setShowCreate(true);
+  }, []);
 
   return (
     <div className="p-6 space-y-4">
       <PageHeader icon={CalendarCheck} title="Simulacros" total={data?.total} onReload={reload}>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        {canConfigure && (
+          <button onClick={() => setShowConfig(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+            <Settings className="w-3.5 h-3.5 text-accent" /> Configurar frecuencias
+          </button>
+        )}
+        <button onClick={() => { setPrefill(undefined); setShowCreate(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nuevo simulacro
         </button>
       </PageHeader>
+
+      <DrillsMatrix key={matrixKey} onPlan={handlePlanFromMatrix} />
 
       <div className="flex gap-2">
         {([["upcoming", "Programados"], ["completed", "Realizados"], ["all", "Todos"]] as const).map(([v, l]) => (
@@ -315,8 +585,20 @@ export const DrillsPage: React.FC = () => {
       {(showCreate || editing) && (
         <DrillModal
           drill={editing}
-          onClose={() => { setShowCreate(false); setEditing(null); }}
-          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          prefill={prefill}
+          onClose={() => { setShowCreate(false); setEditing(null); setPrefill(undefined); }}
+          onSaved={() => {
+            setShowCreate(false); setEditing(null); setPrefill(undefined);
+            setMatrixKey(k => k + 1);
+            void reload();
+          }}
+        />
+      )}
+
+      {showConfig && (
+        <DrillConfigModal
+          onClose={() => setShowConfig(false)}
+          onSaved={() => { setShowConfig(false); setMatrixKey(k => k + 1); }}
         />
       )}
     </div>

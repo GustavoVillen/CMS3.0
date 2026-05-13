@@ -52,6 +52,7 @@ import {
 } from "./crew/certifications-service";
 import {
   listDrills, getDrill, createDrill, updateDrill, completeDrill, cancelDrill, reopenDrill, deleteDrill,
+  getDrillsMatrix, listDrillConfig, upsertDrillConfig,
 } from "./drills/drills-service";
 import { getCrewSummary } from "./crew/crew-summary-service";
 import {
@@ -1254,6 +1255,24 @@ export async function handleTenantRoutes(
   }
 
   // ── Drills / Simulacros ────────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/drills/matrix") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const matrix = await getDrillsMatrix(session, { vesselCode: url.searchParams.get("vesselCode") });
+    sendJson(response, 200, matrix);
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/drills/config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await listDrillConfig(session));
+    return true;
+  }
+  if (method === "PATCH" && /^\/app\/drills\/config\/[A-Z_]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const type = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof upsertDrillConfig>[2];
+    sendJson(response, 200, await upsertDrillConfig(session, type, body));
+    return true;
+  }
   if (method === "GET" && url.pathname === "/app/drills") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const items = await listDrills(session, {

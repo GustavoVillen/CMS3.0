@@ -1,5 +1,67 @@
 HISTORY.txt
 
+[2026-05-13] Simulacros — matriz de cumplimiento + configuración de frecuencias
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+La página de Simulacros sólo listaba drills programados/realizados, pero no
+había forma de ver el cumplimiento por (vessel × tipo) ni alertas de
+vencimiento contra SOLAS/ISPS/MARPOL. Faltaba también poder ajustar las
+frecuencias por tenant para adaptarlas al plan de simulacros de la
+compañía.
+
+CAMBIOS:
+
+· prisma/schema.prisma + migrations/20260513_drill_config/
+  Nueva tabla DrillConfig (tenantId, type, frequencyDays, enabled,
+  updatedAt, updatedByUserId), UNIQUE(tenantId, type). Si no hay registro
+  el servicio aplica el default constante.
+
+· apps/api/src/tenant/drills/drills-service.ts
+  - Constante DRILL_FREQUENCY_DAYS con los defaults SOLAS/ISPS/MARPOL:
+    FIRE/ABANDON_SHIP 30d (mensual), ENCLOSED_SPACE 60d (bimestral),
+    STEERING_GEAR/SECURITY/POLLUTION/OIL_SPILL/MAN_OVERBOARD/MEDICAL 90d
+    (trimestral), BLACKOUT 180d, OTHER 365d.
+  - DUE_SOON_THRESHOLD_DAYS = 14.
+  - loadEffectiveDrillConfig(): merge DB ↔ defaults por tipo.
+  - getDrillsMatrix(session, filters): por cada (vessel en scope × tipo
+    habilitado) computa último COMPLETED, nextDueDate y status:
+    NEVER / OVERDUE / DUE_SOON / OK.
+  - listDrillConfig / upsertDrillConfig (validación 1..3650 días,
+    audit Drill.config.{created|updated}).
+
+· apps/api/src/tenant/tenant-router.ts
+  Routes: GET /app/drills/matrix, GET /app/drills/config,
+  PATCH /app/drills/config/:type. Las /matrix y /config se registran
+  ANTES del catch-all /app/drills/:id para no colisionar.
+
+· apps/web-modern/src/pages/Drills.tsx
+  - <DrillsMatrix>: sección colapsable encima de la lista. Tabla tipo×vessel
+    con celdas coloreadas (rojo vencido / amarillo próximo ≤14d / verde al
+    día / gris sin registro). Header muestra contadores de vencidos +
+    próximos. Cada celda es clickeable → handlePlanFromMatrix abre el
+    modal de nuevo simulacro con vessel+type pre-rellenados (scheduledDate
+    = hoy).
+  - <DrillConfigModal>: tabla editable de frecuencias (días) + checkbox
+    "Activo". Marca rows como dirty y guarda en lote vía PATCH por tipo.
+    Solo TENANT_ADMIN / FLEET_SUPERINTENDENT / MAINTENANCE_MANAGER.
+  - DrillModal acepta prop `prefill?: {vesselCode, type, scheduledDate}`.
+  - matrixKey se incrementa tras crear/completar drill o tras guardar
+    config para que la matriz re-fetchee.
+
+VERIFICADO:
+  · tsc backend OK (sólo warnings preexistentes de deprecation TS5101/5107)
+  · tsc + vite build frontend OK (1853 KB)
+  · Sin breaking changes en lista/modal existente
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  set -a; . /app/.env; set +a
+  npx prisma db push          # crea tabla DrillConfig
+  npx prisma generate
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-13] WO/Diferimientos — UX e indicadores en cards/modal/lista
 Agent: Claude Opus 4.7
 

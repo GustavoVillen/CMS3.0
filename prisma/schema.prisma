@@ -2551,6 +2551,23 @@ model Drill {
   @@index([scheduledDate])
 }
 
+// Frecuencia mínima por tipo de simulacro, configurable por tenant.
+// Si no existe registro para un tipo, el servicio aplica el default
+// DRILL_FREQUENCY_DAYS (SOLAS/ISPS/MARPOL).
+model DrillConfig {
+  id              String    @id @default(cuid())
+  tenantId        String
+  type            DrillType
+  frequencyDays   Int
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String
+
+  @@unique([tenantId, type])
+  @@index([tenantId])
+}
+
 // ── Block: Permit to Work (Vetting Sprint 1 — SOLAS II-2/10, XI-1/7, SIRE 2.0) ─
 
 model PermitToWork {
