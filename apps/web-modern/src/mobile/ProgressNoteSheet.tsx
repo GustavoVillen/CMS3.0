@@ -10,14 +10,42 @@ interface Props {
   onSaved: () => void;
 }
 
+// Comprime una imagen usando Canvas a máx 1280px y calidad JPEG 0.75.
+// Devuelve el archivo original si algo falla.
+async function compressImage(f: File): Promise<File> {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width: w, height: h } = img;
+      const MAX = 1280;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (!blob) { resolve(f); return; }
+        const name = f.name.replace(/\.[^.]+$/, ".jpg");
+        resolve(new File([blob], name, { type: "image/jpeg" }));
+      }, "image/jpeg", 0.75);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(f); };
+    img.src = url;
+  });
+}
+
 // Bottom sheet para registrar un avance de trabajo en una OT.
-// Permite 4 tipos: texto, foto, video, audio (grabación en navegador).
-// Cada tipo opcionalmente acepta un caption descriptivo.
+// Permite 4 tipos: texto, foto (comprimida), video (getUserMedia baja res), audio.
 export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSaved }) => {
   const [kind, setKind]         = useState<Kind>("TEXT");
   const [text, setText]         = useState("");
   const [file, setFile]         = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [saving, setSaving]     = useState(false);
   const [err, setErr]           = useState<string | null>(null);
 
@@ -27,13 +55,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // SpeechRecognition: transcribe audio en el navegador. Cuando termina la
-  // grabación, el transcript se envía como `text` junto con el archivo,
-  // y el backend lo usa directamente como processedText (sin OCR/AI extra).
   const speechRecognitionRef = useRef<any>(null);
   const transcriptRef = useRef<string>("");
-  // Estado visual del SR: si el browser lo soporta, si está activo, y el
-  // transcript que se va viendo en vivo (final + interim).
   const SR_AVAILABLE = typeof window !== "undefined" &&
     (!!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition);
   const [srStatus, setSrStatus] = useState<"idle" | "active" | "error" | "unavailable">(
@@ -41,16 +64,29 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   );
   const [liveTranscript, setLiveTranscript] = useState("");
 
-  // Limpiar URL de preview al desmontar
+  // ─── Video recording state ────────────────────────────────────────────────
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoElapsed, setVideoElapsed] = useState(0);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const videoElapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+
+  // Limpiar URLs y streams al desmontar
   useEffect(() => {
     return () => {
       if (filePreview) URL.revokeObjectURL(filePreview);
       if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-      // Si la grabación quedó activa al cerrar, parar el stream
+      if (videoElapsedRef.current) clearInterval(videoElapsedRef.current);
       const mr = mediaRecorderRef.current;
       if (mr && mr.state !== "inactive") {
         try { mr.stop(); } catch { /* noop */ }
         mr.stream.getTracks().forEach(t => t.stop());
+      }
+      const vr = videoRecorderRef.current;
+      if (vr && vr.state !== "inactive") {
+        try { vr.stop(); } catch { /* noop */ }
+        vr.stream.getTracks().forEach(t => t.stop());
       }
       if (speechRecognitionRef.current) {
         try { speechRecognitionRef.current.stop(); } catch { /* noop */ }
@@ -64,6 +100,15 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(null);
     setAudioElapsed(0);
+    setVideoElapsed(0);
+    // Parar grabación de video si estaba activa
+    const vr = videoRecorderRef.current;
+    if (vr && vr.state !== "inactive") {
+      try { vr.stop(); } catch { /* noop */ }
+      vr.stream.getTracks().forEach(t => t.stop());
+    }
+    setVideoRecording(false);
+    if (videoElapsedRef.current) { clearInterval(videoElapsedRef.current); videoElapsedRef.current = null; }
   };
 
   const switchKind = (k: Kind) => {
@@ -72,23 +117,89 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
     setErr(null);
   };
 
-  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ─── Foto: selección + compresión ────────────────────────────────────────
+  const onFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
     if (!f) return;
-    setFile(f);
-    if (filePreview) URL.revokeObjectURL(filePreview);
-    setFilePreview(URL.createObjectURL(f));
-  };
+    setCompressing(true);
+    setErr(null);
+    try {
+      const compressed = await compressImage(f);
+      setFile(compressed);
+      if (filePreview) URL.revokeObjectURL(filePreview);
+      setFilePreview(URL.createObjectURL(compressed));
+    } catch {
+      setFile(f);
+      if (filePreview) URL.revokeObjectURL(filePreview);
+      setFilePreview(URL.createObjectURL(f));
+    } finally {
+      setCompressing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePreview]);
+
+  // ─── Video: grabación con getUserMedia a baja resolución ─────────────────
+  const startVideoRecording = useCallback(async () => {
+    setErr(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErr("Tu navegador no soporta grabación de video.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { max: 640 }, height: { max: 480 }, frameRate: { max: 15 } },
+        audio: true,
+      });
+
+      // Preview en vivo mientras graba
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        videoPreviewRef.current.play().catch(() => {/* noop */});
+      }
+
+      const options: MediaRecorderOptions = {};
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm;codecs=vp8")) {
+        options.mimeType = "video/webm;codecs=vp8";
+        options.videoBitsPerSecond = 500_000;
+      } else if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm")) {
+        options.mimeType = "video/webm";
+        options.videoBitsPerSecond = 500_000;
+      }
+
+      const mr = new MediaRecorder(stream, options);
+      videoRecorderRef.current = mr;
+      videoChunksRef.current = [];
+
+      mr.ondataavailable = ev => { if (ev.data.size > 0) videoChunksRef.current.push(ev.data); };
+      mr.onstop = () => {
+        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(videoChunksRef.current, { type: mr.mimeType || "video/webm" });
+        const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+        const videoFile = new File([blob], `video-${Date.now()}.${ext}`, { type: blob.type });
+        setFile(videoFile);
+        if (filePreview) URL.revokeObjectURL(filePreview);
+        setFilePreview(URL.createObjectURL(blob));
+      };
+
+      mr.start();
+      setVideoRecording(true);
+      setVideoElapsed(0);
+      videoElapsedRef.current = setInterval(() => setVideoElapsed(e => e + 1), 1000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo acceder a la cámara.";
+      setErr(`Permiso de cámara denegado: ${msg}`);
+    }
+  }, [filePreview]);
+
+  const stopVideoRecording = useCallback(() => {
+    const mr = videoRecorderRef.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+    setVideoRecording(false);
+    if (videoElapsedRef.current) { clearInterval(videoElapsedRef.current); videoElapsedRef.current = null; }
+  }, []);
 
   // ─── Audio recording handlers ─────────────────────────────────────────────
-  // Estrategia: grabar audio con MediaRecorder Y en paralelo correr Web Speech
-  // Recognition. El transcript final se almacena en transcriptRef y se manda
-  // como `text` junto con el blob. El usuario VE el transcript en vivo (final
-  // + interim) durante la grabación; tras detenerla, puede editarlo en el
-  // textarea antes de guardar.
-  //
-  // Si SR no está disponible (Firefox, iOS Safari pre-14.5), el audio igual
-  // se sube — el supervisor puede escucharlo. Mensaje visual claro al usuario.
   const startRecording = useCallback(async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -112,16 +223,12 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         setFile(audioFile);
         if (filePreview) URL.revokeObjectURL(filePreview);
         setFilePreview(URL.createObjectURL(blob));
-        // Si Speech Recognition produjo transcript, lo seteamos como caption
-        // editable. Si el usuario ya tipeó algo, no lo sobreescribimos.
         const tx = transcriptRef.current.trim();
         if (tx && !text.trim()) setText(tx);
-        // Liberar el micrófono
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
 
-      // Arrancar Speech Recognition en paralelo
       const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SR) {
         try {
@@ -141,20 +248,13 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
               }
             }
             transcriptRef.current = finalAccum;
-            // El usuario ve final + interim (con interim en gris semi-transparente)
             setLiveTranscript(finalAccum + (interimText ? ` ${interimText}` : ""));
             setSrStatus("active");
           };
           recog.onerror = (ev: any) => {
-            // Errores comunes: 'no-speech', 'audio-capture', 'not-allowed', 'network'
-            // 'no-speech' es esperable si el usuario está en silencio
-            if (ev?.error && ev.error !== "no-speech") {
-              setSrStatus("error");
-            }
+            if (ev?.error && ev.error !== "no-speech") setSrStatus("error");
           };
           recog.onend = () => {
-            // Si el usuario sigue grabando pero SR terminó (típico cada 60s en
-            // Android), reintentar automáticamente.
             if (mediaRecorderRef.current?.state === "recording") {
               try { recog.start(); } catch { /* ya está corriendo */ }
             }
@@ -162,9 +262,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
           recog.start();
           speechRecognitionRef.current = recog;
           setSrStatus("active");
-        } catch (e) {
+        } catch {
           setSrStatus("error");
-          // SR rechazó el start — el audio se sube igual, sin transcript
         }
       }
 
@@ -206,7 +305,6 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       if (kind === "TEXT") {
         await api.post(`/app/pms/work-orders/${workOrderId}/progress-notes?kind=TEXT`, { text: text.trim() });
       } else {
-        // Binary body + headers para nombre, mime y caption opcional
         const headers: Record<string, string> = {
           "x-filename":  encodeURIComponent(file!.name),
           "x-mime-type": file!.type || "application/octet-stream",
@@ -271,8 +369,10 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
           ))}
         </div>
 
-        {/* Body — cambia por kind */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+
+          {/* ── TEXTO ── */}
           {kind === "TEXT" && (
             <div className="space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/40">Descripción del avance</p>
@@ -286,9 +386,15 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
             </div>
           )}
 
+          {/* ── FOTO ── */}
           {kind === "PHOTO" && (
             <>
-              {filePreview ? (
+              {compressing ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-8 text-text-industrial/60">
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
+                  <span className="text-xs">Comprimiendo imagen...</span>
+                </div>
+              ) : filePreview ? (
                 <div className="relative">
                   <img src={filePreview} alt="Foto" className="w-full rounded-xl border border-white/10 object-cover max-h-80" />
                   <button type="button" onClick={resetMedia} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white">
@@ -299,6 +405,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15">
                   <Camera className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
+                  <span className="text-[10px] text-text-industrial/40 normal-case font-normal">Se comprime automáticamente</span>
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
                 </label>
               )}
@@ -312,21 +419,49 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
             </>
           )}
 
+          {/* ── VIDEO ── */}
           {kind === "VIDEO" && (
             <>
               {filePreview ? (
                 <div className="relative">
                   <video src={filePreview} controls className="w-full rounded-xl border border-white/10 max-h-80" />
-                  <button type="button" onClick={resetMedia} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white">
+                  <button type="button" onClick={() => { resetMedia(); }} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              ) : videoRecording ? (
+                <div className="flex flex-col items-center gap-3">
+                  {/* Preview en vivo */}
+                  <video
+                    ref={videoPreviewRef}
+                    muted
+                    playsInline
+                    className="w-full rounded-xl border border-red-500/30 max-h-64 object-cover bg-black"
+                  />
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <p className="text-sm font-bold text-white tabular-nums">{minSec(videoElapsed)}</p>
+                    <span className="text-[10px] text-text-industrial/50">640×480 · 15fps · 500 kbps</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={stopVideoRecording}
+                    className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <Square className="w-3.5 h-3.5" />
+                    Detener
+                  </button>
+                </div>
               ) : (
-                <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15">
+                <button
+                  type="button"
+                  onClick={() => { void startVideoRecording(); }}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 hover:bg-white/10 active:bg-white/15"
+                >
                   <VideoIcon className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Grabar video</span>
-                  <input type="file" accept="video/*" capture="environment" className="hidden" onChange={onFileSelect} />
-                </label>
+                  <span className="text-[10px] text-text-industrial/40 normal-case font-normal">Baja resolución (640×480, 500 kbps)</span>
+                </button>
               )}
               <textarea
                 value={text}
@@ -338,6 +473,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
             </>
           )}
 
+          {/* ── AUDIO ── */}
           {kind === "AUDIO" && (
             <>
               {filePreview ? (
@@ -358,14 +494,12 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
                     <p className="text-sm font-bold text-white tabular-nums">{minSec(audioElapsed)}</p>
                   </div>
-                  {/* Indicador de estado de la transcripción */}
                   <div className="text-[10px] text-text-industrial/60 flex items-center gap-1.5">
                     {srStatus === "active" && <span className="text-success-sea">● Transcribiendo en vivo</span>}
                     {srStatus === "error" && <span className="text-orange-400">⚠ Transcripción falló — el audio se guarda igual</span>}
                     {srStatus === "unavailable" && <span className="text-text-industrial/40">Transcripción no soportada por el navegador</span>}
                     {srStatus === "idle" && <span>Iniciando transcripción...</span>}
                   </div>
-                  {/* Transcripción en vivo (final + interim) */}
                   {liveTranscript && (
                     <div className="w-full max-h-32 overflow-y-auto bg-black/20 rounded-lg px-3 py-2 text-xs text-white/85 leading-relaxed">
                       {liveTranscript}
@@ -383,7 +517,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
               ) : (
                 <button
                   type="button"
-                  onClick={startRecording}
+                  onClick={() => { void startRecording(); }}
                   className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 hover:bg-white/10 active:bg-white/15"
                 >
                   <Mic className="w-6 h-6" />
@@ -417,8 +551,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         <div className="border-t border-white/10 p-3">
           <button
             type="button"
-            onClick={handleSave}
-            disabled={saving || recording}
+            onClick={() => { void handleSave(); }}
+            disabled={saving || recording || videoRecording || compressing}
             className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar avance"}
