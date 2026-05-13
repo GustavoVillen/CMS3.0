@@ -527,11 +527,16 @@ export async function regenerateObservationsForWorkOrder(
       assetName = asset?.name ?? null;
     } catch { /* non-blocking */ }
 
+    // Para notas TEXT y AUDIO, usamos note.text directamente si processedText es null.
+    // processedText solo se genera para PHOTO (OCR) y AUDIO con transcripción.
     const noteTexts = allNotes
-      .filter((n: any) => n.processedText && n.processedText.trim())
+      .filter((n: any) => {
+        const effective = n.processedText?.trim() || n.text?.trim();
+        return !!effective;
+      })
       .map((n: any) => ({
         kind: n.kind as string,
-        text: n.processedText as string,
+        text: (n.processedText?.trim() || n.text?.trim()) as string,
         createdAt: n.createdAt as Date,
       }));
 

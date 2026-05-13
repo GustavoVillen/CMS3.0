@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, Camera, CheckCheck, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -322,6 +322,40 @@ function CritBadge({ crit }: { crit: string }) {
   );
 }
 
+// ── PhaseHeader — cabecera numerada por fase del flujo de OT ─────────────────
+
+const PhaseHeader: React.FC<{
+  n: number;
+  label: string;
+  dotCls: string;
+  borderCls: string;
+  action?: React.ReactNode;
+  collapsible?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  hint?: string;
+}> = ({ n, label, dotCls, borderCls, action, collapsible, expanded, onToggle, hint }) => (
+  <div className={`flex items-center gap-2.5 border-t-2 ${borderCls} pt-3`}>
+    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${dotCls}`}>
+      {n}
+    </span>
+    {collapsible ? (
+      <button type="button" onClick={onToggle} className="flex items-center gap-1.5 flex-1 text-left group">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-white/70 group-hover:text-white transition-colors">
+          {label}
+        </span>
+        {hint && !expanded && (
+          <span className="text-[10px] normal-case font-normal text-text-industrial/40 ml-1">{hint}</span>
+        )}
+        <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 ml-1 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`} />
+      </button>
+    ) : (
+      <span className="text-[11px] font-bold uppercase tracking-widest text-white/70 flex-1">{label}</span>
+    )}
+    {action}
+  </div>
+);
+
 // ── Progress Notes (avances de trabajo) ──────────────────────────────────────
 
 interface ProgressNote {
@@ -603,6 +637,35 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingRewrite,   setLoadingRewrite]    = useState(false);
   const [showProgressSheet, setShowProgressSheet] = useState(false);
   const [notesReloadKey,    setNotesReloadKey]    = useState(0);
+  // Plan section: collapsed by default when WO comes from a maintenance plan
+  const [planExpanded, setPlanExpanded] = useState(!workOrder.maintenancePlanId);
+  const fromPlan = !!workOrder.maintenancePlanId;
+
+  // Recarga spareUsages desde la API tras el pipeline asincrónico de detección de repuestos.
+  // Se llama con un delay después de guardar un avance para dar tiempo al pipeline de IA.
+  const reloadSpareUsages = useCallback(() => {
+    const delay = 5000;
+    setTimeout(async () => {
+      try {
+        const fresh = await api.get<{ spareUsages?: any[] }>(`/app/pms/work-orders/${workOrder.id}`);
+        const freshUsages = fresh.spareUsages ?? [];
+        if (freshUsages.length > 0) {
+          const catalog = sparesData?.items ?? [];
+          setSpareUsages(freshUsages.map((u: any) => {
+            const found = catalog.find((s: any) => s.id === u.spareId);
+            return {
+              spareId: u.spareId,
+              spareName: u.sku && u.name ? `${u.sku} — ${u.name}` : u.name ?? u.spareId,
+              unit: u.unit ?? found?.unit ?? "",
+              qty: Number(u.qty) || 0,
+              criticality: u.criticality ?? found?.criticality ?? "C",
+              available: found?.available ?? 0,
+            };
+          }));
+        }
+      } catch { /* noop */ }
+    }, delay);
+  }, [workOrder.id, sparesData]);
 
   useCopilotEmitter({
     module: "WORK_ORDERS",
@@ -884,9 +947,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
-          {/* ── INFORMACIÓN ── */}
+          {/* ── 1. INFORMACIÓN ── */}
           <section>
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">{t("wo.modal.section.info")}</p>
+            <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-white/10 text-white/60" borderCls="border-white/10" />
+            <div className="mt-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {([
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
@@ -954,11 +1018,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <p className="text-xs text-red-300">{workOrder.cancelReason}</p>
               </div>
             )}
+            </div>{/* end mt-3 */}
           </section>
 
-          {/* ── PLAN ── */}
+          {/* ── 2. PLAN ── */}
           <section className="space-y-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">{t("wo.modal.section.plan")}</p>
+            <PhaseHeader
+              n={2}
+              label={t("wo.modal.section.plan")}
+              dotCls="bg-accent/20 text-accent"
+              borderCls="border-accent/30"
+              collapsible={fromPlan}
+              expanded={planExpanded}
+              onToggle={() => setPlanExpanded(v => !v)}
+              hint={fromPlan ? t("wo.modal.planFromPlanHint") : undefined}
+            />
 
             {/* ── Departamento + Ubicación (solo Mercurio) ── */}
             {isMercurio && (
@@ -1004,92 +1078,102 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!isEditable} className={inputCls} />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label
-                onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
-                title={isEditable ? t("wo.ai.criteriaTooltip") : undefined}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : ""}`}
-              >
-                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.acceptanceCriteria")}{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
-              </label>
-              <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
-            </div>
-            <div className="space-y-1.5">
-              <label
-                onClick={isEditable ? handleLotoClick : undefined}
-                title={isEditable ? t("wo.ai.lotoTooltip") : undefined}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : ""}`}
-              >
-                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.loto")}{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
-              </label>
-              <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
-            </div>
-            <div className="space-y-1.5">
-              <label
-                onClick={isEditable ? handleRiskClick : undefined}
-                title={isEditable ? t("wo.ai.riskTooltip") : undefined}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
-              >
-                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.riskLevel")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
-                {loadingRisk && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
-              </label>
-              <div className="flex gap-1.5">
-                {([
-                  ["LOW",      "L", "bg-success-sea text-primary-bg border-success-sea",       "text-success-sea border-success-sea/40"],
-                  ["MEDIUM",   "M", "bg-yellow-400 text-primary-bg border-yellow-400",         "text-yellow-400 border-yellow-400/40"],
-                  ["HIGH",     "H", "bg-red-500 text-white border-red-500",                    "text-red-400 border-red-400/40"],
-                  ["CRITICAL", "C", "bg-red-700 text-white border-red-700",                    "text-red-600 border-red-600/40"],
-                ] as [string, string, string, string][]).map(([val, label, activeCls, inactiveLabelCls]) => (
-                  <button key={val} type="button" disabled={!isEditable || loadingRisk}
-                    onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
-                    {label}
-                  </button>
-                ))}
+            {/* ── Campos colapsables (criterios/LOTO/riesgo/consecuencia): siempre visibles en OTs standalone;
+                   ocultos por defecto cuando viene de un plan de mantenimiento ── */}
+            {(planExpanded || !fromPlan) && (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label
+                    onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
+                    title={isEditable ? t("wo.ai.criteriaTooltip") : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {t("wo.modal.acceptanceCriteria")}{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
+                  </label>
+                  <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    onClick={isEditable ? handleLotoClick : undefined}
+                    title={isEditable ? t("wo.ai.lotoTooltip") : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {t("wo.modal.loto")}{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
+                  </label>
+                  <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    onClick={isEditable ? handleRiskClick : undefined}
+                    title={isEditable ? t("wo.ai.riskTooltip") : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {t("wo.modal.riskLevel")}
+                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
+                    {loadingRisk && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
+                  </label>
+                  <div className="flex gap-1.5">
+                    {([
+                      ["LOW",      "L", "bg-success-sea text-primary-bg border-success-sea",       "text-success-sea border-success-sea/40"],
+                      ["MEDIUM",   "M", "bg-yellow-400 text-primary-bg border-yellow-400",         "text-yellow-400 border-yellow-400/40"],
+                      ["HIGH",     "H", "bg-red-500 text-white border-red-500",                    "text-red-400 border-red-400/40"],
+                      ["CRITICAL", "C", "bg-red-700 text-white border-red-700",                    "text-red-600 border-red-600/40"],
+                    ] as [string, string, string, string][]).map(([val, label, activeCls, inactiveLabelCls]) => (
+                      <button key={val} type="button" disabled={!isEditable || loadingRisk}
+                        onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
+                        className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
+                  <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    onClick={isEditable ? handleConsequenceClick : undefined}
+                    title={isEditable ? t("wo.modal.consequenceTooltip") : undefined}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                  >
+                    {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {t("wo.modal.consequenceTitle")}
+                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
+                    {loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
+                  </label>
+                  <select
+                    value={consequenceCategory}
+                    onChange={e => setConsequenceCategory(e.target.value)}
+                    disabled={!isEditable || loadingConsequence}
+                    className={inputCls}
+                  >
+                    <option value="">{t("wo.modal.consequenceUnclassified")}</option>
+                    <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                    <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                    <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                    <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
+                  </select>
+                  <textarea
+                    rows={2}
+                    value={consequenceRationale}
+                    onChange={e => setConsequenceRationale(e.target.value)}
+                    disabled={!isEditable || loadingConsequence}
+                    className={`${inputCls} resize-y`}
+                    placeholder={t("wo.modal.consequencePlaceholder")}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
-              <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
-            </div>
-            <div className="space-y-1.5">
-              <label
-                onClick={isEditable ? handleConsequenceClick : undefined}
-                title={isEditable ? t("wo.modal.consequenceTooltip") : undefined}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
-              >
-                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.consequenceTitle")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
-                {loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
-              </label>
-              <select
-                value={consequenceCategory}
-                onChange={e => setConsequenceCategory(e.target.value)}
-                disabled={!isEditable || loadingConsequence}
-                className={inputCls}
-              >
-                <option value="">{t("wo.modal.consequenceUnclassified")}</option>
-                <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
-                <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
-                <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
-                <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
-              </select>
-              <textarea
-                rows={2}
-                value={consequenceRationale}
-                onChange={e => setConsequenceRationale(e.target.value)}
-                disabled={!isEditable || loadingConsequence}
-                className={`${inputCls} resize-y`}
-                placeholder={t("wo.modal.consequencePlaceholder")}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
+            )}
+          </section>
+
+          {/* ── 3. DOCUMENTO CHECKLIST ── */}
+          <section className="space-y-3">
+            <PhaseHeader n={3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-400" borderCls="border-teal-500/25" />
+            <div className="space-y-1.5 mt-3">
               {checklistDocUrl && !checklistDocFile && (
                 <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
               )}
@@ -1098,11 +1182,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── PERMISOS DE TRABAJO ── */}
-          <section className="space-y-3 border-t border-white/10 pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">Permisos de trabajo</p>
-              {isEditable && (
+          {/* ── 4. PERMISOS DE TRABAJO ── */}
+          <section className="space-y-3">
+            <PhaseHeader
+              n={4}
+              label="Permisos de trabajo"
+              dotCls="bg-yellow-500/15 text-yellow-400"
+              borderCls="border-yellow-500/25"
+              action={isEditable ? (
                 <button
                   type="button"
                   onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
@@ -1110,8 +1197,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 >
                   <Plus className="w-3 h-3" /> Nuevo permiso
                 </button>
-              )}
-            </div>
+              ) : undefined}
+            />
 
             {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
             {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
@@ -1173,9 +1260,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </section>
 
-          {/* ── AVANCES ── */}
+          {/* ── 5. AVANCES ── */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
-            <section className="space-y-3 border-t border-white/10 pt-4">
+            <section className="space-y-3">
+              <PhaseHeader n={5} label="Avances" dotCls="bg-violet-500/15 text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
                 canAdd={isEditable}
@@ -1186,9 +1274,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── RESULTADO ── */}
-          <section className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
-            <p className="text-[10px] uppercase tracking-widest text-blue-300 font-semibold">{t("wo.modal.resultSection")}</p>
+          {/* ── 6. RESULTADO ── */}
+          <section className="space-y-4">
+            <PhaseHeader n={6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-400" borderCls="border-blue-500/30" />
+            <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.result")} *</label>
@@ -1435,6 +1524,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 )}
               </div>
             )}
+            </div>{/* end bg-blue box */}
           </section>
 
           {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
@@ -1529,7 +1619,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       <ProgressNoteSheet
         workOrderId={workOrder.id}
         onClose={() => setShowProgressSheet(false)}
-        onSaved={() => { setNotesReloadKey(k => k + 1); }}
+        onSaved={() => { setNotesReloadKey(k => k + 1); reloadSpareUsages(); }}
       />
     )}
 

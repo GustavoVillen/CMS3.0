@@ -764,6 +764,8 @@ const dict = {
   "wo.modal.commMethodSection": { es: "Medio de comunicación utilizado", en: "Communication method used", pt: "Meio de comunicação utilizado" },
   "wo.modal.distribution":     { es: "Distribución",           en: "Distribution",         pt: "Distribuição" },
 
+  "wo.modal.planFromPlanHint": { es: "del plan de mantenimiento", en: "from maintenance plan", pt: "do plano de manutenção" },
+
   // WorkOrderModal — Consecuencia / RCM
   "wo.modal.consequenceTitle": { es: "Si no se hace, ¿qué pasa?", en: "If not done, what happens?", pt: "Se não for feito, o que acontece?" },
   "wo.modal.consequenceHint":  { es: "— Consecuencia de la falla (RCM)", en: "— Failure consequence (RCM)", pt: "— Consequência da falha (RCM)" },
