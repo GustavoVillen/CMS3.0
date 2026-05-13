@@ -1856,7 +1856,8 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const handleDrop = useCallback(async (targetCol: string) => {
     setOverCol(null);
     const wo = draggingWoRef.current;
-    if (!wo) return;
+    console.log("[kanban] drop", { targetCol, woStatus: wo?.status, woId: wo?.id });
+    if (!wo) { console.warn("[kanban] drop fired but draggingWoRef is null"); return; }
     draggingWoRef.current = null;
     setDraggingWo(null);
     if (wo.status === targetCol) return;
@@ -1871,10 +1872,12 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       return;
     }
     if (wo.status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); onReload(); }
+      console.log("[kanban] calling /resume for", wo.id);
+      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); console.log("[kanban] resume OK"); onReload(); }
       catch (e) { console.error("[kanban] resume failed", e); }
       return;
     }
+    console.warn("[kanban] unhandled transition", wo.status, "→", targetCol);
   }, [onReload]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
@@ -1884,7 +1887,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {KANBAN_COLS.map(col => {
           const colItems = items.filter(w => col.statuses.includes(w.status));
-          const isOver   = overCol === col.colId && col.droppable && !!draggingWo;
+          const isOver   = overCol === col.colId && col.droppable;
           return (
             <div
               key={col.colId}
@@ -1907,7 +1910,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
                     isLoading={loadingId === wo.id}
                     draggingId={draggingWo?.id ?? null}
                     onOpen={onOpen}
-                    onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
+                    onDragStart={w => { console.log("[kanban] dragstart", w.status, w.id); draggingWoRef.current = w; setDraggingWo(w); }}
                   />
                 ))}
               </div>
