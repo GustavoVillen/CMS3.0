@@ -1850,16 +1850,20 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const [draggingWo, setDraggingWo]   = useState<WorkOrder | null>(null);
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
+  // ref para evitar stale closure en handleDrop (React 18 batching)
+  const draggingWoRef = React.useRef<WorkOrder | null>(null);
 
   const handleDrop = useCallback(async (targetCol: string) => {
     setOverCol(null);
-    if (!draggingWo) return;
-    const wo = draggingWo;
+    const wo = draggingWoRef.current;
+    if (!wo) return;
+    draggingWoRef.current = null;
     setDraggingWo(null);
     if (wo.status === targetCol) return;
 
     if (wo.status === "PLANNED" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${wo.id}/start`, {}); onReload(); } catch { /* noop */ }
+      try { await api.post(`/app/pms/work-orders/${wo.id}/start`, {}); onReload(); }
+      catch (e) { console.error("[kanban] start failed", e); }
       return;
     }
     if ((wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
@@ -1867,10 +1871,11 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       return;
     }
     if (wo.status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); onReload(); } catch { /* noop */ }
+      try { await api.post(`/app/pms/work-orders/${wo.id}/resume`, {}); onReload(); }
+      catch (e) { console.error("[kanban] resume failed", e); }
       return;
     }
-  }, [draggingWo, onReload]);
+  }, [onReload]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
@@ -1883,7 +1888,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
           return (
             <div
               key={col.colId}
-              onDragOver={e => { if (col.droppable && draggingWo) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
+              onDragOver={e => { if (col.droppable) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
               onDragLeave={() => setOverCol(null)}
               onDrop={e => { e.preventDefault(); void handleDrop(col.colId); }}
               className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-white/[0.05] ring-1 ring-accent/30" : ""}`}
@@ -1902,7 +1907,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
                     isLoading={loadingId === wo.id}
                     draggingId={draggingWo?.id ?? null}
                     onOpen={onOpen}
-                    onDragStart={w => setDraggingWo(w)}
+                    onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
                   />
                 ))}
               </div>
