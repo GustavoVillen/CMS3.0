@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -86,6 +86,25 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
 
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
+  const [loadingScenario, setLoadingScenario] = useState(false);
+
+  const handleScenarioClick = useCallback(async () => {
+    if (isLocked || loadingScenario) return;
+    if (!type || !vesselCode) { setErr("Seleccioná vessel y tipo antes de pedir el escenario."); return; }
+    setLoadingScenario(true);
+    setScenario("Analizando...");
+    setErr(null);
+    try {
+      const vesselName = vessels.find(v => v.code === vesselCode)?.name ?? null;
+      const res = await api.post<{ text: string }>("/app/drills/suggest-scenario", {
+        type, vesselCode, vesselName,
+      });
+      setScenario(res.text || "");
+    } catch (e) {
+      setScenario("");
+      setErr(e instanceof ApiError ? e.message : "No se pudo generar el escenario.");
+    } finally { setLoadingScenario(false); }
+  }, [isLocked, loadingScenario, type, vesselCode, vessels]);
 
   // Crew list para selección de participantes
   const { data: crewData } = useFetch<{ items: CrewItem[] }>(`/app/crew?status=ONBOARD${vesselCode ? `&vesselCode=${vesselCode}` : ""}`, [vesselCode]);
@@ -189,9 +208,17 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
                 <input type="date" value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
               </div>
             )}
-            <div className="col-span-2">
-              <label className={labelCls}>Escenario</label>
-              <textarea rows={2} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked} className={inputCls} placeholder="Descripción del escenario del simulacro" />
+            <div className="col-span-2 space-y-1">
+              <label
+                onClick={!isLocked ? handleScenarioClick : undefined}
+                title={!isLocked ? "Generar escenario con IA según SOLAS/ISPS/MARPOL" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${!isLocked ? `hover:text-white cursor-pointer ${loadingScenario ? "opacity-60 animate-pulse" : ""}` : ""}`}
+              >
+                {loadingScenario ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Escenario
+                {loadingScenario && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+              </label>
+              <textarea rows={4} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked || loadingScenario} className={`${inputCls} resize-y`} placeholder="Click en 'Escenario' para que la IA proponga uno según el tipo de simulacro, o escribilo manualmente." />
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Observaciones</label>

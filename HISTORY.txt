@@ -1,5 +1,47 @@
 HISTORY.txt
 
+[2026-05-13] Simulacros — IA para generar escenarios según SOLAS/ISPS/MARPOL
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El campo Escenario del modal de nuevo simulacro era un textarea vacío. Se
+agregó IA contextual para que, al clickear el label "Escenario", proponga
+un escenario realista alineado a la regulación aplicable al tipo (igual
+patrón que los Sparkles de criterios de aceptación / LOTO en WO).
+
+CAMBIOS:
+
+· apps/api/src/tenant/drills/drills-ai-suggestions.ts (nuevo)
+  - DRILL_REGULATORY_REF: referencia normativa por tipo
+    (SOLAS III/19.3.2, MSC.350(92), ISPS A/13.4, MARPOL Reg. 37, etc.)
+  - PROMPT_DRILL_SCENARIO: pide 6-10 líneas, situación gatillo concreta,
+    punto de reunión, 2-4 acciones clave, objetivo del ejercicio +
+    referencia normativa al final. Prohíbe disclaimers y procedimientos
+    paso a paso extensos.
+  - suggestDrillScenario(): si el vessel ya tuvo un drill COMPLETED del
+    mismo tipo, su scenario anterior va en el contexto con instrucción
+    "variar para no repetir". Reusa el wrapper Anthropic estándar
+    (timeout 60s, recordAiUsage telemetría, model claude-haiku-4-5).
+
+· apps/api/src/tenant/tenant-router.ts
+  Route POST /app/drills/suggest-scenario.
+
+· apps/web-modern/src/pages/Drills.tsx
+  Label "Escenario" ahora es clickeable con ícono Sparkles. Llama el
+  endpoint pasando type + vesselCode + vesselName. Mientras carga,
+  bloquea el textarea y muestra "analizando…". Si falta vessel o type,
+  pide completarlos antes.
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK (1854 KB)
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+  # No requiere prisma db push (sin cambios de schema)
+
 [2026-05-13] Simulacros — matriz de cumplimiento + configuración de frecuencias
 Agent: Claude Opus 4.7
 

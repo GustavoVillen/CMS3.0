@@ -54,6 +54,7 @@ import {
   listDrills, getDrill, createDrill, updateDrill, completeDrill, cancelDrill, reopenDrill, deleteDrill,
   getDrillsMatrix, listDrillConfig, upsertDrillConfig,
 } from "./drills/drills-service";
+import { suggestDrillScenario } from "./drills/drills-ai-suggestions";
 import { getCrewSummary } from "./crew/crew-summary-service";
 import {
   listPermits, getPermit, createPermit, updatePermit,
@@ -1271,6 +1272,12 @@ export async function handleTenantRoutes(
     const type = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof upsertDrillConfig>[2];
     sendJson(response, 200, await upsertDrillConfig(session, type, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/drills/suggest-scenario") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof suggestDrillScenario>[1];
+    sendJson(response, 200, await suggestDrillScenario(session, body));
     return true;
   }
   if (method === "GET" && url.pathname === "/app/drills") {
