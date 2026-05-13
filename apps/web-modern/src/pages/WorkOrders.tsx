@@ -172,43 +172,111 @@ function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; du
 
 const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess: () => void }> = ({ workOrder, onClose, onSuccess }) => {
   const t = useT();
-  const [holdReason, setHoldReason] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [holdReason,            setHoldReason]            = useState("");
+  const [targetDate,            setTargetDate]            = useState("");
+  const [compensatoryMeasures,  setCompensatoryMeasures]  = useState("");
+  const [loadingAI,             setLoadingAI]             = useState(false);
+  const [saving,                setSaving]                = useState(false);
+  const [submitting,            setSubmitting]            = useState(false);
+  const [err,                   setErr]                   = useState<string | null>(null);
+
+  const doHold = useCallback(async (): Promise<string | null> => {
+    if (!holdReason.trim()) { setErr(t("wo.holdReason")); return null; }
+    const res = await api.post<{ deferralId?: string | null }>(`/app/pms/work-orders/${workOrder.id}/hold`, {
+      holdReason: holdReason.trim(),
+      targetDate: targetDate || null,
+      compensatoryMeasures: compensatoryMeasures.trim() || null,
+    });
+    return res.deferralId ?? null;
+  }, [holdReason, targetDate, compensatoryMeasures, workOrder.id, t]);
 
   const onSave = useCallback(async () => {
-    if (!holdReason.trim()) { setErr(t("wo.holdReason")); return; }
     setSaving(true); setErr(null);
+    try { await doHold(); onSuccess(); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
+    finally { setSaving(false); }
+  }, [doHold, onSuccess, t]);
+
+  const onSubmitForReview = useCallback(async () => {
+    setSubmitting(true); setErr(null);
     try {
-      await api.post(`/app/pms/work-orders/${workOrder.id}/hold`, {
-        holdReason: holdReason.trim(),
-        targetDate: targetDate || null,
-      });
+      const deferralId = await doHold();
+      if (deferralId) {
+        await api.post(`/app/pms/deferrals/${deferralId}/review`, {});
+      }
       onSuccess();
     }
     catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
-    finally { setSaving(false); }
-  }, [holdReason, targetDate, onSuccess, t, workOrder.id]);
+    finally { setSubmitting(false); }
+  }, [doHold, onSuccess, t]);
+
+  const suggestCompensatory = useCallback(async () => {
+    setLoadingAI(true);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/deferrals/suggest-compensatory-measures", {
+        vesselCode:        workOrder.vesselCode,
+        assetLabel:        workOrder.assetName ?? workOrder.assetId,
+        sourceTypeLabel:   "Orden de Trabajo",
+        sourceDisplayName: [workOrder.workOrderCode, workOrder.title].filter(Boolean).join(" — "),
+        targetDate:        targetDate || null,
+        justification:     holdReason.trim() || null,
+      });
+      setCompensatoryMeasures(res.text);
+    } catch { /* noop */ }
+    finally { setLoadingAI(false); }
+  }, [workOrder, targetDate, holdReason]);
+
+  const isBusy = saving || submitting;
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h2 className="text-sm font-bold text-white">{t("wo.hold")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
-        <div className="p-6 space-y-3">
-          <label className={labelCls}>{t("wo.holdReason")}</label>
-          <textarea rows={4} value={holdReason} onChange={e => setHoldReason(e.target.value)} className={inputCls} />
-          <label className={labelCls}>{t("wo.holdTargetDate")}</label>
-          <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className={inputCls} />
+        <div className="p-6 space-y-4">
+          <div>
+            <label className={labelCls}>{t("wo.holdReason")}</label>
+            <textarea rows={3} value={holdReason} onChange={e => setHoldReason(e.target.value)} className={`${inputCls} mt-1`} />
+          </div>
+          <div>
+            <label className={labelCls}>{t("wo.holdTargetDate")}</label>
+            <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className={`${inputCls} mt-1`} />
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => { void suggestCompensatory(); }}
+              disabled={loadingAI}
+              className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent/80 hover:text-accent disabled:opacity-50 transition-colors mb-1"
+            >
+              {loadingAI ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              Medidas compensatorias
+              <span className="text-[10px] normal-case font-normal text-text-industrial/40 ml-1">{loadingAI ? "Generando con IA…" : "click para sugerir con IA"}</span>
+            </button>
+            <textarea
+              rows={5}
+              value={compensatoryMeasures}
+              onChange={e => setCompensatoryMeasures(e.target.value)}
+              disabled={loadingAI}
+              placeholder="Medidas para mitigar el riesgo mientras dure el aplazamiento…"
+              className={`${inputCls} disabled:opacity-50`}
+            />
+          </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+        <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-white/10">
+          <button onClick={onClose} disabled={isBusy} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white disabled:opacity-50">{t("common.cancel")}</button>
+          <button onClick={() => { void onSave(); }} disabled={isBusy}
+            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 disabled:opacity-50 flex items-center gap-1.5">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            Posponer
+          </button>
+          <button onClick={() => { void onSubmitForReview(); }} disabled={isBusy}
+            className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+            {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+            Enviar a Revisión
           </button>
         </div>
       </div>

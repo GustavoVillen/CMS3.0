@@ -81,6 +81,7 @@ export interface UpdateWorkOrderInput {
 export interface HoldWorkOrderInput {
   holdReason: string;
   targetDate?: string | Date | null;
+  compensatoryMeasures?: string | null;
 }
 
 export interface CloseWorkOrderInput {
@@ -616,15 +617,22 @@ export async function holdWorkOrder(session: TenantAccessSession, id: string, pa
     entityId: current.id,
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, holdReason: payload.holdReason },
   });
-  void createDeferralInternal(session, {
-    vesselCode: current.vesselCode,
-    assetId: current.assetId,
-    sourceType: "WORK_ORDER",
-    sourceId: current.id,
-    justification: payload.holdReason,
-    targetDate: payload.targetDate ?? null,
-  }).catch((err: unknown) => { log.error("[holdWorkOrder] auto-deferral failed:", err); });
-  return held;
+  let deferralId: string | null = null;
+  try {
+    const created = await createDeferralInternal(session, {
+      vesselCode: current.vesselCode,
+      assetId: current.assetId,
+      sourceType: "WORK_ORDER",
+      sourceId: current.id,
+      justification: payload.holdReason,
+      targetDate: payload.targetDate ?? null,
+      compensatoryMeasures: payload.compensatoryMeasures ?? null,
+    });
+    deferralId = created.id;
+  } catch (err) {
+    log.error("[holdWorkOrder] auto-deferral failed:", err);
+  }
+  return { ...held, deferralId };
 }
 
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
