@@ -1736,17 +1736,14 @@ function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
     <div
       ref={setNodeRef}
       style={style}
-      className={`w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 ${prioLeft} ${isDragging ? "opacity-40" : ""} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => !isDragging && !isLoading && onOpen(wo)}
+      onKeyDown={e => { if ((e.key === "Enter" || e.key === " ") && !isDragging && !isLoading) onOpen(wo); }}
+      className={`w-full text-left bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 ${prioLeft} ${isDragging ? "opacity-40" : "hover:bg-white/[0.07]"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isLoading ? "opacity-60" : ""} transition-colors`}
       {...(isDraggable ? { ...listeners, ...attributes } : {})}
     >
-      <button
-        type="button"
-        onClick={() => !isDragging && onOpen(wo)}
-        disabled={isLoading}
-        className="w-full text-left space-y-2 disabled:opacity-60"
-      >
-        <KanbanCardContent wo={wo} deferralMap={deferralMap} />
-      </button>
+      <KanbanCardContent wo={wo} deferralMap={deferralMap} />
     </div>
   );
 }
