@@ -888,7 +888,14 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
 
   const current = await getTenantWorkOrder(session, id);
   if (current.status !== "PLANNED" && current.status !== "ON_HOLD") {
-    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo PLANNED u ON_HOLD pueden pasar a CANCELLED (actual: ${current.status}).`);
+    const reason = current.status === "IN_PROGRESS"
+      ? "Esta OT ya tiene trabajo en ejecución (horas, repuestos u observaciones registradas). Cancelarla rompería la trazabilidad. Para finalizarla, cerrala con resultado (ej. \"No completada\") o pasala a En Espera primero."
+      : current.status === "CLOSED"
+      ? "Esta OT ya está cerrada. Solo TENANT_ADMIN puede re-abrirla con justificación."
+      : current.status === "CANCELLED"
+      ? "Esta OT ya fue cancelada."
+      : `Solo OTs en estado Planificada o En Espera pueden cancelarse (actual: ${current.status}).`;
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", reason);
   }
 
   const cancelled = await prisma.workOrder.update({
