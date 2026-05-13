@@ -627,6 +627,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [deficienciasText, observations, workOrder, navigate]);
 
   const [saving,          setSaving]         = useState(false);
+  const [starting,        setStarting]       = useState(false);
   const [closing,         setClosing]        = useState(false);
   const [err,             setErr]            = useState<string | null>(null);
   const [expanded,        setExpanded]       = useState(true);
@@ -890,6 +891,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     onSave,
     onClose,
   });
+
+  const handleStart = useCallback(async () => {
+    setStarting(true); setErr(null);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/start`, {});
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("common.unknownError"));
+    } finally { setStarting(false); }
+  }, [workOrder.id, onSaved, t]);
 
   const onClose_WO = useCallback(async () => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
@@ -1582,6 +1593,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
             </button>
+            {workOrder.status === "PLANNED" && (
+              <button onClick={() => { void handleStart(); }} disabled={starting}
+                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                {starting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
+                Iniciar OT
+              </button>
+            )}
             <button onClick={() => canPostpone && onOpenAction(workOrder, "hold")} disabled={!canPostpone}
               className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.postpone")}
