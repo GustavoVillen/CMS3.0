@@ -560,22 +560,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
 
-  // Linked deferral status (when WO is ON_HOLD)
+  // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
+  interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null }
   const [deferralStatus, setDeferralStatus] = useState<string | null>(null);
   const [deferralTargetDate, setDeferralTargetDate] = useState<string | null>(null);
+  const [deferralHistory, setDeferralHistory] = useState<DeferralLite[]>([]);
+  const [deferralReloadKey, setDeferralReloadKey] = useState(0);
   useEffect(() => {
-    if (workOrder.status !== "ON_HOLD") { setDeferralStatus(null); setDeferralTargetDate(null); return; }
     let cancelled = false;
-    api.get<{ items: { status: string; requestedAt: string; targetDate: string | null }[] }>(`/app/pms/deferrals?sourceId=${encodeURIComponent(workOrder.id)}`)
+    api.get<{ items: DeferralLite[] }>(`/app/pms/deferrals?sourceId=${encodeURIComponent(workOrder.id)}`)
       .then(r => {
         if (cancelled) return;
         const items = (r.items ?? []).slice().sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-        setDeferralStatus(items[0]?.status ?? null);
-        setDeferralTargetDate(items[0]?.targetDate ?? null);
+        // Activo: el más reciente no-terminal; si no hay, el más reciente terminal
+        const TERMINAL = new Set(["REJECTED", "EXPIRED", "CLOSED"]);
+        const active = items.find(d => !TERMINAL.has(d.status)) ?? items[0] ?? null;
+        setDeferralStatus(active?.status ?? null);
+        setDeferralTargetDate(active?.targetDate ?? null);
+        // Historial: el resto (excluye el activo)
+        setDeferralHistory(active ? items.filter(d => d.id !== active.id) : []);
       })
-      .catch(() => { if (!cancelled) { setDeferralStatus(null); setDeferralTargetDate(null); } });
+      .catch(() => { if (!cancelled) { setDeferralStatus(null); setDeferralTargetDate(null); setDeferralHistory([]); } });
     return () => { cancelled = true; };
-  }, [workOrder.id, workOrder.status]);
+  }, [workOrder.id, workOrder.status, deferralReloadKey]);
 
   // ── Mercurio form fields ──
   const [department, setDepartment]         = useState<string>(workOrder.department ?? "");
@@ -984,6 +991,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } finally { setResuming(false); }
   }, [workOrder.id, onSaved, t]);
 
+  // Re-solicitar diferimiento: reanuda la OT (la APL rechazada queda como histórico)
+  // y abre el modal de Diferir para crear una nueva APL.
+  const handleResubmitDeferral = useCallback(async () => {
+    setResuming(true); setErr(null);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/resume`, {});
+      onOpenAction({ ...workOrder, status: "IN_PROGRESS", holdReason: null }, "hold");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("common.unknownError"));
+    } finally { setResuming(false); }
+  }, [workOrder, onOpenAction, t]);
+
   const onClose_WO = useCallback(async () => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
     setClosing(true); setErr(null);
@@ -1080,28 +1099,70 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               const postponedDays = originalDue && postponedTo
                 ? Math.round((new Date(postponedTo).getTime() - new Date(originalDue).getTime()) / 86_400_000)
                 : null;
+              const boxCls = rejected
+                ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
+                : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
+              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-400";
+              const textCls  = rejected ? "text-xs text-red-300" : "text-xs text-yellow-300";
+              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-400/70";
+              const strongCls = rejected ? "font-semibold text-red-300" : "font-semibold text-yellow-300";
               return (
-                <div className="mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
+                <div className={boxCls}>
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className="text-[10px] uppercase tracking-wider text-yellow-400">{t("wo.holdReasonLabel")}</p>
+                    <p className={labelCls}>{t("wo.holdReasonLabel")}</p>
                     {badge && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.cls}`}>
                         {badge.label}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-yellow-300">{workOrder.holdReason}</p>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-400/70">
+                  <p className={textCls}>{workOrder.holdReason}</p>
+                  <div className={metaCls}>
                     {originalDue && (
-                      <span>{t("wo.originalDue")}: <span className="font-semibold text-yellow-300">{fmtDate(originalDue)}</span></span>
+                      <span>{t("wo.originalDue")}: <span className={strongCls}>{fmtDate(originalDue)}</span></span>
                     )}
                     {postponedTo && (
-                      <span>{t("wo.targetDate")}: <span className="font-semibold text-yellow-300">{fmtDate(postponedTo)}</span></span>
+                      <span>{t("wo.targetDate")}: <span className={strongCls}>{fmtDate(postponedTo)}</span></span>
                     )}
                     {postponedDays !== null && (
-                      <span>{t("wo.postponedBy")}: <span className="font-semibold text-yellow-300">{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
+                      <span>{t("wo.postponedBy")}: <span className={strongCls}>{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
                     )}
                   </div>
+                  {rejected && workOrder.status === "ON_HOLD" && (
+                    <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-red-300/80">El diferimiento fue rechazado. Reanude la OT o solicite uno nuevo.</p>
+                      <button
+                        type="button"
+                        onClick={() => { void handleResubmitDeferral(); }}
+                        disabled={resuming}
+                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
+                      >
+                        {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Re-solicitar diferimiento
+                      </button>
+                    </div>
+                  )}
+                  {deferralHistory.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-white/10">
+                      <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
+                      <div className="space-y-0.5">
+                        {deferralHistory.map(d => (
+                          <button
+                            type="button"
+                            key={d.id}
+                            onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
+                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-white/5 transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-yellow-300/80 truncate">{d.deferralCode}</span>
+                              <DeferralStatusBadge status={d.status} />
+                            </span>
+                            <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1838,6 +1899,11 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
   const isDraggable = wo.status === "PLANNED" || wo.status === "IN_PROGRESS" || wo.status === "ON_HOLD";
   const isDragging  = draggingId === wo.id;
   const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-white/10";
+  const deferral    = deferralMap.get(wo.id);
+  const rejected    = deferral?.status === "REJECTED";
+  const borderCls   = rejected
+    ? "border-red-500/40 bg-red-500/[0.04] ring-1 ring-red-500/20"
+    : "border-white/10";
 
   return (
     <div
@@ -1849,7 +1915,8 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      className={`w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 select-none
+      className={`w-full bg-white/[0.03] border rounded-xl p-3 space-y-2 select-none
+        ${borderCls}
         ${prioLeft}
         ${isDragging ? "opacity-30" : "hover:bg-white/[0.07]"}
         ${isDraggable ? "cursor-grab" : "cursor-pointer"}
@@ -2019,10 +2086,20 @@ export const WorkOrdersPage: React.FC = () => {
     const CLOSED = new Set(["CLOSED", "CANCELLED"]);
     if (viewFilter === "closed")    return items.filter(w => CLOSED.has(w.status));
     if (viewFilter === "postponed") return items.filter(w => w.status === "ON_HOLD");
+    if (viewFilter === "postponedRejected") {
+      return items.filter(w => w.status === "ON_HOLD" && deferralMap.get(w.id)?.status === "REJECTED");
+    }
+    if (viewFilter === "postponedPending") {
+      return items.filter(w => {
+        if (w.status !== "ON_HOLD") return false;
+        const s = deferralMap.get(w.id)?.status;
+        return s === "REQUESTED" || s === "UNDER_REVIEW";
+      });
+    }
     if (viewFilter === "overdue")   return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now);
     if (viewFilter === "open")      return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !(!!w.dueDate && parseLocalDate(w.dueDate) < now));
     return items;
-  }, [data, viewFilter]);
+  }, [data, viewFilter, deferralMap]);
 
   // Auto-open WO when arriving from a plan badge click
   useEffect(() => {
@@ -2156,10 +2233,42 @@ export const WorkOrdersPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
       {tableActionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([
+          { key: "",                  label: "Todas" },
+          { key: "open",              label: "Abiertas" },
+          { key: "overdue",           label: "Vencidas" },
+          { key: "postponed",         label: "Diferidas" },
+          { key: "postponedPending",  label: "Difer. pendiente" },
+          { key: "postponedRejected", label: "Difer. rechazada" },
+          { key: "closed",            label: "Cerradas" },
+        ] as const).map(opt => {
+          const active = viewFilter === opt.key;
+          return (
+            <button
+              key={opt.key || "all"}
+              type="button"
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                if (opt.key) params.set("view", opt.key); else params.delete("view");
+                setSearchParams(params, { replace: true });
+              }}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                active
+                  ? "bg-accent/20 text-accent border-accent/40"
+                  : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-white/20 hover:text-text-industrial"
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {viewMode === "list" ? (
         <DataTable columns={columns} data={visibleItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
       ) : (
-        <KanbanBoard items={data?.items ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
+        <KanbanBoard items={visibleItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
       )}
 
       {showCreate && (

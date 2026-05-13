@@ -1,5 +1,62 @@
 HISTORY.txt
 
+[2026-05-13] WO/Diferimientos — UX e indicadores en cards/modal/lista
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Pulido de la integración OT ↔ Diferimiento tras unificar terminología y
+arreglar el drag&drop. Faltaba reforzar señales visuales y permitir el
+loop completo "diferir → rechazado → re-solicitar" desde el modal sin
+salir a la pantalla de Diferimientos.
+
+CAMBIOS (apps/web-modern/src/pages/WorkOrders.tsx):
+
+  · KanbanCard: borde rojo + ring cuando la APL vinculada está REJECTED.
+    Las OTs en la columna Diferida con diferimiento rechazado quedan
+    visualmente distinguibles del resto (APPROVED/ACTIVE/REQUESTED).
+
+  · WorkOrderModal (carga de diferimientos):
+    - Antes cargaba sólo el más reciente y sólo si la OT estaba ON_HOLD.
+    - Ahora carga todas las APLs vinculadas a la OT siempre. Calcula
+      "active" (la primera no-terminal, o la más reciente terminal) y
+      "history" (el resto). El campo deferralReloadKey permite refrescar
+      tras acciones internas del modal.
+
+  · WorkOrderModal (bloque del aplazamiento):
+    - Si la APL activa está REJECTED, el bloque cambia de amarillo a
+      rojo y muestra un botón "Re-solicitar diferimiento" que llama a
+      handleResubmitDeferral.
+    - Si hay historial, lo muestra como lista compacta debajo (código,
+      badge de estado y fecha de solicitud). Click navega a /deferrals
+      con autoCode=<deferralCode>.
+
+  · handleResubmitDeferral: reanuda la OT vía POST /resume y abre el
+    HoldModal con el WO actualizado en memoria (status: IN_PROGRESS,
+    holdReason: null). La APL REJECTED queda en el historial; se crea
+    una nueva APL al enviar el HoldModal.
+
+  · Barra de filtros (chips) encima del DataTable/Kanban:
+    - Opciones: Todas / Abiertas / Vencidas / Diferidas / Difer. pendiente
+      / Difer. rechazada / Cerradas
+    - Setea ?view=<key> en el query string. visibleItems en la página
+      aplica el filtro usando deferralMap (necesario para los filtros que
+      dependen del estado de la APL, no del WO).
+    - El Kanban ahora usa visibleItems (no data.items) para respetar el
+      filtro también en esa vista.
+
+NOTA: el cleanup de diferimientos en cancelWorkOrder ya estaba implementado
+(work-orders-service.ts líneas 936-975) — no requirió cambio backend.
+
+VERIFICADO:
+  · tsc --noEmit OK (sin errores nuevos)
+  · vite build OK (1844 KB, 3.6s)
+  · Sin cambios de backend, no requiere migraciones.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd /app/apps/web-modern && npx vite build
+  pm2 restart gpms
+
 [2026-05-12] IA — anti-alucinación de umbrales numéricos + DB de regulaciones marítimas
 Agent: Claude Sonnet 4.6
 
