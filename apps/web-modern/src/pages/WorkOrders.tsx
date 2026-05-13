@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -1643,6 +1643,102 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   );
 };
 
+// ── KanbanBoard ───────────────────────────────────────────────────────────────
+
+const PRIORITY_LEFT_CLS: Record<string, string> = {
+  CRITICAL: "border-l-2 border-l-red-500",
+  HIGH:     "border-l-2 border-l-orange-500",
+  MEDIUM:   "border-l-2 border-l-yellow-400",
+  LOW:      "border-l-2 border-l-blue-400/60",
+};
+
+const KANBAN_COLS: Array<{ statuses: string[]; label: string; headerCls: string; borderCls: string }> = [
+  { statuses: ["PLANNED"],              label: "Planificadas", headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40" },
+  { statuses: ["IN_PROGRESS"],          label: "En Progreso",  headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40" },
+  { statuses: ["ON_HOLD"],              label: "En Espera",    headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40" },
+  { statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15" },
+];
+
+function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
+  wo: WorkOrder;
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  isLoading: boolean;
+  onOpen: (wo: WorkOrder) => void;
+}) {
+  const now = new Date();
+  const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
+  const prioLeft  = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-white/10";
+  const deferral  = deferralMap.get(wo.id);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(wo)}
+      disabled={isLoading}
+      className={`w-full text-left bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 rounded-xl p-3 space-y-2 transition-colors disabled:opacity-60 ${prioLeft}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className="font-mono font-bold text-white text-[10px]">{wo.workOrderCode}</span>
+          <span className="font-mono text-accent text-[10px] ml-1.5">{wo.vesselCode}</span>
+        </div>
+        <CategoryBadge type={wo.type} />
+      </div>
+      <div>
+        <p className="text-xs text-white font-medium line-clamp-1">{wo.assetName ?? "—"}</p>
+        {wo.title && <p className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{wo.title}</p>}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        {wo.dueDate ? (
+          <span className={`text-[10px] font-medium ${isOverdue ? "text-red-400" : "text-text-industrial/50"}`}>
+            {isOverdue ? "⚠ " : ""}{fmtDate(wo.dueDate)}
+          </span>
+        ) : <span />}
+        {wo.assignedToUserName && (
+          <span className="text-[10px] text-text-industrial/40 truncate max-w-[90px]">{wo.assignedToUserName}</span>
+        )}
+      </div>
+      {deferral && (
+        <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-white/5 text-yellow-300 border-yellow-500/30 font-mono">
+          {deferral.deferralCode}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen }: {
+  items: WorkOrder[];
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  loadingId: string | null;
+  loading: boolean;
+  onOpen: (wo: WorkOrder) => void;
+}) {
+  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {KANBAN_COLS.map(col => {
+        const colItems = items.filter(w => col.statuses.includes(w.status));
+        return (
+          <div key={col.statuses[0]} className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3`}>
+            <div className="flex items-center gap-2 px-1 mb-3">
+              <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
+              <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
+            </div>
+            <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+              {colItems.length === 0 && (
+                <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>
+              )}
+              {colItems.map(wo => (
+                <KanbanCard key={wo.id} wo={wo} deferralMap={deferralMap} isLoading={loadingId === wo.id} onOpen={onOpen} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export const WorkOrdersPage: React.FC = () => {
@@ -1655,6 +1751,7 @@ export const WorkOrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
+  const [viewMode, setViewMode]       = useState<"list" | "kanban">("list");
 
   useCopilotEmitter(!editing && !showCreate ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
   const [showExcel, setShowExcel]     = useState(false);
@@ -1822,12 +1919,34 @@ export const WorkOrdersPage: React.FC = () => {
         >
           {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} {t("wo.page.openReport")}{selectedVesselCode ? ` (${selectedVesselCode})` : ""}
         </button>
+        <div className="flex items-center gap-0.5 border border-white/10 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            title="Vista lista"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("kanban")}
+            title="Vista Kanban"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
       {tableActionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
 
-      <DataTable columns={columns} data={visibleItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
+      {viewMode === "list" ? (
+        <DataTable columns={columns} data={visibleItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
+      ) : (
+        <KanbanBoard items={data?.items ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} />
+      )}
 
       {showCreate && (
         <CreateWorkOrderModal
