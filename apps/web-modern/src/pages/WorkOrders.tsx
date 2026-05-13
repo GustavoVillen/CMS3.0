@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, DragOverlay, useDraggable, useDroppable, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -1670,30 +1671,22 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
   LOW:      "border-l-2 border-l-blue-400/60",
 };
 
-const KANBAN_COLS: Array<{ statuses: string[]; label: string; headerCls: string; borderCls: string }> = [
-  { statuses: ["PLANNED"],              label: "Planificadas", headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40" },
-  { statuses: ["IN_PROGRESS"],          label: "En Progreso",  headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40" },
-  { statuses: ["ON_HOLD"],              label: "En Espera",    headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40" },
-  { statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15" },
+const KANBAN_COLS: Array<{ colId: string; statuses: string[]; label: string; headerCls: string; borderCls: string; droppable: boolean }> = [
+  { colId: "PLANNED",     statuses: ["PLANNED"],              label: "Planificadas", headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
+  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          label: "En Progreso",  headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
+  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              label: "En Espera",    headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
+  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
 ];
 
-function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
+function KanbanCardContent({ wo, deferralMap }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
-  isLoading: boolean;
-  onOpen: (wo: WorkOrder) => void;
 }) {
   const now = new Date();
   const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
-  const prioLeft  = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-white/10";
   const deferral  = deferralMap.get(wo.id);
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(wo)}
-      disabled={isLoading}
-      className={`w-full text-left bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 rounded-xl p-3 space-y-2 transition-colors disabled:opacity-60 ${prioLeft}`}
-    >
+    <>
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className="font-mono font-bold text-white text-[10px]">{wo.workOrderCode}</span>
@@ -1720,40 +1713,163 @@ function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
           {deferral.deferralCode}
         </span>
       )}
-    </button>
+    </>
   );
 }
 
-function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen }: {
+function KanbanCard({ wo, deferralMap, isLoading, onOpen }: {
+  wo: WorkOrder;
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  isLoading: boolean;
+  onOpen: (wo: WorkOrder) => void;
+}) {
+  const isDraggable = wo.status === "PLANNED" || wo.status === "IN_PROGRESS" || wo.status === "ON_HOLD";
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: wo.id,
+    data: { wo },
+    disabled: !isDraggable || isLoading,
+  });
+  const prioLeft = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-white/10";
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-2 ${prioLeft} ${isDragging ? "opacity-40" : ""} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      {...(isDraggable ? { ...listeners, ...attributes } : {})}
+    >
+      <button
+        type="button"
+        onClick={() => !isDragging && onOpen(wo)}
+        disabled={isLoading}
+        className="w-full text-left space-y-2 disabled:opacity-60"
+      >
+        <KanbanCardContent wo={wo} deferralMap={deferralMap} />
+      </button>
+    </div>
+  );
+}
+
+function DroppableColumn({ colId, isOver, children, label, headerCls, borderCls, count }: {
+  colId: string; isOver: boolean; children: React.ReactNode;
+  label: string; headerCls: string; borderCls: string; count: number;
+}) {
+  const { setNodeRef } = useDroppable({ id: colId });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`shrink-0 w-64 flex flex-col ${borderCls} pt-3 rounded-b-xl transition-colors ${isOver ? "bg-white/[0.04]" : ""}`}
+    >
+      <div className="flex items-center gap-2 px-1 mb-3">
+        <span className={`text-[11px] font-bold uppercase tracking-widest ${headerCls}`}>{label}</span>
+        <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{count}</span>
+      </div>
+      <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+        {count === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload }: {
   items: WorkOrder[];
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
   loadingId: string | null;
   loading: boolean;
   onOpen: (wo: WorkOrder) => void;
+  onReload: () => void;
 }) {
+  const [activeWo, setActiveWo]     = useState<WorkOrder | null>(null);
+  const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
+  const [overCol, setOverCol]       = useState<string | null>(null);
+  const transitioningRef            = useRef<Set<string>>(new Set());
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveWo((event.active.data.current as { wo: WorkOrder }).wo);
+  }, []);
+
+  const handleDragOver = useCallback((event: { over: { id: string } | null }) => {
+    setOverCol(event.over ? String(event.over.id) : null);
+  }, []);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    setActiveWo(null); setOverCol(null);
+    const { active, over } = event;
+    if (!over) return;
+    const wo: WorkOrder = (active.data.current as { wo: WorkOrder }).wo;
+    const targetCol = String(over.id);
+    if (wo.status === targetCol) return;
+    if (transitioningRef.current.has(wo.id)) return;
+
+    if (wo.status === "PLANNED" && targetCol === "IN_PROGRESS") {
+      transitioningRef.current.add(wo.id);
+      try { await api.post(`/app/pms/work-orders/${wo.id}/start`, {}); onReload(); }
+      catch { /* noop */ }
+      finally { transitioningRef.current.delete(wo.id); }
+      return;
+    }
+    if ((wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
+      setPendingHold(wo);
+      return;
+    }
+    if (wo.status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
+      transitioningRef.current.add(wo.id);
+      try { await api.post(`/app/pms/work-orders/${wo.id}/reopen`, {}); onReload(); }
+      catch { /* noop */ }
+      finally { transitioningRef.current.delete(wo.id); }
+      return;
+    }
+  }, [onReload]);
+
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
+
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {KANBAN_COLS.map(col => {
-        const colItems = items.filter(w => col.statuses.includes(w.status));
-        return (
-          <div key={col.statuses[0]} className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3`}>
-            <div className="flex items-center gap-2 px-1 mb-3">
-              <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
-              <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
+    <>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {KANBAN_COLS.map(col => {
+            const colItems = items.filter(w => col.statuses.includes(w.status));
+            const inner = colItems.map(wo => (
+              <KanbanCard key={wo.id} wo={wo} deferralMap={deferralMap} isLoading={loadingId === wo.id} onOpen={onOpen} />
+            ));
+            return col.droppable ? (
+              <DroppableColumn key={col.colId} colId={col.colId} isOver={overCol === col.colId} label={col.label} headerCls={col.headerCls} borderCls={col.borderCls} count={colItems.length}>
+                {inner}
+              </DroppableColumn>
+            ) : (
+              <div key={col.colId} className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3`}>
+                <div className="flex items-center gap-2 px-1 mb-3">
+                  <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
+                  <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
+                </div>
+                <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                  {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
+                  {inner}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <DragOverlay>
+          {activeWo && (
+            <div className={`w-64 bg-[#0D1B2A] border border-accent/40 rounded-xl p-3 space-y-2 shadow-2xl opacity-95 ${PRIORITY_LEFT_CLS[activeWo.priority] ?? "border-l-2 border-l-white/10"}`}>
+              <KanbanCardContent wo={activeWo} deferralMap={deferralMap} />
             </div>
-            <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-              {colItems.length === 0 && (
-                <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>
-              )}
-              {colItems.map(wo => (
-                <KanbanCard key={wo.id} wo={wo} deferralMap={deferralMap} isLoading={loadingId === wo.id} onOpen={onOpen} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+      {pendingHold && (
+        <HoldModal
+          workOrder={pendingHold}
+          onClose={() => setPendingHold(null)}
+          onSuccess={() => { setPendingHold(null); onReload(); }}
+        />
+      )}
+    </>
   );
 }
 
@@ -1963,7 +2079,7 @@ export const WorkOrdersPage: React.FC = () => {
       {viewMode === "list" ? (
         <DataTable columns={columns} data={visibleItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
       ) : (
-        <KanbanBoard items={data?.items ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} />
+        <KanbanBoard items={data?.items ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
       )}
 
       {showCreate && (
