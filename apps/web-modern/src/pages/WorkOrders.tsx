@@ -165,6 +165,8 @@ function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; du
     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
   }
   if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
+  if (status === "IN_PROGRESS") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20">En Progreso</span>;
+  if (status === "PLANNED")     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">Planificada</span>;
   return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("wo.status.open")}</span>;
 }
 
