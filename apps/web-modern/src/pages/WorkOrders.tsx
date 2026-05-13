@@ -1766,6 +1766,25 @@ const KANBAN_COLS: Array<{ colId: string; statuses: string[]; label: string; hea
   { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
 ];
 
+function DeferralStatusBadge({ status }: { status: string }) {
+  const t = useT();
+  const map: Record<string, { label: string; cls: string }> = {
+    REQUESTED:    { label: t("wo.deferral.requested"),     cls: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
+    UNDER_REVIEW: { label: t("wo.deferral.underReview"),   cls: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
+    APPROVED:     { label: t("wo.deferral.approved"),      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+    ACTIVE:       { label: t("wo.deferral.approvedActive"), cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+    REJECTED:     { label: t("wo.deferral.rejected"),      cls: "bg-red-500/15 text-red-300 border-red-500/30" },
+    EXPIRED:      { label: t("wo.deferral.expired"),       cls: "bg-white/5 text-text-industrial/60 border-white/10" },
+    CLOSED:       { label: t("wo.deferral.closed"),        cls: "bg-white/5 text-text-industrial/60 border-white/10" },
+  };
+  const meta = map[status] ?? { label: status, cls: "bg-white/5 text-text-industrial/60 border-white/10" };
+  return (
+    <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${meta.cls}`}>
+      {meta.label}
+    </span>
+  );
+}
+
 function KanbanCardContent({ wo, deferralMap }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
@@ -1797,9 +1816,12 @@ function KanbanCardContent({ wo, deferralMap }: {
         )}
       </div>
       {deferral && (
-        <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-white/5 text-yellow-300 border-yellow-500/30 font-mono">
-          {deferral.deferralCode}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-white/5 text-yellow-300 border-yellow-500/30 font-mono">
+            {deferral.deferralCode}
+          </span>
+          <DeferralStatusBadge status={deferral.status} />
+        </div>
       )}
     </>
   );
