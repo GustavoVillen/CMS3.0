@@ -1,5 +1,31 @@
 HISTORY.txt
 
+[2026-05-14] Certificados — permitir editar el código
+Agent: Claude Opus 4.7
+
+El campo "Código" del modal de editar certificado estaba bloqueado
+porque (a) el frontend lo deshabilitaba con `disabled={isEdit}` y
+(b) el backend updateTenantCertificate no leía `input.certificateCode`.
+
+CAMBIOS:
+· apps/api/src/tenant/certificates/certificates-service.ts
+  updateTenantCertificate acepta input.certificateCode: trim+upper,
+  valida no-vacío, valida unicidad contra (tenantId, vesselCode,
+  certificateCode) excluyendo el propio id. Si choca devuelve 409
+  DUPLICATE_CODE.
+· apps/web-modern/src/pages/Certificates.tsx
+  Quitamos disabled={isEdit} del input de código.
+
+El vesselCode SÍ sigue inmutable: cambiarlo rompería joins (asset,
+attachments, scope de usuario, etc.).
+
+VERIFICADO: tsc backend + frontend OK · vite build OK.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] CAPA — generación automática desde RCA aprobado + inspecciones FAIL
 Agent: Claude Opus 4.7
 

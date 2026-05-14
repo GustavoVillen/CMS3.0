@@ -199,6 +199,19 @@ export async function updateTenantCertificate(session: TenantAccessSession, id: 
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
 
+  if (input.certificateCode !== undefined) {
+    const nextCode = String(input.certificateCode).trim().toUpperCase();
+    if (!nextCode) throw new RouteError(400, "VALIDATION_ERROR", "El código no puede estar vacío.");
+    if (nextCode !== cert.certificateCode) {
+      // Verificar unicidad por (tenantId, vesselCode, certificateCode) — index único en DB.
+      const dup = await prisma.certificate.findFirst({
+        where: { tenantId: tenant.id, vesselCode: cert.vesselCode, certificateCode: nextCode, deletedAt: null, NOT: { id } },
+      });
+      if (dup) throw new RouteError(409, "DUPLICATE_CODE", `Ya existe un certificado con código ${nextCode} en este buque.`);
+      data.certificateCode = nextCode;
+    }
+  }
+
   if (input.name !== undefined) {
     const name = String(input.name).trim();
     if (!name) throw new RouteError(400, "VALIDATION_ERROR", "El nombre no puede estar vacío.");

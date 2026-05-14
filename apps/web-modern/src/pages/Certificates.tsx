@@ -220,9 +220,8 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
                 value={certCode}
                 onChange={e => setCertCode(e.target.value.toUpperCase())}
                 required
-                disabled={isEdit}
                 placeholder="CERT-001"
-                className={`${inputCls} disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={inputCls}
               />
             </div>
             <div className="space-y-1.5">
