@@ -1,5 +1,36 @@
 HISTORY.txt
 
+[2026-05-14] WO — vista mosaico para fotos de avances + lightbox
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El panel "Avances" del modal de OT mostraba las notas (texto / foto /
+video / audio) apiladas en cards verticales. Con varias fotos quedaba
+una lista larga difícil de revisar visualmente. Probamos vista
+mosaico para fotos/videos.
+
+CAMBIOS (apps/web-modern/src/pages/WorkOrders.tsx — ProgressNotesPanel):
+
+· Toggle Lista | Mosaico en el header del panel (sólo visible cuando
+  hay al menos una foto/video). Default sigue siendo lista.
+· Mosaico: grid responsive (2 cols mobile, 3 sm, 4 md) cuadrado, sólo
+  con notas PHOTO/VIDEO. Las notas TEXT/AUDIO siguen viéndose en lista
+  porque no aportan en mosaico.
+· Hover: cada tile muestra fecha+hora en banner inferior; videos
+  llevan badge de play centrado.
+· Click en cualquier tile abre un lightbox modal a pantalla completa
+  con la imagen/video, el texto asociado (si tiene) y timestamp.
+  z-index 60 para quedar sobre el modal de WO. Click fuera o X cierra.
+
+VERIFICADO:
+  · tsc OK · vite build OK
+  · El modo lista se mantiene intacto.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Defects — badge clickeable de OT vinculada + banner en PDF
 Agent: Claude Opus 4.7
 

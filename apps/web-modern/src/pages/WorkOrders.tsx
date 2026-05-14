@@ -497,6 +497,12 @@ const ProgressNotesPanel: React.FC<{
     [workOrderId, reloadKey],
   );
   const notes = data?.items ?? [];
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [lightbox, setLightbox] = useState<ProgressNote | null>(null);
+
+  // En modo mosaico solo se muestra contenido visual (foto/video).
+  // El TEXT/AUDIO se ven mejor en la lista.
+  const visualNotes = notes.filter(n => (n.kind === "PHOTO" || n.kind === "VIDEO") && n.fileUrl);
 
   const handleDelete = useCallback(async (noteId: string) => {
     if (!window.confirm("¿Borrar este avance?")) return;
@@ -510,17 +516,39 @@ const ProgressNotesPanel: React.FC<{
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
           Avances {notes.length > 0 && `(${notes.length})`}
         </p>
-        {canAdd && (
-          <button type="button" onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110">
-            <Plus className="w-3.5 h-3.5" />
-            Registrar avance
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {visualNotes.length > 0 && (
+            <div className="flex items-center gap-0.5 border border-white/10 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                title="Vista lista"
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                title={`Vista mosaico (${visualNotes.length} fotos/videos)`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {canAdd && (
+            <button type="button" onClick={onAdd}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110">
+              <Plus className="w-3.5 h-3.5" />
+              Registrar avance
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="flex justify-center py-3">
@@ -528,6 +556,32 @@ const ProgressNotesPanel: React.FC<{
         </div>
       ) : notes.length === 0 ? (
         <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
+      ) : viewMode === "grid" && visualNotes.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {visualNotes.map(n => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => setLightbox(n)}
+              className="relative aspect-square bg-white/5 border border-white/10 rounded-lg overflow-hidden group hover:border-accent/40 transition-colors"
+              title={n.text ?? undefined}
+            >
+              {n.kind === "PHOTO" ? (
+                <img src={n.fileUrl!} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <>
+                  <video src={n.fileUrl!} className="w-full h-full object-cover" muted />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                    <VideoIcon className="w-6 h-6 text-white drop-shadow" />
+                  </div>
+                </>
+              )}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 text-[9px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                {new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="space-y-2">
           {notes.map(n => (
@@ -537,6 +591,33 @@ const ProgressNotesPanel: React.FC<{
               onDelete={canDelete ? () => { void handleDelete(n.id); } : undefined}
             />
           ))}
+        </div>
+      )}
+
+      {/* Lightbox para ampliar la foto/video al hacer click en el mosaico */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={() => setLightbox(null)}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            title="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
+            {lightbox.kind === "PHOTO" ? (
+              <img src={lightbox.fileUrl!} alt="" className="max-h-[85vh] rounded-lg object-contain" />
+            ) : (
+              <video src={lightbox.fileUrl!} controls autoPlay className="max-h-[85vh] rounded-lg" />
+            )}
+            {lightbox.text && (
+              <p className="text-sm text-white/90 max-w-2xl text-center whitespace-pre-line">{lightbox.text}</p>
+            )}
+            <p className="text-[10px] text-white/40">
+              {new Date(lightbox.createdAt).toLocaleString("es-AR")}
+            </p>
+          </div>
         </div>
       )}
     </div>
