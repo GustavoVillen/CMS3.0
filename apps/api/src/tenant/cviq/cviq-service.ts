@@ -7,6 +7,76 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 
 const RESPONSE_STATUSES = ["PENDING", "CONFORMING", "NOT_CONFORMING", "PARTIALLY_CONFORMING", "NOT_APPLICABLE"] as const;
 
+/**
+ * Seed inicial de preguntas CVIQ SIRE 2.0. Representativas, cubren los 10
+ * capítulos. Idempotente: se inserta solo si el código no existe.
+ * El catálogo se carga automáticamente la primera vez que se crea un
+ * assessment (ensureCviqSeed).
+ */
+const CVIQ_SEED_QUESTIONS: Array<{ questionCode: string; chapter: number; chapterTitle: string; section: string; questionText: string; expectedEvidence: string }> = [
+  // Cap. 1 — Generalidades
+  { questionCode: "1.1", chapter: 1, chapterTitle: "Generalidades", section: "Documentación del buque", questionText: "Certificados del buque vigentes (SOC, Class, Flag, Statutory) — todos visibles y dentro de plazo.", expectedEvidence: "Certificados originales o copias certificadas vigentes." },
+  { questionCode: "1.2", chapter: 1, chapterTitle: "Generalidades", section: "Documentación del buque", questionText: "Manuales operativos críticos disponibles (SMS, SOPEP/SMPEP, Cargo Operations, Loading).", expectedEvidence: "Manuales actuales accesibles a la tripulación." },
+  { questionCode: "1.3", chapter: 1, chapterTitle: "Generalidades", section: "Estructura del buque", questionText: "Estructura del casco, cubierta y superestructura en buen estado, sin corrosión visible significativa.", expectedEvidence: "Inspección visual + registros de hull integrity." },
+  // Cap. 2 — Tripulación
+  { questionCode: "2.1", chapter: 2, chapterTitle: "Tripulación", section: "Certificación", questionText: "Tripulación certificada según STCW, con certificados vigentes y apropiados al cargo.", expectedEvidence: "Lista de tripulantes con certs vigentes; CrewCertification table." },
+  { questionCode: "2.2", chapter: 2, chapterTitle: "Tripulación", section: "Familiarización", questionText: "Tripulantes nuevos completaron la inducción y familiarización antes de asumir funciones.", expectedEvidence: "Registros firmados de inducción." },
+  { questionCode: "2.3", chapter: 2, chapterTitle: "Tripulación", section: "Horas de descanso", questionText: "Horas de descanso registradas y cumplen STCW Manila (>=10h/24h, >=77h/7d).", expectedEvidence: "Planilla mensual de horas de descanso por tripulante." },
+  { questionCode: "2.4", chapter: 2, chapterTitle: "Tripulación", section: "Drills", questionText: "Drills regulares según SOLAS, ISPS, MARPOL, con asistencia documentada.", expectedEvidence: "Drill log + asistentes + escenario + lecciones aprendidas." },
+  // Cap. 3 — Navegación
+  { questionCode: "3.1", chapter: 3, chapterTitle: "Navegación", section: "Bridge management", questionText: "Procedimientos de puente claros, BRM implementado, voyage plan firmado.", expectedEvidence: "Voyage plan firmado, master's standing orders, BRM check." },
+  { questionCode: "3.2", chapter: 3, chapterTitle: "Navegación", section: "ECDIS", questionText: "Operadores ECDIS certificados, cartas actualizadas, sistema redundante.", expectedEvidence: "Certs ECDIS, ENC update log, redundancy test." },
+  // Cap. 4 — Seguridad
+  { questionCode: "4.1", chapter: 4, chapterTitle: "Seguridad", section: "SMS", questionText: "SMS implementado, auditorías internas regulares, no-conformidades cerradas.", expectedEvidence: "Audit reports, NC log, CAPA." },
+  { questionCode: "4.2", chapter: 4, chapterTitle: "Seguridad", section: "Near misses", questionText: "Cultura de reporte de near misses establecida, con análisis y acciones.", expectedEvidence: "NearMiss reports + análisis + lecciones aprendidas." },
+  { questionCode: "4.3", chapter: 4, chapterTitle: "Seguridad", section: "PSC findings", questionText: "Findings PSC anteriores cerrados con evidencia.", expectedEvidence: "ExternalAudit findings history, clearance evidence." },
+  { questionCode: "4.4", chapter: 4, chapterTitle: "Seguridad", section: "MOC", questionText: "Proceso formal de Management of Change para cambios significativos.", expectedEvidence: "MOC log con análisis riesgo, aprobación, implementación, revisión." },
+  // Cap. 5 — Contaminación
+  { questionCode: "5.1", chapter: 5, chapterTitle: "Contaminación", section: "MARPOL", questionText: "Procedimientos MARPOL implementados (Annex I, V), Garbage Record Book y Oil Record Book actualizados.", expectedEvidence: "GRB + ORB con entradas vigentes; SOPEP plan visible." },
+  { questionCode: "5.2", chapter: 5, chapterTitle: "Contaminación", section: "Bunkering", questionText: "Procedimientos de bunkering con checklist pre-bunker firmado.", expectedEvidence: "Pre-bunkering checklist firmado por master, chief engineer y supplier." },
+  // Cap. 6 — Maquinarias
+  { questionCode: "6.1", chapter: 6, chapterTitle: "Maquinarias", section: "PMS", questionText: "Plan de mantenimiento preventivo implementado, OTs cerradas en tiempo.", expectedEvidence: "PMS dashboard, OT compliance rate." },
+  { questionCode: "6.2", chapter: 6, chapterTitle: "Maquinarias", section: "Análisis de fluidos", questionText: "Análisis periódico de aceites/combustibles con seguimiento de tendencias.", expectedEvidence: "FluidAnalysis records + trend analysis." },
+  { questionCode: "6.3", chapter: 6, chapterTitle: "Maquinarias", section: "Defectos", questionText: "Defectos identificados con RCA aplicado y CAPA cuando corresponda.", expectedEvidence: "Defect log + RCA aprobado + CAPA generada." },
+  // Cap. 7 — Carga
+  { questionCode: "7.1", chapter: 7, chapterTitle: "Carga", section: "Cargo plan", questionText: "Plan de carga calculado, aprobado y respetado durante operaciones.", expectedEvidence: "Loading plan firmado, stability calculation." },
+  // Cap. 8 — Amarras
+  { questionCode: "8.1", chapter: 8, chapterTitle: "Amarras", section: "MEG4", questionText: "Líneas de amarre dentro de vida útil, registros de inspección y tensión.", expectedEvidence: "Mooring lines log con fechas, breaking load, tests." },
+  // Cap. 9 — Seguridad ISPS
+  { questionCode: "9.1", chapter: 9, chapterTitle: "Seguridad ISPS", section: "SSP", questionText: "SSP implementado, drills security trimestrales, exercise anual.", expectedEvidence: "SSP, security drills log, SSO designado." },
+  // Cap. 10 — Factores humanos
+  { questionCode: "10.1", chapter: 10, chapterTitle: "Factores humanos", section: "Fatiga", questionText: "Procedimientos de fatigue management, horas de descanso verificadas.", expectedEvidence: "Fatigue policy, rest hours monitoring." },
+  { questionCode: "10.2", chapter: 10, chapterTitle: "Factores humanos", section: "Drug & Alcohol", questionText: "Política D&A vigente, tests aleatorios y por causa.", expectedEvidence: "D&A policy, test records." },
+];
+
+/**
+ * Asegura que el catálogo global tenga las preguntas seed. Idempotente:
+ * para cada questionCode, hace upsert (crea si no existe, deja igual si
+ * ya está). Llamado al crear el primer assessment si la tabla está vacía.
+ */
+async function ensureCviqSeed(prisma: NonNullable<ReturnType<typeof getPrismaClient>>): Promise<number> {
+  const count = await qDel(prisma).count({ where: { tenantId: null } });
+  if (count > 0) return count;
+
+  for (const q of CVIQ_SEED_QUESTIONS) {
+    try {
+      await (prisma as unknown as { cviqQuestion: { create(a: unknown): Promise<unknown> } }).cviqQuestion.create({
+        data: {
+          questionCode: q.questionCode,
+          chapter: q.chapter,
+          chapterTitle: q.chapterTitle,
+          section: q.section,
+          questionText: q.questionText,
+          expectedEvidence: q.expectedEvidence,
+          isActive: true,
+          tenantId: null,
+        },
+      });
+    } catch { /* unique violation: ya existe, ignoramos */ }
+  }
+  return CVIQ_SEED_QUESTIONS.length;
+}
+
 export interface AssessmentListFilters {
   vesselCode?: string | null;
   status?: string | null;
@@ -138,6 +208,13 @@ export async function createAssessment(session: TenantAccessSession, input: Crea
   if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(vesselCode)) {
     throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel.");
   }
+
+  // Seed automatico del catalogo global si todavia no existe.
+  // Evita que un assessment se cree con 0 preguntas cuando el INSERT del
+  // migration.sql no se aplico (porque el proyecto usa prisma db push,
+  // que no ejecuta INSERTs de los archivos de migration).
+  await ensureCviqSeed(prisma);
+
   const assessmentCode = await generateAssessmentCode(prisma, tenantId, vesselCode);
   const questions = await qDel(prisma).findMany({
     where: { isActive: true, OR: [{ tenantId }, { tenantId: null }] },
