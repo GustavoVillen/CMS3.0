@@ -1,5 +1,37 @@
 HISTORY.txt
 
+[2026-05-14] WO — abrir la creación a todos los roles (salvo AUDITOR_READONLY)
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El modal "Nueva Orden de Trabajo" abierto desde un defecto tiraba 403
+"No autorizado para gestionar work orders" cuando el usuario no era
+TENANT_ADMIN / FLEET_SUPERINTENDENT / MAINTENANCE_MANAGER. Crear una OT
+desde un defecto detectado a bordo es operación de entrada legítima
+para muchos más roles (TECHNICIAN_OPERATOR, INSPECTOR_COMPLIANCE,
+PROCUREMENT_STORE), restringirlo bloqueaba el flujo.
+
+CAMBIOS (apps/api/src/tenant/work-orders/work-orders-service.ts):
+
+· Nueva función canCreateWorkOrders(session): true para TODOS los roles
+  del tenant excepto AUDITOR_READONLY.
+· Nuevo helper ensureCanCreateWorkOrders con mensaje específico:
+  "Los usuarios solo-lectura no pueden crear órdenes de trabajo."
+· createTenantWorkOrder ahora usa ensureCanCreateWorkOrders en vez de
+  ensureCanManageWorkOrders.
+
+Editar / cancelar / cerrar siguen siendo más restrictivos
+(canManageWorkOrders / canOperateWorkOrders) — sólo se aflojó la
+creación, no la gestión completa.
+
+VERIFICADO:
+  · tsc backend OK
+  · Sin migración, sin frontend.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  pm2 restart gpms
+
 [2026-05-14] UI — siempre mostrar nombre de buque en vez de código
 Agent: Claude Opus 4.7
 

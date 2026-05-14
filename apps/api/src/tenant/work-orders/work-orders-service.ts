@@ -163,9 +163,27 @@ function canOperateWorkOrders(session: TenantAccessSession): boolean {
   return canManageWorkOrders(session) || session.user.role === "TECHNICIAN_OPERATOR";
 }
 
+/**
+ * Crear OT: permitido a TODOS los roles del tenant salvo AUDITOR_READONLY.
+ * La creación es un punto de entrada operativo (especialmente desde defectos
+ * detectados a bordo); restringirla bloqueaba flujos legítimos.
+ *
+ * Editar/cancelar/cerrar siguen siendo más restrictivos (canManageWorkOrders
+ * / canOperateWorkOrders) — sólo se afloja la creación.
+ */
+function canCreateWorkOrders(session: TenantAccessSession): boolean {
+  return session.user.role !== "AUDITOR_READONLY";
+}
+
 function ensureCanManageWorkOrders(session: TenantAccessSession) {
   if (!canManageWorkOrders(session)) {
     throw new RouteError(403, "FORBIDDEN", "No autorizado para gestionar work orders.");
+  }
+}
+
+function ensureCanCreateWorkOrders(session: TenantAccessSession) {
+  if (!canCreateWorkOrders(session)) {
+    throw new RouteError(403, "FORBIDDEN", "Los usuarios solo-lectura no pueden crear órdenes de trabajo.");
   }
 }
 
@@ -360,7 +378,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {
-  ensureCanManageWorkOrders(session);
+  ensureCanCreateWorkOrders(session);
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
