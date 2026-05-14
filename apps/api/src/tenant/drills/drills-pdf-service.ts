@@ -44,6 +44,186 @@ const DRILL_REGULATORY_REF: Record<string, string> = {
   OTHER:          "Buena practica maritima y SMS de la compania.",
 };
 
+/**
+ * Listas de chequeo regulatorias por tipo de simulacro.
+ * Cada item es un punto de verificacion que el inspector / oficial responsable
+ * tilda durante o despues del simulacro. Construidas en base a:
+ *   - SOLAS Cap. III (LSA), Cap. V/26 (steering), Cap. II-2 (fire)
+ *   - ISGOTT (buques tanque, fire & enclosed space)
+ *   - MARPOL Anexo I + SOPEP/SMPEP
+ *   - ISPS Code Parte A
+ *   - MLC 2006 + IMGS (medico)
+ *   - IAMSAR Manual (MOB / SAR)
+ *   - IMO Res. A.1050(27) (enclosed space)
+ *   - MSC.1/Circ.1578 (dead-ship)
+ */
+const DRILL_CHECKLISTS: Record<string, string[]> = {
+  FIRE: [
+    "Alarma general activada y reconocida en puente",
+    "Mustering completo en puntos de reunion (head count)",
+    "Foco identificado y localizacion comunicada al puente",
+    "Comunicacion puente-comando-brigada operativa (UHF/walkie)",
+    "Brigada contra incendio equipada con SCBA y traje proximidad",
+    "Bombas de incendio principal y de emergencia operativas",
+    "Aislacion electrica de la zona afectada confirmada",
+    "Sistema fijo de extincion (CO2 / espuma / agua nebulizada) listo",
+    "Cierre de dampers de ventilacion en zona afectada",
+    "Boundary cooling iniciado en mamparas adyacentes",
+    "Reporte de heridos / desaparecidos (head count vs. tripulacion)",
+    "Tiempo de respuesta brigada operativa (objetivo < 5 min)",
+    "Notificacion SAR / autoridad costera si aplica",
+    "Reset del sistema y stand-down general anunciado",
+  ],
+  ABANDON_SHIP: [
+    "Alarma de abandono (>=7 cortos + 1 largo) activada",
+    "Mustering en puestos de embarque con chalecos puestos",
+    "Chalecos salvavidas correctamente colocados (verificacion visual)",
+    "Trajes de inmersion donned (segun aguas frias)",
+    "Conteo de tripulacion vs. lista de embarque",
+    "Documentacion del buque (Class, registry, ORB, bitacora) preparada",
+    "Posicion GPS y bitacora actualizada con ultima posicion",
+    "MAYDAY transmitido por VHF Ch.16 + DSC + Inmarsat",
+    "EPIRB y SART activados (segun escenario)",
+    "Lanzamiento de bote / balsa (real o simulado - documentar)",
+    "Provisiones de agua y emergencia verificadas en bote",
+    "Reagrupamiento de tripulacion fuera del buque exitoso",
+    "Notificacion a SAR / armador / charterer",
+    "Briefing post-drill con tripulacion completo",
+  ],
+  ENCLOSED_SPACE: [
+    "Permit to Work (espacio confinado) emitido y firmado",
+    "Gas test pre-entry: O2 >= 19.5%",
+    "Gas test pre-entry: LEL < 1%",
+    "Gas test pre-entry: H2S < 10 ppm",
+    "Gas test pre-entry: CO < 50 ppm",
+    "Aislacion de sistemas (lockout/tagout) confirmada",
+    "Ventilacion forzada activa al menos 30 min previos",
+    "Stand-by externo nombrado y posicionado fuera",
+    "Comunicacion bidireccional radio confirmada cada 5 min",
+    "BA con suministro de aire (NO filtros) disponible para rescate",
+    "Linea de vida (harness + tag line) en uso",
+    "Equipo de rescate preparado: trauma kit, camilla, triple-stand",
+    "Briefing pre-entry completado con todo el equipo",
+    "Tiempo maximo de permanencia definido y respetado",
+    "Re-test atmosfera cada 30 min documentado",
+    "Stand-down y permit cerrado al salir",
+  ],
+  MAN_OVERBOARD: [
+    "Alarma MOB / 3 toques largos activada",
+    "Aro salvavidas con humo + luz arrojado inmediatamente",
+    "Posicion del MOB marcada en GPS (boton MOB)",
+    "Maniobra evasiva (Williamson / Anderson / Scharnov) ejecutada",
+    "Lookout adicional posicionado en cubierta",
+    "Alerta VHF Ch.16 transmitida (MAYDAY RELAY si aplica)",
+    "Comunicacion puente-sala de maquinas establecida",
+    "Bote de rescate preparado para arriado",
+    "Velocidad reducida y aproximacion a sotavento de la victima",
+    "Recuperacion de la persona (real o maniqui) exitosa",
+    "Primeros auxilios / hipotermia kit listos",
+    "Reporte SAR si no se recupera en tiempo razonable",
+    "Tiempo total desde alarma hasta recuperacion documentado",
+  ],
+  POLLUTION: [
+    "Alarma de contaminacion activada",
+    "SOPEP / SMPEP plan consultado por el oficial responsable",
+    "Fuente del derrame identificada y aislada",
+    "Tipo y cantidad estimada de producto registrada",
+    "Notificacion inmediata a autoridad costera (CRO)",
+    "Notificacion al armador / charterer / Class",
+    "Despliegue de barreras flotantes (boom) si aplica",
+    "Material absorbente desplegado en cubierta / zona afectada",
+    "Bombas de trasvase / drenado preparadas",
+    "Entrada en ORB (Oil Record Book) registrada",
+    "Comunicacion P&I Club establecida",
+    "Evaluacion de impacto ambiental inicial documentada",
+    "Equipo PPE (overol, guantes nitrilo, mascara) usado",
+    "Limpieza post-incidente coordinada",
+  ],
+  OIL_SPILL: [
+    "Alarma SOPEP activada",
+    "SOPEP plan consultado y rol asignado a cada miembro",
+    "Cierre de valvulas y aislacion del tanque/sistema afectado",
+    "Volumen estimado del derrame registrado",
+    "Notificacion inmediata a autoridad costera (CRO/MAEDO)",
+    "Notificacion al armador / charterer / agente",
+    "Despliegue de oil booms si el derrame alcanzo el agua",
+    "Aplicacion de absorbentes / dispersantes (segun aprobacion)",
+    "Bombeo de retorno al tanque o slop tank",
+    "Entrada detallada en ORB Parte I/II",
+    "Foto-documentacion del area afectada",
+    "Coordinacion con P&I Club y Class society",
+    "Plan de clean-up post-incidente acordado",
+  ],
+  SECURITY: [
+    "Alarma de security activada",
+    "Ship Security Officer (SSO) toma comando",
+    "Nivel de security (MARSEC) elevado segun el escenario",
+    "Verificacion de accesos al buque (gangway control)",
+    "Bridge / sala de control bloqueado",
+    "Comunicacion con Company Security Officer (CSO)",
+    "Notificacion a Flag State y autoridad portuaria",
+    "Inspeccion de carga y compartimientos sospechosos",
+    "Busqueda de personal no autorizado a bordo",
+    "Coordinacion con autoridad portuaria / policia",
+    "Ship Security Alert System (SSAS) NO activado (solo en emergencia real)",
+    "Registro de incidente en el Continuous Synopsis Record (CSR)",
+    "Briefing post-drill con SSO + tripulacion clave",
+  ],
+  MEDICAL: [
+    "Oficial medico designado convocado",
+    "Botiquin / hospital de a bordo abierto y accesible",
+    "Evaluacion inicial paciente (ABCDE primary survey)",
+    "Signos vitales registrados: TA, FC, FR, SpO2, Tº, glucemia",
+    "Consulta telemedicina CIRM / TMAS establecida",
+    "Diagnostico presuntivo y tratamiento documentado",
+    "Preparacion para evacuacion (MEDEVAC) si aplica",
+    "Notificacion al proximo puerto / agente / autoridad",
+    "Coordinacion helicoptero o lancha ambulancia gestionada",
+    "Provision de medicacion del botiquin registrada",
+    "Acompañante de la tripulacion asignado para escolta",
+    "Documentacion medica del paciente preparada para entrega",
+  ],
+  STEERING_GEAR: [
+    "Prueba del aparato de gobierno principal (todas las bombas)",
+    "Prueba del gobierno de emergencia (cambio remoto a local)",
+    "Comunicacion puente-sala steering establecida",
+    "Tiempo hard-over a hard-over <= 28 segundos verificado",
+    "Prueba con cada bomba hidraulica independiente",
+    "Verificacion de feedback rudder angle indicator vs. real",
+    "Prueba de alarmas de fallo (low oil, power failure)",
+    "Verificacion de gyrocompasses (master + repetidores)",
+    "Backup magnetico operativo y verificado",
+    "Comunicacion telefono / walkie puente-steering OK",
+    "Prueba de telegrafo de maquinas / EOT",
+    "Verificacion entrada en bitacora del puente",
+  ],
+  BLACKOUT: [
+    "Black-out simulado (apertura de breaker principal)",
+    "Emergency Diesel Generator (EDG) auto-start en <45 sec",
+    "Verificacion de cargas esenciales en EDG: bombas CI, GMDSS, alumbrado emergencia",
+    "Reporte simultaneo desde puente, sala de maquinas y cada zona",
+    "Verificacion de UPS de puente (radar, ECDIS, GMDSS) operativos",
+    "Reinicio del generador principal segun procedimiento dead-ship",
+    "Re-energizacion paso a paso (load shedding controlado)",
+    "Reconexion de cargas no-esenciales en orden de prioridad",
+    "Verificacion de propulsion restablecida",
+    "Comunicacion bridge-engine confirmada en cada paso",
+    "Tiempo total time-to-restore documentado",
+    "Verificacion de alarmas y registros del sistema PMS",
+  ],
+  OTHER: [
+    "Alarma / inicio del simulacro registrado en bitacora",
+    "Briefing pre-drill realizado",
+    "Roles y responsabilidades asignados",
+    "Equipos necesarios verificados operativos",
+    "Comunicaciones internas funcionando",
+    "Tiempo de respuesta documentado",
+    "Reporte de novedades / heridos / desaparecidos",
+    "Stand-down y debriefing al final",
+    "Lecciones aprendidas documentadas",
+  ],
+};
+
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "-";
   try {
@@ -264,6 +444,78 @@ function renderPdf(ctx: {
         }).join("\n")
       : "Sin participantes registrados.";
     textBlock(partLabel, partRows);
+
+    // ── Lista de chequeo regulatoria (segun SOLAS / ISPS / MARPOL / IAMSAR) ──
+    const checklist = DRILL_CHECKLISTS[drill.type] ?? DRILL_CHECKLISTS["OTHER"];
+    if (checklist && checklist.length > 0) {
+      // Header de la seccion (mismo estilo que textBlock pero sin caja blanca)
+      const labelH = 14;
+      ensureSpace(labelH + 12);
+      doc.rect(ML, y, W, labelH).fillColor(navy).fill();
+      setFont(7, true);
+      doc.fillColor("#ffffff")
+        .text("LISTA DE CHEQUEO REGULATORIA", ML + 8, y + 4, { width: W - 16, characterSpacing: 0.8 });
+      y += labelH;
+
+      // Subtitulo: norma aplicable
+      setFont(7, false);
+      doc.fillColor(gray)
+        .text(`Aplicable: ${sanitize(DRILL_REGULATORY_REF[drill.type] ?? "Buena practica maritima.")}`,
+          ML + 8, y + 2, { width: W - 16, lineGap: 1 });
+      y += 14;
+
+      // Items con checkbox manual + "OK" / "N/A" columns
+      const colCheckW = 14;
+      const colTextW  = W - colCheckW - 100;
+      const colOkW    = 30;
+      const colNaW    = 30;
+      const colNotesW = 32;
+      const rowH      = 16;
+
+      // Header de columnas
+      ensureSpace(rowH + 4);
+      setFont(6.5, true);
+      doc.fillColor(gray);
+      doc.text("#",     ML + 2,                                    y + 4, { width: colCheckW, align: "center", characterSpacing: 0.4 });
+      doc.text("ITEM",  ML + colCheckW + 4,                        y + 4, { width: colTextW, characterSpacing: 0.4 });
+      doc.text("OK",    ML + colCheckW + colTextW + 8,             y + 4, { width: colOkW, align: "center", characterSpacing: 0.4 });
+      doc.text("N/A",   ML + colCheckW + colTextW + colOkW + 12,   y + 4, { width: colNaW, align: "center", characterSpacing: 0.4 });
+      doc.text("OBS.",  ML + colCheckW + colTextW + colOkW + colNaW + 16, y + 4, { width: colNotesW, align: "center", characterSpacing: 0.4 });
+      doc.moveTo(ML, y + rowH).lineTo(ML + W, y + rowH).strokeColor(border).lineWidth(0.5).stroke();
+      y += rowH;
+
+      // Filas
+      checklist.forEach((item, idx) => {
+        setFont(9, false);
+        const textHeight = doc.heightOfString(sanitize(item), { width: colTextW - 8 });
+        const thisRowH = Math.max(rowH, textHeight + 6);
+        ensureSpace(thisRowH);
+
+        // Bordes laterales y bottom de la fila
+        doc.moveTo(ML, y + thisRowH).lineTo(ML + W, y + thisRowH).strokeColor("#e2e8f0").lineWidth(0.3).stroke();
+
+        // Numero
+        setFont(8, true);
+        doc.fillColor(gray)
+          .text(String(idx + 1), ML + 2, y + 4, { width: colCheckW, align: "center" });
+
+        // Texto del item
+        setFont(9, false);
+        doc.fillColor(black)
+          .text(sanitize(item), ML + colCheckW + 4, y + 3, { width: colTextW - 8, lineGap: 1 });
+
+        // Checkbox OK
+        doc.rect(ML + colCheckW + colTextW + 17, y + 3, 10, 10).strokeColor(border).lineWidth(0.5).stroke();
+        // Checkbox N/A
+        doc.rect(ML + colCheckW + colTextW + colOkW + 22, y + 3, 10, 10).strokeColor(border).lineWidth(0.5).stroke();
+        // Espacio observaciones (linea)
+        doc.moveTo(ML + colCheckW + colTextW + colOkW + colNaW + 18, y + thisRowH - 4)
+           .lineTo(ML + W - 4, y + thisRowH - 4).strokeColor("#cbd5e1").lineWidth(0.3).stroke();
+
+        y += thisRowH;
+      });
+      y += 8;
+    }
 
     // ── Firmas ──
     y += 10;

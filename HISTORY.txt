@@ -1,5 +1,45 @@
 HISTORY.txt
 
+[2026-05-14] Simulacros — checklist regulatorio adjunto en PDF por tipo
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El PDF de simulacro ya tenia los bloques de escenario, observaciones,
+participantes, etc., pero faltaba la lista de chequeo operativa que el
+oficial firma durante el ejercicio. Una lista distinta por cada tipo de
+simulacro, alineada con la regulacion aplicable.
+
+CAMBIOS (apps/api/src/tenant/drills/drills-pdf-service.ts):
+
+· Constante DRILL_CHECKLISTS con items por tipo de simulacro:
+  - FIRE (14): SOLAS II-2 + III/19.3.2 + ISGOTT Cap. 7
+  - ABANDON_SHIP (14): SOLAS III/19.3.2 + 19.3.3.1
+  - ENCLOSED_SPACE (16): SOLAS III/19.3.3.3 + IMO A.1050(27)
+    (incluye gas test O2 >=19.5%, LEL <1%, H2S <10ppm, CO <50ppm)
+  - MAN_OVERBOARD (13): SOLAS V/26 + IAMSAR (Williamson maneuver)
+  - POLLUTION (14): MARPOL Anexo I + SOPEP
+  - OIL_SPILL (13): MARPOL Anexo I + SMPEP + ORB I/II
+  - SECURITY (13): ISPS Code A/13.4 (SSO, MARSEC, SSAS)
+  - MEDICAL (12): MLC 2006 + IMGS (ABCDE survey, CIRM/TMAS)
+  - STEERING_GEAR (12): SOLAS V/26.4 (28 sec hard-over)
+  - BLACKOUT (12): MSC.1/Circ.1578 (EDG auto-start <45 sec)
+  - OTHER (9): items genericos
+
+· Nueva seccion al PDF entre Participantes y Firmas:
+  - Banner navy "LISTA DE CHEQUEO REGULATORIA" + linea de norma
+    aplicable (mismo texto que el bloque "Referencia normativa").
+  - Tabla con columnas #, ITEM, OK, N/A, OBS.
+  - Cada item con 2 checkboxes (OK / N/A) en blanco para tildar
+    manualmente + linea horizontal para escribir observaciones.
+  - Altura de fila dinamica segun el largo del texto.
+  - Paginacion automatica via ensureSpace().
+
+VERIFICADO: tsc api OK.
+
+PENDIENTE PARA VPS — solo backend, sin migraciones:
+  cd /app && git pull origin main
+  pm2 restart gpms
+
 [2026-05-14] SIRE 2.0 second tier — Checklists + Crew Matrix + MOC + CVIQ
 Agent: Claude Opus 4.7
 
