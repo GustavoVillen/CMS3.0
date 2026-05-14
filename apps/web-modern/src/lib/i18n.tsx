@@ -54,6 +54,10 @@ const dict = {
   "nav.restHours":         { es: "Horas de Descanso",   en: "Hours of Rest",       pt: "Horas de Descanso" },
   "nav.nearMiss":          { es: "Near Miss",           en: "Near Miss",           pt: "Quase-Acidentes" },
   "nav.externalAudits":    { es: "Auditorías Externas", en: "External Audits",     pt: "Auditorias Externas" },
+  "nav.checklists":        { es: "Checklists",          en: "Checklists",          pt: "Checklists" },
+  "nav.crewMatrix":        { es: "Matriz Competencias", en: "Capability Matrix",   pt: "Matriz Competências" },
+  "nav.moc":               { es: "MOC",                 en: "MOC",                 pt: "MOC" },
+  "nav.cviq":              { es: "CVIQ SIRE 2.0",       en: "CVIQ SIRE 2.0",       pt: "CVIQ SIRE 2.0" },
 
   // Page titles (Layout header)
   "page.dashboard":         { es: "Dashboard Principal",       en: "Main Dashboard",          pt: "Painel Principal" },

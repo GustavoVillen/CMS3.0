@@ -20,6 +20,19 @@ import {
 import {
   listRestHours, upsertRestHours, monthlySnapshot, deleteRestHoursDay,
 } from "./rest-hours/rest-hours-service";
+import {
+  listTemplates, getTemplate, createTemplate, updateTemplate,
+  listExecutions, getExecution, createExecution, updateExecution, deleteExecution, setResponse,
+} from "./checklists/checklists-service";
+import {
+  getMatrix, upsertCapability, deleteCapability,
+} from "./crew-matrix/crew-matrix-service";
+import {
+  listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
+} from "./moc/moc-service";
+import {
+  listQuestions, listAssessments, getAssessment, createAssessment, setResponseCviq, completeAssessment, deleteAssessment,
+} from "./cviq/cviq-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
@@ -1508,6 +1521,173 @@ export async function handleTenantRoutes(
     await deleteRestHoursDay(session, id);
     sendJson(response, 200, { ok: true });
     return true;
+  }
+
+  // ── Checklists (Pre-Arrival / Pre-Departure / etc.) ───────────────────────
+  if (method === "GET" && url.pathname === "/app/checklist-templates") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listTemplates(session, { type: url.searchParams.get("type") });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/checklist-templates") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createTemplate>[1];
+    sendJson(response, 201, await createTemplate(session, body));
+    return true;
+  }
+  if (/^\/app\/checklist-templates\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") { sendJson(response, 200, await getTemplate(session, id)); return true; }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateTemplate>[2];
+      sendJson(response, 200, await updateTemplate(session, id, body));
+      return true;
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/app/checklist-executions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listExecutions(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      type:       url.searchParams.get("type"),
+      status:     url.searchParams.get("status"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/checklist-executions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createExecution>[1];
+    sendJson(response, 201, await createExecution(session, body));
+    return true;
+  }
+  if (/^\/app\/checklist-executions\/[^/]+\/responses$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof setResponse>[2];
+      sendJson(response, 200, await setResponse(session, id, body));
+      return true;
+    }
+  }
+  if (/^\/app\/checklist-executions\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") { sendJson(response, 200, await getExecution(session, id)); return true; }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateExecution>[2];
+      sendJson(response, 200, await updateExecution(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") { await deleteExecution(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  // ── Crew Capability Matrix ────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/crew-matrix") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getMatrix(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      area:       url.searchParams.get("area"),
+    }));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/crew-matrix") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof upsertCapability>[1];
+    sendJson(response, 200, await upsertCapability(session, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/crew-matrix\/[^/]+\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    const crewId = parts[3]!;
+    const area = parts[4]!;
+    await deleteCapability(session, crewId, area);
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
+
+  // ── Management of Change (MOC) ────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/mocs") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listMocs(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+      category:   url.searchParams.get("category"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/mocs") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createMoc>[1];
+    sendJson(response, 201, await createMoc(session, body));
+    return true;
+  }
+  if (/^\/app\/mocs\/[^/]+\/transition$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof transitionMoc>[2];
+      sendJson(response, 200, await transitionMoc(session, id, body));
+      return true;
+    }
+  }
+  if (/^\/app\/mocs\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") { sendJson(response, 200, await getMoc(session, id)); return true; }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateMoc>[2];
+      sendJson(response, 200, await updateMoc(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") { await deleteMoc(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  // ── CVIQ self-assessment ──────────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/cviq/questions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listQuestions(session);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/cviq/assessments") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listAssessments(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/cviq/assessments") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createAssessment>[1];
+    sendJson(response, 201, await createAssessment(session, body));
+    return true;
+  }
+  if (/^\/app\/cviq\/assessments\/[^/]+\/responses$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof setResponseCviq>[2];
+      sendJson(response, 200, await setResponseCviq(session, id, body));
+      return true;
+    }
+  }
+  if (/^\/app\/cviq\/assessments\/[^/]+\/complete$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await completeAssessment(session, id)); return true; }
+  }
+  if (/^\/app\/cviq\/assessments\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") { sendJson(response, 200, await getAssessment(session, id)); return true; }
+    if (method === "DELETE") { await deleteAssessment(session, id); sendJson(response, 200, { ok: true }); return true; }
   }
 
   // ── Crew dashboard summary ─────────────────────────────────────────────────

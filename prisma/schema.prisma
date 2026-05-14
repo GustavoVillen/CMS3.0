@@ -1012,6 +1012,7 @@ model Vessel {
   permits          PermitToWork[]
   externalAudits   ExternalAudit[]
   nearMissReports  NearMissReport[]
+  checklistExecutions ChecklistExecution[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2860,4 +2861,338 @@ model CrewRestHours {
   @@index([tenantId, vesselCode, recordDate])
   @@index([crewId, recordDate])
   @@index([tenantId, hasViolation])
+}
+
+// ─── Block: Pre-Arrival / Pre-Departure / Pre-Bunkering Checklists ─────────────
+// SIRE 2.0 Ch. 4 + ISGOTT + ISM. Listas de verificación firmadas que el
+// inspector pide ver. Templates con items + ejecución por evento.
+
+enum ChecklistTemplateType {
+  PRE_ARRIVAL
+  PRE_DEPARTURE
+  PRE_BUNKERING
+  PRE_CARGO_TRANSFER
+  ENCLOSED_SPACE_ENTRY
+  HOT_WORK
+  PILOT_BOARDING
+  ANCHOR
+  MOORING
+  OTHER
+}
+
+enum ChecklistExecutionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ChecklistItemResponseStatus {
+  PENDING
+  CONFORMING
+  NOT_CONFORMING
+  NOT_APPLICABLE
+}
+
+model ChecklistTemplate {
+  id              String                @id @default(cuid())
+  tenantId        String?               // null = template global (compartido)
+  type            ChecklistTemplateType
+  name            String
+  description     String?
+  // items: array de { code, text, isMandatory, category? } guardado JSON
+  // para evitar una tabla más con tan pocos campos.
+  itemsJson       Json                  @default("[]")
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+  updatedAt       DateTime              @updatedAt
+  updatedByUserId String
+
+  executions      ChecklistExecution[]
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model ChecklistExecution {
+  id                String                       @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  templateId        String
+  executionCode     String                       // CHK-VESSEL-YY-####
+  type              ChecklistTemplateType
+  status            ChecklistExecutionStatus     @default(IN_PROGRESS)
+  // Contexto del evento
+  eventDateTime     DateTime
+  port              String?
+  voyageRef         String?
+  performedByName   String?                      // nombre del que llenó
+  performedByCrewId String?
+  signedByName      String?                      // capitán o responsable
+  signedByCrewId    String?
+  signedAt          DateTime?
+  notes             String?
+  // Snapshot calculado al cerrar
+  totalItems        Int                          @default(0)
+  conformingItems   Int                          @default(0)
+  notConformingItems Int                         @default(0)
+  createdAt         DateTime                     @default(now())
+  createdByUserId   String
+  updatedAt         DateTime                     @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  template          ChecklistTemplate            @relation(fields: [templateId], references: [id])
+  vessel            Vessel                       @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  responses         ChecklistItemResponse[]
+
+  @@unique([tenantId, vesselCode, executionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, type, status])
+  @@index([eventDateTime])
+}
+
+model ChecklistItemResponse {
+  id              String                       @id @default(cuid())
+  tenantId        String
+  executionId     String
+  // itemCode = mismo code del itemsJson del template; permite mantener
+  // la asociación aunque el template se edite a futuro.
+  itemCode        String
+  itemText        String                       // copia del texto al momento del llenado
+  status          ChecklistItemResponseStatus  @default(PENDING)
+  notes           String?
+  reportedByName  String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  updatedByUserId String
+
+  execution       ChecklistExecution           @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, itemCode])
+  @@index([tenantId])
+  @@index([executionId])
+}
+
+// ─── Block: Crew Capability Matrix ────────────────────────────────────────────
+// Quién está calificado para qué tarea crítica. Útil para asignar OTs / PTW /
+// drills y para responder preguntas SIRE como "¿quién puede operar X?".
+
+enum CapabilityLevel {
+  TRAINED              // Hizo el curso pero no está certificado
+  CERTIFIED            // Tiene la certificación vigente
+  EXPERT               // Instructor / referente
+}
+
+enum CapabilityArea {
+  ECDIS                // Operación ECDIS
+  BWMS                 // Ballast Water Management System
+  IG_SYSTEM            // Inert Gas system
+  CARGO_HANDLING       // Operación de carga
+  MOORING_MASTER       // Mooring master / amarre supervisado
+  ENCLOSED_SPACE_ENTRY // Entry team / rescatista
+  HOT_WORK             // Hot work permit holder
+  RADAR_ARPA           // Radar / ARPA
+  GMDSS                // GMDSS operator
+  BRIDGE_RESOURCE_MGMT // BRM
+  ENGINE_ROOM_RESOURCE // ERM
+  FIRE_FIGHTING        // Advanced fire fighting (más allá de BST)
+  SURVIVAL_CRAFT       // Bote / balsa
+  MEDICAL_FIRST_AID    // Primeros auxilios
+  HIGH_VOLTAGE         // Trabajo con alta tensión
+  CRANE_OPERATION      // Operación de grúa / pluma
+  OTHER
+}
+
+model CrewCapability {
+  id              String           @id @default(cuid())
+  tenantId        String
+  crewId          String
+  area            CapabilityArea
+  level           CapabilityLevel  @default(CERTIFIED)
+  // Vinculación opcional con certificación existente como evidencia.
+  certificationId String?
+  notes           String?
+  validUntil      DateTime?
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+  updatedAt       DateTime         @updatedAt
+  updatedByUserId String
+
+  @@unique([crewId, area])
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([tenantId, area])
+}
+
+// ─── Block: Management of Change (MOC) — SIRE 2.0 Ch. 4 + ISM ──────────────────
+// Workflow formal de cambios significativos al buque / sistemas / procedimientos.
+
+enum MocCategory {
+  EQUIPMENT_CHANGE     // Cambio físico de equipo (instalación, modificación)
+  PROCEDURE_CHANGE     // Cambio en procedimiento operativo
+  ORGANIZATIONAL       // Cambio organizacional / responsabilidades
+  TEMPORARY            // Cambio temporal (bypass, workaround)
+  SOFTWARE_FIRMWARE    // Cambio de software/firmware
+  OTHER
+}
+
+enum MocRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MocStatus {
+  REQUESTED            // Solicitado, pendiente de análisis
+  UNDER_ANALYSIS       // En análisis de impacto/riesgo
+  APPROVED             // Aprobado, pendiente de implementación
+  IN_PROGRESS          // Implementación en curso
+  IMPLEMENTED          // Implementado, pendiente de revisión post
+  REVIEWED             // Revisado post-implementación, cerrado satisfactorio
+  REJECTED
+  CANCELLED
+}
+
+model MocRecord {
+  id                    String        @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  mocCode               String        // MOC-VESSEL-YY-####
+  category              MocCategory
+  status                MocStatus     @default(REQUESTED)
+  title                 String
+  reasonForChange       String
+  proposedChange        String
+  riskLevel             MocRiskLevel  @default(MEDIUM)
+  // Análisis de impacto: array JSON con áreas afectadas (Safety, Environment, etc.).
+  impactAreasJson       Json          @default("[]")
+  riskAssessmentNotes   String?
+  mitigationActions     String?
+  // Aprobación
+  approvedAt            DateTime?
+  approvedByUserId      String?
+  approvedByName        String?
+  rejectedReason        String?
+  // Implementación
+  plannedDate           DateTime?
+  implementedAt         DateTime?
+  implementedByName     String?
+  implementationNotes   String?
+  // Revisión post
+  reviewedAt            DateTime?
+  reviewedByUserId      String?
+  reviewNotes           String?
+  reviewOutcome         String?        // "SATISFACTORY" / "WITH_OBSERVATIONS" / "REOPEN"
+  // Vínculos opcionales
+  relatedAssetId        String?
+  relatedWorkOrderId    String?
+  createdAt             DateTime      @default(now())
+  createdByUserId       String
+  updatedAt             DateTime      @updatedAt
+  updatedByUserId       String
+  deletedAt             DateTime?
+  deletedByUserId       String?
+
+  @@unique([tenantId, vesselCode, mocCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+// ─── Block: CVIQ Self-Assessment — SIRE 2.0 ────────────────────────────────────
+// Catálogo global de preguntas SIRE 2.0 CVIQ + ejecución de self-assessments
+// por vessel para evaluar el estado de conformidad antes de la inspección real.
+
+model CviqQuestion {
+  id              String   @id @default(cuid())
+  // Identificador SIRE oficial: "7.1.2", "PI 18.4", etc.
+  questionCode    String   @unique
+  chapter         Int      // 1..10
+  chapterTitle    String   // "Generalidades", "Tripulación", etc.
+  section         String?  // "7.1 Bridge Operations"
+  questionText    String   @db.Text
+  expectedEvidence String? @db.Text  // qué evidencia espera el inspector
+  // null = aplica siempre; otros: "TANKER", "GAS_CARRIER", "CHEMICAL", etc.
+  vesselTypeScope String?
+  // null = catálogo global (precargado); con tenantId = pregunta custom del tenant.
+  tenantId        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  responses       CviqResponse[]
+
+  @@index([chapter])
+  @@index([tenantId])
+}
+
+enum CviqAssessmentStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum CviqResponseStatus {
+  PENDING
+  CONFORMING
+  NOT_CONFORMING
+  PARTIALLY_CONFORMING
+  NOT_APPLICABLE
+}
+
+model CviqAssessment {
+  id                String                @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  assessmentCode    String                // CVIQ-VESSEL-YY-####
+  title             String
+  status            CviqAssessmentStatus  @default(IN_PROGRESS)
+  startedAt         DateTime              @default(now())
+  completedAt       DateTime?
+  assessorName      String?
+  notes             String?
+  // Snapshot al cerrar
+  totalQuestions    Int                   @default(0)
+  conformingCount   Int                   @default(0)
+  notConformingCount Int                  @default(0)
+  partialCount      Int                   @default(0)
+  naCount           Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  createdByUserId   String
+  updatedAt         DateTime              @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  responses         CviqResponse[]
+
+  @@unique([tenantId, vesselCode, assessmentCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model CviqResponse {
+  id              String              @id @default(cuid())
+  tenantId        String
+  assessmentId    String
+  questionId      String
+  status          CviqResponseStatus  @default(PENDING)
+  notes           String?             @db.Text
+  evidenceLink    String?             // URL a doc/registro del PMS
+  // Vínculo opcional a un MOC, CAPA, etc. para tracking de gap.
+  linkedActionType String?            // "CAPA", "MOC", "WO"
+  linkedActionId   String?
+  updatedAt       DateTime            @updatedAt
+  updatedByUserId String
+
+  assessment      CviqAssessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question        CviqQuestion        @relation(fields: [questionId], references: [id])
+
+  @@unique([assessmentId, questionId])
+  @@index([tenantId])
+  @@index([assessmentId])
 }

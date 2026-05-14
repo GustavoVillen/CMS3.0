@@ -1,5 +1,77 @@
 HISTORY.txt
 
+[2026-05-14] SIRE 2.0 second tier — Checklists + Crew Matrix + MOC + CVIQ
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Cuatro módulos nuevos del segundo tier de SIRE 2.0:
+1. Checklists firmados (Pre-Arrival, Pre-Departure, Pre-Bunkering, Hot
+   Work, Enclosed Space Entry, etc.) — los inspectores los piden.
+2. Crew Capability Matrix — quién está calificado para qué tarea crítica.
+3. Management of Change (MOC) — workflow formal de cambios significativos.
+4. CVIQ Self-Assessment — checklist de las preguntas reales del CVIQ
+   mapeadas a documentos/registros para hacer dry-run interno.
+
+CAMBIOS — Schema (4 migrations nuevas):
+
+· 20260514_checklists/
+  ChecklistTemplate (items JSON) + ChecklistExecution con responses
+  por item. Tipos: PRE_ARRIVAL, PRE_DEPARTURE, PRE_BUNKERING,
+  PRE_CARGO_TRANSFER, ENCLOSED_SPACE_ENTRY, HOT_WORK, PILOT_BOARDING,
+  ANCHOR, MOORING. Templates pueden ser globales (tenantId=null) o
+  por tenant. Code CHK-VESSEL-YY-####.
+
+· 20260514_crew_capability/
+  CrewCapability (crewId × area). Áreas: ECDIS, BWMS, IG_SYSTEM,
+  CARGO_HANDLING, MOORING_MASTER, ENCLOSED_SPACE_ENTRY, HOT_WORK,
+  RADAR_ARPA, GMDSS, BRM, ERM, FIRE_FIGHTING, SURVIVAL_CRAFT,
+  MEDICAL_FIRST_AID, HIGH_VOLTAGE, CRANE_OPERATION. Levels: TRAINED,
+  CERTIFIED, EXPERT. Soporta validUntil + notas + certificationId.
+
+· 20260514_moc/
+  MocRecord con workflow REQUESTED → UNDER_ANALYSIS → APPROVED →
+  IN_PROGRESS → IMPLEMENTED → REVIEWED, con caminos a REJECTED y
+  CANCELLED. Approval requiere TENANT_ADMIN o FLEET_SUPERINTENDENT.
+  Impact areas como array JSON. Code MOC-VESSEL-YY-####.
+
+· 20260514_cviq/
+  CviqQuestion catálogo (global + tenant custom) + CviqAssessment +
+  CviqResponse. Seed inicial de 24 preguntas cubriendo los 10
+  capítulos del CVIQ SIRE 2.0 (representativas; el resto se carga
+  desde la admin UI a futuro). Responses tienen status PENDING /
+  CONFORMING / NOT_CONFORMING / PARTIALLY_CONFORMING / NOT_APPLICABLE,
+  con notes, evidenceLink y vínculo a CAPA/MOC/WO. Code
+  CVIQ-VESSEL-YY-####.
+
+CAMBIOS — Backend (4 services + rutas en tenant-router.ts):
+  apps/api/src/tenant/checklists/checklists-service.ts
+  apps/api/src/tenant/crew-matrix/crew-matrix-service.ts
+  apps/api/src/tenant/moc/moc-service.ts
+  apps/api/src/tenant/cviq/cviq-service.ts
+
+CAMBIOS — Frontend (4 páginas + sidebar + i18n + App routes):
+  apps/web-modern/src/pages/Checklists.tsx — lista + ejecuciones +
+    editor de templates (admin) + responses inline con CONFORMING/
+    NOT_CONFORMING/N/A por item + completar y firmar.
+  apps/web-modern/src/pages/CrewMatrix.tsx — grilla crew × área con
+    badges de nivel y flag de expired.
+  apps/web-modern/src/pages/Moc.tsx — lista + modal con workflow
+    interactivo según estado actual; aprobación restringida a admin/
+    superintendent.
+  apps/web-modern/src/pages/Cviq.tsx — dashboard con % de conformidad,
+    filtro por capítulo, contadores; cada pregunta con 4 botones de
+    respuesta + notas/evidencia inline.
+
+VERIFICADO: tsc backend + frontend OK · vite build OK.
+
+PENDIENTE PARA VPS — incluye 4 migrations:
+  cd /app && git pull origin main
+  set -a; . /app/.env; set +a
+  npx prisma db push
+  npx prisma generate
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Crew — rangos PILOT/PILOTIN + fix contraste select dark theme
 Agent: Claude Opus 4.7
 
