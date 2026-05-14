@@ -311,6 +311,8 @@ enum CrewRank {
   STEWARD
   CADET
   RADIO_OPERATOR
+  PILOT
+  PILOTIN
   OTHER
 }
 

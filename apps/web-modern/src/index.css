@@ -72,17 +72,28 @@ body {
   background: #1C2541;
 }
 
-/* Native select contrast fix (notably on Windows dropdown list rendering) */
+/* Native select contrast fix (notably on Windows dropdown list rendering).
+   Algunos navegadores (Chrome/Edge en Windows) ignoran las reglas option:checked
+   y muestran el item seleccionado con el highlight del sistema, dejando texto
+   blanco sobre fondo blanco. Forzamos con !important + colores del tema. */
 select {
   color: #ffffff;
 }
 
 select option {
-  background-color: #0D1B2A;
-  color: #E0E1DD;
+  background-color: #0D1B2A !important;
+  color: #E0E1DD !important;
 }
 
-select option:checked {
-  background: linear-gradient(#2563EB, #2563EB);
-  color: #ffffff;
+select option:checked,
+select option:hover,
+select option:focus,
+select option[selected] {
+  background: #FF9F1C !important;
+  color: #0B132B !important;
+  font-weight: 600;
+}
+
+select option:disabled {
+  color: rgba(224, 225, 221, 0.4) !important;
 }

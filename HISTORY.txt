@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-05-14] Crew — rangos PILOT/PILOTIN + fix contraste select dark theme
+Agent: Claude Opus 4.7
+
+· prisma/schema.prisma + migration 20260514_crew_rank_pilot:
+  Agregados PILOT y PILOTIN al enum CrewRank (ALTER TYPE ADD VALUE
+  idempotente).
+· apps/web-modern/src/pages/Crew.tsx:
+  RANK_LABEL: "PILOT": "Práctico", "PILOTIN": "Pilotín".
+· apps/web-modern/src/index.css:
+  Fix del bug white-on-white en el item seleccionado del <select>
+  nativo (visible en Chrome/Edge en Windows). Reglas con !important
+  para que option:checked use el accent del tema (#FF9F1C con texto
+  #0B132B) y option base tenga fondo navy. También cubre :hover,
+  :focus, [selected] y :disabled.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  set -a; . /app/.env; set +a
+  npx prisma db push
+  npx prisma generate
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] SIRE 2.0 — 3 módulos nuevos: External Audits, Near Miss, Hours of Rest
 Agent: Claude Opus 4.7
 

@@ -56,6 +56,8 @@ const RANK_LABEL: Record<string, string> = {
   STEWARD: "Camarero",
   CADET: "Cadete",
   RADIO_OPERATOR: "Operador Radio",
+  PILOT: "Práctico",
+  PILOTIN: "Pilotín",
   OTHER: "Otro",
 };
 
