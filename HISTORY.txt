@@ -1,5 +1,79 @@
 HISTORY.txt
 
+[2026-05-14] Defects — fotos múltiples + mosaico + análisis IA visión
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Mobile ya tenía foto única; PC no permitía adjuntar fotos. Se pidió
+poder subir varias fotos antes y después de crear el defecto, verlas
+en mosaico, y que la IA las analice ANTES de bajarles resolución para
+agregar descripción técnica al campo Descripción.
+
+CAMBIOS:
+
+· apps/api/src/tenant/attachments/attachment-uploads-service.ts (sin cambios)
+  El archivo se sigue guardando en disco como antes.
+
+· apps/api/src/tenant/attachments/attachments-service.ts
+  - registerAttachmentRecord(): crea registro en tabla Attachment
+    (targetType=DEFECT, targetId=defectId) cuando el endpoint /upload
+    recibe entityType=Defect+entityId. Hace lookup del defecto para
+    obtener vesselCode. Guarda la URL en el campo `description` para
+    devolverla en el listado.
+  - softDeleteTenantAttachment(): scope check por vesselCode.
+  - listTenantAttachments(): nuevo filtro por targetId.
+
+· apps/api/src/tenant/tenant-router.ts
+  - POST /app/attachments/upload acepta entityId y llama
+    registerAttachmentRecord (best-effort, no rompe el upload si falla).
+  - GET /app/attachments acepta ?targetId=.
+  - Nuevo DELETE /app/attachments/:id (soft-delete).
+
+· apps/api/src/tenant/pms/defects-ai-suggestions.ts
+  - analyzeDefectPhoto(): nuevo endpoint que recibe imageBase64 + mimeType
+    + existingDescription + assetLabel. Llama Claude Vision (multimodal
+    con bloque image base64). Prompt PROMPT_PHOTO_ANALYSIS pide 2-4
+    oraciones técnicas describiendo el componente, tipo de daño,
+    localización y severidad aparente. Si no identifica defecto, lo
+    informa.
+  - Rate limit 20/min por usuario en el route handler.
+
+· apps/web-modern/src/lib/defect-photos.ts (nuevo)
+  - resizeImage(file, maxPx, quality) helper Canvas.
+  - analyzePhotoForDefect(file, ctx): comprime a 1920px alta calidad
+    (no a 1280 storage) y manda a /analyze-photo. Ese es el "antes de
+    bajar resolución" que pidió el usuario: pasamos al modelo una
+    versión mejor que la final guardada.
+  - uploadDefectPhoto(defectId, file): comprime a 1280px storage y sube.
+  - listDefectPhotos / deleteDefectPhoto: wrappers tipados.
+
+· apps/web-modern/src/pages/Defects.tsx
+  - CreateDefectModal: nueva sección "Fotos" con input file múltiple,
+    mosaico 3-5 cols (badge IA en analizadas), botón "Analizar con IA"
+    que concatena descripciones técnicas al campo Descripción, botón
+    "Cargar fotos". Al crear el defecto, se suben todas con
+    uploadDefectPhoto. Falla por foto reportada al final sin bloquear.
+  - DefectModal (edit): nuevo panel "Fotos" que listDefectPhotos al
+    abrir, mosaico con click → lightbox, botón "Agregar fotos" para
+    subir más, botón "Analizar con IA" para re-analizar fotos ya
+    subidas (descarga URL → base64 → endpoint), botón eliminar.
+
+· apps/web-modern/src/mobile/MobileDefects.tsx
+  - photoFile (1) → photos: PendingPhoto[]. Mosaico 3-cols con badge IA.
+  - Botón "Analizar IA" antes de comprimir.
+  - Botón "Tomar foto" / "Agregar otra" en label dashed.
+  - Al guardar usa uploadDefectPhoto (con compresión 1280px).
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+  # Sin migración (Attachment ya existía).
+
 [2026-05-14] WO — vista mosaico para fotos de avances + lightbox
 Agent: Claude Opus 4.7
 

@@ -15,7 +15,7 @@ import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-servic
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
-import { listTenantAttachments } from "./attachments/attachments-service";
+import { listTenantAttachments, registerAttachmentRecord, softDeleteTenantAttachment } from "./attachments/attachments-service";
 import { saveAttachment } from "./attachments/attachment-uploads-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
@@ -651,6 +651,7 @@ export async function handleTenantRoutes(
   if (method === "POST" && url.pathname === "/app/attachments/upload") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const entityType = url.searchParams.get("entityType") ?? "generic";
+    const entityId   = url.searchParams.get("entityId");
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
     const chunks: Buffer[] = [];
@@ -658,7 +659,18 @@ export async function handleTenantRoutes(
     const buffer = Buffer.concat(chunks);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveAttachment(session.tenantSlug, entityType, originalName, buffer);
-    sendJson(response, 200, result);
+    // Si el caller dio entityType + entityId, registramos también en tabla Attachment
+    // para que después se puedan listar / borrar. Best-effort: si falla, el archivo
+    // sigue accesible vía URL pero no aparecerá en /app/attachments.
+    let attachmentId: string | null = null;
+    try {
+      attachmentId = await registerAttachmentRecord(session, { entityType, entityId, originalName, savedUrl: result.url, sizeBytes: buffer.length });
+    } catch (err) {
+      // log silencioso — no romper upload por fallar el registro
+      // (se ve igual el archivo via URL)
+      void err;
+    }
+    sendJson(response, 200, { ...result, attachmentId });
     return true;
   }
 
@@ -668,8 +680,17 @@ export async function handleTenantRoutes(
       vesselCode:  url.searchParams.get("vesselCode"),
       status:      url.searchParams.get("status"),
       targetType:  url.searchParams.get("targetType"),
+      targetId:    url.searchParams.get("targetId"),
     });
     sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  if (method === "DELETE" && /^\/app\/attachments\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/").pop()!;
+    await softDeleteTenantAttachment(session, id);
+    sendJson(response, 200, { ok: true });
     return true;
   }
 

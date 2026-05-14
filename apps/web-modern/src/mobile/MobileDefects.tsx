@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { ChevronLeft, Plus, Loader2, Camera, X } from "lucide-react";
+import { ChevronLeft, Plus, Loader2, Camera, Sparkles, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
 
 interface Defect {
   id: string;
@@ -42,23 +43,68 @@ export const MobileDefects: React.FC = () => {
   const [description, setDescription]         = useState("");
   const [severity, setSeverity]               = useState("MEDIUM");
   const [operationalState, setOperationalState] = useState("NORMAL");
-  const [photoFile, setPhotoFile]             = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview]       = useState<string | null>(null);
+  interface PendingPhoto { file: File; preview: string; analyzed: boolean }
+  const [photos, setPhotos]                   = useState<PendingPhoto[]>([]);
+  const [analyzingPhotos, setAnalyzingPhotos] = useState(false);
   const [saving, setSaving]                   = useState(false);
   const [err, setErr]                         = useState<string | null>(null);
 
   const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    setPhotoFile(f);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(f ? URL.createObjectURL(f) : null);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const added = files.map(f => ({ file: f, preview: URL.createObjectURL(f), analyzed: false }));
+    setPhotos(prev => [...prev, ...added]);
+    if (e.target) e.target.value = "";
   };
 
-  const clearPhoto = () => {
-    setPhotoFile(null);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(null);
+  const removePhoto = (idx: number) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      const removed = next.splice(idx, 1)[0];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return next;
+    });
   };
+
+  const clearPhotos = () => {
+    photos.forEach(p => URL.revokeObjectURL(p.preview));
+    setPhotos([]);
+  };
+
+  /**
+   * Analiza las fotos con IA ANTES de comprimirlas y subirlas, y concatena
+   * la descripción técnica al campo description.
+   */
+  const handleAnalyzePhotos = useCallback(async () => {
+    if (analyzingPhotos) return;
+    const toAnalyze = photos.filter(p => !p.analyzed);
+    if (toAnalyze.length === 0) { setErr("Las fotos ya fueron analizadas."); return; }
+    setAnalyzingPhotos(true);
+    setErr(null);
+    try {
+      const selectedAsset = (assetData?.items ?? []).find(a => a.id === assetId);
+      const assetLabel = selectedAsset?.name ?? selectedAsset?.code ?? null;
+      const additions: string[] = [];
+      for (const p of toAnalyze) {
+        try {
+          const res = await analyzePhotoForDefect({ file: p.file, existingDescription: description, assetLabel });
+          if (res.text?.trim()) additions.push(res.text.trim());
+        } catch {
+          additions.push(`(No se pudo analizar ${p.file.name})`);
+        }
+      }
+      if (additions.length > 0) {
+        const block = additions.join("\n\n");
+        setDescription(prev => prev.trim()
+          ? `${prev.trim()}\n\n— Análisis IA de fotos —\n${block}`
+          : `— Análisis IA de fotos —\n${block}`);
+      }
+      setPhotos(prev => prev.map(p => ({ ...p, analyzed: true })));
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al analizar las fotos.");
+    } finally { setAnalyzingPhotos(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzingPhotos, photos, description, assetId, assetData]);
 
   const openDefects = useMemo(
     () => (data?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED"),
@@ -68,7 +114,7 @@ export const MobileDefects: React.FC = () => {
   const openCreate = () => {
     setAssetId(""); setClassification("Mecánico"); setDescription("");
     setSeverity("MEDIUM"); setOperationalState("NORMAL"); setErr(null);
-    clearPhoto();
+    clearPhotos();
     setView("create");
   };
 
@@ -86,13 +132,12 @@ export const MobileDefects: React.FC = () => {
         severity,
         operationalState,
       });
-      // Subir foto si fue capturada (no bloquea el flujo si falla la subida)
-      if (photoFile && created.id) {
-        try {
-          await api.upload(`/app/attachments/upload?entityType=Defect&entityId=${created.id}`, photoFile);
-        } catch { /* non-blocking */ }
+      // Subir fotos (comprime a 1280px y crea registro Attachment).
+      for (const p of photos) {
+        try { await uploadDefectPhoto(created.id, p.file); }
+        catch { /* non-blocking, continúa con el resto */ }
       }
-      clearPhoto();
+      clearPhotos();
       await reload();
       setView("list");
     } catch (e) {
@@ -100,7 +145,8 @@ export const MobileDefects: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedVesselCode, assetId, classification, description, severity, operationalState, photoFile, reload]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVesselCode, assetId, classification, description, severity, operationalState, photos, reload]);
 
   // ─── ESC guard ──────────────────────────────────────────────────────────────
   const createDirty =
@@ -184,34 +230,58 @@ export const MobileDefects: React.FC = () => {
             />
           </div>
 
-          {/* Foto opcional: usa la cámara trasera del celular */}
+          {/* Fotos: cámara trasera del celular + análisis IA + mosaico */}
           <div className="space-y-1.5">
-            <p className={labelCls}>Foto (opcional)</p>
-            {photoPreview ? (
-              <div className="relative">
-                <img src={photoPreview} alt="Vista previa" className="w-full rounded-xl border border-white/10 object-cover max-h-72" />
+            <div className="flex items-center justify-between">
+              <p className={labelCls}>Fotos {photos.length > 0 && `(${photos.length})`}</p>
+              {photos.length > 0 && (
                 <button
                   type="button"
-                  onClick={clearPhoto}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white"
-                  aria-label="Quitar foto"
+                  onClick={() => { void handleAnalyzePhotos(); }}
+                  disabled={analyzingPhotos}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
                 >
-                  <X className="w-4 h-4" />
+                  {analyzingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {analyzingPhotos ? "Analizando…" : "Analizar IA"}
                 </button>
+              )}
+            </div>
+            {photos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {photos.map((p, i) => (
+                  <div key={i} className={`relative aspect-square bg-white/5 border rounded-lg overflow-hidden ${p.analyzed ? "border-accent/40" : "border-white/10"}`}>
+                    <img src={p.preview} alt="" className="w-full h-full object-cover" />
+                    {p.analyzed && (
+                      <span className="absolute top-1 left-1 px-1 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" />IA
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"
+                      aria-label="Quitar foto"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
-                <Camera className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={onPhotoSelect}
-                />
-              </label>
             )}
+            <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
+              <Camera className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {photos.length === 0 ? "Tomar foto" : "Agregar otra"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                className="hidden"
+                onChange={onPhotoSelect}
+              />
+            </label>
           </div>
 
           {err && <p className="text-xs text-red-400">{err}</p>}

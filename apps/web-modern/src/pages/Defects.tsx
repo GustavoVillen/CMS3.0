@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Bot, Download, ExternalLink, Loader2, Maximize2, Minimize2, Plus, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Bot, Camera, Download, ExternalLink, Loader2, Maximize2, Minimize2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
+import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -203,12 +204,77 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
   const [expanded, setExpanded]               = useState(true);
   const [loadingImmediate, setLoadingImmediate] = useState(false);
 
+  const selectedAsset = assets.find(a => a.id === assetId);
+
+  // Fotos pendientes: el usuario las agrega antes de crear el defecto.
+  // Cada slot guarda el File original + preview URL + estado de análisis IA.
+  interface PendingPhoto { file: File; preview: string; analyzed: boolean }
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [analyzing, setAnalyzing]         = useState(false);
+  const photoInputRef                     = React.useRef<HTMLInputElement>(null);
+
+  const onPhotosSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const added = files.map(f => ({ file: f, preview: URL.createObjectURL(f), analyzed: false }));
+    setPendingPhotos(prev => [...prev, ...added]);
+    if (e.target) e.target.value = ""; // permite re-seleccionar la misma foto
+  };
+
+  const removePhoto = (idx: number) => {
+    setPendingPhotos(prev => {
+      const next = [...prev];
+      const removed = next.splice(idx, 1)[0];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return next;
+    });
+  };
+
+  /**
+   * Analiza con IA las fotos que aún no se analizaron. Concatena la descripción
+   * técnica al campo `description`. Hace el análisis ANTES de comprimir a la
+   * resolución de storage para no perder detalles.
+   */
+  const handleAnalyzePhotos = useCallback(async () => {
+    if (analyzing) return;
+    const toAnalyze = pendingPhotos.filter(p => !p.analyzed);
+    if (toAnalyze.length === 0) { setErr("Todas las fotos ya fueron analizadas."); return; }
+    setAnalyzing(true);
+    setErr(null);
+    try {
+      const assetLabel = selectedAsset?.name ?? selectedAsset?.assetCode ?? null;
+      const additions: string[] = [];
+      for (const p of toAnalyze) {
+        try {
+          const res = await analyzePhotoForDefect({
+            file: p.file,
+            existingDescription: description,
+            assetLabel,
+          });
+          if (res.text?.trim()) additions.push(res.text.trim());
+        } catch {
+          additions.push(`(No se pudo analizar ${p.file.name})`);
+        }
+      }
+      if (additions.length > 0) {
+        setDescription(prev => {
+          const block = additions.join("\n\n");
+          return prev.trim()
+            ? `${prev.trim()}\n\n— Análisis IA de fotos —\n${block}`
+            : `— Análisis IA de fotos —\n${block}`;
+        });
+      }
+      setPendingPhotos(prev => prev.map(p => ({ ...p, analyzed: true })));
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al analizar las fotos.");
+    } finally { setAnalyzing(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzing, pendingPhotos, description, selectedAsset?.name, selectedAsset?.assetCode]);
+
   // Auto-select sole vessel (preserves prior behavior).
   useEffect(() => {
     if (vessels.length === 1 && vessels[0] && !vesselCode) setVesselCode(vessels[0].code);
   }, [vessels, vesselCode]);
-
-  const selectedAsset = assets.find(a => a.id === assetId);
 
   const handleImmediateActionClick = useCallback(async () => {
     if (loadingImmediate) return;
@@ -278,6 +344,17 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
         operationalState,
         immediateAction: immediateAction.trim() || null,
       });
+      // Upload fotos pendientes después de crear el defecto. Si una falla,
+      // sigue con el resto y reporta al final pero no bloquea el flujo.
+      const failed: string[] = [];
+      for (const p of pendingPhotos) {
+        try { await uploadDefectPhoto(defect.id, p.file); }
+        catch { failed.push(p.file.name); }
+      }
+      pendingPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+      if (failed.length > 0) {
+        setErr(`Defecto creado, pero ${failed.length} foto(s) fallaron al subir: ${failed.join(", ")}`);
+      }
       onCreated(defect);
     } catch (ex) {
       setErr(ex instanceof ApiError ? ex.message : "Error al crear el defecto.");
@@ -361,6 +438,68 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             </label>
             <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
           </div>
+
+          {/* ── Fotos del defecto ─────────────────────────────────────────── */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className={labelCls + " mb-0"}>Fotos {pendingPhotos.length > 0 && `(${pendingPhotos.length})`}</p>
+              <div className="flex items-center gap-2">
+                {pendingPhotos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { void handleAnalyzePhotos(); }}
+                    disabled={analyzing}
+                    title="La IA analiza las fotos y agrega la descripción técnica al campo Descripción"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50"
+                  >
+                    {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {analyzing ? "Analizando…" : "Analizar con IA"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-text-industrial hover:border-accent/40 hover:text-white text-[10px] font-bold uppercase tracking-wider"
+                >
+                  <Camera className="w-3 h-3" />
+                  Cargar fotos
+                </button>
+                <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={onPhotosSelected} />
+              </div>
+            </div>
+            {pendingPhotos.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="w-full border border-dashed border-white/10 rounded-xl py-6 flex flex-col items-center gap-2 text-text-industrial/40 hover:text-white hover:border-accent/40 transition-colors"
+              >
+                <Camera className="w-6 h-6" />
+                <span className="text-xs">Sin fotos cargadas — click para agregar</span>
+              </button>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                {pendingPhotos.map((p, i) => (
+                  <div key={i} className={`relative aspect-square bg-white/5 border rounded-lg overflow-hidden group ${p.analyzed ? "border-accent/40" : "border-white/10"}`}>
+                    <img src={p.preview} alt="" className="w-full h-full object-cover" />
+                    {p.analyzed && (
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" />IA
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                      title="Quitar"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">Cancelar</button>
@@ -415,6 +554,80 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [rcaAnalysisError, setRcaAnalysisError] = useState<string | null>(null);
   const [loadingImmediate, setLoadingImmediate] = useState(false);
   useAssetsCache(); // cache de nombres de assets para getAssetName en el handler
+
+  // ── Fotos del defecto ──
+  const [photos, setPhotos]                 = useState<DefectPhotoRecord[]>([]);
+  const [photosLoading, setPhotosLoading]   = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [analyzingPhotos, setAnalyzingPhotos] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto]   = useState<DefectPhotoRecord | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+
+  const reloadPhotos = useCallback(async () => {
+    setPhotosLoading(true);
+    try { setPhotos(await listDefectPhotos(defect.id)); }
+    catch { /* silenciar — la lista vacía es válida */ }
+    finally { setPhotosLoading(false); }
+  }, [defect.id]);
+
+  useEffect(() => { void reloadPhotos(); }, [reloadPhotos]);
+
+  const onPhotosSelectedEdit = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    if (e.target) e.target.value = "";
+    setUploadingPhotos(true);
+    try {
+      for (const f of files) { try { await uploadDefectPhoto(defect.id, f); } catch { /* ignore */ } }
+      await reloadPhotos();
+    } finally { setUploadingPhotos(false); }
+  };
+
+  const removePhotoEdit = async (photoId: string) => {
+    if (!window.confirm("¿Eliminar esta foto?")) return;
+    try { await deleteDefectPhoto(photoId); await reloadPhotos(); }
+    catch (e) { setActionError(e instanceof ApiError ? e.message : "Error al eliminar la foto."); }
+  };
+
+  /**
+   * Analiza con IA las fotos ya subidas y concatena descripción técnica al campo
+   * description. Carga la foto desde su URL, la pasa a base64 y la manda al
+   * endpoint de visión. No es óptimo (ya está comprimida), pero útil para
+   * defectos existentes.
+   */
+  const handleAnalyzeStoredPhotos = useCallback(async () => {
+    if (analyzingPhotos || isClosed) return;
+    if (photos.length === 0) { setActionError("No hay fotos para analizar."); return; }
+    setAnalyzingPhotos(true);
+    setActionError(null);
+    try {
+      const assetLabel = getAssetName(defect.assetId);
+      const additions: string[] = [];
+      for (const p of photos) {
+        const url = p.description; // backend guarda la URL en description
+        if (!url) continue;
+        try {
+          // Descargar la imagen y convertir a base64
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          const file = new File([blob], p.filename, { type: blob.type || "image/jpeg" });
+          const res = await analyzePhotoForDefect({ file, existingDescription: description, assetLabel });
+          if (res.text?.trim()) additions.push(res.text.trim());
+        } catch {
+          additions.push(`(No se pudo analizar ${p.filename})`);
+        }
+      }
+      if (additions.length > 0) {
+        const block = additions.join("\n\n");
+        setDescription(prev => prev.trim()
+          ? `${prev.trim()}\n\n— Análisis IA de fotos —\n${block}`
+          : `— Análisis IA de fotos —\n${block}`);
+      }
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "Error al analizar las fotos.");
+    } finally { setAnalyzingPhotos(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzingPhotos, photos, description, defect.assetId]);
 
   const handleImmediateActionClick = useCallback(async () => {
     if (loadingImmediate || isClosed) return;
@@ -832,6 +1045,66 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               <textarea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
             </div>
 
+            {/* Fotos del defecto */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className={fldLabel}>Fotos {photos.length > 0 && `(${photos.length})`}</p>
+                <div className="flex items-center gap-2">
+                  {photos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { void handleAnalyzeStoredPhotos(); }}
+                      disabled={analyzingPhotos || isClosed}
+                      title="La IA analiza las fotos y agrega descripción técnica al campo Descripción"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50"
+                    >
+                      {analyzingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      {analyzingPhotos ? "Analizando…" : "Analizar con IA"}
+                    </button>
+                  )}
+                  {!isClosed && (
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={uploadingPhotos}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-text-industrial hover:border-accent/40 hover:text-white text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                    >
+                      {uploadingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
+                      Agregar fotos
+                    </button>
+                  )}
+                  <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={(e) => { void onPhotosSelectedEdit(e); }} />
+                </div>
+              </div>
+              {photosLoading ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
+              ) : photos.length === 0 ? (
+                <p className="text-xs text-text-industrial/40 italic text-center py-3">Sin fotos. {!isClosed && 'Click "Agregar fotos" para subir.'}</p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                  {photos.map(p => (
+                    <div key={p.id} className="relative aspect-square bg-white/5 border border-white/10 rounded-lg overflow-hidden group">
+                      {p.description && (
+                        <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
+                          <img src={p.description} alt={p.filename} className="w-full h-full object-cover" />
+                        </button>
+                      )}
+                      {!isClosed && (
+                        <button
+                          type="button"
+                          onClick={() => { void removePhotoEdit(p.id); }}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Análisis RCA estructurado */}
             <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -996,6 +1269,23 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         </div>
       </div>
 
+      {/* Lightbox para ampliar fotos al click en el mosaico */}
+      {lightboxPhoto && lightboxPhoto.description && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            title="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
+            <img src={lightboxPhoto.description} alt={lightboxPhoto.filename} className="max-h-[85vh] rounded-lg object-contain" />
+            <p className="text-[10px] text-white/40">{lightboxPhoto.filename}  ·  {fmtDate(lightboxPhoto.uploadedAt)}</p>
+          </div>
+        </div>
+      )}
     </>
   );
 };

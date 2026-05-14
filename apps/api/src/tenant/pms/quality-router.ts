@@ -16,7 +16,7 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
-import { suggestImmediateAction } from "./defects-ai-suggestions";
+import { suggestImmediateAction, analyzeDefectPhoto } from "./defects-ai-suggestions";
 import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
@@ -90,6 +90,12 @@ export async function handleQualityRoutes(
   if (method === "POST" && url.pathname === "/app/pms/defects/suggest-immediate-action") {
     const body = await readJsonBody(request) as Parameters<typeof suggestImmediateAction>[1];
     sendJson(response, 200, await suggestImmediateAction(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/defects/analyze-photo") {
+    enforceRateLimit(request, `ai-vision:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof analyzeDefectPhoto>[1];
+    sendJson(response, 200, await analyzeDefectPhoto(session, body));
     return true;
   }
   if (method === "GET" && /^\/app\/pms\/defects\/[^/]+\/pdf$/.test(url.pathname)) {
