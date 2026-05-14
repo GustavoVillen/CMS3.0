@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -952,7 +953,7 @@ export const AssetsPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "vesselCode", header: t("col.vessel"), render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span> },
+    { key: "vesselCode", header: t("col.vessel"), render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode /> },
     { key: "sfiCode", header: t("col.sfiCode"), render: row => row.sfiCode ?? "—" },
     { key: "criticality", header: t("col.criticality"), render: row => row.criticality },
     { key: "status", header: t("col.status"), render: row => <StatusBadge status={row.status} /> },

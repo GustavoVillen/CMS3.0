@@ -5,6 +5,7 @@ import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSprea
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
@@ -1858,7 +1859,7 @@ function KanbanCardContent({ wo, deferralMap }: {
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className="font-mono font-bold text-white text-[10px]">{wo.workOrderCode}</span>
-          <span className="font-mono text-accent text-[10px] ml-1.5">{wo.vesselCode}</span>
+          <span className="ml-1.5"><VesselLabel code={wo.vesselCode} className="text-[10px]" showCode /></span>
         </div>
         <CategoryBadge type={wo.type} />
       </div>
@@ -2143,7 +2144,7 @@ export const WorkOrdersPage: React.FC = () => {
       render: r => (
         <div>
           <div className="font-mono font-bold text-white text-xs">{r.workOrderCode}</div>
-          <div className="font-mono text-accent text-[10px] mt-0.5">{r.vesselCode}</div>
+          <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" showCode /></div>
         </div>
       ),
     },

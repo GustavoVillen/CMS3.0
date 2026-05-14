@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -830,7 +831,7 @@ export const PermitsPage: React.FC = () => {
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-[10px] font-mono text-text-industrial/40">{p.permitCode}</span>
                     <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
-                    <span className="text-[10px] text-accent font-mono">{p.vesselCode}</span>
+                    <VesselLabel code={p.vesselCode} className="text-[10px]" showCode />
                     <span className="text-[10px] text-text-industrial/50">{TYPE_LABEL[p.type]}</span>
                     {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-white/5 border-white/10 text-text-industrial/60">

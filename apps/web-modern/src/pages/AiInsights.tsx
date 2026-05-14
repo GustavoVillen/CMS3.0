@@ -9,6 +9,7 @@ import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { useVesselContext } from "../lib/vessel-context";
+import { VesselLabel } from "../components/EntityLabels";
 
 interface AiInsight {
   id: string; insightCode: string; insightType: string; priority: string;
@@ -91,9 +92,7 @@ export const AiInsightsPage: React.FC = () => {
 function InsightCard({ insight, onStatusChange }: { insight: AiInsight; onStatusChange: () => void }) {
   const t = useT();
   const [acting, setActing] = useState(false);
-  const targetLabel = insight.vesselCode
-    ? <span className="font-mono text-accent text-xs">{insight.vesselCode}</span>
-    : <span className="text-text-industrial/30 text-xs">—</span>;
+  const targetLabel = <VesselLabel code={insight.vesselCode ?? null} showCode />;
 
   const handleStatus = async (status: "DISMISSED" | "RESOLVED") => {
     setActing(true);

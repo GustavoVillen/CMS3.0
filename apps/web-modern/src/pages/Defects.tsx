@@ -4,6 +4,7 @@ import { AlertTriangle, Bot, Download, Loader2, Maximize2, Minimize2, Plus, X } 
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -679,7 +680,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-white">{t("page.defects")}</h2>
-              <p className="text-[11px] text-text-industrial/50 font-mono">{defect.defectCode} · {defect.vesselCode}</p>
+              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /></p>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
@@ -1007,7 +1008,7 @@ export const DefectsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
-      render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span>,
+      render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "severity",

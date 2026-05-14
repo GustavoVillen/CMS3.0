@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { DataTable, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 
 interface DueItem {
@@ -193,7 +194,7 @@ export const DueItemsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
-      render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span>,
+      render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "executionStatus",

@@ -6,6 +6,7 @@ import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -119,7 +120,7 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
                   {NEGATIVE_TYPES.has(m.movementType) ? "−" : "+"}{m.quantity} {m.unit}
                 </span>
               </td>
-              <td className="px-4 py-2 font-mono text-accent text-[10px]">{m.vesselCode}</td>
+              <td className="px-4 py-2"><VesselLabel code={m.vesselCode} className="text-[10px]" showCode /></td>
               <td className="px-4 py-2">
                 {m.referenceCode
                   ? <span className="font-mono text-white/70">{m.referenceCode}</span>
@@ -315,7 +316,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
                       <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
                     ))}
                   </select>
-                : <p className="text-sm font-mono text-accent">{spare.vesselCode}</p>}
+                : <p className="text-sm"><VesselLabel code={spare.vesselCode} className="text-sm" showCode /></p>}
             </div>
             <div>
               <label className={labelCls}>SKU *</label>
@@ -614,7 +615,7 @@ export const SparesPage: React.FC = () => {
   const COLUMNS: Column<Spare>[] = [
     { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-white text-xs">{r.sku}</span> },
     { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-white text-xs">{r.name}</span> },
-    { key: "vesselCode",   header: t("col.vessel"),        render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span> },
+    { key: "vesselCode",   header: t("col.vessel"),        render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "category",     header: t("col.category"),      render: r => <span className="text-xs text-white/60">{r.category ?? "—"}</span> },
     { key: "criticality",  header: t("col.criticality"),   render: r => <CriticalityBadge value={r.criticality} /> },
     { key: "onHand",       header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },

@@ -28,6 +28,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
@@ -584,7 +585,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div>
             <h2 className="text-base font-bold text-white">{t("mp.exec.reportTitle")}</h2>
-            <p className="text-[11px] text-text-industrial/50 font-mono">{plan.taskCode} · {plan.vesselCode}</p>
+            <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -851,7 +852,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div>
             <h2 className="text-base font-bold text-white">{t("mp.postpone.title")}</h2>
-            <p className="text-[11px] text-text-industrial/50 font-mono">{plan.taskCode} · {plan.vesselCode}</p>
+            <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -1622,7 +1623,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   </div>
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
-                    <p className="text-sm font-mono text-accent">{plan.vesselCode}</p>
+                    <p className="text-sm"><VesselLabel code={plan.vesselCode} className="text-sm" showCode /></p>
                   </div>
                 </div>
                 {/* Last / Next execution info */}

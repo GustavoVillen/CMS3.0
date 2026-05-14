@@ -4,6 +4,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 
@@ -582,7 +583,7 @@ export const MonthlyReportsPage: React.FC = () => {
 
   const COLUMNS: Column<MonthlyReport>[] = [
     { key: "period", header: "Período",   render: r => <span className="font-bold text-xs text-white">{fmtMonth(r.reportYear, r.reportMonth)}</span> },
-    { key: "vesselCode", header: "Vessel", render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span> },
+    { key: "vesselCode", header: "Vessel", render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "status",     header: "Estado", render: r => <StatusBadge status={r.status} /> },
     { key: "currentPort",header: "Puerto", render: r => <span className="text-xs">{r.currentPort ?? "—"}</span> },
     { key: "submittedAt",header: "Enviado", render: r => <span className="text-[11px] text-emerald-400">{fmtDate(r.submittedAt)}</span> },

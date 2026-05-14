@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 
 interface Certification {
   id: string;
@@ -469,7 +470,7 @@ export const CrewPage: React.FC = () => {
                     {c.status === "ONBOARD"
                       ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">A bordo</span>
                       : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">Desembarcado</span>}
-                    <span className="text-[10px] text-accent font-mono">{c.vesselCode}</span>
+                    <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                     {expiringCount > 0 && (
                       <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">
                         {expiringCount} cert. atención

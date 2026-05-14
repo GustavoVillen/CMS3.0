@@ -8,6 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { useT } from "../lib/i18n";
@@ -1558,7 +1559,7 @@ export const DailyReportsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
-      render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span>,
+      render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "status",

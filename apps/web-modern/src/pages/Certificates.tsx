@@ -4,6 +4,7 @@ import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, Trash2,
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
@@ -406,7 +407,7 @@ export const CertificatesPage: React.FC = () => {
   const columns: Column<Certificate>[] = useMemo(() => [
     { key: "certificateCode", header: t("col.code"),      render: r => <span className="font-mono font-bold text-white text-xs">{r.certificateCode}</span> },
     { key: "name",            header: t("col.name"),      render: r => <span className="font-medium text-white line-clamp-1">{r.name}</span> },
-    { key: "vesselCode",      header: t("col.vessel"),    render: r => <span className="font-mono text-accent text-xs">{r.vesselCode}</span> },
+    { key: "vesselCode",      header: t("col.vessel"),    render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "issuingAuthority",header: t("col.authority"), render: r => <span className="text-text-industrial/80">{r.issuingAuthority}</span> },
     { key: "expiryDate",      header: t("col.expiry"),    render: r => <ExpiryCell date={r.expiryDate} /> },
     { key: "status",          header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },

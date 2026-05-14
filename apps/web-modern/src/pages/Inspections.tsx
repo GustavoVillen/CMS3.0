@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -471,7 +472,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
-                <p className="text-sm font-mono text-accent">{editing.execution.vesselCode}</p>
+                <p className="text-sm"><VesselLabel code={editing.execution.vesselCode} className="text-sm" showCode /></p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.title")}</p>
@@ -788,7 +789,7 @@ export const InspectionsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
-      render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span>,
+      render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "status",

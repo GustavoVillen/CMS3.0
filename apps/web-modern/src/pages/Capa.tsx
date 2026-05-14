@@ -4,6 +4,7 @@ import { Loader2, ShieldCheck, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -328,7 +329,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
-                <p className="text-sm font-mono text-accent">{record.vesselCode}</p>
+                <p className="text-sm"><VesselLabel code={record.vesselCode} className="text-sm" showCode /></p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Asset ID</p>
@@ -502,7 +503,7 @@ export const CapaPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
-      render: row => <span className="font-mono text-accent text-xs">{row.vesselCode}</span>,
+      render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "priority",

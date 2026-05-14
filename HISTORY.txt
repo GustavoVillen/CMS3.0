@@ -1,5 +1,48 @@
 HISTORY.txt
 
+[2026-05-14] UI — siempre mostrar nombre de buque en vez de código
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Regla global UX (guardada en memoria como feedback_ui_names_over_codes):
+en todo el frontend se debe mostrar el NOMBRE del buque (y del activo)
+en vez del código técnico. El código queda como información secundaria.
+
+CAMBIOS:
+
+· apps/web-modern/src/components/EntityLabels.tsx (nuevo)
+  - <VesselLabel code={code} name? showCode? className?>:
+    Hace lookup en useVesselContext().vessels; muestra `name` con el
+    code chico al lado opcional (showCode). Fallback al código si el
+    name no se encontró. title=code para tooltip.
+  - <AssetLabel id={id} fallbackName={name?}>:
+    Usa cache module-level + hook useAssetsCache() que carga
+    /app/pms/assets una sola vez para resolver name. Prefiere
+    fallbackName si la entidad parent ya lo trajo.
+  - getAssetName(id): primitivo síncrono para tablas.
+
+· Reemplazos en 17 archivos de páginas (cards + tablas + modales):
+    AiInsights, WorkOrders, Defects, Certificates, Drills, Deferrals,
+    Capa, DailyReports, Crew, MaintenancePlans, Assets, Inspections,
+    Permits, MonthlyReports, Spares, DueItems, Providers.
+
+  Patrón estándar reemplazado:
+    <span className="font-mono text-accent text-xs">{row.vesselCode}</span>
+  →
+    <VesselLabel code={row.vesselCode} className="text-xs" showCode />
+
+  VesselMap.tsx ya mostraba nombre + código lado a lado → sin cambios.
+
+VERIFICADO:
+  · tsc OK · vite build OK (1858 KB)
+  · Los filtros y la lógica interna siguen usando vesselCode como join
+    key: este cambio es exclusivamente de presentación.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] AI Insights — agrupación extendida a stock, OTs, CAPAs, fallas y fluidos
 Agent: Claude Opus 4.7
 

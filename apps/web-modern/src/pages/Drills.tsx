@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { VesselLabel } from "../components/EntityLabels";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { printDrill } from "../lib/print-drill";
 
@@ -680,7 +681,7 @@ export const DrillsPage: React.FC = () => {
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{d.drillCode}</span>
                   <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[d.status]}`}>{STATUS_LABEL[d.status]}</span>
-                  <span className="text-[10px] text-accent font-mono">{d.vesselCode}</span>
+                  <VesselLabel code={d.vesselCode} className="text-[10px]" showCode />
                 </div>
                 <p className="text-sm font-bold text-white">{DRILL_TYPE_LABEL[d.type] ?? d.type}</p>
                 {d.scenario && <p className="text-xs text-text-industrial/50 truncate">{d.scenario}</p>}
