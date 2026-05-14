@@ -1,6 +1,8 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { createCapaInternal } from "./capa-service";
+import { log } from "../../common/logger";
 
 export interface InspectionExecutionFilters {
   vesselCode?: string | null;
@@ -575,6 +577,26 @@ export async function completeInspectionExecution(
           updatedByUserId: session.user.id,
         },
       });
+
+      // Auto-CAPA por finding de inspección con no-conformidad. Prioridad
+      // CRITICAL para deficiencias inmediatas, HIGH para follow-up requerido.
+      // Anti-duplicado por (sourceType=INSPECTION, sourceId=executionId).
+      try {
+        await createCapaInternal(tx as unknown as Parameters<typeof createCapaInternal>[0], {
+          tenantId:    execution.tenantId,
+          vesselCode:  execution.vesselCode,
+          assetId:     execution.assetId ?? "UNASSIGNED_ASSET",
+          sourceType:  "INSPECTION",
+          sourceId:    execution.id,
+          priority:    mapResultToSeverity(result),
+          title:       `CAPA — ${descriptionBase} (${result === "CRITICAL_DEFICIENCY_IMMEDIATE_ACTION" ? "deficiencia crítica" : "follow-up requerido"})`,
+          description,
+          actorUserId: session.user.id,
+        });
+      } catch (err) {
+        // Best-effort: no romper la completion de la inspección si la CAPA falla.
+        log.error("[completeInspectionExecution] auto-CAPA failed:", err);
+      }
     }
   });
 

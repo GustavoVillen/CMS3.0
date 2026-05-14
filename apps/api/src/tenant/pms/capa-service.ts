@@ -424,3 +424,88 @@ export async function cancelCapaRecord(session: TenantAccessSession, id: string,
     },
   });
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// createCapaInternal — helper usado por otros services (defects, inspections)
+// para crear CAPAs automáticamente desde sus disparadores. NO valida permisos
+// (la operación de origen ya pasó por su propio gate). Anti-duplicado por
+// (sourceType, sourceId): si ya existe un CapaRecord activo (no terminal)
+// vinculado al mismo origen, devuelve el existente en vez de crear otro.
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Cliente Prisma usable como el cliente global o como un tx dentro de una
+ * transaction abierta por otro servicio. Solo necesita `capaRecord`.
+ */
+type CapaCreatorPrisma = {
+  capaRecord: {
+    findFirst(args: { where: Record<string, unknown> }): Promise<{ id: string; capaCode: string } | null>;
+    create(args: { data: Record<string, unknown> }): Promise<{ id: string; capaCode: string; title: string; vesselCode: string }>;
+    count(args: { where: Record<string, unknown> }): Promise<number>;
+  };
+};
+
+export interface CapaInternalInput {
+  tenantId: string;
+  vesselCode: string;
+  assetId: string;
+  sourceType: "RCA" | "DEFECT" | "WORK_ORDER" | "INSPECTION";
+  sourceId: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  title: string;
+  description?: string | null;
+  /** userId que dispara el origen (ej. el que aprobó el RCA o completó la inspección) */
+  actorUserId: string;
+}
+
+const TERMINAL_CAPA_STATES = ["CLOSED", "CANCELLED", "VERIFIED_EFFECTIVE"];
+
+export async function createCapaInternal(
+  prisma: CapaCreatorPrisma,
+  input: CapaInternalInput,
+): Promise<{ id: string; capaCode: string; alreadyExisted: boolean } | null> {
+  // Anti-duplicado: si ya hay una CAPA activa (no terminal) para el mismo
+  // (sourceType, sourceId), no creamos otra.
+  const existing = await prisma.capaRecord.findFirst({
+    where: {
+      tenantId:   input.tenantId,
+      sourceType: input.sourceType,
+      sourceId:   input.sourceId,
+      deletedAt:  null,
+      status:     { notIn: TERMINAL_CAPA_STATES },
+    },
+  });
+  if (existing) {
+    return { id: existing.id, capaCode: existing.capaCode, alreadyExisted: true };
+  }
+
+  // Generar capaCode con prefijo + vessel + año + secuencial.
+  const year = new Date().getFullYear();
+  const yy = String(year).slice(-2);
+  const yearCount = await prisma.capaRecord.count({
+    where: {
+      tenantId:   input.tenantId,
+      vesselCode: input.vesselCode,
+      createdAt:  { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) },
+    },
+  });
+  const capaCode = `CAPA-${input.vesselCode}-${yy}-${String(yearCount + 1).padStart(4, "0")}`;
+
+  const created = await prisma.capaRecord.create({
+    data: {
+      tenantId:        input.tenantId,
+      vesselCode:      input.vesselCode,
+      assetId:         input.assetId,
+      sourceType:      input.sourceType,
+      sourceId:        input.sourceId,
+      capaCode,
+      status:          "OPEN",
+      priority:        input.priority,
+      title:           input.title,
+      description:     input.description ?? null,
+      createdByUserId: input.actorUserId,
+      updatedByUserId: input.actorUserId,
+    },
+  });
+  return { id: created.id, capaCode: created.capaCode, alreadyExisted: false };
+}
