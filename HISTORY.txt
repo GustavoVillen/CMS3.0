@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-05-14] AI Insights — agrupación de certificados + cleanup automático
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El dashboard listaba un insight separado por cada certificado vencido.
+Con flotas grandes esto generaba 6-10+ tarjetas idénticas en el bento,
+saturando la vista y ocultando otros tipos de insights.
+
+CAMBIOS (apps/api/src/tenant/ai-insights/insight-generator.ts):
+
+· Constantes GROUP_THRESHOLD = 4 y GROUP_LIST_LIMIT = 10.
+
+· collectCertificateInsights reescrito: agrupa por vessel y por estado
+  (expired / expiring).
+    - Si un grupo tiene ≥ GROUP_THRESHOLD items → emite UN solo insight
+      "N certificados vencidos en VESSEL" con la lista de códigos +
+      fechas en el summary (top 10 con "y N más" si hay más).
+    - Si tiene < GROUP_THRESHOLD → emite individuales como antes.
+  Insights agrupados usan targetType=VESSEL (o FLEET si el cert no
+  tenía vesselCode) y targetId=vesselCode, evitando colisión con los
+  individuales que usan targetType=CERTIFICATE.
+
+· Cleanup al final del run: para cada insightType que generó al menos
+  un draft, marcamos como RESOLVED los OPEN cuyo insightCode NO está
+  entre los drafts actuales. Esto cubre dos escenarios:
+    1. El problema desapareció (cert renovado, stock repuesto, OT cerrada).
+    2. N individuales fueron absorbidos por un nuevo agrupado.
+  Importante: sólo limpia tipos que generaron drafts en este run, así
+  un fallo parcial de una función collect*() no resuelve nada por error.
+
+NO se cambió frontend: la UI sólo lee title + summary del insight, y
+el listado agrupado encaja en el mismo layout (en /ai-insights se ve
+completo, en el dashboard el line-clamp-2 corta pero el título ya
+muestra el conteo).
+
+VERIFICADO:
+  · tsc OK
+  · El cambio aplica al próximo run del generador (worker cron + run on demand)
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  pm2 restart gpms
+  # Sin migración, sólo backend.
+
 [2026-05-14] Simulacros — fix PDF (sin alert nativo + sanitize Latin-1)
 Agent: Claude Opus 4.7
 

@@ -2,11 +2,27 @@
  * Deterministic insight generator.
  * Evaluates threshold rules against current DB state and upserts AiInsight records.
  * Per docs/10: "For MVP, prefer deterministic threshold generation first."
+ *
+ * Agrupación: cuando varios items del mismo tipo/vessel caerían como insights
+ * separados (ej. 10 certificados vencidos del mismo buque), emitimos UNO solo
+ * agrupado con la lista resumida en lugar de N tarjetas idénticas. Threshold
+ * controlado por GROUP_THRESHOLD.
+ *
+ * Cleanup: al final del run, los insights OPEN cuyo `insightCode` no aparece
+ * entre los drafts de su tipo se marcan como RESOLVED (el problema ya no aplica
+ * o fue absorbido por un grupo). Sólo aplica para tipos que SÍ generaron drafts
+ * en este run, así un fallo parcial no resuelve nada por error.
  */
 
 import { getPrismaClient } from "../../platform/data/prisma-client";
 
 type PrismaClient = NonNullable<ReturnType<typeof getPrismaClient>>;
+
+/** A partir de N items del mismo (tipo + vessel) emitimos un único insight agrupado. */
+const GROUP_THRESHOLD = 4;
+
+/** Cuántos códigos listar dentro del summary del grupo antes de "y N más". */
+const GROUP_LIST_LIMIT = 10;
 
 interface InsightDraft {
   insightCode: string;
@@ -89,6 +105,40 @@ export async function generateInsightsForTenant(tenantId: string): Promise<numbe
     }
   }
 
+  // ── Cleanup: auto-resolver OPEN insights que ya no aparecen entre los drafts ──
+  // Importante: SOLO resolvemos un insightType si HUBO al menos un draft de ese
+  // tipo en este run. Así, si una de las funciones collect*() falla y no genera
+  // drafts, no marcamos masivamente como resuelto algo que sigue siendo válido.
+  //
+  // Esto cubre dos casos:
+  //   1. El problema desapareció (el cert se renovó, el stock se repuso).
+  //   2. N items individuales fueron absorbidos por un nuevo insight agrupado.
+  try {
+    const activeCodesByType = new Map<string, Set<string>>();
+    for (const d of drafts) {
+      const set = activeCodesByType.get(d.insightType) ?? new Set<string>();
+      set.add(d.insightCode);
+      activeCodesByType.set(d.insightType, set);
+    }
+    for (const [insightType, activeCodes] of activeCodesByType.entries()) {
+      const existing = await prisma.aiInsight.findMany({
+        where: { tenantId, insightType: insightType as any, status: "OPEN" },
+        select: { id: true, insightCode: true },
+      });
+      const staleIds = existing
+        .filter(e => !activeCodes.has(e.insightCode))
+        .map(e => e.id);
+      if (staleIds.length > 0) {
+        await prisma.aiInsight.updateMany({
+          where: { id: { in: staleIds } },
+          data: { status: "RESOLVED", resolvedAt: now, updatedByUserId: "system" },
+        });
+      }
+    }
+  } catch {
+    // cleanup best-effort: no romper el run si falla
+  }
+
   return upserted;
 }
 
@@ -145,34 +195,101 @@ async function collectCertificateInsights(
   const in30Days = new Date(today);
   in30Days.setDate(in30Days.getDate() + 30);
 
+  interface CertHit { id: string; code: string; name: string | null; vesselCode: string | null; expiry: Date }
+  const expiredByVessel  = new Map<string, CertHit[]>();
+  const expiringByVessel = new Map<string, CertHit[]>();
+  const NO_VESSEL = "__NO_VESSEL__";
+
   for (const cert of certs) {
     if (!cert.expiryDate) continue;
     const expiry = new Date(cert.expiryDate);
+    const hit: CertHit = { id: cert.id, code: cert.certificateCode, name: cert.name, vesselCode: cert.vesselCode, expiry };
+    const key = cert.vesselCode ?? NO_VESSEL;
 
     if (expiry < today) {
+      const arr = expiredByVessel.get(key) ?? [];
+      arr.push(hit);
+      expiredByVessel.set(key, arr);
+    } else if (expiry <= in30Days) {
+      const arr = expiringByVessel.get(key) ?? [];
+      arr.push(hit);
+      expiringByVessel.set(key, arr);
+    }
+  }
+
+  function summariseList(hits: CertHit[]): string {
+    const head = hits.slice(0, GROUP_LIST_LIMIT)
+      .map(h => `${h.code} (${h.expiry.toISOString().split("T")[0]})`)
+      .join(", ");
+    const rest = hits.length - GROUP_LIST_LIMIT;
+    return rest > 0 ? `${head} y ${rest} más` : head;
+  }
+
+  // ── Vencidos ──
+  for (const [vesselKey, hits] of expiredByVessel.entries()) {
+    const vesselCode = vesselKey === NO_VESSEL ? null : vesselKey;
+    const where = vesselCode ? ` en ${vesselCode}` : "";
+
+    if (hits.length >= GROUP_THRESHOLD) {
       drafts.push({
-        insightCode:    `CERT-EXP-${cert.id}`,
+        insightCode:    `CERT-EXP-GROUP-${vesselKey}`,
         insightType:    "certificate_expired",
         priority:       "CRITICAL",
-        targetType:     "CERTIFICATE",
-        targetId:       cert.id,
-        vesselCode:     cert.vesselCode,
-        title:          `Certificado vencido: ${cert.name ?? cert.certificateCode}`,
-        summary:        `El certificado ${cert.certificateCode} venció el ${expiry.toISOString().split("T")[0]}.`,
-        recommendation: "Iniciar proceso de renovación inmediata. Riesgo de incumplimiento regulatorio.",
+        targetType:     vesselCode ? "VESSEL" : "FLEET",
+        targetId:       vesselCode,
+        vesselCode,
+        title:          `${hits.length} certificados vencidos${where}`,
+        summary:        `Hay ${hits.length} certificados vencidos${where}: ${summariseList(hits)}.`,
+        recommendation: "Iniciar proceso de renovación inmediata de todos los certificados listados. Riesgo de incumplimiento regulatorio.",
       });
-    } else if (expiry <= in30Days) {
+    } else {
+      for (const h of hits) {
+        drafts.push({
+          insightCode:    `CERT-EXP-${h.id}`,
+          insightType:    "certificate_expired",
+          priority:       "CRITICAL",
+          targetType:     "CERTIFICATE",
+          targetId:       h.id,
+          vesselCode:     h.vesselCode,
+          title:          `Certificado vencido: ${h.name ?? h.code}`,
+          summary:        `El certificado ${h.code} venció el ${h.expiry.toISOString().split("T")[0]}.`,
+          recommendation: "Iniciar proceso de renovación inmediata. Riesgo de incumplimiento regulatorio.",
+        });
+      }
+    }
+  }
+
+  // ── Próximos a vencer ──
+  for (const [vesselKey, hits] of expiringByVessel.entries()) {
+    const vesselCode = vesselKey === NO_VESSEL ? null : vesselKey;
+    const where = vesselCode ? ` en ${vesselCode}` : "";
+
+    if (hits.length >= GROUP_THRESHOLD) {
       drafts.push({
-        insightCode:    `CERT-EXPIRING-${cert.id}`,
+        insightCode:    `CERT-EXPIRING-GROUP-${vesselKey}`,
         insightType:    "certificate_expiring",
         priority:       "HIGH",
-        targetType:     "CERTIFICATE",
-        targetId:       cert.id,
-        vesselCode:     cert.vesselCode,
-        title:          `Certificado próximo a vencer: ${cert.name ?? cert.certificateCode}`,
-        summary:        `El certificado ${cert.certificateCode} vence el ${expiry.toISOString().split("T")[0]} (≤ 30 días).`,
-        recommendation: "Iniciar proceso de renovación para evitar interrupción operacional.",
+        targetType:     vesselCode ? "VESSEL" : "FLEET",
+        targetId:       vesselCode,
+        vesselCode,
+        title:          `${hits.length} certificados próximos a vencer${where}`,
+        summary:        `Hay ${hits.length} certificados que vencen en ≤30 días${where}: ${summariseList(hits)}.`,
+        recommendation: "Planificar la renovación de todos los certificados listados antes de su vencimiento.",
       });
+    } else {
+      for (const h of hits) {
+        drafts.push({
+          insightCode:    `CERT-EXPIRING-${h.id}`,
+          insightType:    "certificate_expiring",
+          priority:       "HIGH",
+          targetType:     "CERTIFICATE",
+          targetId:       h.id,
+          vesselCode:     h.vesselCode,
+          title:          `Certificado próximo a vencer: ${h.name ?? h.code}`,
+          summary:        `El certificado ${h.code} vence el ${h.expiry.toISOString().split("T")[0]} (≤ 30 días).`,
+          recommendation: "Iniciar proceso de renovación para evitar interrupción operacional.",
+        });
+      }
     }
   }
 }
