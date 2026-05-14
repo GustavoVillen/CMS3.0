@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-05-13] Simulacros — botón "Guardar PDF" con registro completo
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Faltaba poder bajar el registro del simulacro como PDF firmable. El
+schema ya tenía Drill.pdfUrl pero no se usaba ni había template.
+
+CAMBIOS:
+
+· apps/api/src/tenant/drills/drills-pdf-service.ts (nuevo)
+  buildDrillPdf(session, id) con pdfkit. Incluye:
+   - Header navy con tenant + título
+   - Datos: drillCode, vesselCode, tipo, estado, fecha programada/realizada
+   - Bloque "Referencia normativa" con SOLAS/ISPS/MARPOL específico al tipo
+   - Bloques: Escenario, Observaciones, Lecciones aprendidas
+   - Lista de participantes (lookup a Crew por participantCrewIds, con rank)
+   - Dos cajas de firma (responsable del simulacro / capitán)
+   - Footer con timestamp + drillCode + tenant
+  Mismo patrón pdfkit que work-order-pdf/template-standard.ts.
+
+· apps/api/src/tenant/tenant-router.ts
+  Route GET /app/drills/:id/pdf. Devuelve attachment con
+  Content-Type: application/pdf y filename=<drillCode>.pdf. Llama getDrill
+  antes para validar tenant/vessel scope.
+
+· apps/web-modern/src/lib/print-drill.ts (nuevo)
+  printDrill({id, drillCode}) — mismo helper pattern que printWorkOrder:
+  fetch con bearer + tenant slug, blob → <a download> → click.
+
+· apps/web-modern/src/pages/Drills.tsx
+  Botón "Guardar PDF" en el footer del modal (visible cuando el drill ya
+  está creado). Antes de descargar, persiste cambios del modal con un
+  PATCH best-effort para que el PDF refleje lo que el usuario ve.
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+  # Sin migración (no toca schema)
+
 [2026-05-13] Simulacros — copiloto contextual (lee pantalla + acepta consultas)
 Agent: Claude Opus 4.7
 

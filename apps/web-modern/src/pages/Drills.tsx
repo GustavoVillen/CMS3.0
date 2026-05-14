@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { printDrill } from "../lib/print-drill";
 
 interface Drill {
   id: string;
@@ -88,6 +89,30 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
   const [loadingScenario, setLoadingScenario] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const handleGeneratePdf = useCallback(async () => {
+    if (!drill || generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      // Persistimos cambios antes de imprimir si la OT/drill es editable.
+      // Si fallaba el save igualmente bajamos el PDF para no bloquear al usuario.
+      if (!isLocked) {
+        try {
+          await api.patch(`/app/drills/${drill.id}`, {
+            type, scheduledDate,
+            scenario:        scenario.trim() || null,
+            observations:    observations.trim() || null,
+            lessonsLearned:  lessonsLearned.trim() || null,
+            participantCrewIds: participants,
+          });
+        } catch { /* non-blocking */ }
+      }
+      await printDrill({ id: drill.id, drillCode: drill.drillCode });
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }, [drill, generatingPdf, isLocked, type, scheduledDate, scenario, observations, lessonsLearned, participants]);
 
   // Emite contexto del modal al copiloto: tipo, vessel, fecha y campos visibles.
   useCopilotEmitter({
@@ -274,6 +299,13 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
           <div className="flex gap-2">
+            {!isNew && (
+              <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+                {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />}
+                Guardar PDF
+              </button>
+            )}
             {!isNew && drill?.status === "SCHEDULED" && (
               <button onClick={() => { void onComplete(); }} disabled={saving}
                 className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">

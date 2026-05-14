@@ -55,6 +55,7 @@ import {
   getDrillsMatrix, listDrillConfig, upsertDrillConfig,
 } from "./drills/drills-service";
 import { suggestDrillScenario } from "./drills/drills-ai-suggestions";
+import { buildDrillPdf } from "./drills/drills-pdf-service";
 import { getCrewSummary } from "./crew/crew-summary-service";
 import {
   listPermits, getPermit, createPermit, updatePermit,
@@ -1278,6 +1279,19 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as Parameters<typeof suggestDrillScenario>[1];
     sendJson(response, 200, await suggestDrillScenario(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/drills\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const drill = await getDrill(session, id) as { drillCode: string };
+    const buffer = await buildDrillPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${drill.drillCode}.pdf"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
   if (method === "GET" && url.pathname === "/app/drills") {
