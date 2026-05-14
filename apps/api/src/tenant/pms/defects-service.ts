@@ -213,6 +213,29 @@ function applyVesselScope(
   where.vesselCode = { in: session.user.assignedVesselCodes };
 }
 
+/**
+ * Resuelve workOrderCode para una lista de defectos que tienen workOrderId,
+ * para que el frontend pueda mostrar un badge legible (ej. WO-DONCHI-26-0010)
+ * en vez del cuid, y permita navegar al detalle de la OT.
+ */
+async function attachWorkOrderCodes<T extends { workOrderId: string | null }>(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  defects: T[],
+): Promise<Array<T & { workOrderCode: string | null }>> {
+  const ids = [...new Set(defects.map(d => d.workOrderId).filter((v): v is string => !!v))];
+  if (ids.length === 0) return defects.map(d => ({ ...d, workOrderCode: null }));
+  try {
+    const wos = await (prismaRaw as unknown as {
+      workOrder: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean> }): Promise<Array<{ id: string; workOrderCode: string }>> };
+    }).workOrder.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, workOrderCode: true } });
+    const codeMap = new Map(wos.map(w => [w.id, w.workOrderCode]));
+    return defects.map(d => ({ ...d, workOrderCode: d.workOrderId ? codeMap.get(d.workOrderId) ?? null : null }));
+  } catch {
+    return defects.map(d => ({ ...d, workOrderCode: null }));
+  }
+}
+
 export async function listDefects(session: TenantAccessSession, filters: DefectListFilters = {}) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) return [];
@@ -228,7 +251,8 @@ export async function listDefects(session: TenantAccessSession, filters: DefectL
   if (filters.operationalState) where.operationalState = filters.operationalState;
   if (filters.assetId) where.assetId = filters.assetId;
 
-  return defect.findMany({ where, orderBy: { reportedAt: "desc" } });
+  const items = await defect.findMany({ where, orderBy: { reportedAt: "desc" } });
+  return attachWorkOrderCodes(prismaRaw, tenantId, items as Array<{ workOrderId: string | null }>);
 }
 
 export async function getDefect(session: TenantAccessSession, id: string) {
@@ -242,7 +266,8 @@ export async function getDefect(session: TenantAccessSession, id: string) {
 
   const record = await defect.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Defect no encontrado.");
-  return record;
+  const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record as { workOrderId: string | null }]);
+  return enriched[0];
 }
 
 export async function createDefect(session: TenantAccessSession, payload: CreateDefectInput) {

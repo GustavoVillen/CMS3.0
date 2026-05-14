@@ -218,13 +218,24 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
     labeledBox(ML + (third + 8) * 2, y, third, 44, "Estado",            defect.status,           STATUS_COLOR[defect.status] ?? black);
     y += 58;
 
+    // ── Banner OT vinculada — solo cuando el defecto se resolvió con OT ────────
+    const resolvedWithWo =
+      (defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderId;
+    if (resolvedWithWo) {
+      ensureSpace(44);
+      // Banner ancho con color success-sea (verde), más visible que la caja chica
+      const woLabel = linkedWoCode ?? defect.workOrderId ?? "—";
+      labeledBox(ML, y, W, 38, "Resuelto vía Orden de Trabajo", woLabel, "#16a34a");
+      y += 50;
+    }
+
     // ── Text sections ─────────────────────────────────────────────────────────
     textSection("Descripción",    val(defect.description));
     textSection("Acción Inmediata", val(defect.immediateAction));
     textSection("Análisis RCA",   val(defect.rcaAnalysis));
     textSection("CAPA",           val(defect.capaDescription));
 
-    // Repair type & WO
+    // Repair type & WO (solo cuando NO se mostró el banner arriba)
     if (defect.repairType) {
       ensureSpace(58);
       const repairLabel = defect.repairType === "PERMANENTE" ? "Permanente" : "Temporaria";
@@ -233,7 +244,7 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
       y += 58;
     }
 
-    if (defect.workOrderId) {
+    if (defect.workOrderId && !resolvedWithWo) {
       ensureSpace(58);
       labeledBox(ML, y, W / 3, 44, "Work Order Vinculada", linkedWoCode ?? defect.workOrderId, "#0369a1");
       y += 58;

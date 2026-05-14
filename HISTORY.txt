@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-05-14] Defects — badge clickeable de OT vinculada + banner en PDF
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Cuando un defecto se resolvía abriendo una OT, el vínculo solo
+aparecía en una caja chica al final del PDF y no había forma de
+navegar a la OT desde el modal. El usuario quiere que cuando el
+estado quede RESOLVED/CLOSED y haya OT asociada, aparezca un badge
+visible que al hacer click abra esa OT.
+
+CAMBIOS:
+
+· apps/api/src/tenant/pms/defects-service.ts
+  - Nuevo helper attachWorkOrderCodes(prisma, tenantId, defects):
+    para cada defect con workOrderId hace lookup y devuelve también
+    workOrderCode (legible). Try/catch best-effort, no rompe el listado
+    si falla.
+  - listDefects + getDefect ahora devuelven el workOrderCode resuelto.
+
+· apps/web-modern/src/pages/Defects.tsx
+  - interface Defect: agregado workOrderCode: string | null.
+  - DefectModal: nuevo banner verde clickeable entre la meta-info y
+    closeNotes cuando status ∈ {RESOLVED, CLOSED} y hay workOrderCode.
+    Click navega a /work-orders?autoCode=<code>; el page ya tiene el
+    handler autoCode para abrir el modal de la OT directamente.
+
+· apps/api/src/tenant/pms/defect-pdf-service.ts
+  - Nuevo banner ancho "Resuelto vía Orden de Trabajo" en color verde
+    (#16a34a) justo después del row de estado, cuando status ∈
+    {RESOLVED, CLOSED} y hay workOrderId. Más visible que la caja
+    chica al final.
+  - La caja chica "Work Order Vinculada" del final del PDF queda solo
+    para casos donde hay workOrderId pero el defecto NO está resuelto
+    (ej. OT abierta pero defecto aún OPEN). Evita duplicación.
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK (1861 KB)
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Defects — aflojar regla de cierre (salvo AUDITOR_READONLY)
 Agent: Claude Opus 4.7
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Bot, Download, Loader2, Maximize2, Minimize2, Plus, Sparkles, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { AlertTriangle, Bot, Download, ExternalLink, Loader2, Maximize2, Minimize2, Plus, Sparkles, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
@@ -22,6 +22,7 @@ interface Defect {
   vesselCode: string;
   assetId: string;
   workOrderId: string | null;
+  workOrderCode: string | null;
   defectCode: string;
   status: string;
   severity: string;
@@ -387,6 +388,7 @@ const fldLabel = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) => {
   const t = useT();
+  const navigate = useNavigate();
   const [description, setDescription]         = useState(defect.description ?? "");
   const [classification, setClassification]   = useState(defect.classification ?? "");
   const [severity, setSeverity]               = useState(defect.severity ?? "MEDIUM");
@@ -760,6 +762,21 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 </div>
               ))}
             </div>
+
+            {/* Badge OT vinculada — visible cuando el defecto se resolvió/cerró abriendo una OT */}
+            {(defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderCode && (
+              <button
+                type="button"
+                onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-success-sea/5 border border-success-sea/30 hover:bg-success-sea/15 transition-colors text-left group"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider text-success-sea/70 font-bold">Resuelto vía OT</span>
+                  <span className="font-mono font-bold text-success-sea text-xs">{defect.workOrderCode}</span>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-success-sea/60 group-hover:text-success-sea shrink-0" />
+              </button>
+            )}
 
             {isClosed && closeNotes && (
               <div className="rounded-xl border border-success-sea/20 bg-success-sea/10 px-3 py-2">
