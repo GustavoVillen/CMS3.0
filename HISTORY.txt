@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-05-14] Defectos — IA para sugerir "Acción inmediata"
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El campo "Acción inmediata" del modal de defecto (crear + editar) no
+tenía sugerencia con IA. Misma idea que los Sparkles de criterios/LOTO
+en WO y escenario en Drills: click en el label → IA propone medidas
+de contención específicas al defecto.
+
+CAMBIOS:
+
+· apps/api/src/tenant/pms/defects-ai-suggestions.ts (nuevo)
+  - PROMPT_IMMEDIATE_ACTION: pide 3-6 bullets cortos con verbo
+    imperativo accionable, distingue explícitamente acción inmediata
+    (contención temporal) vs acción correctiva (plan definitivo, otro
+    campo). Si severity=CRITICAL fuerza primer bullet de seguridad.
+    Si operationalState=NON_OPERATIONAL evita bullets que asumen
+    operación.
+  - suggestImmediateAction(session, {description, severity,
+    operationalState, assetLabel, vesselCode}). Mismo wrapper
+    Anthropic estándar (haiku, timeout 60s, recordAiUsage).
+
+· apps/api/src/tenant/pms/quality-router.ts
+  Route POST /app/pms/defects/suggest-immediate-action. Registrado
+  ANTES del catch-all /app/pms/defects/:id para evitar colisión.
+
+· apps/web-modern/src/pages/Defects.tsx
+  - CreateDefectModal: label "Acción inmediata" ahora es clickeable
+    con Sparkles. Si no hay descripción, label opaco con tooltip
+    explicativo. setErr si falla.
+  - DefectModal: mismo patrón en el edit modal. Llama useAssetsCache()
+    para resolver el name del asset y pasarlo al backend.
+  - Ambos paths bloquean el textarea mientras carga ("Analizando...")
+    y restauran el valor original si el endpoint falla.
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] WO — abrir la creación a todos los roles (salvo AUDITOR_READONLY)
 Agent: Claude Opus 4.7
 

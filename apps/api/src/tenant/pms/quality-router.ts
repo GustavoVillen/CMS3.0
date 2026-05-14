@@ -16,6 +16,7 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
+import { suggestImmediateAction } from "./defects-ai-suggestions";
 import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
@@ -84,6 +85,11 @@ export async function handleQualityRoutes(
   if (method === "POST" && url.pathname === "/app/pms/defects") {
     const body = await readJsonBody(request) as Parameters<typeof createDefect>[1];
     sendJson(response, 201, await createDefect(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/defects/suggest-immediate-action") {
+    const body = await readJsonBody(request) as Parameters<typeof suggestImmediateAction>[1];
+    sendJson(response, 200, await suggestImmediateAction(session, body));
     return true;
   }
   if (method === "GET" && /^\/app\/pms\/defects\/[^/]+\/pdf$/.test(url.pathname)) {

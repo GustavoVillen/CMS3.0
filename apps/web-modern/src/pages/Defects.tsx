@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Bot, Download, Loader2, Maximize2, Minimize2, Plus, X } from "lucide-react";
+import { AlertTriangle, Bot, Download, Loader2, Maximize2, Minimize2, Plus, Sparkles, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -200,6 +200,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
   const [saving, setSaving]                   = useState(false);
   const [err, setErr]                         = useState<string | null>(null);
   const [expanded, setExpanded]               = useState(true);
+  const [loadingImmediate, setLoadingImmediate] = useState(false);
 
   // Auto-select sole vessel (preserves prior behavior).
   useEffect(() => {
@@ -207,6 +208,27 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
   }, [vessels, vesselCode]);
 
   const selectedAsset = assets.find(a => a.id === assetId);
+
+  const handleImmediateActionClick = useCallback(async () => {
+    if (loadingImmediate) return;
+    if (!description.trim()) { setErr("Completá la descripción antes de pedir la sugerencia."); return; }
+    setLoadingImmediate(true);
+    setImmediateAction("Analizando...");
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/defects/suggest-immediate-action", {
+        description,
+        severity,
+        operationalState,
+        assetLabel: selectedAsset?.name ?? selectedAsset?.assetCode ?? null,
+        vesselCode: vesselCode || null,
+      });
+      setImmediateAction(res.text || "");
+    } catch (e) {
+      setImmediateAction("");
+      setErr(e instanceof ApiError ? e.message : "No se pudo generar la sugerencia.");
+    } finally { setLoadingImmediate(false); }
+  }, [loadingImmediate, description, severity, operationalState, selectedAsset, vesselCode]);
 
   useCopilotEmitter({
     module: "DEFECTS",
@@ -327,8 +349,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder="Describí el defecto encontrado…" />
           </div>
           <div>
-            <label className={labelCls}>Acción inmediata</label>
-            <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={2} className={inputCls + " resize-y"} placeholder="Medidas tomadas de inmediato…" />
+            <label
+              onClick={handleImmediateActionClick}
+              title={!description.trim() ? "Completá la descripción primero" : "Sugerir con IA"}
+              className={`flex items-center gap-1.5 text-[10px] font-bold text-accent uppercase tracking-widest mb-1.5 transition-colors ${description.trim() ? `cursor-pointer hover:text-white ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+            >
+              {loadingImmediate ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              Acción inmediata
+              {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+            </label>
+            <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
           </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">
@@ -381,6 +411,31 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   const [expanded, setExpanded]       = useState(true);
   const [rcaAnalyzing, setRcaAnalyzing]       = useState(false);
   const [rcaAnalysisError, setRcaAnalysisError] = useState<string | null>(null);
+  const [loadingImmediate, setLoadingImmediate] = useState(false);
+  useAssetsCache(); // cache de nombres de assets para getAssetName en el handler
+
+  const handleImmediateActionClick = useCallback(async () => {
+    if (loadingImmediate || isClosed) return;
+    if (!description.trim()) { setActionError("Completá la descripción antes de pedir la sugerencia."); return; }
+    setLoadingImmediate(true);
+    setImmediateAction("Analizando...");
+    setActionError(null);
+    try {
+      const assetLabel = getAssetName(defect.assetId);
+      const res = await api.post<{ text: string }>("/app/pms/defects/suggest-immediate-action", {
+        description,
+        severity,
+        operationalState,
+        assetLabel,
+        vesselCode: defect.vesselCode,
+      });
+      setImmediateAction(res.text || "");
+    } catch (e) {
+      setImmediateAction(defect.immediateAction ?? "");
+      setActionError(e instanceof ApiError ? e.message : "No se pudo generar la sugerencia.");
+    } finally { setLoadingImmediate(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingImmediate, description, severity, operationalState, defect.assetId, defect.vesselCode, defect.immediateAction]);
 
   // Post-save flow state
   const [postSaveStep, setPostSaveStep] = useState<null | "ask-permanent-wo">(null);
@@ -748,8 +803,16 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
             {/* Acción inmediata */}
             <div className="space-y-1.5">
-              <label className={fldLabel}>{t("def.immediateAction")}</label>
-              <textarea rows={2} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Medidas tomadas de inmediato…" />
+              <label
+                onClick={!isClosed ? handleImmediateActionClick : undefined}
+                title={!description.trim() ? "Completá la descripción primero" : isClosed ? undefined : "Sugerir con IA"}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isClosed ? "text-text-industrial/60" : `text-accent ${description.trim() ? `cursor-pointer hover:text-white ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}`}
+              >
+                {!isClosed && (loadingImmediate ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
+                {t("def.immediateAction")}
+                {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+              </label>
+              <textarea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
             </div>
 
             {/* Análisis RCA estructurado */}
