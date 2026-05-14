@@ -1,6 +1,7 @@
 import React from "react";
 import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useVesselContext } from "../lib/vessel-context";
 
 interface WO { status: string; dueDate: string | null; }
 interface Defect { status: string; }
@@ -54,10 +55,14 @@ interface Props {
 }
 
 export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
+  const { selectedVesselCode } = useVesselContext();
+  const aiPath = selectedVesselCode
+    ? `/app/ai-insights?status=OPEN&vesselCode=${encodeURIComponent(selectedVesselCode)}`
+    : "/app/ai-insights?status=OPEN";
   const { data: woData,    loading: woLoading    } = useFetch<{ items: WO[]            }>("/app/pms/work-orders");
   const { data: defData,   loading: defLoading   } = useFetch<{ items: Defect[]        }>("/app/pms/defects");
   const { data: spData                            } = useFetch<{ items: Spare[]         }>("/app/pms/spares");
-  const { data: aiData                            } = useFetch<{ items: Insight[]      }>("/app/ai-insights?status=OPEN");
+  const { data: aiData                            } = useFetch<{ items: Insight[]      }>(aiPath, [aiPath]);
   const { data: certData                          } = useFetch<{ items: Certificate[] }>("/app/certificates");
   const { data: mpSummary                         } = useFetch<{ counts: MpSummaryCounts }>("/app/dashboard/mp-summary");
   const { data: drData                            } = useFetch<{ items: DailyReport[] }>("/app/daily-reports");

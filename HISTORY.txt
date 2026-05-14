@@ -1,5 +1,45 @@
 HISTORY.txt
 
+[2026-05-14] AI Insights — respetar vessel selector del header
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El listado de insights ignoraba el filtro de vessel del header. Si el
+usuario seleccionaba DONCHI en el header, igual veía insights de MGT14,
+MGT22, etc. Confunde con flotas grandes.
+
+CAMBIOS:
+
+· apps/api/src/tenant/ai-insights/ai-insights-service.ts
+  Cuando filters.vesselCode está dado, el where pasa a
+    OR: [{ vesselCode: X }, { targetType: "FLEET" }]
+  Esto mantiene visibles los insights cross-vessel (FLEET) mientras
+  filtra el resto al buque seleccionado. Si el caller ya había agregado
+  un OR previo por scope de usuario (no-admin), se combina como AND.
+
+· apps/web-modern/src/pages/Dashboard.tsx
+  selectedVesselCode se lee del useVesselContext y se inyecta en
+  insightsPath como vesselCode=…. useFetch con deps=[insightsPath]
+  recarga al cambiar el buque seleccionado.
+
+· apps/web-modern/src/pages/AiInsights.tsx
+  Mismo patrón: el path se construye con URLSearchParams sumando
+  status y vesselCode si hay vessel seleccionado.
+
+· apps/web-modern/src/mobile/MobileDashboard.tsx
+  Mismo patrón aplicado al fetch de /app/ai-insights del móvil.
+
+VERIFICADO:
+  · tsc backend + frontend OK · vite build OK
+  · Si el header tiene "todos los buques" (selectedVesselCode = null),
+    se mantiene el comportamiento anterior (todos los insights con
+    scope de usuario).
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] AI Insights — agrupación de certificados + cleanup automático
 Agent: Claude Opus 4.7
 

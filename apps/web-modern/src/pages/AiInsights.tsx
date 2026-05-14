@@ -8,6 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
+import { useVesselContext } from "../lib/vessel-context";
 
 interface AiInsight {
   id: string; insightCode: string; insightType: string; priority: string;
@@ -24,9 +25,14 @@ export const AiInsightsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("OPEN");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const { selectedVesselCode } = useVesselContext();
 
-  const path = `/app/ai-insights${statusFilter ? `?status=${statusFilter}` : ""}`;
-  const { data, loading, error, reload } = useFetch<{ items: AiInsight[]; total: number }>(path, [statusFilter]);
+  const params = new URLSearchParams();
+  if (statusFilter) params.set("status", statusFilter);
+  if (selectedVesselCode) params.set("vesselCode", selectedVesselCode);
+  const qs = params.toString();
+  const path = `/app/ai-insights${qs ? `?${qs}` : ""}`;
+  const { data, loading, error, reload } = useFetch<{ items: AiInsight[]; total: number }>(path, [path]);
 
   const sorted = [...(data?.items ?? [])].sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority));
 

@@ -37,7 +37,20 @@ export async function listTenantAiInsights(
     }
   }
 
-  if (filters.vesselCode)  where.vesselCode  = filters.vesselCode;
+  if (filters.vesselCode) {
+    // Filtramos por el vessel pedido pero seguimos incluyendo los FLEET
+    // (insights cross-vessel: flota completa). Si el caller ya restringió
+    // arriba con OR por scope de usuario, lo respetamos vía AND.
+    const vesselClause = {
+      OR: [{ vesselCode: filters.vesselCode }, { targetType: "FLEET" }],
+    };
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, vesselClause];
+      delete where.OR;
+    } else {
+      Object.assign(where, vesselClause);
+    }
+  }
   if (filters.status)      where.status      = filters.status;
   if (filters.insightType) where.insightType = filters.insightType;
   if (filters.targetType)  where.targetType  = filters.targetType;

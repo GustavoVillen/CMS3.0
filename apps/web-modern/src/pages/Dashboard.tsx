@@ -38,12 +38,17 @@ interface ListResponse<T> { items: T[]; total: number; }
 // ---------------------------------------------------------------------------
 
 export const Dashboard: React.FC = () => {
+  const { vessels: contextVessels, selectedVessel, selectedVesselCode, isVesselScoped } = useVesselContext();
+  const insightsPath = selectedVesselCode
+    ? `/app/ai-insights?status=OPEN&vesselCode=${encodeURIComponent(selectedVesselCode)}`
+    : "/app/ai-insights?status=OPEN";
+
   const workOrders        = useFetch<ListResponse<WorkOrder>>("/app/work-orders");
   const mpSummary         = useFetch<MpSummary>("/app/dashboard/mp-summary");
   const defects           = useFetch<ListResponse<Defect>>("/app/defects");
   const certificates      = useFetch<ListResponse<Certificate>>("/app/certificates");
   const deferrals         = useFetch<ListResponse<Deferral>>("/app/pms/deferrals");
-  const insights          = useFetch<ListResponse<AiInsight>>("/app/ai-insights?status=OPEN");
+  const insights          = useFetch<ListResponse<AiInsight>>(insightsPath, [insightsPath]);
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
@@ -53,7 +58,6 @@ export const Dashboard: React.FC = () => {
   const t            = useT();
   const locale       = useLocale();
   const [showInsights, setShowInsights] = React.useState(false);
-  const { vessels: contextVessels, selectedVessel, isVesselScoped } = useVesselContext();
 
   // useFetch injects vesselCode automatically from VesselContext
   const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
