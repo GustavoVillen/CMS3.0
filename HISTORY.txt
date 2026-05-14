@@ -1,5 +1,54 @@
 HISTORY.txt
 
+[2026-05-13] Simulacros — copiloto contextual (lee pantalla + acepta consultas)
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El copiloto lateral existe (CopilotContextProvider + CopilotoPanel) y
+emite contexto desde otras pantallas (WO, CAPA, Diferimientos, Defectos,
+etc.) vía useCopilotEmitter. La página de Simulacros no estaba conectada,
+así que el copiloto no veía el listado/matriz ni el modal abierto.
+
+CAMBIOS (apps/web-modern/src/pages/Drills.tsx):
+
+· DrillsPage emite contexto cuando NO hay modal abierto:
+    module=DRILLS, screen=DRILL_LIST,
+    fieldValues={ filter, totalScheduled, totalCompleted,
+                  matrixOverdue, matrixDueSoon, matrixNever,
+                  overdueSummary }
+  overdueSummary lista los top 5 vencidos como "VESSEL/TIPO: vencido hace
+  Nd; …" para que el copiloto pueda referenciarlos en respuestas.
+
+· DrillModal emite contexto cuando está abierto:
+    module=DRILLS, screen=DRILL_CREATE|DRILL_EDIT,
+    entityId/entityCode, vesselCode, workflowStage,
+    fieldValues={ type, typeLabel, scheduledDate, completedDate,
+                  scenario, observations, lessonsLearned,
+                  participantCount }
+
+· Refactor mínimo: DrillsMatrix recibe cells/loading/onReload por prop.
+  Esto evita una doble fetch al /app/drills/matrix (el page ya la hacía
+  para alimentar al copiloto). matrixKey se reemplazó por reloadMatrix().
+
+NO se modificó el backend del copiloto: el endpoint /app/copiloto/chat ya
+acepta screenContext genérico; no requiere una "capability" nueva para
+DRILLS (queda en knowledge_assistant que ya cubre consultas sobre SOLAS/
+ISPS/MARPOL).
+
+VERIFICADO:
+  · tsc + vite build OK (1855 KB)
+  · El copiloto ahora puede responder consultas como:
+    - "¿qué simulacros tengo vencidos?"
+    - "¿cuándo toca el próximo de abandono de buque?"
+    - "redactá un acta para este simulacro" (desde el modal)
+    - "¿qué dice SOLAS sobre la frecuencia de espacios confinados?"
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+  # Sin migraciones, solo frontend.
+
 [2026-05-13] Simulacros — IA para generar escenarios según SOLAS/ISPS/MARPOL
 Agent: Claude Opus 4.7
 

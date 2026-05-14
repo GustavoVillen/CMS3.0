@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { useCopilotEmitter } from "../lib/copilot-context";
 
 interface Drill {
   id: string;
@@ -87,6 +88,27 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
   const [loadingScenario, setLoadingScenario] = useState(false);
+
+  // Emite contexto del modal al copiloto: tipo, vessel, fecha y campos visibles.
+  useCopilotEmitter({
+    module: "DRILLS",
+    screen: isNew ? "DRILL_CREATE" : "DRILL_EDIT",
+    entityId: drill?.id,
+    entityCode: drill?.drillCode,
+    vesselCode,
+    workflowStage: drill?.status ?? "NEW",
+    canEdit: !isLocked,
+    fieldValues: {
+      type:               type || null,
+      typeLabel:          DRILL_TYPE_LABEL[type] ?? type,
+      scheduledDate:      scheduledDate || null,
+      completedDate:      drill?.completedDate ?? null,
+      scenario:           scenario.trim() || null,
+      observations:       observations.trim() || null,
+      lessonsLearned:     lessonsLearned.trim() || null,
+      participantCount:   String(participants.length),
+    },
+  });
 
   const handleScenarioClick = useCallback(async () => {
     if (isLocked || loadingScenario) return;
@@ -309,13 +331,11 @@ const STATUS_CELL_LABEL: Record<MatrixStatus, string> = {
   OK:       "Al día",
 };
 
-const DrillsMatrix: React.FC<{ onPlan: (vesselCode: string, type: string) => void }> = ({ onPlan }) => {
-  const { data, loading, reload } = useFetch<{ cells: MatrixCell[] }>("/app/drills/matrix", []);
+const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (vesselCode: string, type: string) => void; onReload: () => void }> = ({ cells, loading, onPlan, onReload }) => {
   const [expanded, setExpanded] = useState(true);
 
   // Agrupar: tipos × vessels
   const { types, vessels, byKey } = useMemo(() => {
-    const cells = data?.cells ?? [];
     const typeSet = new Set<string>();
     const vesselSet = new Set<string>();
     const m = new Map<string, MatrixCell>();
@@ -329,10 +349,10 @@ const DrillsMatrix: React.FC<{ onPlan: (vesselCode: string, type: string) => voi
       vessels: Array.from(vesselSet).sort(),
       byKey:   m,
     };
-  }, [data]);
+  }, [cells]);
 
-  const overdueCount = (data?.cells ?? []).filter(c => c.status === "OVERDUE").length;
-  const dueSoonCount = (data?.cells ?? []).filter(c => c.status === "DUE_SOON").length;
+  const overdueCount = cells.filter(c => c.status === "OVERDUE").length;
+  const dueSoonCount = cells.filter(c => c.status === "DUE_SOON").length;
 
   return (
     <section className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden">
@@ -352,7 +372,7 @@ const DrillsMatrix: React.FC<{ onPlan: (vesselCode: string, type: string) => voi
       </button>
       {expanded && (
         <div className="border-t border-white/10 overflow-x-auto">
-          {loading && !data ? (
+          {loading && cells.length === 0 ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
           ) : types.length === 0 || vessels.length === 0 ? (
             <div className="text-center py-8 text-text-industrial/40 text-xs">Sin vessels o tipos habilitados.</div>
@@ -410,7 +430,7 @@ const DrillsMatrix: React.FC<{ onPlan: (vesselCode: string, type: string) => voi
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-success-sea/40" />Al día</span>
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/20" />Sin registro</span>
             </div>
-            <button onClick={() => void reload()} className="hover:text-white">Refrescar</button>
+            <button onClick={onReload} className="hover:text-white">Refrescar</button>
           </div>
         </div>
       )}
@@ -537,6 +557,22 @@ export const DrillsPage: React.FC = () => {
 
   const [filter, setFilter] = useState<"upcoming" | "completed" | "all">("upcoming");
 
+  // Matriz: la página la consume para alimentar al copiloto con contadores
+  // visibles en pantalla. El componente DrillsMatrix recibe las cells por prop.
+  const { data: matrixData, loading: matrixLoading, reload: reloadMatrix } = useFetch<{ cells: MatrixCell[] }>("/app/drills/matrix", []);
+  const matrixCells = matrixData?.cells ?? [];
+  const overdueCount = matrixCells.filter(c => c.status === "OVERDUE").length;
+  const dueSoonCount = matrixCells.filter(c => c.status === "DUE_SOON").length;
+  const neverCount   = matrixCells.filter(c => c.status === "NEVER").length;
+
+  // Top vencidos (hasta 5) para que el copiloto pueda referenciarlos
+  const overdueSummary = matrixCells
+    .filter(c => c.status === "OVERDUE")
+    .sort((a, b) => (a.daysUntilDue ?? 0) - (b.daysUntilDue ?? 0))
+    .slice(0, 5)
+    .map(c => `${c.vesselCode}/${c.type}: vencido hace ${Math.abs(c.daysUntilDue ?? 0)}d`)
+    .join("; ");
+
   const path = useMemo(() => {
     if (filter === "upcoming") return "/app/drills?status=SCHEDULED";
     if (filter === "completed") return "/app/drills?status=COMPLETED";
@@ -548,8 +584,23 @@ export const DrillsPage: React.FC = () => {
   const [prefill, setPrefill] = useState<DrillPrefill | undefined>(undefined);
   const [editing, setEditing] = useState<Drill | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  // bumpea para forzar re-mount de DrillsMatrix tras guardar config o crear drill
-  const [matrixKey, setMatrixKey] = useState(0);
+
+  // Emite contexto a nivel página (cuando no hay modal abierto): tipo de
+  // vista actual + resumen de la matriz para que el copiloto sepa qué hay
+  // visible en pantalla y pueda responder consultas sobre el plan.
+  useCopilotEmitter(!showCreate && !editing && !showConfig ? {
+    module: "DRILLS",
+    screen: "DRILL_LIST",
+    fieldValues: {
+      filter,
+      totalScheduled: String(data?.items?.filter(d => d.status === "SCHEDULED").length ?? 0),
+      totalCompleted: String(data?.items?.filter(d => d.status === "COMPLETED").length ?? 0),
+      matrixOverdue:  String(overdueCount),
+      matrixDueSoon:  String(dueSoonCount),
+      matrixNever:    String(neverCount),
+      overdueSummary: overdueSummary || null,
+    },
+  } : null);
 
   const handlePlanFromMatrix = useCallback((vesselCode: string, type: string) => {
     setPrefill({ vesselCode, type, scheduledDate: new Date().toISOString().slice(0, 10) });
@@ -569,7 +620,7 @@ export const DrillsPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      <DrillsMatrix key={matrixKey} onPlan={handlePlanFromMatrix} />
+      <DrillsMatrix cells={matrixCells} loading={matrixLoading} onPlan={handlePlanFromMatrix} onReload={reloadMatrix} />
 
       <div className="flex gap-2">
         {([["upcoming", "Programados"], ["completed", "Realizados"], ["all", "Todos"]] as const).map(([v, l]) => (
@@ -616,7 +667,7 @@ export const DrillsPage: React.FC = () => {
           onClose={() => { setShowCreate(false); setEditing(null); setPrefill(undefined); }}
           onSaved={() => {
             setShowCreate(false); setEditing(null); setPrefill(undefined);
-            setMatrixKey(k => k + 1);
+            void reloadMatrix();
             void reload();
           }}
         />
@@ -625,7 +676,7 @@ export const DrillsPage: React.FC = () => {
       {showConfig && (
         <DrillConfigModal
           onClose={() => setShowConfig(false)}
-          onSaved={() => { setShowConfig(false); setMatrixKey(k => k + 1); }}
+          onSaved={() => { setShowConfig(false); void reloadMatrix(); }}
         />
       )}
     </div>
