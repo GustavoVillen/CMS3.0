@@ -36,6 +36,64 @@ interface InsightDraft {
   recommendation: string;
 }
 
+const NO_VESSEL_KEY = "__NO_VESSEL__";
+
+/**
+ * Emite drafts con agrupación automática por vessel.
+ *
+ * Cada `hit` tiene su vesselCode + un display string corto que va en la lista
+ * resumida del grupo si supera el threshold. Si el grupo (vessel) tiene
+ * ≥ GROUP_THRESHOLD hits emitimos UN solo draft agrupado con la lista; si no,
+ * emitimos los individuales que arme `individualDraft(hit)`.
+ */
+function emitGroupedByVessel<T>(
+  drafts: InsightDraft[],
+  hits: Array<{ vesselCode: string | null; display: string; item: T }>,
+  opts: {
+    insightType: string;
+    priority: string;
+    /** Texto para el title del grupo. Recibe count + " en VESSEL" (o "" si flota). */
+    groupTitle: (count: number, vesselSuffix: string) => string;
+    /** Texto para el summary del grupo. Recibe count + " en VESSEL" + lista. */
+    groupSummary: (count: number, vesselSuffix: string, list: string) => string;
+    groupRecommendation: string;
+    /** Sufijo único para el insightCode del grupo, ej. "STOCK-MIN-GROUP". */
+    groupCodePrefix: string;
+    /** Cómo construir un draft individual a partir del hit. */
+    individualDraft: (vesselCode: string | null, item: T) => InsightDraft;
+  },
+) {
+  const byVessel = new Map<string, typeof hits>();
+  for (const h of hits) {
+    const k = h.vesselCode ?? NO_VESSEL_KEY;
+    const arr = byVessel.get(k) ?? [];
+    arr.push(h);
+    byVessel.set(k, arr);
+  }
+  for (const [key, group] of byVessel.entries()) {
+    const vesselCode = key === NO_VESSEL_KEY ? null : key;
+    const suffix = vesselCode ? ` en ${vesselCode}` : "";
+    if (group.length >= GROUP_THRESHOLD) {
+      const head = group.slice(0, GROUP_LIST_LIMIT).map(h => h.display).join(", ");
+      const rest = group.length - GROUP_LIST_LIMIT;
+      const list = rest > 0 ? `${head} y ${rest} más` : head;
+      drafts.push({
+        insightCode:    `${opts.groupCodePrefix}-${key}`,
+        insightType:    opts.insightType,
+        priority:       opts.priority,
+        targetType:     vesselCode ? "VESSEL" : "FLEET",
+        targetId:       vesselCode,
+        vesselCode,
+        title:          opts.groupTitle(group.length, suffix),
+        summary:        opts.groupSummary(group.length, suffix, list),
+        recommendation: opts.groupRecommendation,
+      });
+    } else {
+      for (const h of group) drafts.push(opts.individualDraft(vesselCode, h.item));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public entrypoint
 // ---------------------------------------------------------------------------
@@ -152,33 +210,65 @@ async function collectStockInsights(prisma: PrismaClient, tenantId: string, draf
     select: { id: true, sku: true, name: true, vesselCode: true, currentStock: true, minStock: true, reorderPoint: true },
   });
 
+  type Spare = typeof spares[number];
+  const belowMin: Array<{ vesselCode: string | null; display: string; item: Spare }> = [];
+  const belowReorder: Array<{ vesselCode: string | null; display: string; item: Spare }> = [];
+
   for (const spare of spares) {
     if (spare.currentStock < spare.minStock) {
-      drafts.push({
-        insightCode:    `STOCK-MIN-${spare.id}`,
-        insightType:    "stock_below_minimum",
-        priority:       "HIGH",
-        targetType:     "SPARE",
-        targetId:       spare.id,
-        vesselCode:     spare.vesselCode,
-        title:          `Stock bajo mínimo: ${spare.name ?? spare.sku}`,
-        summary:        `El repuesto ${spare.sku} tiene stock ${spare.currentStock} por debajo del mínimo ${spare.minStock}.`,
-        recommendation: "Emitir orden de compra urgente para reponer el stock al nivel mínimo.",
+      belowMin.push({
+        vesselCode: spare.vesselCode,
+        display: `${spare.sku} (${spare.currentStock}/${spare.minStock})`,
+        item: spare,
       });
     } else if (spare.currentStock <= spare.reorderPoint) {
-      drafts.push({
-        insightCode:    `STOCK-REORDER-${spare.id}`,
-        insightType:    "stock_below_reorder_point",
-        priority:       "MEDIUM",
-        targetType:     "SPARE",
-        targetId:       spare.id,
-        vesselCode:     spare.vesselCode,
-        title:          `Stock en punto de reorden: ${spare.name ?? spare.sku}`,
-        summary:        `El repuesto ${spare.sku} alcanzó el punto de reorden (${spare.reorderPoint}). Stock actual: ${spare.currentStock}.`,
-        recommendation: "Planificar reposición de stock antes de alcanzar el mínimo.",
+      belowReorder.push({
+        vesselCode: spare.vesselCode,
+        display: `${spare.sku} (${spare.currentStock}/${spare.reorderPoint})`,
+        item: spare,
       });
     }
   }
+
+  emitGroupedByVessel(drafts, belowMin, {
+    insightType:    "stock_below_minimum",
+    priority:       "HIGH",
+    groupCodePrefix:"STOCK-MIN-GROUP",
+    groupTitle:     (n, suf) => `${n} repuestos bajo mínimo${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} repuestos por debajo del stock mínimo${suf}: ${list}.`,
+    groupRecommendation: "Emitir órdenes de compra urgentes para reponer al nivel mínimo todos los repuestos listados.",
+    individualDraft: (vesselCode, spare) => ({
+      insightCode:    `STOCK-MIN-${spare.id}`,
+      insightType:    "stock_below_minimum",
+      priority:       "HIGH",
+      targetType:     "SPARE",
+      targetId:       spare.id,
+      vesselCode,
+      title:          `Stock bajo mínimo: ${spare.name ?? spare.sku}`,
+      summary:        `El repuesto ${spare.sku} tiene stock ${spare.currentStock} por debajo del mínimo ${spare.minStock}.`,
+      recommendation: "Emitir orden de compra urgente para reponer el stock al nivel mínimo.",
+    }),
+  });
+
+  emitGroupedByVessel(drafts, belowReorder, {
+    insightType:    "stock_below_reorder_point",
+    priority:       "MEDIUM",
+    groupCodePrefix:"STOCK-REORDER-GROUP",
+    groupTitle:     (n, suf) => `${n} repuestos en punto de reorden${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} repuestos en o por debajo del punto de reorden${suf}: ${list}.`,
+    groupRecommendation: "Planificar reposición de los repuestos listados antes de que toquen el stock mínimo.",
+    individualDraft: (vesselCode, spare) => ({
+      insightCode:    `STOCK-REORDER-${spare.id}`,
+      insightType:    "stock_below_reorder_point",
+      priority:       "MEDIUM",
+      targetType:     "SPARE",
+      targetId:       spare.id,
+      vesselCode,
+      title:          `Stock en punto de reorden: ${spare.name ?? spare.sku}`,
+      summary:        `El repuesto ${spare.sku} alcanzó el punto de reorden (${spare.reorderPoint}). Stock actual: ${spare.currentStock}.`,
+      recommendation: "Planificar reposición de stock antes de alcanzar el mínimo.",
+    }),
+  });
 }
 
 async function collectCertificateInsights(
@@ -195,103 +285,58 @@ async function collectCertificateInsights(
   const in30Days = new Date(today);
   in30Days.setDate(in30Days.getDate() + 30);
 
-  interface CertHit { id: string; code: string; name: string | null; vesselCode: string | null; expiry: Date }
-  const expiredByVessel  = new Map<string, CertHit[]>();
-  const expiringByVessel = new Map<string, CertHit[]>();
-  const NO_VESSEL = "__NO_VESSEL__";
+  type CertItem = { id: string; code: string; name: string | null; expiry: Date };
+  const expired:  Array<{ vesselCode: string | null; display: string; item: CertItem }> = [];
+  const expiring: Array<{ vesselCode: string | null; display: string; item: CertItem }> = [];
 
   for (const cert of certs) {
     if (!cert.expiryDate) continue;
     const expiry = new Date(cert.expiryDate);
-    const hit: CertHit = { id: cert.id, code: cert.certificateCode, name: cert.name, vesselCode: cert.vesselCode, expiry };
-    const key = cert.vesselCode ?? NO_VESSEL;
-
-    if (expiry < today) {
-      const arr = expiredByVessel.get(key) ?? [];
-      arr.push(hit);
-      expiredByVessel.set(key, arr);
-    } else if (expiry <= in30Days) {
-      const arr = expiringByVessel.get(key) ?? [];
-      arr.push(hit);
-      expiringByVessel.set(key, arr);
-    }
+    const item: CertItem = { id: cert.id, code: cert.certificateCode, name: cert.name, expiry };
+    const display = `${cert.certificateCode} (${expiry.toISOString().split("T")[0]})`;
+    if (expiry < today) expired.push({ vesselCode: cert.vesselCode, display, item });
+    else if (expiry <= in30Days) expiring.push({ vesselCode: cert.vesselCode, display, item });
   }
 
-  function summariseList(hits: CertHit[]): string {
-    const head = hits.slice(0, GROUP_LIST_LIMIT)
-      .map(h => `${h.code} (${h.expiry.toISOString().split("T")[0]})`)
-      .join(", ");
-    const rest = hits.length - GROUP_LIST_LIMIT;
-    return rest > 0 ? `${head} y ${rest} más` : head;
-  }
+  emitGroupedByVessel(drafts, expired, {
+    insightType:    "certificate_expired",
+    priority:       "CRITICAL",
+    groupCodePrefix:"CERT-EXP-GROUP",
+    groupTitle:     (n, suf) => `${n} certificados vencidos${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} certificados vencidos${suf}: ${list}.`,
+    groupRecommendation: "Iniciar proceso de renovación inmediata de todos los certificados listados. Riesgo de incumplimiento regulatorio.",
+    individualDraft: (vesselCode, item) => ({
+      insightCode:    `CERT-EXP-${item.id}`,
+      insightType:    "certificate_expired",
+      priority:       "CRITICAL",
+      targetType:     "CERTIFICATE",
+      targetId:       item.id,
+      vesselCode,
+      title:          `Certificado vencido: ${item.name ?? item.code}`,
+      summary:        `El certificado ${item.code} venció el ${item.expiry.toISOString().split("T")[0]}.`,
+      recommendation: "Iniciar proceso de renovación inmediata. Riesgo de incumplimiento regulatorio.",
+    }),
+  });
 
-  // ── Vencidos ──
-  for (const [vesselKey, hits] of expiredByVessel.entries()) {
-    const vesselCode = vesselKey === NO_VESSEL ? null : vesselKey;
-    const where = vesselCode ? ` en ${vesselCode}` : "";
-
-    if (hits.length >= GROUP_THRESHOLD) {
-      drafts.push({
-        insightCode:    `CERT-EXP-GROUP-${vesselKey}`,
-        insightType:    "certificate_expired",
-        priority:       "CRITICAL",
-        targetType:     vesselCode ? "VESSEL" : "FLEET",
-        targetId:       vesselCode,
-        vesselCode,
-        title:          `${hits.length} certificados vencidos${where}`,
-        summary:        `Hay ${hits.length} certificados vencidos${where}: ${summariseList(hits)}.`,
-        recommendation: "Iniciar proceso de renovación inmediata de todos los certificados listados. Riesgo de incumplimiento regulatorio.",
-      });
-    } else {
-      for (const h of hits) {
-        drafts.push({
-          insightCode:    `CERT-EXP-${h.id}`,
-          insightType:    "certificate_expired",
-          priority:       "CRITICAL",
-          targetType:     "CERTIFICATE",
-          targetId:       h.id,
-          vesselCode:     h.vesselCode,
-          title:          `Certificado vencido: ${h.name ?? h.code}`,
-          summary:        `El certificado ${h.code} venció el ${h.expiry.toISOString().split("T")[0]}.`,
-          recommendation: "Iniciar proceso de renovación inmediata. Riesgo de incumplimiento regulatorio.",
-        });
-      }
-    }
-  }
-
-  // ── Próximos a vencer ──
-  for (const [vesselKey, hits] of expiringByVessel.entries()) {
-    const vesselCode = vesselKey === NO_VESSEL ? null : vesselKey;
-    const where = vesselCode ? ` en ${vesselCode}` : "";
-
-    if (hits.length >= GROUP_THRESHOLD) {
-      drafts.push({
-        insightCode:    `CERT-EXPIRING-GROUP-${vesselKey}`,
-        insightType:    "certificate_expiring",
-        priority:       "HIGH",
-        targetType:     vesselCode ? "VESSEL" : "FLEET",
-        targetId:       vesselCode,
-        vesselCode,
-        title:          `${hits.length} certificados próximos a vencer${where}`,
-        summary:        `Hay ${hits.length} certificados que vencen en ≤30 días${where}: ${summariseList(hits)}.`,
-        recommendation: "Planificar la renovación de todos los certificados listados antes de su vencimiento.",
-      });
-    } else {
-      for (const h of hits) {
-        drafts.push({
-          insightCode:    `CERT-EXPIRING-${h.id}`,
-          insightType:    "certificate_expiring",
-          priority:       "HIGH",
-          targetType:     "CERTIFICATE",
-          targetId:       h.id,
-          vesselCode:     h.vesselCode,
-          title:          `Certificado próximo a vencer: ${h.name ?? h.code}`,
-          summary:        `El certificado ${h.code} vence el ${h.expiry.toISOString().split("T")[0]} (≤ 30 días).`,
-          recommendation: "Iniciar proceso de renovación para evitar interrupción operacional.",
-        });
-      }
-    }
-  }
+  emitGroupedByVessel(drafts, expiring, {
+    insightType:    "certificate_expiring",
+    priority:       "HIGH",
+    groupCodePrefix:"CERT-EXPIRING-GROUP",
+    groupTitle:     (n, suf) => `${n} certificados próximos a vencer${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} certificados que vencen en ≤30 días${suf}: ${list}.`,
+    groupRecommendation: "Planificar la renovación de todos los certificados listados antes de su vencimiento.",
+    individualDraft: (vesselCode, item) => ({
+      insightCode:    `CERT-EXPIRING-${item.id}`,
+      insightType:    "certificate_expiring",
+      priority:       "HIGH",
+      targetType:     "CERTIFICATE",
+      targetId:       item.id,
+      vesselCode,
+      title:          `Certificado próximo a vencer: ${item.name ?? item.code}`,
+      summary:        `El certificado ${item.code} vence el ${item.expiry.toISOString().split("T")[0]} (≤ 30 días).`,
+      recommendation: "Iniciar proceso de renovación para evitar interrupción operacional.",
+    }),
+  });
 }
 
 async function collectWorkOrderInsights(
@@ -316,22 +361,60 @@ async function collectWorkOrderInsights(
     select: { id: true, workOrderCode: true, vesselCode: true, dueDate: true, criticality: true },
   });
 
+  type WO = typeof workOrders[number];
+  const overdueA_list: Array<{ vesselCode: string | null; display: string; item: WO }> = [];
+  const overdueRest:   Array<{ vesselCode: string | null; display: string; item: WO }> = [];
+
   for (const wo of workOrders) {
     const threshold = wo.criticality === "A" ? overdueA : overdueThreshold;
-    if (wo.dueDate && new Date(wo.dueDate) < threshold) {
-      drafts.push({
-        insightCode:    `WO-OVERDUE-${wo.id}`,
-        insightType:    "overdue_work_order",
-        priority:       wo.criticality === "A" ? "CRITICAL" : "HIGH",
-        targetType:     "WORK_ORDER",
-        targetId:       wo.id,
-        vesselCode:     wo.vesselCode,
-        title:          `Orden de trabajo vencida: ${wo.workOrderCode}`,
-        summary:        `La OT ${wo.workOrderCode} venció el ${new Date(wo.dueDate!).toISOString().split("T")[0]} y sigue abierta.`,
-        recommendation: "Revisar y reprogramar o escalar la orden de trabajo.",
-      });
-    }
+    if (!wo.dueDate || new Date(wo.dueDate) >= threshold) continue;
+    const dueStr = new Date(wo.dueDate).toISOString().split("T")[0];
+    const hit = { vesselCode: wo.vesselCode, display: `${wo.workOrderCode} (${dueStr})`, item: wo };
+    if (wo.criticality === "A") overdueA_list.push(hit);
+    else overdueRest.push(hit);
   }
+
+  // Las críticas (criticidad A) se reportan como insights CRITICAL — agrupadas
+  // por vessel cuando son muchas.
+  emitGroupedByVessel(drafts, overdueA_list, {
+    insightType:    "overdue_work_order",
+    priority:       "CRITICAL",
+    groupCodePrefix:"WO-OVERDUE-A-GROUP",
+    groupTitle:     (n, suf) => `${n} OTs críticas vencidas${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} órdenes de trabajo de criticidad A vencidas${suf}: ${list}.`,
+    groupRecommendation: "Revisar, reprogramar o escalar de inmediato. Riesgo operativo elevado.",
+    individualDraft: (vesselCode, wo) => ({
+      insightCode:    `WO-OVERDUE-${wo.id}`,
+      insightType:    "overdue_work_order",
+      priority:       "CRITICAL",
+      targetType:     "WORK_ORDER",
+      targetId:       wo.id,
+      vesselCode,
+      title:          `Orden de trabajo vencida: ${wo.workOrderCode}`,
+      summary:        `La OT ${wo.workOrderCode} (criticidad A) venció el ${new Date(wo.dueDate!).toISOString().split("T")[0]} y sigue abierta.`,
+      recommendation: "Revisar y reprogramar o escalar la orden de trabajo.",
+    }),
+  });
+
+  emitGroupedByVessel(drafts, overdueRest, {
+    insightType:    "overdue_work_order",
+    priority:       "HIGH",
+    groupCodePrefix:"WO-OVERDUE-GROUP",
+    groupTitle:     (n, suf) => `${n} OTs vencidas${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} órdenes de trabajo vencidas${suf}: ${list}.`,
+    groupRecommendation: "Revisar el backlog y reprogramar o escalar las OTs vencidas.",
+    individualDraft: (vesselCode, wo) => ({
+      insightCode:    `WO-OVERDUE-${wo.id}`,
+      insightType:    "overdue_work_order",
+      priority:       "HIGH",
+      targetType:     "WORK_ORDER",
+      targetId:       wo.id,
+      vesselCode,
+      title:          `Orden de trabajo vencida: ${wo.workOrderCode}`,
+      summary:        `La OT ${wo.workOrderCode} venció el ${new Date(wo.dueDate!).toISOString().split("T")[0]} y sigue abierta.`,
+      recommendation: "Revisar y reprogramar o escalar la orden de trabajo.",
+    }),
+  });
 }
 
 async function collectCapaInsights(
@@ -353,19 +436,58 @@ async function collectCapaInsights(
     select: { id: true, capaCode: true, vesselCode: true, dueDate: true, priority: true },
   });
 
+  type Capa = typeof capas[number];
+  // Dividimos por priority del CAPA: CRITICAL/HIGH del registro → insight
+  // priority CRITICAL; resto → HIGH. Esto preserva la lógica original.
+  const groupCritical: Array<{ vesselCode: string | null; display: string; item: Capa }> = [];
+  const groupHigh:     Array<{ vesselCode: string | null; display: string; item: Capa }> = [];
+
   for (const capa of capas) {
-    drafts.push({
+    const dueStr = new Date(capa.dueDate!).toISOString().split("T")[0];
+    const hit = { vesselCode: capa.vesselCode, display: `${capa.capaCode} (${dueStr})`, item: capa };
+    if (capa.priority === "CRITICAL" || capa.priority === "HIGH") groupCritical.push(hit);
+    else groupHigh.push(hit);
+  }
+
+  emitGroupedByVessel(drafts, groupCritical, {
+    insightType:    "overdue_capa",
+    priority:       "CRITICAL",
+    groupCodePrefix:"CAPA-OVERDUE-CRIT-GROUP",
+    groupTitle:     (n, suf) => `${n} CAPAs críticas vencidas${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} CAPAs de prioridad CRITICAL/HIGH vencidas${suf}: ${list}.`,
+    groupRecommendation: "Escalar y actualizar el estado de las CAPAs listadas con urgencia.",
+    individualDraft: (vesselCode, capa) => ({
       insightCode:    `CAPA-OVERDUE-${capa.id}`,
       insightType:    "overdue_capa",
-      priority:       capa.priority === "CRITICAL" || capa.priority === "HIGH" ? "CRITICAL" : "HIGH",
+      priority:       "CRITICAL",
       targetType:     "CAPA",
       targetId:       capa.id,
-      vesselCode:     capa.vesselCode,
+      vesselCode,
       title:          `CAPA vencida: ${capa.capaCode}`,
       summary:        `La CAPA ${capa.capaCode} venció el ${new Date(capa.dueDate!).toISOString().split("T")[0]} sin completarse.`,
       recommendation: "Actualizar el estado de la CAPA o escalar al responsable.",
-    });
-  }
+    }),
+  });
+
+  emitGroupedByVessel(drafts, groupHigh, {
+    insightType:    "overdue_capa",
+    priority:       "HIGH",
+    groupCodePrefix:"CAPA-OVERDUE-GROUP",
+    groupTitle:     (n, suf) => `${n} CAPAs vencidas${suf}`,
+    groupSummary:   (n, suf, list) => `Hay ${n} CAPAs vencidas${suf}: ${list}.`,
+    groupRecommendation: "Revisar y actualizar el estado de las CAPAs listadas.",
+    individualDraft: (vesselCode, capa) => ({
+      insightCode:    `CAPA-OVERDUE-${capa.id}`,
+      insightType:    "overdue_capa",
+      priority:       "HIGH",
+      targetType:     "CAPA",
+      targetId:       capa.id,
+      vesselCode,
+      title:          `CAPA vencida: ${capa.capaCode}`,
+      summary:        `La CAPA ${capa.capaCode} venció el ${new Date(capa.dueDate!).toISOString().split("T")[0]} sin completarse.`,
+      recommendation: "Actualizar el estado de la CAPA o escalar al responsable.",
+    }),
+  });
 }
 
 async function collectBacklogRiskInsights(
@@ -434,21 +556,36 @@ async function collectRepeatedFailureInsights(
     byAsset.set(d.assetId, entry);
   }
 
+  const hits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; count: number; vesselCode: string } }> = [];
   for (const [assetId, entry] of byAsset.entries()) {
     if (entry.count >= 3) {
-      drafts.push({
-        insightCode:    `REPEAT-FAIL-${assetId}`,
-        insightType:    "repeated_failure",
-        priority:       "HIGH",
-        targetType:     "ASSET",
-        targetId:       assetId,
-        vesselCode:     entry.vesselCode,
-        title:          `Falla repetida detectada en activo`,
-        summary:        `Se registraron ${entry.count} defectos en el mismo activo en los últimos 90 días.`,
-        recommendation: "Investigar causa raíz y revisar el plan de mantenimiento preventivo.",
+      hits.push({
+        vesselCode: entry.vesselCode,
+        display: `${assetId.slice(-6)} (${entry.count} fallas)`,
+        item: { assetId, count: entry.count, vesselCode: entry.vesselCode },
       });
     }
   }
+
+  emitGroupedByVessel(drafts, hits, {
+    insightType:    "repeated_failure",
+    priority:       "HIGH",
+    groupCodePrefix:"REPEAT-FAIL-GROUP",
+    groupTitle:     (n, suf) => `${n} activos con fallas repetidas${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos registraron ≥3 defectos en los últimos 90 días${suf}: ${list}.`,
+    groupRecommendation: "Investigar causa raíz por activo y revisar planes preventivos de los listados.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `REPEAT-FAIL-${it.assetId}`,
+      insightType:    "repeated_failure",
+      priority:       "HIGH",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Falla repetida detectada en activo`,
+      summary:        `Se registraron ${it.count} defectos en el mismo activo en los últimos 90 días.`,
+      recommendation: "Investigar causa raíz y revisar el plan de mantenimiento preventivo.",
+    }),
+  });
 }
 
 async function collectRepeatedDeferralInsights(
@@ -477,21 +614,36 @@ async function collectRepeatedDeferralInsights(
     byAsset.set(d.assetId, entry);
   }
 
+  const hits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; count: number; vesselCode: string } }> = [];
   for (const [assetId, entry] of byAsset.entries()) {
     if (entry.count >= 2) {
-      drafts.push({
-        insightCode:    `REPEAT-DEF-${assetId}`,
-        insightType:    "repeated_deferral",
-        priority:       "MEDIUM",
-        targetType:     "ASSET",
-        targetId:       assetId,
-        vesselCode:     entry.vesselCode,
-        title:          `Postergaciones repetidas en activo`,
-        summary:        `Se registraron ${entry.count} postergaciones en el mismo activo en los últimos 90 días.`,
-        recommendation: "Evaluar si la tarea debe redefinirse o si el activo requiere atención urgente.",
+      hits.push({
+        vesselCode: entry.vesselCode,
+        display: `${assetId.slice(-6)} (${entry.count} dif.)`,
+        item: { assetId, count: entry.count, vesselCode: entry.vesselCode },
       });
     }
   }
+
+  emitGroupedByVessel(drafts, hits, {
+    insightType:    "repeated_deferral",
+    priority:       "MEDIUM",
+    groupCodePrefix:"REPEAT-DEF-GROUP",
+    groupTitle:     (n, suf) => `${n} activos con diferimientos repetidos${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos acumulan ≥2 diferimientos en los últimos 90 días${suf}: ${list}.`,
+    groupRecommendation: "Evaluar redefinir las tareas o priorizar la atención de los activos listados.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `REPEAT-DEF-${it.assetId}`,
+      insightType:    "repeated_deferral",
+      priority:       "MEDIUM",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Postergaciones repetidas en activo`,
+      summary:        `Se registraron ${it.count} postergaciones en el mismo activo en los últimos 90 días.`,
+      recommendation: "Evaluar si la tarea debe redefinirse o si el activo requiere atención urgente.",
+    }),
+  });
 }
 
 async function collectInspectionFailureInsights(
@@ -581,33 +733,63 @@ async function collectFluidAnalysisInsights(
     byAsset.set(assetId, entry);
   }
 
+  const critHits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; entry: AssetEntry } }> = [];
+  const cautHits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; entry: AssetEntry } }> = [];
   for (const [assetId, entry] of byAsset.entries()) {
     if (entry.critical >= 1) {
-      drafts.push({
-        insightCode:    `FLUID-CRIT-${assetId}`,
-        insightType:    "fluid_analysis_critical",
-        priority:       "HIGH",
-        targetType:     "ASSET",
-        targetId:       assetId,
-        vesselCode:     entry.vesselCode,
-        title:          `Análisis de fluido crítico en activo`,
-        summary:        `Se detectaron ${entry.critical} resultado(s) CRÍTICO/ACCIÓN REQUERIDA en análisis de fluidos de los últimos 90 días.`,
-        recommendation: "Revisar el estado del lubricante o fluido, considerar cambio inmediato y verificar condición del equipo.",
+      critHits.push({
+        vesselCode: entry.vesselCode,
+        display: `${assetId.slice(-6)} (${entry.critical} crit.)`,
+        item: { assetId, entry },
       });
     } else if (entry.caution >= 2) {
-      drafts.push({
-        insightCode:    `FLUID-CAUT-${assetId}`,
-        insightType:    "fluid_analysis_caution_trend",
-        priority:       "MEDIUM",
-        targetType:     "ASSET",
-        targetId:       assetId,
-        vesselCode:     entry.vesselCode,
-        title:          `Tendencia de precaución en análisis de fluidos`,
-        summary:        `El activo acumula ${entry.caution} resultados en estado PRECAUCIÓN en los últimos 90 días.`,
-        recommendation: "Incrementar frecuencia de muestreo y revisar condición del fluido antes del próximo mantenimiento.",
+      cautHits.push({
+        vesselCode: entry.vesselCode,
+        display: `${assetId.slice(-6)} (${entry.caution} prec.)`,
+        item: { assetId, entry },
       });
     }
   }
+
+  emitGroupedByVessel(drafts, critHits, {
+    insightType:    "fluid_analysis_critical",
+    priority:       "HIGH",
+    groupCodePrefix:"FLUID-CRIT-GROUP",
+    groupTitle:     (n, suf) => `${n} activos con análisis de fluido crítico${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos con resultados CRÍTICO/ACCIÓN REQUERIDA en 90 días${suf}: ${list}.`,
+    groupRecommendation: "Revisar lubricante/fluido y condición de los activos listados; considerar cambios inmediatos.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `FLUID-CRIT-${it.assetId}`,
+      insightType:    "fluid_analysis_critical",
+      priority:       "HIGH",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Análisis de fluido crítico en activo`,
+      summary:        `Se detectaron ${it.entry.critical} resultado(s) CRÍTICO/ACCIÓN REQUERIDA en análisis de fluidos de los últimos 90 días.`,
+      recommendation: "Revisar el estado del lubricante o fluido, considerar cambio inmediato y verificar condición del equipo.",
+    }),
+  });
+
+  emitGroupedByVessel(drafts, cautHits, {
+    insightType:    "fluid_analysis_caution_trend",
+    priority:       "MEDIUM",
+    groupCodePrefix:"FLUID-CAUT-GROUP",
+    groupTitle:     (n, suf) => `${n} activos con tendencia de precaución en fluidos${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos acumulan ≥2 resultados PRECAUCIÓN en 90 días${suf}: ${list}.`,
+    groupRecommendation: "Incrementar frecuencia de muestreo de los activos listados y revisar antes del próximo mantenimiento.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `FLUID-CAUT-${it.assetId}`,
+      insightType:    "fluid_analysis_caution_trend",
+      priority:       "MEDIUM",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Tendencia de precaución en análisis de fluidos`,
+      summary:        `El activo acumula ${it.entry.caution} resultados en estado PRECAUCIÓN en los últimos 90 días.`,
+      recommendation: "Incrementar frecuencia de muestreo y revisar condición del fluido antes del próximo mantenimiento.",
+    }),
+  });
 }
 
 async function collectFuelConsumptionInsights(

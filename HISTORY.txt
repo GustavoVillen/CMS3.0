@@ -1,5 +1,52 @@
 HISTORY.txt
 
+[2026-05-14] AI Insights — agrupación extendida a stock, OTs, CAPAs, fallas y fluidos
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+La agrupación implementada para certificados se extendió al resto de los
+generadores de insights que pueden producir volumen.
+
+CAMBIOS (apps/api/src/tenant/ai-insights/insight-generator.ts):
+
+· Helper genérico `emitGroupedByVessel<T>(drafts, hits, opts)`:
+  Recibe una lista de hits (cada uno con vesselCode + display + item).
+  Agrupa por vessel; si un grupo tiene ≥ GROUP_THRESHOLD emite un solo
+  insight agrupado con la lista resumida (top GROUP_LIST_LIMIT + "y N
+  más"); si tiene menos emite individuales vía individualDraft(item).
+  Mismo patrón de targetType=VESSEL (o FLEET sin vessel) y targetId=
+  vesselCode para no colisionar con los individuales que usan otro
+  targetType.
+
+· Refactor de collectCertificateInsights para usar el helper.
+
+· Nuevas agrupaciones:
+  - collectStockInsights: stock_below_minimum + stock_below_reorder_point
+    (display: "SKU (current/min)").
+  - collectWorkOrderInsights: overdue_work_order separado en CRITICAL
+    (criticidad A) y HIGH (resto) — cada uno con su agrupado por vessel.
+  - collectCapaInsights: overdue_capa separado en CRITICAL (priority del
+    CAPA CRITICAL/HIGH) y HIGH (resto).
+  - collectRepeatedFailureInsights: agrupa los assets con repeated_failure.
+  - collectRepeatedDeferralInsights: agrupa los assets con repeated_deferral.
+  - collectFluidAnalysisInsights: fluid_analysis_critical y
+    fluid_analysis_caution_trend, ambos agrupados.
+
+El cleanup de insights obsoletos (auto-RESOLVED al final del run, mismos
+type que tuvieron drafts en este run) sigue aplicando: cuando un grupo
+absorbe N individuales antiguos, esos individuales pasan a RESOLVED en
+la próxima pasada del generador.
+
+VERIFICADO:
+  · tsc OK
+  · No requiere migración (sólo lógica del generador).
+  · El cambio se ve en el próximo run del generador.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  pm2 restart gpms
+  # Sin frontend, sin migración.
+
 [2026-05-14] AI Insights — respetar vessel selector del header
 Agent: Claude Opus 4.7
 
