@@ -7,15 +7,27 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+/**
+ * Lanza el error en lugar de alert() para que el caller lo muestre en su UI.
+ * Si el server devolvió un JSON con `error`/`message`, lo extrae.
+ */
 export async function printDrill(drill: { id: string; drillCode: string }): Promise<void> {
   const res = await fetch(`/app/drills/${drill.id}/pdf`, {
     headers: getAuthHeaders(),
   });
 
   if (!res.ok) {
-    console.error("Error generando PDF de simulacro:", res.status, await res.text());
-    alert("No se pudo generar el PDF del simulacro. Intente nuevamente.");
-    return;
+    const raw = await res.text();
+    let msg = `Error ${res.status} al generar el PDF`;
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; message?: string };
+      if (parsed.message) msg = parsed.message;
+      else if (parsed.error) msg = parsed.error;
+    } catch { /* texto plano */
+      if (raw && raw.length < 200) msg = `${msg}: ${raw}`;
+    }
+    console.error("[printDrill] failed", res.status, raw);
+    throw new Error(msg);
   }
 
   const blob = await res.blob();

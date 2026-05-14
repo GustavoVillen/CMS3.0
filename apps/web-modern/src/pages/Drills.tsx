@@ -94,9 +94,10 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
   const handleGeneratePdf = useCallback(async () => {
     if (!drill || generatingPdf) return;
     setGeneratingPdf(true);
+    setErr(null);
     try {
-      // Persistimos cambios antes de imprimir si la OT/drill es editable.
-      // Si fallaba el save igualmente bajamos el PDF para no bloquear al usuario.
+      // Persistimos cambios antes de imprimir si el drill es editable.
+      // Si falla el save igualmente bajamos el PDF para no bloquear al usuario.
       if (!isLocked) {
         try {
           await api.patch(`/app/drills/${drill.id}`, {
@@ -109,6 +110,8 @@ const DrillModal: React.FC<{ drill: Drill | null; prefill?: DrillPrefill; onClos
         } catch { /* non-blocking */ }
       }
       await printDrill({ id: drill.id, drillCode: drill.drillCode });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo generar el PDF.");
     } finally {
       setGeneratingPdf(false);
     }

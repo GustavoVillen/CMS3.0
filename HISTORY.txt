@@ -1,5 +1,54 @@
 HISTORY.txt
 
+[2026-05-14] Simulacros — fix PDF (sin alert nativo + sanitize Latin-1)
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+El botón "Guardar PDF" del modal de simulacros tiraba un alert() nativo
+del navegador con "No se pudo generar el PDF". El usuario marcó dos cosas:
+1. el alert nativo no encaja con el UI; 2. el endpoint efectivamente
+estaba devolviendo error.
+
+CAMBIOS:
+
+· apps/web-modern/src/lib/print-drill.ts
+  Sacamos el alert(). Ahora si la response no es ok, parseamos el JSON
+  de error del backend ({error, message}) o el texto plano y throw new
+  Error con el mensaje del server. El caller lo muestra inline.
+
+· apps/web-modern/src/pages/Drills.tsx
+  handleGeneratePdf envuelve printDrill en try/catch y usa setErr(...)
+  para mostrar el error en el banner rojo del modal (mismo patrón que
+  el resto del modal), no alert.
+
+· apps/api/src/tenant/drills/drills-pdf-service.ts
+  - sanitize() reescrito sin regex con control chars literales (TS no
+    parseaba el archivo). Ahora normaliza puntuación unicode común
+    (smart quotes, dashes, ellipsis, nbsp) y luego filtra por charCode:
+    sólo mantiene \t, \n y Latin-1 imprimible (0x20-0xFF salvo 0x7F).
+    pdfkit con Helvetica usa WinAnsiEncoding y caracteres fuera de
+    Latin-1 (emojis, etc.) generaban error a la hora de render.
+  - Texto literales se cambiaron a versiones ASCII (sin acentos en
+    label maps; los acentos los aporta el usuario y se sanitizan si
+    están fuera de rango).
+  - setFont() helper antes de cada medición/escritura (heightOfString
+    necesita un font cargado para no fallar).
+  - tenant/crew lookups envueltos en try/catch con log.warn.
+  - renderPdf envuelto en try/catch + log.error + RouteError(500,
+    "PDF_RENDER_FAILED", err.message) — así el frontend puede mostrar
+    el motivo real si vuelve a fallar.
+
+VERIFICADO:
+  · tsc backend + frontend OK
+  · vite build OK
+  · El alert nativo desapareció; los errores ahora se muestran en el
+    banner rojo del modal.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-13] Simulacros — botón "Guardar PDF" con registro completo
 Agent: Claude Opus 4.7
 
