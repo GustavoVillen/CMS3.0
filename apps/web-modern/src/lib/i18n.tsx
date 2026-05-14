@@ -51,6 +51,9 @@ const dict = {
   "nav.crew":              { es: "Tripulantes",         en: "Crew",                pt: "Tripulantes" },
   "nav.drills":            { es: "Simulacros",          en: "Drills",              pt: "Simulados" },
   "nav.permits":           { es: "Permisos de Trabajo", en: "Permits to Work",     pt: "Permissões de Trabalho" },
+  "nav.restHours":         { es: "Horas de Descanso",   en: "Hours of Rest",       pt: "Horas de Descanso" },
+  "nav.nearMiss":          { es: "Near Miss",           en: "Near Miss",           pt: "Quase-Acidentes" },
+  "nav.externalAudits":    { es: "Auditorías Externas", en: "External Audits",     pt: "Auditorias Externas" },
 
   // Page titles (Layout header)
   "page.dashboard":         { es: "Dashboard Principal",       en: "Main Dashboard",          pt: "Painel Principal" },

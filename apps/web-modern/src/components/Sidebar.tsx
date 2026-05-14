@@ -5,6 +5,7 @@ import {
   AlertTriangle, Clock, ShieldCheck, Microscope, Package, Truck,
   UsersRound, UserCircle, ScrollText, ChevronLeft, ChevronRight, Gauge, Bot,
   FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
+  ClipboardCheck, AlertOctagon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -65,6 +66,9 @@ const NAV: NavSection[] = [
       { icon: Users,           labelKey: "nav.crew",             path: "/crew" },
       { icon: CalendarCheck,   labelKey: "nav.drills",           path: "/drills" },
       { icon: ShieldAlert,     labelKey: "nav.permits",          path: "/permits" },
+      { icon: Clock,           labelKey: "nav.restHours",        path: "/rest-hours" },
+      { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
+      { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
     ],
   },
   {

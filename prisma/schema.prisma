@@ -1008,6 +1008,8 @@ model Vessel {
   crew             Crew[]
   drills           Drill[]
   permits          PermitToWork[]
+  externalAudits   ExternalAudit[]
+  nearMissReports  NearMissReport[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2670,4 +2672,190 @@ model PermitParticipant {
   @@index([tenantId])
   @@index([permitId])
   @@index([crewId])
+}
+
+// ─── Block: External Audits (PSC / Flag / Class / Vetting) — SIRE 2.0 Ch. 4 ────
+// Registro histórico de inspecciones externas, separado de las inspecciones
+// internas. SIRE pregunta explícitamente por PSC findings pasados.
+
+enum ExternalAuditType {
+  PSC                 // Port State Control
+  FLAG                // Flag State
+  CLASS               // Sociedad de Clasificación
+  VETTING_OIL_MAJOR   // SIRE inspection previo / vetting de oil major
+  CDI                 // Chemical Distribution Institute
+  RIGHTSHIP           // RightShip
+  OTHER
+}
+
+enum ExternalAuditFindingType {
+  DEFICIENCY
+  OBSERVATION
+  RECOMMENDATION
+  POSITIVE_OBSERVATION
+}
+
+enum ExternalAuditFindingStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  REJECTED_BY_AUDITOR
+}
+
+model ExternalAudit {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  auditCode          String              // EXT-VESSEL-YY-####
+  auditType          ExternalAuditType
+  auditDate          DateTime
+  port               String?
+  country            String?
+  agencyOrAuthority  String?             // "USCG", "MCA", "Shell", "BP", "ABS", etc.
+  inspectorName      String?
+  durationHours      Decimal?            @db.Decimal(5, 2)
+  overallResult      String?             // "Pass", "Conditional", "Fail", "Acceptable"
+  summary            String?             // resumen general
+  scoreOrRating      String?             // "85%", "B-", etc.
+  reportUrl          String?             // URL al PDF original del informe
+  createdAt          DateTime            @default(now())
+  createdByUserId    String
+  updatedAt          DateTime            @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  vessel             Vessel              @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  findings           ExternalAuditFinding[]
+
+  @@unique([tenantId, vesselCode, auditCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, auditType])
+  @@index([auditDate])
+}
+
+model ExternalAuditFinding {
+  id                String                     @id @default(cuid())
+  tenantId          String
+  auditId           String
+  vesselCode        String
+  // findingCode: código del inspector (ej. PSC code "30150", SIRE Q "7.1.2").
+  findingCode       String?
+  findingType       ExternalAuditFindingType
+  category          String?                    // "Safety", "Pollution prevention", "Crew", "Cargo"
+  description       String                     // qué se encontró
+  status            ExternalAuditFindingStatus @default(OPEN)
+  // Severidad solo aplica a DEFICIENCY. "MINOR" / "MAJOR" / "CRITICAL".
+  severity          String?
+  detentionRelated  Boolean                    @default(false)
+  rectificationDeadline DateTime?
+  clearingDate      DateTime?
+  evidenceNotes     String?                    // qué evidencia se aportó al cerrar
+  evidenceDocUrl    String?
+  createdAt         DateTime                   @default(now())
+  createdByUserId   String
+  updatedAt         DateTime                   @updatedAt
+  updatedByUserId   String
+
+  audit             ExternalAudit              @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([auditId])
+  @@index([tenantId, vesselCode, status])
+}
+
+// ─── Block: Near Miss / Hazard Observation — SIRE 2.0 Ch. 4 Safety ─────────────
+// Separado de Defect: el defecto es un problema material (algo está roto o
+// degradado); el near miss es un evento o condición que pudo haber causado
+// daño pero no lo causó. Cultura de reporte es clave en SIRE.
+
+enum NearMissCategory {
+  NEAR_MISS            // Evento que pudo causar daño pero no lo causó
+  HAZARD_OBSERVATION   // Condición de riesgo observada (sin evento)
+  UNSAFE_ACT           // Acción humana insegura observada
+  UNSAFE_CONDITION     // Estado físico inseguro
+}
+
+enum NearMissSeverity {
+  LOW                  // Potencial de daño bajo
+  MEDIUM               // Potencial de lesión leve
+  HIGH                 // Potencial de lesión grave / daño mayor
+  CRITICAL             // Potencial de fatalidad / pérdida total
+}
+
+enum NearMissStatus {
+  REPORTED
+  UNDER_REVIEW
+  ACTIONED             // Acción correctiva aplicada
+  CLOSED
+}
+
+model NearMissReport {
+  id                String           @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  nearMissCode      String           // NM-VESSEL-YY-####
+  category          NearMissCategory
+  severity          NearMissSeverity @default(MEDIUM)
+  status            NearMissStatus   @default(REPORTED)
+  occurredAt        DateTime
+  location          String?          // "Sala de máquinas", "Cubierta", "Puente"
+  description       String
+  immediateAction   String?
+  rootCause         String?
+  preventiveActions String?
+  lessonsLearned    String?
+  assetId           String?
+  reportedByName    String?          // crew code o nombre libre
+  reportedByCrewId  String?
+  reviewedAt        DateTime?
+  reviewedByUserId  String?
+  closedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  createdByUserId   String
+  updatedAt         DateTime         @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, nearMissCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([occurredAt])
+}
+
+// ─── Block: Hours of Rest — STCW Manila / MLC 2006 ─────────────────────────────
+// Una fila por (crew, día). El registro de horas se modela como un array de
+// 24 booleans en JSON: true = descanso, false = trabajo, indexado por hora
+// del día (0..23 en hora local del buque). El cálculo de violaciones
+// (mínimo 10h/24h, 77h/7d, no más de 2 períodos en 24h con uno ≥6h) se hace
+// en el servicio al consultar.
+
+model CrewRestHours {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  crewId          String
+  recordDate      DateTime @db.Date
+  // hoursData: Json[24]; true = descanso. Si no hay datos, se asume work=true.
+  hoursData       Json     @default("[false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]")
+  notes           String?
+  // Snapshot calculado al guardar — útil para listados y reportes sin recomputar.
+  totalRestHours  Decimal? @db.Decimal(4, 2)
+  hasViolation    Boolean  @default(false)
+  violationsJson  Json?    // { kind: "...", details: "..." }[]
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String
+
+  @@unique([tenantId, vesselCode, crewId, recordDate])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode, recordDate])
+  @@index([crewId, recordDate])
+  @@index([tenantId, hasViolation])
 }

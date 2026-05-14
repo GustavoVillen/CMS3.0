@@ -1,5 +1,79 @@
 HISTORY.txt
 
+[2026-05-14] SIRE 2.0 — 3 módulos nuevos: External Audits, Near Miss, Hours of Rest
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Para cubrir auditorías SIRE 2.0 (vetting de oil majors) faltaban
+tres registros que el CVIQ pregunta explícitamente:
+1. Hours of Rest (STCW Manila / MLC 2006) — uno de los findings más
+   comunes en inspecciones PSC y SIRE.
+2. Near Miss / Hazard Observation — cultura de reporte separada del
+   módulo de defectos.
+3. External Audits (PSC, Flag, Class, Vetting oil major) — registro
+   histórico de inspecciones externas con findings y evidencia de
+   cierre.
+
+CAMBIOS:
+
+· prisma/schema.prisma + 3 migrations:
+  - ExternalAudit + ExternalAuditFinding + enums.
+  - NearMissReport + enums (Category, Severity, Status).
+  - CrewRestHours: una fila por (crew, día) con hoursData JSON[24]
+    boolean y snapshot precalculado (totalRestHours, hasViolation,
+    violationsJson).
+  Relaciones inversas agregadas a Vessel.
+
+· apps/api/src/tenant/external-audits/external-audits-service.ts:
+  CRUD de audits + CRUD de findings anidados (POST/PATCH/DELETE
+  /findings/:id). Genera auditCode EXT-VESSEL-YY-####. Lista
+  incluye contadores findingsTotal y findingsOpen.
+
+· apps/api/src/tenant/near-miss/near-miss-service.ts:
+  CRUD básico + transición de estados (REPORTED → UNDER_REVIEW →
+  ACTIONED → CLOSED). Auto-setea reviewedAt / closedAt. Permite
+  reportar a TODOS salvo AUDITOR_READONLY (cultura de seguridad).
+
+· apps/api/src/tenant/rest-hours/rest-hours-service.ts:
+  - computeViolations(): chequea STCW (≥10h/24h, ≥77h/7d, ≤2 períodos,
+    ≥6h consecutivas en el período más largo).
+  - upsertRestHours(): trae los 6 días previos en DB, recomputa
+    violaciones y persiste hoursData + snapshot.
+  - monthlySnapshot(): vista mensual para la grilla de UI con todos
+    los crew ONBOARD del vessel.
+
+· apps/api/src/tenant/tenant-router.ts:
+  Routes /app/external-audits (+/findings), /app/near-miss,
+  /app/rest-hours (+/monthly).
+
+· apps/web-modern/src/pages/ExternalAudits.tsx:
+  Lista + modal con findings inline (agregar, editar status,
+  cerrar con evidencia, marcar detention-related).
+
+· apps/web-modern/src/pages/NearMiss.tsx:
+  Lista + modal con flujo Reported→Under review→Actioned→Closed.
+  Filtros por estado.
+
+· apps/web-modern/src/pages/RestHours.tsx:
+  Grilla mensual: filas=crew, columnas=días. Cada celda muestra
+  total de descanso o ícono según estado. Click abre un editor de
+  24 horas con drag-paint (click+arrastrar para pintar varias
+  horas). Botones "Todo descanso" / "Todo trabajo". Banner de
+  reglas STCW. Header muestra contador de días con violación.
+
+· App.tsx + Sidebar.tsx + i18n.tsx: 3 rutas nuevas en sección Crew,
+  con íconos Clock / AlertOctagon / ClipboardCheck.
+
+VERIFICADO: tsc backend + frontend OK · vite build OK.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  set -a; . /app/.env; set +a
+  npx prisma db push
+  npx prisma generate
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Certificados — permitir editar el código
 Agent: Claude Opus 4.7
 

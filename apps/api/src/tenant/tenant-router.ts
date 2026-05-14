@@ -10,6 +10,16 @@ import { registerTenantAccessSession, revokeTenantAccessSession } from "./auth/s
 import { requireTenantAccessSession } from "./auth/tenant-route-auth";
 import { acceptTenantInvitation } from "./invitations/tenant-invitations-service";
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
+import {
+  listExternalAudits, getExternalAudit, createExternalAudit, updateExternalAudit, softDeleteExternalAudit,
+  createFinding, updateFinding, deleteFinding,
+} from "./external-audits/external-audits-service";
+import {
+  listNearMisses, getNearMiss, createNearMiss, updateNearMiss, deleteNearMiss,
+} from "./near-miss/near-miss-service";
+import {
+  listRestHours, upsertRestHours, monthlySnapshot, deleteRestHoursDay,
+} from "./rest-hours/rest-hours-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
@@ -1369,6 +1379,135 @@ export async function handleTenantRoutes(
       sendJson(response, 200, { ok: true });
       return true;
     }
+  }
+
+  // ── External Audits (SIRE 2.0 Ch. 4 — PSC / Flag / Class / Vetting) ────────
+  if (method === "GET" && url.pathname === "/app/external-audits") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listExternalAudits(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      auditType:  url.searchParams.get("auditType"),
+      fromDate:   url.searchParams.get("fromDate"),
+      toDate:     url.searchParams.get("toDate"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/external-audits") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createExternalAudit>[1];
+    sendJson(response, 201, await createExternalAudit(session, body));
+    return true;
+  }
+  if (/^\/app\/external-audits\/[^/]+\/findings$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof createFinding>[2];
+      sendJson(response, 201, await createFinding(session, id, body));
+      return true;
+    }
+  }
+  if (/^\/app\/external-audits\/[^/]+\/findings\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    const auditId = parts[3]!;
+    const findingId = parts[5]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateFinding>[3];
+      sendJson(response, 200, await updateFinding(session, auditId, findingId, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteFinding(session, auditId, findingId);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+  if (/^\/app\/external-audits\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") { sendJson(response, 200, await getExternalAudit(session, id)); return true; }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateExternalAudit>[2];
+      sendJson(response, 200, await updateExternalAudit(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await softDeleteExternalAudit(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Near Miss / Hazard Observations (SIRE 2.0 Ch. 4 Safety culture) ────────
+  if (method === "GET" && url.pathname === "/app/near-miss") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listNearMisses(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      category:   url.searchParams.get("category"),
+      status:     url.searchParams.get("status"),
+      severity:   url.searchParams.get("severity"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/near-miss") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createNearMiss>[1];
+    sendJson(response, 201, await createNearMiss(session, body));
+    return true;
+  }
+  if (/^\/app\/near-miss\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    if (method === "GET") { sendJson(response, 200, await getNearMiss(session, id)); return true; }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateNearMiss>[2];
+      sendJson(response, 200, await updateNearMiss(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteNearMiss(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // ── Hours of Rest (STCW Manila / MLC 2006) ─────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/rest-hours") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const items = await listRestHours(session, {
+      vesselCode:     url.searchParams.get("vesselCode"),
+      crewId:         url.searchParams.get("crewId"),
+      fromDate:       url.searchParams.get("fromDate"),
+      toDate:         url.searchParams.get("toDate"),
+      onlyViolations: url.searchParams.get("onlyViolations") === "true",
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/rest-hours/monthly") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const year  = parseInt(url.searchParams.get("year")  ?? "0", 10);
+    const month = parseInt(url.searchParams.get("month") ?? "0", 10);
+    if (!vesselCode || !year || !month) throw new RouteError(400, "VALIDATION_ERROR", "vesselCode, year y month requeridos.");
+    sendJson(response, 200, await monthlySnapshot(session, { vesselCode, year, month }));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/rest-hours") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof upsertRestHours>[1];
+    sendJson(response, 200, await upsertRestHours(session, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/rest-hours\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    await deleteRestHoursDay(session, id);
+    sendJson(response, 200, { ok: true });
+    return true;
   }
 
   // ── Crew dashboard summary ─────────────────────────────────────────────────

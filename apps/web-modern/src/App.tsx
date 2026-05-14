@@ -46,6 +46,9 @@ import { BitacoraPage } from "./pages/Bitacora";
 import { CrewPage } from "./pages/Crew";
 import { DrillsPage } from "./pages/Drills";
 import { PermitsPage } from "./pages/Permits";
+import { ExternalAuditsPage } from "./pages/ExternalAudits";
+import { NearMissPage } from "./pages/NearMiss";
+import { RestHoursPage } from "./pages/RestHours";
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -146,6 +149,9 @@ export default function App() {
               <Route path="/crew"              element={<CrewPage />} />
               <Route path="/drills"            element={<DrillsPage />} />
               <Route path="/permits"           element={<PermitsPage />} />
+              <Route path="/external-audits"   element={<ExternalAuditsPage />} />
+              <Route path="/near-miss"         element={<NearMissPage />} />
+              <Route path="/rest-hours"        element={<RestHoursPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />
