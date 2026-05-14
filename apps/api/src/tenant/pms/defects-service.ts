@@ -123,8 +123,17 @@ function canWriteDefects(session: TenantAccessSession): boolean {
   );
 }
 
+/**
+ * Cerrar un defecto: permitido a TODOS los roles del tenant salvo
+ * AUDITOR_READONLY. Igual criterio que para crear OT — la operación de
+ * cierre es entrada normal de tripulación / superintendentes /
+ * inspectores; restringirla bloqueaba flujos legítimos.
+ *
+ * Eliminar (deleteDefect) sigue restringido a TENANT_ADMIN porque es
+ * destructivo y rompe trazabilidad.
+ */
 function canCloseDefect(session: TenantAccessSession): boolean {
-  return session.user.role === "TENANT_ADMIN" || session.user.role === "FLEET_SUPERINTENDENT" || session.user.role === "MAINTENANCE_MANAGER";
+  return session.user.role !== "AUDITOR_READONLY";
 }
 
 function canDeleteDefect(session: TenantAccessSession): boolean {
@@ -136,7 +145,7 @@ function ensureCanWriteDefects(session: TenantAccessSession) {
 }
 
 function ensureCanCloseDefect(session: TenantAccessSession) {
-  if (!canCloseDefect(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para cerrar defects.");
+  if (!canCloseDefect(session)) throw new RouteError(403, "FORBIDDEN", "Los usuarios solo-lectura no pueden cerrar defects.");
 }
 
 function ensureCanDeleteDefect(session: TenantAccessSession) {

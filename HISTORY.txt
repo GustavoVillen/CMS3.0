@@ -1,5 +1,31 @@
 HISTORY.txt
 
+[2026-05-14] Defects — aflojar regla de cierre (salvo AUDITOR_READONLY)
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Cerrar un defecto exigía TENANT_ADMIN / FLEET_SUPERINTENDENT /
+MAINTENANCE_MANAGER. Misma decisión que en WorkOrders: la operación
+de cerrar un defecto es entrada normal del flujo (tripulación reporta,
+inspector verifica, superintendente cierra), no debería ser exclusiva
+de tres roles.
+
+CAMBIOS (apps/api/src/tenant/pms/defects-service.ts):
+
+· canCloseDefect ahora retorna true para TODOS los roles del tenant
+  salvo AUDITOR_READONLY.
+· Mensaje 403 actualizado: "Los usuarios solo-lectura no pueden cerrar
+  defects."
+· canDeleteDefect se mantiene en TENANT_ADMIN (delete es destructivo
+  y rompe trazabilidad).
+· canWriteDefects se deja como estaba (sin tocar).
+
+VERIFICADO: tsc backend OK.
+
+PENDIENTE PARA VPS:
+  cd /app && git pull origin main
+  pm2 restart gpms
+
 [2026-05-14] Defectos — IA para sugerir "Acción inmediata"
 Agent: Claude Opus 4.7
 
