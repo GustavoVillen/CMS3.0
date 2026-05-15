@@ -1,5 +1,62 @@
 HISTORY.txt
 
+[2026-05-14] Tier 3 — Compliance Score por vessel + Smart Alerts priorizadas
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Tercer paquete: fleet manager view. Un número único de compliance por
+vessel + alertas priorizadas. NO usa IA (algoritmos deterministas) =
+rápido, gratis, transparente.
+
+CAMBIOS:
+
+· apps/api/src/tenant/compliance/compliance-service.ts (nuevo)
+  - getComplianceScores(): score 0..100 por vessel compuesto por 6
+    componentes ponderados:
+      OT compliance     20%  (cerradas en plazo / total cerradas, 90d)
+      Drill compliance  20%  (realizados / esperados según DrillConfig)
+      Certs vigentes    20%  (% no expired/expiring)
+      No findings PSC   15%  (penaliza 1 → 0.7 → 0.4 → 0.1 por cantidad)
+      No def. críticos  15%  (idem)
+      No STCW violations 10% (últimos 30d)
+    Labels: EXCELLENT >=85, GOOD >=70, FAIR >=50, POOR <50.
+    Devuelve también totals (datos crudos) para tooltip.
+  - getSmartAlerts(): 5 reglas determinísticas que detectan situaciones
+    que requieren atención AHORA:
+      A) Certs vencidos en últimos 7d o vencen en próximos 7d (agrupado
+         por vessel para no saturar)
+      B) OTs críticas (criticality=A) vencidas hace +30d
+      C) Defectos recurrentes en mismo asset (>=3 en 60d) — groupBy
+      D) Findings PSC con rectificación deadline pasada
+      E) Días con violación STCW (>=3 en últimos 7d)
+    Cada alerta tiene severity, title, summary, link al detalle.
+    Ordenadas CRITICAL → WARNING → INFO. Top 20 retornados.
+
+· apps/api/src/tenant/tenant-router.ts
+  GET /app/compliance/scores?vesselCode=X
+  GET /app/compliance/alerts?vesselCode=X
+
+· apps/web-modern/src/components/ComplianceDashboard.tsx (nuevo)
+  Visible solo para managers (TENANT_ADMIN / FLEET_SUPERINTENDENT /
+  MAINTENANCE_MANAGER). Dos secciones:
+    1. Smart Alerts: grid 2 cols con tarjetas color-coded (rojo /
+       amarillo / accent). Click → navega al detalle (link en el JSON).
+    2. Compliance Scores: grid responsive con cards por vessel.
+       Header con código + nombre + score grande + label colorido.
+       Mini-bar de progreso. Click expande tooltip con los 6
+       componentes individuales en % + dato crudo (ej. "12/15 en plazo").
+
+· apps/web-modern/src/pages/Dashboard.tsx
+  Mountado arriba del MyDayPanel y del bento de KPIs. Si el usuario
+  no es manager, el componente devuelve null automáticamente.
+
+VERIFICADO: tsc + vite build OK.
+
+PENDIENTE PARA VPS — sin migraciones:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Tier 2 IA — clasificación + duplicados defectos + monthly report draft
 Agent: Claude Opus 4.7
 

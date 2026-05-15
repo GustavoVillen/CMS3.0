@@ -11,6 +11,7 @@ import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { MyDayPanel } from "../components/MyDayPanel";
+import { ComplianceDashboard } from "../components/ComplianceDashboard";
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -180,6 +181,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Compliance score + smart alerts (sólo managers) */}
+      <ComplianceDashboard />
+
       {/* "Mi día" — tareas personales / vista del vessel según rol */}
       <MyDayPanel />
 
