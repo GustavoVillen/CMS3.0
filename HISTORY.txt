@@ -1,5 +1,66 @@
 HISTORY.txt
 
+[2026-05-14] Tier 2 IA — clasificación + duplicados defectos + monthly report draft
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Segundo paquete: que la IA ayude SIN tomar decisiones. Tres asistencias
+que pre-llenan o avisan al usuario; siempre el humano confirma o edita.
+
+CAMBIOS:
+
+· apps/api/src/tenant/pms/defects-ai-suggestions.ts
+  - suggestDefectClassification(): Haiku con prompt structured JSON
+    devuelve { classification, severity, shouldBeNearMiss, nearMissReason,
+    confidence }. Si shouldBeNearMiss=true, da el motivo para que el
+    usuario decida si convertirlo a Near Miss en vez de Defect.
+    Validación estricta de enums (severity / confidence).
+  - findSimilarDefects(): NO usa IA — algoritmo determinístico con
+    bigramas de palabras + Jaccard. Lista defectos abiertos del mismo
+    asset/vessel con similitud >= 0.25 (top 5). Stopwords ES y
+    normalización (acentos, lowercase, sólo alfanumérico). Endpoint
+    rápido sin consumo de tokens.
+  - Regex de diacritics con escape Unicode (RegExp constructor) para
+    evitar caracteres literales en el source.
+
+· apps/api/src/tenant/pms/quality-router.ts
+  POST /app/pms/defects/suggest-classification (rate limit 40/min)
+  POST /app/pms/defects/find-similar.
+
+· apps/web-modern/src/pages/Defects.tsx (CreateDefectModal):
+  - Botón "IA" al lado del textarea de descripción (chip naranja).
+    Click sugiere classification + severity. Banner naranja inline con
+    [Aplicar] para aceptar o [X] para descartar.
+  - Banner especial amarillo cuando shouldBeNearMiss=true: avisa que
+    quizás debería crearse como Near Miss + da el motivo (no auto-
+    redirige, el usuario decide).
+  - Banner banner naranja de "Posibles duplicados": fetch con debounce
+    de 800ms cuando description.length >= 15 + asset/vessel; lista los
+    defectos abiertos similares con % de similitud y status.
+
+· apps/api/src/tenant/pms/monthly-reports-ai-draft.ts (nuevo)
+  generateMonthlyDraft(): junta KPIs del mes (defects creados/cerrados,
+  OTs completadas/vencidas, drills, near miss, certs vencidos,
+  combustible, horas máquina) + listas de top items, los pasa a Haiku
+  con prompt structured JSON, devuelve { summary, notes, kpis }.
+  La IA NO firma; sólo redacta. Telemetría con recordAiUsage.
+
+· apps/api/src/tenant/pms/spares-router.ts
+  POST /app/pms/monthly-reports/generate-draft.
+
+· apps/web-modern/src/pages/MonthlyReports.tsx
+  Nueva caja "Asistente IA" arriba del Resumen con botón "Generar
+  borrador". Llena summary + notes con el texto IA. Muestra los KPIs
+  como pills debajo del botón para que el usuario vea los datos
+  contextuales sobre los que la IA narró. Errores inline.
+
+VERIFICADO: tsc backend + frontend OK · vite build OK.
+
+PENDIENTE PARA VPS — sin migraciones:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Tier 1 UX — Mi día + Sidebar badges + FAB mobile + voice-to-text
 Agent: Claude Opus 4.7
 

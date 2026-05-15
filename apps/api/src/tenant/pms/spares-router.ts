@@ -192,6 +192,14 @@ export async function handleSparesRoutes(
     return true;
   }
 
+  // ── Monthly Reports — AI draft generator ──────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/pms/monthly-reports/generate-draft") {
+    const { generateMonthlyDraft } = await import("./monthly-reports-ai-draft");
+    const body = await readJsonBody(request) as Parameters<typeof generateMonthlyDraft>[1];
+    sendJson(response, 200, await generateMonthlyDraft(session, body));
+    return true;
+  }
+
   // ── Monthly Reports (formal) ───────────────────────────────────────────────
   if (url.pathname === "/app/pms/monthly-reports") {
     const {

@@ -207,6 +207,62 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
   const selectedAsset = assets.find(a => a.id === assetId);
 
+  // ── Asistente IA: sugerencia de clasificación + detección de duplicados ──
+  interface ClassifySuggestion {
+    classification: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    shouldBeNearMiss: boolean;
+    nearMissReason: string | null;
+    confidence: "HIGH" | "MEDIUM" | "LOW";
+  }
+  interface SimilarDefect {
+    id: string; defectCode: string; description: string; status: string;
+    severity: string; reportedAt: string; similarity: number;
+  }
+  const [suggestion, setSuggestion]           = useState<ClassifySuggestion | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [similar, setSimilar]                 = useState<SimilarDefect[]>([]);
+
+  // Debounce: cuando la descripción tiene >=20 chars y el asset está
+  // seleccionado, dispara después de 800ms de inactividad la búsqueda
+  // de duplicados. La clasificación NO se llama automáticamente — es
+  // explícita con un botón porque consume IA.
+  useEffect(() => {
+    const desc = description.trim();
+    if (desc.length < 15) { setSimilar([]); return; }
+    const handler = window.setTimeout(() => {
+      api.post<{ items: SimilarDefect[] }>("/app/pms/defects/find-similar", {
+        description: desc,
+        assetId: assetId || null,
+        vesselCode: vesselCode || null,
+      }).then(r => setSimilar(r.items ?? [])).catch(() => setSimilar([]));
+    }, 800);
+    return () => window.clearTimeout(handler);
+  }, [description, assetId, vesselCode]);
+
+  const handleSuggestClassification = useCallback(async () => {
+    if (loadingSuggestion) return;
+    if (description.trim().length < 10) { setErr("Completá una descripción de al menos 10 caracteres para sugerir clasificación."); return; }
+    setLoadingSuggestion(true); setErr(null);
+    try {
+      const res = await api.post<ClassifySuggestion>("/app/pms/defects/suggest-classification", {
+        description: description.trim(),
+        assetLabel: selectedAsset?.name ?? selectedAsset?.assetCode ?? null,
+        operationalState,
+      });
+      setSuggestion(res);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "No se pudo sugerir clasificación.");
+    } finally { setLoadingSuggestion(false); }
+  }, [loadingSuggestion, description, selectedAsset, operationalState]);
+
+  const applySuggestion = () => {
+    if (!suggestion) return;
+    setClassification(suggestion.classification);
+    setSeverity(suggestion.severity);
+    setSuggestion(null);
+  };
+
   // Fotos pendientes: el usuario las agrega antes de crear el defecto.
   // Cada slot guarda el File original + preview URL + estado de análisis IA.
   interface PendingPhoto { file: File; preview: string; analyzed: boolean }
@@ -426,10 +482,76 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className={labelCls + " mb-0"}>Descripción *</label>
-              <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { void handleSuggestClassification(); }}
+                  disabled={loadingSuggestion || description.trim().length < 10}
+                  title={description.trim().length < 10 ? "Escribí al menos 10 caracteres para sugerir clasificación" : "Sugerir clasificación + severidad con IA"}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/20"
+                >
+                  {loadingSuggestion ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  IA
+                </button>
+                <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />
+              </div>
             </div>
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder="Describí el defecto encontrado o usá el micrófono para dictarlo…" />
           </div>
+
+          {/* ── Sugerencia IA ─────────────────────────────────────────────── */}
+          {suggestion && (
+            <div className="rounded-xl border border-accent/30 bg-accent/[0.05] p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-accent">Sugerencia IA <span className="text-text-industrial/40 normal-case ml-1">· Confianza {suggestion.confidence.toLowerCase()}</span></p>
+                </div>
+                <button type="button" onClick={() => setSuggestion(null)} className="text-text-industrial/40 hover:text-white" title="Descartar"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              {suggestion.shouldBeNearMiss ? (
+                <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-2.5 text-xs text-yellow-200">
+                  <p className="font-bold mb-1">💡 Esto podría ser un Near Miss, no un defecto</p>
+                  <p className="text-yellow-100/80">{suggestion.nearMissReason ?? "El evento descrito no tiene daño material concreto — encaja mejor como observación de riesgo o near miss."}</p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-[10px] text-text-industrial/60">Clasificación:</span>
+                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.classification}</span>
+                  <span className="text-[10px] text-text-industrial/60 ml-2">Severidad:</span>
+                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.severity}</span>
+                  <button type="button" onClick={applySuggestion} className="ml-auto px-2.5 py-1 rounded-lg bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wider">
+                    Aplicar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Banner de posibles duplicados ─────────────────────────────── */}
+          {similar.length > 0 && (
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-3 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">
+                  {similar.length === 1 ? "Posible duplicado" : `${similar.length} posibles duplicados`}
+                </p>
+              </div>
+              <p className="text-[10px] text-orange-200/80">Hay defectos abiertos similares en el mismo equipo/buque. Verificá si es el mismo problema antes de crear uno nuevo.</p>
+              <ul className="space-y-1 mt-1">
+                {similar.map(s => (
+                  <li key={s.id} className="text-[11px] text-text-industrial/80 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 flex items-center gap-2">
+                    <span className="font-mono text-orange-300/80 shrink-0">{s.defectCode}</span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-text-industrial/60 shrink-0">{s.status}</span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-text-industrial/60 shrink-0">{s.severity}</span>
+                    <span className="truncate">{s.description}</span>
+                    <span className="ml-auto text-[9px] text-text-industrial/40 shrink-0">{Math.round(s.similarity * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div>
             <label
               onClick={handleImmediateActionClick}

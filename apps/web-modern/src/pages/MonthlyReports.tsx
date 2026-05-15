@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, X } from "lucide-react";
+import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, Sparkles, X } from "lucide-react";
+
+const KpiPill: React.FC<{ label: string; value: number; alert?: boolean }> = ({ label, value, alert }) => (
+  <div className={`rounded-md border px-2 py-1.5 ${alert ? "bg-red-500/10 border-red-500/30" : "bg-white/5 border-white/10"}`}>
+    <p className="text-[8px] uppercase tracking-wider text-text-industrial/40 truncate">{label}</p>
+    <p className={`text-sm font-bold ${alert ? "text-red-300" : "text-white"}`}>{value}</p>
+  </div>
+);
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -226,6 +233,9 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [draftError,      setDraftError]      = useState<string | null>(null);
+  const [draftKpis,       setDraftKpis]       = useState<{ defectsCreated: number; defectsClosed: number; workOrdersClosed: number; workOrdersOverdue: number; drillsCompleted: number; nearMissReported: number; certsExpired: number } | null>(null);
 
   const isClosed = !isNew && (liveReport?.status === "CLOSED");
 
@@ -499,9 +509,57 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 )}
               </div>
 
+              {/* Botón generar borrador IA */}
+              {!isClosed && effectiveVesselCode && (
+                <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="w-4 h-4 text-accent shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-accent">Asistente IA</p>
+                        <p className="text-[11px] text-text-industrial/60">Generar borrador del resumen + notas con datos reales del mes</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setGeneratingDraft(true); setDraftError(null);
+                        try {
+                          const r = await api.post<{ summary: string; notes: string; kpis: typeof draftKpis }>("/app/pms/monthly-reports/generate-draft", {
+                            vesselCode: effectiveVesselCode, year: reportYear, month: reportMonth,
+                          });
+                          if (r.summary) setSummary(r.summary);
+                          if (r.notes)   setNotes(r.notes);
+                          setDraftKpis(r.kpis ?? null);
+                        } catch (e) {
+                          setDraftError(e instanceof ApiError ? e.message : "Error al generar el borrador.");
+                        } finally { setGeneratingDraft(false); }
+                      }}
+                      disabled={generatingDraft}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-[11px] uppercase tracking-wider hover:brightness-110 disabled:opacity-50"
+                    >
+                      {generatingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {summary || notes ? "Regenerar borrador" : "Generar borrador"}
+                    </button>
+                  </div>
+                  {draftError && <p className="text-[11px] text-red-400">{draftError}</p>}
+                  {draftKpis && (
+                    <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5 text-center pt-1">
+                      <KpiPill label="Def. creados"    value={draftKpis.defectsCreated} />
+                      <KpiPill label="Def. cerrados"   value={draftKpis.defectsClosed} />
+                      <KpiPill label="OTs cerradas"    value={draftKpis.workOrdersClosed} />
+                      <KpiPill label="OTs vencidas"    value={draftKpis.workOrdersOverdue} alert={draftKpis.workOrdersOverdue > 0} />
+                      <KpiPill label="Drills"          value={draftKpis.drillsCompleted} />
+                      <KpiPill label="Near miss"       value={draftKpis.nearMissReported} />
+                      <KpiPill label="Certs vencidos"  value={draftKpis.certsExpired} alert={draftKpis.certsExpired > 0} />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className={labelCls}>Resumen</label>
-                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={3} className={inputCls} />
+                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={5} className={inputCls} placeholder="Resumen ejecutivo del mes — usá el botón 'Generar borrador' para que la IA pre-llene con datos reales." />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -517,7 +575,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
               <div className="space-y-1.5">
                 <label className={labelCls}>Notas</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={2} className={inputCls} />
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder="Notas operativas, alertas y pendientes para el próximo mes." />
               </div>
 
               {saveError && <p className="text-xs text-red-400">{saveError}</p>}

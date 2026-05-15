@@ -250,3 +250,232 @@ export async function suggestImmediateAction(
   );
   return { text };
 }
+
+// ─── Sugerencia de clasificacion + severidad + flag near-miss ───────────────
+
+const PROMPT_CLASSIFICATION = `Sos superintendente experto en mantenimiento naval. Te pasan una descripcion de un defecto recien reportado por un tripulante y tenes que clasificarlo para que el sistema le ponga los metadatos correctos.
+
+Devolveme UN UNICO JSON valido sin texto adicional, sin code fence, con esta estructura EXACTA:
+
+{
+  "classification": "Mecanico|Electrico|Estructural|Hidraulico|Neumatico|Electronico|Pintura|Comunicaciones|Navegacion|Otro",
+  "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+  "shouldBeNearMiss": true|false,
+  "nearMissReason": "<si shouldBeNearMiss=true, una frase explicando por que es un evento sin daño material y no un defecto; si false, null>",
+  "confidence": "HIGH|MEDIUM|LOW"
+}
+
+Reglas para "classification":
+- Elegi UNA de la lista. No inventes valores.
+- Mecanico: motores, bombas, valvulas, ejes, rodamientos, transmision.
+- Electrico: motores electricos, generadores, alta tension, baterias, cableado.
+- Estructural: casco, cubierta, mamparos, soldaduras, corrosion estructural.
+- Hidraulico: sistemas hidraulicos, cilindros, mangueras, presion.
+- Neumatico: aire comprimido, mangueras de aire, valvulas neumaticas.
+- Electronico: PLCs, automatizacion, control, sensores, ECDIS, radar.
+- Pintura: pintura corroida, oxido superficial, recubrimientos.
+- Comunicaciones: VHF, GMDSS, telefonia interna, antenas.
+- Navegacion: instrumentos de navegacion (giroscopo, GPS, compass).
+- Otro: cuando no encaje claramente.
+
+Reglas para "severity":
+- CRITICAL: riesgo inmediato a la vida humana, al medio ambiente, o al buque. Equipo critico fuera de servicio. Ej: bomba contra incendio rota, steering gear fallado, fuga de combustible.
+- HIGH: equipo importante con falla pero hay redundancia. Riesgo operacional alto. Ej: una bomba de dos paralelas fallada.
+- MEDIUM: deterioro funcional sin riesgo inmediato. Ej: filtro tapado, sensor inestable.
+- LOW: cosmetico, desgaste menor. Ej: pintura, oxido superficial, soporte aflojado.
+
+Reglas para "shouldBeNearMiss":
+- TRUE si la descripcion sugiere un EVENTO o CONDICION DE RIESGO que NO causo dano material todavia. Ej: "casi me tropiezo con un cable suelto", "olor a gas pero sin fuga visible", "alguien casi cae por escalera mojada", "se desprendio un cable pero no impacto a nadie".
+- FALSE si describe un PROBLEMA MATERIAL existente (algo roto, deteriorado, degradado, fugando). Ej: "bomba con vibracion", "pintura oxidada", "valvula no cierra".
+- En la duda → FALSE (el flujo de defectos es el caso comun).
+
+Reglas para "confidence":
+- HIGH: la descripcion es clara y especifica.
+- MEDIUM: la descripcion es generica pero suficiente.
+- LOW: la descripcion es muy corta o ambigua.
+
+Responde SOLO con el JSON, sin texto adicional, sin "Aqui tenes", sin code fence.`;
+
+export interface ClassificationInput {
+  description: string;
+  assetLabel?: string | null;
+  operationalState?: string | null;
+}
+
+export interface ClassificationSuggestion {
+  classification: string;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  shouldBeNearMiss: boolean;
+  nearMissReason: string | null;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+}
+
+function stripCodeFence(t: string): string {
+  return t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+}
+
+export async function suggestDefectClassification(
+  session: TenantAccessSession,
+  input: ClassificationInput,
+): Promise<ClassificationSuggestion> {
+  const desc = String(input.description ?? "").trim();
+  if (!desc) throw new RouteError(400, "VALIDATION_ERROR", "Falta la descripcion del defecto.");
+  if (desc.length < 10) throw new RouteError(400, "VALIDATION_ERROR", "La descripcion es muy corta para sugerir clasificacion (minimo 10 caracteres).");
+
+  const opLabel = input.operationalState ? OP_STATE_LABEL[input.operationalState.toUpperCase()] ?? input.operationalState : "no especificado";
+  const userContent = [
+    `Descripcion del defecto: ${desc}`,
+    input.assetLabel ? `Equipo afectado: ${input.assetLabel}` : "Equipo no especificado",
+    `Estado operacional reportado: ${opLabel}`,
+  ].join("\n");
+
+  const raw = await callClaude(
+    session,
+    "defect_classification_suggestion",
+    PROMPT_CLASSIFICATION,
+    userContent,
+    400,
+  );
+
+  let parsed: Partial<ClassificationSuggestion> & { nearMissReason?: string | null };
+  try {
+    parsed = JSON.parse(stripCodeFence(raw));
+  } catch (err) {
+    log.warn("[suggestDefectClassification] JSON parse failed, raw:", raw.slice(0, 200));
+    throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvio un formato invalido.");
+  }
+
+  // Validar enums (la IA a veces alucina)
+  const sev = String(parsed.severity ?? "").toUpperCase();
+  if (!["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(sev)) {
+    throw new RouteError(502, "AI_PARSE_ERROR", `Severity invalido: ${sev}`);
+  }
+  const conf = String(parsed.confidence ?? "").toUpperCase();
+  if (!["HIGH", "MEDIUM", "LOW"].includes(conf)) {
+    throw new RouteError(502, "AI_PARSE_ERROR", `Confidence invalido: ${conf}`);
+  }
+
+  return {
+    classification: String(parsed.classification ?? "Otro").trim() || "Otro",
+    severity: sev as ClassificationSuggestion["severity"],
+    shouldBeNearMiss: !!parsed.shouldBeNearMiss,
+    nearMissReason: parsed.shouldBeNearMiss ? (parsed.nearMissReason ?? null) : null,
+    confidence: conf as ClassificationSuggestion["confidence"],
+  };
+}
+
+// ─── Deteccion de defectos similares (anti-duplicados) ──────────────────────
+
+export interface SimilarDefectsInput {
+  description: string;
+  assetId?: string | null;
+  vesselCode?: string | null;
+}
+
+export interface SimilarDefect {
+  id: string;
+  defectCode: string;
+  description: string;
+  status: string;
+  severity: string;
+  reportedAt: string;
+  similarity: number; // 0..1
+}
+
+/**
+ * Busca defectos abiertos del mismo asset/vessel con similitud textual con
+ * la descripcion provista. Algoritmo: Jaccard de bigramas + normalizacion +
+ * stopwords ES. No usa IA — es deterministico y rapido. Si el caller
+ * quiere similitud semantica mas profunda, se puede agregar un endpoint
+ * con embeddings, pero para detectar duplicados literales (lo comun)
+ * Jaccard es suficiente.
+ */
+export async function findSimilarDefects(
+  session: TenantAccessSession,
+  input: SimilarDefectsInput,
+): Promise<{ items: SimilarDefect[] }> {
+  const description = String(input.description ?? "").trim();
+  if (description.length < 10) return { items: [] };
+
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [] };
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) return { items: [] };
+
+  const where: Record<string, unknown> = {
+    tenantId: tenant.id,
+    deletedAt: null,
+    status: { notIn: ["RESOLVED", "CLOSED"] },
+  };
+  if (input.assetId) where.assetId = input.assetId;
+  if (input.vesselCode) where.vesselCode = input.vesselCode;
+
+  const candidates = await (prisma as unknown as {
+    defect: { findMany(a: unknown): Promise<Array<{ id: string; defectCode: string; description: string; status: string; severity: string; reportedAt: Date }>> };
+  }).defect.findMany({
+    where,
+    select: { id: true, defectCode: true, description: true, status: true, severity: true, reportedAt: true } as never,
+    orderBy: { reportedAt: "desc" },
+    take: 50,
+  });
+
+  // Calcular similitud Jaccard de bigramas
+  const queryTokens = bigrams(normaliseText(description));
+  const scored = candidates
+    .map(c => ({
+      id: c.id,
+      defectCode: c.defectCode,
+      description: c.description,
+      status: c.status,
+      severity: c.severity,
+      reportedAt: c.reportedAt.toISOString(),
+      similarity: jaccard(queryTokens, bigrams(normaliseText(c.description))),
+    }))
+    .filter(c => c.similarity >= 0.25)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 5);
+
+  return { items: scored };
+}
+
+// Regex de diacritics combining: usamos RegExp constructor con escape
+// Unicode explicito para evitar caracteres literales que dependan del
+// encoding del archivo.
+const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
+
+function normaliseText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(COMBINING_DIACRITICS, "") // quita acentos
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const STOPWORDS = new Set([
+  "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al",
+  "en", "y", "o", "pero", "que", "se", "lo", "le", "con", "por", "para",
+  "es", "son", "este", "esta", "ese", "esa", "su", "sus", "mi", "tu",
+  "fue", "ha", "han", "muy", "mas", "menos", "como",
+]);
+
+function bigrams(text: string): Set<string> {
+  const tokens = text.split(" ").filter(t => t.length >= 2 && !STOPWORDS.has(t));
+  const set = new Set<string>();
+  // Bigramas de palabras (mejor para textos en español que de caracteres)
+  for (let i = 0; i < tokens.length - 1; i++) {
+    set.add(`${tokens[i]}_${tokens[i + 1]}`);
+  }
+  // Tambien agregamos unigramas para cuando hay pocos tokens
+  for (const t of tokens) set.add(t);
+  return set;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const x of a) if (b.has(x)) intersection++;
+  const union = a.size + b.size - intersection;
+  return intersection / union;
+}
