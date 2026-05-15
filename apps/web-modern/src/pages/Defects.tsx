@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
+import { MicButton } from "../components/MicButton";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -423,8 +424,11 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             </div>
           </div>
           <div>
-            <label className={labelCls}>Descripción *</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder="Describí el defecto encontrado…" />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelCls + " mb-0"}>Descripción *</label>
+              <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />
+            </div>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder="Describí el defecto encontrado o usá el micrófono para dictarlo…" />
           </div>
           <div>
             <label
@@ -1000,7 +1004,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
             {/* Descripción breve */}
             <div className="space-y-1.5">
-              <label className={fldLabel}>Descripción breve</label>
+              <div className="flex items-center justify-between">
+                <label className={fldLabel}>Descripción breve</label>
+                {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
+              </div>
               <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Descripción concisa del defecto…" />
             </div>
 

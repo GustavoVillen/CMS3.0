@@ -1,5 +1,89 @@
 HISTORY.txt
 
+[2026-05-14] Tier 1 UX — Mi día + Sidebar badges + FAB mobile + voice-to-text
+Agent: Claude Opus 4.7
+
+CONTEXTO:
+Primer paquete de simplificación UX para reducir overhead cognitivo de
+la tripulación. Cuatro mejoras sin tocar módulos existentes:
+  T1.1 Pantalla "Mi día" personal arriba del Dashboard
+  T1.2 Sidebar con secciones colapsables + badges con contadores
+  T1.3 FAB "Acción rápida" en mobile con 4 atajos
+  T1.4 Voice-to-text en descripción de defectos (PC + mobile)
+
+CAMBIOS:
+
+· apps/web-modern/src/components/MyDayPanel.tsx (nuevo)
+  Se renderiza arriba del Dashboard. Detecta el rol del usuario:
+  - Operativo (TECHNICIAN_OPERATOR, INSPECTOR_COMPLIANCE,
+    PROCUREMENT_STORE) → "Mis tareas": OTs asignadas, drills próximos
+    (30d), near miss (14d), certs venciendo.
+  - Manager con vessel seleccionado (MAINTENANCE_MANAGER /
+    FLEET_SUPERINTENDENT / TENANT_ADMIN) → "Vista del buque":
+    OTs críticas/vencidas, certs, violaciones STCW, findings PSC.
+  - Sin vessel + manager → no se muestra (el Dashboard de flota cubre).
+  Cada tile es clickeable y navega al módulo correspondiente.
+
+· apps/api/src/tenant/sidebar/sidebar-counts-service.ts (nuevo)
+  Endpoint GET /app/dashboard/sidebar-counts?vesselCode=X que devuelve
+  9 contadores en paralelo: workOrdersOpen, defectsOpen, deferralsOpen,
+  capaOpen, certsExpiringOrExpired, nearMissOpen, restHoursViolations,
+  externalAuditsFindingsOpen, mocOpen. Cada count() está envuelto en
+  safe() para que un fallo individual no rompa toda la respuesta.
+
+· apps/web-modern/src/components/Sidebar.tsx
+  - Cada sección ahora tiene un header clickeable con chevron que
+    expande/colapsa los items. Estado persistido en localStorage
+    (gpms_sidebar_sections).
+  - Cuando la sección está colapsada, el header muestra el total de
+    badges de sus items.
+  - Cada NavLink relevante (WO, Defects, Deferrals, CAPA, Certificates,
+    Near Miss, Rest Hours, External Audits, MOC) muestra una badge
+    pill con el contador. Rojo para urgencias (certs venciendo,
+    restHours violations, defects), accent para el resto.
+  - Refresh de contadores cada 120s. Re-fetch al cambiar de vessel.
+  - En modo collapsed (icon-only), badge se muestra como punto en la
+    esquina superior derecha.
+
+· apps/web-modern/src/components/QuickActionFab.tsx (nuevo)
+  Floating Action Button para mobile, posicionado sobre el bottom nav.
+  Click abre un bottom sheet con 4 acciones grandes (88px tap target):
+  - Reportar defecto
+  - Near miss
+  - Foto rápida (avance OT)
+  - Avance de OT
+  Cada acción dispara un callback que el padre traduce a setTab.
+
+· apps/web-modern/src/components/MobileLayout.tsx
+  Integra QuickActionFab arriba del bottom nav. handleQuickAction()
+  mapea la acción al tab correspondiente.
+
+· apps/web-modern/src/lib/use-speech-to-text.ts (nuevo)
+  Hook que envuelve la Web Speech API. Continuous + interim results;
+  invoca onTranscript(chunk) por cada resultado final. Auto-detección
+  de capability (supported = false si el browser no implementa).
+  Limpieza automática al desmontar.
+
+· apps/web-modern/src/components/MicButton.tsx (nuevo)
+  Botón micrófono que toggleea dictado. Mientras escucha muestra
+  animación pulse + el interim text como tooltip. Si no soporta,
+  aparece deshabilitado con tooltip explicativo.
+
+· Aplicado en:
+  - Defects.tsx CreateDefectModal — botón mic al lado del label
+    "Descripción". El append concatena con espacio al texto existente.
+  - Defects.tsx DefectModal (edit) — mismo patrón en "Descripción
+    breve" (sólo visible si !isClosed).
+  - MobileDefects.tsx form de creación — mismo patrón en el textarea
+    de descripción.
+
+VERIFICADO: tsc backend + frontend OK · vite build OK.
+
+PENDIENTE PARA VPS — solo backend + frontend, sin migraciones:
+  cd /app && git pull origin main
+  cd apps/web-modern && npx vite build && cd /app
+  pm2 restart gpms
+
 [2026-05-14] Simulacros — checklist regulatorio adjunto en PDF por tipo
 Agent: Claude Opus 4.7
 

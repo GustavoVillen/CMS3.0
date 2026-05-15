@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
 import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
   AlertTriangle, Clock, ShieldCheck, Microscope, Package, Truck,
-  UsersRound, UserCircle, ScrollText, ChevronLeft, ChevronRight, Gauge, Bot,
+  UsersRound, UserCircle, ScrollText, ChevronLeft, ChevronRight, ChevronDown, Gauge, Bot,
   FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch,
 } from "lucide-react";
@@ -11,6 +11,29 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useResizable } from "../lib/hooks";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { useVesselContext } from "../lib/vessel-context";
+
+interface SidebarCounts {
+  workOrdersOpen: number; defectsOpen: number; deferralsOpen: number; capaOpen: number;
+  certsExpiringOrExpired: number; nearMissOpen: number; restHoursViolations: number;
+  externalAuditsFindingsOpen: number; mocOpen: number;
+}
+
+/** Mapeo path → key del counts object para mostrar badge. */
+const BADGE_KEY: Record<string, keyof SidebarCounts> = {
+  "/work-orders":      "workOrdersOpen",
+  "/defects":          "defectsOpen",
+  "/deferrals":        "deferralsOpen",
+  "/capa":             "capaOpen",
+  "/certificates":     "certsExpiringOrExpired",
+  "/near-miss":        "nearMissOpen",
+  "/rest-hours":       "restHoursViolations",
+  "/external-audits":  "externalAuditsFindingsOpen",
+  "/moc":              "mocOpen",
+};
+
+/** Paths cuya badge cuenta cosas "urgentes" (rojo) en vez de neutro. */
+const BADGE_RED = new Set(["/certificates", "/rest-hours", "/defects"]);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -120,6 +143,7 @@ const COLLAPSED_W = 56;
 export const Sidebar: React.FC = () => {
   const { tenant, user } = useAuth();
   const t = useT();
+  const { selectedVesselCode } = useVesselContext();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("gpms_sidebar_collapsed") === "true",
@@ -131,6 +155,35 @@ export const Sidebar: React.FC = () => {
       localStorage.setItem("gpms_sidebar_collapsed", String(next));
       return next;
     });
+
+  // ── Sections expand/collapse state (persisted) ────────────────────────────
+  // Default: todas las secciones expandidas.
+  const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("gpms_sidebar_sections") ?? "{}"); }
+    catch { return {}; }
+  });
+  const toggleSection = (key: string) => {
+    setSectionsCollapsed(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem("gpms_sidebar_sections", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // ── Sidebar counts (badges) — refreshed when vessel context changes ───────
+  const [counts, setCounts] = useState<SidebarCounts | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const qs = selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
+    const fetchCounts = () => {
+      api.get<SidebarCounts>(`/app/dashboard/sidebar-counts${qs}`)
+        .then(c => { if (!cancelled) setCounts(c); })
+        .catch(() => { /* silent */ });
+    };
+    fetchCounts();
+    const id = setInterval(fetchCounts, 120_000); // refresh cada 2 min
+    return () => { cancelled = true; clearInterval(id); };
+  }, [selectedVesselCode]);
 
   // ── My AI usage (this month) — polled every 60s ────────────────────────────
   const [aiUsage, setAiUsage] = useState<{ totalTokens: number; costUsd: number } | null>(null);
@@ -220,37 +273,75 @@ export const Sidebar: React.FC = () => {
           );
           if (visible.length === 0) return null;
 
+          // Suma de badges del header de la sección — para mostrar contador
+          // agregado cuando la sección está colapsada.
+          const sectionTotal = counts
+            ? visible.reduce((acc, item) => {
+                const key = BADGE_KEY[item.path];
+                return key ? acc + (counts[key] ?? 0) : acc;
+              }, 0)
+            : 0;
+          const isSectionCollapsed = !collapsed && !!sectionsCollapsed[section.titleKey];
+
           return (
             <div key={section.titleKey}>
-              {/* Section header */}
+              {/* Section header (clickeable cuando el sidebar está expandido) */}
               {collapsed ? (
                 <div className="mx-3 border-t border-white/10 mb-2" />
               ) : (
-                <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-white/25 select-none">
-                  {t(section.titleKey)}
-                </p>
+                <button
+                  onClick={() => toggleSection(section.titleKey)}
+                  className="w-full px-4 mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/25 hover:text-white/60 transition-colors select-none"
+                >
+                  <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isSectionCollapsed ? "-rotate-90" : ""}`} />
+                  <span>{t(section.titleKey)}</span>
+                  {isSectionCollapsed && sectionTotal > 0 && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded-full bg-accent/15 border border-accent/30 text-accent text-[9px] font-bold normal-case tracking-normal">
+                      {sectionTotal}
+                    </span>
+                  )}
+                </button>
               )}
 
               {/* Items */}
-              <div className={collapsed ? "space-y-0.5" : "px-2 space-y-0.5"}>
-                {visible.map(item => {
-                  const label = t(item.labelKey);
-                  return (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={item.end}
-                      title={collapsed ? label : undefined}
-                      className={({ isActive }) => navItemCls(isActive, collapsed)}
-                    >
-                      <item.icon className="w-4 h-4 shrink-0" />
-                      {!collapsed && (
-                        <span className="text-xs font-medium truncate">{label}</span>
-                      )}
-                    </NavLink>
-                  );
-                })}
-              </div>
+              {!isSectionCollapsed && (
+                <div className={collapsed ? "space-y-0.5" : "px-2 space-y-0.5"}>
+                  {visible.map(item => {
+                    const label = t(item.labelKey);
+                    const badgeKey = BADGE_KEY[item.path];
+                    const badge = badgeKey && counts ? counts[badgeKey] : 0;
+                    const badgeRed = BADGE_RED.has(item.path);
+                    return (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={item.end}
+                        title={collapsed ? `${label}${badge > 0 ? ` (${badge})` : ""}` : undefined}
+                        className={({ isActive }) => navItemCls(isActive, collapsed)}
+                      >
+                        <item.icon className="w-4 h-4 shrink-0" />
+                        {!collapsed && (
+                          <>
+                            <span className="text-xs font-medium truncate flex-1">{label}</span>
+                            {badge > 0 && (
+                              <span className={`shrink-0 ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                badgeRed
+                                  ? "bg-red-500/15 text-red-300 border border-red-500/30"
+                                  : "bg-accent/15 text-accent border border-accent/30"
+                              }`}>
+                                {badge > 99 ? "99+" : badge}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {collapsed && badge > 0 && (
+                          <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${badgeRed ? "bg-red-400" : "bg-accent"}`} />
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

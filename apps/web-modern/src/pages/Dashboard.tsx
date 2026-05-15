@@ -10,6 +10,7 @@ import { useT, useLocale, translate } from "../lib/i18n";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
+import { MyDayPanel } from "../components/MyDayPanel";
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -179,6 +180,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* "Mi día" — tareas personales / vista del vessel según rol */}
+      <MyDayPanel />
+
       {/* KPI Cards */}
       <div className="w-1/2">
         <div className="grid grid-cols-4 gap-4">

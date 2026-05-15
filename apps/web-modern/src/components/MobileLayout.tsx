@@ -11,6 +11,7 @@ import { MobileDefects } from "../mobile/MobileDefects";
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares } from "../mobile/MobileSpares";
 import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
+import { QuickActionFab, type QuickAction } from "./QuickActionFab";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
 
@@ -46,6 +47,19 @@ export const MobileLayout: React.FC = () => {
     if (opts?.plansFilter) setPlansFilter(opts.plansFilter);
     if (target === "panel") setTab("dashboard");
     else setTab(target);
+  };
+
+  // FAB quick-action: cada acción navega al tab correspondiente.
+  // Defect y near miss caen en el módulo Defectos (MobileDefects ya tiene un
+  // formulario de creación; near miss queda como TODO de UX pero por ahora
+  // llevamos a defectos como home de reportes).
+  const handleQuickAction = (a: QuickAction) => {
+    switch (a) {
+      case "defect":      setTab("defectos"); break;
+      case "near-miss":   setTab("defectos"); break;  // TODO: pantalla mobile dedicada de near miss
+      case "photo":       setTab("ots"); break;       // foto se carga desde una OT (progress note)
+      case "wo-progress": setTab("ots"); break;
+    }
   };
 
   return (
@@ -93,6 +107,9 @@ export const MobileLayout: React.FC = () => {
           {tab === "repuestos"  && <div className="h-full overflow-hidden flex flex-col"><MobileSpares /></div>}
           {tab === "copiloto"   && <MobileCopilot />}
         </main>
+
+        {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
+        <QuickActionFab onAction={handleQuickAction} />
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
         <nav className="shrink-0 grid grid-cols-7 border-t border-white/10 bg-[#0D1B2A]">

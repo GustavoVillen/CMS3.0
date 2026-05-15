@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
+import { MicButton } from "../components/MicButton";
 
 interface Defect {
   id: string;
@@ -220,12 +221,15 @@ export const MobileDefects: React.FC = () => {
             />
           </div>
           <div className="space-y-1.5">
-            <p className={labelCls}>Descripción *</p>
+            <div className="flex items-center justify-between">
+              <p className={labelCls}>Descripción *</p>
+              <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
+            </div>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={5}
-              placeholder="Describe el defecto observado..."
+              placeholder="Describe el defecto o tocá el micrófono para dictarlo…"
               className={inputCls + " resize-none"}
             />
           </div>

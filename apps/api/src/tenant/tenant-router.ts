@@ -33,6 +33,7 @@ import {
 import {
   listQuestions, listAssessments, getAssessment, createAssessment, setResponseCviq, completeAssessment, deleteAssessment,
 } from "./cviq/cviq-service";
+import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
@@ -1688,6 +1689,14 @@ export async function handleTenantRoutes(
     const id = url.pathname.split("/")[4]!;
     if (method === "GET") { sendJson(response, 200, await getAssessment(session, id)); return true; }
     if (method === "DELETE") { await deleteAssessment(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  // ── Sidebar counts (badges) ───────────────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/dashboard/sidebar-counts") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode");
+    sendJson(response, 200, await getSidebarCounts(session, vesselCode));
+    return true;
   }
 
   // ── Crew dashboard summary ─────────────────────────────────────────────────
