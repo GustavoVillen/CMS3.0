@@ -109,7 +109,8 @@ export const MobileLayout: React.FC = () => {
         </main>
 
         {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
-        <QuickActionFab onAction={handleQuickAction} />
+        {/* Lo ocultamos en tabs que ya tienen su propio "+" para no superponer. */}
+        {tab !== "defectos" && <QuickActionFab onAction={handleQuickAction} />}
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
         <nav className="shrink-0 grid grid-cols-7 border-t border-white/10 bg-[#0D1B2A]">
