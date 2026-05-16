@@ -623,40 +623,57 @@ export async function parseVoiceReport(
     "voice_report_parse",
     PROMPT_VOICE_REPORT,
     userContent,
-    900,
+    1500,
   );
 
-  let parsed: VoiceReportOutput;
+  // Validamos que la IA haya devuelto un JSON de objeto. Cualquier otra cosa
+  // (null, array, primitivo) lo tratamos como AI_PARSE_ERROR — antes acceder
+  // a .fields/.type sobre null causaba un 500 sin contexto.
+  let rawParsed: unknown;
   try {
-    parsed = JSON.parse(stripCodeFence(raw));
+    rawParsed = JSON.parse(stripCodeFence(raw));
   } catch {
     log.warn("[parseVoiceReport] JSON parse failed, raw:", raw.slice(0, 400));
-    throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvio un formato invalido. Probá repetir el reporte.");
+    throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvió un formato inválido. Probá repetir el reporte con más detalle.");
+  }
+  if (!rawParsed || typeof rawParsed !== "object" || Array.isArray(rawParsed)) {
+    log.warn("[parseVoiceReport] parsed is not an object, raw:", raw.slice(0, 400));
+    throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvió un formato inesperado. Probá repetir el reporte.");
   }
 
-  // Validacion suave: aseguramos campos mínimos y casteamos enums.
-  const type = parsed.type ?? "unknown";
-  if (!["defect", "near_miss", "unknown"].includes(type)) parsed.type = "unknown";
-  const confidence = parsed.confidence ?? "low";
-  if (!["high", "medium", "low"].includes(confidence)) parsed.confidence = "low";
-  parsed.fields = parsed.fields ?? {};
-  parsed.missingFields = Array.isArray(parsed.missingFields) ? parsed.missingFields : [];
-  parsed.nextQuestion = parsed.nextQuestion ?? null;
+  // A partir de acá hardenizamos todo el post-procesamiento. Si algo
+  // explota validando campos opcionales, loggeamos y devolvemos 502 con
+  // contexto en vez de un 500 genérico "An internal error occurred".
+  try {
+    const parsed = rawParsed as VoiceReportOutput;
 
-  // Si el frontend forzó un tipo, lo respetamos aún si la IA lo cambió.
-  if (forcedType) parsed.type = forcedType;
-
-  // Asset validation: si IA devolvio un assetId, debe estar en la lista.
-  if (parsed.fields.assetId) {
-    const found = assets.find(a => a.id === parsed.fields.assetId);
-    if (!found) {
-      parsed.fields.assetId = null;
-      if (!parsed.missingFields.includes("assetId")) parsed.missingFields.push("assetId");
+    // Validacion suave: aseguramos campos mínimos y casteamos enums.
+    if (!["defect", "near_miss", "unknown"].includes(parsed.type as string)) parsed.type = "unknown";
+    if (!["high", "medium", "low"].includes(parsed.confidence as string)) parsed.confidence = "low";
+    if (!parsed.fields || typeof parsed.fields !== "object" || Array.isArray(parsed.fields)) {
+      parsed.fields = {};
     }
+    parsed.missingFields = Array.isArray(parsed.missingFields) ? parsed.missingFields : [];
+    parsed.nextQuestion = typeof parsed.nextQuestion === "string" ? parsed.nextQuestion : null;
+
+    // Si el frontend forzó un tipo, lo respetamos aún si la IA lo cambió.
+    if (forcedType) parsed.type = forcedType;
+
+    // Asset validation: si IA devolvio un assetId, debe estar en la lista.
+    if (parsed.fields.assetId) {
+      const found = assets.find(a => a.id === parsed.fields.assetId);
+      if (!found) {
+        parsed.fields.assetId = null;
+        if (!parsed.missingFields.includes("assetId")) parsed.missingFields.push("assetId");
+      }
+    }
+
+    // Echo del snapshot de assets para que el frontend pueda mostrar nombres
+    parsed.assetSnapshot = assets.map(a => ({ id: a.id, name: a.name, sfiCode: a.sfiCode }));
+
+    return parsed;
+  } catch (err) {
+    log.error("[parseVoiceReport] post-parse error:", err, "raw:", raw.slice(0, 400));
+    throw new RouteError(502, "AI_POSTPROCESS_ERROR", "No se pudo procesar la respuesta de la IA. Probá repetir el reporte.");
   }
-
-  // Echo del snapshot de assets para que el frontend pueda mostrar nombres
-  parsed.assetSnapshot = assets.map(a => ({ id: a.id, name: a.name, sfiCode: a.sfiCode }));
-
-  return parsed;
 }
