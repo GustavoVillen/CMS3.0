@@ -178,10 +178,65 @@ export async function listCapaRecords(session: TenantAccessSession, filters: Cap
   const records = await capa.findMany({ where, orderBy: { createdAt: "desc" } });
   const assetIds = [...new Set(records.map(r => r.assetId).filter(Boolean))];
   const assetRows = assetIds.length > 0
-    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
+    ? await (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId, deletedAt: null }, select: { id: true, name: true } })
     : [];
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
-  return records.map(r => ({ ...r, assetName: assetNameMap.get(r.assetId) ?? null }));
+
+  // Enriquecer con código humano del source (defectCode / workOrderCode /
+  // inspection code) para que el UI no muestre el cuid crudo.
+  const sourceCodeMap = await resolveSourceCodes(prismaRaw, tenantId, records);
+
+  return records.map(r => ({
+    ...r,
+    assetName: assetNameMap.get(r.assetId) ?? null,
+    sourceCode: sourceCodeMap.get(`${r.sourceType}|${r.sourceId}`) ?? null,
+  }));
+}
+
+/**
+ * Lookup batch del código humano del origen de cada CAPA. La key del map
+ * es "sourceType|sourceId" para distinguir entre tipos.
+ */
+async function resolveSourceCodes(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  records: Array<{ sourceType: string; sourceId: string }>,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const defIds  = records.filter(r => r.sourceType === "DEFECT").map(r => r.sourceId);
+  const woIds   = records.filter(r => r.sourceType === "WORK_ORDER").map(r => r.sourceId);
+  const inspIds = records.filter(r => r.sourceType === "INSPECTION").map(r => r.sourceId);
+
+  const prismaAny = prismaRaw as unknown as {
+    defect:     { findMany(a: unknown): Promise<Array<{ id: string; defectCode: string }>> };
+    workOrder:  { findMany(a: unknown): Promise<Array<{ id: string; workOrderCode: string }>> };
+    inspection: { findMany(a: unknown): Promise<Array<{ id: string; inspectionCode?: string | null }>> };
+  };
+
+  if (defIds.length > 0) {
+    const defects = await prismaAny.defect.findMany({
+      where: { id: { in: defIds }, tenantId, deletedAt: null },
+      select: { id: true, defectCode: true },
+    });
+    for (const d of defects) map.set(`DEFECT|${d.id}`, d.defectCode);
+  }
+  if (woIds.length > 0) {
+    const wos = await prismaAny.workOrder.findMany({
+      where: { id: { in: woIds }, tenantId, deletedAt: null },
+      select: { id: true, workOrderCode: true },
+    });
+    for (const w of wos) map.set(`WORK_ORDER|${w.id}`, w.workOrderCode);
+  }
+  if (inspIds.length > 0) {
+    const inspections = await prismaAny.inspection.findMany({
+      where: { id: { in: inspIds }, tenantId, deletedAt: null },
+      select: { id: true, inspectionCode: true },
+    });
+    for (const i of inspections) {
+      if (i.inspectionCode) map.set(`INSPECTION|${i.id}`, i.inspectionCode);
+    }
+  }
+  return map;
 }
 
 export async function getCapaRecord(session: TenantAccessSession, id: string) {
@@ -195,7 +250,18 @@ export async function getCapaRecord(session: TenantAccessSession, id: string) {
 
   const record = await capa.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "CAPA no encontrada.");
-  return record;
+
+  // Enriquecer con nombre del activo y código humano del origen, para
+  // que el UI no muestre cuids crudos.
+  const assetRow = await (prismaRaw as unknown as { asset: { findFirst(a: unknown): Promise<{ name: string | null } | null> } })
+    .asset.findFirst({ where: { id: record.assetId, tenantId, deletedAt: null }, select: { name: true } });
+  const sourceCodeMap = await resolveSourceCodes(prismaRaw, tenantId, [record]);
+
+  return {
+    ...record,
+    assetName: assetRow?.name ?? null,
+    sourceCode: sourceCodeMap.get(`${record.sourceType}|${record.sourceId}`) ?? null,
+  };
 }
 
 export async function createCapaRecord(session: TenantAccessSession, payload: CreateCapaRecordInput) {

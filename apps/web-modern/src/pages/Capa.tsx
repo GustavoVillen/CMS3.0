@@ -19,6 +19,8 @@ interface CapaRecord {
   assetName: string | null;
   sourceType: string;
   sourceId: string;
+  /** Código humano del origen (defectCode/workOrderCode/inspectionCode). null si no se pudo resolver (fuente borrada). */
+  sourceCode: string | null;
   capaCode: string;
   status: string;
   priority: string;
@@ -36,6 +38,12 @@ interface ListResponse {
   items: CapaRecord[];
   total: number;
 }
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  DEFECT:     "Defecto",
+  WORK_ORDER: "Orden de trabajo",
+  INSPECTION: "Inspección",
+};
 
 function normalizeOptionalText(value: string): string | null {
   const text = value.trim();
@@ -332,16 +340,16 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
                 <p className="text-sm"><VesselLabel code={record.vesselCode} className="text-sm" showCode /></p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Asset ID</p>
-                <p className="text-sm text-white">{record.assetName ?? record.assetId}</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Equipo</p>
+                <p className="text-sm text-white">{record.assetName ?? <span className="text-text-industrial/40 italic">— sin nombre —</span>}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.sourceType")}</p>
-                <p className="text-sm text-white">{record.sourceType}</p>
+                <p className="text-sm text-white">{SOURCE_TYPE_LABEL[record.sourceType] ?? record.sourceType}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Source ID</p>
-                <p className="text-sm text-white">{record.sourceId}</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Origen</p>
+                <p className="text-sm font-mono text-white">{record.sourceCode ?? <span className="text-text-industrial/40 italic">— origen no disponible —</span>}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("status.completed")}</p>
