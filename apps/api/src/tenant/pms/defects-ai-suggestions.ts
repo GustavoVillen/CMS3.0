@@ -479,3 +479,172 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   const union = a.size + b.size - intersection;
   return intersection / union;
 }
+
+// ─── Reporte verbal — parse audio transcription + extract structured fields ─
+
+const PROMPT_VOICE_REPORT = `Sos un asistente de mantenimiento naval. Un tripulante reporta verbalmente un defecto o una situacion de near miss. Te paso la TRANSCRIPCION del audio (que puede tener errores) y necesito que extraigas campos estructurados.
+
+CLASIFICACION DEL TIPO:
+- "defect" = problema material existente (algo roto, deteriorado, fugando, fallando, vibrando, ruido anormal). Hay daño material concreto.
+- "near_miss" = evento o condicion de riesgo SIN dano material (casi paso algo, vi algo inseguro, alguien casi se accidento). Sin equipo roto.
+- "unknown" = no pudiste decidir.
+
+CAMPOS PARA "defect":
+- assetId: SOLO un id de la lista que te paso. null si no podes elegir con confianza media o alta.
+- description: reformulada en lenguaje TECNICO Y PROFESIONAL de superintendencia naval, manteniendo el contenido pero limpiando muletillas. 1-3 oraciones.
+- classification: "Mecanico" | "Electrico" | "Estructural" | "Hidraulico" | "Neumatico" | "Electronico" | "Pintura" | "Comunicaciones" | "Navegacion" | "Otro"
+- severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" (mismo criterio que en suggest-classification)
+- operationalState: "OPERATIONAL" | "OPERATIONAL_LIMITED" | "NON_OPERATIONAL"
+- immediateAction: bullets cortos con verbo accionable si el reporte menciona alguna accion tomada. null si no menciona.
+
+CAMPOS PARA "near_miss":
+- category: "NEAR_MISS" | "HAZARD_OBSERVATION" | "UNSAFE_ACT" | "UNSAFE_CONDITION"
+- severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+- location: lugar mencionado o null. Ej: "Cubierta principal", "Sala de maquinas", "Tanque de lastre 2P".
+- description: reformulada en lenguaje tecnico/profesional, manteniendo el contenido.
+- immediateAction: como en defect.
+- assetId: si el reporte menciona un equipo, puede ser opcional.
+
+DEDUCCION DEL ASSET:
+- Recibis una lista de assets del vessel ({id, name, sfiCode, criticality}).
+- Tratar de elegir el mas probable basado en menciones del reporte (ej: "la bomba de incendio del puente" → busca bomba contra incendio).
+- Si tu confianza es alta o media, ponelo en fields.assetId y NO lo agregues a missingFields.
+- Si tu confianza es baja, ponelo en missingFields y armá una nextQuestion clara y CORTA, mencionando 2-3 candidatos posibles si los hay.
+
+CAMPOS MINIMOS REQUERIDOS para que el reporte sea util:
+- type
+- description
+- Para defect: assetId, classification, severity
+- Para near_miss: category, severity (location es opcional)
+
+Devuelve UN UNICO JSON valido sin texto adicional, sin code fence:
+
+{
+  "type": "defect" | "near_miss" | "unknown",
+  "confidence": "high" | "medium" | "low",
+  "fields": {
+    // campos arriba, los que no apliquen al type omitir o null
+  },
+  "missingFields": ["<nombre del campo critico que falta>", ...],
+  "nextQuestion": "<una sola pregunta corta al usuario para completar lo que falta, o null si nada critico falta>",
+  "reasoning": "<una linea breve explicando por que elegiste type y assetId>"
+}
+
+REGLAS:
+- nextQuestion DEBE ser conciso, en español, una sola pregunta a la vez. Si faltan 2 cosas, pregunta una sola y dejala como nextQuestion. La otra queda en missingFields.
+- description: siempre presente, siempre reformulada con tono tecnico.
+- NO inventes datos que no estan en la transcripcion.
+- Si la transcripcion no tiene contenido suficiente para identificar nada, type="unknown" y nextQuestion = "Puede repetir el reporte con mas detalle? Que equipo o area estaba afectado?".`;
+
+const ASSET_LIST_LIMIT = 80;
+
+export interface VoiceReportInput {
+  /** Transcripcion completa del audio (puede tener errores de ASR). */
+  transcript: string;
+  vesselCode: string;
+  /** Si el usuario ya respondio una nextQuestion previa, su respuesta. */
+  userAnswer?: string;
+  /** Snapshot del JSON anterior para que la IA refine en vez de reempezar. */
+  previousState?: unknown;
+}
+
+export interface VoiceReportFields {
+  assetId?: string | null;
+  description?: string;
+  classification?: string;
+  severity?: string;
+  operationalState?: string;
+  immediateAction?: string | null;
+  category?: string;
+  location?: string | null;
+}
+
+export interface VoiceReportOutput {
+  type: "defect" | "near_miss" | "unknown";
+  confidence: "high" | "medium" | "low";
+  fields: VoiceReportFields;
+  missingFields: string[];
+  nextQuestion: string | null;
+  reasoning?: string;
+  /** Echo del listado de assets usado (para que el frontend muestre nombre, no id). */
+  assetSnapshot?: Array<{ id: string; name: string | null; sfiCode?: string | null }>;
+}
+
+export async function parseVoiceReport(
+  session: TenantAccessSession,
+  input: VoiceReportInput,
+): Promise<VoiceReportOutput> {
+  const transcript = String(input.transcript ?? "").trim();
+  if (!transcript) throw new RouteError(400, "VALIDATION_ERROR", "Falta la transcripcion.");
+  const vesselCode = String(input.vesselCode ?? "").trim().toUpperCase();
+  if (!vesselCode) throw new RouteError(400, "VALIDATION_ERROR", "Falta el vesselCode.");
+  if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(vesselCode)) {
+    throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel.");
+  }
+
+  // Listamos los assets del vessel para que la IA pueda elegir uno.
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "DB no disponible.");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const assets = await (prisma as unknown as {
+    asset: { findMany(a: unknown): Promise<Array<{ id: string; name: string | null; sfiCode: string | null; criticality: string }>> };
+  }).asset.findMany({
+    where: { tenantId: tenant.id, vesselCode, deletedAt: null, status: "ACTIVE" },
+    select: { id: true, name: true, sfiCode: true, criticality: true } as never,
+    orderBy: { name: "asc" },
+    take: ASSET_LIST_LIMIT,
+  });
+
+  const assetListLines = assets.map(a => `- ${a.id} | ${a.sfiCode ?? ""} | ${a.name ?? "(sin nombre)"} | criticidad ${a.criticality}`).join("\n");
+
+  const userContent = [
+    `Vessel: ${vesselCode}`,
+    `Transcripcion del reporte verbal:\n"${transcript}"`,
+    input.userAnswer ? `Respuesta del usuario a la pregunta anterior: "${input.userAnswer}"` : null,
+    input.previousState ? `Estado previo del parseo (refiná):\n${JSON.stringify(input.previousState).slice(0, 2000)}` : null,
+    "",
+    `Assets disponibles en este vessel (id | sfiCode | nombre | criticidad):`,
+    assetListLines || "(sin assets)",
+  ].filter(Boolean).join("\n");
+
+  const raw = await callClaude(
+    session,
+    "voice_report_parse",
+    PROMPT_VOICE_REPORT,
+    userContent,
+    900,
+  );
+
+  let parsed: VoiceReportOutput;
+  try {
+    parsed = JSON.parse(stripCodeFence(raw));
+  } catch {
+    log.warn("[parseVoiceReport] JSON parse failed, raw:", raw.slice(0, 400));
+    throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvio un formato invalido. Probá repetir el reporte.");
+  }
+
+  // Validacion suave: aseguramos campos mínimos y casteamos enums.
+  const type = parsed.type ?? "unknown";
+  if (!["defect", "near_miss", "unknown"].includes(type)) parsed.type = "unknown";
+  const confidence = parsed.confidence ?? "low";
+  if (!["high", "medium", "low"].includes(confidence)) parsed.confidence = "low";
+  parsed.fields = parsed.fields ?? {};
+  parsed.missingFields = Array.isArray(parsed.missingFields) ? parsed.missingFields : [];
+  parsed.nextQuestion = parsed.nextQuestion ?? null;
+
+  // Asset validation: si IA devolvio un assetId, debe estar en la lista.
+  if (parsed.fields.assetId) {
+    const found = assets.find(a => a.id === parsed.fields.assetId);
+    if (!found) {
+      parsed.fields.assetId = null;
+      if (!parsed.missingFields.includes("assetId")) parsed.missingFields.push("assetId");
+    }
+  }
+
+  // Echo del snapshot de assets para que el frontend pueda mostrar nombres
+  parsed.assetSnapshot = assets.map(a => ({ id: a.id, name: a.name, sfiCode: a.sfiCode }));
+
+  return parsed;
+}

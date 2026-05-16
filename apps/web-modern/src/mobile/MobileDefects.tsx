@@ -1,11 +1,23 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { ChevronLeft, Plus, Loader2, Camera, Sparkles, X } from "lucide-react";
+import { ChevronLeft, Plus, Loader2, Camera, Sparkles, X, Mic } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
+import { VoiceReportSheet } from "../components/VoiceReportSheet";
+
+interface VoiceReportFields {
+  assetId?: string | null;
+  description?: string;
+  classification?: string;
+  severity?: string;
+  operationalState?: string;
+  immediateAction?: string | null;
+  category?: string;
+  location?: string | null;
+}
 
 interface Defect {
   id: string;
@@ -30,7 +42,7 @@ const SEV_COLOR: Record<string, string> = {
 const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "text-xs font-bold uppercase tracking-wider text-text-industrial/40";
 
-type View = "list" | "create" | "detail";
+type View = "list" | "create" | "create-nm" | "detail";
 
 export const MobileDefects: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: Defect[] }>("/app/pms/defects");
@@ -49,6 +61,16 @@ export const MobileDefects: React.FC = () => {
   const [analyzingPhotos, setAnalyzingPhotos] = useState(false);
   const [saving, setSaving]                   = useState(false);
   const [err, setErr]                         = useState<string | null>(null);
+
+  // Near-miss state
+  const [nmCategory, setNmCategory]           = useState("NEAR_MISS");
+  const [nmSeverity, setNmSeverity]           = useState("MEDIUM");
+  const [nmLocation, setNmLocation]           = useState("");
+  const [nmDescription, setNmDescription]     = useState("");
+  const [nmImmediateAction, setNmImmediateAction] = useState("");
+
+  // Voice report
+  const [voiceOpen, setVoiceOpen]             = useState(false);
 
   const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -112,12 +134,58 @@ export const MobileDefects: React.FC = () => {
     [data],
   );
 
-  const openCreate = () => {
-    setAssetId(""); setClassification("Mecánico"); setDescription("");
-    setSeverity("MEDIUM"); setOperationalState("NORMAL"); setErr(null);
+  const openCreate = (prefill?: VoiceReportFields) => {
+    setAssetId(prefill?.assetId ?? "");
+    setClassification(prefill?.classification?.trim() || "Mecánico");
+    setDescription(prefill?.description?.trim() ?? "");
+    setSeverity(prefill?.severity?.trim() || "MEDIUM");
+    setOperationalState(prefill?.operationalState?.trim() || "NORMAL");
+    setErr(null);
     clearPhotos();
     setView("create");
   };
+
+  const openCreateNearMiss = (prefill?: VoiceReportFields) => {
+    setNmCategory(prefill?.category?.trim() || "NEAR_MISS");
+    setNmSeverity(prefill?.severity?.trim() || "MEDIUM");
+    setNmLocation(prefill?.location?.trim() ?? "");
+    setNmDescription(prefill?.description?.trim() ?? "");
+    setNmImmediateAction(prefill?.immediateAction?.trim() ?? "");
+    setErr(null);
+    clearPhotos();
+    setView("create-nm");
+  };
+
+  const handleVoiceComplete = (result: { type: "defect" | "near_miss"; fields: VoiceReportFields }) => {
+    setVoiceOpen(false);
+    if (result.type === "near_miss") openCreateNearMiss(result.fields);
+    else openCreate(result.fields);
+  };
+
+  const handleCreateNearMiss = useCallback(async () => {
+    if (!selectedVesselCode)    { setErr("Seleccioná un buque primero.");    return; }
+    if (!nmDescription.trim())  { setErr("La descripción es requerida.");    return; }
+    setSaving(true); setErr(null);
+    try {
+      await api.post<{ id: string }>("/app/near-miss", {
+        vesselCode:      selectedVesselCode,
+        category:        nmCategory,
+        severity:        nmSeverity,
+        status:          "REPORTED",
+        occurredAt:      new Date().toISOString(),
+        location:        nmLocation.trim() || null,
+        description:     nmDescription.trim(),
+        immediateAction: nmImmediateAction.trim() || null,
+      });
+      clearPhotos();
+      setView("list");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al reportar near miss");
+    } finally {
+      setSaving(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVesselCode, nmCategory, nmSeverity, nmLocation, nmDescription, nmImmediateAction]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedVesselCode) { setErr("Seleccioná un buque primero."); return; }
@@ -162,6 +230,21 @@ export const MobileDefects: React.FC = () => {
     enabled: view === "create",
     isDirty: createDirty,
     onSave: handleCreate,
+    onClose: () => setView("list"),
+  });
+
+  const createNmDirty =
+    view === "create-nm" &&
+    (nmDescription.trim() !== "" ||
+      nmLocation.trim() !== "" ||
+      nmImmediateAction.trim() !== "" ||
+      nmCategory !== "NEAR_MISS" ||
+      nmSeverity !== "MEDIUM");
+
+  useEscapeGuard({
+    enabled: view === "create-nm",
+    isDirty: createNmDirty,
+    onSave: handleCreateNearMiss,
     onClose: () => setView("list"),
   });
 
@@ -302,6 +385,83 @@ export const MobileDefects: React.FC = () => {
     );
   }
 
+  // ── Create near miss form ──────────────────────────────────────────────────
+  if (view === "create-nm") {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
+          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="font-bold text-sm text-white">Nuevo Near Miss</span>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <p className={labelCls}>Categoría</p>
+              <select value={nmCategory} onChange={e => setNmCategory(e.target.value)} className={inputCls + " appearance-none"}>
+                <option value="NEAR_MISS">Near miss</option>
+                <option value="HAZARD_OBSERVATION">Obs. de riesgo</option>
+                <option value="UNSAFE_ACT">Acción insegura</option>
+                <option value="UNSAFE_CONDITION">Condición insegura</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <p className={labelCls}>Severidad</p>
+              <select value={nmSeverity} onChange={e => setNmSeverity(e.target.value)} className={inputCls + " appearance-none"}>
+                <option value="CRITICAL">Crítico</option>
+                <option value="HIGH">Alto</option>
+                <option value="MEDIUM">Medio</option>
+                <option value="LOW">Bajo</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className={labelCls}>Lugar</p>
+            <input
+              value={nmLocation}
+              onChange={e => setNmLocation(e.target.value)}
+              placeholder="ej. cubierta de proa, sala de máquinas…"
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className={labelCls}>Descripción *</p>
+              <MicButton onAppend={chunk => setNmDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
+            </div>
+            <textarea
+              value={nmDescription}
+              onChange={e => setNmDescription(e.target.value)}
+              rows={5}
+              placeholder="Qué pasó y qué pudo haber pasado…"
+              className={inputCls + " resize-none"}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className={labelCls}>Acción inmediata</p>
+            <textarea
+              value={nmImmediateAction}
+              onChange={e => setNmImmediateAction(e.target.value)}
+              rows={3}
+              placeholder="Medida tomada al momento…"
+              className={inputCls + " resize-none"}
+            />
+          </div>
+          {err && <p className="text-xs text-red-400">{err}</p>}
+          <button
+            type="button"
+            onClick={handleCreateNearMiss}
+            disabled={saving}
+            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Reportar near miss"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Detail ──────────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
     return (
@@ -381,12 +541,28 @@ export const MobileDefects: React.FC = () => {
       </div>
       <button
         type="button"
-        onClick={openCreate}
+        onClick={() => setVoiceOpen(true)}
+        className="absolute bottom-5 right-24 w-14 h-14 rounded-full bg-white/10 border border-accent/40 text-accent flex items-center justify-center shadow-xl backdrop-blur-sm hover:bg-white/15 active:scale-95 transition-all"
+        aria-label="Reportar por voz"
+        title="Reportar defecto o near miss por voz"
+      >
+        <Mic className="w-6 h-6" />
+      </button>
+      <button
+        type="button"
+        onClick={() => openCreate()}
         className="absolute bottom-5 right-5 w-14 h-14 rounded-full bg-accent text-white flex items-center justify-center shadow-xl shadow-accent/20"
         aria-label="Nuevo defecto"
       >
         <Plus className="w-6 h-6" />
       </button>
+
+      {voiceOpen && (
+        <VoiceReportSheet
+          onClose={() => setVoiceOpen(false)}
+          onComplete={handleVoiceComplete}
+        />
+      )}
     </div>
   );
 };

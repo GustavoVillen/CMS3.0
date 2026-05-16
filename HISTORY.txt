@@ -1,5 +1,85 @@
 HISTORY.txt
 
+[2026-05-15] Reporte por voz en mobile — IA clasifica defect/near miss y precarga form
+Agent: Claude Opus 4.7
+Pedido del usuario: al lado del "+" en mobile, un botón para reportar verbalmente
+un defecto o near miss; la IA completa los campos en formato técnico profesional,
+deduce el equipo del listado del vessel, pregunta lo que falte, y al terminar abre
+la ventana de "Nuevo defecto" o "Nuevo near miss" precargada para subir fotos.
+
+Flujo end-to-end:
+  1. Usuario toca botón mic (al lado del "+" en MobileDefects)
+  2. VoiceReportSheet se abre, arranca grabación automática (Web Speech API)
+  3. Usuario describe el incidente; toca "Procesar con IA"
+  4. POST /app/pms/defects/voice-report-parse con transcript + vesselCode
+  5. Backend (Claude Haiku) clasifica defect|near_miss|unknown, extrae campos,
+     deduce assetId del listado real del vessel, devuelve nextQuestion si falta
+     información crítica
+  6. Loop conversacional: si hay nextQuestion, sheet muestra pregunta + input
+     (tipear o dictar). Usuario responde → POST con userAnswer+previousState
+  7. Cuando IA tiene info suficiente, llama onComplete({ type, fields })
+  8. MobileDefects abre el form correspondiente:
+       · type=defect    → vista "create" precargada (mismo form de siempre)
+       · type=near_miss → nueva vista "create-nm" con form de near miss
+  9. Usuario revisa, agrega fotos si quiere y guarda.
+
+Backend (apps/api/src/tenant/pms/):
+  - defects-ai-suggestions.ts:
+    · PROMPT_VOICE_REPORT — instrucciones a Claude (clasificación,
+      reformulación técnica, deducción de asset, regla "una pregunta a la vez")
+    · parseVoiceReport(session, input) — valida vesselCode + scope, lista
+      assets activos del vessel, llama Claude, valida que assetId devuelto
+      pertenezca al vessel (anti-alucinación), devuelve VoiceReportOutput
+      tipado con assetSnapshot para que el frontend muestre nombre del asset
+  - quality-router.ts: ruta POST /app/pms/defects/voice-report-parse
+    con rate limit (30 req/min por usuario).
+
+Frontend (apps/web-modern/src/):
+  - components/VoiceReportSheet.tsx (NUEVO):
+    · Bottom sheet con 4 stages (recording-initial | processing |
+      awaiting-answer | recording-answer | error)
+    · Arranca grabación on mount, muestra transcript en vivo con interim
+    · Stage awaiting-answer muestra "Detectado hasta ahora" con chips
+      (tipo, clasificación, severidad, asset) + pregunta de IA + input con
+      mic para responder por voz también
+    · Botón "Saltar y editar manualmente" para abortar el loop y abrir
+      el form con lo que haya
+    · Soporte para navegadores sin Web Speech API (fallback msg)
+  - mobile/MobileDefects.tsx:
+    · Nueva vista "create-nm" para crear near miss (categoría, severidad,
+      lugar, descripción con MicButton, acción inmediata)
+    · openCreate(prefill?) y openCreateNearMiss(prefill?) aceptan
+      VoiceReportFields para precargar campos
+    · handleCreateNearMiss POST a /app/near-miss
+    · Botón Mic flotante al lado del "+" (bottom-5 right-24, estilo
+      secundario con borde accent)
+    · useEscapeGuard también cubre create-nm (con isDirty + onSave)
+    · <VoiceReportSheet onClose onComplete={handleVoiceComplete} />
+
+Reglas de simplicidad respetadas (CLAUDE.md):
+  - Reusa MobileDefects en vez de crear MobileNearMiss aparte (un solo file)
+  - Backend reusa el wrapper callClaude existente (mismo patrón que
+    classification suggestion y find-similar)
+  - VoiceReportSheet reusa useSpeechToText (hook ya existente de Tier 1)
+  - El form de near miss replica el patrón visual del form de defecto
+  - Validación de assetId contra lista real evita alucinaciones de la IA
+
+Verificado:
+  - npx tsc --noEmit en web-modern → 0 errores
+  - npx vite build → OK (2013 KB, 847ms)
+  - Backend: ningún error nuevo en quality-router ni defects-ai-suggestions
+    (los errores TS preexistentes en defect-pdf-service / quality-router
+    PDF route son issues conocidos no relacionados)
+
+Pendiente / futuro:
+  - Pruebas en celular real con micrófono (requiere HTTPS o localhost)
+  - El near miss creado por voz no se ve en la lista mobile (la lista solo
+    muestra defectos) — visible en /near-miss desktop. Si se necesita, se
+    puede agregar un tab o filtro.
+  - QuickActionFab podría sumar un 5to tile "Reportar por voz" como entrada
+    alternativa desde el dashboard (no se hizo para mantener el cambio
+    mínimo; el punto de entrada principal queda en MobileDefects).
+
 [2026-05-14] Tier 3 — Compliance Score por vessel + Smart Alerts priorizadas
 Agent: Claude Opus 4.7
 

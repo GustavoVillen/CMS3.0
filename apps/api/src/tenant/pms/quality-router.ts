@@ -16,7 +16,7 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
-import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, findSimilarDefects } from "./defects-ai-suggestions";
+import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, findSimilarDefects, parseVoiceReport } from "./defects-ai-suggestions";
 import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
@@ -107,6 +107,12 @@ export async function handleQualityRoutes(
   if (method === "POST" && url.pathname === "/app/pms/defects/find-similar") {
     const body = await readJsonBody(request) as Parameters<typeof findSimilarDefects>[1];
     sendJson(response, 200, await findSimilarDefects(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/defects/voice-report-parse") {
+    enforceRateLimit(request, `ai-voice:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof parseVoiceReport>[1];
+    sendJson(response, 200, await parseVoiceReport(session, body));
     return true;
   }
   if (method === "GET" && /^\/app\/pms\/defects\/[^/]+\/pdf$/.test(url.pathname)) {
