@@ -1,5 +1,51 @@
 HISTORY.txt
 
+[2026-05-16] Auditoría general — bloque 1+2+3 (9 fixes completos)
+Agent: Claude Opus 4.7
+Resumen: continuamos la auditoría general iniciada el día anterior. Round 2
+encontró patrones nuevos. Aplicamos los 9 fixes priorizados en orden.
+
+Bloque 1 (commit c8f16fc) — defensivos cortos sin schema:
+- Capability whitelist en /app/copiloto/chat
+- Lock anti-overlap en insight scheduler (server.ts)
+- withUniqueRetry() helper + aplicado a defect/capa/deferral/nearMiss/wo
+  code generation (count+create con retry en P2002)
+- Threshold fluid analyses 0.25 → 0.5
+
+Bloque 2 (commit dc3775d):
+- Race CAPA: advisory lock pg_advisory_xact_lock + $transaction
+- Soft-delete olvidado en 4 queries de enrichment (deferrals, work-orders,
+  daily-reports)
+- AbortController en SSE del copiloto (cancela Claude al cerrar tab)
+- Cache de monthly report AI drafts (24h TTL en memoria)
+
+Bloque 3 — migración /uploads/* → /app/files/* (commit pendiente):
+- Backend nuevo: apps/api/src/tenant/files/files-router.ts
+  · Handlers GET /app/files/{kind}/{tenantSlug}/{...} con
+    requireTenantAccessSession + validación pathSlug === sessionSlug
+  · serializeFileUrl() — utility para traducir URLs en respuestas
+- Backend deprecación: /uploads/* responde 410 Gone con header de migración
+  y la URL replacement en el payload.
+- Frontend: apps/web-modern/src/lib/authed-media.tsx
+  · useAuthedBlobUrl(src) — hook que fetcha con Bearer y devuelve blob URL
+  · <AuthedImage>, <AuthedVideo>, <AuthedAudio> — componentes drop-in
+  · downloadAuthedFile(src, filename) — para descargas con <a download>
+  · toAuthedFilePath(url) — traduce /uploads/... → /app/files/...
+- Reemplazados todos los <img/video/audio src={fileUrl}> en:
+  · MobileWorkOrders.tsx (3 lugares)
+  · WorkOrders.tsx (5 lugares incluyendo lightbox)
+  · MaintenancePlans.tsx (1 link de descarga checklist template)
+
+Verificado:
+- tsc web-modern: 0 errores
+- tsc API: 87 preexistentes (todos no relacionados, mismo baseline)
+- vite build: OK (2 MB minified)
+
+Próximo paso (no en esta sesión):
+- Resto de hallazgos de auditoría (decisiones de diseño): tests, CI,
+  refactor de archivos > 2000 líneas, tokens de tema, refactor
+  Defects/MobileDefects duplicación.
+
 [2026-05-16] Auditoría general — fixes cortos de alto impacto (4 de 5)
 Agent: Claude Opus 4.7
 Contexto: auditoría general de calidad disparada por el usuario. 3 agentes

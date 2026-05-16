@@ -19,6 +19,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
 import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
+import { AuthedImage, AuthedVideo, AuthedAudio } from "../lib/authed-media";
 
 // Mini reference data for showing linked permits inside WO modal
 const PTW_STATUS_LABEL: Record<string, string> = {
@@ -470,13 +471,13 @@ const ProgressNoteCard: React.FC<{
         )}
       </div>
       {note.kind === "PHOTO" && note.fileUrl && (
-        <img src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-60" />
+        <AuthedImage src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-60" />
       )}
       {note.kind === "VIDEO" && note.fileUrl && (
-        <video src={note.fileUrl} controls className="w-full rounded-lg max-h-60" />
+        <AuthedVideo src={note.fileUrl} controls className="w-full rounded-lg max-h-60" />
       )}
       {note.kind === "AUDIO" && note.fileUrl && (
-        <audio src={note.fileUrl} controls className="w-full" />
+        <AuthedAudio src={note.fileUrl} controls className="w-full" />
       )}
       {note.text && (
         <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>
@@ -567,10 +568,10 @@ const ProgressNotesPanel: React.FC<{
               title={n.text ?? undefined}
             >
               {n.kind === "PHOTO" ? (
-                <img src={n.fileUrl!} alt="" className="w-full h-full object-cover" />
+                <AuthedImage src={n.fileUrl!} alt="" className="w-full h-full object-cover" />
               ) : (
                 <>
-                  <video src={n.fileUrl!} className="w-full h-full object-cover" muted />
+                  <AuthedVideo src={n.fileUrl!} className="w-full h-full object-cover" muted />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
                     <VideoIcon className="w-6 h-6 text-white drop-shadow" />
                   </div>
@@ -607,9 +608,9 @@ const ProgressNotesPanel: React.FC<{
           </button>
           <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
             {lightbox.kind === "PHOTO" ? (
-              <img src={lightbox.fileUrl!} alt="" className="max-h-[85vh] rounded-lg object-contain" />
+              <AuthedImage src={lightbox.fileUrl!} alt="" className="max-h-[85vh] rounded-lg object-contain" />
             ) : (
-              <video src={lightbox.fileUrl!} controls autoPlay className="max-h-[85vh] rounded-lg" />
+              <AuthedVideo src={lightbox.fileUrl!} controls autoPlay className="max-h-[85vh] rounded-lg" />
             )}
             {lightbox.text && (
               <p className="text-sm text-white/90 max-w-2xl text-center whitespace-pre-line">{lightbox.text}</p>

@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { MarkdownText } from "../components/MarkdownText";
+import { AuthedImage, AuthedVideo, AuthedAudio } from "../lib/authed-media";
 
 interface WO {
   id: string;
@@ -309,13 +310,13 @@ const NoteCard: React.FC<{
       </div>
 
       {note.kind === "PHOTO" && note.fileUrl && (
-        <img src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-72" />
+        <AuthedImage src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-72" />
       )}
       {note.kind === "VIDEO" && note.fileUrl && (
-        <video src={note.fileUrl} controls className="w-full rounded-lg max-h-72" />
+        <AuthedVideo src={note.fileUrl} controls className="w-full rounded-lg max-h-72" />
       )}
       {note.kind === "AUDIO" && note.fileUrl && (
-        <audio src={note.fileUrl} controls className="w-full" />
+        <AuthedAudio src={note.fileUrl} controls className="w-full" />
       )}
       {note.text && (
         <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>

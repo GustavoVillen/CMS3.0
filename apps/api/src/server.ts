@@ -6,10 +6,6 @@ import { sendJson } from "./http/json-response";
 import { toErrorPayload } from "./http/route-error";
 import { getRequestUrl } from "./http/request-url";
 import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa } from "./http/static-files";
-import { serveCertificateUpload } from "./tenant/certificates/cert-uploads-service";
-import { serveChecklistUpload } from "./tenant/pms/checklist-uploads-service";
-import { serveFluidReportUpload } from "./tenant/fluid-analyses/fluid-uploads-service";
-import { serveAttachment } from "./tenant/attachments/attachment-uploads-service";
 import { buildHealthcheckPayload } from "./health/health-route";
 import { buildHomePage } from "./platform/home/home-page";
 import { handlePublicBootstrapRequest } from "./tenant/bootstrap/public-bootstrap-route";
@@ -17,6 +13,7 @@ import { generateInsightsForTenant } from "./tenant/ai-insights/insight-generato
 import { handlePlatformRoutes } from "./platform/platform-router";
 import { handleTenantRoutes } from "./tenant/tenant-router";
 import { handlePmsRoutes } from "./tenant/pms/pms-router";
+import { handleFilesRoutes } from "./tenant/files/files-router";
 import { resetPrismaClient } from "./platform/data/prisma-client";
 import { evictExpiredSessions } from "./tenant/auth/session-store";
 import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
@@ -65,43 +62,18 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  // ── Uploaded certificate source files ───────────────────────────────────────
-  // Pattern: /uploads/certificates/{tenantSlug}/{filename}
-  const uploadMatch = url.pathname.match(/^\/uploads\/certificates\/([^/]+)\/([^/]+)$/);
-  if (method === "GET" && uploadMatch) {
-    const [, tenantSlug, filename] = uploadMatch;
-    const served = serveCertificateUpload(response, tenantSlug, filename);
-    if (served) return;
-    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
-    return;
-  }
-
-  const checklistUploadMatch = url.pathname.match(/^\/uploads\/checklists\/([^/]+)\/([^/]+)$/);
-  if (method === "GET" && checklistUploadMatch) {
-    const [, tenantSlug, filename] = checklistUploadMatch;
-    const served = serveChecklistUpload(response, tenantSlug, filename);
-    if (served) return;
-    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
-    return;
-  }
-
-  const fluidReportMatch = url.pathname.match(/^\/uploads\/fluid-reports\/([^/]+)\/([^/]+)$/);
-  if (method === "GET" && fluidReportMatch) {
-    const [, tenantSlug, filename] = fluidReportMatch;
-    const served = serveFluidReportUpload(response, tenantSlug, filename);
-    if (served) return;
-    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
-    return;
-  }
-
-  // ── Uploaded attachments (work orders, defects, etc.) ───────────────────────
-  // Pattern: /uploads/attachments/{tenantSlug}/{entityType}/{filename}
-  const attachmentMatch = url.pathname.match(/^\/uploads\/attachments\/([^/]+)\/([^/]+)\/([^/]+)$/);
-  if (method === "GET" && attachmentMatch) {
-    const [, tenantSlug, entityType, filename] = attachmentMatch;
-    const served = serveAttachment(response, tenantSlug, entityType, filename);
-    if (served) return;
-    sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
+  // ── Uploaded files DEPRECATED — auditoría 2026-05-16 ────────────────────────
+  // Antes /uploads/* servía archivos sin auth: cualquiera con el filename
+  // UUID podía descargar. Migrado a /app/files/* con requireTenantAccessSession.
+  // Respondemos 410 Gone con una pista al cliente para que migre.
+  if (method === "GET" && url.pathname.startsWith("/uploads/")) {
+    sendJson(response, 410, {
+      error: {
+        code: "UPLOADS_GONE",
+        message: "Esta ruta fue deprecada por seguridad. Usá /app/files/... con Bearer token.",
+        replacement: "/app/files/" + url.pathname.slice("/uploads/".length),
+      },
+    });
     return;
   }
 
@@ -121,6 +93,7 @@ const server = createServer(async (request, response) => {
 
   // ── Sub-router dispatch ─────────────────────────────────────────────────────
   try {
+    if (await handleFilesRoutes(method, url, request, response, env)) return;
     if (await handlePlatformRoutes(method, url, request, response, env)) return;
     if (await handlePmsRoutes(method, url, request, response, env)) return;
     if (await handleTenantRoutes(method, url, request, response, env)) return;

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { downloadAuthedFile } from "../lib/authed-media";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -1951,13 +1952,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mp.checklistTemplate")}</label>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                  {checklistTemplate && checklistTemplate.startsWith("/uploads/") ? (
+                  {checklistTemplate && (checklistTemplate.startsWith("/uploads/") || checklistTemplate.startsWith("/app/files/")) ? (
                     <div className="flex items-center justify-between gap-3">
-                      <a href={checklistTemplate} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-2 text-sm text-green-400 hover:text-green-300 truncate">
+                      <button type="button"
+                        onClick={() => { void downloadAuthedFile(checklistTemplate); }}
+                        className="flex items-center gap-2 text-sm text-green-400 hover:text-green-300 truncate"
+                        title="Descargar plantilla">
                         <ClipboardList className="w-4 h-4 shrink-0" />
                         <span className="truncate">{checklistTemplate.split("/").pop()}</span>
-                      </a>
+                      </button>
                       <button type="button" onClick={() => setChecklistTemplate("")} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0"><X className="w-4 h-4" /></button>
                     </div>
                   ) : (
