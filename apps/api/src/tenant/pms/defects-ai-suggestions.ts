@@ -576,11 +576,39 @@ export async function parseVoiceReport(
   session: TenantAccessSession,
   input: VoiceReportInput,
 ): Promise<VoiceReportOutput> {
+  // Wrapper top-level: capturamos cualquier error JS no controlado y lo
+  // convertimos en RouteError(500) con un mensaje útil + log con stack.
+  // Sin esto el cliente solo ve "An internal error occurred".
+  try {
+    return await parseVoiceReportInner(session, input);
+  } catch (err) {
+    if (err instanceof RouteError) throw err;
+    log.error("[parseVoiceReport] unhandled error:", err, {
+      stack: err instanceof Error ? err.stack : undefined,
+      vesselCode: input?.vesselCode,
+      forcedType: input?.forcedType,
+      transcriptChars: typeof input?.transcript === "string" ? input.transcript.length : null,
+      userId: session.user.id,
+    });
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new RouteError(500, "VOICE_PARSE_ERROR", `Error procesando el reporte: ${detail}`);
+  }
+}
+
+async function parseVoiceReportInner(
+  session: TenantAccessSession,
+  input: VoiceReportInput,
+): Promise<VoiceReportOutput> {
+  log.info(`[parseVoiceReport] start — user=${session.user.email} vessel=${input?.vesselCode} forcedType=${input?.forcedType ?? "none"} chars=${typeof input?.transcript === "string" ? input.transcript.length : 0}`);
+
   const transcript = String(input.transcript ?? "").trim();
   if (!transcript) throw new RouteError(400, "VALIDATION_ERROR", "Falta la transcripcion.");
   const vesselCode = String(input.vesselCode ?? "").trim().toUpperCase();
   if (!vesselCode) throw new RouteError(400, "VALIDATION_ERROR", "Falta el vesselCode.");
-  if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(vesselCode)) {
+  // Guard defensivo: assignedVesselCodes podría ser undefined si la sesión
+  // viene de un user creado antes de que ese campo existiera.
+  const assignedVessels = Array.isArray(session.user.assignedVesselCodes) ? session.user.assignedVesselCodes : [];
+  if (session.user.role !== "TENANT_ADMIN" && !assignedVessels.includes(vesselCode)) {
     throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel.");
   }
 
