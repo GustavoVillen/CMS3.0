@@ -36,6 +36,7 @@ import {
   X,
   Maximize2,
   Minimize2,
+  Sparkles,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,7 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
   }
   return null;
 }
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
 import { useResizable } from "../lib/hooks";
 
@@ -81,9 +82,23 @@ import { useResizable } from "../lib/hooks";
 // Types
 // ---------------------------------------------------------------------------
 
+interface SuggestedAction {
+  type: string;
+  target: string;
+  label?: string;
+  patch?: Record<string, unknown>;
+  vesselCode?: string;
+  /** Estado UI local: idle | applying | applied | failed */
+  state?: "idle" | "applying" | "applied" | "failed";
+  errorMsg?: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  /** Acciones sugeridas por la IA al final de la respuesta. Renderizadas
+   * como botones "Aplicar" debajo del bubble del mensaje. */
+  actions?: SuggestedAction[];
 }
 
 interface Suggestion {
@@ -748,7 +763,12 @@ export const CopilotoPanel: React.FC = () => {
           const data = line.slice(6).trim();
           if (data === "[DONE]") break;
           try {
-            const parsed = JSON.parse(data) as { text?: string; error?: string };
+            const parsed = JSON.parse(data) as {
+              text?: string;
+              error?: string;
+              actions?: SuggestedAction[];
+              stripText?: string;
+            };
             if (parsed.error) { setError(parsed.error); break; }
             if (parsed.text) {
               assistantContent += parsed.text;
@@ -759,7 +779,31 @@ export const CopilotoPanel: React.FC = () => {
               const displayContent = stripCamposBlock(assistantContent);
               setMessages(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1] = { role: "assistant", content: displayContent };
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1]!,
+                  role: "assistant",
+                  content: displayContent,
+                };
+                return updated;
+              });
+            }
+            if (parsed.actions && parsed.actions.length > 0) {
+              // El backend mandó las acciones sugeridas + el bloque crudo
+              // [ACCIONES]...[/ACCIONES] para que lo borremos del texto ya mostrado.
+              const stripText = parsed.stripText ?? "";
+              const initialActions: SuggestedAction[] = parsed.actions.map(a => ({ ...a, state: "idle" }));
+              if (stripText) {
+                assistantContent = assistantContent.replace(stripText, "");
+              }
+              const displayContent = stripCamposBlock(assistantContent);
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1]!,
+                  role: "assistant",
+                  content: displayContent,
+                  actions: initialActions,
+                };
                 return updated;
               });
             }
@@ -778,6 +822,47 @@ export const CopilotoPanel: React.FC = () => {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [buildApiMessages, capability, input, messages, screenContext, streaming]);
+
+  // Aplica una acción sugerida por la IA. Muta el state del action a
+  // applying → applied/failed. POST /app/copiloto/apply-action.
+  const applyAction = useCallback(async (msgIdx: number, actionIdx: number) => {
+    const message = messages[msgIdx];
+    const action = message?.actions?.[actionIdx];
+    if (!action || action.state === "applying" || action.state === "applied") return;
+
+    setMessages(prev => {
+      const updated = [...prev];
+      const m = { ...updated[msgIdx]! };
+      m.actions = (m.actions ?? []).map((a, ai) => ai === actionIdx ? { ...a, state: "applying" as const, errorMsg: undefined } : a);
+      updated[msgIdx] = m;
+      return updated;
+    });
+
+    try {
+      await api.post<{ ok: boolean }>("/app/copiloto/apply-action", {
+        type: action.type,
+        target: action.target,
+        patch: action.patch ?? {},
+        vesselCode: action.vesselCode,
+      });
+      setMessages(prev => {
+        const updated = [...prev];
+        const m = { ...updated[msgIdx]! };
+        m.actions = (m.actions ?? []).map((a, ai) => ai === actionIdx ? { ...a, state: "applied" as const } : a);
+        updated[msgIdx] = m;
+        return updated;
+      });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : "Error al aplicar la acción";
+      setMessages(prev => {
+        const updated = [...prev];
+        const m = { ...updated[msgIdx]! };
+        m.actions = (m.actions ?? []).map((a, ai) => ai === actionIdx ? { ...a, state: "failed" as const, errorMsg: msg } : a);
+        updated[msgIdx] = m;
+        return updated;
+      });
+    }
+  }, [messages]);
 
   // Auto-send a message requested by an external component (e.g. "Asistir con IA" button)
   const sendMessageRef = useRef(sendMessage);
@@ -1015,6 +1100,31 @@ export const CopilotoPanel: React.FC = () => {
                 )
               }
             </div>
+            {/* Suggested actions — botones "Aplicar" debajo del mensaje */}
+            {msg.role === "assistant" && msg.actions && msg.actions.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {msg.actions.map((action, ai) => (
+                  <div key={ai} className="flex items-center gap-2 bg-accent/[0.06] border border-accent/20 rounded-lg px-2.5 py-1.5">
+                    <Sparkles className="w-3 h-3 text-accent shrink-0" />
+                    <span className="flex-1 text-[11px] text-text-industrial leading-tight">
+                      {action.label ?? `Aplicar ${action.type} en ${action.target}`}
+                      {action.state === "applied" && <span className="ml-1 text-success-sea">✓ aplicado</span>}
+                      {action.state === "failed" && action.errorMsg && (
+                        <span className="ml-1 text-red-400 text-[10px]">— {action.errorMsg}</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { void applyAction(i, ai); }}
+                      disabled={action.state === "applying" || action.state === "applied"}
+                      className="px-2 py-1 rounded-md bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
+                    >
+                      {action.state === "applying" ? "Aplicando…" : action.state === "applied" ? "Aplicado" : "Aplicar"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* TTS play button — assistant messages only, when complete */}
             {msg.role === "assistant" && msg.content && !(streaming && i === messages.length - 1) && (
               <div className="mt-0.5 px-1">

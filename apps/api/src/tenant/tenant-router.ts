@@ -10,6 +10,7 @@ import { registerTenantAccessSession, revokeTenantAccessSession } from "./auth/s
 import { requireTenantAccessSession } from "./auth/tenant-route-auth";
 import { acceptTenantInvitation } from "./invitations/tenant-invitations-service";
 import { ensureCapability } from "../platform/prompts/platform-prompts-service";
+import { applyCopilotAction } from "./copiloto/copilot-actions-service";
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import {
   listExternalAudits, getExternalAudit, createExternalAudit, updateExternalAudit, softDeleteExternalAudit,
@@ -1116,6 +1117,12 @@ export async function handleTenantRoutes(
           abortSignal:    abortController.signal,
         },
         (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
+        (actions, rawBlock) => {
+          // Emitimos un evento SSE separado con las acciones sugeridas.
+          // El frontend va a borrar `rawBlock` del texto ya mostrado y
+          // renderizar botones "Aplicar" para cada action.
+          response.write(`data: ${JSON.stringify({ actions, stripText: rawBlock })}\n\n`);
+        },
       );
       response.write("data: [DONE]\n\n");
     } catch (e: any) {
@@ -1197,6 +1204,16 @@ export async function handleTenantRoutes(
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });
+    return true;
+  }
+
+  // ── Copiloto: aplicar acción sugerida ─────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/copiloto/apply-action") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `copilot-action:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof applyCopilotAction>[1];
+    sendJson(response, 200, await applyCopilotAction(session, body));
     return true;
   }
 

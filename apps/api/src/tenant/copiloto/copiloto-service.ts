@@ -51,6 +51,14 @@ Immutable rules:
 - FILL FIELDS: When the user asks to "completar campos faltantes", "complete missing fields", "fill the form", "llenar campos", "rellenar campos", or any similar phrase, analyze the screen context fieldValues (provided in ACTIVE RECORD above), identify fields whose value is null or empty, and propose expert-quality values for them based on domain knowledge and any already-filled fields. Embed the proposed values at the END of your response using EXACTLY this format with no spaces between the markers and the JSON:
 [CAMPOS]{"fieldKey": "proposed value", "fieldKey2": "proposed value 2"}[/CAMPOS]
 Use the exact key names from the fieldValues object in the screen context. Only include fields that were null/empty and that you can confidently propose — omit already-filled fields. After the block, briefly explain what you filled and why.
+- SUGGEST ACTIONS: When you recommend concrete, one-click-applyable changes to one or more maintenance plans in your response, embed them at the END using EXACTLY this format (JSON array, no extra spaces between markers):
+[ACCIONES][{"type":"update_plan","target":"TASKCODE_EXACTO","label":"Texto corto del botón","patch":{"campo":"valor"}}][/ACCIONES]
+- Only emit this when the recommendation is concrete and reversible — never for vague advice like "consider revising frequencies".
+- The 'target' MUST be the exact taskCode of the plan in UPPERCASE (e.g. "DONCHI-LAN-01-1M-M") and the plan must exist in the system (verify with query_maintenance_plans first if unsure).
+- The 'patch' ALLOWED fields ONLY (any other field is silently ignored): responsible, description, triggerType, frequencyHours, frequencyMonths, estimatedHours, acceptanceCriteria, loto, riskLevel.
+- The 'label' is a short button text (max 60 chars) describing the action in Spanish, e.g. "Asignar Jefe de Máquinas como responsable".
+- Emit one entry per plan, even if the patch is the same — never use wildcards or arrays in 'target'.
+- After the [ACCIONES] block, briefly explain what each action will do so the user understands before clicking.
 - LOTO FIELD FORMAT: When proposing or generating a value for the "loto" field (inside [CAMPOS] or in plain text), you MUST ALWAYS use EXACTLY this three-section structure — no exceptions:
 
 LOTO:
@@ -759,9 +767,61 @@ async function executeCopilotTool(
 // Main streaming function — agentic loop (max 1 tool-use round)
 // ---------------------------------------------------------------------------
 
+/**
+ * Acción sugerida por la IA en el bloque [ACCIONES]...[/ACCIONES] al final
+ * de su respuesta. Se emite al cliente como evento separado para que el
+ * frontend renderice botones "Aplicar".
+ */
+export interface SuggestedAction {
+  type: string;
+  target: string;
+  label?: string;
+  patch?: Record<string, unknown>;
+  vesselCode?: string;
+}
+
+/**
+ * Detecta el bloque [ACCIONES][...JSON...][/ACCIONES] en el texto completo.
+ * Devuelve las acciones parseadas y el rango (start, end) que el frontend
+ * debe borrar de lo que ya mostró. Si no hay bloque o el JSON es inválido,
+ * devuelve null.
+ */
+function parseActionsBlock(fullText: string): { actions: SuggestedAction[]; rawBlock: string } | null {
+  const startMarker = "[ACCIONES]";
+  const endMarker = "[/ACCIONES]";
+  const start = fullText.indexOf(startMarker);
+  if (start < 0) return null;
+  const end = fullText.indexOf(endMarker, start + startMarker.length);
+  if (end < 0) return null;
+  const jsonText = fullText.slice(start + startMarker.length, end).trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const actions: SuggestedAction[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const a = item as Record<string, unknown>;
+    if (typeof a.type !== "string" || typeof a.target !== "string") continue;
+    actions.push({
+      type:    a.type,
+      target:  a.target,
+      label:   typeof a.label === "string" ? a.label : undefined,
+      patch:   (a.patch && typeof a.patch === "object" && !Array.isArray(a.patch)) ? a.patch as Record<string, unknown> : {},
+      vesselCode: typeof a.vesselCode === "string" ? a.vesselCode : undefined,
+    });
+  }
+  if (actions.length === 0) return null;
+  return { actions, rawBlock: fullText.slice(start, end + endMarker.length) };
+}
+
 export async function streamCopilotoChat(
   req: CopilotoRequest,
   onChunk: (text: string) => void,
+  onActions?: (actions: SuggestedAction[], rawBlock: string) => void,
 ): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -899,6 +959,10 @@ export async function streamCopilotoChat(
     return { role: m.role, content: m.content };
   });
 
+  // Acumulamos el texto total de ambas phases para parsear [ACCIONES] al final.
+  // Sigue streameando chunk por chunk al cliente como antes.
+  let accumulatedText = "";
+
   // ── Phase 1: stream with tools enabled ──────────────────────────────────────
   const phase1Model = "claude-haiku-4-5-20251001";
   const phase1Started = Date.now();
@@ -914,6 +978,7 @@ export async function streamCopilotoChat(
   // Emit text chunks from phase 1 in real time
   for await (const chunk of phase1Stream) {
     if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+      accumulatedText += chunk.delta.text;
       onChunk(chunk.delta.text);
     }
   }
@@ -975,6 +1040,7 @@ export async function streamCopilotoChat(
 
     for await (const chunk of phase2Stream) {
       if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+        accumulatedText += chunk.delta.text;
         onChunk(chunk.delta.text);
       }
     }
@@ -995,5 +1061,15 @@ export async function streamCopilotoChat(
       cacheCreationTokens: phase2Msg.usage.cache_creation_input_tokens ?? 0,
       latencyMs:           Date.now() - phase2Started,
     });
+  }
+
+  // Después de todas las phases, parseamos [ACCIONES]...[/ACCIONES] en el
+  // texto total. Si hay acciones válidas, las emitimos via callback para
+  // que el router las mande al cliente como un evento SSE separado.
+  if (onActions) {
+    const parsed = parseActionsBlock(accumulatedText);
+    if (parsed) {
+      try { onActions(parsed.actions, parsed.rawBlock); } catch { /* swallow */ }
+    }
   }
 }
