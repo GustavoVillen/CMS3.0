@@ -21,6 +21,7 @@ const MATCHING_KEY: Record<ExcelModule, string> = {
   spares:            "sku",
   providers:         "providerCode",
   certificates:      "certificateCode",
+  work_orders:       "workOrderCode",
 };
 
 const HEADER_ALIASES: Record<string, string> = {

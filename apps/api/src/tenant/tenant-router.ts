@@ -1046,7 +1046,8 @@ export async function handleTenantRoutes(
   // ── Copiloto file upload ───────────────────────────────────────────────────
   if (method === "POST" && url.pathname === "/app/copiloto/parse-file") {
     const slug = requireTenantSlug(request, env);
-    requireTenantAccessSession(request, slug);
+    const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `ai-parse-file:${session.user.id}`, { maxRequests: 15, windowMs: 60_000 });
 
     const chunks: Buffer[] = [];
     for await (const chunk of request) {
@@ -1128,6 +1129,7 @@ export async function handleTenantRoutes(
   if (method === "POST" && url.pathname === "/app/copiloto/analyze-deficiency") {
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `ai-analyze:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as {
       planTitle?: string; vesselCode?: string; deficienciesNotes?: string;
     };
@@ -1156,6 +1158,7 @@ export async function handleTenantRoutes(
   if (method === "POST" && url.pathname === "/app/copiloto/analyze-postponement") {
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `ai-analyze:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as {
       planTitle?: string; vesselCode?: string; triggerType?: string;
       justification?: string; newDueDate?: string | null; newDueHours?: string | null;

@@ -508,16 +508,19 @@ export async function cancelDeferral(session: TenantAccessSession, id: string) {
   // Cancelling the deferral should restore the WO to PLANNED and clear holdReason.
   if (current.sourceType === "WORK_ORDER") {
     try {
+      // Defense-in-depth: filtramos por tenantId aunque sourceId no sea input
+      // del usuario en cancel (se setea en el create). Si en el futuro alguien
+      // expone el campo, este guard evita el cross-tenant read/write.
       const woClient = (prismaRaw as unknown as {
         workOrder: {
-          findUnique(a: { where: { id: string }; select?: Record<string, boolean> }): Promise<{ status: string } | null>;
-          update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+          findFirst(a: { where: { id: string; tenantId: string }; select?: Record<string, boolean> }): Promise<{ status: string } | null>;
+          updateMany(a: { where: { id: string; tenantId: string }; data: Record<string, unknown> }): Promise<{ count: number }>;
         };
       }).workOrder;
-      const wo = await woClient.findUnique({ where: { id: current.sourceId }, select: { status: true } });
+      const wo = await woClient.findFirst({ where: { id: current.sourceId, tenantId: current.tenantId }, select: { status: true } });
       if (wo?.status === "ON_HOLD") {
-        await woClient.update({
-          where: { id: current.sourceId },
+        await woClient.updateMany({
+          where: { id: current.sourceId, tenantId: current.tenantId },
           data: { status: "PLANNED", holdReason: null, updatedByUserId: session.user.id },
         });
       }

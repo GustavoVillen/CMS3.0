@@ -10,6 +10,29 @@ export interface AiInsightListFilters {
   targetType?: string | null;
 }
 
+// Whitelist de valores válidos para los enums Prisma — coincide con el schema.
+// Si llega un valor distinto, lo ignoramos (en vez de pasarlo crudo a Prisma
+// donde tira un 500 o devuelve [] sin contexto).
+const INSIGHT_STATUS_SET = new Set(["OPEN", "DISMISSED", "RESOLVED"]);
+const INSIGHT_TARGET_TYPE_SET = new Set([
+  "VESSEL", "ASSET", "WORK_ORDER", "DEFECT", "CAPA",
+  "SPARE", "CERTIFICATE", "INSPECTION", "FLEET",
+]);
+const INSIGHT_TYPE_SET = new Set([
+  "backlog_risk", "repeated_failure", "repeated_deferral", "pm_frequency_review",
+  "stock_below_minimum", "stock_below_reorder_point", "certificate_expiring",
+  "certificate_expired", "inspection_failure_pattern", "overdue_capa",
+  "overdue_work_order", "documentation_gap", "operational_anomaly",
+  "recurring_asset_downtime", "trend_based_maintenance_improvement",
+  "cross_vessel_spare_availability", "fleet_repeated_failure_pattern",
+  "fleet_known_fix_suggestion", "fleet_shared_operational_experience",
+]);
+
+function pickEnum(value: string | null | undefined, set: Set<string>): string | null {
+  if (!value) return null;
+  return set.has(value) ? value : null;
+}
+
 export async function listTenantAiInsights(
   session: TenantAccessSession,
   filters: AiInsightListFilters = {},
@@ -51,9 +74,13 @@ export async function listTenantAiInsights(
       Object.assign(where, vesselClause);
     }
   }
-  if (filters.status)      where.status      = filters.status;
-  if (filters.insightType) where.insightType = filters.insightType;
-  if (filters.targetType)  where.targetType  = filters.targetType;
+  const validStatus      = pickEnum(filters.status,      INSIGHT_STATUS_SET);
+  const validInsightType = pickEnum(filters.insightType, INSIGHT_TYPE_SET);
+  const validTargetType  = pickEnum(filters.targetType,  INSIGHT_TARGET_TYPE_SET);
+  if (validStatus)      where.status      = validStatus;
+  if (validInsightType) where.insightType = validInsightType;
+  // Solo aplicamos filtro targetType si NO entró ya por scope de vessel arriba.
+  if (validTargetType && where.targetType === undefined) where.targetType = validTargetType;
 
   return prisma.aiInsight.findMany({
     where,

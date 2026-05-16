@@ -1,5 +1,47 @@
 HISTORY.txt
 
+[2026-05-16] Auditoría general — fixes cortos de alto impacto (4 de 5)
+Agent: Claude Opus 4.7
+Contexto: auditoría general de calidad disparada por el usuario. 3 agentes
+en paralelo barrieron backend, frontend y transversal. El informe consolidado
+priorizó 18 findings; estos 4 son los de fix corto + alto impacto.
+
+1. Rate-limit a endpoints AI del copiloto (tenant-router.ts)
+   - POST /app/copiloto/parse-file: enforceRateLimit ai-parse-file (15/min)
+   - POST /app/copiloto/analyze-deficiency: ai-analyze (30/min)
+   - POST /app/copiloto/analyze-postponement: ai-analyze (30/min)
+   Antes: 3 endpoints que llamaban a Claude sin protección → riesgo de costo
+   descontrolado si alguien los martillea con scripts.
+
+2. tenantId en cancel deferral (deferrals-service.ts:511-525)
+   El workOrder.findUnique en cancelDeferral usaba where: { id: sourceId }
+   sin tenantId. Defense-in-depth: si en el futuro alguien expone sourceId
+   como input, este guard evita cross-tenant read/write. Cambié findUnique
+   → findFirst y update → updateMany para permitir compound where.
+
+3. MATCHING_KEY para work_orders (excel-parser.ts:17)
+   El Record<ExcelModule, string> requería la key "work_orders" pero el
+   objeto literal no la incluía. TS marcaba el error pero el código corría
+   con undefined en runtime, rompiendo deduplicación de filas al importar
+   WO por Excel. Fix: agregar "work_orders": "workOrderCode".
+
+4. Validación de enums en ai-insights filters (ai-insights-service.ts)
+   listTenantAiInsights pasaba filters.status / insightType / targetType
+   crudos a Prisma WHERE. Si llegaba un valor fuera del enum, Prisma
+   devolvía vacío sin contexto (o tiraba 500 en el peor caso). Agregué
+   3 whitelists (INSIGHT_STATUS_SET, INSIGHT_TYPE_SET, INSIGHT_TARGET_TYPE_SET)
+   con helper pickEnum() que valida o retorna null.
+
+Pendiente (no abordado en este commit):
+- /uploads/* sin auth de sesión. Filenames son randomUUID (no enumerables)
+  pero quien obtiene un filename puede descargar sin auth. requireTenantAccessSession
+  lee Bearer del header Authorization, que <img src> y <a href> no envían.
+  Fix simple rompería el front. Solución correcta: signed URLs o proxy
+  autenticado (/app/files/* con Bearer → stream del archivo). Requiere
+  cambios en backend + frontend. Documentado para sesión separada.
+
+Verificado: tsc API sin errores nuevos (87 preexistentes, todos no relacionados).
+
 [2026-05-15] Mobile WO — Horas reales más grandes y fáciles de cargar (tap + stepper)
 Agent: Claude Opus 4.7
 Pedido del usuario: en mobile la celda "Reales" del HoursPanel era muy chica
