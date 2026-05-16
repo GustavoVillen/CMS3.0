@@ -417,21 +417,24 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
         (updated as { rcaRootCause?: string | null }).rcaRootCause
           ?? current.rcaRootCause ?? null,
       ].filter(Boolean).join("\n\n").trim() || null;
-      const capaResult = await createCapaInternal(prismaRaw as unknown as Parameters<typeof createCapaInternal>[0], {
-        tenantId:    current.tenantId,
-        vesselCode:  current.vesselCode,
-        assetId:     current.assetId,
-        // El RCA vive dentro del defecto — anclamos la CAPA al defectId.
-        // sourceType debe ser un valor del enum CapaSourceType del schema
-        // (DEFECT | WORK_ORDER | INSPECTION). Antes decía "RCA" y Prisma
-        // lo rechazaba en runtime con "Invalid value for argument sourceType".
-        sourceType:  "DEFECT",
-        sourceId:    current.id,
-        priority:    priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
-        title:       `CAPA preventiva — RCA aprobado del defecto ${current.defectCode}`,
-        description,
-        actorUserId: session.user.id,
-      });
+      // $transaction envuelve la creación de CAPA para que el advisory lock
+      // dentro de createCapaInternal funcione (pg_advisory_xact_lock requiere
+      // tx activa). Sin tx, dos requests simultáneas pueden crear 2 CAPAs
+      // duplicadas para el mismo defecto.
+      const capaResult = await (prismaRaw as unknown as { $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> }).$transaction(async (tx) =>
+        createCapaInternal(tx as Parameters<typeof createCapaInternal>[0], {
+          tenantId:    current.tenantId,
+          vesselCode:  current.vesselCode,
+          assetId:     current.assetId,
+          // El RCA vive dentro del defecto — anclamos la CAPA al defectId.
+          sourceType:  "DEFECT",
+          sourceId:    current.id,
+          priority:    priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+          title:       `CAPA preventiva — RCA aprobado del defecto ${current.defectCode}`,
+          description,
+          actorUserId: session.user.id,
+        }),
+      );
       if (capaResult && !capaResult.alreadyExisted) {
         void publishAudit(prismaRaw, {
           tenantId: current.tenantId,

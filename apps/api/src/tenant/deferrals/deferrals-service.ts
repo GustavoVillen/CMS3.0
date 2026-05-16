@@ -32,9 +32,9 @@ export async function listTenantDeferrals(session: TenantAccessSession, filters:
   const planIds = deferrals.filter(d => d.sourceType === "MAINTENANCE_PLAN"  ).map(d => d.sourceId);
 
   const [workOrders, defects, plans] = await Promise.all([
-    woIds.length   > 0 ? prisma.workOrder.findMany({ where: { id: { in: woIds   }, tenantId: tenant.id }, select: { id: true, workOrderCode: true } }) : [],
-    defIds.length  > 0 ? prisma.defect.findMany(   { where: { id: { in: defIds  }, tenantId: tenant.id }, select: { id: true, defectCode:    true } }) : [],
-    planIds.length > 0 ? prisma.maintenancePlan.findMany({ where: { id: { in: planIds }, tenantId: tenant.id }, select: { id: true, taskCode: true } }) : [],
+    woIds.length   > 0 ? prisma.workOrder.findMany({ where: { id: { in: woIds   }, tenantId: tenant.id, deletedAt: null }, select: { id: true, workOrderCode: true } }) : [],
+    defIds.length  > 0 ? prisma.defect.findMany(   { where: { id: { in: defIds  }, tenantId: tenant.id, deletedAt: null }, select: { id: true, defectCode:    true } }) : [],
+    planIds.length > 0 ? prisma.maintenancePlan.findMany({ where: { id: { in: planIds }, tenantId: tenant.id, deletedAt: null }, select: { id: true, taskCode: true } }) : [],
   ]);
 
   const codeMap = new Map<string, string>();

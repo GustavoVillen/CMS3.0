@@ -222,6 +222,12 @@ export interface CopilotoRequest {
    * the client bundle — moved here for R-18). Default: undefined (text mode).
    */
   mode?: "voice" | null;
+  /**
+   * AbortSignal opcional. Si el cliente HTTP desconecta (cerrar tab,
+   * navegación), el router puede abortar la llamada a Claude para no
+   * facturar tokens de respuesta que nadie va a leer.
+   */
+  abortSignal?: AbortSignal;
 }
 
 const MOBILE_VOICE_INSTRUCTION = `[Modo: asistente móvil de voz. Reglas estrictas:
@@ -903,7 +909,7 @@ export async function streamCopilotoChat(
     tools: COPILOT_TOOLS,
     messages: baseMessages,
     metadata: { user_id: req.userId },
-  });
+  }, { signal: req.abortSignal });
 
   // Emit text chunks from phase 1 in real time
   for await (const chunk of phase1Stream) {
@@ -965,7 +971,7 @@ export async function streamCopilotoChat(
       // No tools in phase 2 — prevent infinite looping
       messages: phase2Messages,
       metadata: { user_id: req.userId },
-    });
+    }, { signal: req.abortSignal });
 
     for await (const chunk of phase2Stream) {
       if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {

@@ -20,6 +20,20 @@ export interface MonthlyDraftInput {
   vesselCode: string;
   year: number;
   month: number;
+  /** Si true, ignora el cache y regenera el draft llamando a la IA. */
+  force?: boolean;
+}
+
+// Cache in-memory por (tenant, vessel, year, month). TTL 24h. Evita
+// regenerar 10 veces el mismo mes cuando el usuario abre la pantalla.
+// Para meses ya pasados los datos no cambian; para el mes actual el TTL
+// hace que se refresque al día siguiente. Usar `force: true` para
+// regenerar a demanda.
+const draftCache = new Map<string, { result: MonthlyDraftOutput; expiresAt: number }>();
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+function makeCacheKey(tenantId: string, vesselCode: string, year: number, month: number): string {
+  return `${tenantId}|${vesselCode}|${year}|${month}`;
 }
 
 export interface MonthlyDraftOutput {
@@ -84,6 +98,17 @@ export async function generateMonthlyDraft(
   const month = Number(input.month);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new RouteError(400, "VALIDATION_ERROR", "year inválido.");
   if (!Number.isInteger(month) || month < 1 || month > 12)   throw new RouteError(400, "VALIDATION_ERROR", "month inválido.");
+
+  // Cache check: misma combinación generada en las últimas 24h → no llamamos
+  // a Claude de nuevo. Saving Claude tokens. Use force: true para regenerar.
+  const cacheKey = makeCacheKey(tenant.id, vesselCode, year, month);
+  if (!input.force) {
+    const cached = draftCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      log.info(`[monthly-draft] cache hit ${cacheKey}`);
+      return cached.result;
+    }
+  }
 
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd   = new Date(Date.UTC(year, month, 1));
@@ -243,7 +268,7 @@ export async function generateMonthlyDraft(
     throw new RouteError(502, "AI_PARSE_ERROR", "La IA devolvió un formato inválido.");
   }
 
-  return {
+  const result: MonthlyDraftOutput = {
     summary: String(parsed.summary ?? "").trim(),
     notes:   String(parsed.notes ?? "").trim(),
     kpis: {
@@ -258,6 +283,8 @@ export async function generateMonthlyDraft(
       runningHoursTotal: fuelAgg._sum.runningHoursMain ?? null,
     },
   };
+  draftCache.set(cacheKey, { result, expiresAt: Date.now() + DRAFT_TTL_MS });
+  return result;
 }
 
 async function safeAgg<T>(fn: () => Promise<T>): Promise<{ _sum: { fuelConsumedLiters?: number | null; runningHoursMain?: number | null } }> {

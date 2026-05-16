@@ -1092,6 +1092,13 @@ export async function handleTenantRoutes(
     // Validar capability contra whitelist — antes pasaba cualquier string
     // y el get del prompt podía cargar capabilities no autorizadas.
     const capability = ensureCapability(body.capability ?? "knowledge_assistant");
+
+    // Si el cliente cierra la conexión (cerrar pestaña, navegar fuera),
+    // cancelamos la llamada a Claude vía AbortSignal. Antes el stream
+    // seguía consumiendo tokens hasta que terminara la respuesta completa.
+    const abortController = new AbortController();
+    response.on("close", () => abortController.abort());
+
     try {
       await streamCopilotoChat(
         {
@@ -1106,6 +1113,7 @@ export async function handleTenantRoutes(
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
           mode:           body.mode ?? null,
+          abortSignal:    abortController.signal,
         },
         (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
       );

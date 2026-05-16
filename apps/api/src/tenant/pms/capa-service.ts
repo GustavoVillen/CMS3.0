@@ -437,7 +437,8 @@ export async function cancelCapaRecord(session: TenantAccessSession, id: string,
 
 /**
  * Cliente Prisma usable como el cliente global o como un tx dentro de una
- * transaction abierta por otro servicio. Solo necesita `capaRecord`.
+ * transaction abierta por otro servicio. Necesita `capaRecord` y, para el
+ * advisory lock anti-race, `$queryRaw`.
  */
 type CapaCreatorPrisma = {
   capaRecord: {
@@ -445,7 +446,22 @@ type CapaCreatorPrisma = {
     create(args: { data: Record<string, unknown> }): Promise<{ id: string; capaCode: string; title: string; vesselCode: string }>;
     count(args: { where: Record<string, unknown> }): Promise<number>;
   };
+  $queryRawUnsafe?: (query: string, ...params: unknown[]) => Promise<unknown>;
 };
+
+/**
+ * Hash determinístico de un string a un int32 (rango aceptable para
+ * pg_advisory_xact_lock). FNV-1a: distribución decente y rápido.
+ */
+function hashToInt32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  // Postgres pg_advisory_xact_lock(int) acepta int32 signed.
+  return h | 0;
+}
 
 export interface CapaInternalInput {
   tenantId: string;
@@ -467,6 +483,23 @@ export async function createCapaInternal(
   prisma: CapaCreatorPrisma,
   input: CapaInternalInput,
 ): Promise<{ id: string; capaCode: string; alreadyExisted: boolean } | null> {
+  // Anti-race: si dos requests entran al mismo tiempo (ej. RCA aprobado 2x),
+  // el findFirst de ambas devuelve null y ambas crean una CAPA. Para
+  // prevenirlo, tomamos un advisory lock de Postgres por (tenantId, sourceType,
+  // sourceId). El lock dura la transacción enclosing (o la statement si no
+  // hay tx). Si el caller pasó un tx (inspection-executions), el lock vive
+  // hasta el commit; si pasó el client global (defects on RCA), el lock vive
+  // hasta esta función. Suficiente para serializar el findFirst+create.
+  if (prisma.$queryRawUnsafe) {
+    const lockKey = hashToInt32(`${input.tenantId}|${input.sourceType}|${input.sourceId}`);
+    try {
+      await prisma.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(${lockKey})`);
+    } catch {
+      // Si la DB no soporta advisory locks (test runner, sqlite, etc.), seguimos
+      // sin lock — el peor caso es el race que el lock previene.
+    }
+  }
+
   // Anti-duplicado: si ya hay una CAPA activa (no terminal) para el mismo
   // (sourceType, sourceId), no creamos otra.
   const existing = await prisma.capaRecord.findFirst({

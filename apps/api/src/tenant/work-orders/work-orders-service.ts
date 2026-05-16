@@ -493,7 +493,7 @@ async function applySpareUsagesToWo(
   const validIds = new Set<string>();
   if (proposedIds.length > 0) {
     const valid = await (prismaRaw as any).spare.findMany({
-      where: { id: { in: proposedIds }, tenantId: wo.tenantId },
+      where: { id: { in: proposedIds }, tenantId: wo.tenantId, deletedAt: null },
       select: { id: true },
     });
     for (const s of valid as Array<{ id: string }>) validIds.add(s.id);
