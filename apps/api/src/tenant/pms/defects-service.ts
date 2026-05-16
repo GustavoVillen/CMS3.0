@@ -415,8 +415,12 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
         tenantId:    current.tenantId,
         vesselCode:  current.vesselCode,
         assetId:     current.assetId,
-        sourceType:  "RCA",
-        sourceId:    current.id, // ligamos al defectId; el RCA vive dentro del defecto
+        // El RCA vive dentro del defecto — anclamos la CAPA al defectId.
+        // sourceType debe ser un valor del enum CapaSourceType del schema
+        // (DEFECT | WORK_ORDER | INSPECTION). Antes decía "RCA" y Prisma
+        // lo rechazaba en runtime con "Invalid value for argument sourceType".
+        sourceType:  "DEFECT",
+        sourceId:    current.id,
         priority:    priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
         title:       `CAPA preventiva — RCA aprobado del defecto ${current.defectCode}`,
         description,

@@ -15,7 +15,8 @@ export interface CapaListFilters {
 export interface CreateCapaRecordInput {
   vesselCode: string;
   assetId: string;
-  sourceType: "RCA" | "DEFECT" | "WORK_ORDER" | "INSPECTION";
+  // Debe coincidir con enum CapaSourceType del schema (DEFECT | WORK_ORDER | INSPECTION).
+  sourceType: "DEFECT" | "WORK_ORDER" | "INSPECTION";
   sourceId: string;
   priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   title: string;
@@ -449,7 +450,8 @@ export interface CapaInternalInput {
   tenantId: string;
   vesselCode: string;
   assetId: string;
-  sourceType: "RCA" | "DEFECT" | "WORK_ORDER" | "INSPECTION";
+  // Debe coincidir con enum CapaSourceType del schema (DEFECT | WORK_ORDER | INSPECTION).
+  sourceType: "DEFECT" | "WORK_ORDER" | "INSPECTION";
   sourceId: string;
   priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   title: string;
