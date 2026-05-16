@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-05-15] Mobile WO — Horas reales más grandes y fáciles de cargar (tap + stepper)
+Agent: Claude Opus 4.7
+Pedido del usuario: en mobile la celda "Reales" del HoursPanel era muy chica
+(lápiz de 12px, input chico, sin atajos). Querían que sea más grande y más
+fácil de actualizar a dedo.
+
+Cambios en HoursPanel (apps/web-modern/src/mobile/MobileWorkOrders.tsx):
+  - Modo lectura:
+    · Tipografía de los números pasó de text-base a text-xl
+    · La celda "Reales" entera es un botón tap-to-edit (no solo el lápiz)
+    · Mensaje guía cuando actual=null: "Tocá para cargar" en gris suave
+    · Lápiz visible al lado de "Reales" como hint, w-3.5 con color accent/60
+  - Modo edición (full-width, ocupa toda la fila):
+    · Input grande, centrado, text-3xl, border accent, padding generoso
+    · Stepper rápido de 5 chips: -1h | -0.5h | +0.5h | +1h | +2h
+      (los negativos en gris, los positivos en accent — todos tabular-nums)
+    · Botones Cancelar / Guardar full-width grid 2 cols, py-3, con iconos
+    · Helper "est. X h" arriba del input para tener la referencia visible
+  - Helper bump(delta) hace el stepper con clamp en 0 y redondeo a 2 dec
+    para evitar floats feos (1.7500000001).
+
+Verificado: tsc OK, vite build OK.
+
 [2026-05-15] Reporte por voz — mic separado por tipo (defect / near miss) + forcedType
 Agent: Claude Opus 4.7
 Pedido del usuario: en el sheet de "Acción rápida" (QuickActionFab), cada tile

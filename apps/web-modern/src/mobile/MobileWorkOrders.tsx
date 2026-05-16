@@ -377,71 +377,114 @@ const HoursPanel: React.FC<{
     deviation = { pct, color, label: `${sign}${pct.toFixed(0)}%` };
   }
 
+  // Sumador rápido para celular: el operario suma cuartos/medias/horas sin tipear.
+  const bump = (delta: number) => {
+    const current = Number(draft || "0");
+    const next = Math.max(0, current + delta);
+    // Evitar floats feos tipo 1.7500000001
+    setDraft(String(Math.round(next * 100) / 100));
+  };
+
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-3">
       <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Horas de la tarea</p>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <p className="text-[10px] text-text-industrial/40">Estimadas</p>
-          <p className="text-base font-bold text-white tabular-nums">{estimated != null ? `${estimated} h` : "—"}</p>
-        </div>
-        <div>
-          <div className="flex items-center justify-between gap-1">
-            <p className="text-[10px] text-text-industrial/40">{isClosed ? "Reales" : "Reales"}</p>
-            {isEditable && !editing && (
-              <button
-                type="button"
-                onClick={startEdit}
-                className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors"
-                aria-label="Editar horas reales"
-              >
-                <Pencil className="w-3 h-3" />
-              </button>
+
+      {editing ? (
+        // ── Modo edición: ocupa todo el ancho con stepper grande ─────────────
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[11px] uppercase tracking-wider text-accent font-bold">Horas reales</p>
+            {estimated != null && (
+              <p className="text-[10px] text-text-industrial/40 tabular-nums">est. {estimated} h</p>
             )}
           </div>
-          {editing ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.25"
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="h"
-                className="flex-1 min-w-0 bg-white/5 border border-accent/40 rounded-md px-2 py-1 text-sm text-white focus:outline-none"
-                disabled={saving}
-              />
+
+          {/* Input grande, centrado, teclado numérico decimal */}
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.25"
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="0"
+            className="w-full bg-white/5 border-2 border-accent/40 rounded-xl px-4 py-3 text-3xl font-bold text-white text-center tabular-nums focus:outline-none focus:border-accent"
+            disabled={saving}
+          />
+
+          {/* Sumador rápido — 5 chips de paso fijo */}
+          <div className="grid grid-cols-5 gap-1.5">
+            {[-1, -0.5, 0.5, 1, 2].map((d) => (
               <button
+                key={d}
                 type="button"
-                onClick={saveEdit}
+                onClick={() => bump(d)}
                 disabled={saving}
-                className="p-1 rounded-md bg-accent text-white disabled:opacity-50"
-                aria-label="Guardar"
+                className={`py-2.5 rounded-lg text-sm font-bold tabular-nums active:scale-95 transition-all ${
+                  d < 0
+                    ? "bg-white/5 border border-white/10 text-text-industrial hover:bg-white/10"
+                    : "bg-accent/15 border border-accent/30 text-accent hover:bg-accent/20"
+                }`}
               >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {d > 0 ? "+" : ""}{d}h
               </button>
-              <button
-                type="button"
-                onClick={cancelEdit}
-                disabled={saving}
-                className="p-1 rounded-md bg-white/10 text-text-industrial/60"
-                aria-label="Cancelar"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            ))}
+          </div>
+
+          {/* Guardar / Cancelar — full width, grandes para dedo */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-text-industrial disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            >
+              <X className="w-4 h-4" /> Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={saveEdit}
+              disabled={saving}
+              className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Guardar</>}
+            </button>
+          </div>
+        </div>
+      ) : (
+        // ── Modo lectura: grid 2 cols, Reales tap-to-edit en mobile ──────────
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-text-industrial/40">Estimadas</p>
+              <p className="text-xl font-bold text-white tabular-nums mt-0.5">{estimated != null ? `${estimated} h` : "—"}</p>
             </div>
-          ) : (
-            <p className="text-base font-bold text-white tabular-nums">{actual != null ? `${actual} h` : "—"}</p>
+            <button
+              type="button"
+              onClick={isEditable ? startEdit : undefined}
+              disabled={!isEditable}
+              className={`text-left rounded-lg p-2 -m-2 transition-colors ${
+                isEditable ? "hover:bg-white/5 active:bg-white/10 cursor-pointer" : "cursor-default"
+              }`}
+              aria-label={isEditable ? "Editar horas reales" : undefined}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[10px] text-text-industrial/40">Reales</p>
+                {isEditable && <Pencil className="w-3.5 h-3.5 text-accent/60" />}
+              </div>
+              <p className={`text-xl font-bold tabular-nums mt-0.5 ${actual != null ? "text-white" : "text-text-industrial/40"}`}>
+                {actual != null ? `${actual} h` : "Tocá para cargar"}
+              </p>
+            </button>
+          </div>
+          {deviation && (
+            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+              <span className="text-[10px] text-text-industrial/50 uppercase tracking-wider">Desvío</span>
+              <span className={`text-sm font-bold tabular-nums ${deviation.color}`}>{deviation.label}</span>
+            </div>
           )}
-        </div>
-      </div>
-      {deviation && !editing && (
-        <div className="flex items-center justify-between pt-1 border-t border-white/10">
-          <span className="text-[10px] text-text-industrial/50 uppercase tracking-wider">Desvío</span>
-          <span className={`text-sm font-bold tabular-nums ${deviation.color}`}>{deviation.label}</span>
-        </div>
+        </>
       )}
     </div>
   );
