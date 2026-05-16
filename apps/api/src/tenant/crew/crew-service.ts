@@ -35,7 +35,14 @@ export interface CrewWriteInput {
 
 function canManage(session: TenantAccessSession): boolean {
   const r = session.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT" || r === "MAINTENANCE_MANAGER";
+  // TECHNICIAN_OPERATOR a bordo (típicamente capitán/jefe) registra
+  // embarques/desembarques y datos del tripulante. INSPECTOR_COMPLIANCE
+  // también — debe poder corregir datos durante una auditoría.
+  return r === "TENANT_ADMIN"
+      || r === "FLEET_SUPERINTENDENT"
+      || r === "MAINTENANCE_MANAGER"
+      || r === "TECHNICIAN_OPERATOR"
+      || r === "INSPECTOR_COMPLIANCE";
 }
 
 function ensureCanManage(session: TenantAccessSession) {
