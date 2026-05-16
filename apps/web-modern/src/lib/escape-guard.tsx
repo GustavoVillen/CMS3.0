@@ -55,14 +55,31 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
   const dialogOpenRef = useRef(false);
   dialogOpenRef.current = dialog.open;
 
+  // Flag para distinguir back programático (limpieza de history) del back
+  // disparado por el usuario (botón físico Android, swipe gesture iOS).
+  const programmaticBackRef = useRef(false);
+
   const register = useCallback((g: Omit<Guard, "id">) => {
     const id = ++guardIdCounter;
     stackRef.current = [...stackRef.current, { ...g, id }];
+    // Pushear una entry "guard" al history para que el back button del
+    // sistema (Android, iOS swipe) pueda interceptarse y cerrar el guard
+    // en vez de navegar fuera de la app.
+    try { window.history.pushState({ __escapeGuard: id }, ""); } catch { /* noop */ }
     return id;
   }, []);
 
   const unregister = useCallback((id: number) => {
+    const wasTop = stackRef.current[stackRef.current.length - 1]?.id === id;
     stackRef.current = stackRef.current.filter(g => g.id !== id);
+    // Si el state actual del history es nuestro guard, lo limpiamos haciendo
+    // history.back() programáticamente. Marcamos el flag para que el listener
+    // de popstate no lo confunda con un back del usuario.
+    const state = window.history.state as { __escapeGuard?: number } | null;
+    if (wasTop && state?.__escapeGuard === id) {
+      programmaticBackRef.current = true;
+      try { window.history.back(); } catch { /* noop */ }
+    }
   }, []);
 
   const closeDialog = useCallback(() => {
@@ -124,6 +141,45 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [closeDialog, navigate]);
+
+  // ── Back button del sistema (Android / iOS swipe) ────────────────────────
+  // El mismo stack de guards reacciona también a popstate. Cada `register`
+  // pushea una entry custom; cuando el usuario hace back, este listener
+  // ejecuta onClose del top guard (o abre el dialog de confirmación si dirty).
+  useEffect(() => {
+    const onPopState = () => {
+      // Back programático (limpieza de history desde unregister) — ignorar.
+      if (programmaticBackRef.current) {
+        programmaticBackRef.current = false;
+        return;
+      }
+      // Si el dialog de confirmación está abierto, el back lo cancela y
+      // vuelve a empujar el state para mantener el guard "atrasable".
+      if (dialogOpenRef.current) {
+        closeDialog();
+        const top = stackRef.current[stackRef.current.length - 1];
+        if (top) {
+          try { window.history.pushState({ __escapeGuard: top.id }, ""); } catch { /* noop */ }
+        }
+        return;
+      }
+      const top = stackRef.current[stackRef.current.length - 1];
+      if (!top) return; // sin guards activos, dejar pasar el back nativo
+      if (top.isDirty()) {
+        // Abrir dialog y re-pushear para que el próximo back (cancel) funcione.
+        setDialog({ open: true, guard: top });
+        try { window.history.pushState({ __escapeGuard: top.id }, ""); } catch { /* noop */ }
+      } else {
+        // Cerrar limpio. onClose va a llamar a unregister que ya hace el
+        // history.back programático, pero como ya estamos en popstate
+        // (el back fue del usuario, no programático), no hace falta más
+        // limpieza — el state ya cambió.
+        top.onClose();
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [closeDialog]);
 
   return (
     <EscapeGuardContext.Provider value={{ register, unregister }}>

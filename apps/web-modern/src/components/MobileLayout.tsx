@@ -12,6 +12,7 @@ import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares } from "../mobile/MobileSpares";
 import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
+import { useEscapeGuard } from "../lib/escape-guard";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
 
@@ -48,6 +49,15 @@ export const MobileLayout: React.FC = () => {
     if (target === "panel") setTab("dashboard");
     else setTab(target);
   };
+
+  // Back button del sistema (Android / iOS swipe): si NO estamos en dashboard,
+  // volver al dashboard. Los modales/sub-vistas que estén apilados arriba
+  // tienen sus propios useEscapeGuard y se cierran primero (LIFO del stack).
+  useEscapeGuard({
+    enabled: tab !== "dashboard",
+    isDirty: false,
+    onClose: () => setTab("dashboard"),
+  });
 
   // FAB quick-action: cada acción navega al tab correspondiente.
   // Defect y near miss caen en el módulo Defectos (MobileDefects ya tiene un
