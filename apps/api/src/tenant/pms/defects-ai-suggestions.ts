@@ -494,7 +494,11 @@ CAMPOS PARA "defect":
 - description: reformulada en lenguaje TECNICO Y PROFESIONAL de superintendencia naval, manteniendo el contenido pero limpiando muletillas. 1-3 oraciones.
 - classification: "Mecanico" | "Electrico" | "Estructural" | "Hidraulico" | "Neumatico" | "Electronico" | "Pintura" | "Comunicaciones" | "Navegacion" | "Otro"
 - severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" (mismo criterio que en suggest-classification)
-- operationalState: "OPERATIONAL" | "OPERATIONAL_LIMITED" | "NON_OPERATIONAL"
+- operationalState: "NORMAL" | "DEGRADED" | "RESTRICTED" | "NO_GO"
+  · NORMAL = equipo opera sin restriccion
+  · DEGRADED = equipo opera pero con limitacion (potencia reducida, redundancia perdida)
+  · RESTRICTED = equipo opera solo bajo condiciones especificas o no continuamente
+  · NO_GO = equipo fuera de servicio, no se puede usar
 - immediateAction: bullets cortos con verbo accionable si el reporte menciona alguna accion tomada. null si no menciona.
 
 CAMPOS PARA "near_miss":

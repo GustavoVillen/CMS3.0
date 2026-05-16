@@ -146,20 +146,32 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
     [data],
   );
 
+  // Validar valores prefill contra los enums permitidos del form. Si la IA
+  // devuelve algo fuera de set (ej. "OPERATIONAL_LIMITED" cuando el enum es
+  // NORMAL|DEGRADED|RESTRICTED|NO_GO), caemos al default — el operario lo
+  // ajusta en el form antes de guardar.
+  const SEVERITY_SET = new Set(["CRITICAL", "HIGH", "MEDIUM", "LOW"]);
+  const OPSTATE_SET  = new Set(["NORMAL", "DEGRADED", "RESTRICTED", "NO_GO"]);
+  const NM_CATEGORY_SET = new Set(["NEAR_MISS", "HAZARD_OBSERVATION", "UNSAFE_ACT", "UNSAFE_CONDITION"]);
+  const pick = <T extends string>(value: string | undefined, allowed: Set<string>, fallback: T): T => {
+    const v = value?.trim().toUpperCase();
+    return v && allowed.has(v) ? (v as T) : fallback;
+  };
+
   const openCreate = (prefill?: VoiceReportFields) => {
     setAssetId(prefill?.assetId ?? "");
     setClassification(prefill?.classification?.trim() || "Mecánico");
     setDescription(prefill?.description?.trim() ?? "");
-    setSeverity(prefill?.severity?.trim() || "MEDIUM");
-    setOperationalState(prefill?.operationalState?.trim() || "NORMAL");
+    setSeverity(pick(prefill?.severity, SEVERITY_SET, "MEDIUM"));
+    setOperationalState(pick(prefill?.operationalState, OPSTATE_SET, "NORMAL"));
     setErr(null);
     clearPhotos();
     setView("create");
   };
 
   const openCreateNearMiss = (prefill?: VoiceReportFields) => {
-    setNmCategory(prefill?.category?.trim() || "NEAR_MISS");
-    setNmSeverity(prefill?.severity?.trim() || "MEDIUM");
+    setNmCategory(pick(prefill?.category, NM_CATEGORY_SET, "NEAR_MISS"));
+    setNmSeverity(pick(prefill?.severity, SEVERITY_SET, "MEDIUM"));
     setNmLocation(prefill?.location?.trim() ?? "");
     setNmDescription(prefill?.description?.trim() ?? "");
     setNmImmediateAction(prefill?.immediateAction?.trim() ?? "");
