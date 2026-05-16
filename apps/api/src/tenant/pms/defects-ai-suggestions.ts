@@ -546,6 +546,8 @@ export interface VoiceReportInput {
   userAnswer?: string;
   /** Snapshot del JSON anterior para que la IA refine en vez de reempezar. */
   previousState?: unknown;
+  /** Si el usuario tocó un mic específico (defect vs near miss), forzar tipo. */
+  forcedType?: "defect" | "near_miss";
 }
 
 export interface VoiceReportFields {
@@ -599,8 +601,15 @@ export async function parseVoiceReport(
 
   const assetListLines = assets.map(a => `- ${a.id} | ${a.sfiCode ?? ""} | ${a.name ?? "(sin nombre)"} | criticidad ${a.criticality}`).join("\n");
 
+  const forcedType = input.forcedType && ["defect", "near_miss"].includes(input.forcedType)
+    ? input.forcedType
+    : null;
+
   const userContent = [
     `Vessel: ${vesselCode}`,
+    forcedType
+      ? `TIPO FORZADO: "${forcedType}". El usuario eligió explícitamente este tipo desde la UI. NO clasifiques: usá "${forcedType}" sí o sí en el campo "type" del JSON, y extraé los campos correspondientes a ese tipo. Si la transcripción claramente no encaja con el tipo forzado (ej: forzado "defect" pero el usuario describe un near miss puro sin daño material), igual respetá el tipo y avisá en "reasoning" la inconsistencia.`
+      : null,
     `Transcripcion del reporte verbal:\n"${transcript}"`,
     input.userAnswer ? `Respuesta del usuario a la pregunta anterior: "${input.userAnswer}"` : null,
     input.previousState ? `Estado previo del parseo (refiná):\n${JSON.stringify(input.previousState).slice(0, 2000)}` : null,
@@ -633,6 +642,9 @@ export async function parseVoiceReport(
   parsed.fields = parsed.fields ?? {};
   parsed.missingFields = Array.isArray(parsed.missingFields) ? parsed.missingFields : [];
   parsed.nextQuestion = parsed.nextQuestion ?? null;
+
+  // Si el frontend forzó un tipo, lo respetamos aún si la IA lo cambió.
+  if (forcedType) parsed.type = forcedType;
 
   // Asset validation: si IA devolvio un assetId, debe estar en la lista.
   if (parsed.fields.assetId) {

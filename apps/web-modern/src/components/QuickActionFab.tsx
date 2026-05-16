@@ -6,9 +6,11 @@
 // que el padre (MobileLayout) traduce a cambio de tab + acción.
 
 import React, { useEffect, useState } from "react";
-import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, X } from "lucide-react";
+import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, X, Mic } from "lucide-react";
 
-export type QuickAction = "defect" | "near-miss" | "photo" | "wo-progress";
+export type QuickAction =
+  | "defect" | "near-miss" | "photo" | "wo-progress"
+  | "defect-voice" | "near-miss-voice";
 
 interface QuickActionFabProps {
   onAction: (a: QuickAction) => void;
@@ -53,6 +55,8 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
                 hint="Algo está roto o degradado"
                 color="text-orange-400 bg-orange-500/10 border-orange-500/30"
                 onClick={() => fire("defect")}
+                onMicClick={() => fire("defect-voice")}
+                micAriaLabel="Reportar defecto por voz"
               />
               <ActionTile
                 Icon={AlertOctagon}
@@ -60,6 +64,8 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
                 hint="Casi pasa algo grave"
                 color="text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
                 onClick={() => fire("near-miss")}
+                onMicClick={() => fire("near-miss-voice")}
+                micAriaLabel="Reportar near miss por voz"
               />
               <ActionTile
                 Icon={Camera}
@@ -93,14 +99,36 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
   );
 };
 
-const ActionTile: React.FC<{ Icon: React.FC<{ className?: string; strokeWidth?: number }>; label: string; hint: string; color: string; onClick: () => void }> = ({ Icon, label, hint, color, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`p-4 rounded-2xl border text-left active:scale-95 transition-transform ${color}`}
-  >
-    <Icon className="w-7 h-7 mb-2" strokeWidth={1.8} />
-    <p className="text-xs font-bold text-white leading-tight">{label}</p>
-    <p className="text-[10px] text-text-industrial/60 mt-0.5 leading-tight">{hint}</p>
-  </button>
+const ActionTile: React.FC<{
+  Icon: React.FC<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  hint: string;
+  color: string;
+  onClick: () => void;
+  /** Si está, muestra un sub-botón mic en la esquina superior derecha. */
+  onMicClick?: () => void;
+  micAriaLabel?: string;
+}> = ({ Icon, label, hint, color, onClick, onMicClick, micAriaLabel }) => (
+  <div className={`relative p-4 rounded-2xl border text-left ${color}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full text-left active:scale-95 transition-transform"
+    >
+      <Icon className="w-7 h-7 mb-2" strokeWidth={1.8} />
+      <p className="text-xs font-bold text-white leading-tight">{label}</p>
+      <p className="text-[10px] text-text-industrial/60 mt-0.5 leading-tight">{hint}</p>
+    </button>
+    {onMicClick && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onMicClick(); }}
+        aria-label={micAriaLabel ?? "Reportar por voz"}
+        title={micAriaLabel ?? "Reportar por voz"}
+        className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/40 border border-white/20 text-white flex items-center justify-center active:scale-90 hover:bg-black/60 transition-all"
+      >
+        <Mic className="w-4 h-4" />
+      </button>
+    )}
+  </div>
 );

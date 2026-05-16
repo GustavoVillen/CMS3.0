@@ -7,11 +7,12 @@ import { MobileCopilot } from "./MobileCopilot";
 import { CmsLogo } from "./CmsLogo";
 import { MobileDashboard } from "../mobile/MobileDashboard";
 import { MobileWorkOrders } from "../mobile/MobileWorkOrders";
-import { MobileDefects } from "../mobile/MobileDefects";
+import { MobileDefects, type DefectsVoicePrefill } from "../mobile/MobileDefects";
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares } from "../mobile/MobileSpares";
 import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
+import { VoiceReportSheet } from "./VoiceReportSheet";
 import { useEscapeGuard } from "../lib/escape-guard";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
@@ -44,6 +45,12 @@ export const MobileLayout: React.FC = () => {
   // con foco específico (ej. tocar "Vencidos" → filter "due")
   const [plansFilter, setPlansFilter] = useState<PlansFilter | undefined>(undefined);
 
+  // Voice report state — vive en el layout para que cualquier acción (FAB o
+  // dentro de Defectos) pueda abrir el mismo sheet.
+  const [voiceType, setVoiceType] = useState<"defect" | "near_miss" | null>(null);
+  // Prefill que MobileDefects consume al recibirlo (luego notifica consumed).
+  const [defectsPrefill, setDefectsPrefill] = useState<DefectsVoicePrefill | null>(null);
+
   const navigateFromDashboard = (target: DashboardTabTarget, opts?: { plansFilter?: PlansFilter }) => {
     if (opts?.plansFilter) setPlansFilter(opts.plansFilter);
     if (target === "panel") setTab("dashboard");
@@ -60,16 +67,21 @@ export const MobileLayout: React.FC = () => {
   });
 
   // FAB quick-action: cada acción navega al tab correspondiente.
-  // Defect y near miss caen en el módulo Defectos (MobileDefects ya tiene un
-  // formulario de creación; near miss queda como TODO de UX pero por ahora
-  // llevamos a defectos como home de reportes).
   const handleQuickAction = (a: QuickAction) => {
     switch (a) {
-      case "defect":      setTab("defectos"); break;
-      case "near-miss":   setTab("defectos"); break;  // TODO: pantalla mobile dedicada de near miss
-      case "photo":       setTab("ots"); break;       // foto se carga desde una OT (progress note)
-      case "wo-progress": setTab("ots"); break;
+      case "defect":           setTab("defectos"); break;
+      case "near-miss":        setTab("defectos"); break;
+      case "defect-voice":     setVoiceType("defect"); break;
+      case "near-miss-voice":  setVoiceType("near_miss"); break;
+      case "photo":            setTab("ots"); break;
+      case "wo-progress":      setTab("ots"); break;
     }
+  };
+
+  const handleVoiceComplete = (result: { type: "defect" | "near_miss"; fields: DefectsVoicePrefill["fields"] }) => {
+    setVoiceType(null);
+    setDefectsPrefill({ type: result.type, fields: result.fields });
+    setTab("defectos");
   };
 
   return (
@@ -112,7 +124,7 @@ export const MobileLayout: React.FC = () => {
           {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard onNavigate={navigateFromDashboard} /></div>}
           {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans initialFilter={plansFilter} /></div>}
           {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders /></div>}
-          {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects /></div>}
+          {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects prefill={defectsPrefill} onPrefillConsumed={() => setDefectsPrefill(null)} /></div>}
           {tab === "diario"     && <div className="h-full overflow-hidden flex flex-col"><MobileDailyReport /></div>}
           {tab === "repuestos"  && <div className="h-full overflow-hidden flex flex-col"><MobileSpares /></div>}
           {tab === "copiloto"   && <MobileCopilot />}
@@ -121,6 +133,15 @@ export const MobileLayout: React.FC = () => {
         {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
         {/* Lo ocultamos en tabs que ya tienen su propio "+" para no superponer. */}
         {tab !== "defectos" && <QuickActionFab onAction={handleQuickAction} />}
+
+        {/* ── Voice report sheet (compartido layout-wide) ──────────────────── */}
+        {voiceType && (
+          <VoiceReportSheet
+            forcedType={voiceType}
+            onClose={() => setVoiceType(null)}
+            onComplete={handleVoiceComplete}
+          />
+        )}
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
         <nav className="shrink-0 grid grid-cols-7 border-t border-white/10 bg-[#0D1B2A]">

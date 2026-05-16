@@ -34,6 +34,8 @@ interface VoiceReportSheetProps {
   onClose: () => void;
   /** Reporte completo y validado. Padre decide qué hacer con el prefill. */
   onComplete: (result: { type: "defect" | "near_miss"; fields: VoiceReportFields; reasoning?: string }) => void;
+  /** Si está, fuerza el tipo y la IA no clasifica (la UI muestra el tipo elegido). */
+  forcedType?: "defect" | "near_miss";
 }
 
 type Stage =
@@ -43,7 +45,7 @@ type Stage =
   | "recording-answer"
   | "error";
 
-export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onComplete }) => {
+export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onComplete, forcedType }) => {
   const { selectedVesselCode } = useVesselContext();
   const [stage, setStage]         = useState<Stage>("recording-initial");
   const [transcript, setTranscript] = useState("");
@@ -77,6 +79,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
       const r = await api.post<VoiceReportOutput>("/app/pms/defects/voice-report-parse", {
         transcript: text,
         vesselCode: selectedVesselCode,
+        forcedType,
       });
       setParsed(r);
       handleParsedResult(r);
@@ -99,6 +102,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
         vesselCode: selectedVesselCode,
         userAnswer: ans,
         previousState: parsed,
+        forcedType,
       });
       setParsed(r);
       setAnswerText("");
@@ -155,7 +159,11 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-accent font-bold">Reporte por voz</p>
+              <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                {forcedType === "defect"    ? "Defecto · por voz"
+                 : forcedType === "near_miss" ? "Near miss · por voz"
+                 : "Reporte por voz"}
+              </p>
               <h2 className="text-sm font-bold text-white">
                 {stage === "recording-initial" && "Contame qué pasó"}
                 {stage === "processing"        && "Procesando…"}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { ChevronLeft, Plus, Loader2, Camera, Sparkles, X, Mic } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -8,7 +8,7 @@ import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
 import { VoiceReportSheet } from "../components/VoiceReportSheet";
 
-interface VoiceReportFields {
+export interface VoiceReportFields {
   assetId?: string | null;
   description?: string;
   classification?: string;
@@ -17,6 +17,18 @@ interface VoiceReportFields {
   immediateAction?: string | null;
   category?: string;
   location?: string | null;
+}
+
+export interface DefectsVoicePrefill {
+  type: "defect" | "near_miss";
+  fields: VoiceReportFields;
+}
+
+interface MobileDefectsProps {
+  /** Prefill que viene del VoiceReportSheet abierto desde MobileLayout. */
+  prefill?: DefectsVoicePrefill | null;
+  /** Aviso al padre de que ya consumimos el prefill (para que lo limpie). */
+  onPrefillConsumed?: () => void;
 }
 
 interface Defect {
@@ -44,7 +56,7 @@ const labelCls = "text-xs font-bold uppercase tracking-wider text-text-industria
 
 type View = "list" | "create" | "create-nm" | "detail";
 
-export const MobileDefects: React.FC = () => {
+export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefillConsumed }) => {
   const { data, loading, reload } = useFetch<{ items: Defect[] }>("/app/pms/defects");
   const { data: assetData }       = useFetch<{ items: Asset[] }>("/app/assets");
   const { selectedVesselCode }    = useVesselContext();
@@ -161,6 +173,15 @@ export const MobileDefects: React.FC = () => {
     if (result.type === "near_miss") openCreateNearMiss(result.fields);
     else openCreate(result.fields);
   };
+
+  // Consumir prefill que viene del layout (voice sheet abierto en FAB).
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.type === "near_miss") openCreateNearMiss(prefill.fields);
+    else openCreate(prefill.fields);
+    onPrefillConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const handleCreateNearMiss = useCallback(async () => {
     if (!selectedVesselCode)    { setErr("Seleccioná un buque primero.");    return; }
@@ -543,8 +564,8 @@ export const MobileDefects: React.FC = () => {
         type="button"
         onClick={() => setVoiceOpen(true)}
         className="absolute bottom-5 right-24 w-14 h-14 rounded-full bg-white/10 border border-accent/40 text-accent flex items-center justify-center shadow-xl backdrop-blur-sm hover:bg-white/15 active:scale-95 transition-all"
-        aria-label="Reportar por voz"
-        title="Reportar defecto o near miss por voz"
+        aria-label="Reportar defecto por voz"
+        title="Reportar defecto por voz"
       >
         <Mic className="w-6 h-6" />
       </button>
@@ -559,6 +580,7 @@ export const MobileDefects: React.FC = () => {
 
       {voiceOpen && (
         <VoiceReportSheet
+          forcedType="defect"
           onClose={() => setVoiceOpen(false)}
           onComplete={handleVoiceComplete}
         />

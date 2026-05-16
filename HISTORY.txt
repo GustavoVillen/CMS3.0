@@ -1,5 +1,56 @@
 HISTORY.txt
 
+[2026-05-15] Reporte por voz — mic separado por tipo (defect / near miss) + forcedType
+Agent: Claude Opus 4.7
+Pedido del usuario: en el sheet de "Acción rápida" (QuickActionFab), cada tile
+de "Reportar defecto" y "Near miss" debe tener su PROPIO botón de micrófono
+(antes había un solo mic genérico). Cuando el usuario toca el mic de un tipo
+específico, la IA ya no clasifica — usa ese tipo directamente.
+
+Cambios:
+  - Backend (defects-ai-suggestions.ts):
+    · VoiceReportInput.forcedType?: "defect" | "near_miss"
+    · Si forcedType está, se inyecta en el prompt como "TIPO FORZADO" y se
+      sobreescribe parsed.type aún si la IA hubiera elegido otra cosa
+      (defensivo: el usuario eligió, respeta su elección)
+  - VoiceReportSheet.tsx:
+    · prop forcedType opcional, pasada en el body del POST
+    · Subtítulo del sheet refleja el tipo: "Defecto · por voz" o
+      "Near miss · por voz" (en vez del genérico "Reporte por voz")
+  - QuickActionFab.tsx:
+    · QuickAction extendido con "defect-voice" y "near-miss-voice"
+    · ActionTile ahora acepta onMicClick opcional + micAriaLabel y muestra
+      un sub-botón mic (esquina superior derecha, círculo bg-black/40) que
+      dispara el callback de voz con stopPropagation. Solo los tiles de
+      defect y near miss lo usan.
+  - MobileLayout.tsx:
+    · State voiceType: "defect" | "near_miss" | null
+    · handleQuickAction enruta defect-voice / near-miss-voice → setVoiceType
+    · <VoiceReportSheet forcedType={voiceType} ... /> renderiza al nivel del
+      layout, no de MobileDefects → cualquier acción puede dispararlo
+    · handleVoiceComplete pasa el prefill a MobileDefects via prop +
+      navega al tab "defectos"
+  - MobileDefects.tsx:
+    · Tipos exportados: VoiceReportFields, DefectsVoicePrefill
+    · Props: prefill?: DefectsVoicePrefill | null, onPrefillConsumed?
+    · useEffect consume prefill y abre el form (create o create-nm) +
+      notifica al padre para limpiar el estado
+    · El mic FAB existente al lado del "+" ahora usa forcedType="defect"
+      (estamos en tab Defectos, no tiene sentido permitir near miss desde
+      ahí — para near miss el camino es FAB → tile near miss → mic)
+
+UX final:
+  - Tap en el área principal del tile "Reportar defecto" → tab defectos
+    (flujo manual, igual que antes)
+  - Tap en el mic dentro del tile "Reportar defecto" → VoiceReportSheet
+    con forcedType="defect" → al terminar abre form "Nuevo Defecto"
+    precargado
+  - Idem para "Near miss" → form "Nuevo Near Miss" precargado
+  - Mic adicional al lado del "+" en MobileDefects sigue disponible
+    (también forcedType="defect")
+
+Verificado: tsc web-modern OK, vite build OK.
+
 [2026-05-15] Reporte por voz en mobile — IA clasifica defect/near miss y precarga form
 Agent: Claude Opus 4.7
 Pedido del usuario: al lado del "+" en mobile, un botón para reportar verbalmente
