@@ -42,6 +42,7 @@ import {
   reopenCapaRecord,
   updateCapaRecord,
 } from "./capa-service";
+import { buildCapaPdf } from "./capa-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -286,6 +287,20 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof reopenCapaRecord>[2];
     sendJson(response, 200, await reopenCapaRecord(session, id, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/pms\/capa\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const record = await getCapaRecord(session, id);
+    const filename = `${record.capaCode}-${record.vesselCode}.pdf`;
+    const buffer = await buildCapaPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
   if (/^\/app\/pms\/capa\/[^/]+$/.test(url.pathname)) {

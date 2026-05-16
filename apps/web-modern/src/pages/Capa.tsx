@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Download, Loader2, ShieldCheck, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { downloadAuthedFile } from "../lib/authed-media";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -410,7 +411,16 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
             </div>
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => { void downloadAuthedFile(`/app/pms/capa/${record.id}/pdf`, `${record.capaCode}-${record.vesselCode}.pdf`); }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+              title="Descargar PDF"
+            >
+              <Download className="w-3.5 h-3.5" /> PDF
+            </button>
+            <div className="flex items-center gap-2">
             {record.status === "IN_PROGRESS" && (
               <button onClick={() => setShowCompleteModal(true)} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 transition-all">
                 {t("capa.complete")}
@@ -432,6 +442,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
               </button>
             )}
+            </div>
           </div>
         </div>
       </div>
