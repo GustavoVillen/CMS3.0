@@ -178,6 +178,16 @@ function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   return slug;
 }
 
+/**
+ * Quién puede crear/actualizar certificados (incluye upload de archivos).
+ * El TECHNICIAN_OPERATOR a bordo es el responsable de mantener los certs
+ * del buque al día — debería poder cargar el archivo renovado.
+ * Borrar sigue siendo solo TENANT_ADMIN (audit trail de compliance).
+ */
+function canWriteCertificates(session: import("./auth/session-store").TenantAccessSession): boolean {
+  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER", "TECHNICIAN_OPERATOR", "INSPECTOR_COMPLIANCE"].includes(session.user.role);
+}
+
 export async function handleTenantRoutes(
   method: string,
   url: URL,
@@ -514,7 +524,7 @@ export async function handleTenantRoutes(
   }
   if (method === "POST" && url.pathname === "/app/certificates") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden crear certificados.");
+    if (!canWriteCertificates(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para crear certificados.");
     const body = await readJsonBody<any>(request);
     sendJson(response, 201, await createTenantCertificate(session, body));
     return true;
@@ -529,12 +539,14 @@ export async function handleTenantRoutes(
       return true;
     }
     if (method === "PATCH") {
-      if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden editar certificados.");
+      if (!canWriteCertificates(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para editar certificados.");
       const body = await readJsonBody<any>(request);
       sendJson(response, 200, await updateTenantCertificate(session, id, body));
       return true;
     }
     if (method === "DELETE") {
+      // Mantener restrictivo: borrar un certificado afecta audit trail
+      // de compliance — solo admin del tenant.
       if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden eliminar certificados.");
       await deleteTenantCertificate(session, id);
       sendJson(response, 200, { ok: true });
@@ -545,7 +557,7 @@ export async function handleTenantRoutes(
   // ── Certificate source file upload ─────────────────────────────────────────
   if (method === "POST" && url.pathname === "/app/certificates/upload-source") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden subir archivos.");
+    if (!canWriteCertificates(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para subir archivos de certificados.");
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
     const chunks: Buffer[] = [];

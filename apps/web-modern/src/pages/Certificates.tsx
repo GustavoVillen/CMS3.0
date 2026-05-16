@@ -363,6 +363,13 @@ export const CertificatesPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
+  // Cualquier rol operativo puede crear/editar certificados (subir
+  // archivos renovados). Borrar sigue siendo solo admin.
+  const canWrite = isAdmin
+    || user?.role === "FLEET_SUPERINTENDENT"
+    || user?.role === "MAINTENANCE_MANAGER"
+    || user?.role === "TECHNICIAN_OPERATOR"
+    || user?.role === "INSPECTOR_COMPLIANCE";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
@@ -443,7 +450,7 @@ export const CertificatesPage: React.FC = () => {
       )}
 
       <PageHeader icon={FileText} title={t("page.certificates")} total={data?.total} onReload={reload}>
-        {isAdmin && (
+        {canWrite && (
           <button onClick={() => setFormCert(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("common.new")}
           </button>
@@ -460,7 +467,7 @@ export const CertificatesPage: React.FC = () => {
         error={error}
         keyFn={r => r.id}
         emptyText={t("empty.certificates")}
-        onRowClick={isAdmin ? row => { void openEdit(row); } : undefined}
+        onRowClick={canWrite ? row => { void openEdit(row); } : undefined}
       />
     </div>
   );
