@@ -621,7 +621,7 @@ async function parseVoiceReportInner(
   const assets = await (prisma as unknown as {
     asset: { findMany(a: unknown): Promise<Array<{ id: string; name: string | null; sfiCode: string | null; criticality: string }>> };
   }).asset.findMany({
-    where: { tenantId: tenant.id, vesselCode, deletedAt: null, status: "ACTIVE" },
+    where: { tenantId: tenant.id, vesselCode, deletedAt: null },
     select: { id: true, name: true, sfiCode: true, criticality: true } as never,
     orderBy: { name: "asc" },
     take: ASSET_LIST_LIMIT,
