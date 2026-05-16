@@ -1346,6 +1346,10 @@ model CapaRecord {
   owner            String?
   dueDate          DateTime?
   completedAt      DateTime?
+  // Acciones realizadas por el responsable de a bordo al sugerir cierre.
+  // Se rellena al pasar a PENDING_VERIFICATION; Gerencia Técnica la lee
+  // antes de aprobar el cierre y escribe verificationNote por su lado.
+  actionsTaken              String?
   verificationNote          String?
   effectivenessCriteria     String?
   effectivenessReviewDate   DateTime?

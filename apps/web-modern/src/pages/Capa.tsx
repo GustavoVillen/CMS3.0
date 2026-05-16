@@ -30,6 +30,9 @@ interface CapaRecord {
   owner: string | null;
   dueDate: string | null;
   completedAt: string | null;
+  /** Texto del responsable a bordo describiendo las acciones realizadas
+   * cuando sugiere el cierre. Visible a Gerencia Técnica al revisar. */
+  actionsTaken: string | null;
   verificationNote: string | null;
   cancelReason: string | null;
   createdAt: string;
@@ -64,16 +67,20 @@ interface CompleteCapaModalProps {
 
 const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, onSuccess }) => {
   const t = useT();
-  const [verificationNote, setVerificationNote] = useState("");
+  const [actionsTaken, setActionsTaken] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const onSave = useCallback(async () => {
+    if (!actionsTaken.trim()) {
+      setActionError("Describí las acciones realizadas antes de sugerir el cierre.");
+      return;
+    }
     setSaving(true);
     setActionError(null);
     try {
       await api.post(`/app/pms/capa/${capaId}/complete`, {
-        verificationNote: normalizeOptionalText(verificationNote) ?? undefined,
+        actionsTaken: actionsTaken.trim(),
       });
       onSuccess();
     } catch (err) {
@@ -81,30 +88,42 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
     } finally {
       setSaving(false);
     }
-  }, [capaId, onSuccess, t, verificationNote]);
+  }, [capaId, onSuccess, t, actionsTaken]);
 
   // ESC guard
-  const isDirty = useDirtyTracker({ verificationNote });
+  const isDirty = useDirtyTracker({ actionsTaken });
   useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("capa.complete")}</h2>
+          <h2 className="text-base font-bold text-white">Sugerir cierre de CAPA</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
+            <p className="text-[11px] text-text-industrial/80 leading-relaxed">
+              La CAPA pasará a estado <strong className="text-white">PENDIENTE DE VERIFICACIÓN</strong>.
+              Gerencia Técnica revisará las acciones y aprobará el cierre.
+            </p>
+          </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.verificationNote")}</label>
-            <textarea rows={4} value={verificationNote} onChange={e => setVerificationNote(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Acciones realizadas *</label>
+            <textarea
+              rows={6}
+              value={actionsTaken}
+              onChange={e => setActionsTaken(e.target.value)}
+              placeholder="Detallá las acciones correctivas/preventivas ejecutadas, fechas, recursos utilizados, evidencia disponible…"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+            />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sugerir cierre"}
           </button>
         </div>
       </div>
@@ -114,11 +133,14 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
 
 interface CloseCapaModalProps {
   capaId: string;
+  /** Acciones reportadas por el responsable a bordo. Se muestran como
+   * referencia antes del input de verificación. */
+  actionsTaken?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, onClose, onSuccess }) => {
+const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, onClose, onSuccess }) => {
   const t = useT();
   const [verificationNote, setVerificationNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -155,9 +177,21 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, onClose, onSucc
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          {actionsTaken && (
+            <div className="rounded-xl bg-accent/5 border border-accent/20 p-3">
+              <p className="text-[10px] uppercase tracking-wider text-accent mb-1">Acciones realizadas (informe a bordo)</p>
+              <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{actionsTaken}</p>
+            </div>
+          )}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.verificationNote")}</label>
-            <textarea rows={4} value={verificationNote} onChange={e => setVerificationNote(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Verificación de Gerencia Técnica *</label>
+            <textarea
+              rows={4}
+              value={verificationNote}
+              onChange={e => setVerificationNote(e.target.value)}
+              placeholder="Conformidad con las acciones reportadas, observaciones, criterio de cierre…"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+            />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -356,10 +390,16 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("status.completed")}</p>
                 <p className="text-sm text-white">{fmtDate(record.completedAt)}</p>
               </div>
+              {record.actionsTaken && (
+                <div className="bg-accent/5 border border-accent/20 rounded-xl p-3 sm:col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-accent">Acciones realizadas (sugerido por responsable a bordo)</p>
+                  <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.actionsTaken}</p>
+                </div>
+              )}
               {record.verificationNote && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
-                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.verificationNote")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap">{record.verificationNote}</p>
+                <div className="bg-success-sea/5 border border-success-sea/20 rounded-xl p-3 sm:col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-success-sea">Verificación de Gerencia Técnica</p>
+                  <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.verificationNote}</p>
                 </div>
               )}
               {record.cancelReason && (
@@ -421,9 +461,9 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               <Download className="w-3.5 h-3.5" /> PDF
             </button>
             <div className="flex items-center gap-2">
-            {record.status === "IN_PROGRESS" && (
+            {(record.status === "OPEN" || record.status === "IN_PROGRESS") && (
               <button onClick={() => setShowCompleteModal(true)} className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:brightness-110 transition-all">
-                {t("capa.complete")}
+                Sugerir cierre
               </button>
             )}
             {record.status === "PENDING_VERIFICATION" && (
@@ -448,7 +488,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
       </div>
 
       {showCompleteModal && <CompleteCapaModal capaId={record.id} onClose={() => setShowCompleteModal(false)} onSuccess={onSuccess} />}
-      {showCloseModal && <CloseCapaModal capaId={record.id} onClose={() => setShowCloseModal(false)} onSuccess={onSuccess} />}
+      {showCloseModal && <CloseCapaModal capaId={record.id} actionsTaken={record.actionsTaken} onClose={() => setShowCloseModal(false)} onSuccess={onSuccess} />}
       {showCancelModal && <CancelCapaModal capaId={record.id} onClose={() => setShowCancelModal(false)} onSuccess={onSuccess} />}
     </>
   );

@@ -51,6 +51,7 @@ interface CapaRecord {
   owner: string | null;
   dueDate: Date | null;
   completedAt: Date | null;
+  actionsTaken: string | null;
   verificationNote: string | null;
   cancelReason: string | null;
   createdAt: Date;
@@ -157,6 +158,12 @@ function applyVesselScope(
 function ensureStatus(current: string, expected: string, action: string) {
   if (current !== expected) {
     throw new RouteError(409, "INVALID_STATUS_TRANSITION", `${action} requiere estado ${expected} (actual: ${current}).`);
+  }
+}
+
+function ensureStatusIn(current: string, allowed: string[], action: string) {
+  if (!allowed.includes(current)) {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `${action} requiere estado ${allowed.join(" o ")} (actual: ${current}).`);
   }
 }
 
@@ -367,7 +374,17 @@ export async function updateCapaRecord(session: TenantAccessSession, id: string,
   return updated;
 }
 
-export async function completeCapaRecord(session: TenantAccessSession, id: string, payload: { verificationNote?: string }) {
+/**
+ * "Sugerir cierre" — el responsable de a bordo declara que ejecutó las
+ * acciones y solicita revisión de Gerencia Técnica. Pasa de OPEN o
+ * IN_PROGRESS → PENDING_VERIFICATION y guarda actionsTaken (requerido).
+ * Después Gerencia Técnica usa closeCapaRecord para aprobar.
+ */
+export async function completeCapaRecord(
+  session: TenantAccessSession,
+  id: string,
+  payload: { actionsTaken?: string; verificationNote?: string },
+) {
   ensureCanManageCapa(session);
 
   const prismaRaw = getPrismaClient();
@@ -375,21 +392,29 @@ export async function completeCapaRecord(session: TenantAccessSession, id: strin
   const capa = capaDelegate(prismaRaw);
 
   const current = await getCapaRecord(session, id);
-  ensureStatus(current.status, "IN_PROGRESS", "Complete");
+  ensureStatusIn(current.status, ["OPEN", "IN_PROGRESS"], "Sugerir cierre");
+
+  // El responsable a bordo debe describir qué hizo. Aceptamos actionsTaken
+  // como nombre nuevo; verificationNote queda como fallback por compatibilidad
+  // si algún cliente viejo aún lo manda.
+  const actions = normalizeRequiredText(
+    payload.actionsTaken ?? payload.verificationNote,
+    "actionsTaken",
+  );
 
   const completed = await capa.update({
     where: { id: current.id },
     data: {
       status: "PENDING_VERIFICATION",
       completedAt: new Date(),
-      verificationNote: normalizeOptionalText(payload.verificationNote),
+      actionsTaken: actions,
       updatedByUserId: session.user.id,
     },
   });
   void publishAudit(prismaRaw, {
     tenantId: completed.tenantId,
     actorUserId: session.user.id,
-    action: "Capa.completed",
+    action: "Capa.suggestedClose",
     entityType: "Capa",
     entityId: completed.id,
     metadata: { capaCode: completed.capaCode, title: completed.title, vesselCode: completed.vesselCode },

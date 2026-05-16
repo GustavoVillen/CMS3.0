@@ -234,7 +234,8 @@ export async function buildCapaPdf(session: TenantAccessSession, id: string): Pr
     // ── Text sections ─────────────────────────────────────────────────────────
     textSection("Título",      val(record.title));
     textSection("Descripción", val(record.description));
-    if (record.verificationNote) textSection("Nota de Verificación", val(record.verificationNote));
+    if (record.actionsTaken)     textSection("Acciones Realizadas (a bordo)", val(record.actionsTaken));
+    if (record.verificationNote) textSection("Verificación de Gerencia Técnica", val(record.verificationNote));
     if (record.cancelReason)     textSection("Motivo de Cancelación", val(record.cancelReason));
 
     // ── Footer (last page) ────────────────────────────────────────────────────
