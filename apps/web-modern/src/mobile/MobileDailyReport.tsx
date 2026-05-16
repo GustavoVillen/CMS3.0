@@ -14,6 +14,15 @@ interface DailyReport {
   oilConsumedLiters?: number | null;
   notes?: string | null;
   operationalStatus?: string | null;
+  positionLat?: number | null;
+  positionLon?: number | null;
+  currentPort?: string | null;
+  nextPort?: string | null;
+  etaNextPort?: string | null;
+  maintenanceOpportunity?: string | null;
+  sparesReceiptPossible?: string | null;
+  operationalRemarks?: string | null;
+  summary?: string | null;
 }
 
 interface Asset {
@@ -78,10 +87,23 @@ export const MobileDailyReport: React.FC = () => {
   const [oil, setOil]       = useState("");
   const [opStatus, setOp]   = useState("UNDERWAY");
   const [notes, setNotes]   = useState("");
+  // Posición geográfica + contexto portuario
+  const [posLat, setPosLat]               = useState("");
+  const [posLon, setPosLon]               = useState("");
+  const [currentPort, setCurrentPort]     = useState("");
+  const [nextPort, setNextPort]           = useState("");
+  const [etaNextPort, setEtaNextPort]     = useState("");
+  const [maintOpp, setMaintOpp]           = useState("UNKNOWN");
+  const [sparesRecv, setSparesRecv]       = useState("UNKNOWN");
+  const [opRemarks, setOpRemarks]         = useState("");
+  const [summary, setSummary]             = useState("");
   // Mapa assetId → horas totales del motor para ese activo
   const [hoursByAsset, setHoursByAsset] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
+  // Geolocation: pedimos al usuario una vez al abrir el form. Si denegado o
+  // sin GPS, dejamos los campos vacíos para que pueda escribir lat/lon a mano.
+  const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "ok" | "denied" | "unavailable">("idle");
 
   // Activos con trackDailyReport=true para el buque seleccionado
   const { data: assetsData } = useFetch<{ items: Asset[] }>(
@@ -96,6 +118,41 @@ export const MobileDailyReport: React.FC = () => {
     setFuel(""); setOil(""); setNotes(""); setOp("UNDERWAY");
     setHoursByAsset({});
     setErr(null);
+
+    // Prefill desde el último reporte del mismo buque: el contexto operativo
+    // (puertos, ETA, maintOpp, sparesRecv) raramente cambia de un día al otro;
+    // pre-llenarlo le ahorra al operador re-escribir lo mismo. Si cambió, lo edita.
+    const lastForVessel = selectedVesselCode
+      ? (data?.items ?? []).find(r => r.vesselCode === selectedVesselCode)
+      : undefined;
+    setCurrentPort(lastForVessel?.nextPort ?? lastForVessel?.currentPort ?? "");
+    setNextPort(lastForVessel?.nextPort ?? "");
+    setEtaNextPort(lastForVessel?.etaNextPort ? lastForVessel.etaNextPort.slice(0, 10) : "");
+    setMaintOpp(lastForVessel?.maintenanceOpportunity ?? "UNKNOWN");
+    setSparesRecv(lastForVessel?.sparesReceiptPossible ?? "UNKNOWN");
+    setOpRemarks("");
+    setSummary("");
+
+    // Geolocation — pedimos posición actual. Si denegado/no disponible,
+    // el operador puede tipear lat/lon a mano.
+    setPosLat(""); setPosLon("");
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+      setGeoStatus("loading");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setPosLat(pos.coords.latitude.toFixed(6));
+          setPosLon(pos.coords.longitude.toFixed(6));
+          setGeoStatus("ok");
+        },
+        (err) => {
+          setGeoStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+        },
+        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
+      );
+    } else {
+      setGeoStatus("unavailable");
+    }
+
     setView("create");
   };
 
@@ -107,6 +164,16 @@ export const MobileDailyReport: React.FC = () => {
     setOil(r.oilConsumedLiters != null ? String(r.oilConsumedLiters) : "");
     setOp(r.operationalStatus ?? "UNDERWAY");
     setNotes(r.notes ?? "");
+    setPosLat(r.positionLat != null ? String(r.positionLat) : "");
+    setPosLon(r.positionLon != null ? String(r.positionLon) : "");
+    setCurrentPort(r.currentPort ?? "");
+    setNextPort(r.nextPort ?? "");
+    setEtaNextPort(r.etaNextPort ? r.etaNextPort.slice(0, 10) : "");
+    setMaintOpp(r.maintenanceOpportunity ?? "UNKNOWN");
+    setSparesRecv(r.sparesReceiptPossible ?? "UNKNOWN");
+    setOpRemarks(r.operationalRemarks ?? "");
+    setSummary(r.summary ?? "");
+    setGeoStatus(r.positionLat != null ? "ok" : "idle");
     setHoursByAsset({});
     setErr(null);
     setView("create");
@@ -138,6 +205,15 @@ export const MobileDailyReport: React.FC = () => {
         fuelConsumedLiters: fuel ? parseFloat(fuel) : null,
         oilConsumedLiters:  oil  ? parseFloat(oil)  : null,
         notes: notes.trim() || null,
+        positionLat: posLat ? parseFloat(posLat) : null,
+        positionLon: posLon ? parseFloat(posLon) : null,
+        currentPort: currentPort.trim() || null,
+        nextPort:    nextPort.trim() || null,
+        etaNextPort: etaNextPort || null,
+        maintenanceOpportunity: maintOpp,
+        sparesReceiptPossible:  sparesRecv,
+        operationalRemarks: opRemarks.trim() || null,
+        summary: summary.trim() || null,
       };
 
       // 1) Crear o actualizar el reporte base
@@ -185,7 +261,7 @@ export const MobileDailyReport: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [editingId, selectedVesselCode, todayStr, opStatus, fuel, oil, notes, hoursByAsset, trackedAssets, reload]);
+  }, [editingId, selectedVesselCode, todayStr, opStatus, fuel, oil, notes, posLat, posLon, currentPort, nextPort, etaNextPort, maintOpp, sparesRecv, opRemarks, summary, hoursByAsset, trackedAssets, reload]);
 
   // Aliases para los handlers de escape-guard y para los onClick de botones
   const handleSaveDraft = useCallback(() => saveReport(false), [saveReport]);
@@ -267,6 +343,116 @@ export const MobileDailyReport: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Posición geográfica */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className={labelCls}>Posición geográfica</p>
+              <span className="text-[10px] text-text-industrial/40">
+                {geoStatus === "loading" && "📡 obteniendo…"}
+                {geoStatus === "ok"       && "✓ GPS"}
+                {geoStatus === "denied"   && "GPS denegado"}
+                {geoStatus === "unavailable" && "sin GPS"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.000001"
+                value={posLat}
+                onChange={e => setPosLat(e.target.value)}
+                placeholder="Latitud"
+                className={inputCls}
+              />
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.000001"
+                value={posLon}
+                onChange={e => setPosLon(e.target.value)}
+                placeholder="Longitud"
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {/* Puerto actual + próximo + ETA */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <p className={labelCls}>Puerto actual</p>
+              <input
+                type="text"
+                value={currentPort}
+                onChange={e => setCurrentPort(e.target.value)}
+                placeholder="ej. Buenos Aires"
+                className={inputCls}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className={labelCls}>Próximo puerto</p>
+              <input
+                type="text"
+                value={nextPort}
+                onChange={e => setNextPort(e.target.value)}
+                placeholder="ej. Rosario"
+                className={inputCls}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className={labelCls}>ETA próximo puerto</p>
+            <input
+              type="date"
+              value={etaNextPort}
+              onChange={e => setEtaNextPort(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          {/* Oportunidad de mantenimiento + recepción repuestos */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <p className={labelCls}>Op. mantenimiento</p>
+              <select value={maintOpp} onChange={e => setMaintOpp(e.target.value)} className={inputCls + " appearance-none"}>
+                <option value="UNKNOWN">Desconocida</option>
+                <option value="YES">Sí</option>
+                <option value="LIMITED">Limitada</option>
+                <option value="NO">No</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <p className={labelCls}>Recepción repuestos</p>
+              <select value={sparesRecv} onChange={e => setSparesRecv(e.target.value)} className={inputCls + " appearance-none"}>
+                <option value="UNKNOWN">Desconocida</option>
+                <option value="YES">Sí</option>
+                <option value="LIMITED">Limitada</option>
+                <option value="NO">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className={labelCls}>Comentarios operativos</p>
+            <textarea
+              value={opRemarks}
+              onChange={e => setOpRemarks(e.target.value)}
+              rows={2}
+              placeholder="Comentarios sobre la operación del día…"
+              className={inputCls + " resize-none"}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <p className={labelCls}>Resumen</p>
+            <textarea
+              value={summary}
+              onChange={e => setSummary(e.target.value)}
+              rows={2}
+              placeholder="Resumen de la jornada…"
+              className={inputCls + " resize-none"}
+            />
           </div>
 
           <div className="space-y-1.5">

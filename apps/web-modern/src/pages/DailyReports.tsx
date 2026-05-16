@@ -1008,7 +1008,38 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isClosed = !isNew && (liveReport!.status === "CLOSED" || !!liveReport!.integratedAt);
+  // Prefill del contexto operativo desde el último reporte del vessel
+  // (puerto actual = próximo puerto del último, ETA, maintOpp, etc.).
+  // Solo aplica al crear un reporte nuevo. Si el operador ya escribió
+  // algo en alguno de los campos, no lo pisamos.
+  useEffect(() => {
+    if (!isNew || !newVesselCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await api.get<{ items: DailyReport[] }>(`/app/daily-reports?vesselCode=${newVesselCode}`);
+        const last = list.items[0];
+        if (!last || cancelled) return;
+        // Solo seteamos los campos que el user todavía no tocó.
+        setCurrentPort(prev => prev || last.nextPort || last.currentPort || "");
+        setNextPort(prev => prev || last.nextPort || "");
+        setEtaNextPort(prev => prev || (last.etaNextPort ? last.etaNextPort.slice(0, 10) : ""));
+        setMaintOpp(prev => prev !== "UNKNOWN" ? prev : (last.maintenanceOpportunity ?? "UNKNOWN"));
+        setSpares(prev => prev !== "UNKNOWN" ? prev : (last.sparesReceiptPossible ?? "UNKNOWN"));
+      } catch { /* silently ignore */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, newVesselCode]);
+
+  // isClosed: realmente cerrado (status CLOSED). Bloquea TODO.
+  // isIntegrated: las horas/consumos/mantenimiento ya se propagaron a los planes.
+  // Los campos contextuales (puertos, ETA, oportunidad, comentarios) NO se
+  // integran a ningún lado, así que se pueden editar aún post-integración.
+  // Solo bloqueamos las tabs que SÍ afectan integración.
+  const isClosed = !isNew && liveReport!.status === "CLOSED";
+  const isIntegrated = !isNew && !!liveReport!.integratedAt;
+  const isOpDataLocked = isClosed || isIntegrated;
 
   const saveInfo = async () => {
     setSaving(true); setSaveError(null);
@@ -1496,11 +1527,11 @@ ${hasPos ? `
           {activeTab !== "info" && isNew && (
             <p className="text-xs text-text-industrial/40 text-center py-8">Guardá la información básica primero para habilitar esta sección.</p>
           )}
-          {!isNew && activeTab === "equipment"   && <EquipmentHoursTab reportId={liveReport!.id} vesselCode={liveReport!.vesselCode} disabled={isClosed} />}
-          {!isNew && activeTab === "consumos"    && <ConsumosTab       reportId={liveReport!.id} disabled={isClosed} />}
-          {!isNew && activeTab === "maintenance" && <MaintenanceTab    reportId={liveReport!.id} disabled={isClosed} prefillEntries={prevData?.maintenanceEntries} suggestions={suggestions?.maintenance as any[]} suggestionPeriod={suggestions?.period} />}
-          {!isNew && activeTab === "spares"      && <SpareUsageTab     reportId={liveReport!.id} disabled={isClosed} prefillEntries={prevData?.spareUsages}        suggestions={suggestions?.spares as any[]}      suggestionPeriod={suggestions?.period} />}
-          {!isNew && activeTab === "defects"     && <DefectEntriesTab  reportId={liveReport!.id} disabled={isClosed} prefillEntries={prevData?.defectEntries}       suggestions={suggestions?.defects as any[]}     suggestionPeriod={suggestions?.period} />}
+          {!isNew && activeTab === "equipment"   && <EquipmentHoursTab reportId={liveReport!.id} vesselCode={liveReport!.vesselCode} disabled={isOpDataLocked} />}
+          {!isNew && activeTab === "consumos"    && <ConsumosTab       reportId={liveReport!.id} disabled={isOpDataLocked} />}
+          {!isNew && activeTab === "maintenance" && <MaintenanceTab    reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.maintenanceEntries} suggestions={suggestions?.maintenance as any[]} suggestionPeriod={suggestions?.period} />}
+          {!isNew && activeTab === "spares"      && <SpareUsageTab     reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.spareUsages}        suggestions={suggestions?.spares as any[]}      suggestionPeriod={suggestions?.period} />}
+          {!isNew && activeTab === "defects"     && <DefectEntriesTab  reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.defectEntries}       suggestions={suggestions?.defects as any[]}     suggestionPeriod={suggestions?.period} />}
           {!isNew && activeTab === "deferrals"  && <DeferralsTab vesselCode={liveReport!.vesselCode} />}
         </div>
       </div>

@@ -22,6 +22,8 @@ export interface CreateDailyReportInput {
   fuelConsumedLiters?: number | null;
   oilConsumedLiters?: number | null;
   notes?: string | null;
+  operationalStatus?: string | null;
+  currentPort?: string | null;
   nextPort?: string | null;
   etaNextPort?: string | null;
   etdNextPort?: string | null;
@@ -140,6 +142,8 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
       fuelConsumedLiters: parseOptionalFloat(input.fuelConsumedLiters),
       oilConsumedLiters: parseOptionalFloat(input.oilConsumedLiters),
       notes: input.notes?.trim() || null,
+      operationalStatus: (input.operationalStatus || null) as never,
+      currentPort: input.currentPort?.trim() || null,
       nextPort: input.nextPort?.trim() || null,
       etaNextPort: parseOptionalDate(input.etaNextPort),
       etdNextPort: parseOptionalDate(input.etdNextPort),
@@ -173,6 +177,8 @@ export async function updateTenantDailyReport(session: TenantAccessSession, id: 
   if (input.fuelConsumedLiters !== undefined) data.fuelConsumedLiters = parseOptionalFloat(input.fuelConsumedLiters);
   if (input.oilConsumedLiters !== undefined) data.oilConsumedLiters = parseOptionalFloat(input.oilConsumedLiters);
   if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
+  if (input.operationalStatus !== undefined) data.operationalStatus = input.operationalStatus || null;
+  if (input.currentPort !== undefined) data.currentPort = input.currentPort?.trim() || null;
   if (input.nextPort !== undefined) data.nextPort = input.nextPort?.trim() || null;
   if (input.etaNextPort !== undefined) data.etaNextPort = parseOptionalDate(input.etaNextPort);
   if (input.etdNextPort !== undefined) data.etdNextPort = parseOptionalDate(input.etdNextPort);
