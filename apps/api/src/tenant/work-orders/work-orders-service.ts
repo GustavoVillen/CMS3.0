@@ -8,6 +8,7 @@ import { createDeferralInternal } from "../pms/deferrals-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 import { log } from "../../common/logger";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -411,40 +412,43 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-  const workOrderCode = `WO-${vesselCode}-${yy}-${String(existingCount + 1).padStart(4, "0")}`;
 
-  const created = await prisma.workOrder.create({
-    data: {
-      tenantId,
-      vesselCode,
-      assetId,
-      maintenancePlanId: null,
-      workOrderCode,
-      type: payload.type ?? "PREVENTIVE",
-      status: "PLANNED",
-      priority: payload.priority ?? "MEDIUM",
-      criticality: payload.criticality ?? "B",
-      openDate: parseOptionalDate(payload.openDate, "openDate") ?? new Date(),
-      dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
-      title: normalizeOptionalText(payload.title),
-      description: normalizeOptionalText(payload.description),
-      assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
-      estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
-      taskMasterId,
-      acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
-      loto: normalizeOptionalText(payload.loto),
-      riskLevel: normalizeOptionalText(payload.riskLevel),
-      riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
-      consequenceCategory: payload.consequenceCategory ?? null,
-      consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
-      department: payload.department ?? null,
-      location: normalizeOptionalText(payload.location),
-      communicationMethod: payload.communicationMethod ?? [],
-      distribution: payload.distribution ?? [],
-      createdByUserId: session.user.id,
-      updatedByUserId: session.user.id,
-    },
+  // Race protection con @@unique(workOrderCode): retry en P2002.
+  const created = await withUniqueRetry(async (attempt) => {
+    const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+    const workOrderCode = `WO-${vesselCode}-${yy}-${String(existingCount + 1 + attempt).padStart(4, "0")}`;
+    return prisma.workOrder.create({
+      data: {
+        tenantId,
+        vesselCode,
+        assetId,
+        maintenancePlanId: null,
+        workOrderCode,
+        type: payload.type ?? "PREVENTIVE",
+        status: "PLANNED",
+        priority: payload.priority ?? "MEDIUM",
+        criticality: payload.criticality ?? "B",
+        openDate: parseOptionalDate(payload.openDate, "openDate") ?? new Date(),
+        dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
+        title: normalizeOptionalText(payload.title),
+        description: normalizeOptionalText(payload.description),
+        assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
+        estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
+        taskMasterId,
+        acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
+        loto: normalizeOptionalText(payload.loto),
+        riskLevel: normalizeOptionalText(payload.riskLevel),
+        riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
+        consequenceCategory: payload.consequenceCategory ?? null,
+        consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
+        department: payload.department ?? null,
+        location: normalizeOptionalText(payload.location),
+        communicationMethod: payload.communicationMethod ?? [],
+        distribution: payload.distribution ?? [],
+        createdByUserId: session.user.id,
+        updatedByUserId: session.user.id,
+      },
+    });
   });
   void publishAudit(prismaRaw, {
     tenantId,
@@ -452,7 +456,7 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     action: "WorkOrder.created",
     entityType: "WorkOrder",
     entityId: created.id,
-    metadata: { workOrderCode, vesselCode, type: created.type },
+    metadata: { workOrderCode: created.workOrderCode, vesselCode, type: created.type },
   });
   return created;
 }

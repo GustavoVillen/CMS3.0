@@ -5,6 +5,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { createCapaInternal } from "./capa-service";
 import { log } from "../../common/logger";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface DefectListFilters {
   vesselCode?: string | null;
@@ -303,28 +304,33 @@ export async function createDefect(session: TenantAccessSession, payload: Create
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const defectCount = await defect.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-  const defectCode = `DEF-${vesselCode}-${yy}-${String(defectCount + 1).padStart(4, "0")}`;
   const reportedAt = parseOptionalDate(payload.reportedAt, "reportedAt") ?? new Date();
 
-  const created = await defect.create({
-    data: {
-      tenantId,
-      vesselCode,
-      assetId,
-      workOrderId,
-      defectCode,
-      status: payload.status ?? "OPEN",
-      severity: payload.severity ?? "MEDIUM",
-      operationalState: payload.operationalState ?? "NORMAL",
-      classification: normalizeRequiredText(payload.classification, "classification"),
-      reportedAt,
-      description: normalizeRequiredText(payload.description, "description"),
-      immediateAction: normalizeOptionalText(payload.immediateAction),
-      correctiveAction: normalizeOptionalText(payload.correctiveAction),
-      createdByUserId: session.user.id,
-      updatedByUserId: session.user.id,
-    },
+  // Race protection: count() + create() puede chocar con @@unique(defectCode)
+  // bajo concurrencia. withUniqueRetry reintenta con count+1+attempt en cada
+  // colisión P2002 (hasta 5 attempts).
+  const created = await withUniqueRetry(async (attempt) => {
+    const defectCount = await defect.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+    const defectCode = `DEF-${vesselCode}-${yy}-${String(defectCount + 1 + attempt).padStart(4, "0")}`;
+    return defect.create({
+      data: {
+        tenantId,
+        vesselCode,
+        assetId,
+        workOrderId,
+        defectCode,
+        status: payload.status ?? "OPEN",
+        severity: payload.severity ?? "MEDIUM",
+        operationalState: payload.operationalState ?? "NORMAL",
+        classification: normalizeRequiredText(payload.classification, "classification"),
+        reportedAt,
+        description: normalizeRequiredText(payload.description, "description"),
+        immediateAction: normalizeOptionalText(payload.immediateAction),
+        correctiveAction: normalizeOptionalText(payload.correctiveAction),
+        createdByUserId: session.user.id,
+        updatedByUserId: session.user.id,
+      },
+    });
   });
   void publishAudit(prismaRaw, {
     tenantId,
@@ -332,7 +338,7 @@ export async function createDefect(session: TenantAccessSession, payload: Create
     action: "Defect.created",
     entityType: "Defect",
     entityId: created.id,
-    metadata: { defectCode, vesselCode, severity: created.severity, classification: created.classification },
+    metadata: { defectCode: created.defectCode, vesselCode, severity: created.severity, classification: created.classification },
   });
   return created;
 }

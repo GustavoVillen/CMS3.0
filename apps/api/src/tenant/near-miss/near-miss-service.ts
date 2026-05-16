@@ -6,6 +6,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 const CATEGORIES = ["NEAR_MISS", "HAZARD_OBSERVATION", "UNSAFE_ACT", "UNSAFE_CONDITION"] as const;
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
@@ -121,15 +122,6 @@ export async function getNearMiss(session: TenantAccessSession, id: string) {
   return rec;
 }
 
-async function generateNearMissCode(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, tenantId: string, vesselCode: string): Promise<string> {
-  const year = new Date().getFullYear();
-  const yy = String(year).slice(-2);
-  const count = await delegate(prisma).count({
-    where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
-  });
-  return `NM-${vesselCode}-${yy}-${String(count + 1).padStart(4, "0")}`;
-}
-
 export async function createNearMiss(session: TenantAccessSession, input: NearMissWriteInput) {
   ensureCanWriteNearMiss(session);
   const prisma = getPrismaClient();
@@ -139,30 +131,37 @@ export async function createNearMiss(session: TenantAccessSession, input: NearMi
   if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(vesselCode)) {
     throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel solicitado.");
   }
-  const nearMissCode = await generateNearMissCode(prisma, tenantId, vesselCode);
-
-  const created = await delegate(prisma).create({
-    data: {
-      tenantId, vesselCode, nearMissCode,
-      category:          parseEnum(input.category, CATEGORIES, "category"),
-      severity:          input.severity ? parseEnum(input.severity, SEVERITIES, "severity") : "MEDIUM",
-      status:            "REPORTED",
-      occurredAt:        input.occurredAt ? parseDate(input.occurredAt, "occurredAt") : new Date(),
-      location:          normOpt(input.location),
-      description:       normReq(input.description, "description"),
-      immediateAction:   normOpt(input.immediateAction),
-      assetId:           normOpt(input.assetId),
-      reportedByName:    normOpt(input.reportedByName),
-      reportedByCrewId:  normOpt(input.reportedByCrewId),
-      createdByUserId:   session.user.id,
-      updatedByUserId:   session.user.id,
-    },
+  // Race protection con @@unique(nearMissCode): retry en P2002.
+  const year = new Date().getFullYear();
+  const yy = String(year).slice(-2);
+  const created = await withUniqueRetry(async (attempt) => {
+    const count = await delegate(prisma).count({
+      where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+    });
+    const nearMissCode = `NM-${vesselCode}-${yy}-${String(count + 1 + attempt).padStart(4, "0")}`;
+    return delegate(prisma).create({
+      data: {
+        tenantId, vesselCode, nearMissCode,
+        category:          parseEnum(input.category, CATEGORIES, "category"),
+        severity:          input.severity ? parseEnum(input.severity, SEVERITIES, "severity") : "MEDIUM",
+        status:            "REPORTED",
+        occurredAt:        input.occurredAt ? parseDate(input.occurredAt, "occurredAt") : new Date(),
+        location:          normOpt(input.location),
+        description:       normReq(input.description, "description"),
+        immediateAction:   normOpt(input.immediateAction),
+        assetId:           normOpt(input.assetId),
+        reportedByName:    normOpt(input.reportedByName),
+        reportedByCrewId:  normOpt(input.reportedByCrewId),
+        createdByUserId:   session.user.id,
+        updatedByUserId:   session.user.id,
+      },
+    });
   });
   void publishAudit(prisma, {
     tenantId, actorUserId: session.user.id,
     action: "NearMiss.created", entityType: "NearMissReport",
     entityId: (created as { id: string }).id,
-    metadata: { nearMissCode, vesselCode, category: input.category, severity: input.severity ?? "MEDIUM" },
+    metadata: { nearMissCode: (created as { nearMissCode: string }).nearMissCode, vesselCode, category: input.category, severity: input.severity ?? "MEDIUM" },
   });
   return created;
 }

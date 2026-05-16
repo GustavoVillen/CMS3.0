@@ -9,6 +9,7 @@ import { loginTenantUser, refreshTenantSession, logoutTenantSession } from "./au
 import { registerTenantAccessSession, revokeTenantAccessSession } from "./auth/session-store";
 import { requireTenantAccessSession } from "./auth/tenant-route-auth";
 import { acceptTenantInvitation } from "./invitations/tenant-invitations-service";
+import { ensureCapability } from "../platform/prompts/platform-prompts-service";
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import {
   listExternalAudits, getExternalAudit, createExternalAudit, updateExternalAudit, softDeleteExternalAudit,
@@ -1088,10 +1089,13 @@ export async function handleTenantRoutes(
       "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
     });
+    // Validar capability contra whitelist — antes pasaba cualquier string
+    // y el get del prompt podía cargar capabilities no autorizadas.
+    const capability = ensureCapability(body.capability ?? "knowledge_assistant");
     try {
       await streamCopilotoChat(
         {
-          capability:     body.capability    ?? "knowledge_assistant",
+          capability,
           locale:         body.locale        ?? "es",
           messages:       body.messages      ?? [],
           vesselCode:     body.vesselCode    ?? null,

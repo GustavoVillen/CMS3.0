@@ -53,7 +53,7 @@ const CAPABILITIES: DevPromptCapability[] = [
   "evidence_link_assistant",
 ];
 
-function ensureCapability(value: string): DevPromptCapability {
+export function ensureCapability(value: string): DevPromptCapability {
   const normalized = String(value || "").trim();
   if (!CAPABILITIES.includes(normalized as DevPromptCapability)) {
     throw new RouteError(400, "PROMPT_INVALID_CAPABILITY", "Prompt capability is invalid.");

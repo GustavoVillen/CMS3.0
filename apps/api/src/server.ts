@@ -179,21 +179,39 @@ setInterval(evictExpiredRateLimitBuckets, 10 * 60 * 1000).unref();
 setInterval(evictExpiredLockouts, 10 * 60 * 1000).unref();
 
 // ── Background insight scheduler — every 6 hours for all active tenants ───────
+//
+// Anti-overlap: si una corrida tarda más que el intervalo (improbable hoy con
+// pocos tenants, real al crecer), evitamos que arranque otra en paralelo.
+// Dos corridas simultáneas pueden hacer doble audit logs y, sin protección
+// en el upsert, race entre inserts del mismo insight.
+
+let insightSchedulerRunning = false;
 
 async function runInsightScheduler(): Promise<void> {
-  const { getPrismaClient } = await import("./platform/data/prisma-client");
-  const prisma = getPrismaClient();
-  if (!prisma) return;
+  if (insightSchedulerRunning) {
+    process.stdout.write("[insight-scheduler] skipped — previous run still in progress\n");
+    return;
+  }
+  insightSchedulerRunning = true;
+  const started = Date.now();
   try {
+    const { getPrismaClient } = await import("./platform/data/prisma-client");
+    const prisma = getPrismaClient();
+    if (!prisma) return;
     const tenants = await prisma.tenant.findMany({
       where: { status: "ACTIVE" },
       select: { id: true, slug: true },
     });
     for (const t of tenants) {
-      await generateInsightsForTenant(t.id).catch(() => {});
+      await generateInsightsForTenant(t.id).catch((err) => {
+        process.stderr.write(`[insight-scheduler] tenant=${t.slug} failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      });
     }
-  } catch {
-    // non-fatal
+    process.stdout.write(`[insight-scheduler] completed ${tenants.length} tenants in ${Date.now() - started}ms\n`);
+  } catch (err) {
+    process.stderr.write(`[insight-scheduler] aborted: ${err instanceof Error ? err.message : String(err)}\n`);
+  } finally {
+    insightSchedulerRunning = false;
   }
 }
 

@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface CapaListFilters {
   vesselCode?: string | null;
@@ -484,30 +485,34 @@ export async function createCapaInternal(
   // Generar capaCode con prefijo + vessel + año + secuencial.
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const yearCount = await prisma.capaRecord.count({
-    where: {
-      tenantId:   input.tenantId,
-      vesselCode: input.vesselCode,
-      createdAt:  { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) },
-    },
-  });
-  const capaCode = `CAPA-${input.vesselCode}-${yy}-${String(yearCount + 1).padStart(4, "0")}`;
 
-  const created = await prisma.capaRecord.create({
-    data: {
-      tenantId:        input.tenantId,
-      vesselCode:      input.vesselCode,
-      assetId:         input.assetId,
-      sourceType:      input.sourceType,
-      sourceId:        input.sourceId,
-      capaCode,
-      status:          "OPEN",
-      priority:        input.priority,
-      title:           input.title,
-      description:     input.description ?? null,
-      createdByUserId: input.actorUserId,
-      updatedByUserId: input.actorUserId,
-    },
+  // Race protection con @@unique(capaCode): si dos requests entran al mismo
+  // tiempo, el segundo crash con P2002 y reintentamos con count+1+attempt.
+  const created = await withUniqueRetry(async (attempt) => {
+    const yearCount = await prisma.capaRecord.count({
+      where: {
+        tenantId:   input.tenantId,
+        vesselCode: input.vesselCode,
+        createdAt:  { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) },
+      },
+    });
+    const capaCode = `CAPA-${input.vesselCode}-${yy}-${String(yearCount + 1 + attempt).padStart(4, "0")}`;
+    return prisma.capaRecord.create({
+      data: {
+        tenantId:        input.tenantId,
+        vesselCode:      input.vesselCode,
+        assetId:         input.assetId,
+        sourceType:      input.sourceType,
+        sourceId:        input.sourceId,
+        capaCode,
+        status:          "OPEN",
+        priority:        input.priority,
+        title:           input.title,
+        description:     input.description ?? null,
+        createdByUserId: input.actorUserId,
+        updatedByUserId: input.actorUserId,
+      },
+    });
   });
   return { id: created.id, capaCode: created.capaCode, alreadyExisted: false };
 }

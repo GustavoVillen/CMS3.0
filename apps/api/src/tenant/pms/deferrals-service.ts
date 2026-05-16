@@ -4,6 +4,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { log } from "../../common/logger";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface DeferralListFilters {
   vesselCode?: string | null;
@@ -299,26 +300,29 @@ async function createDeferralCore(session: TenantAccessSession, payload: CreateD
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const deferralCount = await deferral.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-  const deferralCode = `APL-${vesselCode}-${yy}-${String(deferralCount + 1).padStart(4, "0")}`;
-  const created = await deferral.create({
-    data: {
-      tenantId,
-      vesselCode,
-      assetId,
-      sourceType: payload.sourceType,
-      sourceId,
-      deferralCode,
-      status: "REQUESTED",
-      requestedAt: parseOptionalDate(payload.requestedAt, "requestedAt") ?? new Date(),
-      requestedByUserId: session.user.id,
-      targetDate: parseOptionalDate(payload.targetDate, "targetDate"),
-      justification: normalizeOptionalText(payload.justification),
-      compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
-      reviewNotes: normalizeOptionalText(payload.reviewNotes),
-      createdByUserId: session.user.id,
-      updatedByUserId: session.user.id,
-    },
+  // Race protection con @@unique(deferralCode): retry en P2002.
+  const created = await withUniqueRetry(async (attempt) => {
+    const deferralCount = await deferral.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+    const deferralCode = `APL-${vesselCode}-${yy}-${String(deferralCount + 1 + attempt).padStart(4, "0")}`;
+    return deferral.create({
+      data: {
+        tenantId,
+        vesselCode,
+        assetId,
+        sourceType: payload.sourceType,
+        sourceId,
+        deferralCode,
+        status: "REQUESTED",
+        requestedAt: parseOptionalDate(payload.requestedAt, "requestedAt") ?? new Date(),
+        requestedByUserId: session.user.id,
+        targetDate: parseOptionalDate(payload.targetDate, "targetDate"),
+        justification: normalizeOptionalText(payload.justification),
+        compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
+        reviewNotes: normalizeOptionalText(payload.reviewNotes),
+        createdByUserId: session.user.id,
+        updatedByUserId: session.user.id,
+      },
+    });
   });
   void publishAudit(prismaRaw, {
     tenantId,

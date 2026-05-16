@@ -254,7 +254,11 @@ async function suggestAsset(
     const score = jaccard(ref, cand);
     if (!best || score > best.score) best = { id: a.id, name: a.name ?? a.assetCode ?? a.id, score };
   }
-  if (best && best.score >= 0.25) return best;
+  // Threshold 0.5: requiere al menos 50% de tokens compartidos (Jaccard).
+  // El 0.25 anterior era muy permisivo — "Motor Port" matchea con "Pump Motor"
+  // por compartir 1 token. Un match falso en fluid analyses lleva a registrar
+  // el análisis contra el activo equivocado.
+  if (best && best.score >= 0.5) return best;
   return null;
 }
 
