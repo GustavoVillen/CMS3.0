@@ -588,6 +588,44 @@ async function collectRepeatedFailureInsights(
   });
 }
 
+const DEFERRAL_TYPE_LABEL: Record<string, string> = {
+  OPERATIONAL_CONSTRAINT:      "restricción operacional",
+  NO_PORT_OPPORTUNITY:         "sin oportunidad en puerto",
+  SPARES_MISSING:              "faltan repuestos",
+  CONTRACTOR_REQUIRED:         "requiere contratista",
+  SAFETY_CONSTRAINT:           "restricción de seguridad",
+  WEATHER_CONSTRAINT:          "condiciones meteorológicas",
+  EQUIPMENT_CANNOT_BE_STOPPED: "equipo no puede detenerse",
+  PERMIT_NOT_AVAILABLE:        "permiso no disponible",
+  CREW_LIMITATION:             "limitación de tripulación",
+  LOW_RISK_RESCHEDULE:         "reprogramación de bajo riesgo",
+  OTHER:                       "otro",
+};
+
+function buildDeferralSummary(count: number, reasons: Array<{ type: string | null; justification: string | null }>): string {
+  const typeCounts = new Map<string, number>();
+  const justifications: string[] = [];
+  for (const r of reasons) {
+    if (r.type) {
+      const label = DEFERRAL_TYPE_LABEL[r.type] ?? r.type.replace(/_/g, " ").toLowerCase();
+      typeCounts.set(label, (typeCounts.get(label) ?? 0) + 1);
+    }
+    if (r.justification?.trim()) {
+      const j = r.justification.trim().replace(/\s+/g, " ");
+      justifications.push(j.length > 90 ? j.slice(0, 90) + "…" : j);
+    }
+  }
+  const typesText = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, c]) => (c > 1 ? `${label} (${c})` : label))
+    .join(", ");
+
+  let summary = `${count} postergaciones en los últimos 90 días`;
+  if (typesText)              summary += `. Motivos: ${typesText}`;
+  if (justifications.length)  summary += `. Notas: ${justifications.slice(0, 2).map(j => `«${j}»`).join("; ")}`;
+  return summary + ".";
+}
+
 async function collectRepeatedDeferralInsights(
   prisma: PrismaClient,
   tenantId: string,
@@ -603,26 +641,41 @@ async function collectRepeatedDeferralInsights(
       deletedAt:    null,
       requestedAt:  { gte: window90 },
     },
-    select: { id: true, assetId: true, vesselCode: true },
+    select: { id: true, assetId: true, vesselCode: true, justification: true, deferralType: true, requestedAt: true },
+    orderBy: { requestedAt: "desc" },
   });
 
-  const byAsset = new Map<string, { count: number; vesselCode: string }>();
+  const byAsset = new Map<string, { count: number; vesselCode: string; reasons: Array<{ type: string | null; justification: string | null }> }>();
   for (const d of deferrals) {
     if (!d.assetId) continue;
-    const entry = byAsset.get(d.assetId) ?? { count: 0, vesselCode: d.vesselCode };
+    const entry = byAsset.get(d.assetId) ?? { count: 0, vesselCode: d.vesselCode, reasons: [] };
     entry.count++;
+    entry.reasons.push({ type: d.deferralType ?? null, justification: d.justification ?? null });
     byAsset.set(d.assetId, entry);
   }
 
-  const hits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; count: number; vesselCode: string } }> = [];
-  for (const [assetId, entry] of byAsset.entries()) {
-    if (entry.count >= 2) {
-      hits.push({
-        vesselCode: entry.vesselCode,
-        display: `${assetId.slice(-6)} (${entry.count} dif.)`,
-        item: { assetId, count: entry.count, vesselCode: entry.vesselCode },
-      });
-    }
+  const repeatedIds = [...byAsset.entries()].filter(([, e]) => e.count >= 2).map(([id]) => id);
+  if (repeatedIds.length === 0) return;
+
+  // Cargar nombres de los assets afectados para mostrarlos en title/display.
+  const assets = await prisma.asset.findMany({
+    where:  { id: { in: repeatedIds }, tenantId, deletedAt: null },
+    select: { id: true, name: true, sfiCode: true },
+  });
+  const assetMap = new Map(assets.map(a => [a.id, a]));
+
+  const hits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; assetLabel: string; count: number; vesselCode: string; reasons: Array<{ type: string | null; justification: string | null }> } }> = [];
+  for (const assetId of repeatedIds) {
+    const entry = byAsset.get(assetId)!;
+    const asset = assetMap.get(assetId);
+    const assetLabel = asset
+      ? `${asset.name}${asset.sfiCode ? ` (${asset.sfiCode})` : ""}`
+      : `asset ${assetId.slice(0, 8)}`;
+    hits.push({
+      vesselCode: entry.vesselCode,
+      display:    `${assetLabel} ×${entry.count}`,
+      item:       { assetId, assetLabel, count: entry.count, vesselCode: entry.vesselCode, reasons: entry.reasons },
+    });
   }
 
   emitGroupedByVessel(drafts, hits, {
@@ -639,9 +692,9 @@ async function collectRepeatedDeferralInsights(
       targetType:     "ASSET",
       targetId:       it.assetId,
       vesselCode,
-      title:          `Postergaciones repetidas en activo`,
-      summary:        `Se registraron ${it.count} postergaciones en el mismo activo en los últimos 90 días.`,
-      recommendation: "Evaluar si la tarea debe redefinirse o si el activo requiere atención urgente.",
+      title:          `Postergaciones repetidas: ${it.assetLabel}`,
+      summary:        buildDeferralSummary(it.count, it.reasons),
+      recommendation: "Revisar si la tarea debe redefinirse, si faltan repuestos u otra restricción se está repitiendo, o si el activo requiere intervención urgente.",
     }),
   });
 }
