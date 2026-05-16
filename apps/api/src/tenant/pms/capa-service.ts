@@ -88,6 +88,17 @@ function ensureCanManageCapa(session: TenantAccessSession) {
   }
 }
 
+/**
+ * "Sugerir cierre" lo puede hacer cualquier responsable operativo a bordo
+ * — no requiere rol de gestión porque NO está cerrando, está solicitando
+ * que Gerencia Técnica revise y apruebe. Solo AUDITOR_READONLY queda fuera.
+ */
+function ensureCanSuggestCapaClose(session: TenantAccessSession) {
+  if (session.user.role === "AUDITOR_READONLY") {
+    throw new RouteError(403, "FORBIDDEN", "Los usuarios solo-lectura no pueden sugerir cierre.");
+  }
+}
+
 function ensureTenantAdmin(session: TenantAccessSession) {
   if (session.user.role !== "TENANT_ADMIN") {
     throw new RouteError(403, "FORBIDDEN", "Operacion permitida solo para TENANT_ADMIN.");
@@ -385,7 +396,9 @@ export async function completeCapaRecord(
   id: string,
   payload: { actionsTaken?: string; verificationNote?: string },
 ) {
-  ensureCanManageCapa(session);
+  // "Sugerir cierre" lo puede hacer cualquier user no-readonly. Solo
+  // closeCapaRecord (cerrar definitivamente) requiere rol de gestión.
+  ensureCanSuggestCapaClose(session);
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
