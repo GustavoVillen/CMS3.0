@@ -479,10 +479,24 @@ export interface CapaInternalInput {
 
 const TERMINAL_CAPA_STATES = ["CLOSED", "CANCELLED", "VERIFIED_EFFECTIVE"];
 
+const VALID_CAPA_SOURCE_TYPES = new Set(["DEFECT", "WORK_ORDER", "INSPECTION"]);
+
 export async function createCapaInternal(
   prisma: CapaCreatorPrisma,
   input: CapaInternalInput,
 ): Promise<{ id: string; capaCode: string; alreadyExisted: boolean } | null> {
+  // Guard defensivo: validar sourceType ANTES de tocar la DB. Si llega
+  // un valor inválido (ej. "RCA" — bug histórico que ya arreglamos pero
+  // queda este guard para que no se repita), tiramos error claro en lugar
+  // de dejar que Prisma crashee con "Invalid value for argument sourceType".
+  if (!VALID_CAPA_SOURCE_TYPES.has(input.sourceType)) {
+    throw new RouteError(
+      500,
+      "CAPA_INVALID_SOURCE_TYPE",
+      `sourceType "${input.sourceType}" no es válido. Esperado: DEFECT | WORK_ORDER | INSPECTION.`,
+    );
+  }
+
   // Anti-race: si dos requests entran al mismo tiempo (ej. RCA aprobado 2x),
   // el findFirst de ambas devuelve null y ambas crean una CAPA. Para
   // prevenirlo, tomamos un advisory lock de Postgres por (tenantId, sourceType,
