@@ -184,24 +184,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       {/* Compliance score + smart alerts (sólo managers) */}
       <ComplianceDashboard />
 
-      {/* "Mi día" — tareas personales / vista del vessel según rol */}
-      <MyDayPanel />
-
-      {/* KPI Cards */}
-      <div className="w-1/2">
-        <div className="grid grid-cols-4 gap-4">
-          <DailyReportCard
-            label={t("dashboard.dailyReports")}
-            lastAt={dailyReportsInfo.lastAt}
-            hasToday={dailyReportsInfo.hasToday}
-            loading={dailyReports.loading}
-            onClick={() => navigate("/daily-reports")}
-          />
-          <StatCard icon={AlertTriangle} label={t("dashboard.defects")}      value={defectsOpen}    loading={defects.loading}      color="text-accent" onClick={() => navigate("/defects")} />
-          <StatCard icon={FileCheck}     label={certsBadge.label}            value={certsBadge.value}  loading={certificates.loading} color={certsBadge.value > 0 ? "text-red-400" : "text-white"} alert={certsExpired > 0} onClick={() => navigate("/certificates")} />
-          <AiInsightBadge count={insightCount} loading={insights.loading} onClick={() => setShowInsights(true)} />
-        </div>
-      </div>
+      {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
+       * (reporte diario, defectos abiertos, AI insights, certs por vencer).
+       * Antes los KPI eran 4 cards sueltas debajo; consolidados acá. */}
+      <MyDayPanel onShowInsights={() => setShowInsights(true)} />
 
       {/* AI Insights modal */}
       {showInsights && (
@@ -604,87 +590,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const StatCard = ({ icon: Icon, label, value, loading, color = "text-white", onClick, alert = false }: {
-  icon: React.FC<{ className?: string }>;
-  label: string;
-  value: number;
-  loading: boolean;
-  color?: string;
-  onClick?: () => void;
-  /** When true, paint the card background red-translucent (same alert style as DailyReportCard). */
-  alert?: boolean;
-}) => {
-  // .bento-card sets `background` in plain CSS (higher specificity than
-  // Tailwind utilities), so override via inline style when alerting.
-  const wrapStyle: React.CSSProperties | undefined = alert
-    ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
-    : undefined;
-  const iconBoxCls = alert
-    ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
-    : "p-1.5 rounded-lg bg-white/5 border border-white/10";
-  const iconColor = alert ? "text-red-400" : "text-accent";
-  return (
-    <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]" style={wrapStyle} onClick={onClick}>
-      <div className="flex items-start justify-between mb-3">
-        <div className={iconBoxCls}>
-          <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
-        </div>
-        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-      </div>
-      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
-      <p className={`text-xl font-bold tracking-tight ${color}`}>
-        {loading ? "—" : value}
-      </p>
-    </div>
-  );
-};
-
-const DailyReportCard = ({ label, lastAt, hasToday, loading, onClick }: {
-  label: string;
-  lastAt: string | null;
-  hasToday: boolean;
-  loading: boolean;
-  onClick?: () => void;
-}) => {
-  const t = useT();
-  const alert = !loading && !hasToday;
-  const wrapCls = "bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02]";
-  // .bento-card sets `background` in plain CSS (higher specificity than
-  // Tailwind's bg-red-500/50), so we override via inline style when alerting.
-  const wrapStyle: React.CSSProperties | undefined = alert
-    ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
-    : undefined;
-  const iconBoxCls = alert
-    ? "p-1.5 rounded-lg bg-red-500/15 border border-red-500/30"
-    : "p-1.5 rounded-lg bg-white/5 border border-white/10";
-  const iconColor = alert ? "text-red-400" : "text-accent";
-  const valueCls  = alert ? "text-sm font-bold tracking-tight text-red-400" : "text-sm font-bold tracking-tight text-white";
-
-  const formatted = lastAt
-    ? new Date(lastAt).toLocaleString(undefined, {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-      })
-    : "—";
-
-  return (
-    <div className={wrapCls} style={wrapStyle} onClick={onClick}>
-      <div className="flex items-start justify-between mb-3">
-        <div className={iconBoxCls}>
-          {alert
-            ? <AlertTriangle className={`w-3.5 h-3.5 ${iconColor}`} />
-            : <FileText className={`w-3.5 h-3.5 ${iconColor}`} />}
-        </div>
-        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-      </div>
-      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">{label}</p>
-      <p className={valueCls}>
-        {loading ? "—" : (alert ? t("dashboard.noReportToday") : formatted)}
-      </p>
-    </div>
-  );
-};
-
 const PRIORITY_STYLES: Record<string, string> = {
   CRITICAL: "bg-red-500/10 text-red-400 border-red-500/20",
   HIGH:     "bg-accent/10 text-accent border-accent/20",
@@ -712,27 +617,6 @@ const ErrorMsg = ({ msg }: { msg: string }) => (
   </div>
 );
 
-const AiInsightBadge = ({ count, loading, onClick }: { count: number; loading: boolean; onClick: () => void }) => {
-  const t = useT();
-  return (
-    <div className="bento-card p-4! cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden" onClick={onClick}>
-      <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent pointer-events-none" />
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-1.5 rounded-lg bg-accent/10 border border-accent/20">
-          <Sparkles className="w-3.5 h-3.5 text-accent" />
-        </div>
-        {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-      </div>
-      <p className="text-[10px] text-text-industrial/40 font-medium mb-1">AI Insights</p>
-      <div className="flex items-end justify-between">
-        <p className="text-xl font-bold tracking-tight text-accent">{loading ? "—" : count}</p>
-        {!loading && count > 0 && (
-          <span className="text-[9px] text-accent/60 font-bold uppercase tracking-widest group-hover:text-accent transition-colors pb-1">{t("dashboard.viewArrow")}</span>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // ---------------------------------------------------------------------------
 // Droplets consumption helpers

@@ -11,7 +11,7 @@
 //   no se muestra (la vista de flota del Dashboard ya cubre).
 
 import React, { useMemo } from "react";
-import { Wrench, CalendarCheck, AlertOctagon, FileCheck, AlertTriangle, ChevronRight, Clock } from "lucide-react";
+import { Wrench, CalendarCheck, AlertOctagon, FileCheck, AlertTriangle, ChevronRight, Clock, FileText, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
@@ -25,6 +25,9 @@ interface Certificate { id: string; certificateCode: string; vesselCode: string;
 interface RestHoursRow { id: string; crewId: string; vesselCode: string; hasViolation: boolean; recordDate: string }
 interface ExternalAuditFinding { id: string; status: string }
 interface ExternalAudit { id: string; vesselCode: string; findingsOpen?: number }
+interface DailyReportRow { id: string; reportDate: string; createdAt?: string }
+interface DefectRow { id: string; status: string }
+interface AiInsightRow { id: string; status: string }
 
 const DRILL_TYPE_LABEL: Record<string, string> = {
   FIRE: "Incendio", ABANDON_SHIP: "Abandono", ENCLOSED_SPACE: "Esp. confinado",
@@ -41,7 +44,13 @@ const SEVERITY_COLOR: Record<string, string> = {
   LOW: "text-blue-400", MEDIUM: "text-yellow-400", HIGH: "text-orange-400", CRITICAL: "text-red-400",
 };
 
-export const MyDayPanel: React.FC = () => {
+interface MyDayPanelProps {
+  /** Abre el modal de AI Insights del Dashboard (vive en Dashboard para
+   * mantener el state ahí). Si no se pasa, el tile navega a /ai-insights. */
+  onShowInsights?: () => void;
+}
+
+export const MyDayPanel: React.FC<MyDayPanelProps> = ({ onShowInsights }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedVesselCode, selectedVessel } = useVesselContext();
@@ -85,6 +94,11 @@ export const MyDayPanel: React.FC = () => {
             <OpenFindingsTile vesselCode={selectedVesselCode} />
           </>
         )}
+        {/* Tiles compartidos por todos los roles — antes eran cards
+         * sueltas debajo del MyDayPanel; consolidados acá. */}
+        <DailyReportTile vesselQS={vesselQS} />
+        <OpenDefectsTile vesselQS={vesselQS} />
+        <AiInsightsTile vesselQS={vesselQS} onShow={onShowInsights} />
       </div>
     </section>
   );
@@ -284,6 +298,72 @@ const OpenFindingsTile: React.FC<{ vesselCode: string | null }> = ({ vesselCode 
   return (
     <TileShell icon={AlertTriangle} label="Findings PSC abiertos" count={openCount} loading={loading} accent={openCount > 0 ? "text-yellow-400" : "text-success-sea"} onClick={() => navigate("/external-audits?filter=open")}>
       {openCount === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin findings abiertos.</p>}
+    </TileShell>
+  );
+};
+
+// ─── Tiles unificados (antes vivían como cards sueltas en Dashboard) ──────
+
+const DailyReportTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
+  const navigate = useNavigate();
+  const { data, loading } = useFetch<{ items: DailyReportRow[] }>(`/app/daily-reports${vesselQS}`);
+  const items = data?.items ?? [];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const hasToday = items.some(r => String(r.reportDate).slice(0, 10) === todayStr);
+
+  return (
+    <TileShell
+      icon={FileText}
+      label="Reporte diario"
+      count={hasToday ? "✓" : "—"}
+      loading={loading}
+      accent={hasToday ? "text-success-sea" : "text-red-400"}
+      onClick={() => navigate("/daily-reports")}
+    >
+      {!loading && (
+        <p className={`text-[10px] ${hasToday ? "text-text-industrial/60" : "text-red-400 font-bold"}`}>
+          {hasToday ? "Cargado hoy" : "Sin reporte hoy"}
+        </p>
+      )}
+    </TileShell>
+  );
+};
+
+const OpenDefectsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
+  const navigate = useNavigate();
+  const { data, loading } = useFetch<{ items: DefectRow[] }>(`/app/pms/defects${vesselQS}`);
+  const open = (data?.items ?? []).filter(d => d.status === "OPEN" || d.status === "IN_PROGRESS").length;
+
+  return (
+    <TileShell
+      icon={AlertTriangle}
+      label="Defectos abiertos"
+      count={open}
+      loading={loading}
+      accent={open > 0 ? "text-orange-400" : "text-success-sea"}
+      onClick={() => navigate("/defects")}
+    >
+      {!loading && open === 0 && <p className="text-[10px] text-text-industrial/40 italic">Sin defectos abiertos.</p>}
+    </TileShell>
+  );
+};
+
+const AiInsightsTile: React.FC<{ vesselQS: string; onShow?: () => void }> = ({ vesselQS, onShow }) => {
+  const navigate = useNavigate();
+  const { data, loading } = useFetch<{ items?: AiInsightRow[]; total?: number }>(`/app/ai-insights${vesselQS}`);
+  const total = data?.total ?? data?.items?.length ?? 0;
+
+  return (
+    <TileShell
+      icon={Sparkles}
+      label="AI Insights"
+      count={total}
+      loading={loading}
+      accent={total > 0 ? "text-accent" : "text-text-industrial/60"}
+      onClick={() => (onShow ? onShow() : navigate("/ai-insights"))}
+    >
+      {!loading && total === 0 && <p className="text-[10px] text-text-industrial/40 italic">Sin insights nuevos.</p>}
+      {!loading && total > 0  && <p className="text-[10px] text-accent">Tocá para revisar.</p>}
     </TileShell>
   );
 };
