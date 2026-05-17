@@ -304,19 +304,25 @@ export async function getSmartAlerts(session: TenantAccessSession, vesselCode: s
     crewRestHours: { count(a: unknown): Promise<number> };
   };
 
-  // --- A) Certs venciendo esta semana (CRITICAL si vencidos, WARNING si próximos) ---
+  // --- A) Certs vencidos + próximos a vencer ──────────────────────────────
+  // Alineado con el cálculo de status del módulo Certificates:
+  //   - EXPIRED:       diffDays < 0  (cualquier cert ya vencido)
+  //   - EXPIRING_SOON: 0 ≤ diffDays ≤ 30
+  // El bug anterior usaba ventana [-7, +7] y dejaba afuera los expired
+  // viejos y los que vencen entre 8-30 días.
+  const d30f = new Date(now.getTime() + 30 * 86_400_000);
   try {
-    const expiringSoon = await p.certificate.findMany({
+    const relevantCerts = await p.certificate.findMany({
       where: {
         tenantId: tenant.id, vesselCode: { in: codes }, deletedAt: null,
-        expiryDate: { gte: d7, lte: d7f }, // dentro de [-7, +7] días
+        expiryDate: { lte: d30f },   // todos los vencidos + los que vencen en ≤30d
       },
       select: { id: true, vesselCode: true, certificateCode: true, name: true, expiryDate: true } as never,
-      take: 30,
+      take: 200,
     });
-    // Agrupamos por vessel para no spam-ear con N alertas individuales
-    const byVessel = new Map<string, typeof expiringSoon>();
-    for (const c of expiringSoon) {
+    // Agrupamos por vessel para no generar N alertas individuales
+    const byVessel = new Map<string, typeof relevantCerts>();
+    for (const c of relevantCerts) {
       const arr = byVessel.get(c.vesselCode) ?? [];
       arr.push(c);
       byVessel.set(c.vesselCode, arr);
@@ -341,7 +347,7 @@ export async function getSmartAlerts(session: TenantAccessSession, vesselCode: s
           vesselCode: vc,
           vesselName: vesselNames.get(vc) ?? null,
           severity: "WARNING",
-          title: `${soon.length} certificado${soon.length > 1 ? "s" : ""} vence${soon.length === 1 ? "" : "n"} en ≤7 días en ${vc}`,
+          title: `${soon.length} certificado${soon.length > 1 ? "s" : ""} vence${soon.length === 1 ? "" : "n"} en ≤30 días en ${vc}`,
           summary: soon.slice(0, 3).map(c => c.certificateCode).join(", ") + (soon.length > 3 ? ` y ${soon.length - 3} más` : ""),
           link: `/certificates?vesselCode=${encodeURIComponent(vc)}&status=EXPIRING_SOON`,
         });
