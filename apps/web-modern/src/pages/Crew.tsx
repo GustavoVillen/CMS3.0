@@ -465,28 +465,26 @@ export const CrewPage: React.FC = () => {
             const expiringCount = c.certifications.filter(x => x.status === "EXPIRING_SOON" || x.status === "EXPIRED").length;
             return (
               <button key={c.id} onClick={() => setEditing(c)}
-                className="w-full text-left p-4 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className="text-[10px] font-mono text-text-industrial/40">{c.crewCode}</span>
-                    {c.status === "ONBOARD"
-                      ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">A bordo</span>
-                      : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">Desembarcado</span>}
-                    <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
-                    {expiringCount > 0 && (
-                      <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">
-                        {expiringCount} cert. atención
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold text-white">{c.firstName} {c.lastName}</p>
-                  <p className="text-xs text-text-industrial/50">{RANK_LABEL[c.rank] ?? c.rank}</p>
+                className="w-full text-left px-4 py-2 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+                <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+                  <span className="text-[10px] font-mono text-text-industrial/40 shrink-0">{c.crewCode}</span>
+                  {c.status === "ONBOARD"
+                    ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">A bordo</span>
+                    : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">Desembarcado</span>}
+                  <p className="text-sm font-bold text-white truncate">{c.firstName} {c.lastName}</p>
+                  <p className="text-xs text-text-industrial/50 truncate">{RANK_LABEL[c.rank] ?? c.rank}</p>
+                  <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
+                  {expiringCount > 0 && (
+                    <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 shrink-0">
+                      {expiringCount} cert. atención
+                    </span>
+                  )}
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] text-text-industrial/40">Embarcado</p>
-                  <p className="text-xs text-white font-mono">{fmtDate(c.signOnDate)}</p>
+                <div className="text-right shrink-0 hidden sm:block">
+                  <p className="text-[10px] text-text-industrial/40 leading-tight">Embarcado</p>
+                  <p className="text-xs text-white font-mono leading-tight">{fmtDate(c.signOnDate)}</p>
                 </div>
-                {c.status === "ONBOARD" && expiringCount === 0 && <CheckCircle className="w-4 h-4 text-success-sea" />}
+                {c.status === "ONBOARD" && expiringCount === 0 && <CheckCircle className="w-4 h-4 text-success-sea shrink-0" />}
               </button>
             );
           })}
