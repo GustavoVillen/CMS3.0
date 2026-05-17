@@ -170,19 +170,21 @@ export async function buildCompliancePdf(
       doc.fontSize(8).font("Helvetica-Bold").fillColor(labelColor)
         .text((LABEL_TEXT[s.label] ?? s.label).toUpperCase(), ML + W - 80, y + 42, { width: 70, align: "right", characterSpacing: 0.5 });
 
-      // Componentes — grid 3x2
+      // Componentes — grid 3x2. Drills y STCW solo se muestran para buques
+      // tripulados; barcazas omiten esas dos filas y dejan 4 componentes.
       const COMP_TOP = y + 60;
       const COMP_W = (W - 28) / 3;
       const COMP_H = 28;
 
-      const rows = [
-        { label: "OT compliance",  v: s.components.woComplianceRate,        hint: `${s.totals.woCompletedOnTime}/${s.totals.woClosedTotal}` },
-        { label: "Drills (90d)",   v: s.components.drillCompliance,         hint: `${s.totals.drillsDone90d}/${s.totals.drillsExpected90d}` },
-        { label: "Certs vigentes", v: s.components.certVigent,              hint: `${s.totals.certsActive}/${s.totals.certsTotal}` },
-        { label: "Findings PSC",   v: s.components.noFindingsPenalty,       hint: s.totals.findingsOpen > 0 ? `${s.totals.findingsOpen} abiertos` : "Sin findings" },
-        { label: "Def. críticos",  v: s.components.noCriticalDefects,       hint: s.totals.criticalDefectsOpen > 0 ? `${s.totals.criticalDefectsOpen} abiertos` : "Sin críticos" },
-        { label: "STCW (30d)",     v: s.components.noRestHoursViolations,   hint: s.totals.restHoursViolations30d > 0 ? `${s.totals.restHoursViolations30d} violaciones` : "Sin violaciones" },
+      const allRows = [
+        { label: "OT compliance",  v: s.components.woComplianceRate,        hint: `${s.totals.woCompletedOnTime}/${s.totals.woClosedTotal}`, crewedOnly: false },
+        { label: "Drills (90d)",   v: s.components.drillCompliance,         hint: `${s.totals.drillsDone90d}/${s.totals.drillsExpected90d}`, crewedOnly: true },
+        { label: "Certs vigentes", v: s.components.certVigent,              hint: `${s.totals.certsActive}/${s.totals.certsTotal}`, crewedOnly: false },
+        { label: "Findings PSC",   v: s.components.noFindingsPenalty,       hint: s.totals.findingsOpen > 0 ? `${s.totals.findingsOpen} abiertos` : "Sin findings", crewedOnly: false },
+        { label: "Def. críticos",  v: s.components.noCriticalDefects,       hint: s.totals.criticalDefectsOpen > 0 ? `${s.totals.criticalDefectsOpen} abiertos` : "Sin críticos", crewedOnly: false },
+        { label: "STCW (30d)",     v: s.components.noRestHoursViolations,   hint: s.totals.restHoursViolations30d > 0 ? `${s.totals.restHoursViolations30d} violaciones` : "Sin violaciones", crewedOnly: true },
       ];
+      const rows = allRows.filter(r => s.crewedOperation || !r.crewedOnly);
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]!;
@@ -200,6 +202,13 @@ export async function buildCompliancePdf(
           .text(`${pct}%`, cx, cy + 10, { width: 40 });
         doc.fontSize(8).font("Helvetica").fillColor(gray)
           .text(r.hint, cx + 42, cy + 11, { width: COMP_W - 46 });
+      }
+
+      // Nota al pie de la tarjeta cuando es no-tripulada (barcaza)
+      if (!s.crewedOperation) {
+        doc.fontSize(7).font("Helvetica-Oblique").fillColor(gray)
+          .text("Buque no tripulado — drills y STCW no aplican al cálculo.",
+            ML + 14, y + CARD_H - 18, { width: W - 28 });
       }
 
       y += CARD_H + 10;

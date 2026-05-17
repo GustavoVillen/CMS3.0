@@ -29,6 +29,8 @@ interface ComplianceScore {
   vesselName: string;
   score: number;
   label: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
+  /** false = barcaza / unidad no tripulada → drills y STCW no aplican. */
+  crewedOperation: boolean;
   components: ComplianceComponents;
   totals: {
     woCompletedOnTime: number;
@@ -219,11 +221,21 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
       {open && (
         <div className="mt-2.5 space-y-1 pt-2 border-t border-white/5">
           <ComponentRow label="OT compliance"    value={score.components.woComplianceRate}  hint={`${score.totals.woCompletedOnTime}/${score.totals.woClosedTotal} en plazo`} />
-          <ComponentRow label="Drills (90d)"     value={score.components.drillCompliance}   hint={`${score.totals.drillsDone90d}/${score.totals.drillsExpected90d}`} />
+          {/* Drills y STCW solo aplican a buques tripulados (barcazas se omiten). */}
+          {score.crewedOperation && (
+            <ComponentRow label="Drills (90d)"     value={score.components.drillCompliance}   hint={`${score.totals.drillsDone90d}/${score.totals.drillsExpected90d}`} />
+          )}
           <ComponentRow label="Certs vigentes"   value={score.components.certVigent}        hint={`${score.totals.certsActive}/${score.totals.certsTotal}`} />
           <ComponentRow label="Findings PSC"     value={score.components.noFindingsPenalty} hint={score.totals.findingsOpen > 0 ? `${score.totals.findingsOpen} abiertos` : "Sin findings"} invert />
           <ComponentRow label="Def. críticos"    value={score.components.noCriticalDefects} hint={score.totals.criticalDefectsOpen > 0 ? `${score.totals.criticalDefectsOpen} abiertos` : "Sin críticos"} invert />
-          <ComponentRow label="STCW (30d)"       value={score.components.noRestHoursViolations} hint={score.totals.restHoursViolations30d > 0 ? `${score.totals.restHoursViolations30d} violaciones` : "Sin violaciones"} invert />
+          {score.crewedOperation && (
+            <ComponentRow label="STCW (30d)"       value={score.components.noRestHoursViolations} hint={score.totals.restHoursViolations30d > 0 ? `${score.totals.restHoursViolations30d} violaciones` : "Sin violaciones"} invert />
+          )}
+          {!score.crewedOperation && (
+            <p className="text-[9px] text-text-industrial/40 italic pt-1">
+              Buque no tripulado — drills y STCW no aplican.
+            </p>
+          )}
         </div>
       )}
     </button>

@@ -25,6 +25,9 @@ export interface ComplianceScore {
   vesselName: string;
   score: number;                  // 0..100
   label: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
+  /** false = barcaza / unidad no tripulada → drills y STCW NO aplican
+   * (no se cuentan en el score y el UI los oculta). */
+  crewedOperation: boolean;
   components: ComplianceComponents;
   // Datos crudos para que el frontend muestre tooltip explicativo
   totals: {
@@ -53,7 +56,7 @@ export interface SmartAlert {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, session: TenantAccessSession, tenantId: string, requestedVesselCode: string | null): Promise<Array<{ code: string; name: string }>> {
+async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, session: TenantAccessSession, tenantId: string, requestedVesselCode: string | null): Promise<Array<{ code: string; name: string; vesselType: string | null }>> {
   const where: Record<string, unknown> = { tenantId, deletedAt: null };
   if (requestedVesselCode) {
     where.code = requestedVesselCode;
@@ -62,10 +65,21 @@ async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrism
     where.code = { in: session.user.assignedVesselCodes };
   }
   return (prisma as unknown as {
-    vessel: { findMany(a: unknown): Promise<Array<{ code: string; name: string }>> };
+    vessel: { findMany(a: unknown): Promise<Array<{ code: string; name: string; vesselType: string | null }>> };
   }).vessel.findMany({
-    where, select: { code: true, name: true } as never, orderBy: { code: "asc" },
+    where, select: { code: true, name: true, vesselType: true } as never, orderBy: { code: "asc" },
   });
+}
+
+/**
+ * Barcazas y similares no son tripuladas → drills y horas de descanso STCW
+ * no aplican. Cuando isCrewedOperation === false, omitimos esos dos
+ * componentes del score (redistribuímos sus pesos entre los demás) y el
+ * frontend / PDF los oculta.
+ */
+function isCrewedOperation(vesselType: string | null): boolean {
+  if (!vesselType) return true;
+  return vesselType.trim().toUpperCase() !== "BARCAZA";
 }
 
 function clamp01(n: number): number {
@@ -107,8 +121,9 @@ export async function getComplianceScores(session: TenantAccessSession, vesselCo
 async function computeOne(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
-  vessel: { code: string; name: string },
+  vessel: { code: string; name: string; vesselType: string | null },
 ): Promise<ComplianceScore> {
+  const crewed = isCrewedOperation(vessel.vesselType);
   const now = new Date();
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
   const d30 = new Date(now.getTime() - 30 * 86_400_000);
@@ -198,8 +213,10 @@ async function computeOne(
     restViolations <= 5 ? 0.4 :
     0.1;
 
-  // --- Ponderación (suma = 1) ---
-  const weights = {
+  // --- Ponderación: si el buque es no-tripulado (barcaza), excluimos los
+  // componentes que requieren tripulación (drills + horas STCW) y
+  // redistribuímos sus pesos proporcionalmente entre los demás.
+  const weightsFull = {
     woComplianceRate:      0.20,
     drillCompliance:       0.20,
     certVigent:            0.20,
@@ -207,6 +224,23 @@ async function computeOne(
     noCriticalDefects:     0.15,
     noRestHoursViolations: 0.10,
   };
+  const weights = crewed
+    ? weightsFull
+    : (() => {
+        // Sin tripulación: drills + STCW se omiten. El 30% restante se
+        // reparte entre los 4 componentes activos en proporción a su peso.
+        const omitted = weightsFull.drillCompliance + weightsFull.noRestHoursViolations;
+        const kept    = 1 - omitted;
+        const factor  = 1 / kept;
+        return {
+          woComplianceRate:      weightsFull.woComplianceRate      * factor,
+          drillCompliance:       0,
+          certVigent:            weightsFull.certVigent            * factor,
+          noFindingsPenalty:     weightsFull.noFindingsPenalty     * factor,
+          noCriticalDefects:     weightsFull.noCriticalDefects     * factor,
+          noRestHoursViolations: 0,
+        };
+      })();
   const components: ComplianceComponents = {
     woComplianceRate, drillCompliance, certVigent,
     noFindingsPenalty, noCriticalDefects, noRestHoursViolations,
@@ -225,6 +259,7 @@ async function computeOne(
     vesselName: vessel.name,
     score,
     label: scoreLabel(score),
+    crewedOperation: crewed,
     components,
     totals: {
       woCompletedOnTime: closedOnTime,
