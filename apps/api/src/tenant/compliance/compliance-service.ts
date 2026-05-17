@@ -76,10 +76,19 @@ async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrism
  * no aplican. Cuando isCrewedOperation === false, omitimos esos dos
  * componentes del score (redistribuímos sus pesos entre los demás) y el
  * frontend / PDF los oculta.
+ *
+ * Matcher: cualquier vesselType que CONTENGA "BARCAZA" (case-insensitive,
+ * sin acentos). Cubre variantes como "Barcaza", "Barcaza tanque",
+ * "BARCAZA TQ", "barcaza-cisterna", etc. — el dato de vesselType es
+ * texto libre en el modelo, así que no podemos asumir un valor exacto.
  */
 function isCrewedOperation(vesselType: string | null): boolean {
   if (!vesselType) return true;
-  return vesselType.trim().toUpperCase() !== "BARCAZA";
+  const normalized = vesselType
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita acentos
+    .toUpperCase();
+  return !normalized.includes("BARCAZA");
 }
 
 function clamp01(n: number): number {
