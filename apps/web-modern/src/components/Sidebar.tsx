@@ -81,6 +81,8 @@ const NAV: NavSection[] = [
       { icon: ShieldCheck,     labelKey: "nav.certificates",     path: "/certificates" },
       { icon: FlaskConical,    labelKey: "nav.fluidAnalyses",    path: "/fluid-analyses" },
       { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
+      { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
+      { icon: ShieldCheck,     labelKey: "nav.cviq",             path: "/cviq" },
     ],
   },
   {
@@ -94,8 +96,6 @@ const NAV: NavSection[] = [
       { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
       { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },
       { icon: Grid3x3,         labelKey: "nav.crewMatrix",       path: "/crew-matrix" },
-      { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
-      { icon: ShieldCheck,     labelKey: "nav.cviq",             path: "/cviq" },
     ],
   },
   {
