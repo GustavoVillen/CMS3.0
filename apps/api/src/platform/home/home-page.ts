@@ -107,7 +107,7 @@ export function buildHomePage(env: AppEnv): string {
         <li>In development mode, demo auth fallback is available if database auth is not ready.</li>
         <li>Demo tenant login: <code>admin@demo.local</code> or <code>DEMOADMIN</code> / <code>demo123</code></li>
         <li>Demo platform login: <code>admin@localhost</code> / <code>admin123</code></li>
-        <li>Source of truth is <code>docs_saas/</code>. Legacy folders are read-only.</li>
+        <li>Source of truth: <code>CLAUDE.md</code> + <code>HISTORY.txt</code> in the repo root.</li>
       </ul>
     </div>
     <div class="card">

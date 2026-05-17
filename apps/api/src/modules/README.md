@@ -18,7 +18,5 @@ Suggested module ownership order:
 14. attachments and AI documents
 15. AI runtime and insights
 
-Every new module must align with:
-- `docs_saas/04_ROLES_PERMISSIONS_AND_SCOPES.md`
-- `docs_saas/05_DATA_MODEL_AND_AUDIT_RULES.md`
-- `docs_saas/06_MODULE_STATES_AND_TRANSITIONS.md`
+Every new module must align with the project rules in `CLAUDE.md` (root)
+and the patterns documented in `HISTORY.txt` for prior modules.

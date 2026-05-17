@@ -10,4 +10,4 @@ This app is the target runtime for:
 - import/export jobs
 - audit and event pipelines
 
-Do not pull implementation code from legacy folders directly into this app without documenting the migration mapping in `docs_saas/`.
+Do not pull implementation code from legacy folders directly into this app without documenting the migration mapping in `CLAUDE.md` and `HISTORY.txt`.
