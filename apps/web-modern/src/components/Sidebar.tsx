@@ -83,6 +83,10 @@ const NAV: NavSection[] = [
       { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
       { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
       { icon: ShieldCheck,     labelKey: "nav.cviq",             path: "/cviq" },
+      { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
+      { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
+      { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },
+      { icon: ShieldAlert,     labelKey: "nav.permits",          path: "/permits" },
     ],
   },
   {
@@ -90,11 +94,7 @@ const NAV: NavSection[] = [
     items: [
       { icon: Users,           labelKey: "nav.crew",             path: "/crew" },
       { icon: CalendarCheck,   labelKey: "nav.drills",           path: "/drills" },
-      { icon: ShieldAlert,     labelKey: "nav.permits",          path: "/permits" },
       { icon: Clock,           labelKey: "nav.restHours",        path: "/rest-hours" },
-      { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
-      { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
-      { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },
       { icon: Grid3x3,         labelKey: "nav.crewMatrix",       path: "/crew-matrix" },
     ],
   },
