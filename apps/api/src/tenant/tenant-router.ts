@@ -37,6 +37,7 @@ import {
 } from "./cviq/cviq-service";
 import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
+import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
@@ -1741,6 +1742,23 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const vesselCode = url.searchParams.get("vesselCode");
     sendJson(response, 200, await getComplianceScores(session, vesselCode));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/compliance/scores/pdf") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode");
+    const buffer = await buildCompliancePdf(session, vesselCode);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `compliance-${vesselCode}-${dateStr}.pdf`
+      : `compliance-flota-${dateStr}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
   if (method === "GET" && url.pathname === "/app/compliance/alerts") {

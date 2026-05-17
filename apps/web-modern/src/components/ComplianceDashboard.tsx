@@ -8,11 +8,12 @@
 // MAINTENANCE_MANAGER). Se renderiza arriba del Dashboard.
 
 import React, { useEffect, useState } from "react";
-import { TrendingUp, AlertTriangle, AlertOctagon, Info, ChevronRight, Loader2 } from "lucide-react";
+import { TrendingUp, AlertTriangle, AlertOctagon, Info, ChevronRight, Loader2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
+import { downloadAuthedFile } from "../lib/authed-media";
 
 interface ComplianceComponents {
   woComplianceRate: number;
@@ -157,6 +158,22 @@ export const ComplianceDashboard: React.FC = () => {
             <h2 className="text-xs font-bold uppercase tracking-widest text-white">
               Compliance score por buque
             </h2>
+            <button
+              type="button"
+              onClick={() => {
+                const qs = selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
+                const dateStr = new Date().toISOString().slice(0, 10);
+                const filename = selectedVesselCode
+                  ? `compliance-${selectedVesselCode}-${dateStr}.pdf`
+                  : `compliance-flota-${dateStr}.pdf`;
+                void downloadAuthedFile(`/app/compliance/scores/pdf${qs}`, filename);
+              }}
+              className="ml-1 flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] text-text-industrial hover:border-accent/30 hover:text-accent transition-all"
+              title="Descargar PDF"
+            >
+              <Download className="w-3 h-3" />
+              PDF
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {scores.map(s => <ScoreCard key={s.vesselCode} score={s} />)}
