@@ -260,6 +260,50 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [aiLoadingRisk, setAiLoadingRisk] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // Detección de cambios sin guardar (dirty check). Comparamos los campos
+  // editables contra los valores del moc original. Sirve para que el botón
+  // PDF guarde silenciosamente antes de descargar.
+  const isDirty = !!moc && (
+    moc.title !== title ||
+    moc.reasonForChange !== reasonForChange ||
+    moc.proposedChange !== proposedChange ||
+    moc.riskLevel !== riskLevel ||
+    (moc.riskAssessmentNotes ?? "") !== riskAssessmentNotes ||
+    (moc.mitigationActions ?? "") !== mitigationActions ||
+    moc.category !== category ||
+    (moc.plannedDate?.slice(0, 10) ?? "") !== plannedDate ||
+    JSON.stringify(moc.impactAreasJson ?? []) !== JSON.stringify(impactAreas)
+  );
+
+  const handleDownloadPdf = async () => {
+    if (!moc || generatingPdf) return;
+    setGeneratingPdf(true);
+    setErr(null);
+    try {
+      // Si hay cambios sin guardar, los guardamos primero para que el PDF
+      // refleje el estado actual del form (no la versión vieja de DB).
+      if (isDirty && !isLocked) {
+        const payload = {
+          vesselCode, category, title, reasonForChange, proposedChange, riskLevel,
+          impactAreas,
+          riskAssessmentNotes: riskAssessmentNotes.trim() || null,
+          mitigationActions: mitigationActions.trim() || null,
+          plannedDate: plannedDate || null,
+          relatedAssetId: prefill?.relatedAssetId ?? null,
+          relatedWorkOrderId: prefill?.relatedWorkOrderId ?? null,
+        };
+        await api.patch(`/app/mocs/${moc.id}`, payload);
+      }
+      await downloadAuthedFile(`/app/mocs/${moc.id}/pdf`, `${moc.mocCode}-${moc.vesselCode}.pdf`);
+      if (isDirty) onSaved();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Error al generar PDF.");
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   const suggestRiskAssessmentAI = async () => {
     if (aiLoadingRisk || isLocked) return;
@@ -488,11 +532,15 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
             {!isNew && moc && (
               <button
                 type="button"
-                onClick={() => { void downloadAuthedFile(`/app/mocs/${moc.id}/pdf`, `${moc.mocCode}-${moc.vesselCode}.pdf`); }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-                title="Descargar PDF del MOC"
+                onClick={() => { void handleDownloadPdf(); }}
+                disabled={generatingPdf || saving}
+                title={isDirty ? "Guarda los cambios y descarga el PDF" : "Descargar PDF del MOC"}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
               >
-                <Download className="w-3.5 h-3.5" /> PDF
+                {generatingPdf
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Download className="w-3.5 h-3.5" />}
+                PDF
               </button>
             )}
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>

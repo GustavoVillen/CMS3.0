@@ -299,13 +299,13 @@ export async function buildMocPdf(session: TenantAccessSession, id: string): Pro
     }
 
     // ── Text sections ─────────────────────────────────────────────────────────
+    // Las 5 secciones del cuerpo se renderizan SIEMPRE, aunque estén vacías,
+    // para que la ausencia sea visible al revisor / auditor.
     textSection("Título",                    moc.title);
     textSection("Razón del cambio",          moc.reasonForChange);
     textSection("Cambio propuesto",          moc.proposedChange);
-    if (moc.riskAssessmentNotes)
-      textSection("Notas Análisis de Riesgo", moc.riskAssessmentNotes);
-    if (moc.mitigationActions)
-      textSection("Medidas de Mitigación",   moc.mitigationActions);
+    textSection("Análisis de Riesgo",        moc.riskAssessmentNotes ?? "");
+    textSection("Medidas de Mitigación",     moc.mitigationActions ?? "");
 
     // ── Trazabilidad ──────────────────────────────────────────────────────────
     const traceParts: string[] = [];
