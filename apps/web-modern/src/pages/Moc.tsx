@@ -1,7 +1,7 @@
 // Management of Change (MOC) — workflow formal de cambios significativos.
 
 import React, { useCallback, useEffect, useState } from "react";
-import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon } from "lucide-react";
+import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -217,6 +217,25 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
   const [plannedDate, setPlanned] = useState(initial.plannedDate);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [aiLoadingRisk, setAiLoadingRisk] = useState(false);
+
+  const suggestRiskAssessmentAI = async () => {
+    if (aiLoadingRisk || isLocked) return;
+    setAiLoadingRisk(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/mocs/suggest-risk-assessment", {
+        vesselCode, category, title, reasonForChange, proposedChange, riskLevel,
+        impactAreas, mitigationActions,
+        currentNotes: riskAssessmentNotes,
+      });
+      if (res.text?.trim()) setRAN(res.text.trim());
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "No se pudo generar el análisis con IA.");
+    } finally {
+      setAiLoadingRisk(false);
+    }
+  };
 
   // Al cambiar categoría en un MOC nuevo, aplicar el template (impactAreas
   // y riskLevel) si el user no los tocó (heurística: aún coinciden con el
@@ -348,8 +367,25 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
                 ))}
               </div>
             </div>
-            <div className="col-span-2"><label className={labelCls}>Notas análisis de riesgo</label>
-              <textarea rows={2} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y"} />
+            <div className="col-span-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={labelCls + " mb-0"}>Notas análisis de riesgo</label>
+                <button
+                  type="button"
+                  onClick={() => { void suggestRiskAssessmentAI(); }}
+                  disabled={isLocked || aiLoadingRisk || !category || !proposedChange.trim()}
+                  title={!proposedChange.trim()
+                    ? "Completá primero el cambio propuesto"
+                    : "Generar análisis de riesgo con IA experta en SMS"}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-[10px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  {aiLoadingRisk
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Sparkles className="w-3 h-3" />}
+                  {aiLoadingRisk ? "Generando…" : "Asistir con IA"}
+                </button>
+              </div>
+              <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Medidas de mitigación</label>
               <textarea rows={2} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y"} />

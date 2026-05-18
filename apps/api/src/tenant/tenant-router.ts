@@ -32,6 +32,7 @@ import {
 import {
   listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
 } from "./moc/moc-service";
+import { suggestRiskAssessment } from "./moc/moc-ai-suggestions";
 import {
   listQuestions, listAssessments, getAssessment, createAssessment, setResponseCviq, completeAssessment, deleteAssessment,
 } from "./cviq/cviq-service";
@@ -1671,6 +1672,13 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as Parameters<typeof createMoc>[1];
     sendJson(response, 201, await createMoc(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/mocs/suggest-risk-assessment") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-moc-risk:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestRiskAssessment>[1];
+    sendJson(response, 200, await suggestRiskAssessment(session, body));
     return true;
   }
   if (/^\/app\/mocs\/[^/]+\/transition$/.test(url.pathname)) {
