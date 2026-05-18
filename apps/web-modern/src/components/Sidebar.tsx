@@ -14,13 +14,23 @@ import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 
 interface SidebarCounts {
+  // Fase 1
   workOrdersOpen: number; defectsOpen: number; deferralsOpen: number; capaOpen: number;
   certsExpiringOrExpired: number; nearMissOpen: number; restHoursViolations: number;
   externalAuditsFindingsOpen: number; mocOpen: number;
+  // Fase 2 — "acciones requeridas" en el resto del sidebar
+  maintenancePlansOverdue: number; dailyReportsMissing: number;
+  fluidAnalysisCritical: number; spareRequestsPending: number;
+  cviqFindingsOpen: number; checklistsOverdue: number;
+  permitsAttention: number; crewCertsAttention: number;
+  drillsOverdue: number; sparesCriticalLow: number; providerNcOpen: number;
 }
 
-/** Mapeo path → key del counts object para mostrar badge. */
+/** Mapeo path → key del counts object para mostrar badge.
+ *  Todos los badges usan el mismo estilo ámbar — el badge sólo indica "hay
+ *  acciones pendientes". La criticidad real del item se ve dentro de la pantalla. */
 const BADGE_KEY: Record<string, keyof SidebarCounts> = {
+  // Fase 1
   "/work-orders":      "workOrdersOpen",
   "/defects":          "defectsOpen",
   "/deferrals":        "deferralsOpen",
@@ -30,10 +40,19 @@ const BADGE_KEY: Record<string, keyof SidebarCounts> = {
   "/rest-hours":       "restHoursViolations",
   "/external-audits":  "externalAuditsFindingsOpen",
   "/moc":              "mocOpen",
+  // Fase 2
+  "/maintenance-plans": "maintenancePlansOverdue",
+  "/daily-reports":     "dailyReportsMissing",
+  "/fluid-analyses":    "fluidAnalysisCritical",
+  "/spare-requests":    "spareRequestsPending",
+  "/cviq":              "cviqFindingsOpen",
+  "/checklists":        "checklistsOverdue",
+  "/permits":           "permitsAttention",
+  "/crew":              "crewCertsAttention",
+  "/drills":            "drillsOverdue",
+  "/spares":            "sparesCriticalLow",
+  "/providers":         "providerNcOpen",
 };
-
-/** Paths cuya badge cuenta cosas "urgentes" (rojo) en vez de neutro. */
-const BADGE_RED = new Set(["/certificates", "/rest-hours", "/defects"]);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -310,7 +329,6 @@ export const Sidebar: React.FC = () => {
                     const label = t(item.labelKey);
                     const badgeKey = BADGE_KEY[item.path];
                     const badge = badgeKey && counts ? counts[badgeKey] : 0;
-                    const badgeRed = BADGE_RED.has(item.path);
                     return (
                       <NavLink
                         key={item.path}
@@ -324,18 +342,14 @@ export const Sidebar: React.FC = () => {
                           <>
                             <span className="text-xs font-medium truncate flex-1">{label}</span>
                             {badge > 0 && (
-                              <span className={`shrink-0 ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                                badgeRed
-                                  ? "bg-red-500/15 text-red-300 border border-red-500/30"
-                                  : "bg-accent/15 text-accent border border-accent/30"
-                              }`}>
+                              <span className="shrink-0 ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-accent/15 text-accent border border-accent/30">
                                 {badge > 99 ? "99+" : badge}
                               </span>
                             )}
                           </>
                         )}
                         {collapsed && badge > 0 && (
-                          <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${badgeRed ? "bg-red-400" : "bg-accent"}`} />
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
                         )}
                       </NavLink>
                     );

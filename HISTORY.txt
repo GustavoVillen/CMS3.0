@@ -1,5 +1,188 @@
 HISTORY.txt
 
+[2026-05-18] Sidebar — Badges de "acciones requeridas" en todos los items
+Agent: Claude Opus 4.7
+El sidebar ya tenía badges para 9 items (Fase 1). Se extendió a 11 items más
+y se unificó visualmente.
+
+BACKEND
+- apps/api/src/tenant/sidebar/sidebar-counts-service.ts:
+  · SidebarCounts ahora trae 11 contadores nuevos además de los 9 existentes:
+    maintenancePlansOverdue, dailyReportsMissing, fluidAnalysisCritical,
+    spareRequestsPending, cviqFindingsOpen, checklistsOverdue,
+    permitsAttention, crewCertsAttention, drillsOverdue, sparesCriticalLow,
+    providerNcOpen.
+  · Criterios de cada count:
+    - maintenancePlansOverdue: MaintenancePlan.status === OVERDUE
+    - dailyReportsMissing: buques del scope sin DailyReport con
+      reportDate de hoy (diff entre lista de buques y reported distinct).
+    - fluidAnalysisCritical: FluidAnalysisResult.verdict in
+      [CRITICAL, ACTION_REQUIRED].
+    - spareRequestsPending: SpareRequest.status in [DRAFT, SUBMITTED].
+    - cviqFindingsOpen: CviqResponse.status in [NOT_CONFORMING,
+      PARTIALLY_CONFORMING].
+    - checklistsOverdue: ChecklistExecution.status=IN_PROGRESS y
+      eventDateTime más viejo que 24 h.
+    - permitsAttention: PermitToWork OR de dos condiciones —
+      (status=ACTIVE con validTo < now+4h) o (status=REQUESTED).
+    - crewCertsAttention: CrewCertification.status in [EXPIRED,
+      EXPIRING_SOON], filtrado por la relación crew (vesselCode + tenant).
+    - drillsOverdue: Drill.status=SCHEDULED con scheduledDate < now.
+    - sparesCriticalLow: Spare criticality=A activos cuyo onHand
+      calculado con stock-calc-service esté por debajo de minStock.
+      Solo criticidad A para mantener el costo del scan acotado.
+    - providerNcOpen: ProviderNonconformity.status in [OPEN, UNDER_REVIEW].
+  · Todas las queries van en Promise.all y cada una envuelta en safe()
+    para que un schema drift no rompa todo el endpoint.
+  · Sin cambios en el endpoint /app/dashboard/sidebar-counts (mismo path,
+    mismo response shape extendido).
+
+FRONTEND
+- apps/web-modern/src/components/Sidebar.tsx:
+  · SidebarCounts interface extendida en sincronía con el backend.
+  · BADGE_KEY map agregado con 11 nuevas entradas
+    (/maintenance-plans, /daily-reports, /fluid-analyses,
+    /spare-requests, /cviq, /checklists, /permits, /crew, /drills,
+    /spares, /providers).
+  · BADGE_RED set ELIMINADO. Los 3 items que estaban en rojo
+    (/certificates, /rest-hours, /defects) ahora se ven en ámbar, igual
+    que MOC y el resto. Decisión del user: uniformidad visual — el badge
+    solo indica "hay acciones pendientes", la criticidad real se ve dentro
+    de la pantalla.
+  · Bloque de render del badge simplificado (sin la rama badgeRed).
+- Sin cambios en el polling (sigue siendo cada 2 min) ni en la propagación
+  a headers de sección colapsada (suma automática vía sectionTotal).
+- Sin cambios de i18n (los badges muestran número, no texto).
+
+VALIDACIÓN
+- npx tsc -p apps/api/tsconfig.json --noEmit: sin errores nuevos.
+- npx tsc --noEmit en apps/web-modern: sin errores nuevos.
+- npx vite build: OK (2.05 MB / 504 KB gzip, 1.02s).
+
+ITEMS QUE QUEDARON SIN BADGE (por diseño)
+- Dashboard, Carga de Mant., Reportes Mensuales, Bitácora,
+  Matriz Competencias, Buques, Equipos, AI Documents, Configuración,
+  Usuarios y Roles. Son vistas analíticas o de configuración, sin un
+  concepto natural de "acción pendiente".
+
+[2026-05-18] MOC — Triggers Fase 1: 4 popups "¿crear MOC?" no bloqueantes
+Agent: Claude Opus 4.7
+Tras la migración Prisma del paso 1/9 (ya en HISTORY más abajo), se entregó
+el resto de la Fase 1 completa.
+
+INFRA COMÚN (reutilizable para cualquier futuro trigger)
+- apps/web-modern/src/lib/use-moc-trigger.tsx (NUEVO):
+  · Hook useMocTrigger() devuelve { event, stage, ask, proceed, dismiss }.
+  · Componente <MocTriggerHost controller={...} /> que renderiza un dialog
+    "¿Crear MOC para este cambio?" tras el save. Si confirma, monta el
+    MocModal existente con prefill (no se duplicó UI).
+  · MocTriggerEvent.reason: "spareEquivalent" | "procedureChange" |
+    "crewKeyRank" | "alarmOverride".
+- apps/web-modern/src/pages/Moc.tsx:
+  · MocModal pasó de const a export const (estaba pendiente — el comentario
+    final del archivo decía "exportar para Deferral/Defect" pero nunca se
+    hizo). Eliminado el `export { MocModal };` duplicado al final que
+    rompía vite build tras agregar el export inline.
+- apps/web-modern/src/lib/i18n.tsx:
+  · 8 claves nuevas (es/en/pt): moc.trigger.title, askCreate, note,
+    btnLater, btnCreate y 4 reason.* (spareEquivalent, procedureChange,
+    crewKeyRank, alarmOverride).
+
+TRIGGER #1 — Spare equivalente / no-OEM en equipo crítico (EQUIPMENT_CHANGE)
+- prisma/schema.prisma: Spare.isEquivalent Boolean @default(false).
+- apps/api/src/tenant/spares/spares-service.ts: campo en CreateSpareInput,
+  UpdateSpareInput, create() y updateTenantSpare().
+- apps/web-modern/src/pages/Spares.tsx:
+  · interface Spare.isEquivalent, state, useDirtyTracker.
+  · Checkbox "Repuesto equivalente / no-OEM" debajo de Fabricante/Modelo
+    con copy explicativo.
+  · Detector: dispara MOC en alta con isEquivalent+criticality=A, o en
+    edición si el estado pasa de no-equivalente/critic a equivalente+A
+    (evita disparar dos veces sobre el mismo estado).
+  · SparesPage usa useMocTrigger() + MocTriggerHost.
+
+TRIGGER #2 — Edición de Checklist Template aprobada (PROCEDURE_CHANGE)
+- prisma/schema.prisma: ChecklistTemplate.approvedAt DateTime?,
+  approvedByUserId String?.
+- apps/api/src/tenant/checklists/checklists-service.ts:
+  · TemplateWriteInput.approved?: boolean. updateTemplate setea
+    approvedAt=now/null y approvedByUserId=session.user.id/null según el
+    flag.
+- apps/web-modern/src/pages/Checklists.tsx:
+  · interface Template + approvedAt + approvedByUserId.
+  · Banner de estado en TemplateEditor: "Procedimiento aprobado / Pendiente
+    de aprobación" + botón "Aprobar" / "Revocar aprobación" (PATCH directo
+    al endpoint).
+  · Badge "Aprobada" en la lista de templates (TemplatesModal).
+  · Detector: dispara MOC al guardar si la plantilla ya estaba aprobada
+    Y hay cambios sustantivos en name/description/type/itemsJson (compara
+    contra el template original).
+
+TRIGGER #3 — Cambio de rango clave de tripulación (ORGANIZATIONAL)
+- Sin cambios de schema (rank ya existía).
+- apps/web-modern/src/pages/Crew.tsx:
+  · Constante KEY_RANKS = ["CAPTAIN","CHIEF_ENGINEER","CHIEF_OFFICER"].
+  · CrewModal recibe onMocTrigger opcional.
+  · Detector tras save: dispara en (a) alta con rank clave; (b) edición
+    con cambio de rango si alguno de los lados es clave; (c) edición con
+    traslado de buque si el tripulante es/era de rango clave.
+  · Prefill arma title/reasonForChange/proposedChange/sourceLabel con
+    el nombre completo, rank y vessel name.
+  · CrewPage usa useMocTrigger() + MocTriggerHost.
+
+TRIGGER #4 — Permiso de Trabajo con override de alarma (TEMPORARY)
+- prisma/schema.prisma: PermitToWork.alarmOverride Boolean @default(false).
+- apps/api/src/tenant/permits/permits-service.ts: campo en
+  PermitWriteInput, createPermit() y updatePermit().
+- apps/web-modern/src/pages/Permits.tsx:
+  · interface Permit.alarmOverride, state, payload.
+  · Checkbox naranja "Override / bypass de alarma crítica" debajo de EPP
+    con copy específico (fire detection / gas / ESD).
+  · Detector: dispara MOC en alta con alarmOverride=true, o en edición
+    si el flag pasó de false a true (no dispara dos veces sobre permisos
+    que ya estaban en override).
+  · PermitsPage usa useMocTrigger() + MocTriggerHost.
+
+VALIDACIÓN
+- npx tsc -p apps/api/tsconfig.json --noEmit: sin errores nuevos en los
+  archivos tocados (los errores pre-existentes de bitácora/drills/capa/
+  defect-pdf/maintenance-plans siguen iguales).
+- npx tsc --noEmit en apps/web-modern: sin errores en los archivos tocados.
+- npx vite build: OK (2385 módulos, 2.05 MB / 504 KB gzip, 1.30s).
+
+UX FINAL DEL FLUJO (los 4 triggers)
+1. Usuario edita Spare/Crew/Permit/Checklist y guarda.
+2. El save corre normalmente y persiste el cambio.
+3. Si el detector dispara, aparece dialog corto preguntando si crear MOC.
+4. Crear MOC → abre MocModal con prefill (categoría, vessel, título,
+   reasonForChange, proposedChange, sourceLabel). Ahora no → cierra y
+   el cambio queda persistido sin MOC (no bloqueante por decisión del user).
+
+PENDIENTE (Fase 2 / no incluido)
+- Trigger #5 (químicos/lubricantes), #6 (firmware/software log) y #7
+  (voyage planning) requieren módulos nuevos que aún no existen en GPMS.
+  Quedaron fuera de Fase 1 por scope.
+
+[2026-05-18] MOC — Triggers Fase 1: migración Prisma (paso 1/9)
+Agent: Claude Opus 4.7
+- schema.prisma:
+  · Spare.isEquivalent: Boolean @default(false)
+    — Marca repuesto equivalente/no-OEM. Cuando se use en equipo
+      critical (A) dispara popup MOC EQUIPMENT_CHANGE.
+  · ChecklistTemplate.approvedAt: DateTime? + approvedByUserId: String?
+    — Permite aprobar plantilla. Si está aprobada y se edita, dispara
+      popup MOC PROCEDURE_CHANGE.
+  · PermitToWork.alarmOverride: Boolean @default(false)
+    — Flag de bypass/override de alarma crítica. Dispara popup MOC
+      TEMPORARY al guardar PTW.
+- prisma db push aplicado a localhost:5434 (postgres docker), prisma
+  generate ejecutado OK.
+- Sin errores TS nuevos relacionados a los campos agregados (los
+  errores pre-existentes de bitácora/drills/capa/defect-pdf siguen
+  igual, no son de este cambio).
+- Próximos pasos: hook useMocTriggerOnSave + MocTriggerDialog + i18n,
+  luego los 4 triggers (Crew, Spares, PTW, Checklist Template).
+
 [2026-05-18] MOC — "Asistir con IA" genera ahora risk + mitigation y se
 quita la vista previa
 Agent: Claude Opus 4.7

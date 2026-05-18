@@ -25,6 +25,9 @@ export interface TemplateWriteInput {
   description?: string | null;
   items?: TemplateItem[];
   isActive?: boolean;
+  // Aprobación formal de la plantilla. Si pasa de null → fecha, queda aprobada.
+  // Una plantilla aprobada que luego se edita dispara MOC PROCEDURE_CHANGE.
+  approved?: boolean;
 }
 
 export interface ExecutionListFilters {
@@ -199,6 +202,10 @@ export async function updateTemplate(session: TenantAccessSession, id: string, i
   if (input.description !== undefined) data.description = normOpt(input.description);
   if (input.items !== undefined) data.itemsJson = validateItems(input.items);
   if (input.isActive !== undefined) data.isActive = !!input.isActive;
+  if (input.approved !== undefined) {
+    data.approvedAt = input.approved ? new Date() : null;
+    data.approvedByUserId = input.approved ? session.user.id : null;
+  }
   return templateDel(prisma).update({ where: { id }, data });
 }
 

@@ -34,6 +34,7 @@ export interface PermitWriteInput {
   controlMeasures?: string | null;
   ppeRequired?: string | null;
   details?: Record<string, unknown>;
+  alarmOverride?: boolean;
 }
 
 function canManage(session: TenantAccessSession): boolean {
@@ -219,6 +220,7 @@ export async function createPermit(session: TenantAccessSession, input: PermitWr
       controlMeasures: normalizeOptional(input.controlMeasures),
       ppeRequired: normalizeOptional(input.ppeRequired),
       details: input.details ?? {},
+      alarmOverride: !!input.alarmOverride,
       createdByUserId: session.user.id,
       updatedByUserId: session.user.id,
     },
@@ -272,6 +274,7 @@ export async function updatePermit(session: TenantAccessSession, id: string, inp
   if (input.controlMeasures !== undefined) data.controlMeasures = normalizeOptional(input.controlMeasures);
   if (input.ppeRequired !== undefined) data.ppeRequired = normalizeOptional(input.ppeRequired);
   if (input.details !== undefined) data.details = input.details;
+  if (input.alarmOverride !== undefined) data.alarmOverride = !!input.alarmOverride;
 
   const updated = await permitClient(prisma).permitToWork.update({ where: { id }, data });
 

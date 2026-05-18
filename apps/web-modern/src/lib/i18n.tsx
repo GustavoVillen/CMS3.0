@@ -1084,6 +1084,35 @@ const dict = {
   "profile.confirmPwd":    { es: "Confirmar contraseña",en: "Confirm password",   pt: "Confirmar senha" },
   "profile.pwdMismatch":   { es: "Las contraseñas no coinciden", en: "Passwords do not match", pt: "As senhas não coincidem" },
   "profile.pwdChangedOk":  { es: "Contraseña cambiada", en: "Password changed",   pt: "Senha alterada" },
+
+  // MOC trigger dialog — "¿este cambio necesita MOC?" tras un save en Spares, PTW, Crew o Checklist Template.
+  "moc.trigger.title":     { es: "¿Crear MOC para este cambio?",
+                             en: "Create MOC for this change?",
+                             pt: "Criar MOC para esta mudança?" },
+  "moc.trigger.askCreate": { es: "El sistema detectó que este cambio puede requerir un Management of Change (MOC).",
+                             en: "The system detected that this change may require a Management of Change (MOC).",
+                             pt: "O sistema detectou que esta mudança pode exigir um Management of Change (MOC)." },
+  "moc.trigger.note":       { es: "El cambio ya fue guardado. Podés crear el MOC ahora o hacerlo más tarde desde la sección MOC.",
+                              en: "The change was already saved. You can create the MOC now or do it later from the MOC section.",
+                              pt: "A mudança já foi salva. Você pode criar o MOC agora ou mais tarde na seção MOC." },
+  "moc.trigger.btnLater":   { es: "Ahora no",                     en: "Not now",                          pt: "Agora não" },
+  "moc.trigger.btnCreate":  { es: "Crear MOC",                    en: "Create MOC",                       pt: "Criar MOC" },
+  "moc.trigger.reason.spareEquivalent": {
+    es: "Uso de repuesto equivalente / no-OEM en equipo crítico",
+    en: "Use of equivalent / non-OEM spare on critical equipment",
+    pt: "Uso de sobressalente equivalente / não-OEM em equipamento crítico" },
+  "moc.trigger.reason.procedureChange": {
+    es: "Modificación de un procedimiento (checklist) aprobado",
+    en: "Modification of an approved procedure (checklist)",
+    pt: "Modificação de um procedimento (checklist) aprovado" },
+  "moc.trigger.reason.crewKeyRank": {
+    es: "Cambio en un rol clave de tripulación (Capitán / Jefe de Máquinas / Jefe de Cubierta)",
+    en: "Change in a key crew role (Captain / Chief Engineer / Chief Officer)",
+    pt: "Mudança em um cargo chave de tripulação (Capitão / Chefe de Máquinas / Imediato)" },
+  "moc.trigger.reason.alarmOverride": {
+    es: "Permiso de trabajo con bypass / override de alarma crítica",
+    en: "Permit-to-work with critical alarm bypass / override",
+    pt: "Permissão de trabalho com bypass / override de alarme crítico" },
 } satisfies Record<string, Record<Locale, string>>;
 
 export type TranslationKey = keyof typeof dict;

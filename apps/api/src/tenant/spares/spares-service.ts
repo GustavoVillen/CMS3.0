@@ -33,6 +33,7 @@ export interface CreateSpareInput {
   defaultLocationId?: string | null;
   sfiCode?: string | null;
   leadTimeDays?: number | null;
+  isEquivalent?: boolean;
 }
 
 export interface UpdateSpareInput {
@@ -55,6 +56,7 @@ export interface UpdateSpareInput {
   defaultLocationId?: string | null;
   sfiCode?: string | null;
   leadTimeDays?: number | null;
+  isEquivalent?: boolean;
 }
 
 function canManage(session: TenantAccessSession): boolean {
@@ -202,6 +204,7 @@ export async function createTenantSpare(session: TenantAccessSession, payload: C
         defaultLocationId: payload.defaultLocationId ?? null,
         sfiCode: normalizeOptionalText(payload.sfiCode),
         leadTimeDays: payload.leadTimeDays ?? null,
+        isEquivalent: payload.isEquivalent ?? false,
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
       },
@@ -252,6 +255,7 @@ export async function updateTenantSpare(session: TenantAccessSession, id: string
   if (payload.defaultLocationId !== undefined) data.defaultLocationId = payload.defaultLocationId ?? null;
   if (payload.sfiCode !== undefined) data.sfiCode = normalizeOptionalText(payload.sfiCode);
   if (payload.leadTimeDays !== undefined) data.leadTimeDays = payload.leadTimeDays ?? null;
+  if (payload.isEquivalent !== undefined) data.isEquivalent = !!payload.isEquivalent;
 
   try {
     const updated = await prisma.spare.update({ where: { id: current.id }, data });

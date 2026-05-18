@@ -9,6 +9,7 @@ import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
+import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 
 const TYPE_LABEL: Record<string, string> = {
   PRE_ARRIVAL: "Pre-Arrival",
@@ -44,6 +45,10 @@ interface Template {
   description: string | null;
   itemsJson: Array<{ code: string; text: string; isMandatory?: boolean; category?: string }>;
   isActive: boolean;
+  // Aprobación formal del procedimiento. Si se edita una plantilla aprobada,
+  // el sistema sugiere abrir un MOC PROCEDURE_CHANGE.
+  approvedAt: string | null;
+  approvedByUserId: string | null;
 }
 
 interface Response {
@@ -403,7 +408,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
 
 // ─── Templates modal ─────────────────────────────────────────────────────────
 
-const TemplatesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ onClose, onMocTrigger }) => {
   const { data, loading, reload } = useFetch<{ items: Template[] }>("/app/checklist-templates");
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
@@ -431,6 +436,11 @@ const TemplatesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] font-bold uppercase tracking-wider text-accent">{TYPE_LABEL[t.type]}</span>
                       <span className="text-xs font-bold text-white">{t.name}</span>
+                      {t.approvedAt && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-success-sea/10 text-success-sea border-success-sea/30 inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> Aprobada
+                        </span>
+                      )}
                       <span className="text-[10px] text-text-industrial/40 ml-auto">{(t.itemsJson ?? []).length} ítems</span>
                       {t.tenantId === null && <span className="text-[9px] text-text-industrial/40 uppercase">global</span>}
                     </div>
@@ -442,14 +452,19 @@ const TemplatesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           }
         </div>
         {(showNew || editing) && (
-          <TemplateEditor template={editing} onClose={() => { setShowNew(false); setEditing(null); }} onSaved={() => { setShowNew(false); setEditing(null); void reload(); }} />
+          <TemplateEditor
+            template={editing}
+            onClose={() => { setShowNew(false); setEditing(null); }}
+            onSaved={() => { setShowNew(false); setEditing(null); void reload(); }}
+            onMocTrigger={onMocTrigger}
+          />
         )}
       </div>
     </div>
   );
 };
 
-const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void; onSaved: () => void }> = ({ template, onClose, onSaved }) => {
+const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void; onSaved: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ template, onClose, onSaved, onMocTrigger }) => {
   const isNew = !template;
   const [type, setType]         = useState(template?.type ?? "PRE_ARRIVAL");
   const [name, setName]         = useState(template?.name ?? "");
@@ -457,12 +472,23 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
   const [items, setItems]       = useState(template?.itemsJson ?? [{ code: "1", text: "", isMandatory: true }]);
   const [saving, setSaving]     = useState(false);
   const [err, setErr]           = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
+
+  const isApproved = !!template?.approvedAt;
 
   const addItem = () => setItems(prev => [...prev, { code: String(prev.length + 1), text: "", isMandatory: false }]);
   const removeItem = (i: number) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const updateItem = (i: number, patch: Partial<typeof items[number]>) => {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   };
+
+  // Hay cambios sobre la plantilla original (solo aplica en edición).
+  const hasMeaningfulChanges = !isNew && template && (
+    template.name !== name ||
+    (template.description ?? "") !== description ||
+    template.type !== type ||
+    JSON.stringify(template.itemsJson ?? []) !== JSON.stringify(items)
+  );
 
   const onSave = async () => {
     setSaving(true); setErr(null);
@@ -472,9 +498,39 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
       const payload = { type, name, description: description || null, items: filtered };
       if (isNew) await api.post("/app/checklist-templates", payload);
       else await api.patch(`/app/checklist-templates/${template!.id}`, payload);
+
+      // Detector MOC PROCEDURE_CHANGE: si una plantilla aprobada se edita en
+      // su contenido sustantivo (nombre, descripción, tipo o ítems), el cambio
+      // debe pasar por Management of Change. El permitir un MOC posterior a
+      // un save es no bloqueante (el cambio ya quedó persistido).
+      if (onMocTrigger && isApproved && hasMeaningfulChanges) {
+        onMocTrigger({
+          reason: "procedureChange",
+          prefill: {
+            category: "PROCEDURE_CHANGE",
+            title: `Modificación de plantilla aprobada: ${name}`,
+            reasonForChange: `Se modificó la plantilla de checklist "${name}" (tipo ${TYPE_LABEL[type] ?? type}), aprobada el ${fmtDate(template!.approvedAt)}.`,
+            proposedChange: `Cambios aplicados al procedimiento. Total de ítems: ${filtered.length}.`,
+            sourceLabel: `Desde Checklists · Plantilla ${name}`,
+          },
+        });
+      }
+
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
     finally { setSaving(false); }
+  };
+
+  // Aprobar / revocar aprobación. Es una mutación rápida sobre la plantilla
+  // existente — no aplica en creación (hay que guardarla primero).
+  const onToggleApproval = async () => {
+    if (isNew || !template) return;
+    setApproving(true); setErr(null);
+    try {
+      await api.patch(`/app/checklist-templates/${template.id}`, { approved: !isApproved });
+      onSaved();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al cambiar estado de aprobación."); }
+    finally { setApproving(false); }
   };
 
   return (
@@ -485,6 +541,34 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
+          {!isNew && (
+            <div className={`rounded-xl border px-3 py-2 flex items-center gap-3 ${isApproved ? "bg-success-sea/5 border-success-sea/30" : "bg-yellow-500/5 border-yellow-500/20"}`}>
+              {isApproved
+                ? <CheckCircle2 className="w-4 h-4 text-success-sea shrink-0" />
+                : <MinusCircle className="w-4 h-4 text-yellow-400 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-bold ${isApproved ? "text-success-sea" : "text-yellow-300"}`}>
+                  {isApproved ? "Procedimiento aprobado" : "Pendiente de aprobación"}
+                </p>
+                <p className="text-[10px] text-text-industrial/60 truncate">
+                  {isApproved
+                    ? `Aprobado el ${fmtDate(template!.approvedAt)}. Editar esta plantilla disparará un MOC PROCEDURE_CHANGE.`
+                    : "Los cambios no requieren MOC mientras la plantilla no esté aprobada formalmente."}
+                </p>
+              </div>
+              <button
+                onClick={() => { void onToggleApproval(); }}
+                disabled={approving}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border disabled:opacity-50 ${
+                  isApproved
+                    ? "bg-white/5 border-white/10 text-text-industrial/70 hover:bg-white/10"
+                    : "bg-success-sea/10 border-success-sea/30 text-success-sea hover:bg-success-sea/20"
+                }`}
+              >
+                {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : (isApproved ? "Revocar aprobación" : "Aprobar")}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Tipo</label>
               <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
@@ -535,6 +619,7 @@ export const ChecklistsPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [openId, setOpenId]         = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const mocTrigger = useMocTrigger();
 
   const items = useMemo(() => {
     const all = data?.items ?? [];
@@ -599,7 +684,9 @@ export const ChecklistsPage: React.FC = () => {
           onSaved={() => { setShowCreate(false); setOpenId(null); void reload(); }}
         />
       )}
-      {showTemplates && <TemplatesModal onClose={() => setShowTemplates(false)} />}
+      {showTemplates && <TemplatesModal onClose={() => setShowTemplates(false)} onMocTrigger={mocTrigger.ask} />}
+
+      <MocTriggerHost controller={mocTrigger} />
     </div>
   );
 };

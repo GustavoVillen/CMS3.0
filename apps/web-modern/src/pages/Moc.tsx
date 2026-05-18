@@ -168,7 +168,7 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 
 // ─── Modal ───────────────────────────────────────────────────────────────────
 
-const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () => void; onSaved: () => void }> = ({ moc, prefill, onClose, onSaved }) => {
+export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () => void; onSaved: () => void }> = ({ moc, prefill, onClose, onSaved }) => {
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isNew = !moc;
@@ -642,9 +642,8 @@ export const MocPage: React.FC = () => {
   );
 };
 
-// ─── Exportar el modal para que otros módulos (Deferral, Defect) puedan
-// abrirlo desde sus propias pantallas con prefill. La idea: el sistema sugiere
-// "este caso amerita MOC" y abre el modal ya armado.
+// ─── Exportar el modal para que otros módulos (Deferral, Defect, MOC trigger
+// dialogs) puedan abrirlo desde sus propias pantallas con prefill. La idea:
+// el sistema sugiere "este caso amerita MOC" y abre el modal ya armado.
+// MocModal y MocPrefill se exportan inline arriba en sus declaraciones.
 // ────────────────────────────────────────────────────────────────────────────
-
-export { MocModal };

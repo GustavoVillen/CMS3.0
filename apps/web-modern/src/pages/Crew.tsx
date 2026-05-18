@@ -6,6 +6,12 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
+import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
+
+// Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
+// Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
+// puestos de mayor responsabilidad operativa y de seguridad.
+const KEY_RANKS = ["CAPTAIN", "CHIEF_ENGINEER", "CHIEF_OFFICER"];
 
 interface Certification {
   id: string;
@@ -101,7 +107,7 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 // ─── Crew Modal ──────────────────────────────────────────────────────────────
 
-const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () => void }> = ({ crew, onClose, onSaved }) => {
+const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ crew, onClose, onSaved, onMocTrigger }) => {
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -137,13 +143,52 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
       };
       if (isNew) await api.post("/app/crew", payload);
       else await api.patch(`/app/crew/${crew!.id}`, payload);
+
+      // Detector MOC ORGANIZATIONAL: cambios que afecten a un rol clave de
+      // tripulación (Capitán / Jefe Máquinas / Primer Oficial) deben evaluarse
+      // como MOC. Disparamos en alta con rol clave, en cambio de rango si
+      // alguno de los lados es clave, y en traslado de buque si lo era/lo es.
+      if (onMocTrigger) {
+        const isKeyNow = KEY_RANKS.includes(rank);
+        const wasKey = crew ? KEY_RANKS.includes(crew.rank) : false;
+        const rankChanged = crew ? crew.rank !== rank : false;
+        const vesselChanged = crew ? crew.vesselCode !== vesselCode : false;
+
+        let reasonText: string | null = null;
+        if (isNew && isKeyNow) {
+          reasonText = `Alta de tripulante con rol clave (${RANK_LABEL[rank] ?? rank})`;
+        } else if (!isNew && rankChanged && (wasKey || isKeyNow)) {
+          reasonText = `Cambio de rango (${RANK_LABEL[crew!.rank] ?? crew!.rank} → ${RANK_LABEL[rank] ?? rank})`;
+        } else if (!isNew && vesselChanged && (wasKey || isKeyNow)) {
+          reasonText = `Traslado de buque (${crew!.vesselCode} → ${vesselCode}) en rol clave`;
+        }
+
+        if (reasonText) {
+          const fullName = `${firstName.trim()} ${lastName.trim()}`;
+          const rankLabel = RANK_LABEL[rank] ?? rank;
+          const vessel = vessels.find(v => v.code === vesselCode);
+          const vesselName = vessel?.name ?? vesselCode;
+          onMocTrigger({
+            reason: "crewKeyRank",
+            prefill: {
+              category: "ORGANIZATIONAL",
+              vesselCode,
+              title: `Cambio organizacional: ${rankLabel} — ${vesselName}`,
+              reasonForChange: `${reasonText}. Tripulante: ${fullName}.`,
+              proposedChange: `Designar a ${fullName} como ${rankLabel} en ${vesselName}.`,
+              sourceLabel: `Desde Tripulación · ${fullName}`,
+            },
+          });
+        }
+      }
+
       onSaved();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Error al guardar.");
     } finally {
       setSaving(false);
     }
-  }, [isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, onSaved]);
+  }, [isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, vessels, onSaved, onMocTrigger]);
 
   const onSignOff = useCallback(async () => {
     if (!crew) return;
@@ -436,6 +481,7 @@ export const CrewPage: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: Crew[]; total: number }>(path, [path]);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Crew | null>(null);
+  const mocTrigger = useMocTrigger();
 
   return (
     <div className="p-6 space-y-4">
@@ -496,8 +542,11 @@ export const CrewPage: React.FC = () => {
           crew={editing}
           onClose={() => { setShowCreate(false); setEditing(null); }}
           onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          onMocTrigger={mocTrigger.ask}
         />
       )}
+
+      <MocTriggerHost controller={mocTrigger} />
     </div>
   );
 };

@@ -12,6 +12,7 @@ import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
+import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +29,8 @@ interface Spare {
   // Extended fields (Fase 2)
   internalPartNumber: string | null; manufacturerPartNumber: string | null;
   longDescription: string | null; sfiCode: string | null; leadTimeDays: number | null;
+  // Repuesto equivalente / no-OEM (dispara MOC EQUIPMENT_CHANGE si criticality=A)
+  isEquivalent: boolean;
 }
 interface ListResponse { items: Spare[]; total: number; }
 interface SfiNode { id: string; code: string; description: string; groupNumber: number; groupName: string; }
@@ -150,9 +153,10 @@ interface SpareModalProps {
   spare: Spare | null;
   onClose: () => void;
   onSaved: (s: Spare) => void;
+  onMocTrigger?: (e: MocTriggerEvent) => void;
 }
 
-const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
+const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocTrigger }) => {
   const isNew = spare === null;
   const { user } = useAuth();
   const t = useT();
@@ -176,6 +180,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
   const [longDescription,         setLongDescription]         = useState(spare?.longDescription         ?? "");
   const [sfiCode,                 setSfiCode]                 = useState(spare?.sfiCode                 ?? "");
   const [leadTimeDays,            setLeadTimeDays]            = useState(String(spare?.leadTimeDays     ?? ""));
+  const [isEquivalent,            setIsEquivalent]            = useState(spare?.isEquivalent            ?? false);
 
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels } = useVesselContext();
@@ -236,6 +241,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
         longDescription:        longDescription.trim() || null,
         sfiCode:                sfiCode.trim() || null,
         leadTimeDays:           leadTimeDays.trim() ? parseInt(leadTimeDays, 10) : null,
+        isEquivalent:           isEquivalent,
       };
       if (!payload.vesselCode) { setError(t("error.vesselRequired")); setSaving(false); return; }
       if (!payload.sku)        { setError(t("error.skuRequired"));    setSaving(false); return; }
@@ -245,6 +251,28 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
       const result = isNew
         ? await api.post<Spare>("/app/pms/spares", payload)
         : await api.patch<Spare>(`/app/pms/spares/${spare.id}`, payload);
+
+      // Detector MOC EQUIPMENT_CHANGE: si el repuesto está marcado como
+      // equivalente / no-OEM y es de criticidad A (crítico), el cambio en la
+      // línea de defensa exige Management of Change. Disparamos en creación y
+      // también si la edición activa el flag o lo deja en estado equivalente+A.
+      if (onMocTrigger && payload.isEquivalent && payload.criticality === "A") {
+        const wasSameState = !isNew && spare && spare.isEquivalent === true && spare.criticality === "A";
+        if (!wasSameState) {
+          onMocTrigger({
+            reason: "spareEquivalent",
+            prefill: {
+              category: "EQUIPMENT_CHANGE",
+              vesselCode: payload.vesselCode,
+              title: `Repuesto equivalente en componente crítico: ${payload.name}`,
+              reasonForChange: `Se está utilizando el repuesto ${payload.sku} (${payload.name}) marcado como equivalente / no-OEM en una posición de criticidad A.`,
+              proposedChange: `Aprobar el uso del repuesto equivalente ${payload.sku}${payload.manufacturer ? ` (${payload.manufacturer}${payload.model ? ` ${payload.model}` : ""})` : ""} en lugar del componente OEM original.`,
+              sourceLabel: `Desde Repuestos · ${payload.sku} — ${payload.name}`,
+            },
+          });
+        }
+      }
+
       onSaved(result);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al guardar.");
@@ -272,6 +300,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
     vesselCode, sku, name, category, criticality, manufacturer, model, unit,
     minStock, reorderPoint, targetStock, location, status,
     internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays,
+    isEquivalent,
   });
   useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
@@ -361,6 +390,24 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved }) => {
               <input value={model} onChange={e => setModel(e.target.value)} className={inputCls} />
             </div>
           </div>
+
+          {/* Repuesto equivalente / no-OEM — al guardar con criticidad A
+              el sistema sugiere abrir un MOC EQUIPMENT_CHANGE. */}
+          <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-white/3 border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+            <input
+              type="checkbox"
+              checked={isEquivalent}
+              onChange={e => setIsEquivalent(e.target.checked)}
+              className="mt-0.5 accent-accent"
+            />
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-white">Repuesto equivalente / no-OEM</p>
+              <p className="text-[10px] text-white/40 mt-0.5">
+                Marcalo si el repuesto NO es del fabricante original del equipo.
+                En componentes de criticidad A el sistema sugerirá registrar un MOC.
+              </p>
+            </div>
+          </label>
 
           <div className="grid grid-cols-4 gap-4">
             <div>
@@ -611,6 +658,7 @@ export const SparesPage: React.FC = () => {
   })();
 
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
+  const mocTrigger = useMocTrigger();
 
   const COLUMNS: Column<Spare>[] = [
     { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-white text-xs">{r.sku}</span> },
@@ -632,8 +680,11 @@ export const SparesPage: React.FC = () => {
           spare={selected === "new" ? null : selected}
           onClose={() => setSelected(null)}
           onSaved={handleSaved}
+          onMocTrigger={mocTrigger.ask}
         />
       )}
+
+      <MocTriggerHost controller={mocTrigger} />
 
       <PageHeader icon={Package} title={t("page.spares")} total={data?.total} onReload={reload}>
         {/* Search */}
