@@ -1620,6 +1620,36 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           )}
           <fieldset disabled={readOnly} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto disabled:opacity-70">
 
+            {/* Banner: si el user modificó la periodicidad / triggerType del
+              * plan, le sugerimos gestionar un MOC formal. ISM 10.3 / TMSA
+              * piden trazabilidad de cambios en el cronograma de mantenimiento. */}
+            {planChangedFrequency && (
+              <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/[0.08] p-4 space-y-2">
+                <div className="flex items-start gap-3">
+                  <GitBranch className="w-5 h-5 text-yellow-300 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-yellow-100">
+                      Detectamos un cambio en la periodicidad del plan
+                    </p>
+                    <p className="text-xs text-yellow-200/80 mt-1 leading-relaxed">
+                      Modificar la frecuencia o el tipo de disparador de un plan aprobado
+                      cambia el cronograma de mantenimiento (SMS). <strong>ISM 10.3 / TMSA</strong>
+                      piden que este cambio se gestione mediante un <strong>MOC (PROCEDURE_CHANGE)</strong> formal
+                      con análisis de riesgo y aprobación.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowMoc(true)}
+                      className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/40 text-yellow-100 font-bold text-xs hover:bg-yellow-500/30 transition-all"
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                      Abrir MOC ahora
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Read-only identifiers (edit mode) */}
             {!isNew && (
               <>
