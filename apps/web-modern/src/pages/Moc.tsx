@@ -165,58 +165,6 @@ interface Moc {
 const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
-/**
- * Renderiza texto plano con un subset de Markdown:
- * - `**texto**` → bold
- * - saltos de línea → cada línea es un <div> para que el line-height sea
- *   predecible y el wrap funcione naturalmente.
- *
- * No usamos un parser completo a propósito: el contenido viene de la IA o
- * del user, y solo querés bold + line breaks. Cualquier otra cosa se queda
- * como texto literal.
- */
-const MarkdownLite: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
-  if (!text) return null;
-  const lines = text.split(/\r?\n/);
-  return (
-    <div className={className}>
-      {lines.map((line, lineIdx) => {
-        // Tokenizar la línea en segmentos { text, bold }
-        const segments: Array<{ text: string; bold: boolean }> = [];
-        let rest = line;
-        while (rest.length > 0) {
-          const m = rest.match(/^\*\*([^*]+)\*\*/);
-          if (m) {
-            segments.push({ text: m[1]!, bold: true });
-            rest = rest.slice(m[0].length);
-            continue;
-          }
-          const idx = rest.indexOf("**");
-          if (idx === -1) {
-            segments.push({ text: rest, bold: false });
-            rest = "";
-          } else {
-            if (idx > 0) segments.push({ text: rest.slice(0, idx), bold: false });
-            rest = rest.slice(idx);
-          }
-        }
-        // Si la línea está vacía, dejamos un &nbsp; para mantener la altura.
-        const isEmpty = segments.every(s => !s.text);
-        return (
-          <div key={lineIdx} className="leading-relaxed">
-            {isEmpty
-              ? <>&nbsp;</>
-              : segments.map((seg, i) => seg.bold
-                  ? <strong key={i} className="text-white">{seg.text}</strong>
-                  : <span key={i}>{seg.text}</span>
-                )
-            }
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
 // ─── Modal ───────────────────────────────────────────────────────────────────
 
@@ -317,17 +265,27 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
     }
   };
 
+  // Una sola llamada genera AMBOS campos: análisis de riesgo + medidas de
+  // mitigación. La IA responde con dos bloques separados por un marcador, y
+  // el backend los separa antes de devolverlos. Si el user ya tenía algo
+  // escrito en cualquiera de los dos campos, se pasa como contexto para que
+  // la IA lo integre en vez de pisarlo.
   const suggestRiskAssessmentAI = async () => {
     if (aiLoadingRisk || isLocked) return;
     setAiLoadingRisk(true);
     setErr(null);
     try {
-      const res = await api.post<{ text: string }>("/app/mocs/suggest-risk-assessment", {
-        vesselCode, category, title, reasonForChange, proposedChange, riskLevel,
-        impactAreas, mitigationActions,
-        currentNotes: riskAssessmentNotes,
-      });
-      if (res.text?.trim()) setRAN(res.text.trim());
+      const res = await api.post<{ riskAssessment: string; mitigation: string }>(
+        "/app/mocs/suggest-risk-assessment",
+        {
+          vesselCode, category, title, reasonForChange, proposedChange, riskLevel,
+          impactAreas,
+          currentNotes: riskAssessmentNotes,
+          mitigationActions,
+        },
+      );
+      if (res.riskAssessment?.trim()) setRAN(res.riskAssessment.trim());
+      if (res.mitigation?.trim())     setMA(res.mitigation.trim());
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "No se pudo generar el análisis con IA.");
     } finally {
@@ -484,18 +442,10 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
                 </button>
               </div>
               <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
-              {/* Preview formateado del análisis: renderiza **bold** y respeta
-                * saltos de línea. Permite que el user vea cómo va a quedar el
-                * texto en el PDF / vista de detalle sin tener que abrirlo. */}
-              {riskAssessmentNotes.trim() && (
-                <div className="mt-2 rounded-xl bg-white/[0.03] border border-white/10 px-3 py-2.5 text-xs text-text-industrial/85 leading-relaxed">
-                  <p className="text-[9px] uppercase tracking-widest text-text-industrial/40 mb-1.5 font-bold">Vista previa</p>
-                  <MarkdownLite text={riskAssessmentNotes} className="space-y-0.5" />
-                </div>
-              )}
             </div>
-            <div className="col-span-2"><label className={labelCls}>Medidas de mitigación</label>
-              <textarea rows={2} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y"} />
+            <div className="col-span-2">
+              <label className={labelCls}>Medidas de mitigación</label>
+              <textarea rows={6} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
           </div>
 

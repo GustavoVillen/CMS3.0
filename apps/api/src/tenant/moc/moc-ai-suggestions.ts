@@ -11,11 +11,19 @@ const MODEL = "claude-haiku-4-5-20251001";
 // con metodologías formales de análisis de riesgo (Bow Tie, HAZID, FMEA).
 // El output va al campo riskAssessmentNotes del MOC, así que tiene que ser
 // directamente utilizable — sin preámbulos ni preguntas.
+// Separador único que usamos para partir la respuesta en dos bloques
+// (análisis de riesgo y medidas de mitigación). Modelo lo emite literal.
+const SECTION_SEPARATOR = "---MITIGATION---";
+
 const PROMPT_RISK_ASSESSMENT = `Sos experto senior en sistemas de gestión de seguridad (SMS) marítimos y análisis de riesgos formales. Tu experiencia cubre ISM Code, TMSA 3 (element 7 — Management of Change), SIRE 2.0, e ISO 31000. Trabajaste con metodologías Bow Tie, HAZID, HAZOP y FMEA.
 
-Te van a pasar un cambio (MOC) que el armador quiere aplicar a un buque. Tenés que producir un ANÁLISIS DE RIESGO PROFESIONAL del cambio propuesto, en español técnico-naval, en texto plano formateado en bullets.
+Te van a pasar un cambio (MOC) que el armador quiere aplicar a un buque. Tenés que producir DOS BLOQUES separados: (A) un ANÁLISIS DE RIESGO profesional del cambio, y (B) MEDIDAS DE MITIGACIÓN concretas y accionables. Texto plano en español técnico-naval.
 
-ESTRUCTURA del output — 6 secciones obligatorias en este orden, cada una empieza con un encabezado en negrita seguido de DOS PUNTOS y un salto de línea. Después listar los sub-items numerados, UNO POR LÍNEA, comenzando cada línea con el número y un punto. NUNCA poner varios items en una sola línea con "(1)... (2)... (3)...".
+═══════════════════════════════════════
+BLOQUE A — ANÁLISIS DE RIESGO
+═══════════════════════════════════════
+
+6 secciones obligatorias en este orden, cada una empieza con un encabezado en negrita seguido de DOS PUNTOS y un salto de línea. Después listar los sub-items numerados, UNO POR LÍNEA, comenzando cada línea con el número y un punto. NUNCA poner varios items en una sola línea con "(1)... (2)... (3)...".
 
 **Peligros identificados**:
 1. <peligro concreto 1>
@@ -41,22 +49,53 @@ ESTRUCTURA del output — 6 secciones obligatorias en este orden, cada una empie
 
 **Recomendación de nivel de riesgo**: <una sola oración con el nivel sugerido (LOW/MEDIUM/HIGH/CRITICAL) y por qué>.
 
-REGLAS DE FORMATO (IMPORTANTES):
+═══════════════════════════════════════
+SEPARADOR OBLIGATORIO
+═══════════════════════════════════════
+
+Después del Bloque A insertás UNA línea EN BLANCO, luego el literal "${SECTION_SEPARATOR}" SOLO en su propia línea, luego otra línea EN BLANCO, y arrancás el Bloque B.
+
+═══════════════════════════════════════
+BLOQUE B — MEDIDAS DE MITIGACIÓN
+═══════════════════════════════════════
+
+3 secciones obligatorias en este orden:
+
+**Medidas de mitigación**:
+1. <medida concreta y accionable 1 — qué se hace + sobre qué barrera>
+2. <medida concreta y accionable 2>
+3. <medida concreta y accionable 3>
+4. <medida concreta y accionable 4 (opcional)>
+5. <medida concreta y accionable 5 (opcional)>
+
+**Verificación de eficacia**:
+1. <cómo se verifica que la mitigación funciona en la práctica — ej. drill, inspección, KPI a registrar>
+2. <segunda verificación si aplica>
+
+**Plan de reversión / roll-back**:
+1. <cómo se revierte el cambio si la mitigación falla o el riesgo residual sigue siendo inaceptable>
+
+═══════════════════════════════════════
+REGLAS DE FORMATO (críticas)
+═══════════════════════════════════════
 - Cada encabezado de sección DEBE empezar con dos asteriscos y terminar con dos asteriscos (**) seguido de ":".
 - Cada sub-item numerado va en su PROPIA LÍNEA, comenzando con "1. ", "2. ", "3. " desde el margen izquierdo.
 - NUNCA usar "(1)... (2)... (3)..." inline en una sola línea.
 - Separar cada sección con UNA línea en blanco.
 - Si una sección tiene un solo item, va igual numerado como "1.".
+- El separador "${SECTION_SEPARATOR}" aparece UNA SOLA VEZ y va EN SU PROPIA LÍNEA.
 
-REGLAS DE CONTENIDO:
+═══════════════════════════════════════
+REGLAS DE CONTENIDO
+═══════════════════════════════════════
 - NO hagas preguntas al usuario — con la info disponible alcanza para un análisis preliminar serio.
 - NO repitas literalmente el "cambio propuesto"; analizalo.
-- Texto en español técnico-naval. Profesional, conciso, accionable.
-- NO incluyas recomendaciones de mitigación (eso va en otro campo del form).
+- Las medidas de mitigación deben ser ACCIONABLES y específicas al cambio propuesto. NADA de genéricos tipo "capacitar al personal" sin especificar sobre qué.
+- Profesional, conciso. No texto poético ni verboso.
 - NO inventes datos del buque que no estén en el contexto.
-- Si el cambio es trivial o rutinario, decilo explícitamente en la primera sección.
+- Si el cambio es trivial o rutinario, decilo explícitamente en la primera sección del Bloque A — pero igual generá el Bloque B con medidas mínimas razonables.
 
-Respondé ÚNICAMENTE con las 6 secciones, sin introducción ni cierre.`;
+Respondé ÚNICAMENTE con los dos bloques separados por el literal, sin introducción ni cierre.`;
 
 const CATEGORY_LABEL: Record<string, string> = {
   EQUIPMENT_CHANGE:   "Cambio de equipo (físico)",
@@ -79,9 +118,10 @@ export interface RiskAssessmentInput {
   proposedChange?: string | null;
   riskLevel?: string | null;
   impactAreas?: string[] | null;
-  mitigationActions?: string | null;
-  /** Texto que el user ya tenía escrito (si lo hay) — para refinarlo en vez de pisarlo. */
+  /** Texto que el user ya tenía escrito en "Notas análisis de riesgo" (si lo hay) — para refinarlo en vez de pisarlo. */
   currentNotes?: string | null;
+  /** Texto que el user ya tenía escrito en "Medidas de mitigación" (si lo hay) — para refinarlo en vez de pisarlo. */
+  mitigationActions?: string | null;
 }
 
 function buildContext(input: RiskAssessmentInput): string {
@@ -97,14 +137,18 @@ function buildContext(input: RiskAssessmentInput): string {
   if (input.impactAreas && input.impactAreas.length > 0) {
     lines.push(`- Áreas de impacto marcadas por el usuario: ${input.impactAreas.join(", ")}`);
   }
-  if (input.mitigationActions) {
-    lines.push(`- Medidas de mitigación ya planteadas: ${input.mitigationActions}`);
-  }
   if (input.currentNotes && input.currentNotes.trim()) {
     lines.push(
       "",
-      "El usuario ya escribió las siguientes notas de análisis (refinalas, no las pises completamente):",
+      "El usuario ya escribió las siguientes notas de análisis (refinalas e integralas, no las pises completamente):",
       input.currentNotes,
+    );
+  }
+  if (input.mitigationActions && input.mitigationActions.trim()) {
+    lines.push(
+      "",
+      "El usuario ya escribió las siguientes medidas de mitigación (refinalas e integralas, no las pises completamente):",
+      input.mitigationActions,
     );
   }
   return lines.join("\n");
@@ -113,7 +157,7 @@ function buildContext(input: RiskAssessmentInput): string {
 export async function suggestRiskAssessment(
   session: TenantAccessSession,
   input: RiskAssessmentInput,
-): Promise<{ text: string }> {
+): Promise<{ riskAssessment: string; mitigation: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
@@ -130,7 +174,8 @@ export async function suggestRiskAssessment(
   try {
     response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      // Ahora generamos 2 bloques (risk + mitigation), subimos el cap a 2048.
+      max_tokens: 2048,
       system: PROMPT_RISK_ASSESSMENT,
       messages: [{ role: "user", content: buildContext(input) }],
     });
@@ -170,5 +215,12 @@ export async function suggestRiskAssessment(
     .join("\n")
     .trim();
 
-  return { text };
+  // Partimos por el separador. Si el modelo no lo emitió (caso raro), todo
+  // se considera análisis de riesgo y dejamos mitigation vacío — la UI
+  // mostrará lo que haya y el usuario puede regenerar.
+  const sepIdx = text.indexOf(SECTION_SEPARATOR);
+  const riskAssessment = (sepIdx >= 0 ? text.slice(0, sepIdx) : text).trim();
+  const mitigation     = (sepIdx >= 0 ? text.slice(sepIdx + SECTION_SEPARATOR.length) : "").trim();
+
+  return { riskAssessment, mitigation };
 }

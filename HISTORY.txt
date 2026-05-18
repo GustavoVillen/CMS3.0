@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-05-18] MOC — "Asistir con IA" genera ahora risk + mitigation y se
+quita la vista previa
+Agent: Claude Opus 4.7
+- moc-ai-suggestions.ts:
+  · Prompt extendido: el modelo emite dos bloques (análisis de riesgo +
+    medidas de mitigación) separados por un marcador "---MITIGATION---".
+  · suggestRiskAssessment ahora devuelve { riskAssessment, mitigation }.
+  · max_tokens 1024 → 2048 (la salida es ~2x más larga).
+  · Contexto: si el user ya tenía notas o mitigación escritas, se pasan
+    explícitamente para refinar e integrar, no pisar.
+- Moc.tsx (frontend):
+  · suggestRiskAssessmentAI() ahora populate ambos campos.
+  · Quitado el bloque "Vista previa" (preview formateado del riskAssessment).
+  · Quitado MarkdownLite (quedó sin uso al sacar la preview).
+  · Textarea de "Medidas de mitigación" pasa de rows=2 a rows=6 + font-mono
+    (mismo styling que el de análisis, porque ahora puede contener varias
+    secciones numeradas).
+Verificado: tsc api + web-modern 0 errores.
+
 [2026-05-18] PDF — helper compartido renderLabeledTextBox + Skill obligatorio
 Agent: Claude Opus 4.7
 Para no volver a corregir el bug del badge gris que no se redibuja al
