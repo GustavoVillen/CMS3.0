@@ -168,8 +168,8 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 /**
  * Renderiza texto plano con un subset de Markdown:
  * - `**texto**` → bold
- * - saltos de línea → <br />
- * - El resto sale como text plano (no HTML, no XSS).
+ * - saltos de línea → cada línea es un <div> para que el line-height sea
+ *   predecible y el wrap funcione naturalmente.
  *
  * No usamos un parser completo a propósito: el contenido viene de la IA o
  * del user, y solo querés bold + line breaks. Cualquier otra cosa se queda
@@ -177,33 +177,45 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
  */
 const MarkdownLite: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
   if (!text) return null;
-  // Split por dobles asteriscos manteniendo los delimitadores
-  // El regex captura: texto antes, `**bold**`, texto después.
-  const parts: React.ReactNode[] = [];
   const lines = text.split(/\r?\n/);
-  lines.forEach((line, lineIdx) => {
-    let rest = line;
-    let key = 0;
-    while (rest.length > 0) {
-      const match = rest.match(/^\*\*([^*]+)\*\*/);
-      if (match) {
-        parts.push(<strong key={`${lineIdx}-b-${key++}`} className="text-white">{match[1]}</strong>);
-        rest = rest.slice(match[0].length);
-        continue;
-      }
-      // Buscar el próximo `**` y emitir texto antes
-      const idx = rest.indexOf("**");
-      if (idx === -1) {
-        parts.push(<span key={`${lineIdx}-t-${key++}`}>{rest}</span>);
-        rest = "";
-      } else {
-        if (idx > 0) parts.push(<span key={`${lineIdx}-t-${key++}`}>{rest.slice(0, idx)}</span>);
-        rest = rest.slice(idx);
-      }
-    }
-    if (lineIdx < lines.length - 1) parts.push(<br key={`${lineIdx}-br`} />);
-  });
-  return <div className={className}>{parts}</div>;
+  return (
+    <div className={className}>
+      {lines.map((line, lineIdx) => {
+        // Tokenizar la línea en segmentos { text, bold }
+        const segments: Array<{ text: string; bold: boolean }> = [];
+        let rest = line;
+        while (rest.length > 0) {
+          const m = rest.match(/^\*\*([^*]+)\*\*/);
+          if (m) {
+            segments.push({ text: m[1]!, bold: true });
+            rest = rest.slice(m[0].length);
+            continue;
+          }
+          const idx = rest.indexOf("**");
+          if (idx === -1) {
+            segments.push({ text: rest, bold: false });
+            rest = "";
+          } else {
+            if (idx > 0) segments.push({ text: rest.slice(0, idx), bold: false });
+            rest = rest.slice(idx);
+          }
+        }
+        // Si la línea está vacía, dejamos un &nbsp; para mantener la altura.
+        const isEmpty = segments.every(s => !s.text);
+        return (
+          <div key={lineIdx} className="leading-relaxed">
+            {isEmpty
+              ? <>&nbsp;</>
+              : segments.map((seg, i) => seg.bold
+                  ? <strong key={i} className="text-white">{seg.text}</strong>
+                  : <span key={i}>{seg.text}</span>
+                )
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 // ─── Modal ───────────────────────────────────────────────────────────────────

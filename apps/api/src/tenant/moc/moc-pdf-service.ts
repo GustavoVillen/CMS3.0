@@ -188,59 +188,98 @@ export async function buildMocPdf(session: TenantAccessSession, id: string): Pro
         .text(sanitize(value), bx + 10, by + 20, { width: bw - 20 });
     }
 
-    /**
-     * Renderiza un texto con soporte light de markdown: **bold** y newlines.
-     * Cada línea se procesa por separado; los segmentos `**texto**` se pintan
-     * en Helvetica-Bold y el resto en Helvetica regular.
-     */
-    function textWithBold(text: string, x: number, startY: number, width: number, fontSize: number, lineGap: number): number {
-      const lines = text.split(/\r?\n/);
-      let cy = startY;
-      for (const rawLine of lines) {
-        const line = sanitize(rawLine);
-        if (!line) {
-          cy += fontSize + lineGap;
+    /** Parte una línea en segmentos { text, bold } a partir de **bold**. */
+    function tokenize(line: string): Array<{ text: string; bold: boolean }> {
+      const segments: Array<{ text: string; bold: boolean }> = [];
+      let rest = line;
+      while (rest.length > 0) {
+        const m = rest.match(/^\*\*([^*]+)\*\*/);
+        if (m) {
+          segments.push({ text: m[1]!, bold: true });
+          rest = rest.slice(m[0].length);
           continue;
         }
-        // Tokenizar la línea en segmentos: { text, bold }
-        const segments: Array<{ text: string; bold: boolean }> = [];
-        let rest = line;
-        while (rest.length > 0) {
-          const m = rest.match(/^\*\*([^*]+)\*\*/);
-          if (m) {
-            segments.push({ text: m[1]!, bold: true });
-            rest = rest.slice(m[0].length);
-            continue;
-          }
-          const idx = rest.indexOf("**");
-          if (idx === -1) {
-            segments.push({ text: rest, bold: false });
-            rest = "";
-          } else {
-            if (idx > 0) segments.push({ text: rest.slice(0, idx), bold: false });
-            rest = rest.slice(idx);
-          }
+        const idx = rest.indexOf("**");
+        if (idx === -1) {
+          segments.push({ text: rest, bold: false });
+          rest = "";
+        } else {
+          if (idx > 0) segments.push({ text: rest.slice(0, idx), bold: false });
+          rest = rest.slice(idx);
         }
-        // Pintar segmentos en cadena
-        let cx = x;
-        const lineY = cy;
+      }
+      return segments;
+    }
+
+    /**
+     * Mide la altura real que ocupará el texto al renderizarse en `width` pts,
+     * considerando wrap automático de pdfkit. Usa heightOfString sobre la
+     * versión sin asteriscos (el ancho de **bold** vs normal difiere en
+     * <5% para Helvetica, suficiente para reservar caja).
+     */
+    function measureTextHeight(text: string, width: number, fontSize: number, lineGap: number): number {
+      const lines = text.split(/\r?\n/);
+      doc.fontSize(fontSize).font("Helvetica");
+      let total = 0;
+      for (const rawLine of lines) {
+        const sanitized = sanitize(rawLine);
+        const stripped = sanitized.replace(/\*\*/g, "");
+        if (!stripped.trim()) {
+          total += fontSize + lineGap;
+          continue;
+        }
+        total += doc.heightOfString(stripped, { width, lineGap });
+      }
+      return total;
+    }
+
+    /**
+     * Renderiza un texto con soporte light de Markdown (**bold** + newlines)
+     * usando el cursor automático de pdfkit, que respeta wrap. Cada línea
+     * lógica del input se pinta como una secuencia de segmentos continuos
+     * (cada uno con su fuente), y el último segmento de cada línea cierra
+     * el bloque (continued: false) para forzar el line break.
+     */
+    function textWithBold(text: string, x: number, startY: number, width: number, fontSize: number, lineGap: number): void {
+      const lines = text.split(/\r?\n/);
+      doc.fontSize(fontSize).fillColor(black);
+      // Posicionar cursor manualmente en la primera línea; las siguientes
+      // continúan desde doc.y / doc.x que pdfkit actualiza.
+      let firstOfLine = true;
+      doc.x = x;
+      doc.y = startY;
+
+      for (let li = 0; li < lines.length; li++) {
+        const rawLine = lines[li]!;
+        const line = sanitize(rawLine);
+        if (!line.trim()) {
+          // Línea vacía: avanzamos un line height aproximado.
+          doc.text(" ", x, doc.y, { width, lineGap });
+          firstOfLine = true;
+          continue;
+        }
+        const segments = tokenize(line);
         for (let i = 0; i < segments.length; i++) {
           const seg = segments[i]!;
           const last = i === segments.length - 1;
-          doc.fontSize(fontSize)
-            .font(seg.bold ? "Helvetica-Bold" : "Helvetica")
-            .fillColor(black)
-            .text(seg.text, cx, lineY, {
+          doc.font(seg.bold ? "Helvetica-Bold" : "Helvetica").fillColor(black);
+          if (firstOfLine) {
+            doc.text(seg.text, x, doc.y, {
               continued: !last,
-              width: width - (cx - x),
-              lineBreak: false,
+              width,
+              lineGap,
             });
-          // Avanzar cx por el ancho real del texto
-          cx += doc.widthOfString(seg.text);
+            firstOfLine = false;
+          } else {
+            doc.text(seg.text, {
+              continued: !last,
+              width,
+              lineGap,
+            });
+          }
+          if (last) firstOfLine = true;
         }
-        cy = lineY + fontSize + lineGap;
       }
-      return cy;
     }
 
     function textSection(label: string, rawText: string) {
@@ -252,10 +291,8 @@ export async function buildMocPdf(session: TenantAccessSession, id: string): Pro
       const LINE_GAP = 3;
       const FONT_SIZE = 10;
 
-      // Pre-calcular altura de la caja midiendo cada línea
-      const lines = text.split(/\r?\n/);
-      const lineHeight = FONT_SIZE + LINE_GAP;
-      const contentH = lines.length * lineHeight;
+      // Pre-medir altura REAL del texto considerando wrap.
+      const contentH = measureTextHeight(text, W - 20, FONT_SIZE, LINE_GAP);
       const boxH = Math.max(36, contentH + BOX_PAD_TOP + BOX_PAD_BOT);
 
       ensureSpace(LABEL_H + boxH + SECTION_GAP);
