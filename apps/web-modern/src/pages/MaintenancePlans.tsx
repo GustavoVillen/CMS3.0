@@ -1055,6 +1055,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [sfiNodes, setSfiNodes] = useState<SfiNode[]>([]);
   const [loadingSfiNodes, setLoadingSfiNodes] = useState(false);
   const [showMoc, setShowMoc] = useState(false);
+  // Popup interceptor: aparece al tocar Guardar cuando hay cambio de
+  // periodicidad. El user elige Cancelar / Guardar sin MOC / Abrir MOC.
+  const [showMocPrompt, setShowMocPrompt] = useState(false);
 
   // Detección de cambio en frecuencia / trigger — sugiere MOC PROCEDURE_CHANGE.
   // Modificar la frecuencia o el tipo de disparador de un plan aprobado
@@ -1620,36 +1623,6 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           )}
           <fieldset disabled={readOnly} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto disabled:opacity-70">
 
-            {/* Banner: si el user modificó la periodicidad / triggerType del
-              * plan, le sugerimos gestionar un MOC formal. ISM 10.3 / TMSA
-              * piden trazabilidad de cambios en el cronograma de mantenimiento. */}
-            {planChangedFrequency && (
-              <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/[0.08] p-4 space-y-2">
-                <div className="flex items-start gap-3">
-                  <GitBranch className="w-5 h-5 text-yellow-300 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-yellow-100">
-                      Detectamos un cambio en la periodicidad del plan
-                    </p>
-                    <p className="text-xs text-yellow-200/80 mt-1 leading-relaxed">
-                      Modificar la frecuencia o el tipo de disparador de un plan aprobado
-                      cambia el cronograma de mantenimiento (SMS). <strong>ISM 10.3 / TMSA</strong>
-                      piden que este cambio se gestione mediante un <strong>MOC (PROCEDURE_CHANGE)</strong> formal
-                      con análisis de riesgo y aprobación.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowMoc(true)}
-                      className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/40 text-yellow-100 font-bold text-xs hover:bg-yellow-500/30 transition-all"
-                    >
-                      <GitBranch className="w-3.5 h-3.5" />
-                      Abrir MOC ahora
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Read-only identifiers (edit mode) */}
             {!isNew && (
               <>
@@ -2084,25 +2057,21 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   PDF
                 </button>
               )}
-              {/* Si el user cambió la periodicidad o el tipo de disparador del
-                * plan, sugerimos abrir un MOC PROCEDURE_CHANGE. Cambia el SMS
-                * aprobado → ISM 10.3 / TMSA pide trazabilidad formal del cambio. */}
-              {planChangedFrequency && (
-                <button
-                  onClick={() => setShowMoc(true)}
-                  title="Cambiar la frecuencia de un plan amerita un MOC formal"
-                  className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs hover:bg-yellow-500/15 transition-all flex items-center gap-1.5"
-                >
-                  <GitBranch className="w-3.5 h-3.5" />
-                  Abrir MOC
-                </button>
-              )}
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
                 {readOnly ? t("mp.modal.close") : t("common.cancel")}
               </button>
               {!readOnly && (
-                <button onClick={() => { void onSave(); }} disabled={saving}
-                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-primary-bg hover:brightness-110">
+                <button
+                  onClick={() => {
+                    // Interceptor: si cambió la periodicidad, mostramos el popup
+                    // de MOC antes de guardar. El user decide guardar igual o
+                    // abrir MOC primero.
+                    if (planChangedFrequency) setShowMocPrompt(true);
+                    else void onSave();
+                  }}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-primary-bg hover:brightness-110"
+                >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
                 </button>
               )}
@@ -2188,6 +2157,65 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           onClose={() => setShowPostpone(false)}
           onSuccess={() => { setShowPostpone(false); void onSaved(); }}
         />
+      )}
+
+      {/* Popup interceptor pre-save cuando se detecta cambio de frecuencia.
+        * Aparece cuando el user toca "Guardar". Tres opciones:
+        *   1. Cancelar — vuelve al form, no guarda nada
+        *   2. Guardar sin MOC — procede al save normal (registra la decisión)
+        *   3. Abrir MOC primero — abre el MocModal con prefill, el user
+        *      después puede volver a guardar el plan */}
+      {showMocPrompt && !isNew && plan !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-xl bg-[#0D1B2A] border border-yellow-500/40 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <GitBranch className="w-5 h-5 text-yellow-300" />
+              <h2 className="text-sm font-bold text-white">¿Gestionar MOC para este cambio?</h2>
+            </div>
+            <p className="text-sm text-text-industrial leading-relaxed">
+              Estás modificando la <strong className="text-white">periodicidad</strong> del plan
+              <strong className="text-white"> {plan.taskCode}</strong>. Cambiar el cronograma de un
+              plan aprobado afecta el SMS del buque.
+            </p>
+            <p className="text-xs text-text-industrial/70 leading-relaxed">
+              <strong>ISM 10.3 / TMSA element 7</strong> piden que este cambio se gestione mediante
+              un <strong>MOC (PROCEDURE_CHANGE)</strong> formal — con análisis de riesgo, aprobación
+              de Gerencia Técnica y revisión post-implementación.
+            </p>
+            <div className="rounded-lg bg-yellow-500/[0.08] border border-yellow-500/30 px-3 py-2 text-[11px] text-yellow-200/90 leading-relaxed">
+              <strong>Recomendado</strong>: abrir el MOC primero, esperar la aprobación,
+              y después guardar el cambio al plan. Así la trazabilidad queda limpia para auditoría.
+            </div>
+            <div className="flex justify-end gap-2 pt-1 flex-wrap">
+              <button
+                onClick={() => setShowMocPrompt(false)}
+                className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowMocPrompt(false);
+                  void onSave();
+                }}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial text-xs hover:bg-white/10 disabled:opacity-50"
+                title="Guarda el cambio sin abrir MOC. Asumí la responsabilidad del cambio sin trazabilidad formal."
+              >
+                Guardar sin MOC
+              </button>
+              <button
+                onClick={() => {
+                  setShowMocPrompt(false);
+                  setShowMoc(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5"
+              >
+                <GitBranch className="w-3.5 h-3.5" /> Abrir MOC primero
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showMoc && !isNew && plan !== null && (() => {
