@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Bot, Camera, Download, ExternalLink, Loader2, Maximize2, Minimize2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, Bot, Camera, Download, ExternalLink, GitBranch, Loader2, Maximize2, Minimize2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
@@ -781,6 +782,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   // Post-save flow state
   const [postSaveStep, setPostSaveStep] = useState<null | "ask-permanent-wo">(null);
   const [showCreateWo, setShowCreateWo] = useState(false);
+  const [showMoc, setShowMoc] = useState(false);
 
   useEffect(() => {
     setDescription(defect.description ?? "");
@@ -1378,6 +1380,18 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                   Crear OT Correctiva
                 </button>
               )}
+              {/* Abrir MOC: defectos CRITICAL o con status DEFERRED suelen
+                * implicar operación con redundancia degradada o bypass →
+                * amerita MOC TEMPORARY formal para auditoría. */}
+              {!isClosed && (severity === "CRITICAL" || status === "DEFERRED") && (
+                <button
+                  onClick={() => setShowMoc(true)}
+                  title="Documentar el cambio operacional con un MOC formal"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+                >
+                  <GitBranch className="w-3.5 h-3.5" /> Abrir MOC
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
@@ -1397,6 +1411,31 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           </div>
         </div>
       </div>
+
+      {/* Abrir MOC desde el defecto: documenta el cambio operacional
+        * mientras dura la condición degradada. */}
+      {showMoc && (() => {
+        const prefill: MocPrefill = {
+          category: "TEMPORARY",
+          vesselCode: defect.vesselCode,
+          title: `Operación con defecto ${defect.defectCode} (${classification || "—"})`,
+          reasonForChange: `Defecto severidad ${severity} reportado el ${fmtDate(defect.reportedAt)}: ${description.slice(0, 250)}${description.length > 250 ? "…" : ""}`,
+          proposedChange: status === "DEFERRED"
+            ? "Operación con el defecto postergado, manteniendo medidas de mitigación hasta resolución definitiva."
+            : `Operación temporal con el equipo en estado ${operationalState}, hasta completar la acción correctiva.`,
+          mitigationActions: [immediateAction, correctiveAction].filter(Boolean).join("\n\n"),
+          relatedWorkOrderId: defect.workOrderId ?? undefined,
+          sourceLabel: `Desde Defecto ${defect.defectCode} (severidad ${severity}, estado ${status}). El MOC documenta el modo de operación con el equipo degradado mientras dura la condición.`,
+        };
+        return (
+          <MocModal
+            moc={null}
+            prefill={prefill}
+            onClose={() => setShowMoc(false)}
+            onSaved={() => { setShowMoc(false); }}
+          />
+        );
+      })()}
 
       {/* Lightbox para ampliar fotos al click en el mosaico */}
       {lightboxPhoto && lightboxPhoto.description && (

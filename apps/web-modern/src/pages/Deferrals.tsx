@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Clock, Download, ExternalLink, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import { Clock, Download, ExternalLink, GitBranch, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { MocModal, type MocPrefill } from "./Moc";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -360,6 +361,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const [showApprove, setShowApprove] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [showClose, setShowClose] = useState(false);
+  const [showMoc, setShowMoc] = useState(false);
   const [activating, setActivating] = useState(false);
   const [resolvingReferences, setResolvingReferences] = useState(false);
   const [assetDisplayName, setAssetDisplayName] = useState(deferral.assetName ?? deferral.assetId);
@@ -691,14 +693,28 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
-            <button
-              onClick={() => { void handleDownloadPdf(); }}
-              disabled={downloadingPdf}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
-            >
-              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              PDF
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { void handleDownloadPdf(); }}
+                disabled={downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
+              >
+                {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                PDF
+              </button>
+              {/* Abrir MOC: una postergación activa que implica operar con
+                * redundancia degradada o bypass amerita un MOC TEMPORARY
+                * formal para auditoría SIRE / TMSA. Prefilleamos los campos
+                * desde el deferral. */}
+              <button
+                onClick={() => setShowMoc(true)}
+                title="Abrir Management of Change desde esta postergación"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                Abrir MOC
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {showRequestedActions && (
                 <button
@@ -790,6 +806,28 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
           onSuccess={() => { setShowClose(false); onClose(); onSuccess(); }}
         />
       )}
+      {showMoc && (() => {
+        const prefill: MocPrefill = {
+          category: "TEMPORARY",
+          vesselCode: deferral.vesselCode,
+          title: `Operación con ${deferral.sourceCode ?? deferral.sourceType} postergada — ${deferral.assetName ?? "activo"}`,
+          reasonForChange: `Se postergó ${deferral.sourceType === "WORK_ORDER" ? "la OT" : deferral.sourceType === "DEFECT" ? "el defecto" : "el plan"} ${deferral.sourceCode ?? ""}${deferral.justification ? `. Justificación: ${deferral.justification}` : ""}.`,
+          proposedChange: deferral.compensatoryMeasures
+            ? `Operación con las siguientes medidas compensatorias hasta el cierre de la postergación${deferral.targetDate ? ` (target: ${fmtDate(deferral.targetDate)})` : ""}:\n\n${deferral.compensatoryMeasures}`
+            : `Operación con redundancia degradada hasta el cierre de la postergación${deferral.targetDate ? ` (target: ${fmtDate(deferral.targetDate)})` : ""}.`,
+          mitigationActions: deferral.compensatoryMeasures ?? "",
+          relatedWorkOrderId: deferral.sourceType === "WORK_ORDER" ? deferral.sourceId : undefined,
+          sourceLabel: `Desde Postergación ${deferral.deferralCode} (${deferral.assetName ?? deferral.assetId}). El MOC documenta el cambio operacional mientras dura la postergación; ambos registros conviven hasta el cierre.`,
+        };
+        return (
+          <MocModal
+            moc={null}
+            prefill={prefill}
+            onClose={() => setShowMoc(false)}
+            onSaved={() => { setShowMoc(false); }}
+          />
+        );
+      })()}
     </>
   );
 };
