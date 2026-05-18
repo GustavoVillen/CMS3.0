@@ -491,3 +491,91 @@ export async function updatePlatformTenantUser(
 
   return toSummaryFromPrisma(updated);
 }
+
+/**
+ * Revoca el acceso de un usuario a un tenant marcando su membership como
+ * REVOKED (soft delete). No borra el registro porque foreign keys de
+ * audit / MOC / changelogs apuntan al user.
+ *
+ * Reglas de negocio:
+ *   - No se puede revocar al último TENANT_ADMIN ACTIVO o INVITED del tenant
+ *     (dejaría el tenant sin administrador).
+ *   - Si la membership ya está REVOKED devuelve 409.
+ *
+ * Nota: la decisión de impedir auto-revoke se aplica en el router, donde
+ * tenemos identificado al actor.
+ */
+export async function revokePlatformTenantUser(
+  tenantSlug: string,
+  userId: string,
+  actorPlatformUserId?: string,
+): Promise<PlatformTenantUserSummary> {
+  const tenant = await resolveTenantId(tenantSlug);
+  const prisma = getPrismaClient();
+
+  if (!prisma) {
+    const existing = getDevTenantUserById(userId);
+    if (!existing || existing.tenantSlug !== tenant.slug) {
+      throw new RouteError(404, "TENANT_USER_NOT_FOUND", "Tenant user not found.");
+    }
+    if (existing.membershipStatus === "REVOKED") {
+      throw new RouteError(409, "TENANT_USER_ALREADY_REVOKED", "User access is already revoked.");
+    }
+    // Último admin: cuenta admins distintos a este user que no estén REVOKED.
+    if (existing.role === "TENANT_ADMIN") {
+      const otherAdmins = listDevTenantUsers({ tenantSlug: tenant.slug, role: "TENANT_ADMIN" })
+        .filter(u => u.id !== userId && u.membershipStatus !== "REVOKED");
+      if (otherAdmins.length === 0) {
+        throw new RouteError(409, "TENANT_LAST_ADMIN", "Cannot revoke the last admin of the tenant.");
+      }
+    }
+    const record = updateDevTenantUser(userId, { membershipStatus: "REVOKED" });
+    if (!record) {
+      throw new RouteError(404, "TENANT_USER_NOT_FOUND", "Tenant user not found.");
+    }
+    return toSummaryFromDev(record);
+  }
+
+  const membership = await prisma.tenantMembership.findFirst({
+    where: { tenantId: tenant.id, userId },
+    include: { tenant: true, user: true },
+  });
+  if (!membership) {
+    throw new RouteError(404, "TENANT_USER_NOT_FOUND", "Tenant user not found.");
+  }
+  if (membership.status === "REVOKED") {
+    throw new RouteError(409, "TENANT_USER_ALREADY_REVOKED", "User access is already revoked.");
+  }
+  if (membership.role === "TENANT_ADMIN") {
+    const otherAdmins = await prisma.tenantMembership.count({
+      where: {
+        tenantId: tenant.id,
+        role: "TENANT_ADMIN",
+        status: { not: "REVOKED" },
+        userId: { not: userId },
+      },
+    });
+    if (otherAdmins === 0) {
+      throw new RouteError(409, "TENANT_LAST_ADMIN", "Cannot revoke the last admin of the tenant.");
+    }
+  }
+
+  const updated = await prisma.tenantMembership.update({
+    where: { id: membership.id },
+    data: { status: "REVOKED" },
+    include: { tenant: true, user: true },
+  });
+
+  if (actorPlatformUserId) {
+    await publishPlatformAudit(prisma, {
+      tenantId: tenant.id,
+      actorPlatformUserId,
+      action: "TENANT_USER_REVOKED_BY_PLATFORM_ADMIN",
+      entityType: "User",
+      entityId: userId,
+      metadata: { tenantSlug, role: membership.role, email: membership.user.email },
+    });
+  }
+
+  return toSummaryFromPrisma(updated);
+}

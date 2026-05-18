@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
   Building2, Plus, Users, Globe, Mail, X, Loader2,
-  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, Pencil,
+  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, Pencil, Trash2,
 } from "lucide-react";
-import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
+import { platformFetch, platformPost, platformPatch, platformDelete } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { PasswordInput } from "../../components/PasswordInput";
@@ -508,6 +508,24 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
     catch { /* ignore */ }
   };
 
+  // Revoca el acceso de un user al tenant. Soft delete: la membership pasa a
+  // REVOKED pero el user y su historial se conservan.
+  const revokeUser = async (u: TenantUser) => {
+    const name = u.firstName ? `${u.firstName} (${u.email})` : u.email;
+    if (!window.confirm(
+      `¿Revocar el acceso de ${name} al tenant?\n\n` +
+      `Perderá la posibilidad de loguearse, pero el historial se mantiene. ` +
+      `Podés reactivarlo después editando el usuario.`
+    )) return;
+    try {
+      await platformDelete(`/platform/tenants/${tenant.slug}/users/${u.id}`);
+      uReload();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error al revocar.";
+      window.alert(msg);
+    }
+  };
+
   type TabDef = { id: DetailTab; label: string; icon: React.ElementType };
   const TABS: TabDef[] = [
     { id: "domains",     label: "Dominios",     icon: Globe  },
@@ -598,6 +616,15 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        {u.membershipStatus !== "REVOKED" && (
+                          <button
+                            onClick={() => { void revokeUser(u); }}
+                            title="Revocar acceso al tenant"
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-industrial/30 hover:text-red-400 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))

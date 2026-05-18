@@ -3,6 +3,7 @@ import type { AppEnv } from "../config/env";
 import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
 import { enforceRateLimit } from "../http/rate-limiter";
+import { RouteError } from "../http/route-error";
 import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/platform-route-auth";
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
@@ -18,7 +19,7 @@ import {
   createPlatformTenantInvitation, listPlatformTenantInvitations,
 } from "./tenants/platform-tenant-invitations-service";
 import {
-  createPlatformTenantUser, getPlatformTenantUser, listPlatformTenantUsers, updatePlatformTenantUser,
+  createPlatformTenantUser, getPlatformTenantUser, listPlatformTenantUsers, updatePlatformTenantUser, revokePlatformTenantUser,
 } from "./tenants/platform-tenant-users-service";
 import {
   createPlatformPrompt, getPlatformPrompt, listPlatformPrompts,
@@ -173,6 +174,18 @@ export async function handlePlatformRoutes(
     requirePlatformSuperadmin(session);
     const payload = await readJsonBody<any>(request);
     sendJson(response, 200, await updatePlatformTenantUser(tenantUserMatch[1], tenantUserMatch[2], payload, session.user.id));
+    return true;
+  }
+  if (tenantUserMatch && method === "DELETE") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    // Guardamos contra auto-revoke: si el actor es la misma persona, devolvemos
+    // 409 antes de tocar nada. El check va en router porque el actor solo está
+    // disponible acá.
+    if (session.user.id === tenantUserMatch[2]) {
+      throw new RouteError(409, "TENANT_USER_SELF_REVOKE", "You cannot revoke your own access.");
+    }
+    sendJson(response, 200, await revokePlatformTenantUser(tenantUserMatch[1], tenantUserMatch[2], session.user.id));
     return true;
   }
 

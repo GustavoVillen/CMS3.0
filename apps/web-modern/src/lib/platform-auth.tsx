@@ -201,3 +201,12 @@ export async function platformPatch<T>(path: string, body: unknown): Promise<T> 
   }
   return res.json();
 }
+
+export async function platformDelete<T>(path: string): Promise<T> {
+  const res = await platformAuthedFetch(path, buildJsonInit("DELETE"));
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, (json as any).error?.code ?? "ERROR", (json as any).error?.message ?? res.statusText);
+  }
+  return res.json();
+}
