@@ -22,12 +22,17 @@ function isWinAnsiSafe(cp: number): boolean {
  * Replaces known technical Unicode symbols with ASCII equivalents and
  * strips any remaining characters outside WinAnsi to prevent garbled output.
  */
-export function sanitizePdfText(s: string): string {
-  return s
-    // Strip markdown bold/italic before anything else
-    .replace(/\*\*\*([^*\n]+)\*\*\*/g, "$1")
-    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
-    .replace(/\*([^*\n]+)\*/g, "$1")
+export function sanitizePdfText(s: string, opts: { keepMarkdown?: boolean } = {}): string {
+  let t = s;
+  if (!opts.keepMarkdown) {
+    // Strip markdown bold/italic. Skip when caller plans to interpret the
+    // markdown inline (see `renderLabeledTextBox({ markdown: true })`).
+    t = t
+      .replace(/\*\*\*([^*\n]+)\*\*\*/g, "$1")
+      .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+      .replace(/\*([^*\n]+)\*/g, "$1");
+  }
+  return t
     // Mathematical comparison operators — \uXXXX escapes only, no literal Unicode chars
     .replace(/[≥≧⩾]/g, ">=")   // ≥ ≧ ⩾
     .replace(/[≤≦⩽]/g, "<=")   // ≤ ≦ ⩽
@@ -147,6 +152,267 @@ export function splitTextIntoPageSegments(
   });
 
   return segments;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Labeled text box (multi-page safe, optional **bold** markdown)
+//
+// USE THIS for any PDF section that has:
+//   - a small uppercase label
+//   - a body of free-form text that may overflow the page
+//   - a gray "badge" background that must visually contain the text
+//
+// Why: rolling your own (single roundedRect + doc.text) breaks the moment the
+// text exceeds the page — pdfkit auto-paginates the text but doesn't redraw
+// the rectangle, leaving the continuation floating on white. The MOC PDF had
+// exactly this bug. Always go through this helper instead.
+//
+// Set `markdown: true` to interpret **bold** segments inline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RenderLabeledTextBoxOptions {
+  /** Section label (rendered uppercased; continuation pages append " (CONT.)"). */
+  label: string;
+  /** Body text. Use "\n" for line breaks. Pass empty string to render "—". */
+  text: string;
+  /** Left X of the box. */
+  x: number;
+  /** Starting Y. The helper updates the caller's cursor via the returned value. */
+  y: number;
+  /** Full box width. Inner text width = `width - 2*padding`. */
+  width: number;
+  /** Bottom Y for the current page content area. */
+  pageBottom: number;
+  /** Top Y to use when a new page is added (typically vertical margin). */
+  pageTop: number;
+  /** Label position: above the box (default) or inside the top of the box. */
+  labelPosition?: "above" | "inside";
+  /** Reserved height for the label when `labelPosition: "above"`. Default 11. */
+  labelHeightAbove?: number;
+  /** Reserved height for the label band when `labelPosition: "inside"`. Default 18. */
+  labelHeightInside?: number;
+  /** Font size for the label. Default 7 (above) / 8 (inside). */
+  labelFontSize?: number;
+  /** Label color. Default "#64748b" (slate-500). */
+  labelColor?: string;
+  /** Body font size. Default 9. */
+  fontSize?: number;
+  /** Body text color. Default "#0f172a" (slate-900). */
+  textColor?: string;
+  /** Line gap (pdfkit lineGap). Default 2. */
+  lineGap?: number;
+  /** Inner padding on all 4 sides. Default 6 (above-label) / 10 (inside-label). */
+  padding?: number;
+  /** Box background. Default "#f8fafc" (slate-50). */
+  bg?: string;
+  /** Box border. Default "#e2e8f0" (slate-200). */
+  border?: string;
+  /** Corner radius. Default 3. */
+  cornerRadius?: number;
+  /** Gap appended after the box. Default 6. */
+  sectionGap?: number;
+  /** Interpret `**bold**` segments inline. Default false. */
+  markdown?: boolean;
+  /** Optional callback fired after each `doc.addPage()` (e.g., to reset header). */
+  onPageAdd?: () => void;
+}
+
+/**
+ * Renders a labeled text box that automatically segments across pages, so the
+ * gray badge always visually contains the text. Returns the new Y cursor.
+ *
+ * The text is pre-measured line-by-line with `heightOfString` (with `**`
+ * stripped if `markdown: true`), split into page-fitting chunks, and each
+ * chunk is rendered with its own rectangle. Continuation pages get a label
+ * suffix " (CONT.)" for auditor clarity.
+ */
+export function renderLabeledTextBox(
+  doc: PDFKit.PDFDocument,
+  opts: RenderLabeledTextBoxOptions,
+): number {
+  const labelPosition   = opts.labelPosition ?? "above";
+  const padding         = opts.padding ?? (labelPosition === "inside" ? 10 : 6);
+  const labelHeight     = labelPosition === "inside"
+    ? (opts.labelHeightInside ?? 18)
+    : (opts.labelHeightAbove ?? 11);
+  const labelFontSize   = opts.labelFontSize ?? (labelPosition === "inside" ? 8 : 7);
+  const labelColor      = opts.labelColor ?? "#64748b";
+  const fontSize        = opts.fontSize ?? 9;
+  const textColor       = opts.textColor ?? "#0f172a";
+  const lineGap         = opts.lineGap ?? 2;
+  const bg              = opts.bg ?? "#f8fafc";
+  const border          = opts.border ?? "#e2e8f0";
+  const cornerRadius    = opts.cornerRadius ?? 3;
+  const sectionGap      = opts.sectionGap ?? 6;
+  const markdown        = opts.markdown ?? false;
+  const onPageAdd       = opts.onPageAdd;
+
+  const safeText = sanitizePdfText(opts.text || "—", { keepMarkdown: markdown });
+  const innerW = opts.width - padding * 2;
+
+  // For "inside" labels the label sits inside the box top; the text body
+  // height accounts only for the text, not for the label band.
+  const insideLabelBand = labelPosition === "inside" ? labelHeight : 0;
+  // For "above" labels we reserve labelHeight above the box on every chunk.
+  const aboveLabelBand = labelPosition === "above" ? labelHeight : 0;
+
+  // Pre-measure each logical line. If markdown, strip ** before measuring
+  // (Helvetica bold vs normal width differs <5%, irrelevant for line packing).
+  const rawLines = safeText.split(/\r?\n/);
+  doc.fontSize(fontSize).font("Helvetica");
+  const lineHeights = rawLines.map(l => {
+    const stripped = markdown ? l.replace(/\*\*/g, "") : l;
+    if (!stripped.trim()) return fontSize + lineGap;
+    return doc.heightOfString(stripped, { width: innerW, lineGap });
+  });
+
+  let y = opts.y;
+
+  // If the page has less than (label + min 22pt content + 2*padding + gap)
+  // available, jump to next page first to avoid orphan labels.
+  const minStart = aboveLabelBand + insideLabelBand + 22 + padding * 2 + sectionGap;
+  if ((opts.pageBottom - y) < minStart) {
+    doc.addPage();
+    onPageAdd?.();
+    y = opts.pageTop;
+  }
+
+  let idx = 0;
+  let isFirstChunk = true;
+  while (idx < rawLines.length) {
+    // Above-label
+    if (labelPosition === "above") {
+      const labelText = isFirstChunk
+        ? opts.label.toUpperCase()
+        : opts.label.toUpperCase() + " (CONT.)";
+      doc.fontSize(labelFontSize).font("Helvetica-Bold").fillColor(labelColor)
+        .text(labelText, opts.x, y, { width: opts.width, characterSpacing: 0.6 });
+      y += labelHeight;
+    }
+
+    const startY = y;
+    // Inner max excludes the inside-label band (if any), top+bottom padding,
+    // and the gap appended after the box.
+    const innerMax = opts.pageBottom - startY - padding * 2 - insideLabelBand - sectionGap;
+
+    // Accumulate lines that fit in innerMax. Always include the first line
+    // of the chunk (defensive against pathological cases where a single line
+    // is taller than the available space — better overflow once than loop).
+    let used = 0;
+    const startIdx = idx;
+    while (idx < rawLines.length) {
+      const h = lineHeights[idx];
+      if (idx > startIdx && used + h > innerMax) break;
+      used += h;
+      idx++;
+    }
+
+    const boxH = Math.max(22, used + padding * 2 + insideLabelBand);
+    doc.roundedRect(opts.x, startY, opts.width, boxH, cornerRadius).fill(bg);
+    doc.roundedRect(opts.x, startY, opts.width, boxH, cornerRadius).strokeColor(border).lineWidth(0.5).stroke();
+
+    // Inside-label
+    let textTop = startY + padding;
+    if (labelPosition === "inside") {
+      const labelText = isFirstChunk
+        ? opts.label.toUpperCase()
+        : opts.label.toUpperCase() + " (CONT.)";
+      doc.fontSize(labelFontSize).font("Helvetica-Bold").fillColor(labelColor)
+        .text(labelText, opts.x + padding, startY + padding, { width: innerW });
+      textTop = startY + padding + labelHeight;
+    }
+
+    const chunkText = rawLines.slice(startIdx, idx).join("\n");
+    if (markdown) {
+      renderInlineBoldText(doc, chunkText, opts.x + padding, textTop, innerW, fontSize, lineGap, textColor);
+    } else {
+      doc.fontSize(fontSize).font("Helvetica").fillColor(textColor)
+        .text(chunkText, opts.x + padding, textTop, { width: innerW, lineGap });
+    }
+
+    y = startY + boxH + sectionGap;
+    isFirstChunk = false;
+
+    if (idx < rawLines.length) {
+      doc.addPage();
+      onPageAdd?.();
+      y = opts.pageTop;
+    }
+  }
+
+  return y;
+}
+
+/**
+ * Splits a single line on `**bold**` markers. Internal helper.
+ */
+function tokenizeBoldSegments(line: string): Array<{ text: string; bold: boolean }> {
+  const segments: Array<{ text: string; bold: boolean }> = [];
+  let rest = line;
+  while (rest.length > 0) {
+    const m = rest.match(/^\*\*([^*]+)\*\*/);
+    if (m) {
+      segments.push({ text: m[1]!, bold: true });
+      rest = rest.slice(m[0].length);
+      continue;
+    }
+    const idx = rest.indexOf("**");
+    if (idx === -1) {
+      segments.push({ text: rest, bold: false });
+      rest = "";
+    } else {
+      if (idx > 0) segments.push({ text: rest.slice(0, idx), bold: false });
+      rest = rest.slice(idx);
+    }
+  }
+  return segments;
+}
+
+/**
+ * Renders text with `**bold**` markdown inline, using pdfkit's cursor (which
+ * handles word wrap correctly). Each logical line is a sequence of continued
+ * segments closed by `continued: false` on the last segment.
+ *
+ * Used internally by `renderLabeledTextBox` when `markdown: true`. Exported
+ * for advanced cases where you need bold rendering outside a labeled box.
+ */
+export function renderInlineBoldText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  startY: number,
+  width: number,
+  fontSize: number,
+  lineGap: number,
+  color: string = "#0f172a",
+): void {
+  const lines = text.split(/\r?\n/);
+  doc.fontSize(fontSize).fillColor(color);
+  let firstOfLine = true;
+  doc.x = x;
+  doc.y = startY;
+
+  for (const rawLine of lines) {
+    const line = rawLine;
+    if (!line.trim()) {
+      doc.text(" ", x, doc.y, { width, lineGap });
+      firstOfLine = true;
+      continue;
+    }
+    const segments = tokenizeBoldSegments(line);
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]!;
+      const last = i === segments.length - 1;
+      doc.font(seg.bold ? "Helvetica-Bold" : "Helvetica").fillColor(color);
+      if (firstOfLine) {
+        doc.text(seg.text, x, doc.y, { continued: !last, width, lineGap });
+        firstOfLine = false;
+      } else {
+        doc.text(seg.text, { continued: !last, width, lineGap });
+      }
+      if (last) firstOfLine = true;
+    }
+  }
 }
 
 /**

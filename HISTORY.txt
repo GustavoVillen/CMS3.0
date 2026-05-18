@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-05-18] PDF — helper compartido renderLabeledTextBox + Skill obligatorio
+Agent: Claude Opus 4.7
+Para no volver a corregir el bug del badge gris que no se redibuja al
+pasar de página, extraje el patrón completo a un helper compartido y lo
+documenté como Skill.
+Cambios:
+- apps/api/src/tenant/pms/pdf-helpers.ts:
+  · renderLabeledTextBox(doc, opts) — label arriba/dentro + badge + multi-
+    página + opcional markdown bold. Devuelve el nuevo y.
+  · renderInlineBoldText(doc, ...) — render bold inline (interno + export).
+  · sanitizePdfText acepta { keepMarkdown } para no strippear ** cuando el
+    caller va a interpretarlo.
+- apps/api/src/tenant/moc/moc-pdf-service.ts:
+  · textSection ahora delega en renderLabeledTextBox (eliminadas tokenize
+    + textWithBold locales, ~120 líneas menos).
+- .claude/skills/pms-pdf-generation/Skill.md — reglas obligatorias para
+  todo nuevo PDF: usar renderLabeledTextBox, no rolar el propio multi-
+  página, sanitizar todo texto user/AI, checklist de cierre.
+
+Bug colateral encontrado y corregido en moc-pdf-service.ts:
+- "Áreas de impacto" tenía `y += 14` hardcodeado tras render inline con
+  continued:true. Si los chips wrapeaban a 2+ líneas, la sección
+  siguiente se pisaba con los chips de abajo. Ahora se pre-mide con
+  heightOfString y se avanza y según altura real.
+
+Verificado: tsc 0 errores en moc-pdf-service.ts y pdf-helpers.ts.
+
 [2026-05-18] MOC PDF — texto siempre dentro del badge gris (multi-página)
 Agent: Claude Opus 4.7
 Bug: el texto largo de una sección (típicamente Análisis de Riesgo)
