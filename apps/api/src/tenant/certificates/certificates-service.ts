@@ -22,10 +22,16 @@ export async function listTenantCertificates(session: TenantAccessSession, filte
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
   applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
-  if (filters.status) where.status = filters.status;
 
+  // No filtramos por `status` en la query: el status guardado en BD es el
+  // "original" (ACTIVE al crear), pero EXPIRING_SOON / EXPIRED se computan
+  // dinámicamente desde expiryDate en withComputedStatus. Filtrar por
+  // status en BD devolvía 0 filas para las consultas que vienen desde la
+  // alerta del dashboard (?status=EXPIRING_SOON). Mantenemos withComputedStatus
+  // como única fuente de verdad y aplicamos el filtro de status post-mapeo.
   const rows = await prisma.certificate.findMany({ where, orderBy: { expiryDate: "asc" } });
-  return rows.map(withComputedStatus);
+  const computed = rows.map(withComputedStatus);
+  return filters.status ? computed.filter(r => r.status === filters.status) : computed;
 }
 
 export async function getTenantCertificateById(session: TenantAccessSession, id: string) {
