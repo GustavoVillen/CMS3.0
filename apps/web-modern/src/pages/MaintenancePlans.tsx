@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileText,
   Filter,
+  GitBranch,
   Loader2,
   Maximize2,
   Minimize2,
@@ -21,6 +22,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { downloadAuthedFile } from "../lib/authed-media";
@@ -1052,6 +1054,17 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
   const [sfiNodes, setSfiNodes] = useState<SfiNode[]>([]);
   const [loadingSfiNodes, setLoadingSfiNodes] = useState(false);
+  const [showMoc, setShowMoc] = useState(false);
+
+  // Detección de cambio en frecuencia / trigger — sugiere MOC PROCEDURE_CHANGE.
+  // Modificar la frecuencia o el tipo de disparador de un plan aprobado
+  // cambia el SMS / cronograma de mantenimiento; ISM 10.3 / TMSA piden
+  // que ese cambio quede formalmente justificado y aprobado.
+  const planChangedFrequency = !isNew && plan !== null && (
+    triggerType !== (plan.triggerType as TriggerType) ||
+    (frequencyMonths || "") !== String(plan.frequencyMonths ?? "") ||
+    (frequencyHours  || "") !== String(plan.frequencyHours  ?? "")
+  );
 
   useEffect(() => {
     if (!isNew) return;
@@ -2041,6 +2054,19 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   PDF
                 </button>
               )}
+              {/* Si el user cambió la periodicidad o el tipo de disparador del
+                * plan, sugerimos abrir un MOC PROCEDURE_CHANGE. Cambia el SMS
+                * aprobado → ISM 10.3 / TMSA pide trazabilidad formal del cambio. */}
+              {planChangedFrequency && (
+                <button
+                  onClick={() => setShowMoc(true)}
+                  title="Cambiar la frecuencia de un plan amerita un MOC formal"
+                  className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs hover:bg-yellow-500/15 transition-all flex items-center gap-1.5"
+                >
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Abrir MOC
+                </button>
+              )}
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
                 {readOnly ? t("mp.modal.close") : t("common.cancel")}
               </button>
@@ -2133,6 +2159,42 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           onSuccess={() => { setShowPostpone(false); void onSaved(); }}
         />
       )}
+
+      {showMoc && !isNew && plan !== null && (() => {
+        // Resumimos qué cambió para que la IA / el user vean el delta.
+        const oldFreq = plan.frequencyMonths != null
+          ? `${plan.frequencyMonths} meses`
+          : (plan.frequencyHours != null ? `${plan.frequencyHours} h` : "—");
+        const newFreq = frequencyMonths
+          ? `${frequencyMonths} meses`
+          : (frequencyHours ? `${frequencyHours} h` : "—");
+        const oldTrigger = plan.triggerType ?? "—";
+        const newTrigger = triggerType ?? "—";
+        const triggerChanged = oldTrigger !== newTrigger;
+        const freqChanged = oldFreq !== newFreq;
+        const prefill: MocPrefill = {
+          category: "PROCEDURE_CHANGE",
+          vesselCode: plan.vesselCode,
+          title: `Cambio de periodicidad en plan ${plan.taskCode} — ${plan.title}`,
+          reasonForChange: "Modificación del cronograma de mantenimiento aprobado. Justificar el motivo del cambio (recomendación del fabricante, observación de auditoría, ajuste por experiencia operativa, etc.).",
+          proposedChange: [
+            triggerChanged ? `Tipo de disparador: ${oldTrigger} → ${newTrigger}` : null,
+            freqChanged    ? `Frecuencia: ${oldFreq} → ${newFreq}`              : null,
+            `Plan afectado: ${plan.taskCode} (${plan.title})`,
+            plan.assetName ? `Activo: ${plan.assetName}` : null,
+          ].filter(Boolean).join("\n"),
+          mitigationActions: "Comunicar el cambio a la tripulación. Programar primera ejecución con la nueva frecuencia. Revisar a los 6 meses si la nueva periodicidad es adecuada.",
+          sourceLabel: `Desde Plan de mantenimiento ${plan.taskCode}. El MOC formaliza el cambio de cronograma para auditoría ISM 10.3 / TMSA. Recordá guardar el plan después de aprobar el MOC.`,
+        };
+        return (
+          <MocModal
+            moc={null}
+            prefill={prefill}
+            onClose={() => setShowMoc(false)}
+            onSaved={() => { setShowMoc(false); }}
+          />
+        );
+      })()}
 
       {confirmDelete && !isNew && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
