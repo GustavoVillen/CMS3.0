@@ -212,28 +212,6 @@ export async function buildMocPdf(session: TenantAccessSession, id: string): Pro
     }
 
     /**
-     * Mide la altura real que ocupará el texto al renderizarse en `width` pts,
-     * considerando wrap automático de pdfkit. Usa heightOfString sobre la
-     * versión sin asteriscos (el ancho de **bold** vs normal difiere en
-     * <5% para Helvetica, suficiente para reservar caja).
-     */
-    function measureTextHeight(text: string, width: number, fontSize: number, lineGap: number): number {
-      const lines = text.split(/\r?\n/);
-      doc.fontSize(fontSize).font("Helvetica");
-      let total = 0;
-      for (const rawLine of lines) {
-        const sanitized = sanitize(rawLine);
-        const stripped = sanitized.replace(/\*\*/g, "");
-        if (!stripped.trim()) {
-          total += fontSize + lineGap;
-          continue;
-        }
-        total += doc.heightOfString(stripped, { width, lineGap });
-      }
-      return total;
-    }
-
-    /**
      * Renderiza un texto con soporte light de Markdown (**bold** + newlines)
      * usando el cursor automático de pdfkit, que respeta wrap. Cada línea
      * lógica del input se pinta como una secuencia de segmentos continuos
@@ -284,50 +262,83 @@ export async function buildMocPdf(session: TenantAccessSession, id: string): Pro
 
     function textSection(label: string, rawText: string) {
       const text = val(rawText);
-      const LABEL_H = 11;        // antes 14
-      const BOX_PAD_TOP = 6;     // antes 10
-      const BOX_PAD_BOT = 6;     // antes 10
-      const SECTION_GAP = 6;     // antes 14
-      const LINE_GAP = 2;        // antes 3
-      const FONT_SIZE = 9;       // antes 10
+      const LABEL_H = 11;
+      const BOX_PAD_TOP = 6;
+      const BOX_PAD_BOT = 6;
+      const SECTION_GAP = 6;
+      const LINE_GAP = 2;
+      const FONT_SIZE = 9;
+      const INNER_W = W - 16;
 
-      // Pre-medir altura REAL del texto considerando wrap.
-      const contentH = measureTextHeight(text, W - 16, FONT_SIZE, LINE_GAP);
-      const boxH = Math.max(22, contentH + BOX_PAD_TOP + BOX_PAD_BOT);
+      // Medir altura de cada línea lógica (considerando wrap automático).
+      // La altura se calcula sobre el texto sin asteriscos: la diferencia de
+      // ancho entre **bold** y normal en Helvetica es <5%, irrelevante para
+      // decidir cuántas líneas entran en una página.
+      const rawLines = text.split(/\r?\n/);
+      const lineHeights: number[] = [];
+      doc.fontSize(FONT_SIZE).font("Helvetica");
+      for (const rl of rawLines) {
+        const sanitized = sanitize(rl);
+        const stripped = sanitized.replace(/\*\*/g, "");
+        if (!stripped.trim()) {
+          lineHeights.push(FONT_SIZE + LINE_GAP);
+        } else {
+          lineHeights.push(doc.heightOfString(stripped, { width: INNER_W, lineGap: LINE_GAP }));
+        }
+      }
 
-      // Si la sección no entra completa en lo que queda Y la página actual
-      // tiene >150pt usables (mitad de página), partimos la sección entre
-      // páginas en vez de saltar dejando huecos enormes. Si la página está
-      // casi llena (<150pt), sí saltamos.
-      const labelAndMinH = LABEL_H + 40;
-      const available = CONTENT_BOTTOM - y;
-      const wholeFits = (LABEL_H + boxH + SECTION_GAP) <= available;
-      const enoughSpaceToStart = available >= labelAndMinH;
-
-      if (!wholeFits && !enoughSpaceToStart) {
+      // Si en la página actual no entra ni el label + caja mínima (~22pt) +
+      // gap, saltar de una.
+      const minStartH = LABEL_H + 22 + BOX_PAD_TOP + BOX_PAD_BOT + SECTION_GAP;
+      if ((CONTENT_BOTTOM - y) < minStartH) {
         doc.addPage();
         y = MARGIN_V;
       }
 
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.6 });
-      y += LABEL_H;
+      // Renderizar en chunks: por cada página, acumular líneas que entran,
+      // dibujar el badge con esa altura exacta, pintar el texto adentro, y
+      // si queda más → addPage y seguir. Esto garantiza que el texto NUNCA
+      // sale del badge gris (el badge se redibuja por página).
+      let idx = 0;
+      let isFirstChunk = true;
+      while (idx < rawLines.length) {
+        const labelText = isFirstChunk
+          ? label.toUpperCase()
+          : label.toUpperCase() + " (CONT.)";
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
+          .text(labelText, ML, y, { width: W, characterSpacing: 0.6 });
+        y += LABEL_H;
 
-      // Pintar caja: si el texto cabe entero, una sola caja con altura medida;
-      // si no cabe, dejamos que pdfkit haga el wrap automático (textWithBold
-      // sí salta páginas cuando excede la disponible) y la caja queda con la
-      // altura efectiva del texto en ESTA página solamente.
-      const startY = y;
-      const drawY = Math.min(boxH, available - LABEL_H - SECTION_GAP);
-      const actualBoxH = wholeFits ? boxH : Math.max(22, drawY);
-      doc.roundedRect(ML, startY, W, actualBoxH, 3).fillColor(bgBox).fill();
-      doc.roundedRect(ML, startY, W, actualBoxH, 3).strokeColor(border).lineWidth(0.5).stroke();
+        const startY = y;
+        const innerMax = CONTENT_BOTTOM - startY - BOX_PAD_TOP - BOX_PAD_BOT - SECTION_GAP;
 
-      textWithBold(text, ML + 8, startY + BOX_PAD_TOP, W - 16, FONT_SIZE, LINE_GAP);
+        // Acumular líneas que entran en innerMax. Siempre incluir al menos
+        // la primera línea del chunk (evita loop infinito si una sola línea
+        // ya supera el espacio disponible — caso patológico).
+        let used = 0;
+        const startIdx = idx;
+        while (idx < rawLines.length) {
+          const h = lineHeights[idx]!;
+          if (idx > startIdx && used + h > innerMax) break;
+          used += h;
+          idx++;
+        }
 
-      // Avanzar y considerando si pdfkit hizo addPage durante el texto largo.
-      // doc.y es la posición real donde quedó el cursor.
-      y = Math.max(y + actualBoxH + SECTION_GAP, doc.y + SECTION_GAP);
+        const boxH = Math.max(22, used + BOX_PAD_TOP + BOX_PAD_BOT);
+        doc.roundedRect(ML, startY, W, boxH, 3).fillColor(bgBox).fill();
+        doc.roundedRect(ML, startY, W, boxH, 3).strokeColor(border).lineWidth(0.5).stroke();
+
+        const chunkText = rawLines.slice(startIdx, idx).join("\n");
+        textWithBold(chunkText, ML + 8, startY + BOX_PAD_TOP, INNER_W, FONT_SIZE, LINE_GAP);
+
+        y = startY + boxH + SECTION_GAP;
+        isFirstChunk = false;
+
+        if (idx < rawLines.length) {
+          doc.addPage();
+          y = MARGIN_V;
+        }
+      }
     }
 
     // ── Row 1: Estado + Riesgo + Categoría ────────────────────────────────────

@@ -1,5 +1,23 @@
 HISTORY.txt
 
+[2026-05-18] MOC PDF — texto siempre dentro del badge gris (multi-página)
+Agent: Claude Opus 4.7
+Bug: el texto largo de una sección (típicamente Análisis de Riesgo)
+desbordaba el badge gris y continuaba en la página siguiente flotando sobre
+fondo blanco. Causa: textSection dibujaba UN rectángulo con altura limitada
+al espacio disponible, pero pdfkit autopagina el texto que excede → la
+parte que cae en la página 2 queda sin badge.
+Fix (apps/api/src/tenant/moc/moc-pdf-service.ts):
+- Pre-medir cada línea lógica con heightOfString(width, lineGap).
+- Render por chunks: en cada página, acumular líneas que entran, dibujar
+  el badge con la altura EXACTA del chunk, renderizar solo ese chunk,
+  addPage() y repetir si queda más.
+- En páginas siguientes el label se imprime como "<LABEL> (CONT.)".
+- Eliminada measureTextHeight (quedó sin uso).
+Verificado: tsc apps/api → 0 errores en moc-pdf-service.ts.
+Solo cambio backend en TS servido por tsx → deploy: pm2 restart + limpiar
+cache de tsx si hace falta.
+
 [2026-05-16] Auditoría general — bloque 1+2+3 (9 fixes completos)
 Agent: Claude Opus 4.7
 Resumen: continuamos la auditoría general iniciada el día anterior. Round 2
