@@ -33,6 +33,7 @@ import {
   listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
 } from "./moc/moc-service";
 import { suggestRiskAssessment } from "./moc/moc-ai-suggestions";
+import { buildMocPdf } from "./moc/moc-pdf-service";
 import {
   listQuestions, listAssessments, getAssessment, createAssessment, setResponseCviq, completeAssessment, deleteAssessment,
 } from "./cviq/cviq-service";
@@ -1679,6 +1680,21 @@ export async function handleTenantRoutes(
     enforceRateLimit(request, `ai-moc-risk:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestRiskAssessment>[1];
     sendJson(response, 200, await suggestRiskAssessment(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/mocs\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[3]!;
+    const moc = await getMoc(session, id);
+    const filename = `${moc.mocCode}-${moc.vesselCode}.pdf`;
+    const buffer = await buildMocPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
   if (/^\/app\/mocs\/[^/]+\/transition$/.test(url.pathname)) {

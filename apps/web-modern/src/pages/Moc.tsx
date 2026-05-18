@@ -1,7 +1,8 @@
 // Management of Change (MOC) — workflow formal de cambios significativos.
 
 import React, { useCallback, useEffect, useState } from "react";
-import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles } from "lucide-react";
+import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles, Download } from "lucide-react";
+import { downloadAuthedFile } from "../lib/authed-media";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -163,6 +164,47 @@ interface Moc {
 
 const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
+
+/**
+ * Renderiza texto plano con un subset de Markdown:
+ * - `**texto**` → bold
+ * - saltos de línea → <br />
+ * - El resto sale como text plano (no HTML, no XSS).
+ *
+ * No usamos un parser completo a propósito: el contenido viene de la IA o
+ * del user, y solo querés bold + line breaks. Cualquier otra cosa se queda
+ * como texto literal.
+ */
+const MarkdownLite: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
+  if (!text) return null;
+  // Split por dobles asteriscos manteniendo los delimitadores
+  // El regex captura: texto antes, `**bold**`, texto después.
+  const parts: React.ReactNode[] = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, lineIdx) => {
+    let rest = line;
+    let key = 0;
+    while (rest.length > 0) {
+      const match = rest.match(/^\*\*([^*]+)\*\*/);
+      if (match) {
+        parts.push(<strong key={`${lineIdx}-b-${key++}`} className="text-white">{match[1]}</strong>);
+        rest = rest.slice(match[0].length);
+        continue;
+      }
+      // Buscar el próximo `**` y emitir texto antes
+      const idx = rest.indexOf("**");
+      if (idx === -1) {
+        parts.push(<span key={`${lineIdx}-t-${key++}`}>{rest}</span>);
+        rest = "";
+      } else {
+        if (idx > 0) parts.push(<span key={`${lineIdx}-t-${key++}`}>{rest.slice(0, idx)}</span>);
+        rest = rest.slice(idx);
+      }
+    }
+    if (lineIdx < lines.length - 1) parts.push(<br key={`${lineIdx}-br`} />);
+  });
+  return <div className={className}>{parts}</div>;
+};
 
 // ─── Modal ───────────────────────────────────────────────────────────────────
 
@@ -385,7 +427,16 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
                   {aiLoadingRisk ? "Generando…" : "Asistir con IA"}
                 </button>
               </div>
-              <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y"} />
+              <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
+              {/* Preview formateado del análisis: renderiza **bold** y respeta
+                * saltos de línea. Permite que el user vea cómo va a quedar el
+                * texto en el PDF / vista de detalle sin tener que abrirlo. */}
+              {riskAssessmentNotes.trim() && (
+                <div className="mt-2 rounded-xl bg-white/[0.03] border border-white/10 px-3 py-2.5 text-xs text-text-industrial/85 leading-relaxed">
+                  <p className="text-[9px] uppercase tracking-widest text-text-industrial/40 mb-1.5 font-bold">Vista previa</p>
+                  <MarkdownLite text={riskAssessmentNotes} className="space-y-0.5" />
+                </div>
+              )}
             </div>
             <div className="col-span-2"><label className={labelCls}>Medidas de mitigación</label>
               <textarea rows={2} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y"} />
@@ -434,6 +485,16 @@ const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () =>
             )}
           </div>
           <div className="flex gap-2">
+            {!isNew && moc && (
+              <button
+                type="button"
+                onClick={() => { void downloadAuthedFile(`/app/mocs/${moc.id}/pdf`, `${moc.mocCode}-${moc.vesselCode}.pdf`); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+                title="Descargar PDF del MOC"
+              >
+                <Download className="w-3.5 h-3.5" /> PDF
+              </button>
+            )}
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
             {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">

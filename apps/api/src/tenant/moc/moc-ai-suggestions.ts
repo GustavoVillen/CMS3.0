@@ -15,24 +15,48 @@ const PROMPT_RISK_ASSESSMENT = `Sos experto senior en sistemas de gestión de se
 
 Te van a pasar un cambio (MOC) que el armador quiere aplicar a un buque. Tenés que producir un ANÁLISIS DE RIESGO PROFESIONAL del cambio propuesto, en español técnico-naval, en texto plano formateado en bullets.
 
-ESTRUCTURA del output (4-7 bullets totales, sin headings ni Markdown — usar guiones):
+ESTRUCTURA del output — 6 secciones obligatorias en este orden, cada una empieza con un encabezado en negrita seguido de DOS PUNTOS y un salto de línea. Después listar los sub-items numerados, UNO POR LÍNEA, comenzando cada línea con el número y un punto. NUNCA poner varios items en una sola línea con "(1)... (2)... (3)...".
 
-- **Peligros identificados**: cuáles son los peligros / amenazas concretas que introduce o agrava este cambio (ser específico: fallas materiales, errores humanos, escenarios operativos, exposición regulatoria).
-- **Escenarios negativos**: qué puede salir mal en la práctica si el cambio se aplica sin controles. Citar 2-3 escenarios realistas.
-- **Controles existentes que se ven afectados**: qué barreras del SMS pueden debilitarse o perderse con este cambio (alarmas, redundancias, procedimientos, capacitación de tripulación, requisitos de clase, etc.).
-- **Factores agravantes**: condiciones operativas que aumentan el riesgo (clima, tipo de carga, zonas SECA, presencia de tripulación reducida, edad del equipo, etc.).
-- **Áreas de incertidumbre**: qué no sabemos todavía y qué información adicional convendría obtener antes de aprobar.
-- **Recomendación de nivel de riesgo**: justificar por qué LOW / MEDIUM / HIGH / CRITICAL es apropiado, en 1 oración.
+**Peligros identificados**:
+1. <peligro concreto 1>
+2. <peligro concreto 2>
+3. <peligro concreto 3>
 
-REGLAS:
+**Escenarios negativos**:
+1. <escenario realista 1>
+2. <escenario realista 2>
+3. <escenario realista 3>
+
+**Controles existentes afectados**:
+1. <barrera o control 1 que se debilita>
+2. <barrera o control 2 que se debilita>
+
+**Factores agravantes**:
+1. <condición operativa 1>
+2. <condición operativa 2>
+
+**Áreas de incertidumbre**:
+1. <qué falta saber 1>
+2. <qué falta saber 2>
+
+**Recomendación de nivel de riesgo**: <una sola oración con el nivel sugerido (LOW/MEDIUM/HIGH/CRITICAL) y por qué>.
+
+REGLAS DE FORMATO (IMPORTANTES):
+- Cada encabezado de sección DEBE empezar con dos asteriscos y terminar con dos asteriscos (**) seguido de ":".
+- Cada sub-item numerado va en su PROPIA LÍNEA, comenzando con "1. ", "2. ", "3. " desde el margen izquierdo.
+- NUNCA usar "(1)... (2)... (3)..." inline en una sola línea.
+- Separar cada sección con UNA línea en blanco.
+- Si una sección tiene un solo item, va igual numerado como "1.".
+
+REGLAS DE CONTENIDO:
 - NO hagas preguntas al usuario — con la info disponible alcanza para un análisis preliminar serio.
 - NO repitas literalmente el "cambio propuesto"; analizalo.
 - Texto en español técnico-naval. Profesional, conciso, accionable.
 - NO incluyas recomendaciones de mitigación (eso va en otro campo del form).
 - NO inventes datos del buque que no estén en el contexto.
-- Si el cambio es trivial o rutinario, decilo explícitamente.
+- Si el cambio es trivial o rutinario, decilo explícitamente en la primera sección.
 
-Respondé ÚNICAMENTE con los bullets del análisis, sin introducción ni cierre.`;
+Respondé ÚNICAMENTE con las 6 secciones, sin introducción ni cierre.`;
 
 const CATEGORY_LABEL: Record<string, string> = {
   EQUIPMENT_CHANGE:   "Cambio de equipo (físico)",
