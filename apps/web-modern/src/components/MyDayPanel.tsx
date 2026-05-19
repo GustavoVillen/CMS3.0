@@ -140,6 +140,10 @@ const MyWorkOrdersTile: React.FC = () => {
     });
   }, [data, user]);
 
+  // "Si no hay tareas pendientes, no colocarlas aquí" — oculta el tile cuando
+  // termina de cargar y no hay nada. Mientras carga sí lo muestra (placeholder).
+  if (!loading && mine.length === 0) return null;
+
   return (
     <TileShell icon={Wrench} label="Mis OTs abiertas" count={mine.length} loading={loading} onClick={() => navigate("/work-orders")}>
       {mine.length > 0 && (
@@ -153,7 +157,6 @@ const MyWorkOrdersTile: React.FC = () => {
           {mine.length > 3 && <li className="text-[10px] text-text-industrial/40 italic">+{mine.length - 3} más…</li>}
         </ul>
       )}
-      {mine.length === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin OTs asignadas.</p>}
     </TileShell>
   );
 };
@@ -174,6 +177,8 @@ const UpcomingDrillsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
+  if (!loading && upcoming.length === 0) return null;
+
   return (
     <TileShell icon={CalendarCheck} label="Drills próximos (30d)" count={upcoming.length} loading={loading} onClick={() => navigate("/drills")}>
       {upcoming.length > 0 && (
@@ -185,7 +190,6 @@ const UpcomingDrillsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
           ))}
         </ul>
       )}
-      {upcoming.length === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin drills programados.</p>}
     </TileShell>
   );
 };
@@ -200,6 +204,8 @@ const RecentNearMissTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
       .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
   }, [data]);
 
+  if (!loading && recent.length === 0) return null;
+
   return (
     <TileShell icon={AlertOctagon} label="Near miss (14d)" count={recent.length} loading={loading} accent="text-yellow-400" onClick={() => navigate("/near-miss")}>
       {recent.length > 0 && (
@@ -212,7 +218,6 @@ const RecentNearMissTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
           ))}
         </ul>
       )}
-      {recent.length === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin reportes recientes.</p>}
     </TileShell>
   );
 };
@@ -227,6 +232,8 @@ const ExpiringCertsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   const soon    = items.filter(c => c.status === "EXPIRING_SOON").length;
   const count = expired + soon;
 
+  if (!loading && count === 0) return null;
+
   return (
     <TileShell icon={FileCheck} label="Certs por vencer (60d)" count={count} loading={loading} accent={expired > 0 ? "text-red-400" : "text-orange-400"} onClick={() => navigate("/certificates")}>
       {count > 0 && (
@@ -236,7 +243,6 @@ const ExpiringCertsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
           {soon > 0 && <span className="text-orange-400">{soon} próximos</span>}
         </p>
       )}
-      {count === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Todos vigentes.</p>}
     </TileShell>
   );
 };
@@ -255,8 +261,10 @@ const CriticalWoTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
+  if (!loading && critical.length === 0) return null;
+
   return (
-    <TileShell icon={Wrench} label="OTs críticas/vencidas" count={critical.length} loading={loading} accent={critical.length > 0 ? "text-red-400" : "text-white"} onClick={() => navigate("/work-orders?view=overdue")}>
+    <TileShell icon={Wrench} label="OTs críticas/vencidas" count={critical.length} loading={loading} accent="text-red-400" onClick={() => navigate("/work-orders?view=overdue")}>
       {critical.length > 0 && (
         <ul className="space-y-0.5 mt-1">
           {critical.slice(0, 3).map(w => (
@@ -267,7 +275,6 @@ const CriticalWoTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
           {critical.length > 3 && <li className="text-[10px] text-text-industrial/40 italic">+{critical.length - 3} más…</li>}
         </ul>
       )}
-      {critical.length === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Todo al día.</p>}
     </TileShell>
   );
 };
@@ -281,9 +288,10 @@ const RestHoursViolationsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) =
   const { data, loading } = useFetch<{ items: RestHoursRow[] }>(path);
   const count = data?.items?.length ?? 0;
 
+  if (!loading && count === 0) return null;
+
   return (
-    <TileShell icon={Clock} label="Violaciones horas descanso" count={count} loading={loading} accent={count > 0 ? "text-red-400" : "text-success-sea"} onClick={() => navigate("/rest-hours")}>
-      {count === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin violaciones STCW.</p>}
+    <TileShell icon={Clock} label="Violaciones horas descanso" count={count} loading={loading} accent="text-red-400" onClick={() => navigate("/rest-hours")}>
       {count > 0 && <p className="text-[10px] text-red-300">Revisar planilla mensual.</p>}
     </TileShell>
   );
@@ -295,9 +303,10 @@ const OpenFindingsTile: React.FC<{ vesselCode: string | null }> = ({ vesselCode 
   const { data, loading } = useFetch<{ items: ExternalAudit[] }>(`/app/external-audits${qs}`);
   const openCount = (data?.items ?? []).reduce((s, a) => s + (a.findingsOpen ?? 0), 0);
 
+  if (!loading && openCount === 0) return null;
+
   return (
-    <TileShell icon={AlertTriangle} label="Findings PSC abiertos" count={openCount} loading={loading} accent={openCount > 0 ? "text-yellow-400" : "text-success-sea"} onClick={() => navigate("/external-audits?filter=open")}>
-      {openCount === 0 && !loading && <p className="text-[10px] text-text-industrial/40 italic">Sin findings abiertos.</p>}
+    <TileShell icon={AlertTriangle} label="Findings PSC abiertos" count={openCount} loading={loading} accent="text-yellow-400" onClick={() => navigate("/external-audits?filter=open")}>
     </TileShell>
   );
 };
@@ -311,20 +320,20 @@ const DailyReportTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   const todayStr = new Date().toISOString().slice(0, 10);
   const hasToday = items.some(r => String(r.reportDate).slice(0, 10) === todayStr);
 
+  // Caso inverso al resto: "tareas pendientes" = falta cargar reporte hoy.
+  // Cuando YA está cargado, no es pendiente → ocultar el tile.
+  if (!loading && hasToday) return null;
+
   return (
     <TileShell
       icon={FileText}
       label="Reporte diario"
-      count={hasToday ? "✓" : "—"}
+      count="—"
       loading={loading}
-      accent={hasToday ? "text-success-sea" : "text-red-400"}
+      accent="text-red-400"
       onClick={() => navigate("/daily-reports")}
     >
-      {!loading && (
-        <p className={`text-[10px] ${hasToday ? "text-text-industrial/60" : "text-red-400 font-bold"}`}>
-          {hasToday ? "Cargado hoy" : "Sin reporte hoy"}
-        </p>
-      )}
+      {!loading && <p className="text-[10px] text-red-400 font-bold">Sin reporte hoy</p>}
     </TileShell>
   );
 };
@@ -334,16 +343,17 @@ const OpenDefectsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   const { data, loading } = useFetch<{ items: DefectRow[] }>(`/app/pms/defects${vesselQS}`);
   const open = (data?.items ?? []).filter(d => d.status === "OPEN" || d.status === "IN_PROGRESS").length;
 
+  if (!loading && open === 0) return null;
+
   return (
     <TileShell
       icon={AlertTriangle}
       label="Defectos abiertos"
       count={open}
       loading={loading}
-      accent={open > 0 ? "text-orange-400" : "text-success-sea"}
+      accent="text-orange-400"
       onClick={() => navigate("/defects")}
     >
-      {!loading && open === 0 && <p className="text-[10px] text-text-industrial/40 italic">Sin defectos abiertos.</p>}
     </TileShell>
   );
 };
@@ -353,17 +363,18 @@ const AiInsightsTile: React.FC<{ vesselQS: string; onShow?: () => void }> = ({ v
   const { data, loading } = useFetch<{ items?: AiInsightRow[]; total?: number }>(`/app/ai-insights${vesselQS}`);
   const total = data?.total ?? data?.items?.length ?? 0;
 
+  if (!loading && total === 0) return null;
+
   return (
     <TileShell
       icon={Sparkles}
       label="AI Insights"
       count={total}
       loading={loading}
-      accent={total > 0 ? "text-accent" : "text-text-industrial/60"}
+      accent="text-accent"
       onClick={() => (onShow ? onShow() : navigate("/ai-insights"))}
     >
-      {!loading && total === 0 && <p className="text-[10px] text-text-industrial/40 italic">Sin insights nuevos.</p>}
-      {!loading && total > 0  && <p className="text-[10px] text-accent">Tocá para revisar.</p>}
+      {!loading && total > 0 && <p className="text-[10px] text-accent">Tocá para revisar.</p>}
     </TileShell>
   );
 };
