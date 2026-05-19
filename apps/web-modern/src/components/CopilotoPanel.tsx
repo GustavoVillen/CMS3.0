@@ -686,17 +686,8 @@ export const CopilotoPanel: React.FC = () => {
   // Message sending
   // ---------------------------------------------------------------------------
 
-  /**
-   * Build the messages array sent to the API.
-   * On the very first turn of a fresh conversation, prepend a compact context
-   * marker to the user message so the model immediately knows which record is
-   * open — without polluting the display.
-   */
   const buildApiMessages = useCallback((msgs: ChatMessage[]): ChatMessage[] => {
     if (!screenContext || msgs.length === 0) return msgs;
-    // Only inject when this is the first user message (no prior assistant reply)
-    const hasAssistantReply = msgs.some(m => m.role === "assistant" && m.content.trim().length > 0);
-    if (hasAssistantReply) return msgs;
 
     const { entityCode, module: mod, vesselCode: vc, workflowStage: stage } = screenContext;
     const refParts = [
@@ -1011,13 +1002,6 @@ export const CopilotoPanel: React.FC = () => {
           {screenContext.vesselCode && (
             <p className="text-[9px] text-text-industrial/30 mt-0.5">Vessel: {screenContext.vesselCode}</p>
           )}
-        </div>
-      )}
-
-      {/* ── Offline suggestions (heuristic, no API) ── */}
-      {suggestions.length > 0 && (
-        <div className="px-2 py-2 border-b border-white/5 shrink-0 space-y-1.5">
-          {suggestions.map(s => <SuggestionCard key={s.id} s={s} />)}
         </div>
       )}
 
