@@ -1505,9 +1505,9 @@ export async function handleTenantRoutes(
   if (method === "GET" && url.pathname === "/app/drills") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const items = await listDrills(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status:     url.searchParams.get("status"),
-      type:       url.searchParams.get("type"),
+      vesselCode:    url.searchParams.get("vesselCode"),
+      status:        url.searchParams.get("status"),
+      requirementId: url.searchParams.get("requirementId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
