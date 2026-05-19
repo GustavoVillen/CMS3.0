@@ -1,14 +1,14 @@
 // ComplianceDashboard — panel para fleet manager.
 //
-// Dos secciones:
-//   1. Compliance Score por vessel (0-100) con desglose de componentes.
-//   2. Smart Alerts priorizadas (CRITICAL → WARNING → INFO).
+// Una sección: Compliance Score por vessel (0-100) con desglose de
+// componentes. Antes había también una sección "Alertas inteligentes" que
+// fue removida porque duplicaba info que ya está en los tiles de "Mi día".
 //
 // Visible solo para roles managers (TENANT_ADMIN / FLEET_SUPERINTENDENT /
 // MAINTENANCE_MANAGER). Se renderiza arriba del Dashboard.
 
 import React, { useEffect, useState } from "react";
-import { TrendingUp, AlertTriangle, AlertOctagon, Info, ChevronRight, Loader2, Download } from "lucide-react";
+import { TrendingUp, Loader2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -45,16 +45,6 @@ interface ComplianceScore {
   };
 }
 
-interface SmartAlert {
-  id: string;
-  vesselCode: string | null;
-  vesselName: string | null;
-  severity: "INFO" | "WARNING" | "CRITICAL";
-  title: string;
-  summary: string;
-  link: string | null;
-}
-
 const LABEL_COLOR: Record<ComplianceScore["label"], string> = {
   EXCELLENT: "text-success-sea",
   GOOD:      "text-accent",
@@ -69,18 +59,6 @@ const LABEL_TEXT: Record<ComplianceScore["label"], string> = {
   POOR:      "Pobre",
 };
 
-const SEVERITY_ICON: Record<SmartAlert["severity"], React.FC<{ className?: string }>> = {
-  CRITICAL: AlertOctagon,
-  WARNING:  AlertTriangle,
-  INFO:     Info,
-};
-
-const SEVERITY_COLOR: Record<SmartAlert["severity"], string> = {
-  CRITICAL: "border-red-500/40 bg-red-500/[0.06] text-red-300",
-  WARNING:  "border-yellow-500/40 bg-yellow-500/[0.06] text-yellow-300",
-  INFO:     "border-accent/30 bg-accent/[0.05] text-accent",
-};
-
 export const ComplianceDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -89,7 +67,6 @@ export const ComplianceDashboard: React.FC = () => {
   const isManager = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
 
   const [scores, setScores] = useState<ComplianceScore[] | null>(null);
-  const [alerts, setAlerts] = useState<SmartAlert[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -97,15 +74,13 @@ export const ComplianceDashboard: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     const qs = selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
-    Promise.all([
-      api.get<{ items: ComplianceScore[] }>(`/app/compliance/scores${qs}`).catch(() => ({ items: [] })),
-      api.get<{ items: SmartAlert[] }>(`/app/compliance/alerts${qs}`).catch(() => ({ items: [] })),
-    ]).then(([s, a]) => {
-      if (cancelled) return;
-      setScores(s.items);
-      setAlerts(a.items);
-      setLoading(false);
-    });
+    api.get<{ items: ComplianceScore[] }>(`/app/compliance/scores${qs}`)
+      .catch(() => ({ items: [] }))
+      .then(s => {
+        if (cancelled) return;
+        setScores(s.items);
+        setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [isManager, selectedVesselCode]);
 
@@ -117,40 +92,10 @@ export const ComplianceDashboard: React.FC = () => {
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       )}
 
-      {/* Smart Alerts */}
-      {!loading && alerts && alerts.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <AlertOctagon className="w-4 h-4 text-red-400" />
-            <h2 className="text-xs font-bold uppercase tracking-widest text-white">
-              Alertas inteligentes <span className="text-text-industrial/40 font-normal normal-case ml-1">({alerts.length})</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-            {alerts.slice(0, 6).map(a => {
-              const Icon = SEVERITY_ICON[a.severity];
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => a.link && navigate(a.link)}
-                  className={`text-left p-3 rounded-xl border ${SEVERITY_COLOR[a.severity]} hover:brightness-125 transition-all flex items-start gap-2.5`}
-                >
-                  <Icon className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-white line-clamp-1">{a.title}</p>
-                    <p className="text-[10px] text-text-industrial/70 line-clamp-2 mt-0.5">{a.summary}</p>
-                  </div>
-                  {a.link && <ChevronRight className="w-3.5 h-3.5 shrink-0 mt-1 opacity-50" />}
-                </button>
-              );
-            })}
-          </div>
-          {alerts.length > 6 && (
-            <p className="text-[10px] text-text-industrial/40 italic">+{alerts.length - 6} alertas adicionales</p>
-          )}
-        </div>
-      )}
+      {/* Alertas inteligentes — removidas porque duplicaban info que ya está
+          en los tiles de "Mi día" (Certs por vencer, Defectos abiertos, etc.).
+          El fetch a /app/compliance/alerts se mantiene por si en el futuro se
+          reutiliza desde otro componente. */}
 
       {/* Compliance Scores */}
       {!loading && scores && scores.length > 0 && (
