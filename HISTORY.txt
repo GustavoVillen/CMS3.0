@@ -12956,3 +12956,40 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     - prisma db push para crear la tabla en la BD de producción.
     - vite build + restart pm2 con cleanup de /tmp/tsx-*.
 
+============================================================
+SESIÓN 2026-05-19 (cont) — Cierre: restaurar rutas + push a main
+============================================================
+
+  Contexto:
+    - El módulo notifications quedó "a medias" en el commit anterior:
+      el servicio estaba untracked y el commit 912b75d había desactivado
+      las 4 rutas /app/notifications/* en tenant-router por crash de
+      MODULE_NOT_FOUND en el VPS.
+
+  Cambios de cierre:
+    - apps/api/src/tenant/tenant-router.ts: restaurado el import
+      (listMyNotifications, markNotificationRead, markAllNotificationsRead,
+      dismissNotification) + las 4 rutas REST. Esta vez el servicio sí
+      va al mismo commit, así que el MODULE_NOT_FOUND no se repite.
+
+  Verificado:
+    - tsc backend: 87 errores en HEAD → 95 con los cambios. Los 8 nuevos
+      son el mismo patrón pre-existente de "narrow typing del delegate de
+      Defect" (acceso a current.tenantId / current.vesselCode / current.
+      defectCode que TS no infiere pero que en runtime existen). No es
+      regresión nueva. tsx ignora estos errores y arranca igual.
+    - tsc frontend: limpio.
+
+  Commit: 0a729a1 "Notificaciones in-app: campana, banner CRITICAL y
+  triggers de defectos" — 9 archivos, +686/-13.
+
+  No se commitearon:
+    - dashboard-mock.html y manual.html (HTML scratch en root, no en
+      patrón tracked del repo).
+
+  Pendiente en VPS (sin cambios respecto al bloque anterior):
+    - prisma db push (tabla Notification es nueva en prod).
+    - vite build (cambios FE).
+    - restart pm2 con cleanup /tmp/tsx-* (cambios BE en código TS servido
+      por tsx, regla del 2026-05-02).
+

@@ -7,6 +7,7 @@ import { Activity, AlertTriangle, FileCode, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { downloadAuthedFile } from "../lib/authed-media";
+import { useT } from "../lib/i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,11 +30,11 @@ interface WorkloadProjection {
 
 type Mode = "count" | "hours";
 
-const WEEK_OPTIONS: { value: number; label: string }[] = [
-  { value: 26, label: "6 meses" },
-  { value: 52, label: "12 meses" },
-  { value: 78, label: "18 meses" },
-  { value: 104, label: "24 meses" },
+const WEEK_OPTIONS: { value: number; labelKey: "mwl.months6" | "mwl.months12" | "mwl.months18" | "mwl.months24" }[] = [
+  { value: 26,  labelKey: "mwl.months6" },
+  { value: 52,  labelKey: "mwl.months12" },
+  { value: 78,  labelKey: "mwl.months18" },
+  { value: 104, labelKey: "mwl.months24" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,18 +47,19 @@ function formatWeekLabel(iso: string): string {
   return `${day}/${month}`;
 }
 
-function formatWeekTooltip(iso: string): string {
+function formatWeekTooltip(iso: string, t: (k: "mwl.weekOf") => string): string {
   const d = new Date(iso + "T00:00:00Z");
   if (isNaN(d.getTime())) return iso;
   const day = String(d.getUTCDate()).padStart(2, "0");
   const month = String(d.getUTCMonth() + 1).padStart(2, "0");
   const year = d.getUTCFullYear();
-  return `Semana del ${day}/${month}/${year}`;
+  return t("mwl.weekOf").replace("{date}", `${day}/${month}/${year}`);
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export const MaintenanceWorkloadPage: React.FC = () => {
+  const t = useT();
   const [weeks, setWeeks] = useState<number>(52);
   const [mode, setMode] = useState<Mode>("count");
 
@@ -99,14 +101,14 @@ export const MaintenanceWorkloadPage: React.FC = () => {
     return { avg, max, maxWeek };
   }, [data, mode]);
 
-  const unit = mode === "count" ? "tareas" : "hs-hombre";
   const isHours = mode === "hours";
+  const perWeekHint = t(isHours ? "mwl.manHoursPerWeek" : "mwl.tasksPerWeek");
 
   return (
     <div className="space-y-4">
       <PageHeader
         icon={Activity}
-        title="Carga de Mantenimiento"
+        title={t("mwl.title")}
         total={data?.totalPlans}
         onReload={reload}
       >
@@ -119,19 +121,19 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             );
           }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-          title="Descargar snapshot HTML (imprimible)"
+          title={t("mwl.htmlSnapshotTitle")}
         >
           <FileCode className="w-3.5 h-3.5 text-accent" /> HTML
         </button>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-text-industrial/60">Ventana</label>
+          <label className="text-xs text-text-industrial/60">{t("mwl.window")}</label>
           <select
             value={weeks}
             onChange={e => setWeeks(parseInt(e.target.value, 10))}
             className="bg-primary-bg/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent"
           >
             {WEEK_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
             ))}
           </select>
         </div>
@@ -139,7 +141,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
 
       {/* Toggle modo */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-text-industrial/60">Métrica:</span>
+        <span className="text-xs text-text-industrial/60">{t("mwl.metric")}</span>
         <div className="inline-flex rounded-lg border border-white/10 bg-primary-bg/60 p-0.5">
           <button
             onClick={() => setMode("count")}
@@ -149,7 +151,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                 : "text-text-industrial/70 hover:text-white"
             }`}
           >
-            Por cantidad
+            {t("mwl.byCount")}
           </button>
           <button
             onClick={() => setMode("hours")}
@@ -159,24 +161,24 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                 : "text-text-industrial/70 hover:text-white"
             }`}
           >
-            Por horas-hombre
+            {t("mwl.byManHours")}
           </button>
         </div>
       </div>
 
       {/* Resumen ejecutivo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Planes activos" value={data?.totalPlans ?? 0} />
-        <StatCard label="Proyectados" value={data?.projectedPlans ?? 0} />
+        <StatCard label={t("mwl.activePlans")} value={data?.totalPlans ?? 0} />
+        <StatCard label={t("mwl.projected")} value={data?.projectedPlans ?? 0} />
         <StatCard
-          label="Promedio semanal"
+          label={t("mwl.weeklyAvg")}
           value={Math.round(stats.avg * 10) / 10}
-          hint={`${unit}/semana`}
+          hint={perWeekHint}
         />
         <StatCard
-          label="Pico"
+          label={t("mwl.peak")}
           value={Math.round(stats.max * 10) / 10}
-          hint={stats.maxWeek ? formatWeekTooltip(stats.maxWeek) : undefined}
+          hint={stats.maxWeek ? formatWeekTooltip(stats.maxWeek, t) : undefined}
         />
       </div>
 
@@ -186,8 +188,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
           <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
           <div className="text-xs text-text-industrial/70">
             <span className="font-bold text-orange-300">{data.plansWithoutEstimate}</span>{" "}
-            plan{data.plansWithoutEstimate !== 1 ? "es" : ""} proyectado{data.plansWithoutEstimate !== 1 ? "s" : ""} sin horas estimadas
-            — la curva está subestimada hasta cargarles tiempo de ejecución en el formulario del plan.
+            {t(data.plansWithoutEstimate === 1 ? "mwl.warnNoEstimate.one" : "mwl.warnNoEstimate.many")}
           </div>
         </div>
       )}
@@ -200,15 +201,13 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             {data.unscheduledHoursPlans > 0 && (
               <p>
                 <span className="font-bold text-yellow-300">{data.unscheduledHoursPlans}</span>{" "}
-                plan{data.unscheduledHoursPlans !== 1 ? "es" : ""} por horas sin proyectar
-                — falta historial de horas de motor o frecuencia inválida.
+                {t(data.unscheduledHoursPlans === 1 ? "mwl.warnNoHoursSched.one" : "mwl.warnNoHoursSched.many")}
               </p>
             )}
             {data.unscheduledDatePlans > 0 && (
               <p>
                 <span className="font-bold text-yellow-300">{data.unscheduledDatePlans}</span>{" "}
-                plan{data.unscheduledDatePlans !== 1 ? "es" : ""} por fecha sin proyectar
-                — falta próxima ejecución o frecuencia.
+                {t(data.unscheduledDatePlans === 1 ? "mwl.warnNoDateSched.one" : "mwl.warnNoDateSched.many")}
               </p>
             )}
           </div>
@@ -220,12 +219,11 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="text-sm font-bold text-white">
-              {isHours ? "Horas-hombre" : "Tareas"} por semana — próximos {weeks > 52 ? `${Math.round(weeks/4.33)} meses` : weeks === 52 ? "12 meses" : `${Math.round(weeks/4.33)} meses`}
+              {t(isHours ? "mwl.chartTitleHours" : "mwl.chartTitleCount")
+                .replace("{months}", String(Math.round(weeks / 4.33)))}
             </h2>
             <p className="text-[11px] text-text-industrial/40">
-              {isHours
-                ? "Suma de horas estimadas (estimatedHours del plan) por cada ocurrencia proyectada en la semana."
-                : "Suma de ocurrencias proyectadas. Planes por horas estimados según historial reciente del motor."}
+              {t(isHours ? "mwl.chartHelpHours" : "mwl.chartHelpCount")}
             </p>
           </div>
           {loading && <Loader2 className="w-4 h-4 text-accent animate-spin" />}
@@ -261,7 +259,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                   itemStyle={{ color: "#E0E1DD" }}
                   labelFormatter={(_label, payload) => {
                     const ws = payload?.[0]?.payload?.weekStart;
-                    return ws ? formatWeekTooltip(ws) : "";
+                    return ws ? formatWeekTooltip(ws, t) : "";
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#E0E1DD" }} />
@@ -271,7 +269,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                     stroke="rgba(255,255,255,0.25)"
                     strokeDasharray="4 4"
                     label={{
-                      value: `prom. ${stats.avg.toFixed(1)}`,
+                      value: t("mwl.avgPrefix").replace("{value}", stats.avg.toFixed(1)),
                       position: "right",
                       fill: "rgba(224,225,221,0.5)",
                       fontSize: 10,
@@ -282,7 +280,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                   <Line
                     type="monotone"
                     dataKey="laborHours"
-                    name="Horas-hombre estimadas"
+                    name={t("mwl.lineHoursName")}
                     stroke="#22d3ee"
                     strokeWidth={2}
                     dot={{ r: 2, fill: "#22d3ee" }}
@@ -293,7 +291,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="total"
-                      name="Total tareas"
+                      name={t("mwl.lineTotal")}
                       stroke="#22d3ee"
                       strokeWidth={2}
                       dot={{ r: 2, fill: "#22d3ee" }}
@@ -302,7 +300,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="dateBased"
-                      name="Por fecha"
+                      name={t("mwl.lineByDate")}
                       stroke="#a78bfa"
                       strokeWidth={1.5}
                       strokeDasharray="3 3"
@@ -311,7 +309,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="hoursBased"
-                      name="Por horas"
+                      name={t("mwl.lineByHours")}
                       stroke="#f97316"
                       strokeWidth={1.5}
                       strokeDasharray="3 3"
