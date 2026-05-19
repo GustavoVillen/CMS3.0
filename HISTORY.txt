@@ -1,5 +1,61 @@
 HISTORY.txt
 
+[2026-05-19] Excel export en 15 módulos + HTML export Dashboard/Workload
+Agent: Claude Opus 4.7
+Tanda completa: el sistema de Excel se extiende a 15 módulos nuevos
+(export-only), y se agrega export HTML standalone (single file, sin JS,
+imprimible) para el dashboard y la vista de carga de mantenimiento.
+
+Excel export-only para los siguientes módulos:
+- Tripulación, Matriz de Competencias (CrewCertification), Horas de
+  Descanso, Simulacros, Permisos de Trabajo, Auditorías Externas,
+  Near Miss, MOC, Solicitud de Repuestos, Muestreos y Análisis,
+  CAPA, Diferimientos, Defectos, Reportes Diarios, Reportes Mensuales.
+
+Backend (apps/api/src/tenant/excel/*):
+- excel-permissions.ts: VALID_MODULES +15, IMPORT_ROLES=[] en todos,
+  EXPORT_ROLES con el rol manager natural + AUDITOR_READONLY.
+- excel-template.ts: definiciones de columnas por módulo.
+- excel-export-service.ts: cases nuevos en fetchRecords +
+  DYNAMIC_COLUMN_PRIORITIES. Casos especiales:
+    * crew_certifications: filtra vessel via relación crew → vesselCode
+      (no tiene vesselCode directo).
+    * spare_requests: usa requestedForVesselCode (no vesselCode).
+    * external_audits: agrega findingsCount + findingsOpen.
+    * fluid_samples: aplana result (verdict, receivedAt, summary).
+    * moc: aplana impactAreasJson a CSV.
+    * crew_rest_hours: excluye hoursData (24 booleans irrelevantes para
+      Excel) y aplana violationsJson a string.
+    * monthly_reports: excluye inventorySnapshot (Json grande).
+- excel-import-service.ts: cases stub para los 15 (no-op, devuelven null
+  o { tenantId } — nunca se llaman porque IMPORT_ROLES está vacío).
+- excel-parser.ts: MATCHING_KEY extendido (no se usa en práctica, solo
+  evita acceso por índice undefined si se llama el parser).
+- tenant-router.ts: el endpoint /app/excel/export/{module} ahora acepta
+  filtros severity, auditType, riskLevel, kind.
+
+HTML export — Dashboard + Maintenance Workload:
+- dashboard/dashboard-html-service.ts (nuevo):
+    * buildDashboardHtml(session, vesselCode): genera HTML standalone
+      con grid de KPIs (sidebar-counts) coloreados según umbrales.
+    * buildWorkloadHtml(session, vesselCode, weeks): genera HTML con
+      tabla semana×(tareas/dateBased/hoursBased/laborHours) + totales.
+    * htmlShell(): wrapper común con CSS inline + footer + print rules.
+- tenant-router.ts: dos endpoints nuevos GET:
+    * /app/dashboard/html?vesselCode=...
+    * /app/dashboard/maintenance-workload/html?vesselCode=...&weeks=...
+
+Frontend:
+- ExportExcelButton.tsx (nuevo): botón directo de descarga reutilizable.
+  Usa downloadAuthedFile() con Authorization Bearer.
+- Botón insertado en las 15 páginas (PageHeader children).
+- FluidAnalyses.tsx: título pasa a usar t("page.fluidAnalyses") =
+  "Muestreos y Análisis" (antes hardcoded "Análisis de Fluidos").
+- MaintenanceWorkload.tsx: + botón "HTML" en PageHeader.
+- Dashboard.tsx: + botón "Exportar HTML" arriba a la derecha.
+
+Verificado: tsc 0 errores en archivos tocados.
+
 [2026-05-19] Fix: PDF de plan de mantenimiento — tablas con muchas columnas
 Agent: Claude Opus 4.7
 Bug visible al imprimir un plan cuya descripción incluye una tabla

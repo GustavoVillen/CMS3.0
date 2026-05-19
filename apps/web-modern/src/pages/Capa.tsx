@@ -8,6 +8,7 @@ import { DataTable, PriorityBadge, StatusBadge, type Column } from "../component
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -589,6 +590,7 @@ export const CapaPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={ShieldCheck} title={t("page.capa")} total={data?.total} onReload={reload}>
+        <ExportExcelButton module="capa" />
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del CAPA...</div>}

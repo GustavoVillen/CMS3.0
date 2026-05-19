@@ -10,6 +10,8 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
+import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
@@ -139,6 +141,7 @@ async function uploadAndExtract(file: File, vesselCode: string | null): Promise<
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export const FluidAnalysesPage: React.FC = () => {
+  const t = useT();
   const { user } = useAuth();
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
@@ -207,7 +210,8 @@ export const FluidAnalysesPage: React.FC = () => {
         />
       )}
 
-      <PageHeader icon={FlaskConical} title="Análisis de Fluidos" total={data?.total} onReload={reload}>
+      <PageHeader icon={FlaskConical} title={t("page.fluidAnalyses")} total={data?.total} onReload={reload}>
+        <ExportExcelButton module="fluid_samples" />
         <div className="flex items-center gap-2 flex-wrap">
           <select value={filters.fluidType} onChange={e => setFilters(f => ({ ...f, fluidType: e.target.value }))}
             className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">

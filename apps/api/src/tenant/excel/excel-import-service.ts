@@ -204,6 +204,23 @@ async function findExistingRecord(
     case "providers":         return prisma.provider.findFirst({ where, select: { id: true, deletedAt: true } });
     case "certificates":      return prisma.certificate.findFirst({ where, select: { id: true, deletedAt: true } });
     case "work_orders":       return null;
+    // Módulos export-only: no se importa, no se busca registro existente.
+    case "crew":
+    case "crew_certifications":
+    case "crew_rest_hours":
+    case "drills":
+    case "permits":
+    case "external_audits":
+    case "near_miss":
+    case "moc":
+    case "spare_requests":
+    case "fluid_samples":
+    case "capa":
+    case "deferrals":
+    case "defects":
+    case "daily_reports":
+    case "monthly_reports":
+      return null;
   }
 }
 
@@ -396,6 +413,23 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         assetId:              d.assetId ? String(d.assetId) : null,
       };
     case "work_orders":
+      return { tenantId };
+    // Módulos export-only: no se construye payload de creación.
+    case "crew":
+    case "crew_certifications":
+    case "crew_rest_hours":
+    case "drills":
+    case "permits":
+    case "external_audits":
+    case "near_miss":
+    case "moc":
+    case "spare_requests":
+    case "fluid_samples":
+    case "capa":
+    case "deferrals":
+    case "defects":
+    case "daily_reports":
+    case "monthly_reports":
       return { tenantId };
   }
 }

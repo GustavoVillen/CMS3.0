@@ -15,13 +15,31 @@ export interface ParseResult {
 }
 
 const MATCHING_KEY: Record<ExcelModule, string> = {
-  vessels:           "code",
-  assets:            "assetCode",
-  maintenance_plans: "taskCode",
-  spares:            "sku",
-  providers:         "providerCode",
-  certificates:      "certificateCode",
-  work_orders:       "workOrderCode",
+  vessels:             "code",
+  assets:              "assetCode",
+  maintenance_plans:   "taskCode",
+  spares:              "sku",
+  providers:           "providerCode",
+  certificates:        "certificateCode",
+  work_orders:         "workOrderCode",
+  // Módulos export-only: no se importan, pero la lista necesita un valor para no
+  // romper acceso por índice si alguien llama el parser. Usamos el código natural
+  // de cada entidad.
+  crew:                "crewCode",
+  crew_certifications: "id",
+  crew_rest_hours:     "id",
+  drills:              "drillCode",
+  permits:             "permitCode",
+  external_audits:     "auditCode",
+  near_miss:           "nearMissCode",
+  moc:                 "mocCode",
+  spare_requests:      "requestCode",
+  fluid_samples:       "sampleCode",
+  capa:                "capaCode",
+  deferrals:           "deferralCode",
+  defects:             "defectCode",
+  daily_reports:       "id",
+  monthly_reports:     "id",
 };
 
 const HEADER_ALIASES: Record<string, string> = {

@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { printDrill } from "../lib/print-drill";
@@ -646,6 +647,7 @@ export const DrillsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-4">
       <PageHeader icon={CalendarCheck} title="Simulacros" total={data?.total} onReload={reload}>
+        <ExportExcelButton module="drills" />
         {canConfigure && (
           <button onClick={() => setShowConfig(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
             <Settings className="w-3.5 h-3.5 text-accent" /> Configurar frecuencias

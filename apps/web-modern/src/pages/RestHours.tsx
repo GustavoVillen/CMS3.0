@@ -7,6 +7,7 @@ import { Clock, Loader2, X, ChevronLeft, ChevronRight, AlertTriangle, Check } fr
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 
 interface CrewMember {
   id: string;
@@ -239,6 +240,7 @@ export const RestHoursPage: React.FC = () => {
   return (
     <div className="p-6 space-y-4">
       <PageHeader icon={Clock} title="Horas de Descanso (STCW / MLC)" total={data?.rows.length ?? 0} onReload={reload}>
+        <ExportExcelButton module="crew_rest_hours" />
         {totalViolations > 0 && (
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold">
             <AlertTriangle className="w-3.5 h-3.5" /> {totalViolations} día(s) con violaciones STCW

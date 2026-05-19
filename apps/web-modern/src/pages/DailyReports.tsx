@@ -10,6 +10,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
@@ -1462,6 +1463,7 @@ export const DailyReportsPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={FileText} title={t("page.dailyReports")} total={data?.total} onReload={reload}>
+        <ExportExcelButton module="daily_reports" />
         {canManage && (
           <button
             onClick={() => setDetailReport("new")}

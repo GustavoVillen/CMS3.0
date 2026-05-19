@@ -6,6 +6,7 @@ import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 
@@ -682,6 +683,7 @@ export const SpareRequestsPage: React.FC = () => {
       )}
 
       <PageHeader icon={ClipboardList} title="Solicitudes de Repuestos" total={data?.total} onReload={reload}>
+        <ExportExcelButton module="spare_requests" />
         <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="PENDING">Pendientes de recepción</option>

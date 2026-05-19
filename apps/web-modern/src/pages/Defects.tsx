@@ -10,6 +10,7 @@ import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefec
 import { MicButton } from "../components/MicButton";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
@@ -1573,6 +1574,7 @@ export const DefectsPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={AlertTriangle} title={t("page.defects")} total={data?.total} onReload={reload}>
+        <ExportExcelButton module="defects" />
         <button
           onClick={() => setCreating(true)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 transition-all"

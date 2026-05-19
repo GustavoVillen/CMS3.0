@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 
@@ -846,6 +847,7 @@ export const PermitsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-4">
       <PageHeader icon={ShieldAlert} title="Permisos de Trabajo" total={data?.total} onReload={reload}>
+        <ExportExcelButton module="permits" />
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nuevo permiso
         </button>

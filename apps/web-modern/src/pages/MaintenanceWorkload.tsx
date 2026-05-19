@@ -3,9 +3,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { Activity, AlertTriangle, Loader2 } from "lucide-react";
+import { Activity, AlertTriangle, FileCode, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { downloadAuthedFile } from "../lib/authed-media";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,19 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         total={data?.totalPlans}
         onReload={reload}
       >
+        <button
+          onClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            void downloadAuthedFile(
+              `/app/dashboard/maintenance-workload/html?weeks=${weeks}`,
+              `workload_${today}.html`,
+            );
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          title="Descargar snapshot HTML (imprimible)"
+        >
+          <FileCode className="w-3.5 h-3.5 text-accent" /> HTML
+        </button>
         <div className="flex items-center gap-2">
           <label className="text-xs text-text-industrial/60">Ventana</label>
           <select

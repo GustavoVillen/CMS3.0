@@ -6,6 +6,7 @@ import { Grid3x3, Loader2, X, AlertCircle } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 
 const AREA_LABEL: Record<string, string> = {
   ECDIS: "ECDIS",
@@ -192,7 +193,9 @@ export const CrewMatrixPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={Grid3x3} title="Matriz de Competencias" total={data?.capabilities.length ?? 0} onReload={reload} />
+      <PageHeader icon={Grid3x3} title="Matriz de Competencias" total={data?.capabilities.length ?? 0} onReload={reload}>
+        <ExportExcelButton module="crew_certifications" />
+      </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
         <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">

@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate } from "../lib/i18n";
@@ -12,6 +12,7 @@ import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { MyDayPanel } from "../components/MyDayPanel";
 import { ComplianceDashboard } from "../components/ComplianceDashboard";
+import { downloadAuthedFile } from "../lib/authed-media";
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -179,8 +180,26 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   const insightCount = insights.data?.total ?? 0;
 
+  const exportDashboardHtml = () => {
+    const qs = selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
+    const today = new Date().toISOString().slice(0, 10);
+    void downloadAuthedFile(`/app/dashboard/html${qs}`, `dashboard_${today}.html`);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
+          archivar o mandar por email un estado puntual de la flota. */}
+      <div className="flex justify-end">
+        <button
+          onClick={exportDashboardHtml}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          title="Descargar snapshot HTML del dashboard (imprimible)"
+        >
+          <FileCode className="w-3.5 h-3.5 text-accent" /> Exportar HTML
+        </button>
+      </div>
+
       {/* Compliance score + smart alerts (sólo managers) */}
       <ComplianceDashboard />
 

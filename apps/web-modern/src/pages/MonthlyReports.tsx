@@ -11,6 +11,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
@@ -660,6 +661,7 @@ export const MonthlyReportsPage: React.FC = () => {
       )}
 
       <PageHeader icon={FileBarChart} title={t("page.reports") || "Reportes Mensuales"} total={data?.total} onReload={reload}>
+        <ExportExcelButton module="monthly_reports" />
         <button
           onClick={() => setSelected("new")}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110"

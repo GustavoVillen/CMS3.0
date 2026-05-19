@@ -88,6 +88,137 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "deletedAt",
     "deletedByUserId",
   ],
+  // ── Módulos export-only ──────────────────────────────────────────────────
+  // Estos arrays definen el orden EN QUE APARECEN las columnas extras
+  // (campos retornados por DB que no están en el template). Si una columna
+  // no figura, se ordena alfabéticamente al final.
+  crew: [
+    "rank", "nationality", "dateOfBirth", "passportNumber",
+    "signOnDate", "signOffDate", "status", "notes",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  crew_certifications: [
+    "type", "certificateNumber", "issuingAuthority", "issuedDate", "expiryDate",
+    "status", "docUrl", "notes",
+    "crewId", "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  crew_rest_hours: [
+    "recordDate", "totalRestHours", "hasViolation", "violationsJson", "notes",
+    "crewId", "createdByUserId", "updatedByUserId",
+  ],
+  drills: [
+    "type", "status", "scheduledDate", "completedDate",
+    "scenario", "observations", "lessonsLearned",
+    "participantCrewIds", "pdfUrl",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  permits: [
+    "type", "status", "location", "description",
+    "plannedStart", "plannedEnd", "validFrom", "validTo",
+    "requestedAt", "requestedByUserId",
+    "approvedAt", "approvedByUserId",
+    "activatedAt", "activatedByUserId",
+    "closedAt", "closedByUserId", "closeNotes",
+    "rejectionReason", "cancelReason",
+    "hazardsIdentified", "controlMeasures", "ppeRequired",
+    "details", "alarmOverride",
+    "assetId", "workOrderId",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  external_audits: [
+    "auditType", "auditDate", "port", "country", "agencyOrAuthority",
+    "inspectorName", "durationHours", "overallResult", "summary",
+    "scoreOrRating", "reportUrl",
+    "findingsCount", "findingsOpen",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  near_miss: [
+    "category", "severity", "status", "occurredAt", "location",
+    "description", "immediateAction", "rootCause", "preventiveActions",
+    "lessonsLearned", "assetId",
+    "reportedByName", "reportedByCrewId",
+    "reviewedAt", "reviewedByUserId", "closedAt",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  moc: [
+    "category", "status", "riskLevel", "title",
+    "reasonForChange", "proposedChange",
+    "riskAssessmentNotes", "mitigationActions", "impactAreasJson",
+    "plannedDate",
+    "approvedAt", "approvedByName", "approvedByUserId", "rejectedReason",
+    "implementedAt", "implementedByName", "implementationNotes",
+    "reviewedAt", "reviewOutcome", "reviewNotes", "reviewedByUserId",
+    "relatedAssetId", "relatedWorkOrderId",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  spare_requests: [
+    "status", "priority", "requestedAt",
+    "requestedByUserId", "approvedByUserId", "approvedAt", "rejectionReason",
+    "requestedForVesselCode", "requestedForAssetId", "requestedForLocationId",
+    "itemsCount", "notes",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  fluid_samples: [
+    "kind", "fluidType", "fluidProduct",
+    "sampledAt", "runningHours", "sampledByUserId",
+    "containerCode", "sentAt", "labName", "labReference",
+    "status", "notes",
+    "resultVerdict", "resultReceivedAt", "resultSummary",
+    "sourceWorkOrderId", "sourcePlanId",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  capa: [
+    "sourceType", "sourceId", "assetId",
+    "status", "priority", "title", "description",
+    "owner", "dueDate", "completedAt",
+    "actionsTaken", "verificationNote",
+    "effectivenessCriteria", "effectivenessReviewDate", "effectivenessOutcome",
+    "cancelReason",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  deferrals: [
+    "assetId", "sourceType", "sourceId", "deferralType",
+    "status", "requestedAt", "requestedByUserId",
+    "targetDate", "targetPort",
+    "justification", "compensatoryMeasures", "reviewNotes",
+    "decisionAt", "decidedByUserId",
+    "approverName", "rejectorName",
+    "activeSince", "expiredAt", "closedAt", "closeNotes", "rejectionReason",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  defects: [
+    "assetId", "workOrderId",
+    "status", "severity", "operationalState",
+    "classification", "reportedAt",
+    "description", "immediateAction", "correctiveAction",
+    "rcaAnalysis", "rcaMethodology",
+    "rcaImmediateCause", "rcaContributingCause", "rcaRootCause", "rcaPreventiveActions",
+    "rcaCompletedAt", "rcaApprovedAt", "rcaApprovedByUserId",
+    "capaDescription", "repairType",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  daily_reports: [
+    "reportDate", "status",
+    "reportType", "operationalStatus",
+    "currentPort", "timezone", "nextPort",
+    "etaNextPort", "etdNextPort", "portCallType", "estimatedStayHours",
+    "maintenanceOpportunity", "sparesReceiptPossible", "operationalRemarks",
+    "positionLat", "positionLon",
+    "engineHoursMain", "generatorHours",
+    "fuelConsumedLiters", "oilConsumedLiters",
+    "summary", "notes",
+    "submittedByUserId", "verifiedByUserId", "verifiedAt", "integratedAt",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
+  monthly_reports: [
+    "reportYear", "reportMonth", "status",
+    "operationalStatus", "currentPort", "nextPort", "etaNextPort",
+    "positionLat", "positionLon",
+    "summary", "notes",
+    "submittedAt", "submittedByUserId", "integratedAt",
+    "inventorySnapshotAt",
+    "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
+  ],
 };
 
 function sortDynamicKeys(module: ExcelModule, keys: string[]): string[] {
@@ -205,6 +336,215 @@ async function fetchRecords(
     case "certificates": {
       if (filters.status) where.status = filters.status;
       return prisma.certificate.findMany({ where, orderBy: { expiryDate: "asc" } }) as any;
+    }
+
+    // ── Módulos export-only ──────────────────────────────────────────────
+    case "crew": {
+      if (filters.status) where.status = filters.status;
+      return (prisma as any).crew.findMany({
+        where,
+        orderBy: [{ vesselCode: "asc" }, { lastName: "asc" }],
+      }) as any;
+    }
+
+    case "crew_certifications": {
+      // CrewCertification no tiene vesselCode directo; el vessel se infiere por
+      // la relación con Crew. Quitamos vesselCode del where heredado y lo
+      // re-aplicamos a través de la relación.
+      const vesselScope = where.vesselCode;
+      delete where.vesselCode;
+      if (filters.status) where.status = filters.status;
+      const rows = await (prisma as any).crewCertification.findMany({
+        where: {
+          ...where,
+          ...(vesselScope ? { crew: { vesselCode: vesselScope, deletedAt: null } } : { crew: { deletedAt: null } }),
+        },
+        include: { crew: { select: { crewCode: true, firstName: true, lastName: true, vesselCode: true } } },
+        orderBy: { expiryDate: "asc" },
+      }) as any[];
+      return rows.map((r) => ({
+        ...r,
+        crewCode:     r.crew?.crewCode    ?? null,
+        crewFullName: r.crew ? `${r.crew.firstName} ${r.crew.lastName}` : null,
+        vesselCode:   r.crew?.vesselCode  ?? null,
+        crew: undefined, // no exportar el objeto anidado
+      }));
+    }
+
+    case "crew_rest_hours": {
+      const rows = await (prisma as any).crewRestHours.findMany({
+        where,
+        orderBy: [{ recordDate: "desc" }, { vesselCode: "asc" }],
+      }) as any[];
+      // Join a Crew para mostrar nombres + crewCode.
+      const crewIds = [...new Set(rows.map((r) => r.crewId).filter(Boolean))];
+      const crew = crewIds.length
+        ? await (prisma as any).crew.findMany({
+            where: { id: { in: crewIds }, tenantId: where.tenantId as string },
+            select: { id: true, crewCode: true, firstName: true, lastName: true },
+          })
+        : [];
+      const crewMap = new Map(crew.map((c: any) => [c.id, c]));
+      return rows.map((r) => {
+        const c = crewMap.get(r.crewId) as any;
+        return {
+          ...r,
+          crewCode:     c?.crewCode ?? null,
+          crewFullName: c ? `${c.firstName} ${c.lastName}` : null,
+          // hoursData es Json[24] — no útil en Excel sin contexto; lo dejamos fuera.
+          hoursData: undefined,
+          // violationsJson lo aplanamos a texto.
+          violationsJson: r.violationsJson ? JSON.stringify(r.violationsJson) : null,
+        };
+      });
+    }
+
+    case "drills": {
+      if (filters.status) where.status = filters.status;
+      if (filters.type)   where.type   = filters.type;
+      return (prisma as any).drill.findMany({
+        where,
+        orderBy: { scheduledDate: "desc" },
+      }) as any;
+    }
+
+    case "permits": {
+      if (filters.status) where.status = filters.status;
+      if (filters.type)   where.type   = filters.type;
+      return (prisma as any).permitToWork.findMany({
+        where,
+        orderBy: { plannedStart: "desc" },
+      }) as any;
+    }
+
+    case "external_audits": {
+      if (filters.auditType) where.auditType = filters.auditType;
+      const rows = await (prisma as any).externalAudit.findMany({
+        where,
+        include: { findings: { select: { status: true } } },
+        orderBy: { auditDate: "desc" },
+      }) as any[];
+      return rows.map((r) => {
+        const findings = (r.findings ?? []) as Array<{ status: string }>;
+        return {
+          ...r,
+          findingsCount: findings.length,
+          findingsOpen:  findings.filter(f => f.status === "OPEN" || f.status === "IN_PROGRESS").length,
+          findings: undefined, // no exportar relación cruda
+        };
+      });
+    }
+
+    case "near_miss": {
+      if (filters.status)   where.status   = filters.status;
+      if (filters.severity) where.severity = filters.severity;
+      if (filters.category) where.category = filters.category;
+      return (prisma as any).nearMissReport.findMany({
+        where,
+        orderBy: { occurredAt: "desc" },
+      }) as any;
+    }
+
+    case "moc": {
+      if (filters.status)    where.status    = filters.status;
+      if (filters.category)  where.category  = filters.category;
+      if (filters.riskLevel) where.riskLevel = filters.riskLevel;
+      const rows = await (prisma as any).mocRecord.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+      }) as any[];
+      // impactAreasJson es Json — lo aplanamos a CSV.
+      return rows.map((r) => ({
+        ...r,
+        impactAreasJson: Array.isArray(r.impactAreasJson)
+          ? r.impactAreasJson.join(", ")
+          : (r.impactAreasJson ? JSON.stringify(r.impactAreasJson) : null),
+      }));
+    }
+
+    case "spare_requests": {
+      // SpareRequest no tiene vesselCode; usa requestedForVesselCode. Y NO usa
+      // base.deletedAt → SpareRequest sí tiene deletedAt, mantenemos.
+      const vesselScope = where.vesselCode;
+      delete where.vesselCode;
+      if (filters.status)   where.status   = filters.status;
+      if (filters.priority) where.priority = filters.priority;
+      if (vesselScope) where.requestedForVesselCode = vesselScope;
+      const rows = await (prisma as any).spareRequest.findMany({
+        where,
+        include: { items: { select: { id: true } } },
+        orderBy: { requestedAt: "desc" },
+      }) as any[];
+      return rows.map((r) => ({
+        ...r,
+        itemsCount: (r.items ?? []).length,
+        items: undefined,
+      }));
+    }
+
+    case "fluid_samples": {
+      if (filters.status) where.status = filters.status;
+      if (filters.kind)   where.kind   = filters.kind;
+      const rows = await (prisma as any).fluidSample.findMany({
+        where,
+        include: { result: { select: { verdict: true, receivedAt: true, summary: true } } },
+        orderBy: { sampledAt: "desc" },
+      }) as any[];
+      return rows.map((r) => ({
+        ...r,
+        resultVerdict:    r.result?.verdict    ?? null,
+        resultReceivedAt: r.result?.receivedAt ?? null,
+        resultSummary:    r.result?.summary    ?? null,
+        result: undefined,
+      }));
+    }
+
+    case "capa": {
+      if (filters.status)   where.status   = filters.status;
+      if (filters.priority) where.priority = filters.priority;
+      return (prisma as any).capaRecord.findMany({
+        where,
+        orderBy: { dueDate: "asc" },
+      }) as any;
+    }
+
+    case "deferrals": {
+      if (filters.status) where.status = filters.status;
+      return (prisma as any).deferral.findMany({
+        where,
+        orderBy: { requestedAt: "desc" },
+      }) as any;
+    }
+
+    case "defects": {
+      if (filters.status)   where.status   = filters.status;
+      if (filters.severity) where.severity = filters.severity;
+      return (prisma as any).defect.findMany({
+        where,
+        orderBy: { reportedAt: "desc" },
+      }) as any;
+    }
+
+    case "daily_reports": {
+      if (filters.status) where.status = filters.status;
+      return (prisma as any).dailyReport.findMany({
+        where,
+        orderBy: [{ reportDate: "desc" }, { vesselCode: "asc" }],
+      }) as any;
+    }
+
+    case "monthly_reports": {
+      if (filters.status) where.status = filters.status;
+      const rows = await (prisma as any).monthlyReport.findMany({
+        where,
+        orderBy: [{ reportYear: "desc" }, { reportMonth: "desc" }, { vesselCode: "asc" }],
+      }) as any[];
+      // inventorySnapshot es Json grande — lo excluimos del export para no
+      // ensuciar el Excel. Si el user lo necesita, está en el PDF del reporte.
+      return rows.map((r) => ({
+        ...r,
+        inventorySnapshot: undefined,
+      }));
     }
   }
 }
