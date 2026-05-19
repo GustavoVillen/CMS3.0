@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, Printer, Send, Trash2, X,
+  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, Send, Trash2, X,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -1517,8 +1517,8 @@ ${hasPos ? `
                     disabled={generatingPdf || saving || submitting}
                     className="px-4 py-2 rounded-lg bg-white/10 border border-white/15 text-white font-bold text-xs hover:bg-white/15 disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
-                    Generar PDF
+                    {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                    Guardar PDF
                   </button>
                 )}
               </div>
