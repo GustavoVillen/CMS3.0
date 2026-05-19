@@ -2741,7 +2741,7 @@ export const MaintenancePlansPage: React.FC = () => {
           plan={editing}
           userId={user?.id ?? null}
           userName={userName}
-          isAdmin={user?.role === "TENANT_ADMIN"}
+          isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           setRequestMessage={setRequestMessageFromContext}
           onClose={() => { setShowModal(false); setEditing(null); }}

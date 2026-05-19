@@ -899,7 +899,7 @@ const dict = {
   "mp.searchByCodeOrName":     { es: "Buscar por código o nombre…", en: "Search by code or name…", pt: "Buscar por código ou nome…" },
 
   // MaintenancePlanModal — visible UI
-  "mp.modal.readOnly":         { es: "Solo lectura — la edición de planes está restringida al administrador.", en: "Read only — plan editing is restricted to administrators.", pt: "Apenas leitura — a edição de planos está restrita ao administrador." },
+  "mp.modal.readOnly":         { es: "Solo lectura — la edición de planes está restringida a Admin, Superintendente y Capitán/Jefe de Máquinas.", en: "Read only — plan editing is restricted to Admin, Superintendent and Captain/Chief Engineer.", pt: "Apenas leitura — a edição de planos está restrita ao Admin, Superintendente e Capitão/Chefe de Máquinas." },
   "mp.modal.loadingAssets":    { es: "Cargando activos…",     en: "Loading assets…",       pt: "Carregando ativos…" },
   "mp.modal.selectVessel":     { es: "— Seleccioná un buque —", en: "— Select a vessel —", pt: "— Selecione uma embarcação —" },
   "mp.modal.codeAuto":         { es: "Auto",                  en: "Auto",                  pt: "Auto" },

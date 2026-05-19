@@ -238,12 +238,15 @@ function maintenanceClient(prisma: NonNullable<ReturnType<typeof getPrismaClient
 }
 
 function canManagePlans(session: TenantAccessSession): boolean {
-  return session.user.role === "TENANT_ADMIN";
+  const role = session.user.role;
+  // Admin (gestión total) + Superintendente técnico (define planes desde
+  // oficina) + Capitán/Jefe de Máquinas (ajusta planes desde el buque).
+  return role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
 }
 
 export function ensureCanManagePlans(session: TenantAccessSession) {
   if (!canManagePlans(session)) {
-    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede modificar planes de mantenimiento.");
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para modificar planes de mantenimiento.");
   }
 }
 
