@@ -194,9 +194,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <button
           onClick={exportDashboardHtml}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-          title="Descargar snapshot HTML del dashboard (imprimible)"
+          title={t("dashboard.exportHtmlTitle")}
         >
-          <FileCode className="w-3.5 h-3.5 text-accent" /> Exportar HTML
+          <FileCode className="w-3.5 h-3.5 text-accent" /> {t("dashboard.exportHtml")}
         </button>
       </div>
 
@@ -451,8 +451,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-xs font-bold text-white">Tripulación y Simulacros</h2>
-              <p className="text-[10px] text-text-industrial/40">Onboard, certificados, simulacros</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.crewTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.crewSubtitle")}</p>
             </div>
             {crewSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
@@ -464,7 +464,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Users className="w-3 h-3 text-text-industrial/40" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A bordo</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewOnboard")}</span>
                   </div>
                   <p className="text-xl font-bold text-white tabular-nums">{c.onboard}</p>
                 </button>
@@ -476,32 +476,32 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Certs. atención</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewCertsAttn")}</span>
                   </div>
                   <p className={`text-xl font-bold tabular-nums ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
                     {c.certsExpired + c.certsExpiringSoon}
                   </p>
                   {c.certsExpired > 0 && (
-                    <p className="text-[10px] text-red-400 mt-0.5">{c.certsExpired} vencidos</p>
+                    <p className="text-[10px] text-red-400 mt-0.5">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</p>
                   )}
                 </button>
                 <button onClick={() => navigate("/drills")}
                   className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros mes</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsMonth")}</span>
                   </div>
                   <p className="text-xl font-bold text-white tabular-nums">{c.drillsScheduled}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-0.5">programados</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-0.5">{t("dashboard.drillsScheduled")}</p>
                 </button>
                 <button onClick={() => navigate("/drills?status=COMPLETED")}
                   className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-success-sea" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros año</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsYear")}</span>
                   </div>
                   <p className="text-xl font-bold text-success-sea tabular-nums">{c.drillsCompletedYear}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-0.5">realizados</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-0.5">{t("dashboard.drillsCompleted")}</p>
                 </button>
               </div>
             );
@@ -512,8 +512,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-xs font-bold text-white">Permisos de Trabajo</h2>
-              <p className="text-[10px] text-text-industrial/40">Activos, pendientes, próximos a vencer</p>
+              <h2 className="text-xs font-bold text-white">{t("dashboard.permitsTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.permitsSubtitle")}</p>
             </div>
             {permitsSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
           </div>
@@ -525,7 +525,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ShieldAlert className="w-3 h-3 text-success-sea" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Activos</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsActive")}</span>
                   </div>
                   <p className="text-xl font-bold text-success-sea tabular-nums">{p.active}</p>
                 </button>
@@ -537,7 +537,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <Clock className={`w-3 h-3 ${p.pendingApproval > 0 ? "text-yellow-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A aprobar</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsToApprove")}</span>
                   </div>
                   <p className={`text-xl font-bold tabular-nums ${p.pendingApproval > 0 ? "text-yellow-400" : "text-white"}`}>{p.pendingApproval}</p>
                 </button>
@@ -549,7 +549,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <AlertTriangle className={`w-3 h-3 ${p.expiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Vencen &lt;24h</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpiring")}</span>
                   </div>
                   <p className={`text-xl font-bold tabular-nums ${p.expiringSoon > 0 ? "text-orange-400" : "text-white"}`}>{p.expiringSoon}</p>
                 </button>
@@ -561,7 +561,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <AlertCircle className={`w-3 h-3 ${p.expired > 0 ? "text-red-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Vencidos sin cerrar</span>
+                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpired")}</span>
                   </div>
                   <p className={`text-xl font-bold tabular-nums ${p.expired > 0 ? "text-red-400" : "text-white"}`}>{p.expired}</p>
                 </button>

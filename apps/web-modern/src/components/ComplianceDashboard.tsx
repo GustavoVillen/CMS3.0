@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { downloadAuthedFile } from "../lib/authed-media";
 
 interface ComplianceComponents {
@@ -52,15 +53,16 @@ const LABEL_COLOR: Record<ComplianceScore["label"], string> = {
   POOR:      "text-red-400",
 };
 
-const LABEL_TEXT: Record<ComplianceScore["label"], string> = {
-  EXCELLENT: "Excelente",
-  GOOD:      "Bueno",
-  FAIR:      "Regular",
-  POOR:      "Pobre",
+const LABEL_KEY: Record<ComplianceScore["label"], TranslationKey> = {
+  EXCELLENT: "compliance.label.EXCELLENT",
+  GOOD:      "compliance.label.GOOD",
+  FAIR:      "compliance.label.FAIR",
+  POOR:      "compliance.label.POOR",
 };
 
 export const ComplianceDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const t = useT();
   const { user } = useAuth();
   const { selectedVesselCode } = useVesselContext();
   const role = user?.role ?? "";
@@ -103,7 +105,7 @@ export const ComplianceDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-accent" />
             <h2 className="text-xs font-bold uppercase tracking-widest text-white">
-              Compliance score por buque
+              {t("compliance.scoreTitle")}
             </h2>
             <button
               type="button"
@@ -116,7 +118,7 @@ export const ComplianceDashboard: React.FC = () => {
                 void downloadAuthedFile(`/app/compliance/scores/pdf${qs}`, filename);
               }}
               className="ml-1 flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] text-text-industrial hover:border-accent/30 hover:text-accent transition-all"
-              title="Descargar PDF"
+              title={t("compliance.pdfTitle")}
             >
               <Download className="w-3 h-3" />
               PDF
@@ -133,6 +135,7 @@ export const ComplianceDashboard: React.FC = () => {
 
 const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
   const [open, setOpen] = useState(false);
+  const t = useT();
   return (
     <button
       type="button"
@@ -146,7 +149,7 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
         </div>
         <div className="text-right shrink-0">
           <p className={`text-2xl font-bold leading-none ${LABEL_COLOR[score.label]}`}>{score.score}</p>
-          <p className={`text-[9px] uppercase tracking-wider font-bold ${LABEL_COLOR[score.label]}`}>{LABEL_TEXT[score.label]}</p>
+          <p className={`text-[9px] uppercase tracking-wider font-bold ${LABEL_COLOR[score.label]}`}>{t(LABEL_KEY[score.label])}</p>
         </div>
       </div>
 
@@ -165,20 +168,20 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
 
       {open && (
         <div className="mt-2.5 space-y-1 pt-2 border-t border-white/5">
-          <ComponentRow label="OT compliance"    value={score.components.woComplianceRate}  hint={`${score.totals.woCompletedOnTime}/${score.totals.woClosedTotal} en plazo`} />
+          <ComponentRow label={t("compliance.row.woCompliance")} value={score.components.woComplianceRate}  hint={t("compliance.hint.onTime").replace("{a}", String(score.totals.woCompletedOnTime)).replace("{b}", String(score.totals.woClosedTotal))} />
           {/* Drills y STCW solo aplican a buques tripulados (barcazas se omiten). */}
           {score.crewedOperation && (
-            <ComponentRow label="Drills (90d)"     value={score.components.drillCompliance}   hint={`${score.totals.drillsDone90d}/${score.totals.drillsExpected90d}`} />
+            <ComponentRow label={t("compliance.row.drills")} value={score.components.drillCompliance}   hint={`${score.totals.drillsDone90d}/${score.totals.drillsExpected90d}`} />
           )}
-          <ComponentRow label="Certs vigentes"   value={score.components.certVigent}        hint={`${score.totals.certsActive}/${score.totals.certsTotal}`} />
-          <ComponentRow label="Findings PSC"     value={score.components.noFindingsPenalty} hint={score.totals.findingsOpen > 0 ? `${score.totals.findingsOpen} abiertos` : "Sin findings"} invert />
-          <ComponentRow label="Def. críticos"    value={score.components.noCriticalDefects} hint={score.totals.criticalDefectsOpen > 0 ? `${score.totals.criticalDefectsOpen} abiertos` : "Sin críticos"} invert />
+          <ComponentRow label={t("compliance.row.certs")} value={score.components.certVigent}        hint={`${score.totals.certsActive}/${score.totals.certsTotal}`} />
+          <ComponentRow label={t("compliance.row.findings")} value={score.components.noFindingsPenalty} hint={score.totals.findingsOpen > 0 ? t("compliance.hint.openCount").replace("{n}", String(score.totals.findingsOpen)) : t("compliance.hint.noFindings")} invert />
+          <ComponentRow label={t("compliance.row.defects")} value={score.components.noCriticalDefects} hint={score.totals.criticalDefectsOpen > 0 ? t("compliance.hint.openCount").replace("{n}", String(score.totals.criticalDefectsOpen)) : t("compliance.hint.noCritical")} invert />
           {score.crewedOperation && (
-            <ComponentRow label="STCW (30d)"       value={score.components.noRestHoursViolations} hint={score.totals.restHoursViolations30d > 0 ? `${score.totals.restHoursViolations30d} violaciones` : "Sin violaciones"} invert />
+            <ComponentRow label={t("compliance.row.stcw")} value={score.components.noRestHoursViolations} hint={score.totals.restHoursViolations30d > 0 ? t("compliance.hint.violations").replace("{n}", String(score.totals.restHoursViolations30d)) : t("compliance.hint.noViolations")} invert />
           )}
           {!score.crewedOperation && (
             <p className="text-[9px] text-text-industrial/40 italic pt-1">
-              Buque no tripulado — drills y STCW no aplican.
+              {t("compliance.notCrewed")}
             </p>
           )}
         </div>

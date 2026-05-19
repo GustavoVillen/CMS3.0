@@ -1,5 +1,33 @@
 HISTORY.txt
 
+[2026-05-19] Copiloto — quitar badges heurísticos y reforzar contexto
+Agent: Claude Opus 4.7
+
+  Pedido: "Sacar estos badges. Quiero que el copiloto siempre, siempre
+  vea la pantalla o sepa lo que hay en pantalla" (screenshot mostraba
+  los SuggestionCard amarillos: 'Falta justificación', 'Faltan medidas
+  compensatorias', 'Falta fecha objetivo').
+
+  Cambios en apps/web-modern/src/components/CopilotoPanel.tsx:
+    - Eliminado el bloque que renderizaba <SuggestionCard> para cada
+      suggestion heurístico. Los botones de acción ("Ayúdame a completar
+      los ítems pendientes" y "Analizar diferimiento") quedan porque
+      dependen de hasSuggestions y de la lógica de computeSuggestions
+      (que sigue intacta).
+    - buildApiMessages: removido el guard `if (hasAssistantReply)
+      return msgs`. Ahora el prefijo [Contexto activo: ...] se inyecta
+      en cada mensaje del usuario, no solo en el primero. Refuerza la
+      visibilidad del registro activo en cada turno.
+
+  Backend: ya recibía screenContext en cada API call y lo procesaba
+  como bloque "ACTIVE RECORD — CRITICAL CONTEXT" en el system prompt.
+  Sin cambios necesarios server-side.
+
+  Verificación: tsc frontend limpio. Deploy frontend-only al VPS:
+  pull + vite build + pm2 restart → 200 OK.
+
+  Commit: 7b64f67 — 1 archivo, -16.
+
 [2026-05-19] IA Performance Fase 2a — tenant cache en services
 Agent: Claude Opus 4.7
 Cada AI call disparaba un `prisma.tenant.findUnique({ where: { slug }})`
