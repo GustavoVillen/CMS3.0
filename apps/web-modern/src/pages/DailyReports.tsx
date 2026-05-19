@@ -1123,186 +1123,29 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
   const generatePdf = async () => {
     if (!liveReport) return;
     setGeneratingPdf(true);
-    // Wait for auto-save on tab unmount to complete before fetching
+    // Esperamos a que el auto-save del tab actual termine antes de pedir el PDF.
     await new Promise(r => setTimeout(r, 800));
     try {
-      const [full, deferralsRes] = await Promise.all([
-        api.get<FullReport & { oilConsumedLiters?: number | null }>(`/app/daily-reports/${liveReport.id}/full`),
-        api.get<{ items: DeferralEntry[] }>(`/app/pms/deferrals?vesselCode=${encodeURIComponent(liveReport.vesselCode)}`).catch(() => ({ items: [] as DeferralEntry[] })),
-      ]);
-      const gen = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
-      const lat = (full as any).positionLat as number | null | undefined;
-      const lon = (full as any).positionLon as number | null | undefined;
-      const hasPos = lat != null && lon != null;
-
-      const rawLogoUrl = tenant?.logoUrlLight || tenant?.logoUrl || null;
-      let tenantLogoUrl: string | null = rawLogoUrl;
-      if (rawLogoUrl) {
-        try {
-          const res = await fetch(rawLogoUrl);
-          const blob = await res.blob();
-          tenantLogoUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } catch {
-          tenantLogoUrl = rawLogoUrl;
-        }
+      const token = localStorage.getItem("gpms_token");
+      const slug  = localStorage.getItem("gpms_tenant_slug");
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (slug)  headers["X-Tenant-Slug"] = slug;
+      const res = await fetch(`/app/daily-reports/${liveReport.id}/pdf`, { headers });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setSaveError(`Error ${res.status}: ${text.slice(0, 300) || "No se pudo generar el PDF."}`);
+        return;
       }
-
-      const esc = (v: unknown) =>
-        String(v ?? "—").replace(/ð/g, "").replace(/[☐☑☒□■✓✔✘]/g, "☐");
-
-      const rows = {
-        equipment: (full.equipmentHours ?? []).map(e => `
-          <tr>
-            <td>${esc(e.equipmentLabel)}</td>
-            <td>${esc(e.runningHoursTotal)}</td>
-            <td>${esc((e as any).fuelConsumptionLiters)}</td>
-            <td>${esc((e as any).oilConsumptionLiters)}</td>
-            <td>${e.inService ? "Sí" : "No"}</td>
-          </tr>`).join(""),
-        maintenance: (full.maintenanceEntries ?? []).map(m => `
-          <tr>
-            <td>${esc((m as any).taskCode ?? (m as any).maintenancePlanId ?? (m as any).workOrderId)}</td>
-            <td>${esc(m.taskTitle)}</td>
-            <td>${esc(m.taskType)}</td>
-            <td>${esc(m.resultStatus)}</td>
-            <td>${esc(m.performedBy)}</td>
-          </tr>`).join(""),
-        spares: (full.spareUsages ?? []).map(s => `
-          <tr>
-            <td>${esc(s.spareName)}</td>
-            <td>${esc(s.quantity)}</td>
-            <td>${esc(s.unit)}</td>
-          </tr>`).join(""),
-        defects: (full.defectEntries ?? []).map(d => `
-          <tr>
-            <td style="white-space:nowrap;font-family:monospace;font-weight:bold;color:#111">${esc(d.defectCode)}</td>
-            <td>${esc(d.description)}</td>
-            <td>${esc(d.severitySuggested)}</td>
-            <td>${esc(d.immediateActionTaken)}</td>
-          </tr>`).join(""),
-        deferrals: (deferralsRes.items ?? []).map(d => {
-          const statusMap: Record<string, string> = {
-            REQUESTED: "Solicitado", UNDER_REVIEW: "En revisión", APPROVED: "Aprobado",
-            ACTIVE: "Activo", CLOSED: "Cerrado", EXPIRED: "Vencido", REJECTED: "Rechazado",
-          };
-          return `<tr>
-            <td>${esc(d.deferralCode)}</td>
-            <td>${esc(d.sourceCode ?? d.sourceType)}</td>
-            <td>${esc(statusMap[d.status] ?? d.status)}</td>
-            <td>${d.targetDate ? new Date(d.targetDate).toLocaleDateString("es-AR") : "—"}</td>
-            <td>${esc(d.justification)}</td>
-          </tr>`;
-        }).join(""),
-      };
-
-      const cmsLogoUrl = `${window.location.origin}/logo.png`;
-      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte Diario — ${liveReport.vesselCode}</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:20mm 18mm}
-  .meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin-bottom:14px;font-size:9pt}
-  .meta span{color:#555}
-  .meta strong{color:#111}
-  h2{font-size:10pt;font-weight:bold;margin:14px 0 4px;border-bottom:1px solid #ccc;padding-bottom:2px}
-  table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:8.5pt}
-  th{background:#f0f0f0;text-align:left;padding:3px 6px;border:1px solid #ccc;font-size:8pt}
-  td{padding:3px 6px;border:1px solid #e0e0e0}
-  .consumos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-  .consumos-card{border:1px solid #ddd;border-radius:4px;padding:8px 12px}
-  .consumos-card .label{font-size:8pt;color:#555;margin-bottom:2px}
-  .consumos-card .value{font-size:14pt;font-weight:bold}
-  .pos-block{display:flex;gap:16px;align-items:flex-start;margin-bottom:12px}
-  .pos-coords{font-size:9pt;color:#333;min-width:160px}
-  .pos-coords .label{font-size:7.5pt;color:#888;margin-bottom:2px}
-  .pos-coords .val{font-size:11pt;font-weight:bold;font-family:monospace}
-  .footer{margin-top:16px;padding-top:6px;border-top:1px solid #ddd;font-size:7.5pt;color:#888;display:flex;align-items:center;gap:8px}
-  @media print{body{padding:12mm 14mm}}
-</style></head><body>
-<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #cbd5e1">
-  <div style="display:flex;align-items:flex-start;gap:10px">
-    <div style="width:4px;background:#1e40af;border-radius:2px;min-height:60px;flex-shrink:0"></div>
-    <div>
-      <div style="font-size:18pt;font-weight:bold;color:#0f2744;line-height:1.1">REPORTE DIARIO</div>
-      <div style="font-size:13pt;font-weight:bold;color:#0f2744;margin-top:3px">${liveReport.vesselCode} · ${fmtDate(liveReport.reportDate)}</div>
-      <div style="font-size:8pt;color:#64748b;margin-top:4px">Generado: ${gen} · Estado: ${liveReport.status}${liveReport.integratedAt ? " · INTEGRADO" : ""}</div>
-    </div>
-  </div>
-  ${tenantLogoUrl ? `<img src="${tenantLogoUrl}" style="max-height:60px;max-width:130px;object-fit:contain;flex-shrink:0" />` : ""}
-</div>
-<div class="meta">
-  <div><span>Puerto actual: </span><strong>${liveReport.currentPort ?? "—"}</strong></div>
-  <div><span>Próximo puerto: </span><strong>${liveReport.nextPort ?? "—"}</strong></div>
-  <div><span>ETA: </span><strong>${liveReport.etaNextPort ? fmtDate(liveReport.etaNextPort) : "—"}</strong></div>
-  <div><span>Tipo de escala: </span><strong>${liveReport.portCallType ?? "—"}</strong></div>
-  <div><span>Oportunidad mantenimiento: </span><strong>${liveReport.maintenanceOpportunity ?? "—"}</strong></div>
-  <div><span>Recepción repuestos: </span><strong>${liveReport.sparesReceiptPossible ?? "—"}</strong></div>
-</div>
-${liveReport.summary ? `<p style="font-size:9pt;margin-bottom:12px;color:#333">${liveReport.summary}</p>` : ""}
-
-${hasPos ? `
-<h2>Posición</h2>
-<div class="pos-block">
-  <div style="display:flex;gap:16px;margin-bottom:8px">
-    <div class="pos-coords"><div class="label">LATITUD</div><div class="val">${lat!.toFixed(5)}°</div></div>
-    <div class="pos-coords"><div class="label">LONGITUD</div><div class="val">${lon!.toFixed(5)}°</div></div>
-  </div>
-  <div id="map" style="width:100%;height:200px;border:1px solid #ddd;border-radius:4px;margin-bottom:12px"></div>
-</div>` : ""}
-
-<h2>Consumos del día</h2>
-<div class="consumos">
-  <div class="consumos-card"><div class="label">Combustible</div><div class="value">${full.fuelConsumedLiters != null ? `${full.fuelConsumedLiters} L` : "—"}</div></div>
-  <div class="consumos-card"><div class="label">Aceite</div><div class="value">${(full as any).oilConsumedLiters != null ? `${(full as any).oilConsumedLiters} L` : "—"}</div></div>
-</div>
-
-<h2>Horas de equipo</h2>
-${rows.equipment ? `<table><thead><tr><th>Equipo</th><th>Hs. Acumuladas</th><th>Comb. (L)</th><th>Aceite (L)</th><th>En servicio</th></tr></thead><tbody>${rows.equipment}</tbody></table>` : "<p style='font-size:8.5pt;color:#999;margin-bottom:8px'>Sin registros.</p>"}
-
-<h2>Mantenimiento</h2>
-${rows.maintenance ? `<table><thead><tr><th>ID Tarea</th><th>Tarea</th><th>Tipo</th><th>Resultado</th><th>Realizado por</th></tr></thead><tbody>${rows.maintenance}</tbody></table>` : "<p style='font-size:8.5pt;color:#999;margin-bottom:8px'>Sin registros.</p>"}
-
-<h2>Repuestos utilizados</h2>
-${rows.spares ? `<table><thead><tr><th>Repuesto</th><th>Cantidad</th><th>Unidad</th></tr></thead><tbody>${rows.spares}</tbody></table>` : "<p style='font-size:8.5pt;color:#999;margin-bottom:8px'>Sin registros.</p>"}
-
-<h2>Defectos</h2>
-${rows.defects ? `<table><thead><tr><th>Código</th><th>Descripción</th><th>Severidad</th><th>Acción inmediata</th></tr></thead><tbody>${rows.defects}</tbody></table>` : "<p style='font-size:8.5pt;color:#999;margin-bottom:8px'>Sin registros.</p>"}
-
-<h2>Diferimientos activos</h2>
-${rows.deferrals ? `<table><thead><tr><th>Código</th><th>Referencia</th><th>Estado</th><th>Fecha objetivo</th><th>Justificación</th></tr></thead><tbody>${rows.deferrals}</tbody></table>` : "<p style='font-size:8.5pt;color:#999;margin-bottom:8px'>Sin diferimientos activos.</p>"}
-
-<div class="footer"><img src="${cmsLogoUrl}" style="height:16px;width:16px;object-fit:contain;opacity:0.6" /><span>Copilot Management System — Reporte generado automáticamente · ${gen}</span></div>
-${hasPos ? `
-<script>
-(function() {
-  function initMap() {
-    if (typeof L === "undefined") { setTimeout(initMap, 100); return; }
-    var map = L.map("map", { zoomControl: false, attributionControl: false }).setView([${lat}, ${lon}], 7);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
-    L.marker([${lat}, ${lon}]).addTo(map);
-    map.once("idle", function() { setTimeout(function() { window.print(); }, 600); });
-    setTimeout(function() { window.print(); }, 3000);
-  }
-  window.addEventListener("load", initMap);
-})();
-<\/script>` : ""}
-</body></html>`;
-
-      const w = window.open("", "_blank", "width=900,height=700");
-      if (!w) return;
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      // When there's a map, the Leaflet script triggers print after tiles load.
-      // Without map, print immediately.
-      if (!hasPos) setTimeout(() => { w.print(); }, 400);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `reporte-diario-${liveReport.vesselCode}-${fmtDate(liveReport.reportDate)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
       setSaveError(e instanceof ApiError ? e.message : "Error al generar PDF.");
     } finally {

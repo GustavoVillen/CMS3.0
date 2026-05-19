@@ -57,6 +57,7 @@ import {
   upsertDailySpareUsages,
 } from "./daily-reports/daily-report-integration-service";
 import { getDailyReportPeriodSuggestions } from "./daily-reports/daily-report-suggestions-service";
+import { buildDailyReportPdf } from "./daily-reports/daily-reports-pdf-service";
 import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
@@ -644,6 +645,20 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const id = url.pathname.split("/")[3]!;
     sendJson(response, 200, await getDailyReportWithSubEntities(session, id));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/daily-reports\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const buffer = await buildDailyReportPdf(session, id);
+    const filename = `reporte-diario-${id}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 
