@@ -241,7 +241,7 @@ function canManagePlans(session: TenantAccessSession): boolean {
   return session.user.role === "TENANT_ADMIN";
 }
 
-function ensureCanManagePlans(session: TenantAccessSession) {
+export function ensureCanManagePlans(session: TenantAccessSession) {
   if (!canManagePlans(session)) {
     throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede modificar planes de mantenimiento.");
   }

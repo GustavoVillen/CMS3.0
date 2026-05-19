@@ -1210,7 +1210,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   }, [plan, assetId, assets]);
 
   const handleAcceptanceCriteriaClick = useCallback(async () => {
-    if (loadingCriteria) return;
+    if (readOnly || loadingCriteria) return;
     const prev = acceptanceCriteria;
     setLoadingCriteria(true);
     setAcceptanceCriteria(t("mp.modal.analyzing"));
@@ -1225,10 +1225,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     } finally {
       setLoadingCriteria(false);
     }
-  }, [acceptanceCriteria, description, title, loadingCriteria, resolveAssetLabel, t]);
+  }, [readOnly, acceptanceCriteria, description, title, loadingCriteria, resolveAssetLabel, t]);
 
   const handleLotoClick = useCallback(async () => {
-    if (loadingLoto) return;
+    if (readOnly || loadingLoto) return;
     const prev = loto;
     setLoadingLoto(true);
     setLoto(t("mp.modal.analyzing"));
@@ -1244,10 +1244,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     } finally {
       setLoadingLoto(false);
     }
-  }, [loto, description, title, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
+  }, [readOnly, loto, description, title, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
 
   const handleRiskClick = useCallback(async () => {
-    if (loadingRisk) return;
+    if (readOnly || loadingRisk) return;
     setLoadingRisk(true);
     try {
       const res = await api.post<{ level: string; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
@@ -1264,10 +1264,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     finally {
       setLoadingRisk(false);
     }
-  }, [description, title, acceptanceCriteria, loto, loadingRisk, resolveAssetLabel]);
+  }, [readOnly, description, title, acceptanceCriteria, loto, loadingRisk, resolveAssetLabel]);
 
   const handleConsequenceClick = useCallback(async () => {
-    if (loadingConsequence) return;
+    if (readOnly || loadingConsequence) return;
     setLoadingConsequence(true);
     try {
       const res = await api.post<{ category: string; rationale: string }>(
@@ -1287,7 +1287,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     finally {
       setLoadingConsequence(false);
     }
-  }, [plan, title, description, loadingConsequence, resolveAssetLabel, sfiSubgroupCode]);
+  }, [readOnly, plan, title, description, loadingConsequence, resolveAssetLabel, sfiSubgroupCode]);
 
   const sfiGroups = useMemo(() => {
     const map = new Map<number, string>();
@@ -1879,11 +1879,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Acceptance criteria */}
             <div className="space-y-1.5">
               <label
-                onClick={handleAcceptanceCriteriaClick}
-                title={t("mp.modal.aiCriteriaTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingCriteria ? "opacity-60 animate-pulse" : ""}`}
+                onClick={readOnly ? undefined : handleAcceptanceCriteriaClick}
+                title={readOnly ? undefined : t("mp.modal.aiCriteriaTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  readOnly
+                    ? "text-text-industrial/60 cursor-default"
+                    : `text-accent hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}`
+                }`}
               >
-                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {!readOnly && (loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("mp.acceptanceCriteria")}
               </label>
               <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
@@ -1892,11 +1896,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* LOTO */}
             <div className="space-y-1.5">
               <label
-                onClick={handleLotoClick}
-                title={t("wo.ai.lotoTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingLoto ? "opacity-60 animate-pulse" : ""}`}
+                onClick={readOnly ? undefined : handleLotoClick}
+                title={readOnly ? undefined : t("wo.ai.lotoTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  readOnly
+                    ? "text-text-industrial/60 cursor-default"
+                    : `text-accent hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}`
+                }`}
               >
-                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {!readOnly && (loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("mp.loto")}
               </label>
               <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
@@ -1905,11 +1913,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* Risk level */}
             <div className="space-y-1.5">
               <label
-                onClick={handleRiskClick}
-                title={t("mp.modal.aiRiskTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingRisk ? "opacity-60 animate-pulse" : ""}`}
+                onClick={readOnly ? undefined : handleRiskClick}
+                title={readOnly ? undefined : t("mp.modal.aiRiskTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  readOnly
+                    ? "text-text-industrial/60 cursor-default"
+                    : `text-accent hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}`
+                }`}
               >
-                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {!readOnly && (loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("mp.riskLevel")}
                 <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
               </label>
@@ -1934,11 +1946,15 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
             {/* RCM consequence — "si esta tarea no se hace, ¿qué pasa?" */}
             <div className="space-y-1.5">
               <label
-                onClick={handleConsequenceClick}
-                title={t("wo.modal.consequenceTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white cursor-pointer transition-colors ${loadingConsequence ? "opacity-60 animate-pulse" : ""}`}
+                onClick={readOnly ? undefined : handleConsequenceClick}
+                title={readOnly ? undefined : t("wo.modal.consequenceTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  readOnly
+                    ? "text-text-industrial/60 cursor-default"
+                    : `text-accent hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}`
+                }`}
               >
-                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {!readOnly && (loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("wo.modal.consequenceTitle")}
                 <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
               </label>

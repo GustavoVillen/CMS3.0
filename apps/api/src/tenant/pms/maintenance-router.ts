@@ -11,6 +11,7 @@ import {
   completeChecklistPlan,
   createTenantMaintenancePlan,
   deleteTenantMaintenancePlan,
+  ensureCanManagePlans,
   generateUniqueTaskCode,
   getTenantMaintenancePlan,
   getTenantMaintenancePlansSummary,
@@ -118,6 +119,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-acceptance-criteria") {
+    ensureCanManagePlans(session);
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanAcceptanceCriteria>[1]>(request);
     sendJson(response, 200, await suggestPlanAcceptanceCriteria(session, body));
@@ -125,6 +127,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-loto") {
+    ensureCanManagePlans(session);
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanLoto>[1]>(request);
     sendJson(response, 200, await suggestPlanLoto(session, body));
@@ -132,6 +135,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-risk") {
+    ensureCanManagePlans(session);
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanRisk>[1]>(request);
     sendJson(response, 200, await suggestPlanRisk(session, body));
@@ -139,6 +143,7 @@ export async function handleMaintenanceRoutes(
   }
 
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/suggest-consequence") {
+    ensureCanManagePlans(session);
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestPlanConsequence>[1]>(request);
     sendJson(response, 200, await suggestPlanConsequence(session, body));
