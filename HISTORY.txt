@@ -1,5 +1,25 @@
 HISTORY.txt
 
+[2026-05-19] Fix: PDF de plan de mantenimiento — tablas con muchas columnas
+Agent: Claude Opus 4.7
+Bug visible al imprimir un plan cuya descripción incluye una tabla
+markdown con muchas columnas (ej. checklist de vibración con 12 cols:
+Equipo | Punto | RPM | Velocidad RMS | Aceleración | ... | Acción).
+Síntomas:
+- "Equipo" enorme (35% fijo de W).
+- Las otras 11 columnas a ~5% cada una → headers wrappeados carácter por
+  carácter ("Vel/ oci/ dad/ RMS/ (m/m/s)").
+- Header height fijo (18pt) → texto invadiendo las filas de datos.
+Fix (maintenance-plan-pdf-service.ts renderMarkdownTable):
+- Ancho por columna: proporcional al largo del header (mínimo 8 chars).
+  Si nCols >= 6, la primera se capea a 1.5× el promedio del resto. Piso
+  mínimo de 30pt con redistribución del remanente entre las anchas.
+- Header height dinámico: pre-mide cada header con heightOfString, toma
+  el mayor + padding.
+- Font escalable según nCols: 7.5 → 6.5 → 6 cuando ≥10 columnas.
+- Mismo escalado aplica a las celdas de datos para coherencia.
+Verificado: tsc 0 errores.
+
 [2026-05-19] Muestreos y Análisis — módulo ampliado a CBM (vibración, etc.)
 Agent: Claude Opus 4.7
 "Análisis de Fluidos" pasa a ser "Muestreos y Análisis", un módulo de

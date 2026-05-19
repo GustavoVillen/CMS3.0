@@ -233,39 +233,87 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       const headers = rows[0];
       const dataRows = rows.slice(1);
       const nCols = headers.length;
-      const cellPad = 5;
+      const cellPad = 4;
 
-      // First column gets 35% of width, rest split equally
-      const firstColW = nCols > 1 ? W * 0.35 : W;
-      const restColW  = nCols > 1 ? (W - firstColW) / (nCols - 1) : 0;
-      const colWidths = headers.map((_, i) => i === 0 ? firstColW : restColW);
+      // ── Ancho de columnas ────────────────────────────────────────────────
+      // Antes: primera columna fija 35% y el resto a partes iguales.
+      // Problema: con muchas columnas (ej. 12 para checklist de vibración),
+      // la primera quedaba enorme y las otras 11 a ~5% cada una → headers
+      // wrappeados carácter por carácter.
+      //
+      // Ahora: peso proporcional al largo del header (mínimo 8 chars), y la
+      // primera columna se capea cuando hay muchas columnas para que no
+      // monopolice. Después se aplica un piso mínimo de 30pt y se rebalancea
+      // el resto.
+      const minColW = 30;
+      const weights = headers.map(h => Math.max(8, h.trim().length));
+      if (nCols >= 6) {
+        // Cap primera columna a 1.5× el promedio del resto.
+        const avgRest = weights.slice(1).reduce((s, x) => s + x, 0) / Math.max(1, nCols - 1);
+        weights[0] = Math.min(weights[0], avgRest * 1.5);
+      }
+      const totalWeight = weights.reduce((s, x) => s + x, 0) || 1;
+      let colWidths = weights.map(w => (w / totalWeight) * W);
+
+      // Aplicar piso mínimo: si hay columnas debajo del piso, fijarlas en el
+      // piso y redistribuir el resto entre las "anchas" proporcionalmente.
+      // Si todas terminan en piso (tabla muy densa), se acepta el overflow
+      // (caso patológico — convendría más de una página o landscape).
+      const needsFloor = colWidths.some(w => w < minColW);
+      if (needsFloor) {
+        const widePool = colWidths.filter(w => w >= minColW).reduce((s, x) => s + x, 0);
+        const narrowCount = colWidths.filter(w => w < minColW).length;
+        const remainder = Math.max(0, W - narrowCount * minColW);
+        if (widePool > 0) {
+          colWidths = colWidths.map(w => w < minColW ? minColW : (w / widePool) * remainder);
+        } else {
+          // Todas igual al piso → split equitativo (acepta overflow).
+          colWidths = colWidths.map(() => W / nCols);
+        }
+      }
       const colX = (i: number) => ML + colWidths.slice(0, i).reduce((a, b) => a + b, 0);
 
-      const headerH = 18;
+      // ── Header height dinámico ───────────────────────────────────────────
+      // Antes: 18pt fijo. Si el header wrappeaba a 3+ líneas, invadía las
+      // filas de datos. Ahora medimos la altura real por columna y tomamos
+      // la mayor. También bajamos el font cuando hay muchas columnas.
+      const headerFont = nCols >= 10 ? 6 : nCols >= 7 ? 6.5 : 7.5;
+      const headerHeights = headers.map((h, i) => {
+        const cw = colWidths[i];
+        return doc.fontSize(headerFont).font(FONT_BOLD).heightOfString(h.trim(), {
+          width: cw - cellPad * 2,
+          lineGap: 0.5,
+        });
+      });
+      const headerH = Math.max(18, ...headerHeights) + 8;
       ensureSpace(headerH);
       headers.forEach((h, i) => {
         doc.rect(colX(i), y, colWidths[i], headerH).fillColor("#e2e8f0").fill();
         doc.rect(colX(i), y, colWidths[i], headerH).strokeColor(border).lineWidth(0.4).stroke();
-        doc.fontSize(7.5).font(FONT_BOLD).fillColor(black)
-          .text(h.trim(), colX(i) + cellPad, y + 5, { width: colWidths[i] - cellPad * 2, ellipsis: true });
+        doc.fontSize(headerFont).font(FONT_BOLD).fillColor(black)
+          .text(h.trim(), colX(i) + cellPad, y + 4, { width: colWidths[i] - cellPad * 2, lineGap: 0.5 });
       });
       y += headerH;
+
+      // Mismo escalado de font para celdas que para headers — coherente y
+      // evita que celdas largas (ej. observaciones) wrappen a 10 líneas.
+      const cellFont = nCols >= 10 ? 6 : nCols >= 7 ? 6.5 : 7.5;
 
       dataRows.forEach(row => {
         // Calculate dynamic row height based on tallest cell
         const cellHeights = row.map((cell, i) => {
-          const cw = colWidths[i] ?? restColW;
+          const cw = colWidths[i] ?? minColW;
           const raw = cell.trim();
           const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(raw);
           const cleanText = sanitizePdfText(hasCheckbox ? raw.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : raw);
           const textW = cw - cellPad * 2 - (hasCheckbox ? 11 : 0);
           if (!cleanText) return 16;
-          return doc.fontSize(7.5).font(FONT_REGULAR).heightOfString(cleanText, { width: textW, lineGap: 1 }) + 8;
+          return doc.fontSize(cellFont).font(FONT_REGULAR).heightOfString(cleanText, { width: textW, lineGap: 1 }) + 8;
         });
         const rowH = Math.max(16, ...cellHeights);
         ensureSpace(rowH);
         row.forEach((cell, i) => {
-          const cw = colWidths[i] ?? restColW;
+          const cw = colWidths[i] ?? minColW;
           doc.rect(colX(i), y, cw, rowH).strokeColor(border).lineWidth(0.3).stroke();
           const raw = cell.trim();
           const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(raw);
@@ -277,7 +325,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
             textX += cbSize + 3;
           }
           if (cleanText) {
-            doc.fontSize(7.5).font(FONT_REGULAR).fillColor(black)
+            doc.fontSize(cellFont).font(FONT_REGULAR).fillColor(black)
               .text(cleanText, textX, y + 4, { width: cw - (textX - colX(i)) - cellPad, lineGap: 1 });
           }
         });
