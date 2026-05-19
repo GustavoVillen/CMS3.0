@@ -86,7 +86,8 @@ import {
 } from "./crew/certifications-service";
 import {
   listDrills, getDrill, createDrill, updateDrill, completeDrill, cancelDrill, reopenDrill, deleteDrill,
-  getDrillsMatrix, listDrillConfig, upsertDrillConfig,
+  getDrillsMatrix,
+  listDrillRequirements, createDrillRequirement, updateDrillRequirement, deleteDrillRequirement,
 } from "./drills/drills-service";
 import { suggestDrillScenario } from "./drills/drills-ai-suggestions";
 import { buildDrillPdf } from "./drills/drills-pdf-service";
@@ -1455,17 +1456,31 @@ export async function handleTenantRoutes(
     sendJson(response, 200, matrix);
     return true;
   }
-  if (method === "GET" && url.pathname === "/app/drills/config") {
+  // Drill requirements (catálogo configurable por tenant)
+  if (method === "GET" && url.pathname === "/app/drills/requirements") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    sendJson(response, 200, await listDrillConfig(session));
+    sendJson(response, 200, await listDrillRequirements(session));
     return true;
   }
-  if (method === "PATCH" && /^\/app\/drills\/config\/[A-Z_]+$/.test(url.pathname)) {
+  if (method === "POST" && url.pathname === "/app/drills/requirements") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const type = url.pathname.split("/")[4]!;
-    const body = await readJsonBody(request) as Parameters<typeof upsertDrillConfig>[2];
-    sendJson(response, 200, await upsertDrillConfig(session, type, body));
+    const body = await readJsonBody(request) as Parameters<typeof createDrillRequirement>[1];
+    sendJson(response, 201, await createDrillRequirement(session, body));
     return true;
+  }
+  if (/^\/app\/drills\/requirements\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[4]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateDrillRequirement>[2];
+      sendJson(response, 200, await updateDrillRequirement(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await deleteDrillRequirement(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
   }
   if (method === "POST" && url.pathname === "/app/drills/suggest-scenario") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));

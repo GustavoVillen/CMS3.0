@@ -149,7 +149,7 @@ async function computeOne(
   const p = prisma as unknown as {
     workOrder: { findMany(a: unknown): Promise<Array<{ completedDate: Date | null; dueDate: Date | null; status: string }>>; count(a: { where: Record<string, unknown> }): Promise<number> };
     drill: { count(a: { where: Record<string, unknown> }): Promise<number> };
-    drillConfig: { findMany(a: { where: Record<string, unknown> }): Promise<Array<{ type: string; frequencyDays: number; enabled: boolean }>> };
+    drillRequirement: { findMany(a: { where: Record<string, unknown> }): Promise<Array<{ id: string; frequencyDays: number; applicableVesselCodes: unknown }>> };
     certificate: { count(a: { where: Record<string, unknown> }): Promise<number> };
     externalAuditFinding: { count(a: { where: Record<string, unknown> }): Promise<number> };
     defect: { count(a: { where: Record<string, unknown> }): Promise<number> };
@@ -172,24 +172,17 @@ async function computeOne(
   const drillsDone = await p.drill.count({
     where: { tenantId, vesselCode: vessel.code, deletedAt: null, status: "COMPLETED", completedDate: { gte: d90 } },
   });
-  const configs = await p.drillConfig.findMany({ where: { tenantId } });
-  // Defaults SOLAS (mismos que en drills-service): si no hay configs custom
-  // por tenant, asumimos los defaults para los tipos críticos.
-  const DEFAULT_FREQ_DAYS: Record<string, number> = {
-    FIRE: 30, ABANDON_SHIP: 30, ENCLOSED_SPACE: 60,
-    STEERING_GEAR: 90, SECURITY: 90, POLLUTION: 90, OIL_SPILL: 90,
-    MAN_OVERBOARD: 90, MEDICAL: 90, BLACKOUT: 180, OTHER: 365,
-  };
-  const cfgByType = new Map<string, { frequencyDays: number; enabled: boolean }>();
-  for (const c of configs) cfgByType.set(c.type, { frequencyDays: c.frequencyDays, enabled: c.enabled });
+  // Cargar requirements del tenant que aplican a este vessel:
+  // applicableVesselCodes vacío = aplica a todos los vessels.
+  const requirements = await p.drillRequirement.findMany({
+    where: { tenantId, enabled: true, deletedAt: null },
+  });
   let drillsExpected = 0;
-  for (const [type, defaultFreq] of Object.entries(DEFAULT_FREQ_DAYS)) {
-    const ov = cfgByType.get(type);
-    const freq = ov?.frequencyDays ?? defaultFreq;
-    const enabled = ov?.enabled ?? true;
-    if (!enabled) continue;
+  for (const r of requirements) {
+    const codes = Array.isArray(r.applicableVesselCodes) ? r.applicableVesselCodes as string[] : [];
+    if (codes.length > 0 && !codes.includes(vessel.code)) continue;
     // En 90 días, cuántos drills se esperan: ceil(90 / freq)
-    drillsExpected += Math.ceil(90 / freq);
+    drillsExpected += Math.ceil(90 / r.frequencyDays);
   }
   const drillCompliance = clamp01(safeDiv(drillsDone, drillsExpected));
 

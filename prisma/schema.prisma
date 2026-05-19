@@ -363,20 +363,6 @@ enum CrewCertificationStatus {
   EXPIRED
 }
 
-enum DrillType {
-  FIRE
-  ABANDON_SHIP
-  ENCLOSED_SPACE
-  MAN_OVERBOARD
-  POLLUTION
-  SECURITY
-  MEDICAL
-  STEERING_GEAR
-  BLACKOUT
-  OIL_SPILL
-  OTHER
-}
-
 enum DrillStatus {
   SCHEDULED
   COMPLETED
@@ -2572,12 +2558,44 @@ model CrewCertification {
   @@index([expiryDate])
 }
 
+// Catálogo configurable de drills/simulacros por tenant. Reemplaza el enum
+// fijo DrillType + DrillConfig. Cada tenant puede cargar su matriz SOLAS/ISPS/
+// MARPOL/MLC/STCW con regulación, frecuencia, label de intervalo y scope opcional
+// por buque (applicableVesselCodes vacío = aplica a toda la flota).
+model DrillRequirement {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  title                 String
+  solasRegulation       String?
+  frequencyDays         Int
+  intervalLabel         String?
+  // Array de strings descriptivos de quién ejecuta (ej: ["Master", "Officers", "Crew"])
+  performedBy           Json      @default("[]")
+  // Array de vesselCode; vacío = aplica a toda la flota del tenant
+  applicableVesselCodes Json      @default("[]")
+  notes                 String?
+  enabled               Boolean   @default(true)
+  sortOrder             Int       @default(0)
+  createdAt             DateTime  @default(now())
+  createdByUserId       String
+  updatedAt             DateTime  @updatedAt
+  updatedByUserId       String
+  deletedAt             DateTime?
+  deletedByUserId       String?
+
+  drills                Drill[]
+
+  @@unique([tenantId, title])
+  @@index([tenantId])
+  @@index([tenantId, enabled])
+}
+
 model Drill {
   id                 String          @id @default(cuid())
   tenantId           String
   vesselCode         String
   drillCode          String
-  type               DrillType
+  requirementId      String
   status             DrillStatus     @default(SCHEDULED)
   scheduledDate      DateTime
   completedDate      DateTime?
@@ -2601,29 +2619,14 @@ model Drill {
   lastReopenByUserId String?
 
   vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  requirement        DrillRequirement @relation(fields: [requirementId], references: [id])
 
   @@unique([tenantId, vesselCode, drillCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([scheduledDate])
-}
-
-// Frecuencia mínima por tipo de simulacro, configurable por tenant.
-// Si no existe registro para un tipo, el servicio aplica el default
-// DRILL_FREQUENCY_DAYS (SOLAS/ISPS/MARPOL).
-model DrillConfig {
-  id              String    @id @default(cuid())
-  tenantId        String
-  type            DrillType
-  frequencyDays   Int
-  enabled         Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  updatedByUserId String
-
-  @@unique([tenantId, type])
-  @@index([tenantId])
+  @@index([requirementId])
 }
 
 // ── Block: Permit to Work (Vetting Sprint 1 — SOLAS II-2/10, XI-1/7, SIRE 2.0) ─

@@ -8,36 +8,6 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-// Referencias normativas por tipo — se inyectan en el prompt para anclar la IA
-// a reglamentaciones reales y evitar escenarios genéricos.
-const DRILL_REGULATORY_REF: Record<string, string> = {
-  FIRE:           "SOLAS II-2 / III/19.3.2 — drill mensual contra incendio. ISGOTT cap. 7 (buques tanque).",
-  ABANDON_SHIP:   "SOLAS III/19.3.2 y 19.3.3.1 — abandono mensual; ejercicio dentro de 24 h si >25% de tripulación es nueva.",
-  ENCLOSED_SPACE: "SOLAS III/19.3.3.3 (MSC.350(92)) — entrada y rescate cada 2 meses. IMO Res. A.1050(27).",
-  MAN_OVERBOARD:  "SOLAS V/26 + práctica recomendada. Maniobra Williamson/Anderson, recuperación con bote de rescate.",
-  POLLUTION:      "MARPOL Anexo I Reg. 37 + SOPEP. Ejercicio trimestral típico.",
-  OIL_SPILL:      "MARPOL Anexo I + SOPEP/SMPEP. OPA 90 para aguas USA.",
-  SECURITY:       "ISPS Code A/13.4 — drill trimestral; exercise anual del SSP.",
-  MEDICAL:        "MLC 2006 + SMS de la compañía. Guidance: IMGS / WHO Medical Guide for Ships.",
-  STEERING_GEAR:  "SOLAS V/26.4 — prueba trimestral del aparato de gobierno de emergencia y comunicación puente-máquina.",
-  BLACKOUT:       "SMS de la compañía + buena práctica. Recuperación del generador de emergencia, arranque ciego.",
-  OTHER:          "Buena práctica marítima y SMS de la compañía.",
-};
-
-const DRILL_LABEL_ES: Record<string, string> = {
-  FIRE:           "Incendio",
-  ABANDON_SHIP:   "Abandono de buque",
-  ENCLOSED_SPACE: "Espacios confinados",
-  MAN_OVERBOARD:  "Hombre al agua",
-  POLLUTION:      "Contaminación",
-  OIL_SPILL:      "Derrame de combustible",
-  SECURITY:       "Seguridad (ISPS)",
-  MEDICAL:        "Emergencia médica",
-  STEERING_GEAR:  "Gobierno de emergencia",
-  BLACKOUT:       "Blackout / dead ship",
-  OTHER:          "Otro",
-};
-
 const PROMPT_DRILL_SCENARIO = `Sos un instructor experto en simulacros de emergencia marítima, formado en SOLAS, ISPS y MARPOL.
 
 Tu tarea: redactar un escenario de simulacro REALISTA, BREVE y OPERATIVO, alineado a las reglamentaciones internacionales aplicables al tipo solicitado.
@@ -64,10 +34,10 @@ NO incluyas:
 Respondé ÚNICAMENTE con el escenario, sin encabezados ni explicaciones.`;
 
 export interface DrillScenarioInput {
-  type: string;                  // FIRE | ABANDON_SHIP | ...
+  requirementId: string;          // id del DrillRequirement
   vesselCode?: string | null;
   vesselName?: string | null;
-  lastScenario?: string | null;  // último escenario del mismo tipo en este vessel
+  lastScenario?: string | null;
   lastCompletedDate?: string | null;
 }
 
@@ -128,37 +98,44 @@ export async function suggestDrillScenario(
   session: TenantAccessSession,
   input: DrillScenarioInput,
 ): Promise<{ text: string }> {
-  const type = String(input.type ?? "").toUpperCase();
-  if (!DRILL_LABEL_ES[type]) {
-    throw new RouteError(400, "VALIDATION_ERROR", `Tipo de simulacro inválido: ${input.type}.`);
+  const requirementId = String(input.requirementId ?? "").trim();
+  if (!requirementId) {
+    throw new RouteError(400, "VALIDATION_ERROR", "requirementId es requerido.");
   }
 
-  // Consultamos el último simulacro del mismo tipo en el vessel para variar el escenario
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const requirement = await (prisma as unknown as {
+    drillRequirement: { findFirst(a: unknown): Promise<{ id: string; title: string; solasRegulation: string | null } | null> };
+  }).drillRequirement.findFirst({
+    where: { id: requirementId, tenantId: tenant.id, deletedAt: null },
+  });
+  if (!requirement) throw new RouteError(404, "NOT_FOUND", "Requisito de simulacro no encontrado.");
+
+  // Último simulacro del mismo requirement en el vessel (para variar el escenario)
   let lastScenario = input.lastScenario ?? null;
   let lastCompletedDate = input.lastCompletedDate ?? null;
   if (!lastScenario && input.vesselCode) {
     try {
-      const prisma = getPrismaClient();
-      if (prisma) {
-        const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
-        if (tenant) {
-          const recent = await (prisma as unknown as {
-            drill: { findFirst(a: unknown): Promise<{ scenario: string | null; completedDate: Date | null } | null> };
-          }).drill.findFirst({
-            where: {
-              tenantId: tenant.id,
-              vesselCode: input.vesselCode,
-              type,
-              status: "COMPLETED",
-              deletedAt: null,
-            },
-            orderBy: { completedDate: "desc" },
-          });
-          if (recent) {
-            lastScenario = recent.scenario ?? null;
-            lastCompletedDate = recent.completedDate ? recent.completedDate.toISOString().slice(0, 10) : null;
-          }
-        }
+      const recent = await (prisma as unknown as {
+        drill: { findFirst(a: unknown): Promise<{ scenario: string | null; completedDate: Date | null } | null> };
+      }).drill.findFirst({
+        where: {
+          tenantId: tenant.id,
+          vesselCode: input.vesselCode,
+          requirementId,
+          status: "COMPLETED",
+          deletedAt: null,
+        },
+        orderBy: { completedDate: "desc" },
+      });
+      if (recent) {
+        lastScenario = recent.scenario ?? null;
+        lastCompletedDate = recent.completedDate ? recent.completedDate.toISOString().slice(0, 10) : null;
       }
     } catch (err) {
       log.warn("[suggestDrillScenario] no se pudo cargar último simulacro:", err);
@@ -166,9 +143,9 @@ export async function suggestDrillScenario(
   }
 
   const lines: string[] = [
-    `Tipo de simulacro: ${DRILL_LABEL_ES[type]} (${type})`,
+    `Tipo de simulacro: ${requirement.title}`,
     `Vessel: ${input.vesselName ? `${input.vesselCode} — ${input.vesselName}` : (input.vesselCode ?? "no especificado")}`,
-    `Referencia normativa aplicable: ${DRILL_REGULATORY_REF[type] ?? "—"}`,
+    `Referencia normativa aplicable: ${requirement.solasRegulation ?? "—"}`,
   ];
   if (lastScenario) {
     lines.push(`Último escenario realizado${lastCompletedDate ? ` (${lastCompletedDate})` : ""}: ${lastScenario.slice(0, 400)}`);

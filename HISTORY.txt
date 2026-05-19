@@ -1,5 +1,52 @@
 HISTORY.txt
 
+[2026-05-19] Drills refactor — DrillType enum → DrillRequirement catálogo per-tenant
+Agent: Claude Opus 4.7
+
+  Pedido: el enum fijo DrillType (11 valores hardcoded SOLAS) no permitía a
+  cada compañía/buque tener su propio set de simulacros. Refactor destructivo
+  a catálogo configurable per-tenant (DrillRequirement), aplicado a TODOS los
+  tenants (datos previos borrados).
+
+  Schema:
+    - DROP enum DrillType + tabla DrillConfig.
+    - NEW model DrillRequirement (id, tenantId, title, solasRegulation,
+      frequencyDays, intervalLabel, performedBy Json[], applicableVesselCodes
+      Json[], notes, enabled, sortOrder, soft-delete). Unique(tenantId,title).
+    - Drill: drop campo type, add requirementId FK → DrillRequirement.
+
+  Backend:
+    - drills-service.ts: reescrito. Nuevas funciones listDrillRequirements,
+      createDrillRequirement, updateDrillRequirement, deleteDrillRequirement
+      (soft-delete con check de uso). getDrillsMatrix ahora itera vessels ×
+      requirements filtrando por applicableVesselCodes (vacío = todos).
+      createDrill valida que el requirement aplique al vessel.
+    - drills-ai-suggestions.ts: input ahora requirementId (no type), carga
+      DrillRequirement para obtener title + solasRegulation, último escenario
+      por requirementId.
+    - drills-pdf-service.ts: drop DRILL_TYPE_LABEL / DRILL_REGULATORY_REF /
+      DRILL_CHECKLISTS hardcoded. Checklist genérico GENERIC_DRILL_CHECKLIST
+      (9 items). Título y norma data-driven desde drill.requirement.
+    - compliance-service.ts: drillCompliance ahora calcula expected_in_90d
+      sumando ceil(90/freq) por cada DrillRequirement aplicable al vessel.
+    - tenant-router.ts: rutas /app/drills/config eliminadas; nuevas
+      /app/drills/requirements (GET/POST) y /app/drills/requirements/:id
+      (PATCH/DELETE).
+
+  Frontend:
+    - Drills.tsx: reescrito. DrillModal usa select de requirements aplicables
+      al vessel. Matriz agrupa por requirementTitle (sorted). DrillConfigModal
+      reemplazado por DrillRequirementsModal: CRUD full del catálogo (título,
+      norma, frecuencia, intervalLabel, vessels aplicables multi-select,
+      notas, enabled). Botón "Catálogo" reemplaza "Configurar frecuencias".
+    - MyDayPanel.tsx: drop DRILL_TYPE_KEY hardcoded; muestra
+      drill.requirement?.title directo. Drill interface refactorizada.
+    - i18n.tsx: removidas 11 claves drill.type.* (ya no aplicables — los
+      títulos vienen de DB per-tenant en el idioma del catálogo).
+
+  Próximo: configurar locale capitalmaritima=PT y seedear templates SOLAS
+  por tenant (PT para capitalmaritima, ES para mercurio y demo).
+
 [2026-05-19] i18n — MyDayPanel + Dashboard (Crew, Permits) + ComplianceDashboard
 Agent: Claude Opus 4.7
 

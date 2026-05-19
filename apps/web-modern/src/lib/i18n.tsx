@@ -1226,19 +1226,6 @@ const dict = {
   "myday.aiInsightsTap":      { es: "Tocá para revisar.",      en: "Tap to review.",          pt: "Toque para revisar." },
   "myday.moreItems":          { es: "+{n} más…",               en: "+{n} more…",              pt: "+{n} mais…" },
 
-  // ─── Drill type labels ──────────────────────────────────────────────────────
-  "drill.type.FIRE":           { es: "Incendio",            en: "Fire",                  pt: "Incêndio" },
-  "drill.type.ABANDON_SHIP":   { es: "Abandono",            en: "Abandon ship",          pt: "Abandono" },
-  "drill.type.ENCLOSED_SPACE": { es: "Esp. confinado",      en: "Enclosed space",        pt: "Esp. confinado" },
-  "drill.type.MAN_OVERBOARD":  { es: "Hombre al agua",      en: "Man overboard",         pt: "Homem ao mar" },
-  "drill.type.POLLUTION":      { es: "Contaminación",       en: "Pollution",             pt: "Poluição" },
-  "drill.type.OIL_SPILL":      { es: "Derrame",             en: "Oil spill",             pt: "Derramamento" },
-  "drill.type.SECURITY":       { es: "Seguridad (ISPS)",    en: "Security (ISPS)",       pt: "Segurança (ISPS)" },
-  "drill.type.MEDICAL":        { es: "Médico",              en: "Medical",               pt: "Médico" },
-  "drill.type.STEERING_GEAR":  { es: "Gobierno emerg.",     en: "Steering gear",         pt: "Governo emerg." },
-  "drill.type.BLACKOUT":       { es: "Blackout",            en: "Blackout",              pt: "Blackout" },
-  "drill.type.OTHER":          { es: "Otro",                en: "Other",                 pt: "Outro" },
-
   // ─── Near miss categories ───────────────────────────────────────────────────
   "nearMiss.cat.NEAR_MISS":          { es: "Near miss",           en: "Near miss",          pt: "Quase-acidente" },
   "nearMiss.cat.HAZARD_OBSERVATION": { es: "Riesgo",              en: "Hazard",             pt: "Risco" },

@@ -20,7 +20,7 @@ import { useT, type TranslationKey } from "../lib/i18n";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 
 interface WorkOrder { id: string; workOrderCode: string; status: string; criticality?: string; dueDate?: string; assignedToUserId?: string | null; assignedToUserName?: string | null; vesselCode: string; title?: string | null; assetName?: string | null }
-interface Drill { id: string; drillCode: string; vesselCode: string; type: string; status: string; scheduledDate: string }
+interface Drill { id: string; drillCode: string; vesselCode: string; requirementId: string; requirement?: { title: string } | null; status: string; scheduledDate: string }
 interface NearMiss { id: string; nearMissCode: string; vesselCode: string; category: string; severity: string; status: string; occurredAt: string; description: string }
 interface Certificate { id: string; certificateCode: string; vesselCode: string; name: string; status: string; expiryDate: string | null }
 interface RestHoursRow { id: string; crewId: string; vesselCode: string; hasViolation: boolean; recordDate: string }
@@ -29,13 +29,6 @@ interface ExternalAudit { id: string; vesselCode: string; findingsOpen?: number 
 interface DailyReportRow { id: string; reportDate: string; createdAt?: string }
 interface DefectRow { id: string; status: string }
 interface AiInsightRow { id: string; status: string }
-
-const DRILL_TYPE_KEY: Record<string, TranslationKey> = {
-  FIRE: "drill.type.FIRE", ABANDON_SHIP: "drill.type.ABANDON_SHIP", ENCLOSED_SPACE: "drill.type.ENCLOSED_SPACE",
-  MAN_OVERBOARD: "drill.type.MAN_OVERBOARD", POLLUTION: "drill.type.POLLUTION", OIL_SPILL: "drill.type.OIL_SPILL",
-  SECURITY: "drill.type.SECURITY", MEDICAL: "drill.type.MEDICAL", STEERING_GEAR: "drill.type.STEERING_GEAR",
-  BLACKOUT: "drill.type.BLACKOUT", OTHER: "drill.type.OTHER",
-};
 
 const NEAR_MISS_CAT_KEY: Record<string, TranslationKey> = {
   NEAR_MISS: "nearMiss.cat.NEAR_MISS", HAZARD_OBSERVATION: "nearMiss.cat.HAZARD_OBSERVATION",
@@ -190,7 +183,7 @@ const UpcomingDrillsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
         <ul className="space-y-0.5 mt-1">
           {upcoming.slice(0, 3).map(d => (
             <li key={d.id} className="text-[10px] text-text-industrial/70 truncate">
-              <span className="text-accent/80">{DRILL_TYPE_KEY[d.type] ? t(DRILL_TYPE_KEY[d.type]) : d.type}</span> · {fmtDate(d.scheduledDate)}
+              <span className="text-accent/80">{d.requirement?.title ?? "—"}</span> · {fmtDate(d.scheduledDate)}
             </li>
           ))}
         </ul>
