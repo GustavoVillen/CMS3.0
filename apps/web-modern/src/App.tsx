@@ -5,6 +5,7 @@ import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
 import { I18nProvider, type Locale } from "./lib/i18n";
 import { VesselProvider } from "./lib/vessel-context";
 import { EscapeGuardProvider } from "./lib/escape-guard";
+import { NotificationsProvider } from "./lib/notifications";
 import { Layout } from "./components/Layout";
 import { MobileLayout } from "./components/MobileLayout";
 import { PlatformLayout } from "./components/PlatformLayout";
@@ -180,9 +181,11 @@ function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider locale={locale}>
       <VesselProvider>
-        <EscapeGuardProvider>
-          {children}
-        </EscapeGuardProvider>
+        <NotificationsProvider>
+          <EscapeGuardProvider>
+            {children}
+          </EscapeGuardProvider>
+        </NotificationsProvider>
       </VesselProvider>
     </I18nProvider>
   );

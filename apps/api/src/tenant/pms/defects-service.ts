@@ -6,6 +6,7 @@ import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../comm
 import { createCapaInternal } from "./capa-service";
 import { log } from "../../common/logger";
 import { withUniqueRetry } from "../../common/unique-retry";
+import { enqueueNotificationForRoles } from "../notifications/notifications-service";
 
 export interface DefectListFilters {
   vesselCode?: string | null;
@@ -340,6 +341,23 @@ export async function createDefect(session: TenantAccessSession, payload: Create
     entityId: created.id,
     metadata: { defectCode: created.defectCode, vesselCode, severity: created.severity, classification: created.classification },
   });
+
+  // Notif: defecto crítico → alerta in-app a admins/superintendentes/jefes
+  // con acceso al buque. La unique (tenantId, recipientUserId, sourceType,
+  // sourceId) garantiza que reintentos no dupliquen.
+  if (created.severity === "CRITICAL") {
+    void enqueueNotificationForRoles(prismaRaw, {
+      tenantId,
+      vesselCode,
+      type:       "DEFECT_CRITICAL",
+      severity:   "CRITICAL",
+      title:      `Defecto crítico — ${created.defectCode}`,
+      body:       created.description?.slice(0, 200) ?? null,
+      linkUrl:    `/defects?openId=${created.id}`,
+      sourceType: "DEFECT",
+      sourceId:   created.id,
+    }).catch((err) => log.error("[createDefect] notif enqueue failed:", err));
+  }
   return created;
 }
 
@@ -395,6 +413,23 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
     entityId: current.id,
     metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode },
   });
+
+  // Notif: si la severity pasó a CRITICAL en esta edición (de algo distinto),
+  // encolar alerta. La unique constraint hace el resto si ya existía.
+  const newSeverity = (updated as { severity?: string }).severity ?? current.severity;
+  if (newSeverity === "CRITICAL" && current.severity !== "CRITICAL") {
+    void enqueueNotificationForRoles(prismaRaw, {
+      tenantId:   current.tenantId,
+      vesselCode: current.vesselCode,
+      type:       "DEFECT_CRITICAL",
+      severity:   "CRITICAL",
+      title:      `Defecto crítico — ${current.defectCode}`,
+      body:       (((updated as { description?: string | null }).description) ?? current.description)?.slice(0, 200) ?? null,
+      linkUrl:    `/defects?openId=${current.id}`,
+      sourceType: "DEFECT",
+      sourceId:   current.id,
+    }).catch((err) => log.error("[updateDefect] notif enqueue failed:", err));
+  }
 
   // Trigger: si recién se aprobó el RCA (transición null → fecha), crear
   // automáticamente una CAPA preventiva con sourceType=RCA. Anti-duplicado

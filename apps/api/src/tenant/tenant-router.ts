@@ -38,8 +38,12 @@ import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
 import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
-// Notifications module — in-progress, no commiteado todavía. Cuando vuelva
-// a estar listo, restaurar este import y las 4 rutas /app/notifications/*.
+import {
+  listMyNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  dismissNotification,
+} from "./notifications/notifications-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
@@ -873,10 +877,29 @@ export async function handleTenantRoutes(
     return true;
   }
 
-  // ── In-app notifications — DESACTIVADO temporalmente.
-  // El módulo notifications/notifications-service.ts está in-progress y no
-  // committeado. Cuando esté listo, restaurar import + estas 4 rutas
-  // (GET /app/notifications, POST /app/notifications/read-all, /:id/read, /:id/dismiss).
+  // ── In-app notifications (campana del header + banner CRITICAL) ────────────
+  if (method === "GET" && url.pathname === "/app/notifications") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await listMyNotifications(session));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/notifications/read-all") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await markAllNotificationsRead(session));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/notifications\/[^/]+\/read$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await markNotificationRead(session, id));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/notifications\/[^/]+\/dismiss$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await dismissNotification(session, id));
+    return true;
+  }
 
   // ── AI Documents ───────────────────────────────────────────────────────────
   if (method === "GET" && url.pathname === "/app/ai-documents") {
