@@ -2803,10 +2803,10 @@ export function listDevProviderEvaluationsForTenant(
   });
 }
 
+// NCRs son fleet-wide: cualquier usuario del tenant las ve. Solo se filtra
+// por vessel si el caller lo pide explícitamente (acotar la vista).
 export function listDevProviderNonconformitiesForTenant(
   tenantSlug: string,
-  role: TenantRole,
-  assignedVesselCodes: string[],
   filters: {
     vesselCode?: string | null;
     status?: string | null;
@@ -2815,7 +2815,6 @@ export function listDevProviderNonconformitiesForTenant(
 ): DevProviderNonconformityRecord[] {
   return DEV_PROVIDER_NONCONFORMITIES.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
-    if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
     if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
     if (filters.status && item.status !== filters.status) return false;
     if (filters.severity && item.severity !== filters.severity) return false;

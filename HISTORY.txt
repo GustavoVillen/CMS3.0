@@ -1,5 +1,22 @@
 HISTORY.txt
 
+[2026-05-19] NCRs (ProviderNonconformity) fleet-wide visibles
+Agent: Claude Opus 4.7
+Cualquier usuario del tenant ve ahora todas las NCRs, sin importar a qué
+buques esté asignado. Una NC ocurrida en un buque es info operativa
+relevante para toda la flota (cross-vessel learning). El campo vesselCode
+de la NC se conserva como dato (DÓNDE ocurrió), pero deja de filtrar la
+visibilidad. El filtro vesselCode solo se aplica si el user lo pide
+explícitamente desde la UI.
+Cambios:
+- provider-nonconformities-service.ts: quito applyAssignedVesselScope,
+  uso filters.vesselCode solo como filtro opcional.
+- dev-domain-store.ts: listDevProviderNonconformitiesForTenant pierde
+  los params role/assignedVesselCodes y el check canViewVessel.
+- sidebar-counts-service.ts: providerNcOpen cuenta todas las NCRs del
+  tenant; respeta vesselCode SOLO si el user filtró explícitamente.
+Verificado: tsc 0 errores.
+
 [2026-05-18] Sidebar — Badges de "acciones requeridas" en todos los items
 Agent: Claude Opus 4.7
 El sidebar ya tenía badges para 9 items (Fase 1). Se extendió a 11 items más
@@ -12656,4 +12673,85 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
     Verificado: tsc sin errores nuevos en los archivos modificados (los
     errores pre-existentes en bitacora/drills/maintenance-plans/defect-pdf
     no se tocaron, ya estaban antes del cambio).
+
+
+2026-05-19 — Notificaciones in-app (campana + banner CRITICAL)
+--------------------------------------------------------------
+  Contexto: el manual.html del comercial prometía "alerta inmediata al
+  superintendente" cuando un defecto entra como CRITICAL, pero el sistema
+  no tenía ninguna infraestructura de notificaciones — la campana del
+  Header.tsx era puramente decorativa (sin onClick, sin badge, sin endpoint,
+  sin modelo). Opción A elegida por el usuario: alerta visual in-app sin
+  email/push externo.
+
+  Schema (prisma/schema.prisma):
+    + model Notification: per-tenant, per-recipient. Campos: tenantId,
+      recipientUserId, vesselCode?, type (DEFECT_CRITICAL|WORK_ORDER_OVERDUE|
+      CERTIFICATE_EXPIRED), severity (CRITICAL|HIGH|INFO), title, body?,
+      linkUrl?, sourceType?, sourceId?, createdAt, readAt?, dismissedAt?.
+    + @@unique(tenantId, recipientUserId, sourceType, sourceId) — clave del
+      anti-duplicado para que sync repetido sea idempotente.
+    + Índices para listado por usuario y por severidad.
+
+  Backend (apps/api/src/tenant/notifications/notifications-service.ts NEW):
+    - enqueueNotificationForRoles(prisma, params): busca memberships
+      ACTIVE con role TENANT_ADMIN|FLEET_SUPERINTENDENT|MAINTENANCE_MANAGER
+      filtrados por assignedVesselCodes (o todos para TENANT_ADMIN si
+      vesselCode=null). createMany con skipDuplicates.
+    - listMyNotifications: top 50 no descartadas + unreadCount +
+      criticalUnreadCount. Antes de devolver, dispara
+      syncStaleNotificationsIfDue() (throttle 5min por tenant) que materializa
+      WO_OVERDUE (dueDate < now, status != CLOSED/CANCELLED) y
+      CERTIFICATE_EXPIRED (expiryDate < now, status != SUSPENDED/CLOSED).
+    - markNotificationRead / dismissNotification / markAllNotificationsRead
+      con tenant + recipient ownership check.
+
+  Trigger en defects-service.ts:
+    - createDefect: si severity === "CRITICAL" → enqueue con sourceType=DEFECT.
+    - updateDefect: si severity transition non-CRITICAL → CRITICAL → enqueue.
+    - Body truncado a 200 chars. linkUrl = /defects?openId={id}.
+
+  Endpoints (apps/api/src/tenant/tenant-router.ts):
+    GET    /app/notifications
+    POST   /app/notifications/read-all
+    POST   /app/notifications/:id/read
+    POST   /app/notifications/:id/dismiss
+
+  Frontend:
+    - apps/web-modern/src/lib/notifications.tsx NEW: NotificationsProvider
+      + useNotifications. Polling cada 30s con setInterval. Manejo
+      optimista de markRead/dismiss/markAllRead.
+    - apps/web-modern/src/components/NotificationsBell.tsx NEW: campana con
+      badge rojo (count o "99+"), dropdown 96 con últimas 50 notificaciones,
+      icono de severidad (rojo/ambar/azul), click marca leído + navega al
+      linkUrl, X descarta inline, "Marcar todo leído" en header del panel.
+    - apps/web-modern/src/components/CriticalNotificationBanner.tsx NEW:
+      banner rojo persistente arriba del main cuando hay ≥1 CRITICAL no
+      leída. Muestra la más reciente + "+ N más" si hay varias. Botones
+      Ver (markRead + navigate) y X (dismiss).
+    - Header.tsx: reemplaza la campana decorativa por <NotificationsBell />.
+    - Layout.tsx: <CriticalNotificationBanner /> entre Header y main.
+    - App.tsx: <NotificationsProvider> dentro de VesselProvider (necesita
+      auth + tenant).
+    - i18n.tsx: 11 keys nuevas notifications.* en es/en/pt.
+
+  Manual.html:
+    - Diagrama Mermaid del flujo de defectos: la caja roja ahora dice
+      "Alerta in-app inmediata · banner rojo + campana · DPA,
+      superintendente, capitán, jefe de máquinas" (antes prometía
+      genérico "alerta inmediata al superintendente" sin precisar canal).
+    - Sección "Severidad": texto aclara que es notificación in-app
+      (banner + badge), no push/email externo.
+
+  Verificado:
+    - tsc backend: limpio en archivos tocados (errores pre-existentes en
+      defects-service por el typing narrow del delegate no se tocaron).
+    - tsc frontend: limpio.
+    - vite build: 2040 KB / 503 KB gzip, 3.94s.
+    - prisma db push aplicado a localhost:5434 (tabla Notification creada,
+      cliente regenerado).
+
+  Pendiente en VPS:
+    - prisma db push para crear la tabla en la BD de producción.
+    - vite build + restart pm2 con cleanup de /tmp/tsx-*.
 

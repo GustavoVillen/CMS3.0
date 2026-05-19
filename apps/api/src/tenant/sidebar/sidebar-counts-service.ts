@@ -182,8 +182,17 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     })),
     // Drills SCHEDULED con fecha pasada = vencidos.
     safe(() => p.drill.count({ where: { ...base, deletedAt: null, status: "SCHEDULED", scheduledDate: { lt: now } } })),
-    // Provider non-conformities abiertas o en revisión.
-    safe(() => p.providerNonconformity.count({ where: { ...base, deletedAt: null, status: { in: ["OPEN", "UNDER_REVIEW"] } } })),
+    // Provider non-conformities abiertas o en revisión. NCRs son fleet-wide
+    // visibles, así que no aplicamos el scope por vessel asignado. Solo
+    // filtramos por vessel si el user lo pidió explícitamente desde la UI.
+    safe(() => p.providerNonconformity.count({
+      where: {
+        tenantId: base.tenantId,
+        ...(vesselCode ? { vesselCode } : {}),
+        deletedAt: null,
+        status: { in: ["OPEN", "UNDER_REVIEW"] },
+      },
+    })),
     // Lista de buques en scope (Promise paralela, se usa abajo solo si hay buques).
     scopeVesselCodesPromise,
     // Spares: criticidad A activos con onHand < minStock. Usa stock-calc-service.
