@@ -305,17 +305,56 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
   const now = new Date().toISOString();
 
   if (!prisma) {
-    const { listDevTenantUsers, createDevTenantUser } = await import("../../platform/data/dev-tenant-user-store");
+    const {
+      listDevTenantUsers,
+      createDevTenantUser,
+      updateDevTenantUser,
+      getDevTenantUserByEmail,
+      getDevTenantUserByLegacyId,
+    } = await import("../../platform/data/dev-tenant-user-store");
     const internalEmail = input.email?.trim().toLowerCase()
       || `named-${Date.now()}@internal.${session.tenantSlug}.local`;
 
-    // Check email not already used
+    const cleanUsername = input.firstName.trim().toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "");
+
+    // Mismo flujo que en Prisma mode: reusar user existente, reactivar si está
+    // REVOKED, rechazar si ya es miembro activo.
+    const existingByUsername = getDevTenantUserByLegacyId(cleanUsername);
     if (input.email) {
-      const existing = listDevTenantUsers({ tenantSlug: session.tenantSlug, email: input.email.trim().toLowerCase() });
-      if (existing.length > 0) throw new RouteError(409, "EMAIL_TAKEN", "Ya existe un miembro con ese email.");
+      const existingByEmail = getDevTenantUserByEmail(internalEmail);
+      if (existingByEmail && existingByEmail.id !== existingByUsername?.id) {
+        throw new RouteError(409, "EMAIL_TAKEN", `El email "${internalEmail}" pertenece a otro usuario.`);
+      }
     }
 
-    const cleanUsername = input.firstName.trim().toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "");
+    if (existingByUsername) {
+      if (existingByUsername.tenantSlug === session.tenantSlug) {
+        if (existingByUsername.membershipStatus === "ACTIVE") {
+          throw new RouteError(409, "ALREADY_MEMBER", `"${cleanUsername}" ya es miembro activo de este tenant.`);
+        }
+        const updated = updateDevTenantUser(existingByUsername.id, {
+          role: input.role,
+          membershipStatus: "ACTIVE",
+          userStatus: "ACTIVE",
+        });
+        if (!updated) throw new RouteError(500, "REACTIVATE_FAILED", "No se pudo reactivar al miembro.");
+        return {
+          userId: updated.id,
+          email: updated.email,
+          firstName: updated.firstName,
+          lastName: updated.lastName,
+          role: updated.role,
+          status: updated.membershipStatus,
+          assignedVesselCodes: updated.assignedVesselCodes ?? [],
+          joinedAt: now,
+        };
+      }
+      // En el dev store cada record pertenece a un tenant — no hay verdadera
+      // separación global User/Membership como en Prisma. Si el username está
+      // tomado en otro tenant, lo permitimos creando un nuevo record (dev mode
+      // no tiene unique global real).
+    }
+
     const record = createDevTenantUser({
       tenantSlug: session.tenantSlug,
       email: internalEmail,
@@ -329,6 +368,8 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
       userStatus: "ACTIVE",
       membershipStatus: "ACTIVE",
     });
+    // listDevTenantUsers se importa para mantener compat — no se usa en este flujo
+    void listDevTenantUsers;
 
     return {
       userId: record.id,
@@ -350,48 +391,79 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
 
   const cleanUsername = input.firstName.trim().toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "");
 
-  // Validaciones previas para devolver mensajes claros (P2002 cae al handler
-  // genérico "An internal error occurred"). legacyUserId y email son únicos globales.
+  // El modelo User es global (legacyUserId y email son @unique global), pero la
+  // pertenencia a un tenant la define TenantMembership. Por eso "ya existe un
+  // user con USER X" no implica conflicto en este tenant — puede pertenecer a
+  // otro tenant o haber quedado huérfano. Flujo correcto:
+  //   1. Si no existe el User globalmente → crear User + membership.
+  //   2. Si existe el User globalmente:
+  //      a. Si ya es miembro ACTIVE de este tenant → 409 (ya está en el equipo).
+  //      b. Si es miembro REVOKED de este tenant → reactivar la membership.
+  //      c. Si no tiene membership en este tenant → crear membership reutilizando el User.
+  //   3. Email: si se pasa un email y pertenece a OTRO User existente, 409.
   const existingByUsername = await prisma.user.findUnique({ where: { legacyUserId: cleanUsername } });
-  if (existingByUsername) {
-    throw new RouteError(409, "USERNAME_TAKEN", `Ya existe un usuario con USER "${cleanUsername}". Elegí otro nombre.`);
-  }
   if (input.email) {
     const existingByEmail = await prisma.user.findUnique({ where: { email: internalEmail } });
-    if (existingByEmail) {
-      throw new RouteError(409, "EMAIL_TAKEN", `Ya existe un usuario con email "${internalEmail}".`);
+    if (existingByEmail && existingByEmail.id !== existingByUsername?.id) {
+      throw new RouteError(409, "EMAIL_TAKEN", `El email "${internalEmail}" pertenece a otro usuario.`);
     }
   }
 
-  let user;
-  try {
-    user = await prisma.user.create({
-      data: {
-        email: internalEmail,
-        legacyUserId: cleanUsername,
-        firstName: input.firstName.trim(),
-        lastName: input.lastName?.trim() ?? null,
-        passwordHash: hashPassword(randomBytes(32).toString("hex")),
-        status: "ACTIVE",
-      },
+  let user: { id: string; email: string; firstName: string | null; lastName: string | null };
+
+  if (existingByUsername) {
+    // El user ya existe globalmente — reutilizarlo. Chequeamos su membership
+    // en este tenant para decidir si crear, reactivar o rechazar.
+    const existingMembership = await (prisma as any).tenantMembership.findFirst({
+      where: { tenantId, userId: existingByUsername.id },
     });
-  } catch (err: any) {
-    // Race entre la validación previa y el INSERT — devuelve el mismo 409.
-    if (err?.code === "P2002") {
-      throw new RouteError(409, "USERNAME_TAKEN", "Ya existe un usuario con ese USER o email.");
+    if (existingMembership?.status === "ACTIVE") {
+      throw new RouteError(409, "ALREADY_MEMBER", `"${cleanUsername}" ya es miembro activo de este tenant.`);
     }
-    throw err;
+    if (existingMembership?.status === "REVOKED" || existingMembership?.status === "SUSPENDED") {
+      await (prisma as any).tenantMembership.update({
+        where: { id: existingMembership.id },
+        data: { role: input.role, status: "ACTIVE" },
+      });
+    } else if (!existingMembership) {
+      await (prisma as any).tenantMembership.create({
+        data: { tenantId, userId: existingByUsername.id, role: input.role, status: "ACTIVE", joinedAt: new Date() },
+      });
+    } else {
+      // Estado INVITED u otro — promovemos a ACTIVE.
+      await (prisma as any).tenantMembership.update({
+        where: { id: existingMembership.id },
+        data: { role: input.role, status: "ACTIVE" },
+      });
+    }
+    user = existingByUsername;
+  } else {
+    // User nuevo: crear globalmente + membership.
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: internalEmail,
+          legacyUserId: cleanUsername,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName?.trim() ?? null,
+          passwordHash: hashPassword(randomBytes(32).toString("hex")),
+          status: "ACTIVE",
+        },
+      });
+    } catch (err: any) {
+      // Race entre el findUnique y el create (otro proceso pudo haber creado
+      // el user en el medio). 409 con el mismo mensaje sería más correcto
+      // ahora, pero como el flujo de reuso ya cubrió el caso normal, esto
+      // solo ocurre bajo carrera real.
+      if (err?.code === "P2002") {
+        throw new RouteError(409, "USERNAME_TAKEN", "Conflicto al crear el usuario. Reintentá.");
+      }
+      throw err;
+    }
+    await (prisma as any).tenantMembership.create({
+      data: { tenantId, userId: user.id, role: input.role, status: "ACTIVE", joinedAt: new Date() },
+    });
   }
-
-  await (prisma as any).tenantMembership.create({
-    data: {
-      tenantId,
-      userId: user.id,
-      role: input.role,
-      status: "ACTIVE",
-      joinedAt: new Date(),
-    },
-  });
 
   return {
     userId: user.id,
