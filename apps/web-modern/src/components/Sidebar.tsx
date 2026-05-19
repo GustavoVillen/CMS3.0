@@ -21,7 +21,7 @@ interface SidebarCounts {
   // Fase 2 — "acciones requeridas" en el resto del sidebar
   maintenancePlansOverdue: number; dailyReportsMissing: number;
   fluidAnalysisCritical: number; spareRequestsPending: number;
-  cviqFindingsOpen: number; checklistsOverdue: number;
+  checklistsOverdue: number;
   permitsAttention: number; crewCertsAttention: number;
   drillsOverdue: number; sparesCriticalLow: number; providerNcOpen: number;
 }
@@ -45,7 +45,6 @@ const BADGE_KEY: Record<string, keyof SidebarCounts> = {
   "/daily-reports":     "dailyReportsMissing",
   "/fluid-analyses":    "fluidAnalysisCritical",
   "/spare-requests":    "spareRequestsPending",
-  "/cviq":              "cviqFindingsOpen",
   "/checklists":        "checklistsOverdue",
   "/permits":           "permitsAttention",
   "/crew":              "crewCertsAttention",
@@ -101,7 +100,6 @@ const NAV: NavSection[] = [
       { icon: FlaskConical,    labelKey: "nav.fluidAnalyses",    path: "/fluid-analyses" },
       { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
       { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
-      { icon: ShieldCheck,     labelKey: "nav.cviq",             path: "/cviq" },
       { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
       { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
       { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },

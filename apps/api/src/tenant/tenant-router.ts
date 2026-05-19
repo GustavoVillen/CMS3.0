@@ -34,9 +34,6 @@ import {
 } from "./moc/moc-service";
 import { suggestRiskAssessment } from "./moc/moc-ai-suggestions";
 import { buildMocPdf } from "./moc/moc-pdf-service";
-import {
-  listQuestions, listAssessments, getAssessment, createAssessment, setResponseCviq, completeAssessment, deleteAssessment,
-} from "./cviq/cviq-service";
 import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
 import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
@@ -1716,49 +1713,6 @@ export async function handleTenantRoutes(
       return true;
     }
     if (method === "DELETE") { await deleteMoc(session, id); sendJson(response, 200, { ok: true }); return true; }
-  }
-
-  // ── CVIQ self-assessment ──────────────────────────────────────────────────
-  if (method === "GET" && url.pathname === "/app/cviq/questions") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const items = await listQuestions(session);
-    sendJson(response, 200, { items, total: items.length });
-    return true;
-  }
-  if (method === "GET" && url.pathname === "/app/cviq/assessments") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const items = await listAssessments(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status:     url.searchParams.get("status"),
-    });
-    sendJson(response, 200, { items, total: items.length });
-    return true;
-  }
-  if (method === "POST" && url.pathname === "/app/cviq/assessments") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const body = await readJsonBody(request) as Parameters<typeof createAssessment>[1];
-    sendJson(response, 201, await createAssessment(session, body));
-    return true;
-  }
-  if (/^\/app\/cviq\/assessments\/[^/]+\/responses$/.test(url.pathname)) {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const id = url.pathname.split("/")[4]!;
-    if (method === "POST") {
-      const body = await readJsonBody(request) as Parameters<typeof setResponseCviq>[2];
-      sendJson(response, 200, await setResponseCviq(session, id, body));
-      return true;
-    }
-  }
-  if (/^\/app\/cviq\/assessments\/[^/]+\/complete$/.test(url.pathname)) {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const id = url.pathname.split("/")[4]!;
-    if (method === "POST") { sendJson(response, 200, await completeAssessment(session, id)); return true; }
-  }
-  if (/^\/app\/cviq\/assessments\/[^/]+$/.test(url.pathname)) {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const id = url.pathname.split("/")[4]!;
-    if (method === "GET") { sendJson(response, 200, await getAssessment(session, id)); return true; }
-    if (method === "DELETE") { await deleteAssessment(session, id); sendJson(response, 200, { ok: true }); return true; }
   }
 
   // ── Compliance scores + smart alerts ──────────────────────────────────────

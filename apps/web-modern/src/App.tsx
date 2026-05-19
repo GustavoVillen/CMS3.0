@@ -52,7 +52,6 @@ import { RestHoursPage } from "./pages/RestHours";
 import { ChecklistsPage } from "./pages/Checklists";
 import { CrewMatrixPage } from "./pages/CrewMatrix";
 import { MocPage } from "./pages/Moc";
-import { CviqPage } from "./pages/Cviq";
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -159,7 +158,6 @@ export default function App() {
               <Route path="/checklists"        element={<ChecklistsPage />} />
               <Route path="/crew-matrix"       element={<CrewMatrixPage />} />
               <Route path="/moc"               element={<MocPage />} />
-              <Route path="/cviq"              element={<CviqPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />

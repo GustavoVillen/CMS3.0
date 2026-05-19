@@ -57,7 +57,6 @@ const dict = {
   "nav.checklists":        { es: "Checklists",          en: "Checklists",          pt: "Checklists" },
   "nav.crewMatrix":        { es: "Matriz Competencias", en: "Capability Matrix",   pt: "Matriz Competências" },
   "nav.moc":               { es: "MOC",                 en: "MOC",                 pt: "MOC" },
-  "nav.cviq":              { es: "CVIQ SIRE 2.0",       en: "CVIQ SIRE 2.0",       pt: "CVIQ SIRE 2.0" },
 
   // Page titles (Layout header)
   "page.dashboard":         { es: "Dashboard Principal",       en: "Main Dashboard",          pt: "Painel Principal" },

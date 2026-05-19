@@ -21,7 +21,6 @@ export interface SidebarCounts {
   dailyReportsMissing: number;       // /daily-reports
   fluidAnalysisCritical: number;     // /fluid-analyses
   spareRequestsPending: number;      // /spare-requests
-  cviqFindingsOpen: number;          // /cviq
   checklistsOverdue: number;         // /checklists
   permitsAttention: number;          // /permits
   crewCertsAttention: number;        // /crew
@@ -36,7 +35,7 @@ const EMPTY: SidebarCounts = {
   externalAuditsFindingsOpen: 0, mocOpen: 0,
   maintenancePlansOverdue: 0, dailyReportsMissing: 0,
   fluidAnalysisCritical: 0, spareRequestsPending: 0,
-  cviqFindingsOpen: 0, checklistsOverdue: 0,
+  checklistsOverdue: 0,
   permitsAttention: 0, crewCertsAttention: 0,
   drillsOverdue: 0, sparesCriticalLow: 0, providerNcOpen: 0,
 };
@@ -114,7 +113,6 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     dailyReport: { findMany(a: { where: Record<string, unknown>; select: { vesselCode: true }; distinct: ["vesselCode"] }): Promise<Array<{ vesselCode: string }>> };
     fluidAnalysisResult: Delegate;
     spareRequest: Delegate;
-    cviqResponse: Delegate;
     checklistExecution: Delegate;
     permitToWork: Delegate;
     crewCertification: Delegate;
@@ -139,7 +137,6 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     maintenancePlansOverdue,
     fluidAnalysisCritical,
     spareRequestsPending,
-    cviqFindingsOpen,
     checklistsOverdue,
     permitsAttention,
     crewCertsAttention,
@@ -163,8 +160,6 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     safe(() => p.fluidAnalysisResult.count({ where: { tenantId: base.tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] } } })),
     // Solicitudes de repuestos pendientes (DRAFT o SUBMITTED).
     safe(() => p.spareRequest.count({ where: { tenantId: base.tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } } })),
-    // CVIQ: respuestas no conformes o parcialmente conformes (findings abiertos).
-    safe(() => p.cviqResponse.count({ where: { tenantId: base.tenantId, status: { in: ["NOT_CONFORMING", "PARTIALLY_CONFORMING"] } } })),
     // Checklists en curso con más de 24 h desde el evento (atrasados).
     safe(() => p.checklistExecution.count({ where: { ...base, status: "IN_PROGRESS", eventDateTime: { lt: dayAgo } } })),
     // Permisos: ACTIVE que expiran en < 4 h OR REQUESTED pendientes de aprobación.
@@ -229,7 +224,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     externalAuditsFindingsOpen, mocOpen,
     maintenancePlansOverdue, dailyReportsMissing,
     fluidAnalysisCritical, spareRequestsPending,
-    cviqFindingsOpen, checklistsOverdue,
+    checklistsOverdue,
     permitsAttention, crewCertsAttention,
     drillsOverdue, sparesCriticalLow, providerNcOpen,
   };
