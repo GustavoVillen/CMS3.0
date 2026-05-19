@@ -1,5 +1,33 @@
 HISTORY.txt
 
+[2026-05-19] IA Performance Fase 2a — tenant cache en services
+Agent: Claude Opus 4.7
+Cada AI call disparaba un `prisma.tenant.findUnique({ where: { slug }})`
+extra para resolver tenantId antes de recordAiUsage. Eran ~17 queries
+extra por cada interacción con IA. Saturaba el connection pool en picos.
+
+Cambios:
+- apps/api/src/tenant/tenant-cache.ts (nuevo): cache in-memory con TTL
+  5min para resolver slug→tenant. Función getCachedTenantBySlug() +
+  invalidateTenantCache(slug) para limpiar después de updates.
+- Migrados 11 AI services a usar el cache en su telemetría IIFE:
+    * assets-criticality-ai
+    * drills-ai-suggestions
+    * fluid-analyses-ai-extractor
+    * maintenance-plans-ai-suggestions
+    * maintenance-plans-rcm-ai
+    * moc-ai-suggestions
+    * permits-ai-suggestions
+    * defects-ai-suggestions (2 IIFEs)
+    * deferrals-ai-suggestions
+    * work-orders-ai-suggestions
+    * work-orders-rewrite-ai
+
+Pendiente Fase 2b: AbortController en las 17 suggestion services (cancela
+Anthropic cuando el user cierra el modal) + streaming POC.
+
+Verificado: tsc 0 errores en archivos tocados.
+
 [2026-05-19] IA Performance — bloque rápido (timeouts, cache, SSE, modelos)
 Agent: Claude Opus 4.7
 Tras auditar las 17 features que invocan Anthropic, aplico el bloque

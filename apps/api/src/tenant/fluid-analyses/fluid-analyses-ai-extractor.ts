@@ -7,6 +7,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { getCachedTenantBySlug } from "../tenant-cache";
 import { recordAiUsage } from "../usage/usage-service";
 
 export interface ExtractedField<T> {
@@ -122,9 +123,7 @@ export async function extractFluidReport(
 
   // Record token usage — non-blocking. Resolve tenantId lazily.
   (async () => {
-    const prisma = getPrismaClient();
-    if (!prisma) return;
-    const tenant = await (prisma as any).tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
+    const tenant = await getCachedTenantBySlug(session.tenantSlug);
     if (!tenant) return;
     recordAiUsage({
       tenantId:            tenant.id,

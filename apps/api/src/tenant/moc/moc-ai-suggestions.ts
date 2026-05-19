@@ -3,7 +3,7 @@ import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
-import { getPrismaClient } from "../../platform/data/prisma-client";
+import { getCachedTenantBySlug } from "../tenant-cache";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -190,12 +190,9 @@ export async function suggestRiskAssessment(
 
   // Telemetría no bloqueante
   (async () => {
-    const prisma = getPrismaClient();
-    if (!prisma) return;
-    const tenant = await (prisma as unknown as { tenant: { findUnique(a: unknown): Promise<{ id: string } | null> } }).tenant.findUnique({
-      where: { slug: session.tenantSlug },
-      select: { id: true },
-    });
+    // Cache de tenant: antes hacíamos un findUnique extra por cada AI call
+    // (~17 ocurrencias). El cache TTL 5min mata esa saturación del pool.
+    const tenant = await getCachedTenantBySlug(session.tenantSlug);
     if (!tenant) return;
     recordAiUsage({
       tenantId: tenant.id,

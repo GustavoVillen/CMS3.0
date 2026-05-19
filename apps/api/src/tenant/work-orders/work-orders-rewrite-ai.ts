@@ -6,7 +6,7 @@ import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
-import { getPrismaClient } from "../../platform/data/prisma-client";
+import { getCachedTenantBySlug } from "../tenant-cache";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -73,14 +73,9 @@ export async function rewriteDeficiencies(
     throw new RouteError(502, "AI_CALL_FAILED", "No se pudo obtener reescritura de la IA.");
   }
 
-  // Telemetría no bloqueante
+  // Telemetría no bloqueante (tenant cacheado).
   (async () => {
-    const prisma = getPrismaClient();
-    if (!prisma) return;
-    const tenant = await (prisma as any).tenant.findUnique({
-      where: { slug: session.tenantSlug },
-      select: { id: true },
-    });
+    const tenant = await getCachedTenantBySlug(session.tenantSlug);
     if (!tenant) return;
     recordAiUsage({
       tenantId: tenant.id,
