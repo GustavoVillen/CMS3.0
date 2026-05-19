@@ -1,5 +1,41 @@
 HISTORY.txt
 
+[2026-05-19] i18n — MyDayPanel + Dashboard (Crew, Permits) + ComplianceDashboard
+Agent: Claude Opus 4.7
+
+  Pedido: el tenant estaba en EN pero las secciones "Mi día", "Tripulación
+  y Simulacros", "Permisos de Trabajo" y "Compliance score por buque"
+  seguían hardcoded en español.
+
+  Cambios:
+    - apps/web-modern/src/lib/i18n.tsx: 47 claves nuevas — myday.* (18),
+      drill.type.* (11), nearMiss.cat.* (4), dashboard.crew*/permits*/
+      export* (14), compliance.* (18). Las 3 traducciones (es/en/pt)
+      mantenidas en cada entrada.
+    - apps/web-modern/src/components/MyDayPanel.tsx: header del panel
+      (Mi día / Mis tareas / Vista del buque) y cada uno de los 8 tiles
+      (Mis OTs, Drills próximos, Near miss, Certs por vencer, OTs
+      críticas, Horas descanso, Findings PSC, Reporte diario, Defectos
+      abiertos, AI Insights) ahora usan useT. DRILL_TYPE_LABEL y
+      CATEGORY_LABEL convertidos a maps de TranslationKey.
+    - apps/web-modern/src/pages/Dashboard.tsx: botón Exportar HTML, tile
+      "Tripulación y Simulacros" (A bordo / Certs atención / Simulacros
+      mes / Simulacros año / programados / realizados) y tile "Permisos
+      de Trabajo" (Activos / A aprobar / Vencen <24h / Vencidos sin
+      cerrar).
+    - apps/web-modern/src/components/ComplianceDashboard.tsx: título
+      "Compliance score por buque", LABEL_TEXT (Excelente/Bueno/
+      Regular/Pobre) → LABEL_KEY, todas las filas de desglose
+      (OT compliance / Drills / Certs / Findings PSC / Def. críticos /
+      STCW) y hints (en plazo / abiertos / violaciones / Sin findings/
+      críticos/violaciones / Buque no tripulado).
+
+  Verificación: tsc frontend limpio (sin nuevos errores). Deploy
+  frontend-only al VPS: pull + vite build 1.54s + pm2 restart, logs
+  limpios.
+
+  Commit: ddf566b — 5 archivos, +183/-60.
+
 [2026-05-19] Copiloto — quitar badges heurísticos y reforzar contexto
 Agent: Claude Opus 4.7
 
