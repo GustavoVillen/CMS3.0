@@ -1112,6 +1112,30 @@ const dict = {
     es: "Permiso de trabajo con bypass / override de alarma crítica",
     en: "Permit-to-work with critical alarm bypass / override",
     pt: "Permissão de trabalho com bypass / override de alarme crítico" },
+
+  // Etiquetas de roles del tenant. Reflejan la "persona típica" que ocupa el
+  // rol — más descriptivo para el admin al asignar.
+  "role.tenantAdmin":         { es: "DPA / Director de Operaciones",
+                                en: "DPA / Operations Director",
+                                pt: "DPA / Diretor de Operações" },
+  "role.fleetSuperintendent": { es: "Superintendente técnico",
+                                en: "Technical Superintendent",
+                                pt: "Superintendente técnico" },
+  "role.maintenanceManager":  { es: "Capitán / Jefe de Máquinas",
+                                en: "Captain / Chief Engineer",
+                                pt: "Capitão / Chefe de Máquinas" },
+  "role.technicianOperator":  { es: "Tripulante operativo",
+                                en: "Operational crew",
+                                pt: "Tripulante operacional" },
+  "role.inspectorCompliance": { es: "Inspector / Auditor interno",
+                                en: "Inspector / Internal Auditor",
+                                pt: "Inspetor / Auditor interno" },
+  "role.procurementStore":    { es: "Compras / Logística",
+                                en: "Procurement / Logistics",
+                                pt: "Compras / Logística" },
+  "role.auditorReadonly":     { es: "Auditor externo",
+                                en: "External Auditor",
+                                pt: "Auditor externo" },
 } satisfies Record<string, Record<Locale, string>>;
 
 export type TranslationKey = keyof typeof dict;

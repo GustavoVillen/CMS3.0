@@ -7,7 +7,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { fmtDate } from "../lib/utils";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,15 +49,24 @@ const ALL_ROLES = [
   "AUDITOR_READONLY",
 ];
 
-const ROLE_LABELS: Record<string, string> = {
-  TENANT_ADMIN:         "Administrador",
-  FLEET_SUPERINTENDENT: "Superintendent de Flota",
-  MAINTENANCE_MANAGER:  "Jefe de Mantenimiento",
-  TECHNICIAN_OPERATOR:  "Técnico / Operador",
-  INSPECTOR_COMPLIANCE: "Inspector / Cumplimiento",
-  PROCUREMENT_STORE:    "Compras / Almacén",
-  AUDITOR_READONLY:     "Auditor (solo lectura)",
+// Etiquetas de roles según la "persona típica" del manual, traducidas al locale
+// del tenant. Hook porque las traducciones dependen del context i18n.
+const ROLE_LABEL_KEYS: Record<string, TranslationKey> = {
+  TENANT_ADMIN:         "role.tenantAdmin",
+  FLEET_SUPERINTENDENT: "role.fleetSuperintendent",
+  MAINTENANCE_MANAGER:  "role.maintenanceManager",
+  TECHNICIAN_OPERATOR:  "role.technicianOperator",
+  INSPECTOR_COMPLIANCE: "role.inspectorCompliance",
+  PROCUREMENT_STORE:    "role.procurementStore",
+  AUDITOR_READONLY:     "role.auditorReadonly",
 };
+
+function useRoleLabels(): Record<string, string> {
+  const t = useT();
+  return Object.fromEntries(
+    Object.entries(ROLE_LABEL_KEYS).map(([role, key]) => [role, t(key)]),
+  );
+}
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE:    "bg-success-sea/10 text-success-sea border-success-sea/20",
@@ -100,6 +109,7 @@ interface AddMemberModalProps {
 
 const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => {
   const t = useT();
+  const roleLabels = useRoleLabels();
   const [tab, setTab] = useState<"direct" | "invite">("direct");
 
   // Direct create fields
@@ -210,7 +220,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("team.role")}</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
-                  {ALL_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
                 </select>
               </div>
               {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
@@ -234,7 +244,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("team.role")}</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
-                  {ALL_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
                 </select>
               </div>
               {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
@@ -429,6 +439,7 @@ interface MemberDrawerProps {
 
 const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onClose, onChanged }) => {
   const t = useT();
+  const roleLabels = useRoleLabels();
   const [newRole, setNewRole]       = useState(member.role);
   const [saving, setSaving]         = useState(false);
   const [deactivating, setDeactivating] = useState(false);
@@ -484,7 +495,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             {!isInternalEmail(member.email) && (
               <p className="text-[10px] text-text-industrial/40">{member.email}</p>
             )}
-            <p className="text-[10px] text-blue-400 font-semibold">{ROLE_LABELS[member.role] ?? member.role}</p>
+            <p className="text-[10px] text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
           </div>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -523,7 +534,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
               <label className={labelCls}>{t("team.changeRole")}</label>
               <div className="flex items-center gap-2">
                 <select value={newRole} onChange={e => setNewRole(e.target.value)} className={`flex-1 ${selectCls}`}>
-                  {ALL_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
                 </select>
                 <button
                   onClick={() => { void handleRoleChange(); }}
@@ -574,6 +585,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
 const PendingInvitationsPanel: React.FC<{ reload: number }> = ({ reload }) => {
   const t = useT();
+  const roleLabels = useRoleLabels();
   const { data, loading } = useFetch<PendingInvite[]>("/app/team/invitations", [reload]);
   const invites = data ?? [];
 
@@ -587,7 +599,7 @@ const PendingInvitationsPanel: React.FC<{ reload: number }> = ({ reload }) => {
           <div key={inv.id} className="flex items-center justify-between px-4 py-2.5 bg-blue-500/5 border border-blue-500/15 rounded-xl">
             <div>
               <p className="text-xs font-medium text-white">{inv.email}</p>
-              <p className="text-[10px] text-text-industrial/40">{ROLE_LABELS[inv.role] ?? inv.role} · vence {fmtDate(inv.expiresAt)}</p>
+              <p className="text-[10px] text-text-industrial/40">{roleLabels[inv.role] ?? inv.role} · vence {fmtDate(inv.expiresAt)}</p>
             </div>
             <span className="text-[10px] px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20 font-bold">{t("team.statusInvited")}</span>
           </div>
@@ -601,6 +613,7 @@ const PendingInvitationsPanel: React.FC<{ reload: number }> = ({ reload }) => {
 
 export const TeamPage: React.FC = () => {
   const t = useT();
+  const roleLabels = useRoleLabels();
   const { user } = useAuth();
   const [showAdd, setShowAdd]       = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
@@ -625,7 +638,7 @@ export const TeamPage: React.FC = () => {
     {
       key: "role",
       header: t("team.role"),
-      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-white"}`}>{ROLE_LABELS[m.role] ?? m.role}</span>,
+      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-white"}`}>{roleLabels[m.role] ?? m.role}</span>,
     },
     {
       key: "status",

@@ -40,14 +40,16 @@ const TENANT_ROLES = [
   "PROCUREMENT_STORE",
   "AUDITOR_READONLY",
 ];
+// Etiquetas alineadas con la "persona típica" del manual de uso. El panel
+// superadmin no respeta el locale del tenant, por eso quedan fijas en español.
 const ROLE_LABELS: Record<string, string> = {
-  TENANT_ADMIN:         "Administrador",
-  FLEET_SUPERINTENDENT: "Superintendent de Flota",
-  MAINTENANCE_MANAGER:  "Jefe de Mantenimiento",
-  TECHNICIAN_OPERATOR:  "Técnico / Operador",
-  INSPECTOR_COMPLIANCE: "Inspector / Cumplimiento",
-  PROCUREMENT_STORE:    "Compras / Almacén",
-  AUDITOR_READONLY:     "Auditor (solo lectura)",
+  TENANT_ADMIN:         "DPA / Director de Operaciones",
+  FLEET_SUPERINTENDENT: "Superintendente técnico",
+  MAINTENANCE_MANAGER:  "Capitán / Jefe de Máquinas",
+  TECHNICIAN_OPERATOR:  "Tripulante operativo",
+  INSPECTOR_COMPLIANCE: "Inspector / Auditor interno",
+  PROCUREMENT_STORE:    "Compras / Logística",
+  AUDITOR_READONLY:     "Auditor externo",
 };
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
