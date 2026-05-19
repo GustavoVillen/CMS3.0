@@ -163,26 +163,36 @@ export function useCopilotApplyFields(fn: ((fields: Record<string, string>) => v
  * Emit structured context from a page or modal.
  *
  * - Emits whenever ctx content changes (JSON.stringify diff, not object identity).
- * - Clears context automatically when the emitting component unmounts.
- * - Safe to call unconditionally (pass null when no meaningful context exists).
+ * - Clears context on unmount/change ONLY IF the active context is still ours
+ *   (a deeper emitter may have overwritten it — e.g. a modal mounted on top of a
+ *   list page; closing the list emitter must not clobber the modal's context).
+ * - Passing `null` is a no-op: it means "I have nothing to emit", it does NOT
+ *   clear what another emitter already set. This matters when the page-level
+ *   emitter goes null because a modal opened on top of it.
  */
 export function useCopilotEmitter(ctx: CopilotScreenContext | null) {
   const { setScreenContext } = useContext(CopilotContext);
-
-  // Hold a ref to always call setScreenContext with the latest value even after
-  // the dep-array closure has gone stale.
-  const latestCtx = useRef(ctx);
-  latestCtx.current = ctx;
 
   // Use serialised content as the stable dependency to avoid re-running on
   // every render caused by new object references with identical content.
   const ctxKey = ctx === null ? "__null__" : JSON.stringify(ctx);
 
   useEffect(() => {
-    setScreenContext(latestCtx.current);
-    // Clear context when this component unmounts (modal/page closes).
-    // Also clears when ctxKey changes — immediately re-emitted by the next effect run.
-    return () => { setScreenContext(null); };
+    if (ctx === null) {
+      // Nothing to emit — do not touch the active context. Another emitter
+      // (e.g. a modal mounted on top of this page) may have set it.
+      return;
+    }
+    setScreenContext(ctx);
+    return () => {
+      // Only clear if the active context is still the one we set. If a deeper
+      // emitter (modal) overwrote it, leave it alone — that emitter owns the
+      // value now and will clean up on its own unmount.
+      setScreenContext(prev => {
+        if (prev === null) return null;
+        return JSON.stringify(prev) === ctxKey ? null : prev;
+      });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxKey]);
 }
