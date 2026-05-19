@@ -157,12 +157,26 @@ export async function generateMonthlyDraft(
 
   // ── Top defectos / OTs / drills para citar en el narrative ──
   const topDefects = defectsClosedRaw.slice(0, 5);
-  const topWosOverdue = await p.workOrder.findMany({
+  // WorkOrder no tiene assetName; tiene assetId. Fetch nombres de asset en
+  // un segundo query para enriquecer el label.
+  const topWosOverdueRaw = await p.workOrder.findMany({
     where: { ...baseWhere, status: { in: ["PLANNED", "IN_PROGRESS"] }, dueDate: { lt: monthEnd } },
     orderBy: { dueDate: "asc" },
-    select: { workOrderCode: true, title: true, assetName: true, dueDate: true } as never,
+    select: { workOrderCode: true, title: true, assetId: true, dueDate: true } as never,
     take: 5,
-  });
+  }) as Array<{ workOrderCode: string; title: string | null; assetId: string; dueDate: Date | null }>;
+  const wosAssetIds = [...new Set(topWosOverdueRaw.map(w => w.assetId).filter(Boolean))];
+  const wosAssets = wosAssetIds.length > 0
+    ? await (p as unknown as { asset: { findMany(a: { where: { id: { in: string[] }; tenantId: string }; select: { id: true; name: true } }): Promise<Array<{ id: string; name: string }>> } })
+        .asset.findMany({ where: { id: { in: wosAssetIds }, tenantId: tenant.id }, select: { id: true, name: true } })
+    : [];
+  const wosAssetNameById = new Map(wosAssets.map(a => [a.id, a.name]));
+  const topWosOverdue = topWosOverdueRaw.map(w => ({
+    workOrderCode: w.workOrderCode,
+    title:         w.title,
+    assetName:     wosAssetNameById.get(w.assetId) ?? null,
+    dueDate:       w.dueDate,
+  }));
   const drillsDone = await p.drill.findMany({
     where: { tenantId: tenant.id, vesselCode, deletedAt: null, status: "COMPLETED", completedDate: { gte: monthStart, lt: monthEnd } },
     orderBy: { completedDate: "desc" },
