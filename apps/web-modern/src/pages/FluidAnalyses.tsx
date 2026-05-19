@@ -64,12 +64,26 @@ interface FluidResult {
   aiAnalysis: string | null;
   aiAnalysisGeneratedAt: string | null;
 }
+// Tipos de muestreo. FLUID es el caso histórico. Al ampliar el módulo a CBM,
+// la misma tabla almacena también vibración, termografía, etc. `fluidType`
+// queda null cuando kind !== "FLUID".
+type SampleKind = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER";
+
+const SAMPLE_KIND_LABELS: Record<SampleKind, string> = {
+  FLUID:      "Fluido",
+  VIBRATION:  "Vibración",
+  THERMAL:    "Termografía",
+  ULTRASOUND: "Ultrasonido",
+  OTHER:      "Otro",
+};
+
 interface FluidSample {
   id: string;
   vesselCode: string;
   assetId: string;
   sampleCode: string;
-  fluidType: FluidType;
+  kind: SampleKind;
+  fluidType: FluidType | null;
   fluidProduct: string | null;
   sampledAt: string;
   runningHours: number | null;
@@ -227,7 +241,7 @@ export const FluidAnalysesPage: React.FC = () => {
                 <SortTh label="Código"    col="sampleCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Buque"     col="vesselCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Equipo"    col="assetId"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Fluido"    col="fluidType"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="Tipo"      col="fluidType"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Toma"      col="sampledAt"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Horas"     col="runningHours" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
                 <SortTh label="Estado"    col="status"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -242,7 +256,11 @@ export const FluidAnalysesPage: React.FC = () => {
                   <td className="px-4 py-3 font-mono font-bold text-accent">{s.sampleCode}</td>
                   <td className="px-4 py-3 text-text-industrial/70">{s.vesselCode}</td>
                   <td className="px-4 py-3 text-text-industrial/70">{assetLabel(s.assetId, assetsData?.items ?? [])}</td>
-                  <td className="px-4 py-3 text-text-industrial/70">{FLUID_LABELS[s.fluidType] ?? s.fluidType}</td>
+                  <td className="px-4 py-3 text-text-industrial/70">
+                    {s.kind === "FLUID"
+                      ? (s.fluidType ? (FLUID_LABELS[s.fluidType] ?? s.fluidType) : "Fluido")
+                      : SAMPLE_KIND_LABELS[s.kind] ?? s.kind}
+                  </td>
                   <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.sampledAt)}</td>
                   <td className="px-4 py-3 text-right text-text-industrial/60 font-mono">{s.runningHours ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -467,7 +485,15 @@ function SampleDetailModal({
   }
 
   return (
-    <ModalShell title={`${sample.sampleCode} · ${FLUID_LABELS[sample.fluidType]}`} onClose={onClose} wide>
+    <ModalShell
+      title={`${sample.sampleCode} · ${
+        sample.kind === "FLUID"
+          ? (sample.fluidType ? FLUID_LABELS[sample.fluidType] : "Fluido")
+          : SAMPLE_KIND_LABELS[sample.kind]
+      }`}
+      onClose={onClose}
+      wide
+    >
       <div className="space-y-5">
         {sample.sourceWorkOrderId && (
           <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
@@ -532,13 +558,15 @@ function SampleDetailModal({
           </div>
         )}
 
-        {/* Trend chart for this asset + fluid type */}
-        <div className="space-y-2 pt-2 border-t border-white/10">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-accent" /> Tendencia del equipo
-          </h3>
-          <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
-        </div>
+        {/* Trend chart — solo para muestras de fluido (los otros kinds usan otros parámetros). */}
+        {sample.kind === "FLUID" && sample.fluidType && (
+          <div className="space-y-2 pt-2 border-t border-white/10">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" /> Tendencia del equipo
+            </h3>
+            <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
+          </div>
+        )}
 
         {/* AI insight: tendencias + interpretación + recomendaciones */}
         {sample.result && (

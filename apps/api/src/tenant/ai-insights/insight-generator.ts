@@ -115,6 +115,7 @@ export async function generateInsightsForTenant(tenantId: string): Promise<numbe
   await collectRepeatedDeferralInsights(prisma, tenantId, drafts, now);
   await collectInspectionFailureInsights(prisma, tenantId, drafts, now);
   await collectFluidAnalysisInsights(prisma, tenantId, drafts, now);
+  await collectVibrationInsights(prisma, tenantId, drafts, now);
   await collectFuelConsumptionInsights(prisma, tenantId, drafts, now);
 
   let upserted = 0;
@@ -759,17 +760,25 @@ async function collectFluidAnalysisInsights(
   const window90 = new Date(now);
   window90.setDate(window90.getDate() - 90);
 
+  // Solo considerar muestras de fluido. La misma tabla almacena vibración /
+  // termografía / etc., y esas tienen su propio collector.
+  // Cast a `any` en el where porque el cliente Prisma puede no estar regenerado
+  // todavía con el nuevo campo `kind`; en runtime es válido tras `prisma generate`.
   const results = await prisma.fluidAnalysisResult.findMany({
     where: {
       tenantId,
       receivedAt: { gte: window90 },
       verdict: { in: ["CAUTION", "CRITICAL", "ACTION_REQUIRED"] as any[] },
+      sample: { kind: "FLUID" } as any,
     },
     select: {
       verdict: true,
       sample: { select: { assetId: true, vesselCode: true, sampleCode: true } },
     },
-  });
+  }) as unknown as Array<{
+    verdict: string;
+    sample: { assetId: string; vesselCode: string; sampleCode: string };
+  }>;
 
   type AssetEntry = { critical: number; caution: number; vesselCode: string; sampleCode: string };
   const byAsset = new Map<string, AssetEntry>();
@@ -841,6 +850,98 @@ async function collectFluidAnalysisInsights(
       title:          `Tendencia de precaución en análisis de fluidos`,
       summary:        `El activo acumula ${it.entry.caution} resultados en estado PRECAUCIÓN en los últimos 90 días.`,
       recommendation: "Incrementar frecuencia de muestreo y revisar condición del fluido antes del próximo mantenimiento.",
+    }),
+  });
+}
+
+async function collectVibrationInsights(
+  prisma: PrismaClient,
+  tenantId: string,
+  drafts: InsightDraft[],
+  now: Date,
+) {
+  const window90 = new Date(now);
+  window90.setDate(window90.getDate() - 90);
+
+  // Mismo storage (FluidAnalysisResult) pero filtrado por kind=VIBRATION.
+  // Las verdicts vienen de ISO 10816-3 (CRITICAL = Zona D, CAUTION = Zona C).
+  const results = await prisma.fluidAnalysisResult.findMany({
+    where: {
+      tenantId,
+      receivedAt: { gte: window90 },
+      verdict: { in: ["CAUTION", "CRITICAL", "ACTION_REQUIRED"] as any[] },
+      sample: { kind: "VIBRATION" } as any,
+    },
+    select: {
+      verdict: true,
+      sample: { select: { assetId: true, vesselCode: true, sampleCode: true } },
+    },
+  }) as unknown as Array<{
+    verdict: string;
+    sample: { assetId: string; vesselCode: string; sampleCode: string };
+  }>;
+
+  type AssetEntry = { critical: number; caution: number; vesselCode: string; sampleCode: string };
+  const byAsset = new Map<string, AssetEntry>();
+  for (const r of results) {
+    const assetId = r.sample.assetId;
+    const entry = byAsset.get(assetId) ?? {
+      critical: 0, caution: 0,
+      vesselCode: r.sample.vesselCode,
+      sampleCode: r.sample.sampleCode,
+    };
+    if (r.verdict === "CRITICAL" || r.verdict === "ACTION_REQUIRED") entry.critical++;
+    else entry.caution++;
+    byAsset.set(assetId, entry);
+  }
+
+  const critHits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; entry: AssetEntry } }> = [];
+  const cautHits: Array<{ vesselCode: string | null; display: string; item: { assetId: string; entry: AssetEntry } }> = [];
+  for (const [assetId, entry] of byAsset.entries()) {
+    if (entry.critical >= 1) {
+      critHits.push({ vesselCode: entry.vesselCode, display: `${assetId.slice(-6)} (${entry.critical} D)`, item: { assetId, entry } });
+    } else if (entry.caution >= 2) {
+      cautHits.push({ vesselCode: entry.vesselCode, display: `${assetId.slice(-6)} (${entry.caution} C)`, item: { assetId, entry } });
+    }
+  }
+
+  emitGroupedByVessel(drafts, critHits, {
+    insightType:    "vibration_critical",
+    priority:       "HIGH",
+    groupCodePrefix:"VIBR-CRIT-GROUP",
+    groupTitle:     (n, suf) => `${n} activos en zona D de vibración ISO 10816${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos con lecturas en zona D (inaceptable) en 90 días${suf}: ${list}.`,
+    groupRecommendation: "Reducir carga y planificar intervención mecánica inmediata; verificar balanceo, alineación y rodamientos.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `VIBR-CRIT-${it.assetId}`,
+      insightType:    "vibration_critical",
+      priority:       "HIGH",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Vibración en zona D (inaceptable) — ISO 10816-3`,
+      summary:        `Se registraron ${it.entry.critical} medición(es) en zona D en los últimos 90 días — riesgo de daño mecánico.`,
+      recommendation: "Reducir carga; verificar balanceo, alineación y estado de rodamientos antes de retomar operación normal.",
+    }),
+  });
+
+  emitGroupedByVessel(drafts, cautHits, {
+    insightType:    "vibration_caution_trend",
+    priority:       "MEDIUM",
+    groupCodePrefix:"VIBR-CAUT-GROUP",
+    groupTitle:     (n, suf) => `${n} activos en zona C de vibración${suf}`,
+    groupSummary:   (n, suf, list) => `${n} activos acumulan ≥2 lecturas en zona C (insatisfactorio) en 90 días${suf}: ${list}.`,
+    groupRecommendation: "Incrementar frecuencia de medición y planificar mantenimiento correctivo en próximo período.",
+    individualDraft: (vesselCode, it) => ({
+      insightCode:    `VIBR-CAUT-${it.assetId}`,
+      insightType:    "vibration_caution_trend",
+      priority:       "MEDIUM",
+      targetType:     "ASSET",
+      targetId:       it.assetId,
+      vesselCode,
+      title:          `Tendencia de vibración en zona C — ISO 10816-3`,
+      summary:        `El activo acumula ${it.entry.caution} lecturas en zona C (insatisfactorio) en los últimos 90 días.`,
+      recommendation: "Incrementar frecuencia de medición y planificar mantenimiento correctivo en el próximo período.",
     }),
   });
 }

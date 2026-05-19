@@ -161,6 +161,18 @@ enum FluidSampleStatus {
   ARCHIVED
 }
 
+// Tipo de muestreo / análisis de condición. FLUID es el original (lubricante,
+// combustible, agua). El resto fueron agregados al ampliar el módulo a
+// monitoreo de condición (CBM) más amplio. El nombre de la tabla `FluidSample`
+// se conserva por compatibilidad histórica; semánticamente es "Sample".
+enum SampleKind {
+  FLUID
+  VIBRATION
+  THERMAL
+  ULTRASOUND
+  OTHER
+}
+
 enum FluidVerdict {
   NORMAL
   CAUTION
@@ -1097,8 +1109,12 @@ model MaintenancePlan {
   nextDueHours         Float?
   // PMS extensions
   taskMasterId         String?
-  // Fluid sampling: si está set, al cerrar la OT generada por este plan se
-  // crea automáticamente un FluidSample DRAFT con horas y datos del activo.
+  // Sampling: si `samplingKind` está set, al cerrar la OT generada por este
+  // plan se crea automáticamente un FluidSample DRAFT con kind correspondiente,
+  // horas y datos del activo. Para kind=FLUID, además se usa `samplingFluidType`
+  // como sub-tipo (engine oil, hydraulic, etc.). Para otros kinds (VIBRATION,
+  // THERMAL, etc.) el sub-tipo no aplica.
+  samplingKind         SampleKind?
   samplingFluidType    FluidType?
   triggerResultMode    TriggerResultMode      @default(DUE_ONLY)
   checklistTemplate    String?
@@ -2112,6 +2128,30 @@ model AiInsight {
   @@index([tenantId, vesselCode, status])
 }
 
+// ─── In-app notifications (campana del header + banner CRITICAL) ─────────────
+// Una fila por destinatario. Anti-duplicado por (tenant, user, sourceType, sourceId)
+// para que sync periódico no spamee la bandeja con la misma alerta.
+model Notification {
+  id              String    @id @default(cuid())
+  tenantId        String
+  recipientUserId String
+  vesselCode      String?
+  type            String    // DEFECT_CRITICAL | WORK_ORDER_OVERDUE | CERTIFICATE_EXPIRED
+  severity        String    // CRITICAL | HIGH | INFO
+  title           String
+  body            String?
+  linkUrl         String?
+  sourceType      String?   // DEFECT | WORK_ORDER | CERTIFICATE
+  sourceId        String?
+  createdAt       DateTime  @default(now())
+  readAt          DateTime?
+  dismissedAt     DateTime?
+
+  @@unique([tenantId, recipientUserId, sourceType, sourceId])
+  @@index([tenantId, recipientUserId, dismissedAt, readAt])
+  @@index([tenantId, severity, dismissedAt])
+}
+
 // ─── Block 11: PMS — Catálogos globales ──────────────────────────────────────
 
 model SfiNode {
@@ -2387,7 +2427,11 @@ model FluidSample {
   vesselCode         String
   assetId            String
   sampleCode         String
-  fluidType          FluidType
+  // kind: tipo de muestreo. FLUID = comportamiento original. Cuando es otro
+  // kind (VIBRATION, THERMAL, etc.), `fluidType` queda en null y los datos
+  // específicos van en `parameters` del resultado.
+  kind               SampleKind          @default(FLUID)
+  fluidType          FluidType?
   fluidProduct       String?
   sampledAt          DateTime
   runningHours       Float?

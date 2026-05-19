@@ -1,5 +1,51 @@
 HISTORY.txt
 
+[2026-05-19] Muestreos y Análisis — módulo ampliado a CBM (vibración, etc.)
+Agent: Claude Opus 4.7
+"Análisis de Fluidos" pasa a ser "Muestreos y Análisis", un módulo de
+monitoreo de condición (CBM) que abarca fluido, vibración, termografía,
+ultrasonido y otros. El plan de mantenimiento ahora puede declarar un
+"Plan de muestreo" de cualquier kind; al cerrar la OT, se crea un Sample
+DRAFT del kind correspondiente. Para vibración, las verdicts se derivan
+de ISO 10816-3 (Zonas A/B/C/D).
+
+Schema (prisma/schema.prisma):
+- Nuevo enum SampleKind { FLUID, VIBRATION, THERMAL, ULTRASOUND, OTHER }.
+- MaintenancePlan: + samplingKind: SampleKind?
+- FluidSample: + kind: SampleKind @default(FLUID), fluidType pasa a optional.
+
+Backend:
+- maintenance-plans-service.ts: payload acepta samplingKind.
+- work-orders-service.ts: auto-create de Sample respeta samplingKind del
+  plan (no solo FLUID). Backward-compat: si solo está samplingFluidType,
+  se infiere kind=FLUID.
+- fluid-analyses-service.ts: createFluidSampleFromWorkOrder ahora acepta
+  kind + fluidType opcional.
+- insight-generator.ts: el collector de fluidos filtra por kind=FLUID;
+  nuevo collectVibrationInsights genera VIBR-CRIT/VIBR-CAUT con ISO
+  10816 (zona D = HIGH, zona C tras 2+ lecturas = MEDIUM).
+- vibration-iso10816.ts (nuevo): helper con tabla de zonas A/B/C/D para
+  las 4 clases de máquinas ISO 10816-3.
+- excel-template / import / export: + columna samplingKind.
+
+Frontend:
+- MaintenancePlans.tsx: el campo "Plan de muestreo de fluido" pasa a
+  "Plan de muestreo" con select de kind primero; si kind=FLUID, segundo
+  select con el sub-tipo de fluido.
+- FluidAnalyses.tsx: columna "Fluido" pasa a "Tipo" y muestra el kind;
+  TrendChart solo se renderiza para muestras de fluido.
+- i18n.tsx: renombra nav.fluidAnalyses y page.fluidAnalyses a
+  "Muestreos y Análisis" (en + pt actualizadas).
+- nuevas keys: mp.modal.samplingLabel, samplingHint, sampling.kind.*.
+
+Compat con data existente:
+- FluidSample.kind tiene default FLUID, así que las muestras viejas
+  quedan correctas tras db push.
+- MaintenancePlan.samplingFluidType existente se sigue interpretando
+  (work-orders-service infiere kind=FLUID si no hay samplingKind).
+
+Verificado: tsc 0 errores en archivos tocados.
+
 [2026-05-19] NCRs (ProviderNonconformity) fleet-wide visibles
 Agent: Claude Opus 4.7
 Cualquier usuario del tenant ve ahora todas las NCRs, sin importar a qué

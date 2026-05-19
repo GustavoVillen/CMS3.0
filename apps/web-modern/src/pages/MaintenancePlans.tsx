@@ -76,6 +76,7 @@ interface MaintenancePlan {
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
+  samplingKind?: string | null;
   samplingFluidType?: string | null;
   windowMode?: string | null;
   windowLeadDays?: number | null;
@@ -1037,6 +1038,11 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
   const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
+  // samplingKind = "" (no sampling) | "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER"
+  // Para retrocompatibilidad: si el plan tenía samplingFluidType pero no samplingKind, asumimos FLUID.
+  const [samplingKind, setSamplingKind] = useState<string>(
+    plan?.samplingKind ?? (plan?.samplingFluidType ? "FLUID" : "")
+  );
   const [samplingFluidType, setSamplingFluidType] = useState<string>(plan?.samplingFluidType ?? "");
   const [checklistUploading, setChecklistUploading] = useState(false);
   const [checklistUploadError, setChecklistUploadError] = useState<string | null>(null);
@@ -1152,6 +1158,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
     setChecklistTemplate(plan.checklistTemplate ?? "");
+    setSamplingKind(plan.samplingKind ?? (plan.samplingFluidType ? "FLUID" : ""));
     setSamplingFluidType(plan.samplingFluidType ?? "");
     setChecklistUploading(false);
     setChecklistUploadError(null);
@@ -1336,7 +1343,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
-          samplingFluidType: samplingFluidType || null,
+          samplingKind:      samplingKind || null,
+          // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
+          samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
         });
         savedId = created.id;
       } else {
@@ -1364,7 +1373,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
           checklistTemplate: normalizeOptionalText(checklistTemplate),
-          samplingFluidType: samplingFluidType || null,
+          samplingKind:      samplingKind || null,
+          // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
+          samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
         });
         savedId = plan.id;
       }
@@ -1838,27 +1849,47 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               </div>
             </div>
 
-            {/* Análisis de fluido — si está set, al cerrar la OT del plan se crea automáticamente una muestra DRAFT */}
+            {/* Plan de muestreo — kind primero; si es FLUID, segundo select con el sub-tipo. */}
             <div className="space-y-1.5">
               <label className={labelCls}>
-                {t("mp.modal.fluidSampleLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
+                {t("mp.modal.samplingLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
               </label>
-              <select value={samplingFluidType} onChange={e => setSamplingFluidType(e.target.value)} className={selectCls} disabled={readOnly}>
-                <option value="">{t("mp.modal.notFluidPlan")}</option>
-                <option value="ENGINE_OIL">{t("fluid.plan.engineOil")}</option>
-                <option value="HYDRAULIC_OIL">{t("fluid.plan.hydraulic")}</option>
-                <option value="GEARBOX_OIL">{t("fluid.plan.gearbox")}</option>
-                <option value="TRANSMISSION_OIL">{t("fluid.plan.transmission")}</option>
-                <option value="FUEL_DIESEL">{t("fluid.plan.diesel")}</option>
-                <option value="FUEL_GASOIL">{t("fluid.plan.gasoil")}</option>
-                <option value="COOLING_WATER">{t("fluid.plan.coolingWater")}</option>
-                <option value="BOILER_WATER">{t("fluid.plan.boilerWater")}</option>
-                <option value="POTABLE_WATER">{t("fluid.plan.potableWater")}</option>
-                <option value="REFRIGERANT">{t("fluid.plan.refrigerant")}</option>
-                <option value="OTHER">{t("fluid.plan.other")}</option>
+              <select
+                value={samplingKind}
+                onChange={e => {
+                  const v = e.target.value;
+                  setSamplingKind(v);
+                  // Al salir de FLUID, limpiar el sub-tipo (no aplica).
+                  if (v !== "FLUID") setSamplingFluidType("");
+                }}
+                className={selectCls}
+                disabled={readOnly}
+              >
+                <option value="">{t("mp.modal.notSamplingPlan")}</option>
+                <option value="FLUID">{t("sampling.kind.fluid")}</option>
+                <option value="VIBRATION">{t("sampling.kind.vibration")}</option>
+                <option value="THERMAL">{t("sampling.kind.thermal")}</option>
+                <option value="ULTRASOUND">{t("sampling.kind.ultrasound")}</option>
+                <option value="OTHER">{t("sampling.kind.other")}</option>
               </select>
-              {samplingFluidType && (
-                <p className="text-[10px] text-accent/70">{t("mp.modal.fluidSampleHint")}</p>
+              {samplingKind === "FLUID" && (
+                <select value={samplingFluidType} onChange={e => setSamplingFluidType(e.target.value)} className={selectCls} disabled={readOnly}>
+                  <option value="">{t("mp.modal.selectFluidType")}</option>
+                  <option value="ENGINE_OIL">{t("fluid.plan.engineOil")}</option>
+                  <option value="HYDRAULIC_OIL">{t("fluid.plan.hydraulic")}</option>
+                  <option value="GEARBOX_OIL">{t("fluid.plan.gearbox")}</option>
+                  <option value="TRANSMISSION_OIL">{t("fluid.plan.transmission")}</option>
+                  <option value="FUEL_DIESEL">{t("fluid.plan.diesel")}</option>
+                  <option value="FUEL_GASOIL">{t("fluid.plan.gasoil")}</option>
+                  <option value="COOLING_WATER">{t("fluid.plan.coolingWater")}</option>
+                  <option value="BOILER_WATER">{t("fluid.plan.boilerWater")}</option>
+                  <option value="POTABLE_WATER">{t("fluid.plan.potableWater")}</option>
+                  <option value="REFRIGERANT">{t("fluid.plan.refrigerant")}</option>
+                  <option value="OTHER">{t("fluid.plan.other")}</option>
+                </select>
+              )}
+              {samplingKind && (
+                <p className="text-[10px] text-accent/70">{t("mp.modal.samplingHint")}</p>
               )}
             </div>
 

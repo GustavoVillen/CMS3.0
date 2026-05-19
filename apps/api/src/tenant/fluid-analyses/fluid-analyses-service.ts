@@ -498,11 +498,16 @@ async function createDefectFromResult(
 // `samplingFluidType` set. The newly created FluidSample is in DRAFT status —
 // the user finishes filling lab data afterwards from the FluidAnalyses page.
 
+export type SampleKindInput = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER";
+
 export interface CreateSampleFromWoInput {
   tenantId: string;
   vesselCode: string;
   assetId: string;
-  fluidType: FluidType;
+  /** Tipo de muestreo. Default FLUID por compat. */
+  kind?: SampleKindInput;
+  /** Sub-tipo de fluido — solo aplica cuando kind === "FLUID". */
+  fluidType?: FluidType | null;
   workOrderId: string;
   workOrderCode: string;
   planId: string | null;
@@ -516,6 +521,7 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
   if (!prisma) return null;
 
   const sampleCode = await nextSampleCode(prisma as any, input.tenantId, input.vesselCode);
+  const kind = input.kind ?? "FLUID";
 
   const sample = await (prisma as any).fluidSample.create({
     data: {
@@ -523,7 +529,9 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
       vesselCode:        input.vesselCode,
       assetId:           input.assetId,
       sampleCode,
-      fluidType:         input.fluidType,
+      kind,
+      // fluidType solo se setea si el sample es FLUID; para otros kinds queda null.
+      fluidType:         kind === "FLUID" ? (input.fluidType ?? null) : null,
       sampledAt:         input.completedAt,
       runningHours:      input.runningHours,
       sampledByUserId:   input.createdByUserId,
@@ -542,7 +550,7 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
     action: "FluidSample.createdFromWorkOrder",
     entityType: "FluidSample",
     entityId: sample.id,
-    metadata: { sampleCode, vesselCode: input.vesselCode, fluidType: input.fluidType, workOrderCode: input.workOrderCode },
+    metadata: { sampleCode, vesselCode: input.vesselCode, kind, fluidType: input.fluidType ?? null, workOrderCode: input.workOrderCode },
   });
 
   return sample.id;

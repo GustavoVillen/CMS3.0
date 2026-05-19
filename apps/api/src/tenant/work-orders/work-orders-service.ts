@@ -752,8 +752,9 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
 
+  let samplingKind:      string | null = null;
   let samplingFluidType: string | null = null;
-  let samplingPlanId: string | null = null;
+  let samplingPlanId:    string | null = null;
 
   const closedResult = await prisma.$transaction(async (tx) => {
     const startDate = current.status === "PLANNED" ? completedDate : undefined;
@@ -801,10 +802,15 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             updatedByUserId: session.user.id,
           },
         });
-        // Capture sampling info for post-commit auto-creation of FluidSample
-        if ((plan as any).samplingFluidType) {
-          samplingFluidType = (plan as any).samplingFluidType;
-          samplingPlanId = plan.id;
+        // Capture sampling info for post-commit auto-creation of Sample.
+        // samplingKind disparador del auto-create. Si solo está samplingFluidType
+        // (datos heredados pre-CBM), inferimos kind=FLUID por compatibilidad.
+        const planKind      = (plan as any).samplingKind as string | null;
+        const planFluidType = (plan as any).samplingFluidType as string | null;
+        if (planKind || planFluidType) {
+          samplingKind      = planKind || "FLUID";
+          samplingFluidType = planFluidType;
+          samplingPlanId    = plan.id;
         }
       }
     }
@@ -877,15 +883,16 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to auto-close associated deferrals:", err);
   }
 
-  // Auto-create FluidSample DRAFT if the plan was a fluid sampling plan
+  // Auto-create Sample DRAFT si el plan era un plan de muestreo (cualquier kind).
   let createdFluidSampleId: string | null = null;
-  if (samplingFluidType) {
+  if (samplingKind) {
     try {
       createdFluidSampleId = await createFluidSampleFromWorkOrder({
         tenantId:        current.tenantId,
         vesselCode:      current.vesselCode,
         assetId:         current.assetId,
-        fluidType:       samplingFluidType as FluidTypeEnum,
+        kind:            samplingKind as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
+        fluidType:       samplingFluidType as FluidTypeEnum | null,
         workOrderId:     current.id,
         workOrderCode:   current.workOrderCode,
         planId:          samplingPlanId,
@@ -894,7 +901,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         createdByUserId: session.user.id,
       });
     } catch (err) {
-      log.error("[closeWorkOrder] auto-create FluidSample failed", err);
+      log.error("[closeWorkOrder] auto-create Sample failed", err);
     }
   }
 

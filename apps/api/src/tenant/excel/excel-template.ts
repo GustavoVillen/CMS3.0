@@ -72,6 +72,7 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "lastExecutionHours",  header: "lastExecutionHours",   required: false, width: 20 },
     { key: "nextDueHours",        header: "nextDueHours",         required: false, width: 16 },
     { key: "checklistTemplate",   header: "checklistTemplate",    required: false, width: 25 },
+    { key: "samplingKind",        header: "samplingKind",         required: false, width: 18 },
     { key: "samplingFluidType",   header: "samplingFluidType",    required: false, width: 20 },
     { key: "status",              header: "status",               required: false, width: 18 },
   ],

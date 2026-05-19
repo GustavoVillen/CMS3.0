@@ -341,6 +341,7 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       if ("lastExecutionHours" in d) r.lastExecutionHours = parseNumeric(d.lastExecutionHours);
       if ("nextDueHours"      in d) r.nextDueHours      = parseNumeric(d.nextDueHours);
       if ("checklistTemplate"  in d) r.checklistTemplate  = d.checklistTemplate  ?? null;
+      if ("samplingKind"      in d) r.samplingKind       = d.samplingKind      ?? null;
       if ("samplingFluidType" in d) r.samplingFluidType = d.samplingFluidType ?? null;
       return r;
     }
