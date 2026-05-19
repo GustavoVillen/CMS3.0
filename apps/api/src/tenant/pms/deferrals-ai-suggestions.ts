@@ -40,7 +40,7 @@ export async function suggestCompensatoryMeasures(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   let response;
@@ -48,7 +48,7 @@ export async function suggestCompensatoryMeasures(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: PROMPT_COMPENSATORY,
+      system: [{ type: "text", text: PROMPT_COMPENSATORY, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: buildContext(input) }],
     });
   } catch (err) {

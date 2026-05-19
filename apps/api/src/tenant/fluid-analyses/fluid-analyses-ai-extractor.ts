@@ -90,7 +90,7 @@ export async function extractFluidReport(
   }
 
   const base64 = buffer.toString("base64");
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
 
   const contentBlocks: Anthropic.ContentBlockParam[] = [];
   if (isImage) {
@@ -109,12 +109,14 @@ export async function extractFluidReport(
     text: "Extraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.",
   });
 
-  const fluidModel = "claude-sonnet-4-6";
+  // Antes Sonnet 4.6 + 4096. Haiku ya hace OCR de PDF y es ~5× más rápido/barato.
+  // Se mantiene Sonnet como fallback potencial si se mide caída de precisión.
+  const fluidModel = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
   const response = await client.messages.create({
     model: fluidModel,
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
+    max_tokens: 2048,
+    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: contentBlocks }],
   });
 

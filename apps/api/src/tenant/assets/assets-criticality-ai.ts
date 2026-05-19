@@ -85,7 +85,7 @@ export async function suggestAssetCriticality(
     serialNumber: input.serialNumber ?? null,
   };
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const model = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
 
@@ -94,7 +94,7 @@ export async function suggestAssetCriticality(
     response = await client.messages.create({
       model,
       max_tokens: 512,
-      system: SYSTEM_PROMPT,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
   } catch (err) {

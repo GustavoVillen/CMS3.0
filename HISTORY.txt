@@ -1,5 +1,56 @@
 HISTORY.txt
 
+[2026-05-19] IA Performance — bloque rápido (timeouts, cache, SSE, modelos)
+Agent: Claude Opus 4.7
+Tras auditar las 17 features que invocan Anthropic, aplico el bloque
+"low-risk, high-impact":
+
+1) Timeout uniforme 30_000ms + maxRetries: 1 en TODOS los services
+   (default del SDK era 600s — un cuelgue real bloqueaba el request 10
+   min). Aplicado a 11 services que no lo tenían + bajado a 30s en los
+   5 que estaban a 60s. Excepción: fluid-analyses-ai-extractor procesa
+   PDFs grandes → queda en 60s.
+
+2) prompt caching (cache_control: ephemeral) en system prompts de TODOS
+   los services AI:
+   - MOC, defects (immediate + classification + photo analysis),
+     deferrals, drills, permits, plans (suggest + RCM), WO (suggest +
+     rewrite + progress OCR + progress rewrite), fluid (extractor +
+     insights), assets criticality, monthly draft.
+   - Esperado: -80% input cost en 2da llamada dentro de 5min, -30%
+     latencia warm.
+
+3) SSE copiloto:
+   - response.flushHeaders() inmediato tras writeHead → cliente abre el
+     canal en <50ms (antes esperaba a que Claude generara el 1er token).
+   - Comment ": ready" enviado de arranque.
+   - Heartbeat ": ping" cada 15s + clearInterval en close/finally para
+     no cortar conexiones detrás de Nginx/Cloudflare (timeout idle).
+
+4) max_tokens bajado donde sobredimensionado:
+   - MOC: 2048 → 1500 (salida real ~900-1100)
+   - Fluid extractor: 4096 → 2048
+   - WO progress rewrite: 2048 → 1024
+
+5) Modelo Sonnet → Haiku en OCR:
+   - fluid-analyses-ai-extractor: Sonnet 4.6 → Haiku 4.5 (5× más rápido/
+     barato; haiku 4.5 soporta visión). Si se observa caída de
+     precisión, revertir.
+   - work-order-progress-ai OCR: idem.
+
+6) Rate-limit en 3 endpoints AI que faltaban:
+   - POST /app/fluid-analyses/extract (ai-extract, 15/min)
+   - POST /app/drills/suggest-scenario (ai, 30/min)
+   - POST /app/ai-insights/refresh (ai-insights-refresh, 3/min — pesado)
+
+NO incluido (fase 2):
+- Streaming de las 17 "Sugerir con IA" → ganaría TTFB 4-12s → <1s, pero
+  requiere refactor UI + backend de cada feature.
+- AbortController en suggestion services (cancelar al cerrar modal).
+- Cache de tenant.findUnique (saturación leve de pool).
+
+Verificado: tsc 0 errores en los 15 archivos tocados.
+
 [2026-05-19] Excel export en 15 módulos + HTML export Dashboard/Workload
 Agent: Claude Opus 4.7
 Tanda completa: el sistema de Excel se extiende a 15 módulos nuevos

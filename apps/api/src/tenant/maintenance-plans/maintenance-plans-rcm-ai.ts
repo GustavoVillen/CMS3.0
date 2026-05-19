@@ -73,7 +73,7 @@ export async function suggestPlanConsequence(
     descripcion: input.planDescription ?? null,
   };
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   let response;
@@ -81,7 +81,7 @@ export async function suggestPlanConsequence(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
   } catch (err) {

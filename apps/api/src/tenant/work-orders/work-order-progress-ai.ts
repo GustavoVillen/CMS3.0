@@ -18,7 +18,9 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
 
-const OCR_MODEL    = "claude-sonnet-4-6";
+// Antes OCR usaba Sonnet 4.6. Haiku 4.5 ya soporta visión y es ~5× más
+// rápido/barato. Si se observa caída de precisión en OCR de fotos, revertir.
+const OCR_MODEL    = "claude-haiku-4-5-20251001";
 const REWRITE_MODEL = "claude-haiku-4-5-20251001";
 
 const ALLOWED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -65,7 +67,7 @@ export async function extractTextFromPhoto(
   }
 
   const base64 = buffer.toString("base64");
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
 
   let response;
@@ -73,7 +75,7 @@ export async function extractTextFromPhoto(
     response = await client.messages.create({
       model: OCR_MODEL,
       max_tokens: 1024,
-      system: OCR_SYSTEM_PROMPT,
+      system: [{ type: "text", text: OCR_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [
         {
           role: "user",
@@ -172,7 +174,7 @@ export async function rewriteObservations(
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   if (items.length === 0) return "";
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
 
   const payload = {
@@ -191,8 +193,9 @@ export async function rewriteObservations(
   try {
     response = await client.messages.create({
       model: REWRITE_MODEL,
-      max_tokens: 2048,
-      system: REWRITE_SYSTEM_PROMPT,
+      // 2048 estaba sobredimensionado; la salida real ronda 400-700 tokens.
+      max_tokens: 1024,
+      system: [{ type: "text", text: REWRITE_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
   } catch (err) {
@@ -288,7 +291,7 @@ async function detectSparesFromText(
   if (!apiKey) return [];
   if (!text || !text.trim() || spares.length === 0) return [];
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
 
   const payload = {

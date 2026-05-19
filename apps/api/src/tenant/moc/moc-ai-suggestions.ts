@@ -167,16 +167,20 @@ export async function suggestRiskAssessment(
     throw new RouteError(400, "VALIDATION_ERROR", "Completá al menos la categoría y el cambio propuesto antes de pedir el análisis a la IA.");
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   let response;
   try {
     response = await client.messages.create({
       model: MODEL,
-      // Ahora generamos 2 bloques (risk + mitigation), subimos el cap a 2048.
-      max_tokens: 2048,
-      system: PROMPT_RISK_ASSESSMENT,
+      // 2 bloques (risk + mitigation). 1500 alcanza para la salida real
+      // observada (~900-1100 tokens); Anthropic reserva tiempo proporcional al cap.
+      max_tokens: 1500,
+      // System prompt en forma de array con cache_control ephemeral. El prompt
+      // pesa ~2.3 KB y es idéntico entre invocaciones: cacheándolo bajamos
+      // ~80% el input charge y mejoramos latencia warm.
+      system: [{ type: "text", text: PROMPT_RISK_ASSESSMENT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: buildContext(input) }],
     });
   } catch (err) {

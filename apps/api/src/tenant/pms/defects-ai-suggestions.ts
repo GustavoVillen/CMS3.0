@@ -61,7 +61,7 @@ async function callClaude(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
 
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   let response;
@@ -69,7 +69,9 @@ async function callClaude(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: maxTokens,
-      system: systemPrompt,
+      // cache_control ephemeral — el prompt es constante por feature; ahorra
+      // input tokens cuando varios users del tenant invocan el mismo feature.
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userContent }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);
@@ -160,7 +162,7 @@ export async function analyzeDefectPhoto(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
 
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "defect_photo_analysis";
 
@@ -175,7 +177,7 @@ export async function analyzeDefectPhoto(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 400,
-      system: PROMPT_PHOTO_ANALYSIS,
+      system: [{ type: "text", text: PROMPT_PHOTO_ANALYSIS, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
         content: [

@@ -243,7 +243,7 @@ export async function generateMonthlyDraft(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 800,
-      system: PROMPT,
+      system: [{ type: "text", text: PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: contextLines.join("\n") }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms`);

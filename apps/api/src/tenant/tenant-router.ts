@@ -844,6 +844,8 @@ export async function handleTenantRoutes(
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
     if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden regenerar insights.");
+    // Insight generation es pesado (recorre todo el tenant). Limitar fuerte.
+    enforceRateLimit(request, `ai-insights-refresh:${session.user.id}`, { maxRequests: 3, windowMs: 60_000 });
     const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
     if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
     const tenant = await prisma.tenant.findUnique({ where: { slug } });
@@ -1006,6 +1008,7 @@ export async function handleTenantRoutes(
   }
   if (method === "POST" && url.pathname === "/app/fluid-analyses/extract") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-extract:${session.user.id}`, { maxRequests: 15, windowMs: 60_000 });
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
     const vesselCode = (Array.isArray(request.headers["x-vessel-code"]) ? request.headers["x-vessel-code"][0] : request.headers["x-vessel-code"]) ?? null;
@@ -1157,6 +1160,21 @@ export async function handleTenantRoutes(
       "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
     });
+    // Flush inmediato para que el cliente reciba el primer byte YA y abra el
+    // canal — antes detrás de Nginx/Cloudflare el TTFB se veía como
+    // "el copiloto tarda mucho en arrancar" hasta que Claude generaba el
+    // primer token (1-3s). Con flushHeaders + el comment ": ready" enviado
+    // a continuación, el cliente abre el EventSource en <50ms.
+    response.flushHeaders?.();
+    response.write(": ready\n\n");
+
+    // Heartbeat cada 15s — mantiene viva la conexión a través de proxies que
+    // cortan conexiones idle (Cloudflare ~100s, ALB 60s). Como mucho añade
+    // unos bytes a la respuesta, no rompe el parser SSE estándar.
+    const heartbeat = setInterval(() => {
+      response.write(": ping\n\n");
+    }, 15_000);
+
     // Validar capability contra whitelist — antes pasaba cualquier string
     // y el get del prompt podía cargar capabilities no autorizadas.
     const capability = ensureCapability(body.capability ?? "knowledge_assistant");
@@ -1165,7 +1183,10 @@ export async function handleTenantRoutes(
     // cancelamos la llamada a Claude vía AbortSignal. Antes el stream
     // seguía consumiendo tokens hasta que terminara la respuesta completa.
     const abortController = new AbortController();
-    response.on("close", () => abortController.abort());
+    response.on("close", () => {
+      clearInterval(heartbeat);
+      abortController.abort();
+    });
 
     try {
       await streamCopilotoChat(
@@ -1208,6 +1229,7 @@ export async function handleTenantRoutes(
       }
       response.write(`data: ${JSON.stringify({ error: friendly })}\n\n`);
     } finally {
+      clearInterval(heartbeat);
       response.end();
     }
     return true;
@@ -1424,6 +1446,7 @@ export async function handleTenantRoutes(
   }
   if (method === "POST" && url.pathname === "/app/drills/suggest-scenario") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestDrillScenario>[1];
     sendJson(response, 200, await suggestDrillScenario(session, body));
     return true;

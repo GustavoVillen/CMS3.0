@@ -103,7 +103,7 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
   const regulatoryContext = buildFluidAnalysisRegulationContext(sample.fluidType);
   const systemPrompt = SYSTEM_PROMPT_BASE.replace("{REGULATORY_CONTEXT}", regulatoryContext);
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const model = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
 
@@ -112,7 +112,7 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
     response = await client.messages.create({
       model,
       max_tokens: 1024,
-      system: systemPrompt,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: JSON.stringify(dataPayload, null, 2) }],
     });
   } catch (err) {
