@@ -1192,6 +1192,19 @@ const dict = {
   "mwl.warnNoHoursSched.many":{ es: "planes por horas sin proyectar — falta historial de horas de motor o frecuencia inválida.", en: "hour-based plans not projected — missing engine hours history or invalid frequency.", pt: "planos por horas sem projeção — falta histórico de horas do motor ou frequência inválida." },
   "mwl.warnNoDateSched.one":  { es: "plan por fecha sin proyectar — falta próxima ejecución o frecuencia.", en: "date-based plan not projected — missing next execution or frequency.", pt: "plano por data sem projeção — falta próxima execução ou frequência." },
   "mwl.warnNoDateSched.many":{ es: "planes por fecha sin proyectar — falta próxima ejecución o frecuencia.", en: "date-based plans not projected — missing next execution or frequency.", pt: "planos por data sem projeção — falta próxima execução ou frequência." },
+
+  // ─── Work Orders — kanban columns + filter chips ───────────────────────────
+  "wo.kanban.planned":        { es: "Planificadas",      en: "Planned",         pt: "Planejadas" },
+  "wo.kanban.inProgress":     { es: "En Progreso",       en: "In Progress",     pt: "Em Progresso" },
+  "wo.kanban.onHold":         { es: "Diferida",          en: "Deferred",        pt: "Adiada" },
+  "wo.kanban.closed":         { es: "Cerradas",          en: "Closed",          pt: "Fechadas" },
+  "wo.filter.all":            { es: "Todas",             en: "All",             pt: "Todas" },
+  "wo.filter.open":           { es: "Abiertas",          en: "Open",            pt: "Abertas" },
+  "wo.filter.overdue":        { es: "Vencidas",          en: "Overdue",         pt: "Vencidas" },
+  "wo.filter.postponed":      { es: "Diferidas",         en: "Deferred",        pt: "Adiadas" },
+  "wo.filter.postponedPending": { es: "Difer. pendiente", en: "Deferral pending", pt: "Adiam. pendente" },
+  "wo.filter.postponedRejected":{ es: "Difer. rechazada", en: "Deferral rejected", pt: "Adiam. rejeitado" },
+  "wo.filter.closed":         { es: "Cerradas",          en: "Closed",          pt: "Fechadas" },
 } satisfies Record<string, Record<Locale, string>>;
 
 export type TranslationKey = keyof typeof dict;

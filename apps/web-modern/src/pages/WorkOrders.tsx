@@ -10,7 +10,7 @@ import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
@@ -1903,11 +1903,11 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
   LOW:      "border-l-2 border-l-blue-400/60",
 };
 
-const KANBAN_COLS: Array<{ colId: string; statuses: string[]; label: string; headerCls: string; borderCls: string; droppable: boolean }> = [
-  { colId: "PLANNED",     statuses: ["PLANNED"],              label: "Planificadas", headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
-  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          label: "En Progreso",  headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
-  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              label: "Diferida",     headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
-  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], label: "Cerradas",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
+const KANBAN_COLS: Array<{ colId: string; statuses: string[]; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
+  { colId: "PLANNED",     statuses: ["PLANNED"],              labelKey: "wo.kanban.planned",    headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
+  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          labelKey: "wo.kanban.inProgress", headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
+  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              labelKey: "wo.kanban.onHold",     headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
+  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], labelKey: "wo.kanban.closed",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
 ];
 
 function DeferralStatusBadge({ status }: { status: string }) {
@@ -2019,6 +2019,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   onOpen: (wo: WorkOrder) => void;
   onReload: () => void;
 }) {
+  const t = useT();
   const [draggingWo, setDraggingWo]   = useState<WorkOrder | null>(null);
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
@@ -2071,7 +2072,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
               className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-white/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
-                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(col.labelKey)}</span>
                 <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
@@ -2318,13 +2319,13 @@ export const WorkOrdersPage: React.FC = () => {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {([
-          { key: "",                  label: "Todas" },
-          { key: "open",              label: "Abiertas" },
-          { key: "overdue",           label: "Vencidas" },
-          { key: "postponed",         label: "Diferidas" },
-          { key: "postponedPending",  label: "Difer. pendiente" },
-          { key: "postponedRejected", label: "Difer. rechazada" },
-          { key: "closed",            label: "Cerradas" },
+          { key: "",                  labelKey: "wo.filter.all" },
+          { key: "open",              labelKey: "wo.filter.open" },
+          { key: "overdue",           labelKey: "wo.filter.overdue" },
+          { key: "postponed",         labelKey: "wo.filter.postponed" },
+          { key: "postponedPending",  labelKey: "wo.filter.postponedPending" },
+          { key: "postponedRejected", labelKey: "wo.filter.postponedRejected" },
+          { key: "closed",            labelKey: "wo.filter.closed" },
         ] as const).map(opt => {
           const active = viewFilter === opt.key;
           return (
@@ -2342,7 +2343,7 @@ export const WorkOrdersPage: React.FC = () => {
                   : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-white/20 hover:text-text-industrial"
               }`}
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </button>
           );
         })}
