@@ -448,9 +448,14 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
   const isSelf    = member.userId === currentUserId;
   const isRevoked = member.status === "REVOKED";
-  const isSuperintendent = member.role === "FLEET_SUPERINTENDENT";
-  const isTechnician     = member.role === "TECHNICIAN_OPERATOR";
-  const needsFleetAssignment = isSuperintendent || isTechnician;
+  // El backend aplica vessel scope a TODOS los roles excepto TENANT_ADMIN
+  // (vessel-scope.ts applyAssignedVesselScope). Por lo tanto la UI debe
+  // permitir asignar buques a cualquier rol no-admin — sin asignación el
+  // usuario no ve datos. Antes solo se permitía para FLEET_SUPERINTENDENT
+  // y TECHNICIAN_OPERATOR, dejando a MAINTENANCE_MANAGER, INSPECTOR,
+  // PROCUREMENT y AUDITOR sin forma de configurarlo.
+  const needsFleetAssignment = member.role !== "TENANT_ADMIN";
+  const hasNoVesselsAssigned = needsFleetAssignment && member.assignedVesselCodes.length === 0;
 
   const handleRoleChange = async () => {
     if (newRole === member.role) return;
@@ -520,9 +525,9 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
           {needsFleetAssignment && !isRevoked && (
             <div className="border border-accent/15 rounded-xl p-4 bg-accent/3">
               <FleetAssignmentPanel member={member} onChanged={onChanged} />
-              {isTechnician && member.assignedVesselCodes.length === 0 && (
+              {hasNoVesselsAssigned && (
                 <p className="text-[10px] text-amber-400 mt-2">
-                  ⚠ Un Técnico/Operador necesita al menos una embarcación asignada para ver datos.
+                  ⚠ Este rol necesita al menos una embarcación asignada para ver datos del sistema.
                 </p>
               )}
             </div>
