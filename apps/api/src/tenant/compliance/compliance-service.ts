@@ -58,7 +58,14 @@ export interface SmartAlert {
 
 async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, session: TenantAccessSession, tenantId: string, requestedVesselCode: string | null): Promise<Array<{ code: string; name: string; vesselType: string | null }>> {
   const where: Record<string, unknown> = { tenantId, deletedAt: null };
+  // Validar requestedVesselCode contra el scope antes de aplicar. Sin esta
+  // validación, un user no-admin podía pedir ?vesselCode=OTRO y recibir
+  // datos de buques fuera de su asignación (bypass de aislamiento, detectado
+  // 2026-05-19 cuando un MAINTENANCE_MANAGER de LATERE vio dashboard de DONCHI).
   if (requestedVesselCode) {
+    if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(requestedVesselCode)) {
+      return [];
+    }
     where.code = requestedVesselCode;
   } else if (session.user.role !== "TENANT_ADMIN") {
     if (session.user.assignedVesselCodes.length === 0) return [];

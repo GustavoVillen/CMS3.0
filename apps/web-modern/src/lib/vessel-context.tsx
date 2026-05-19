@@ -52,12 +52,23 @@ export function VesselProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Auto-select sole vessel for non-admin users with a single vessel
+  // Sanitizar selectedVesselCode contra la lista real del user. Si quedó en
+  // localStorage un vessel del user anterior (típico cuando dos usuarios
+  // comparten la misma máquina/browser), lo descartamos. Si el user tiene
+  // un único vessel, lo auto-seleccionamos.
   useEffect(() => {
-    if (vessels.length === 1 && selectedVesselCode === null) {
-      setSelectedVesselCodeState(vessels[0]!.code);
+    if (vessels.length === 0) return;
+    const allowed = vessels.some(v => v.code === selectedVesselCode);
+    if (!allowed) {
+      const fallback = vessels.length === 1 ? vessels[0]!.code : null;
+      setSelectedVesselCodeState(fallback);
+      try {
+        const slug = tenant?.slug ?? localStorage.getItem("gpms_tenant_slug") ?? "";
+        if (fallback) localStorage.setItem(lsKey(slug), fallback);
+        else localStorage.removeItem(lsKey(slug));
+      } catch {}
     }
-  }, [vessels, selectedVesselCode]);
+  }, [vessels, selectedVesselCode, tenant?.slug]);
 
   const setSelectedVesselCode = useCallback((code: string | null) => {
     setSelectedVesselCodeState(code);

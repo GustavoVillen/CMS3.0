@@ -49,6 +49,24 @@ function loadStoredAuth(): AuthState {
   return { token: null, user: null, tenant: null, isAuthenticated: false };
 }
 
+// Limpia toda la localStorage relacionada al login. Importante incluir las
+// claves de vessel scope (gpms_vessel_scope_<slug>) para que al cambiar de
+// usuario en la misma máquina no se herede la selección de buque del anterior.
+function clearAuthLocalStorage() {
+  localStorage.removeItem("gpms_auth");
+  localStorage.removeItem("gpms_token");
+  localStorage.removeItem("gpms_tenant_slug");
+  localStorage.removeItem("gpms_refresh_token");
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("gpms_vessel_scope_")) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(loadStoredAuth);
   const [error, setError] = useState<string | null>(null);
@@ -128,20 +146,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       api.post("/app/auth/logout", { refreshToken, accessToken }).catch(() => { /* ignore */ });
     }
     setState({ token: null, user: null, tenant: null, isAuthenticated: false });
-    localStorage.removeItem("gpms_auth");
-    localStorage.removeItem("gpms_token");
-    localStorage.removeItem("gpms_tenant_slug");
-    localStorage.removeItem("gpms_refresh_token");
+    clearAuthLocalStorage();
   }, []);
 
   // Auto-logout on 401 only after refresh attempt has failed (api.ts handles refresh)
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setState({ token: null, user: null, tenant: null, isAuthenticated: false });
-      localStorage.removeItem("gpms_auth");
-      localStorage.removeItem("gpms_token");
-      localStorage.removeItem("gpms_tenant_slug");
-      localStorage.removeItem("gpms_refresh_token");
+      clearAuthLocalStorage();
     });
   }, []);
 
