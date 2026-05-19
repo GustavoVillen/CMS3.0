@@ -1138,6 +1138,8 @@ export async function handleTenantRoutes(
           tenantSlug:     slug,
           userId:         session.user.id,
           userEmail:      session.user.email,
+          userRole:       session.user.role,
+          assignedVesselCodes: session.user.assignedVesselCodes,
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
           mode:           body.mode ?? null,
@@ -1194,7 +1196,7 @@ export async function handleTenantRoutes(
     ].join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email, userRole: session.user.role, assignedVesselCodes: session.user.assignedVesselCodes },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });
@@ -1227,7 +1229,7 @@ export async function handleTenantRoutes(
     ].filter(Boolean).join("\n");
     let output = "";
     await streamCopilotoChat(
-      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email },
+      { capability: "knowledge_assistant", locale: "es", messages: [{ role: "user", content: prompt }], vesselCode: body.vesselCode ?? null, tenantId: tenant.id, tenantSlug: slug, userId: session.user.id, userEmail: session.user.email, userRole: session.user.role, assignedVesselCodes: session.user.assignedVesselCodes },
       (chunk) => { output += chunk; },
     );
     sendJson(response, 200, { suggestion: output.trim() });

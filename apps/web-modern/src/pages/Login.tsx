@@ -4,11 +4,22 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { PasswordInput } from "../components/PasswordInput";
 
+const LAST_TENANT_KEY = "gpms_last_tenant";
+const LAST_IDENTIFIER_KEY = "gpms_last_identifier";
+
 export const Login: React.FC = () => {
   const { login, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({ tenantSlug: "demo", identifier: "", password: "" });
+  const [form, setForm] = useState(() => {
+    let tenantSlug = "demo";
+    let identifier = "";
+    try {
+      tenantSlug = localStorage.getItem(LAST_TENANT_KEY) || "demo";
+      identifier = localStorage.getItem(LAST_IDENTIFIER_KEY) || "";
+    } catch {}
+    return { tenantSlug, identifier, password: "" };
+  });
 
   useEffect(() => {
     if (isAuthenticated) navigate("/", { replace: true });
@@ -16,6 +27,10 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      localStorage.setItem(LAST_TENANT_KEY, form.tenantSlug.trim());
+      localStorage.setItem(LAST_IDENTIFIER_KEY, form.identifier.trim());
+    } catch {}
     await login(form.tenantSlug, form.identifier, form.password);
   };
 

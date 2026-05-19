@@ -213,6 +213,16 @@ export interface CopilotoRequest {
   /** User email — used only for the internal SUPERADMIN usage log (denormalized). */
   userEmail?: string;
   /**
+   * Rol del usuario en el tenant. TENANT_ADMIN tiene acceso a toda la flota;
+   * el resto debe quedar acotado a `assignedVesselCodes`.
+   */
+  userRole?: string;
+  /**
+   * Buques asignados al usuario. Aplica scope a las queries de tools y a la
+   * inyección de insights para que el copiloto no filtre datos cross-vessel.
+   */
+  assignedVesselCodes?: string[];
+  /**
    * Structured snapshot of the screen the user is working on (emitted by the frontend).
    * Injected into the system prompt so the AI can give context-aware answers.
    * Sanitised: only string/null leaf values, no circular refs, no sensitive secrets.
@@ -403,10 +413,52 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
 // Tool executor — runs Prisma queries, always scoped to tenantId
 // ---------------------------------------------------------------------------
 
+/**
+ * Scope de buques accesibles por el usuario actual. Si `unrestricted` es true
+ * (TENANT_ADMIN), el copiloto puede consultar toda la flota. En cualquier otro
+ * caso, las queries se acotan a `codes` y los pedidos a un vessel fuera de la
+ * lista devuelven un mensaje de "acceso denegado" que la IA debe respetar.
+ */
+interface VesselScope {
+  unrestricted: boolean;
+  codes: string[];
+}
+
+function deniedVesselResponse(vesselCode: string, scope: VesselScope): string {
+  return JSON.stringify({
+    error: "ACCESS_DENIED",
+    message: `User does not have access to vessel ${vesselCode}. Accessible vessels: ${scope.codes.length > 0 ? scope.codes.join(", ") : "(none)"}.`,
+  });
+}
+
+function applyVesselWhereScope(
+  where: Record<string, unknown>,
+  rawVessel: unknown,
+  scope: VesselScope,
+): { ok: true } | { ok: false; reason: string } {
+  if (scope.unrestricted) {
+    if (typeof rawVessel === "string" && rawVessel) where.vesselCode = rawVessel;
+    return { ok: true };
+  }
+  if (scope.codes.length === 0) {
+    return { ok: false, reason: deniedVesselResponse(typeof rawVessel === "string" ? rawVessel : "(any)", scope) };
+  }
+  if (typeof rawVessel === "string" && rawVessel) {
+    if (!scope.codes.includes(rawVessel)) {
+      return { ok: false, reason: deniedVesselResponse(rawVessel, scope) };
+    }
+    where.vesselCode = rawVessel;
+    return { ok: true };
+  }
+  where.vesselCode = { in: scope.codes };
+  return { ok: true };
+}
+
 async function executeCopilotTool(
   name: string,
   input: Record<string, unknown>,
   tenantId: string,
+  scope: VesselScope,
 ): Promise<string> {
   const prisma = getPrismaClient();
   if (!prisma) return JSON.stringify({ error: "Database not available in current environment" });
@@ -417,9 +469,10 @@ async function executeCopilotTool(
     if (name === "query_maintenance_plans") {
       const where: Record<string, unknown> = {
         tenantId,
-        vesselCode: input.vesselCode,
         deletedAt: null,
       };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.textSearch) {
@@ -459,9 +512,10 @@ async function executeCopilotTool(
     if (name === "query_work_orders") {
       const where: Record<string, unknown> = {
         tenantId,
-        vesselCode: input.vesselCode,
         deletedAt: null,
       };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.type) where.type = input.type;
@@ -502,9 +556,10 @@ async function executeCopilotTool(
     if (name === "query_defects") {
       const where: Record<string, unknown> = {
         tenantId,
-        vesselCode: input.vesselCode,
         deletedAt: null,
       };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.severity) where.severity = input.severity;
@@ -533,9 +588,10 @@ async function executeCopilotTool(
     if (name === "query_capa_records") {
       const where: Record<string, unknown> = {
         tenantId,
-        vesselCode: input.vesselCode,
         deletedAt: null,
       };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.sourceType) where.sourceType = input.sourceType;
       if (input.sourceId) where.sourceId = input.sourceId;
       if (input.status) where.status = input.status;
@@ -563,7 +619,8 @@ async function executeCopilotTool(
 
     if (name === "query_fluid_analyses") {
       const where: Record<string, unknown> = { tenantId, deletedAt: null };
-      if (input.vesselCode) where.vesselCode = input.vesselCode;
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId)    where.assetId    = input.assetId;
       if (input.fluidType)  where.fluidType  = input.fluidType;
       const samples = await (prisma as any).fluidSample.findMany({
@@ -589,6 +646,10 @@ async function executeCopilotTool(
       if (!assetId) return JSON.stringify({ error: "assetId is required" });
       const trendLimit = Math.min(Number(input.limit ?? 10), 50);
       const where: Record<string, unknown> = { tenantId, assetId, deletedAt: null };
+      if (!scope.unrestricted) {
+        if (scope.codes.length === 0) return deniedVesselResponse("(any)", scope);
+        where.vesselCode = { in: scope.codes };
+      }
       if (input.fluidType) where.fluidType = input.fluidType;
       const samples = await (prisma as any).fluidSample.findMany({
         where, take: trendLimit, orderBy: { sampledAt: "asc" },
@@ -617,7 +678,8 @@ async function executeCopilotTool(
       // legacy Spare.currentStock está deprecated y no refleja la realidad.
       const sparesLimit = Math.min(Number(input.limit ?? 10), 30);
       const where: Record<string, unknown> = { tenantId, deletedAt: null };
-      if (input.vesselCode) where.vesselCode = input.vesselCode;
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.category)   where.category   = input.category;
       if (input.criticality) where.criticality = input.criticality;
       if (input.textSearch) {
@@ -698,7 +760,8 @@ async function executeCopilotTool(
     if (name === "query_daily_reports") {
       const reportsLimit = Math.min(Number(input.limit ?? 5), 30);
       const where: Record<string, unknown> = { tenantId, deletedAt: null };
-      if (input.vesselCode)        where.vesselCode = input.vesselCode;
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
       if (input.status)            where.status = input.status;
       if (input.operationalStatus) where.operationalStatus = input.operationalStatus;
       if (input.sinceDate)         where.reportDate = { gte: new Date(input.sinceDate as string) };
@@ -856,10 +919,29 @@ export async function streamCopilotoChat(
   // ── Volatile system blocks (per-request, after the cache breakpoint) ──
   const volatileSystemBlocks: Anthropic.TextBlockParam[] = [];
 
-  // Voice mode: append the mobile-voice instruction here instead of in the
-  // client bundle. Volatile because it varies per-request (text vs voice).
-  if (req.mode === "voice") {
-    volatileSystemBlocks.push({ type: "text", text: MOBILE_VOICE_INSTRUCTION });
+  // ── Vessel access scope (per-user) ──
+  // TENANT_ADMIN ve toda la flota. El resto queda acotado a sus assigned vessels.
+  // Esto se le declara explícitamente a la IA y se enforce en los tools.
+  const scope: VesselScope = req.userRole === "TENANT_ADMIN"
+    ? { unrestricted: true, codes: [] }
+    : { unrestricted: false, codes: req.assignedVesselCodes ?? [] };
+
+  if (!scope.unrestricted) {
+    const vesselsText = scope.codes.length > 0 ? scope.codes.join(", ") : "(ninguno)";
+    volatileSystemBlocks.push({
+      type: "text",
+      text:
+        `## USER VESSEL ACCESS SCOPE (HARD LIMIT)\n` +
+        `Role: ${req.userRole ?? "USER"}\n` +
+        `Accessible vessels: ${vesselsText}\n\n` +
+        `STRICT RULES:\n` +
+        `- The user can ONLY see data from the vessels listed above. Never reveal, summarize, count, or mention data from any other vessel — neither directly nor aggregated.\n` +
+        `- When calling query_* tools, ONLY use one of the accessible vessel codes for the \`vesselCode\` parameter. Never pass a different vesselCode.\n` +
+        `- For tools where vesselCode is optional, the server will auto-restrict to the accessible vessels; you may omit it, but do not invent codes from outside the list.\n` +
+        `- If a tool returns \`error: "ACCESS_DENIED"\`, do not retry with the same vessel.\n` +
+        `- If the user asks about a specific vessel that is NOT in the accessible list, respond ONLY with: "No tenés acceso al buque [X]. Tus buques asignados son: ${vesselsText}." Do not provide any data, summary, or hint about the requested vessel.\n` +
+        `- Never reference fleet-wide totals, counts, or comparisons that include vessels outside the accessible list.`,
+    });
   }
 
   if (req.screenContext && typeof req.screenContext === "object" && Object.keys(req.screenContext).length > 0) {
@@ -897,7 +979,28 @@ export async function streamCopilotoChat(
     if (prisma) {
       try {
         const insightWhere: Record<string, unknown> = { tenantId: req.tenantId, status: "OPEN" };
-        if (req.vesselCode) insightWhere.vesselCode = req.vesselCode;
+        // Scope cross-vessel: el copiloto no debe inyectar insights de buques
+        // a los que el usuario no tiene acceso. Mismas reglas que listTenantAiInsights:
+        // no-admin → solo vessels asignados + insights FLEET; sin vessels → solo FLEET.
+        if (!scope.unrestricted) {
+          if (scope.codes.length === 0) {
+            insightWhere.targetType = "FLEET";
+          } else {
+            insightWhere.OR = [
+              { vesselCode: { in: scope.codes } },
+              { targetType: "FLEET" },
+            ];
+          }
+        }
+        if (req.vesselCode) {
+          const vesselClause = { OR: [{ vesselCode: req.vesselCode }, { targetType: "FLEET" }] };
+          if (insightWhere.OR) {
+            insightWhere.AND = [{ OR: insightWhere.OR }, vesselClause];
+            delete insightWhere.OR;
+          } else {
+            Object.assign(insightWhere, vesselClause);
+          }
+        }
 
         const insights = await prisma.aiInsight.findMany({
           where: insightWhere,
@@ -1015,6 +1118,7 @@ export async function streamCopilotoChat(
           block.name,
           block.input as Record<string, unknown>,
           req.tenantId,
+          scope,
         ),
       })),
     );

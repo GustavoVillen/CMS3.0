@@ -12606,3 +12606,54 @@ ESTADO ACTUAL DE LA AUDITORIA (cierre de sesion):
       etc.) — mismo patrón pero menos visible. Aplicar i18n cuando toque.
     - Revisar PageHeader.tsx por si recibe strings en lugar de keys
 
+
+2026-05-19 — Copiloto IA: scope cross-vessel + login recuerda credenciales
+-------------------------------------------------------------------------
+  Login (apps/web-modern/src/pages/Login.tsx):
+    - El form de login ahora prellena tenant y email/usuario con los últimos
+      usados en ese navegador (localStorage keys gpms_last_tenant /
+      gpms_last_identifier). La password nunca se persiste. Fallback "demo"
+      sólo si no hay nada guardado.
+
+  Copiloto — aislamiento por buque asignado (bug crítico de leakage):
+    Síntoma reportado: CAPDONCHI (MAINTENANCE_MANAGER) preguntando al copiloto
+    "analiza el reporte" recibió como parte de la respuesta:
+    "Hay 56 certificados vencidos distribuidos en múltiples buques (MGT08,
+    MGT14, MAO01, MGT04, MGT22)" — buques a los que ese usuario no tiene
+    acceso.
+
+    Causa raíz: streamCopilotoChat sólo recibía tenantId y vesselCode opcional.
+    Los tools query_* filtraban por tenant pero aceptaban cualquier vesselCode
+    de la IA. La inyección de insights usaba `if (req.vesselCode)` — si el
+    usuario estaba en vista fleet, traía TODOS los insights del tenant
+    incluyendo otros buques. La IA no sabía qué buques podía mostrar.
+
+    Fix (apps/api/src/tenant/copiloto/copiloto-service.ts):
+      - CopilotoRequest ahora incluye userRole + assignedVesselCodes.
+      - VesselScope { unrestricted, codes }: TENANT_ADMIN → unrestricted;
+        cualquier otro rol → codes = assigned.
+      - executeCopilotTool recibe el scope. Helper applyVesselWhereScope:
+        * Si se pide un vesselCode fuera de scope → devuelve
+          { error: "ACCESS_DENIED", message: "...accessible: A, B" }.
+        * Si no se pide vesselCode → fuerza vesselCode: { in: scope.codes }.
+        * Si está unrestricted → pasa todo sin tocar.
+        Aplicado a los 8 tools (maintenance_plans, work_orders, defects,
+        capa_records, fluid_analyses, fluid_trend, spares, daily_reports).
+      - Inyección de insights del primer turno ahora replica la lógica de
+        listTenantAiInsights: no-admin → vessels asignados + FLEET; sin
+        vessels → sólo FLEET; si se pidió un vesselCode adicional, se
+        combina con AND/OR.
+      - Volatile system block nuevo con la sección "USER VESSEL ACCESS SCOPE
+        (HARD LIMIT)" que le declara a Claude la lista de buques accesibles
+        y la regla: si el usuario pregunta por un buque fuera de la lista,
+        responder textualmente "No tenés acceso al buque [X]. Tus buques
+        asignados son: ...". No se inyecta para admin → mantiene el cache.
+
+    Router (apps/api/src/tenant/tenant-router.ts):
+      - Los 3 puntos que llaman streamCopilotoChat pasan ahora userRole y
+        assignedVesselCodes desde la session.
+
+    Verificado: tsc sin errores nuevos en los archivos modificados (los
+    errores pre-existentes en bitacora/drills/maintenance-plans/defect-pdf
+    no se tocaron, ya estaban antes del cambio).
+
