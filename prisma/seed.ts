@@ -70,8 +70,8 @@ async function main(): Promise<void> {
   });
 
   await prisma.tenantMembership.upsert({
-    where: { userId: tenantUser.id },
-    update: { tenantId: demoTenant.id, role: TenantRole.TENANT_ADMIN, status: MembershipStatus.ACTIVE, assignedVesselCodes: ["LATERE", "GLT001"], joinedAt: now },
+    where: { tenantId_userId: { tenantId: demoTenant.id, userId: tenantUser.id } },
+    update: { role: TenantRole.TENANT_ADMIN, status: MembershipStatus.ACTIVE, assignedVesselCodes: ["LATERE", "GLT001"], joinedAt: now },
     create: { tenantId: demoTenant.id, userId: tenantUser.id, role: TenantRole.TENANT_ADMIN, status: MembershipStatus.ACTIVE, assignedVesselCodes: ["LATERE", "GLT001"], joinedAt: now },
   });
 

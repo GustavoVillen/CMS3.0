@@ -802,7 +802,7 @@ model User {
 model TenantMembership {
   id                   String           @id @default(cuid())
   tenantId              String
-  userId                String           @unique
+  userId                String
   role                  TenantRole
   status                MembershipStatus @default(INVITED)
   assignedVesselCodes   String[]         @default([])
@@ -814,7 +814,10 @@ model TenantMembership {
   tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Un user puede pertenecer a varios tenants, pero sólo una vez a cada uno.
+  @@unique([tenantId, userId])
   @@index([tenantId])
+  @@index([userId])
   @@index([role])
 }
 
