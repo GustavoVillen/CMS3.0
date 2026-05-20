@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-05-20] Import de repuestos: respetar currentStock + generar StockMovement inicial
+Agent: Claude Sonnet 4.6 + Opus 4.7
+
+  PROBLEMA REPORTADO:
+  Usuario importó planilla Excel con columna currentStock (valores reales) pero
+  en la UI los 116 repuestos de capitalmaritima aparecían con stock=0.
+
+  DIAGNÓSTICO (dos bugs encadenados):
+
+  1. Importador hardcodeaba currentStock=0
+     [excel-import-service.ts:378] ignoraba d.currentStock del Excel y forzaba 0.
+     Además el template de spares (excel-template.ts:94-113) no exponía la
+     columna currentStock — estaba como "export-only" en DYNAMIC_COLUMN_PRIORITIES.
+
+  2. La UI no usa Spare.currentStock para mostrar stock
+     [spares-service.ts:149-157] calcula onHand sumando StockMovement
+     (RECEIPT - ISSUE +- ADJUSTMENT). El campo Spare.currentStock es legacy/cache.
+     Sin StockMovement, la UI muestra 0 aunque la DB tenga stock.
+
+  FIX APLICADO:
+    - excel-template.ts: agregada columna "currentStock" al template de spares
+    - excel-export-service.ts: removida "currentStock" de DYNAMIC_COLUMN_PRIORITIES
+      (ya forma parte del template)
+    - excel-import-service.ts:378 respeta d.currentStock al crear el Spare
+    - excel-import-service.ts createRecord case "spares":
+      Si currentStock > 0 al crear el Spare, genera un StockMovement tipo RECEIPT
+      con esa cantidad (referenceType=ADJUSTMENT,
+      notes="Stock inicial importado desde planilla") para que aparezca en la UI.
+
+  BACKFILL (capitalmaritima, 116 spares existentes):
+    INSERT INTO "StockMovement" ... SELECT FROM "Spare"
+    WHERE tenantId = capitalmaritima AND currentStock > 0
+      AND NOT EXISTS (movement previo)
+    Resultado: 116 movements RECEIPT creados (referenceType=ADJUSTMENT,
+    movementCode='MOV-INIT-<id>', notes='Stock inicial backfill').
+
+  COMMITS:
+    - efd981c fix(excel-import): respetar columna currentStock al importar repuestos
+    - e4839d6 fix(excel-import): generar StockMovement RECEIPT al importar spare con stock inicial
+
+  VERIFICACIÓN:
+    Stock visible en UI para capitalmaritima despues del backfill.
+    Próximos imports de planillas con currentStock generarán movements automaticamente.
+
 [2026-05-20] Crew refactor compatibility: fix 4 services using deprecated rank enum
 Agent: Claude Haiku 4.5
 
