@@ -88,7 +88,7 @@ export async function getMatrix(session: TenantAccessSession, filters: MatrixFil
   }
 
   const crew = await (prisma as unknown as {
-    crew: { findMany(a: unknown): Promise<Array<{ id: string; firstName: string; lastName: string; rank: string; vesselCode: string }>> };
+    crew: { findMany(a: unknown): Promise<Array<{ id: string; firstName: string; lastName: string; rankDefinition: { code: string; name: string } | null; vesselCode: string }>> };
   }).crew.findMany({
     where: {
       tenantId,
@@ -96,18 +96,24 @@ export async function getMatrix(session: TenantAccessSession, filters: MatrixFil
       status: "ONBOARD",
       ...(vesselCode ? { vesselCode } : (session.user.role !== "TENANT_ADMIN" ? { vesselCode: { in: session.user.assignedVesselCodes } } : {})),
     },
-    select: { id: true, firstName: true, lastName: true, rank: true, vesselCode: true },
+    select: { id: true, firstName: true, lastName: true, rankDefinition: { select: { code: true, name: true } }, vesselCode: true },
     orderBy: { lastName: "asc" },
   });
 
-  const crewIds = crew.map(c => c.id);
+  // Map rankDefinition to rank string for backward compatibility
+  const crewWithRank = crew.map(c => ({
+    ...c,
+    rank: c.rankDefinition?.name ?? "Unknown",
+  }));
+
+  const crewIds = crewWithRank.map(c => c.id);
   const capWhere: Record<string, unknown> = { tenantId };
   if (crewIds.length > 0) capWhere.crewId = { in: crewIds };
   else return { crew: [], capabilities: [], areas: AREAS };
   if (filters.area) capWhere.area = parseEnum(filters.area, AREAS, "area");
 
   const caps = await capDel(prisma).findMany({ where: capWhere, orderBy: [{ crewId: "asc" }, { area: "asc" }] });
-  return { crew, capabilities: caps, areas: AREAS };
+  return { crew: crewWithRank, capabilities: caps, areas: AREAS };
 }
 
 export async function upsertCapability(session: TenantAccessSession, input: UpsertCapabilityInput) {
