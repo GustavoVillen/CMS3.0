@@ -542,9 +542,9 @@ const AssetModal: React.FC<AssetModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-          <h2 className="text-base font-bold text-white">{isEdit ? "Editar Asset" : "Nuevo Asset"}</h2>
+          <h2 className="text-base font-bold text-white">{isEdit ? t("asset.editTitle") : t("asset.newTitle")}</h2>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
@@ -553,14 +553,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Vessels</label>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")}</label>
               <select
                 value={vesselCode}
                 onChange={e => setVesselCode(e.target.value)}
                 disabled={isEdit && !isAdmin}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60"
               >
-                <option value="">Seleccionar vessel</option>
+                <option value="">{t("asset.selectVessel")}</option>
                 {vessels.map(vessel => (
                   <option key={vessel.code} value={vessel.code}>
                     {vessel.code} - {vessel.name}
@@ -569,7 +569,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Asset Code</label>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.code")}</label>
               <input
                 value={assetCode}
                 onChange={e => {
@@ -632,7 +632,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   disabled={!selectedSubgroup}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60"
                 >
-                  <option value="">Seleccionar nombre existente</option>
+                  <option value="">{t("asset.selectExistingName")}</option>
                   {nameOptions.map(option => (
                     <option key={`${option.name}-${option.suggestedAssetCode}`} value={option.name}>
                       {option.name}
@@ -644,7 +644,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 value={name}
                 onChange={e => onNameChanged(e.target.value)}
                 disabled={!selectedSubgroup}
-                placeholder={nameOptions.length > 0 ? "Seleccionar y luego editar nombre del asset" : "No hay nombre previo para este SFI. Ingresar nuevo."}
+                placeholder={nameOptions.length > 0 ? t("asset.namePlaceholderEdit") : t("asset.namePlaceholderNew")}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
               />
             </div>
@@ -654,7 +654,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 type="button"
                 onClick={() => { void requestCriticalitySuggestion(); }}
                 disabled={!name.trim() || suggestingCriticality}
-                title={!name.trim() ? "Completá el nombre del equipo primero" : "Sugerir criticidad con IA"}
+                title={!name.trim() ? t("asset.suggestCritNeedsName") : t("asset.suggestCritTitle")}
                 className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {suggestingCriticality
@@ -694,18 +694,18 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   className="w-4 h-4 accent-accent"
                 />
                 <span className="text-sm text-white">
-                  Equipo crítico para seguridad <span className="text-text-industrial/60">(ISM 10.3)</span>
+                  {t("asset.safetyCritical")} <span className="text-text-industrial/60">(ISM 10.3)</span>
                 </span>
               </label>
             </div>
 
             <div className="space-y-1.5 col-span-2">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Fundamento de Criticidad</label>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.critRationale")}</label>
               <textarea
                 value={criticalityRationale}
                 onChange={e => setCriticalityRationale(e.target.value)}
                 rows={3}
-                placeholder="Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA."
+                placeholder={t("asset.critRationalePh")}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
               />
             </div>
@@ -946,7 +946,7 @@ export const AssetsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="font-medium text-white line-clamp-1">{row.name}</span>
           {row.isSafetyCritical && (
-            <span title="Equipo crítico para seguridad (ISM 10.3)" className="inline-flex items-center text-amber-400">
+            <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center text-amber-400">
               <ShieldAlert className="w-3.5 h-3.5" />
             </span>
           )}

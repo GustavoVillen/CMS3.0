@@ -676,6 +676,22 @@ const dict = {
   "error.popupBlocked":         { es: "El navegador bloqueó la ventana emergente. Permita popups para este sitio.", en: "Your browser blocked the popup. Allow popups for this site.", pt: "O navegador bloqueou o popup. Permita popups para este site." },
   "error.pdfFailed":            { es: "No se pudo generar el PDF.",                           en: "Could not generate PDF.",                            pt: "Não foi possível gerar o PDF." },
 
+  // Assets — modal
+  "asset.editTitle":            { es: "Editar Asset",                                         en: "Edit Asset",                                         pt: "Editar Equipamento" },
+  "asset.newTitle":             { es: "Nuevo Asset",                                          en: "New Asset",                                          pt: "Novo Equipamento" },
+  "asset.code":                 { es: "Código del asset",                                     en: "Asset code",                                         pt: "Código do equipamento" },
+  "asset.selectVessel":         { es: "Seleccionar vessel",                                   en: "Select a vessel",                                    pt: "Selecionar embarcação" },
+  "asset.selectExistingName":   { es: "Seleccionar nombre existente",                         en: "Select existing name",                               pt: "Selecionar nome existente" },
+  "asset.namePlaceholderEdit":  { es: "Seleccionar y luego editar nombre del asset",          en: "Select then edit the asset name",                    pt: "Selecionar e depois editar o nome do equipamento" },
+  "asset.namePlaceholderNew":   { es: "No hay nombre previo para este SFI. Ingresar nuevo.",  en: "No previous name for this SFI. Enter a new one.",    pt: "Não há nome anterior para este SFI. Inserir novo." },
+  "asset.suggestCritTitle":     { es: "Sugerir criticidad con IA",                            en: "Suggest criticality with AI",                        pt: "Sugerir criticidade com IA" },
+  "asset.suggestCritNeedsName": { es: "Completá el nombre del equipo primero",                en: "Enter the asset name first",                         pt: "Preencha o nome do equipamento primeiro" },
+  "asset.safetyCritical":       { es: "Equipo crítico para seguridad",                        en: "Safety-critical equipment",                          pt: "Equipamento crítico para segurança" },
+  "asset.critRationale":        { es: "Fundamento de Criticidad",                             en: "Criticality Rationale",                              pt: "Fundamento de Criticidade" },
+  "asset.critRationalePh":      { es: "Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA.", en: "Justification for the criticality level and/or ISM flag. You can generate it automatically with the AI buttons.", pt: "Justificativa do nível de criticidade e/ou flag ISM. Você pode gerá-la automaticamente com os botões IA." },
+  "asset.expand":               { es: "Ampliar",                                              en: "Expand",                                             pt: "Ampliar" },
+  "asset.collapse":             { es: "Reducir",                                              en: "Collapse",                                           pt: "Reduzir" },
+
   // Labels (status display)
   "label.approvedBy":           { es: "Aprobado por",                           en: "Approved by",                            pt: "Aprovado por" },
   "label.rejectedBy":           { es: "Rechazado por",                          en: "Rejected by",                            pt: "Rejeitado por" },
