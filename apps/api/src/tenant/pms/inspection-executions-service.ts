@@ -557,8 +557,8 @@ export async function completeInspectionExecution(
     if (shouldCreateDefect(result)) {
       const year = new Date().getFullYear();
       const yy = String(year).slice(-2);
-      const defectCount = await tx.defect.count({ where: { tenantId: execution.tenantId, vesselCode: execution.vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-      const defectCode = `DEF-${execution.vesselCode}-${yy}-${String(defectCount + 1).padStart(4, "0")}`;
+      const defectsThisYear = await (tx.defect as any).findMany({ where: { tenantId: execution.tenantId, vesselCode: execution.vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+      const defectCode = `DEF-${execution.vesselCode}-${yy}-${String(defectsThisYear.length + 1).padStart(4, "0")}`;
       const descriptionBase = execution.template?.title ?? "Inspection";
       const details = normalizeOptionalText(payload.generalObservations);
       const description = details ? `${descriptionBase}: ${details}` : `${descriptionBase}: finding generado por inspección.`;

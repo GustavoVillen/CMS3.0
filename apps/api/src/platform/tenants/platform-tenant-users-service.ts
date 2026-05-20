@@ -225,7 +225,7 @@ export async function listPlatformTenantUsers(
   if (Object.keys(userWhere).length > 0) membershipWhere.user = userWhere;
 
   const records = await prisma.tenantMembership.findMany({
-    where: membershipWhere as Parameters<typeof prisma.tenantMembership.findMany>[0]["where"],
+    where: membershipWhere as any,
     include: { tenant: true, user: true },
     orderBy: { createdAt: "asc" },
   });

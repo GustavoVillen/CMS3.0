@@ -1216,8 +1216,8 @@ export async function postponePlan(
 
   const aplYear = new Date().getFullYear();
   const aplYY = String(aplYear).slice(-2);
-  const aplCount = await deferral.count({ where: { tenantId: plan.tenantId, vesselCode: plan.vesselCode, createdAt: { gte: new Date(aplYear, 0, 1), lt: new Date(aplYear + 1, 0, 1) } } });
-  const deferralCode = `APL-${plan.vesselCode}-${aplYY}-${String(aplCount + 1).padStart(4, "0")}`;
+  const deferralsThisYear = await (deferral as any).findMany({ where: { tenantId: plan.tenantId, vesselCode: plan.vesselCode, createdAt: { gte: new Date(aplYear, 0, 1), lt: new Date(aplYear + 1, 0, 1) } } });
+  const deferralCode = `APL-${plan.vesselCode}-${aplYY}-${String(deferralsThisYear.length + 1).padStart(4, "0")}`;
 
   const deferralStatus = authorizedBy ? "APPROVED" : "REQUESTED";
   const now = new Date();
@@ -1250,7 +1250,7 @@ export async function postponePlan(
     const updateData: Record<string, unknown> = { updatedByUserId: session.user.id };
     if (newDueDate) updateData.nextDueDate = newDueDate;
     if (newDueHours !== null) updateData.nextDueHours = newDueHours;
-    updatedPlan = await prisma.maintenancePlan.update({ where: { id: plan.id }, data: updateData });
+    updatedPlan = await prisma.maintenancePlan.update({ where: { id: plan.id }, data: updateData }) as any;
   }
 
   void publishAudit(prismaRaw, {

@@ -35,9 +35,11 @@ export async function updateProfile(
 ): Promise<ProfileData> {
   const prisma = getPrismaClient();
   if (prisma) {
+    const data: any = { firstName: input.firstName, lastName: input.lastName };
+    if (input.preferredLocale !== undefined) data.preferredLocale = input.preferredLocale;
     const user = await prisma.user.update({
       where: { id: session.user.id },
-      data: { firstName: input.firstName, lastName: input.lastName, preferredLocale: input.preferredLocale },
+      data,
       select: { id: true, email: true, firstName: true, lastName: true, preferredLocale: true },
     });
     return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, preferredLocale: user.preferredLocale ?? "es" };

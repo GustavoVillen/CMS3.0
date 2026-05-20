@@ -119,9 +119,9 @@ export async function buildDrillPdf(session: TenantAccessSession, id: string): P
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { slug: session.tenantSlug },
-      select: { name: true },
+      select: { slug: true },
     });
-    if (tenant?.name) tenantName = tenant.name;
+    if (tenant?.slug) tenantName = tenant.slug;
   } catch (err) {
     log.warn("[buildDrillPdf] tenant lookup failed:", err);
   }

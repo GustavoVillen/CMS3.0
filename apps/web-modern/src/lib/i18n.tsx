@@ -592,6 +592,7 @@ const dict = {
   "common.reload":         { es: "Actualizar",          en: "Reload",             pt: "Atualizar" },
   "common.loading":        { es: "Cargando…",           en: "Loading…",           pt: "Carregando…" },
   "common.error":          { es: "Error",               en: "Error",              pt: "Erro" },
+  "common.unknownError":   { es: "Error desconocido",   en: "Unknown error",      pt: "Erro desconhecido" },
   "common.noData":         { es: "Sin datos",           en: "No data",            pt: "Sem dados" },
   "common.save":           { es: "Guardar",             en: "Save",               pt: "Salvar" },
   "common.saveChanges":    { es: "Guardar cambios",     en: "Save changes",       pt: "Salvar alterações" },

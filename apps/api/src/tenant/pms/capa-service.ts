@@ -317,8 +317,8 @@ export async function createCapaRecord(session: TenantAccessSession, payload: Cr
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const capaCount = await capa.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-  const capaCode = `CAPA-${vesselCode}-${yy}-${String(capaCount + 1).padStart(4, "0")}`;
+  const capasThisYear = await (capa as any).findMany({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+  const capaCode = `CAPA-${vesselCode}-${yy}-${String(capasThisYear.length + 1).padStart(4, "0")}`;
   const created = await capa.create({
     data: {
       tenantId,

@@ -270,8 +270,8 @@ export async function getDefect(session: TenantAccessSession, id: string) {
 
   const record = await defect.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Defect no encontrado.");
-  const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record as { workOrderId: string | null }]);
-  return enriched[0];
+  const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record as { workOrderId: string | null } & Record<string, any>]);
+  return enriched[0] as typeof record & { workOrderCode: string | null };
 }
 
 export async function createDefect(session: TenantAccessSession, payload: CreateDefectInput) {
@@ -311,8 +311,8 @@ export async function createDefect(session: TenantAccessSession, payload: Create
   // bajo concurrencia. withUniqueRetry reintenta con count+1+attempt en cada
   // colisión P2002 (hasta 5 attempts).
   const created = await withUniqueRetry(async (attempt) => {
-    const defectCount = await defect.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-    const defectCode = `DEF-${vesselCode}-${yy}-${String(defectCount + 1 + attempt).padStart(4, "0")}`;
+    const defectsThisYear = await (defect as any).findMany({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
+    const defectCode = `DEF-${vesselCode}-${yy}-${String(defectsThisYear.length + 1 + attempt).padStart(4, "0")}`;
     return defect.create({
       data: {
         tenantId,
