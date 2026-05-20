@@ -3,12 +3,11 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
+// Documentos personales del tripulante. Los cursos/entrenamientos regulatorios
+// (STCW, NR, GMDSS, etc.) se gestionan en la Matriz de Entrenamientos
+// (TrainingItem + CrewTrainingRecord), no acá.
 const CERT_TYPES = [
-  "STCW_II_1", "STCW_II_2", "STCW_III_1", "STCW_III_2", "STCW_IV_2",
-  "STCW_V_1", "STCW_VI_1", "STCW_VI_2", "STCW_VI_3", "STCW_VI_4",
-  "GMDSS_GOC", "GMDSS_ROC", "BST", "MEDICAL_ENOG", "MEDICAL_FIRST_AID",
-  "ADVANCED_FIRE_FIGHTING", "SHIP_SECURITY_OFFICER", "CROWD_MANAGEMENT",
-  "PASSPORT", "SEAMANS_BOOK", "OTHER",
+  "PASSPORT", "SEAMANS_BOOK", "VISA", "MEDICAL", "YELLOW_FEVER", "OTHER",
 ] as const;
 type CertType = typeof CERT_TYPES[number];
 type CertStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED";

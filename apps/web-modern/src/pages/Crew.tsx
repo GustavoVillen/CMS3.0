@@ -77,28 +77,16 @@ const RANK_TKEY: Record<string, string> = {
   OTHER: "crew.rank.other",
 };
 
+// Solo documentos personales. Los cursos/entrenamientos regulatorios se
+// gestionan en la Matriz de Entrenamientos.
+const PERSONAL_DOC_TYPES = ["PASSPORT", "SEAMANS_BOOK", "VISA", "MEDICAL", "YELLOW_FEVER", "OTHER"] as const;
 const CERT_TYPE_TKEY: Record<string, string> = {
-  STCW_II_1: "cert.type.stcw_ii_1",
-  STCW_II_2: "cert.type.stcw_ii_2",
-  STCW_III_1: "cert.type.stcw_iii_1",
-  STCW_III_2: "cert.type.stcw_iii_2",
-  STCW_IV_2: "cert.type.stcw_iv_2",
-  STCW_V_1: "cert.type.stcw_v_1",
-  STCW_VI_1: "cert.type.stcw_vi_1",
-  STCW_VI_2: "cert.type.stcw_vi_2",
-  STCW_VI_3: "cert.type.stcw_vi_3",
-  STCW_VI_4: "cert.type.stcw_vi_4",
-  GMDSS_GOC: "cert.type.gmdss_goc",
-  GMDSS_ROC: "cert.type.gmdss_roc",
-  BST: "cert.type.bst",
-  MEDICAL_ENOG: "cert.type.medical_enog",
-  MEDICAL_FIRST_AID: "cert.type.medical_first_aid",
-  ADVANCED_FIRE_FIGHTING: "cert.type.advanced_fire_fighting",
-  SHIP_SECURITY_OFFICER: "cert.type.ship_security_officer",
-  CROWD_MANAGEMENT: "cert.type.crowd_management",
-  PASSPORT: "cert.type.passport",
+  PASSPORT:     "cert.type.passport",
   SEAMANS_BOOK: "cert.type.seamans_book",
-  OTHER: "cert.type.other",
+  VISA:         "cert.type.visa",
+  MEDICAL:      "cert.type.medical",
+  YELLOW_FEVER: "cert.type.yellow_fever",
+  OTHER:        "cert.type.other",
 };
 
 function fmtDate(value: string | null): string {
@@ -382,7 +370,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
   const t = useT();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Certification | null>(null);
-  const [type, setType]               = useState("STCW_VI_1");
+  const [type, setType]               = useState<string>(PERSONAL_DOC_TYPES[0]);
   const [certificateNumber, setCN]    = useState("");
   const [issuingAuthority, setAuth]   = useState("");
   const [issuedDate, setIssued]       = useState("");
@@ -393,7 +381,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
   const [err, setErr]                 = useState<string | null>(null);
 
   const resetForm = () => {
-    setType("STCW_VI_1"); setCN(""); setAuth(""); setIssued(""); setExpiry(""); setDocUrl(""); setNotes("");
+    setType(PERSONAL_DOC_TYPES[0]); setCN(""); setAuth(""); setIssued(""); setExpiry(""); setDocUrl(""); setNotes("");
     setAdding(false); setEditing(null); setErr(null);
   };
 

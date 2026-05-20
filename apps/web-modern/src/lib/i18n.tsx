@@ -1300,7 +1300,7 @@ const dict = {
   "crew.field.signOffDate":       { es: "Fecha desembarque",                    en: "Sign-off date",                         pt: "Data de desembarque" },
   "crew.field.notes":             { es: "Notas",                                en: "Notes",                                 pt: "Notas" },
   "crew.tab.details":             { es: "Detalles",                             en: "Details",                               pt: "Detalhes" },
-  "crew.tab.certifications":      { es: "Certificaciones",                      en: "Certifications",                        pt: "Certificações" },
+  "crew.tab.certifications":      { es: "Documentos personales",                en: "Personal Documents",                    pt: "Documentos pessoais" },
   "crew.filter.onboard":          { es: "A bordo",                              en: "Onboard",                               pt: "A bordo" },
   "crew.filter.signedOff":        { es: "Desembarcados",                        en: "Signed off",                            pt: "Desembarcados" },
   "crew.filter.all":              { es: "Todos",                                en: "All",                                   pt: "Todos" },
@@ -1404,6 +1404,9 @@ const dict = {
   "cert.type.crowd_management":   { es: "Manejo de Multitudes",                en: "Crowd Management",              pt: "Gestão de Multidões" },
   "cert.type.passport":           { es: "Pasaporte",                           en: "Passport",                      pt: "Passaporte" },
   "cert.type.seamans_book":       { es: "Libreta de Embarco",                  en: "Seaman's Book",                 pt: "Caderneta de Marinheiro" },
+  "cert.type.visa":               { es: "Visa",                                en: "Visa",                          pt: "Visto" },
+  "cert.type.medical":            { es: "Certificado médico",                  en: "Medical Certificate",           pt: "Atestado médico" },
+  "cert.type.yellow_fever":       { es: "Fiebre amarilla",                     en: "Yellow Fever",                  pt: "Febre amarela" },
   "cert.type.other":              { es: "Otro",                                en: "Other",                         pt: "Outro" },
 } satisfies Record<string, Record<Locale, string>>;
 
