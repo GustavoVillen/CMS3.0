@@ -1545,55 +1545,55 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
         <div style="display:flex;align-items:center;gap:14px">
           <img src="/logo.png" style="width:60px;height:60px;object-fit:contain;flex-shrink:0" />
           <div>
-            <h1>PLAN DE MANTENIMIENTO</h1>
+            <h1>${t("mp.pdf.title")}</h1>
             <div class="sub">Copilot Management System</div>
           </div>
         </div>
         <div style="text-align:right;font-size:9pt;color:#64748b">
-          <div style="font-size:7pt">Código:</div>
+          <div style="font-size:7pt">${t("mp.pdf.code")}</div>
           <div style="font-size:13pt;font-weight:bold;color:#0f2744">${v(plan.taskCode)}</div>
-          <div style="font-size:7pt;margin-top:4px">Generado: ${gen}</div>
+          <div style="font-size:7pt;margin-top:4px">${t("mp.pdf.generated")} ${gen}</div>
         </div>
       </div>
       <hr/>
 
-      <div class="section-title">Identificación</div>
+      <div class="section-title">${t("mp.pdf.identification")}</div>
       <div class="grid">
-        <div class="cell"><div class="cell-label">Embarcación</div><div class="cell-value blue">${v(plan.vesselCode)}</div></div>
-        <div class="cell"><div class="cell-label">Activo / Equipo</div><div class="cell-value">${assetDisplay}</div></div>
-        <div class="cell"><div class="cell-label">Estado</div><div class="cell-value">${statusLbl(plan.status ?? "")}</div></div>
-        <div class="cell"><div class="cell-label">Código de tarea</div><div class="cell-value">${v(plan.taskCode)}</div></div>
-        <div class="cell"><div class="cell-label">Grupo SFI</div><div class="cell-value">${plan.sfiGroupNumber != null ? `G${plan.sfiGroupNumber}` : "—"}</div></div>
-        <div class="cell"><div class="cell-label">Subgrupo SFI</div><div class="cell-value">${v(plan.sfiSubgroupCode)}</div></div>
-        <div class="cell"><div class="cell-label">Tipo de tarea</div><div class="cell-value">${taskTypeLbl(plan.taskType)}</div></div>
-        <div class="cell"><div class="cell-label">Responsable</div><div class="cell-value">${v(responsible)}</div></div>
-        <div class="cell"><div class="cell-label">Criticidad</div><div class="cell-value">${v(plan.criticality)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.vessel")}</div><div class="cell-value blue">${v(plan.vesselCode)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.asset")}</div><div class="cell-value">${assetDisplay}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.status")}</div><div class="cell-value">${statusLbl(plan.status ?? "")}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.taskCode")}</div><div class="cell-value">${v(plan.taskCode)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.sfiGroup")}</div><div class="cell-value">${plan.sfiGroupNumber != null ? `G${plan.sfiGroupNumber}` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.sfiSubgroup")}</div><div class="cell-value">${v(plan.sfiSubgroupCode)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.taskType")}</div><div class="cell-value">${taskTypeLbl(plan.taskType)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.responsible")}</div><div class="cell-value">${v(responsible)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.criticality")}</div><div class="cell-value">${v(plan.criticality)}</div></div>
       </div>
 
-      <div class="section-title">Planificación y Frecuencia</div>
+      <div class="section-title">${t("mp.pdf.planFreq")}</div>
       <div class="grid">
-        <div class="cell"><div class="cell-label">Tipo de trigger</div><div class="cell-value">${triggerLbl(plan.triggerType)}</div></div>
-        <div class="cell"><div class="cell-label">Frecuencia (meses)</div><div class="cell-value">${plan.frequencyMonths != null ? `${plan.frequencyMonths} meses` : "—"}</div></div>
-        <div class="cell"><div class="cell-label">Frecuencia (horas)</div><div class="cell-value">${plan.frequencyHours != null ? `${plan.frequencyHours} h` : "—"}</div></div>
-        <div class="cell"><div class="cell-label">Última ejecución</div><div class="cell-value">${fmtDate(plan.lastExecutionDate)}</div></div>
-        <div class="cell"><div class="cell-label">Próximo vencimiento</div><div class="cell-value red">${fmtDate(plan.nextDueDate)}</div></div>
-        <div class="cell"><div class="cell-label">Modo de resultado</div><div class="cell-value">${resultLbl(plan.triggerResultMode ?? "")}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.triggerType")}</div><div class="cell-value">${triggerLbl(plan.triggerType)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.freqMonths")}</div><div class="cell-value">${plan.frequencyMonths != null ? `${plan.frequencyMonths} ${t("mp.pdf.months")}` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.freqHours")}</div><div class="cell-value">${plan.frequencyHours != null ? `${plan.frequencyHours} h` : "—"}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.lastExec")}</div><div class="cell-value">${fmtDate(plan.lastExecutionDate)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.nextDue")}</div><div class="cell-value red">${fmtDate(plan.nextDueDate)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.resultMode")}</div><div class="cell-value">${resultLbl(plan.triggerResultMode ?? "")}</div></div>
       </div>
 
-      <div class="section-title">Tareas a Realizar</div>
+      <div class="section-title">${t("mp.pdf.tasksToDo")}</div>
       <div class="grid">
-        <div class="cell cell-full"><div class="cell-label">Título</div><div class="cell-value">${v(title)}</div></div>
-        <div class="cell cell-full"><div class="cell-label">Tareas a realizar / Descripción</div><div class="cell-value" style="font-weight:normal">${renderText(description)}</div></div>
-        ${acceptanceCriteria ? `<div class="cell cell-full"><div class="cell-label">Criterios de aceptación</div><div class="cell-value" style="font-weight:normal">${renderText(acceptanceCriteria)}</div></div>` : ""}
-        ${loto ? `<div class="cell cell-full"><div class="cell-label">Evidencia requerida / LOTO</div><div class="cell-value" style="font-weight:normal">${renderText(loto)}</div></div>` : ""}
-        ${riskLevel ? `<div class="cell cell-full"><div class="cell-label">Nivel de riesgo</div><div class="cell-value" style="font-size:13pt;color:${riskColor(riskLevel)}">${riskLbl(riskLevel)}</div></div>
-        ${riskAnalysisResult ? `<div class="cell cell-full"><div class="cell-label">Análisis de riesgo</div><div class="cell-value" style="font-weight:normal">${renderText(riskAnalysisResult)}</div></div>` : ""}` : ""}
+        <div class="cell cell-full"><div class="cell-label">${t("mp.pdf.title2")}</div><div class="cell-value">${v(title)}</div></div>
+        <div class="cell cell-full"><div class="cell-label">${t("mp.pdf.tasksDesc")}</div><div class="cell-value" style="font-weight:normal">${renderText(description)}</div></div>
+        ${acceptanceCriteria ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.acceptCriteria")}</div><div class="cell-value" style="font-weight:normal">${renderText(acceptanceCriteria)}</div></div>` : ""}
+        ${loto ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.evidenceLoto")}</div><div class="cell-value" style="font-weight:normal">${renderText(loto)}</div></div>` : ""}
+        ${riskLevel ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskLevel")}</div><div class="cell-value" style="font-size:13pt;color:${riskColor(riskLevel)}">${riskLbl(riskLevel)}</div></div>
+        ${riskAnalysisResult ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskAnalysis")}</div><div class="cell-value" style="font-weight:normal">${renderText(riskAnalysisResult)}</div></div>` : ""}` : ""}
       </div>
 
       <div class="sig-row">
-        <div class="sig-cell"><div class="cell-label">Responsable de ejecución</div><div class="sig-line"></div></div>
-        <div class="sig-cell"><div class="cell-label">Supervisor / Jefe de Máquinas</div><div class="sig-line"></div></div>
-        <div class="sig-cell"><div class="cell-label">Verificado por</div><div class="sig-line"></div></div>
+        <div class="sig-cell"><div class="cell-label">${t("mp.pdf.respExec")}</div><div class="sig-line"></div></div>
+        <div class="sig-cell"><div class="cell-label">${t("mp.pdf.supervisor")}</div><div class="sig-line"></div></div>
+        <div class="sig-cell"><div class="cell-label">${t("mp.pdf.verifiedBy")}</div><div class="sig-line"></div></div>
       </div>
     </div>
   </td></tr></tbody>

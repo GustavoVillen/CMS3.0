@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 interface AuditLogItem {
   id: string;
@@ -21,17 +22,17 @@ interface AuditLogResponse {
   total: number;
 }
 
-const ENTITY_LABELS: Record<string, string> = {
-  MaintenancePlan:     "Plan Mtto.",
-  WorkOrder:           "OT",
-  Vessel:              "Buque",
-  Asset:               "Activo",
-  Defect:              "Defecto",
-  Deferral:            "Diferimiento",
-  Certificate:         "Certificado",
-  Spare:               "Repuesto",
-  Capa:                "CAPA",
-  InspectionExecution: "Inspección",
+const ENTITY_TKEY: Record<string, TranslationKey> = {
+  MaintenancePlan:     "bit.entity.maintenancePlan",
+  WorkOrder:           "bit.entity.workOrder",
+  Vessel:              "bit.entity.vessel",
+  Asset:               "bit.entity.asset",
+  Defect:              "bit.entity.defect",
+  Deferral:            "bit.entity.deferral",
+  Certificate:         "bit.entity.certificate",
+  Spare:               "bit.entity.spare",
+  Capa:                "bit.entity.capa",
+  InspectionExecution: "bit.entity.inspection",
 };
 
 const ENTITY_ROUTE: Record<string, string> = {
@@ -47,7 +48,7 @@ const ENTITY_ROUTE: Record<string, string> = {
   InspectionExecution: "/inspections",
 };
 
-const ENTITY_TYPES = Object.entries(ENTITY_LABELS).map(([value, label]) => ({ value, label }));
+const ENTITY_TYPE_VALUES = Object.keys(ENTITY_TKEY);
 
 function actionBadgeCls(action: string): string {
   const a = action.toLowerCase();
@@ -67,18 +68,23 @@ function actionBadgeCls(action: string): string {
   return "bg-white/5 text-text-industrial/60 border-white/10";
 }
 
-function actionLabel(action: string): string {
+function actionTKey(action: string): TranslationKey | null {
   const dot = action.indexOf(".");
   const raw = dot !== -1 ? action.slice(dot + 1) : action;
-  const map: Record<string, string> = {
-    created: "CREADO", updated: "MODIFICADO", deleted: "ELIMINADO",
-    executed: "EJECUTADO", completed: "COMPLETADO", started: "INICIADO",
-    closed: "CERRADO", approved: "APROBADO", cancelled: "CANCELADO",
-    held: "EN ESPERA", opened: "ABIERTO", deferred: "APLAZADO",
-    rejected: "RECHAZADO",
+  const map: Record<string, TranslationKey> = {
+    created: "bit.act.created", updated: "bit.act.updated", deleted: "bit.act.deleted",
+    executed: "bit.act.executed", completed: "bit.act.completed", started: "bit.act.started",
+    closed: "bit.act.closed", approved: "bit.act.approved", cancelled: "bit.act.cancelled",
+    held: "bit.act.held", opened: "bit.act.opened", deferred: "bit.act.deferred",
+    rejected: "bit.act.rejected",
   };
-  const key = raw.toLowerCase();
-  return map[key] ?? raw.toUpperCase();
+  return map[raw.toLowerCase()] ?? null;
+}
+
+function actionRawUpper(action: string): string {
+  const dot = action.indexOf(".");
+  const raw = dot !== -1 ? action.slice(dot + 1) : action;
+  return raw.toUpperCase();
 }
 
 function refCode(metadata: Record<string, unknown> | null): string {
@@ -290,6 +296,7 @@ function downloadAuditExcel(entityType: string, from: string, to: string) {
 }
 
 export const BitacoraPage: React.FC = () => {
+  const t = useT();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [entityType, setEntityType] = useState("");
@@ -307,7 +314,7 @@ export const BitacoraPage: React.FC = () => {
   if (user?.role !== "TENANT_ADMIN") {
     return (
       <div className="flex items-center justify-center h-40">
-        <p className="text-sm text-red-400">Acceso restringido a administradores del tenant.</p>
+        <p className="text-sm text-red-400">{t("bit.adminOnly")}</p>
       </div>
     );
   }
@@ -335,24 +342,24 @@ export const BitacoraPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={ScrollText} title="Bitácora del Sistema" total={data?.total} onReload={() => { void reload(); }}>
+      <PageHeader icon={ScrollText} title={t("bit.title")} total={data?.total} onReload={() => { void reload(); }}>
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => downloadAuditExcel(entityType, from, to)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Exportar Excel
+            <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> {t("bit.exportExcel")}
           </button>
           <select value={entityType} onChange={e => setEntityType(e.target.value)} className={inputCls}>
-            <option value="">Todos los tipos</option>
-            {ENTITY_TYPES.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
+            <option value="">{t("common.allTypes")}</option>
+            {ENTITY_TYPE_VALUES.map(v => <option key={v} value={v}>{t(ENTITY_TKEY[v])}</option>)}
           </select>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
           <span className="text-text-industrial/30 text-xs">→</span>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
           {hasFilters && (
             <button onClick={clearFilters} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white transition-all">
-              Limpiar
+              {t("bit.clear")}
             </button>
           )}
         </div>
@@ -369,20 +376,20 @@ export const BitacoraPage: React.FC = () => {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
-                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Fecha / Hora</th>
-                <th className="text-left px-4 py-3 font-semibold">Tipo</th>
-                <th className="text-left px-4 py-3 font-semibold">Buque</th>
-                <th className="text-left px-4 py-3 font-semibold">Referencia</th>
-                <th className="text-left px-4 py-3 font-semibold">Acción</th>
-                <th className="text-left px-4 py-3 font-semibold">Detalle</th>
-                <th className="text-left px-4 py-3 font-semibold">Actor</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">{t("bit.colDateTime")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colType")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colVessel")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colReference")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colAction")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colDetail")}</th>
+                <th className="text-left px-4 py-3 font-semibold">{t("bit.colActor")}</th>
               </tr>
             </thead>
             <tbody>
               {(data?.items ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-text-industrial/30">
-                    Sin registros en este período.
+                    {t("bit.empty")}
                   </td>
                 </tr>
               ) : (
@@ -401,7 +408,7 @@ export const BitacoraPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-text-industrial/60 whitespace-nowrap">
-                        {ENTITY_LABELS[item.entityType] ?? item.entityType}
+                        {ENTITY_TKEY[item.entityType] ? t(ENTITY_TKEY[item.entityType]) : item.entityType}
                       </td>
                       <td className="px-4 py-3">
                         {vessel
@@ -429,7 +436,7 @@ export const BitacoraPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold ${actionBadgeCls(item.action)}`}>
-                          {actionLabel(item.action)}
+                          {(() => { const k = actionTKey(item.action); return k ? t(k) : actionRawUpper(item.action); })()}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-text-industrial/50 max-w-[280px]">

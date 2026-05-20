@@ -50,10 +50,10 @@ interface CrewItem {
   status: string;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: "Programado",
-  COMPLETED: "Realizado",
-  CANCELLED: "Cancelado",
+const STATUS_TKEY: Record<string, "drill.status.scheduled" | "drill.status.completed" | "drill.status.cancelled"> = {
+  SCHEDULED: "drill.status.scheduled",
+  COMPLETED: "drill.status.completed",
+  CANCELLED: "drill.status.cancelled",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -241,10 +241,10 @@ const DrillModal: React.FC<{
           <div className="flex items-center gap-3">
             <CalendarCheck className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Simulacro</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo simulacro" : drill!.drillCode}</h2>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("drill.title")}</p>
+              <h2 className="text-sm font-bold text-white">{isNew ? t("drill.newTitle") : drill!.drillCode}</h2>
             </div>
-            {drill && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[drill.status]}`}>{STATUS_LABEL[drill.status]}</span>}
+            {drill && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[drill.status]}`}>{t(STATUS_TKEY[drill.status])}</span>}
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
@@ -253,72 +253,72 @@ const DrillModal: React.FC<{
           {isLocked && (
             <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-orange-200">Este simulacro está {STATUS_LABEL[drill!.status]}. Para editarlo, un administrador debe re-abrirlo con justificación.</p>
+              <p className="text-xs text-orange-200">{t("drill.lockedHint").replace("{status}", t(STATUS_TKEY[drill!.status]))}</p>
             </div>
           )}
 
           {availableRequirements.length === 0 && (
             <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-200">No hay tipos de simulacro configurados para este vessel. Pedile a un administrador que configure el catálogo.</p>
+              <p className="text-xs text-yellow-200">{t("drill.noTypesForVessel")}</p>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Vessel</label>
+              <label className={labelCls}>{t("drill.vessel")}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Tipo de simulacro</label>
+              <label className={labelCls}>{t("drill.type")}</label>
               <select value={requirementId} onChange={e => setRequirementId(e.target.value)} disabled={isLocked} className={inputCls}>
-                {!requirementId && <option value="">— Seleccionar —</option>}
+                {!requirementId && <option value="">{t("common.select")}</option>}
                 {availableRequirements.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                 {currentReq && !availableRequirements.find(r => r.id === currentReq.id) && (
                   <option value={currentReq.id}>{currentReq.title}</option>
                 )}
               </select>
               {currentReq?.solasRegulation && (
-                <p className="mt-1 text-[10px] text-text-industrial/40">Ref: {currentReq.solasRegulation}</p>
+                <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.ref")}: {currentReq.solasRegulation}</p>
               )}
             </div>
             <div>
-              <label className={labelCls}>Fecha programada</label>
+              <label className={labelCls}>{t("drill.scheduledDate")}</label>
               <input type="date" value={scheduledDate} onChange={e => setScheduled(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             {drill?.completedDate && (
               <div>
-                <label className={labelCls}>Realizado</label>
+                <label className={labelCls}>{t("drill.completedDate")}</label>
                 <input type="date" value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
               </div>
             )}
             <div className="col-span-2 space-y-1">
               <label
                 onClick={!isLocked ? handleScenarioClick : undefined}
-                title={!isLocked ? "Generar escenario con IA según la norma del requisito" : undefined}
+                title={!isLocked ? t("drill.scenarioAiTitle") : undefined}
                 className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${!isLocked ? `hover:text-white cursor-pointer ${loadingScenario ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
                 {loadingScenario ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                Escenario
-                {loadingScenario && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
+                {t("drill.scenario")}
+                {loadingScenario && <span className="ml-1 text-[9px] normal-case font-normal">{t("drill.scenarioAiAnalyzing")}</span>}
               </label>
-              <textarea rows={4} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked || loadingScenario} className={`${inputCls} resize-y`} placeholder="Click en 'Escenario' para que la IA proponga uno, o escribilo manualmente." />
+              <textarea rows={4} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked || loadingScenario} className={`${inputCls} resize-y`} placeholder={t("drill.scenarioPlaceholder")} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>Observaciones</label>
+              <label className={labelCls}>{t("drill.observations")}</label>
               <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>Lecciones aprendidas</label>
+              <label className={labelCls}>{t("drill.lessonsLearned")}</label>
               <textarea rows={3} value={lessonsLearned} onChange={e => setLessons(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>Participantes ({participants.length})</label>
+              <label className={labelCls}>{t("drill.participants")} ({participants.length})</label>
               <div className="max-h-40 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
                 {availableCrew.length === 0 ? (
-                  <p className="text-xs text-text-industrial/40 p-2">Sin tripulantes a bordo en este vessel</p>
+                  <p className="text-xs text-text-industrial/40 p-2">{t("drill.noCrewOnboard")}</p>
                 ) : availableCrew.map(c => (
                   <label key={c.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer">
                     <input type="checkbox"
@@ -342,28 +342,28 @@ const DrillModal: React.FC<{
               <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
                 {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />}
-                Guardar PDF
+                {t("common.savePdf")}
               </button>
             )}
             {!isNew && drill?.status === "SCHEDULED" && (
               <button onClick={() => { void onComplete(); }} disabled={saving}
                 className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">
-                Marcar realizado
+                {t("drill.markCompleted")}
               </button>
             )}
             {!isNew && isLocked && isAdmin && (
               <button onClick={() => { void onReopen(); }} disabled={saving}
                 className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
-                Re-abrir
+                {t("drill.reopen")}
               </button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
             {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
               </button>
             )}
           </div>
@@ -398,14 +398,15 @@ const STATUS_CELL_CLS: Record<MatrixStatus, string> = {
   OK: "bg-success-sea/10 text-success-sea/80 border-success-sea/20 hover:bg-success-sea/15",
 };
 
-const STATUS_CELL_LABEL: Record<MatrixStatus, string> = {
-  OVERDUE: "Vencido",
-  DUE_SOON: "Próximo",
-  NEVER: "Sin registro",
-  OK: "Al día",
+const STATUS_CELL_TKEY: Record<MatrixStatus, "drill.cellOverdue" | "drill.cellDueSoon" | "drill.cellNever" | "drill.cellOk"> = {
+  OVERDUE: "drill.cellOverdue",
+  DUE_SOON: "drill.cellDueSoon",
+  NEVER: "drill.cellNever",
+  OK: "drill.cellOk",
 };
 
 const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (vesselCode: string, requirementId: string) => void; onReload: () => void }> = ({ cells, loading, onPlan, onReload }) => {
+  const t = useT();
   const [expanded, setExpanded] = useState(true);
 
   // Agrupar: requirements × vessels (ordenados por título)
@@ -440,14 +441,14 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
       <button onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.04] transition-colors text-left">
         {expanded ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
-        <span className="text-xs font-bold uppercase tracking-wider text-white">Matriz de cumplimiento</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-white">{t("drill.complianceMatrix")}</span>
         <span className="text-[10px] text-text-industrial/40">— SOLAS / ISPS / MARPOL</span>
         <div className="ml-auto flex items-center gap-2">
           {overdueCount > 0 && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/15 text-red-300 border-red-500/30">{overdueCount} vencidos</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/15 text-red-300 border-red-500/30">{t("drill.overdueCount").replace("{n}", String(overdueCount))}</span>
           )}
           {dueSoonCount > 0 && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-300 border-yellow-500/30">{dueSoonCount} próximos</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-300 border-yellow-500/30">{t("drill.dueSoonCount").replace("{n}", String(dueSoonCount))}</span>
           )}
         </div>
       </button>
@@ -456,12 +457,12 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
           {loading && cells.length === 0 ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
           ) : requirements.length === 0 || vessels.length === 0 ? (
-            <div className="text-center py-8 text-text-industrial/40 text-xs">Sin vessels o tipos configurados.</div>
+            <div className="text-center py-8 text-text-industrial/40 text-xs">{t("drill.noVesselsOrTypes")}</div>
           ) : (
             <table className="w-full text-[11px]">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="text-left px-3 py-2 font-bold text-text-industrial/60 uppercase tracking-wider sticky left-0 bg-[#0D1B2A] z-10">Tipo / Frecuencia</th>
+                  <th className="text-left px-3 py-2 font-bold text-text-industrial/60 uppercase tracking-wider sticky left-0 bg-[#0D1B2A] z-10">{t("drill.colTypeFrequency")}</th>
                   {vessels.map(v => (
                     <th key={v} className="text-center px-3 py-2 font-mono font-bold text-accent">{v}</th>
                   ))}
@@ -472,23 +473,23 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
                   <tr key={r.id} className="border-b border-white/5 last:border-b-0">
                     <td className="px-3 py-2 sticky left-0 bg-[#0D1B2A] z-10">
                       <div className="font-bold text-white">{r.title}</div>
-                      <div className="text-[9px] text-text-industrial/40">{r.intervalLabel ?? `cada ${r.frequencyDays} días`}</div>
+                      <div className="text-[9px] text-text-industrial/40">{r.intervalLabel ?? t("drill.everyXdays").replace("{n}", String(r.frequencyDays))}</div>
                     </td>
                     {vessels.map(v => {
                       const c = byKey.get(`${v}|${r.id}`);
                       if (!c) return <td key={v} className="px-2 py-2 text-center text-text-industrial/20">—</td>;
                       const cellCls = STATUS_CELL_CLS[c.status];
                       const main =
-                        c.status === "NEVER" ? "Nunca" :
-                        c.status === "OVERDUE" ? `Vencido hace ${Math.abs(c.daysUntilDue!)} d` :
-                        c.status === "DUE_SOON" ? `En ${c.daysUntilDue} d` :
-                        `En ${c.daysUntilDue} d`;
+                        c.status === "NEVER" ? t("common.never") :
+                        c.status === "OVERDUE" ? t("drill.overdueDays").replace("{n}", String(Math.abs(c.daysUntilDue!))) :
+                        c.status === "DUE_SOON" ? t("drill.inDays").replace("{n}", String(c.daysUntilDue)) :
+                        t("drill.inDays").replace("{n}", String(c.daysUntilDue));
                       return (
                         <td key={v} className="px-2 py-2 text-center">
                           <button
                             type="button"
                             onClick={() => onPlan(v, r.id)}
-                            title={`${STATUS_CELL_LABEL[c.status]}${c.lastCompletedDate ? ` — último: ${fmtDate(c.lastCompletedDate)}` : ""}${c.nextDueDate ? ` — próximo: ${fmtDate(c.nextDueDate)}` : ""}`}
+                            title={`${t(STATUS_CELL_TKEY[c.status])}${c.lastCompletedDate ? ` — ${t("drill.lastDate")}: ${fmtDate(c.lastCompletedDate)}` : ""}${c.nextDueDate ? ` — ${t("drill.nextDate")}: ${fmtDate(c.nextDueDate)}` : ""}`}
                             className={`w-full px-2 py-1 rounded-md border font-bold text-[10px] transition-colors ${cellCls}`}
                           >
                             {main}
@@ -503,12 +504,12 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
           )}
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 text-[10px] text-text-industrial/40">
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/40" />Vencido</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/40" />Próximo (≤14d)</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-success-sea/40" />Al día</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/20" />Sin registro</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/40" />{t("drill.legendOverdue")}</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/40" />{t("drill.legendDueSoon")}</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-success-sea/40" />{t("drill.legendOk")}</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/20" />{t("drill.legendNone")}</span>
             </div>
-            <button onClick={onReload} className="hover:text-white">Refrescar</button>
+            <button onClick={onReload} className="hover:text-white">{t("common.refresh")}</button>
           </div>
         </div>
       )}
@@ -571,8 +572,8 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
   const onSaveRow = async () => {
     if (!editing) return;
     const title = editing.title.trim();
-    if (!title) { setErr("El nombre del tipo es obligatorio."); return; }
-    if (editing.frequencyDays < 1) { setErr("Frecuencia mínima: 1 día."); return; }
+    if (!title) { setErr(t("drill.errTitleRequired")); return; }
+    if (editing.frequencyDays < 1) { setErr(t("drill.errMinFreq")); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -591,7 +592,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
       await reload();
       onSaved();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al guardar.");
+      setErr(e instanceof ApiError ? e.message : t("common.saveError"));
     } finally { setSaving(false); }
   };
 
@@ -603,7 +604,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
       await reload();
       onSaved();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al eliminar.");
+      setErr(e instanceof ApiError ? e.message : t("common.deleteError"));
     } finally { setSaving(false); }
   };
 
@@ -624,24 +625,21 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
           <div className="flex items-center gap-3">
             <Settings className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Configuración</p>
-              <h2 className="text-sm font-bold text-white">Catálogo de simulacros</h2>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("common.config")}</p>
+              <h2 className="text-sm font-bold text-white">{t("drill.catalogTitle")}</h2>
             </div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
-          <p className="text-xs text-text-industrial/60">
-            Definí los tipos de simulacro que tu compañía debe realizar y a qué buques aplican.
-            Si dejás "Aplica a" en blanco, el tipo aplica a TODOS los buques.
-          </p>
+          <p className="text-xs text-text-industrial/60">{t("drill.catalogHelp")}</p>
 
           {!editing && (
             <>
               <div className="flex justify-end">
                 <button onClick={startNew} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
-                  <Plus className="w-3.5 h-3.5" /> Nuevo tipo
+                  <Plus className="w-3.5 h-3.5" /> {t("drill.newType")}
                 </button>
               </div>
 
@@ -649,17 +647,17 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                 <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
               ) : items.length === 0 ? (
                 <div className="text-center py-8 text-text-industrial/40 text-sm">
-                  Sin tipos configurados. Creá el primero para arrancar.
+                  {t("drill.noTypes")}
                 </div>
               ) : (
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-white/10 text-text-industrial/50">
-                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">Tipo</th>
-                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">Norma</th>
-                      <th className="text-center py-2 px-2 font-bold uppercase tracking-wider">Cada</th>
-                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">Aplica a</th>
-                      <th className="text-center py-2 px-2 font-bold uppercase tracking-wider">Activo</th>
+                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colType")}</th>
+                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colNorm")}</th>
+                      <th className="text-center py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colEvery")}</th>
+                      <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colAppliesTo")}</th>
+                      <th className="text-center py-2 px-2 font-bold uppercase tracking-wider">{t("common.active")}</th>
                       <th className="py-2 px-2"></th>
                     </tr>
                   </thead>
@@ -672,7 +670,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                         <td className="py-2 px-2 text-text-industrial/60">
                           {r.applicableVesselCodes && r.applicableVesselCodes.length > 0
                             ? r.applicableVesselCodes.join(", ")
-                            : <span className="italic">Todos</span>}
+                            : <span className="italic">{t("common.all")}</span>}
                         </td>
                         <td className="py-2 px-2 text-center">
                           {r.enabled
@@ -682,7 +680,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                         <td className="py-2 px-2 text-right" onClick={e => e.stopPropagation()}>
                           <button onClick={() => { void onDelete(r.id); }} disabled={saving}
                             className="p-1.5 rounded-md text-text-industrial/40 hover:text-red-400 hover:bg-red-500/10"
-                            title="Eliminar">
+                            title={t("common.deleteAction")}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
@@ -698,28 +696,28 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className={labelCls}>Nombre del tipo</label>
-                  <input value={editing.title} onChange={e => setEditing(d => d ? { ...d, title: e.target.value } : d)} className={inputCls} placeholder="Ej: Incendio en sala de máquinas" />
+                  <label className={labelCls}>{t("drill.typeName")}</label>
+                  <input value={editing.title} onChange={e => setEditing(d => d ? { ...d, title: e.target.value } : d)} className={inputCls} placeholder={t("drill.typeNamePh")} />
                 </div>
                 <div>
-                  <label className={labelCls}>Referencia normativa</label>
-                  <input value={editing.solasRegulation} onChange={e => setEditing(d => d ? { ...d, solasRegulation: e.target.value } : d)} className={inputCls} placeholder="Ej: SOLAS III/19.3.2" />
+                  <label className={labelCls}>{t("drill.regRef")}</label>
+                  <input value={editing.solasRegulation} onChange={e => setEditing(d => d ? { ...d, solasRegulation: e.target.value } : d)} className={inputCls} placeholder={t("drill.regRefPh")} />
                 </div>
                 <div>
-                  <label className={labelCls}>Frecuencia (días)</label>
+                  <label className={labelCls}>{t("drill.freqDays")}</label>
                   <input type="number" min={1} max={3650} value={editing.frequencyDays}
                     onChange={e => setEditing(d => d ? { ...d, frequencyDays: Math.max(1, parseInt(e.target.value, 10) || 0) } : d)}
                     className={inputCls} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Etiqueta de intervalo (opcional)</label>
-                  <input value={editing.intervalLabel} onChange={e => setEditing(d => d ? { ...d, intervalLabel: e.target.value } : d)} className={inputCls} placeholder="Ej: Mensual, Trimestral, Anual" />
+                  <label className={labelCls}>{t("drill.intervalLabel")}</label>
+                  <input value={editing.intervalLabel} onChange={e => setEditing(d => d ? { ...d, intervalLabel: e.target.value } : d)} className={inputCls} placeholder={t("drill.intervalLabelPh")} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Aplica a (vacío = todos los buques)</label>
+                  <label className={labelCls}>{t("drill.appliesToHint")}</label>
                   <div className="max-h-40 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
                     {vessels.length === 0 ? (
-                      <p className="text-xs text-text-industrial/40 p-2">Sin buques en el tenant.</p>
+                      <p className="text-xs text-text-industrial/40 p-2">{t("drill.noVesselsInTenant")}</p>
                     ) : vessels.map(v => (
                       <label key={v.code} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer">
                         <input type="checkbox"
@@ -733,7 +731,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Notas</label>
+                  <label className={labelCls}>{t("drill.notes")}</label>
                   <textarea rows={2} value={editing.notes}
                     onChange={e => setEditing(d => d ? { ...d, notes: e.target.value } : d)}
                     className={inputCls} />
@@ -742,15 +740,15 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                   <input id="req-enabled" type="checkbox" checked={editing.enabled}
                     onChange={e => setEditing(d => d ? { ...d, enabled: e.target.checked } : d)}
                     className="rounded" />
-                  <label htmlFor="req-enabled" className="text-xs text-white">Activo</label>
+                  <label htmlFor="req-enabled" className="text-xs text-white">{t("common.active")}</label>
                 </div>
               </div>
               {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
               <div className="flex justify-end gap-2">
-                <button onClick={() => { setEditing(null); setErr(null); }} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cancelar</button>
+                <button onClick={() => { setEditing(null); setErr(null); }} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
                 <button onClick={() => { void onSaveRow(); }} disabled={saving}
                   className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
                 </button>
               </div>
             </div>
@@ -760,7 +758,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
         </div>
       </div>
     </div>
@@ -770,6 +768,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const DrillsPage: React.FC = () => {
+  const t = useT();
   const { user } = useAuth();
   const canConfigure = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER" || user?.role === "FLEET_SUPERINTENDENT";
 
@@ -824,22 +823,22 @@ export const DrillsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={CalendarCheck} title="Simulacros" total={data?.total} onReload={reload}>
+      <PageHeader icon={CalendarCheck} title={t("nav.drills")} total={data?.total} onReload={reload}>
         <ExportExcelButton module="drills" />
         {canConfigure && (
           <button onClick={() => setShowRequirements(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
-            <Settings className="w-3.5 h-3.5 text-accent" /> Catálogo
+            <Settings className="w-3.5 h-3.5 text-accent" /> {t("drill.catalog")}
           </button>
         )}
         <button onClick={() => { setPrefill(undefined); setShowCreate(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
-          <Plus className="w-3.5 h-3.5" /> Nuevo simulacro
+          <Plus className="w-3.5 h-3.5" /> {t("drill.newTitle")}
         </button>
       </PageHeader>
 
       <DrillsMatrix cells={matrixCells} loading={matrixLoading} onPlan={handlePlanFromMatrix} onReload={reloadMatrix} />
 
       <div className="flex gap-2">
-        {([["upcoming", "Programados"], ["completed", "Realizados"], ["all", "Todos"]] as const).map(([v, l]) => (
+        {([["upcoming", t("drill.filterUpcoming")], ["completed", t("drill.filterCompleted")], ["all", t("drill.filterAll")]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
               filter === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
@@ -851,7 +850,7 @@ export const DrillsPage: React.FC = () => {
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : !data?.items?.length ? (
-        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin simulacros</div>
+        <div className="text-center py-10 text-text-industrial/30 text-sm">{t("drill.empty")}</div>
       ) : (
         <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
           {data.items.map(d => (
@@ -860,16 +859,16 @@ export const DrillsPage: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{d.drillCode}</span>
-                  <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[d.status]}`}>{STATUS_LABEL[d.status]}</span>
+                  <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[d.status]}`}>{t(STATUS_TKEY[d.status])}</span>
                   <VesselLabel code={d.vesselCode} className="text-[10px]" showCode />
                 </div>
                 <p className="text-sm font-bold text-white">{d.requirement?.title ?? "—"}</p>
                 {d.scenario && <p className="text-xs text-text-industrial/50 truncate">{d.scenario}</p>}
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[10px] text-text-industrial/40">{d.status === "COMPLETED" ? "Realizado" : "Programado"}</p>
+                <p className="text-[10px] text-text-industrial/40">{d.status === "COMPLETED" ? t("drill.status.completed") : t("drill.status.scheduled")}</p>
                 <p className="text-xs text-white font-mono">{fmtDate(d.status === "COMPLETED" ? d.completedDate : d.scheduledDate)}</p>
-                <p className="text-[10px] text-text-industrial/40">{(d.participantCrewIds ?? []).length} participantes</p>
+                <p className="text-[10px] text-text-industrial/40">{t("drill.participantsCount").replace("{n}", String((d.participantCrewIds ?? []).length))}</p>
               </div>
             </button>
           ))}

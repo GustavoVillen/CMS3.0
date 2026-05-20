@@ -436,7 +436,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-          <h2 className="text-base font-bold text-white">Nuevo Defecto</h2>
+          <h2 className="text-base font-bold text-white">{t("def.newTitle")}</h2>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -447,16 +447,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
         <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Buque *</label>
+              <label className={labelCls}>{t("form.vessel")}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls + " appearance-none"} required>
-                <option value="">— Seleccionar buque —</option>
+                <option value="">{t("asset.selectVessel")}</option>
                 {vessels.map(v => (
                   <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Severidad</label>
+              <label className={labelCls}>{t("form.severity")}</label>
               <select value={severity} onChange={e => setSeverity(e.target.value)} className={inputCls + " appearance-none"}>
                 {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -471,19 +471,19 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
           />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Estado operacional</label>
+              <label className={labelCls}>{t("form.operationalState")}</label>
               <select value={operationalState} onChange={e => setOperationalState(e.target.value)} className={inputCls + " appearance-none"}>
                 {OP_STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Clasificación *</label>
-              <input value={classification} onChange={e => setClassification(e.target.value)} className={inputCls} placeholder="ej. Mecánico" />
+              <label className={labelCls}>{t("form.classification")}</label>
+              <input value={classification} onChange={e => setClassification(e.target.value)} className={inputCls} placeholder={t("def.classificationPh")} />
             </div>
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelCls + " mb-0"}>Descripción *</label>
+              <label className={labelCls + " mb-0"}>{t("form.description")}</label>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -498,7 +498,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                 <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />
               </div>
             </div>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder="Describí el defecto encontrado o usá el micrófono para dictarlo…" />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder={t("def.descPh")} />
           </div>
 
           {/* ── Sugerencia IA ─────────────────────────────────────────────── */}
@@ -507,7 +507,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-accent" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-accent">Sugerencia IA <span className="text-text-industrial/40 normal-case ml-1">· Confianza {suggestion.confidence.toLowerCase()}</span></p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-accent">{t("def.aiSuggestion")} <span className="text-text-industrial/40 normal-case ml-1">· {t("def.aiConfidence")} {suggestion.confidence.toLowerCase()}</span></p>
                 </div>
                 <button type="button" onClick={() => setSuggestion(null)} className="text-text-industrial/40 hover:text-white" title="Descartar"><X className="w-3.5 h-3.5" /></button>
               </div>
@@ -518,9 +518,9 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-[10px] text-text-industrial/60">Clasificación:</span>
+                  <span className="text-[10px] text-text-industrial/60">{t("def.classLabel")}</span>
                   <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.classification}</span>
-                  <span className="text-[10px] text-text-industrial/60 ml-2">Severidad:</span>
+                  <span className="text-[10px] text-text-industrial/60 ml-2">{t("def.sevLabel")}</span>
                   <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.severity}</span>
                   <button type="button" onClick={applySuggestion} className="ml-auto px-2.5 py-1 rounded-lg bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wider">
                     Aplicar
@@ -539,7 +539,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                   {similar.length === 1 ? "Posible duplicado" : `${similar.length} posibles duplicados`}
                 </p>
               </div>
-              <p className="text-[10px] text-orange-200/80">Hay defectos abiertos similares en el mismo equipo/buque. Verificá si es el mismo problema antes de crear uno nuevo.</p>
+              <p className="text-[10px] text-orange-200/80">{t("def.similarOpen")}</p>
               <ul className="space-y-1 mt-1">
                 {similar.map(s => (
                   <li key={s.id} className="text-[11px] text-text-industrial/80 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 flex items-center gap-2">
@@ -564,7 +564,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               Acción inmediata
               {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
             </label>
-            <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
+            <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
           </div>
 
           {/* ── Fotos del defecto ─────────────────────────────────────────── */}
@@ -602,7 +602,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                 className="w-full border border-dashed border-white/10 rounded-xl py-6 flex flex-col items-center gap-2 text-text-industrial/40 hover:text-white hover:border-accent/40 transition-colors"
               >
                 <Camera className="w-6 h-6" />
-                <span className="text-xs">Sin fotos cargadas — click para agregar</span>
+                <span className="text-xs">{t("def.noPhotos")}</span>
               </button>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
@@ -1023,12 +1023,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-            <h2 className="text-base font-bold text-white">Reparación temporaria registrada</h2>
+            <h2 className="text-base font-bold text-white">{t("def.tempRepairTitle")}</h2>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
           </div>
           <div className="p-6 space-y-3">
-            <p className="text-sm text-white/80">La corrección fue temporaria. ¿Deseas ejecutar una nueva Orden de Trabajo para la reparación permanente?</p>
-            <p className="text-xs text-text-industrial/40">Si creás la OT, se cerrará la OT original y se cerrará este registro de defecto.</p>
+            <p className="text-sm text-white/80">{t("def.tempRepairAsk")}</p>
+            <p className="text-xs text-text-industrial/40">{t("def.tempRepairHint")}</p>
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
           <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
@@ -1113,7 +1113,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-success-sea/5 border border-success-sea/30 hover:bg-success-sea/15 transition-colors text-left group"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] uppercase tracking-wider text-success-sea/70 font-bold">Resuelto vía OT</span>
+                  <span className="text-[10px] uppercase tracking-wider text-success-sea/70 font-bold">{t("def.resolvedViaWo")}</span>
                   <span className="font-mono font-bold text-success-sea text-xs">{defect.workOrderCode}</span>
                 </div>
                 <ExternalLink className="w-3.5 h-3.5 text-success-sea/60 group-hover:text-success-sea shrink-0" />
@@ -1130,10 +1130,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             {/* Descripción breve */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className={fldLabel}>Descripción breve</label>
+                <label className={fldLabel}>{t("form.briefDesc")}</label>
                 {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
               </div>
-              <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder="Descripción concisa del defecto…" />
+              <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
             </div>
 
             {/* Clasificación + selects */}
@@ -1174,7 +1174,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 {t("def.immediateAction")}
                 {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
               </label>
-              <textarea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder="Click en el título para que la IA proponga acciones inmediatas, o escribilas manualmente." />
+              <textarea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
             </div>
 
             {/* Fotos del defecto */}
@@ -1211,7 +1211,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               {photosLoading ? (
                 <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
               ) : photos.length === 0 ? (
-                <p className="text-xs text-text-industrial/40 italic text-center py-3">Sin fotos. {!isClosed && 'Click "Agregar fotos" para subir.'}</p>
+                <p className="text-xs text-text-industrial/40 italic text-center py-3">{t("def.noPhotosShort")} {!isClosed && t("def.clickAddPhotos")}</p>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                   {photos.map(p => (
@@ -1240,7 +1240,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             {/* Análisis RCA estructurado */}
             <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">Análisis de causa raíz (RCA)</p>
+                <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">{t("def.rcaTitle")}</p>
                 <div className="flex items-center gap-2">
                   {rcaApprovedAt && (
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
@@ -1277,28 +1277,28 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               </div>
 
               <div className="space-y-1.5">
-                <label className={fldLabel}>Resumen del análisis</label>
-                <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder="Resumen ejecutivo del análisis…" />
+                <label className={fldLabel}>{t("def.rcaSummary")}</label>
+                <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder={t("def.rcaSummaryPh")} />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaImmediateCause")}</label>
-                <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder="Fallo observable inmediato…" />
+                <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaImmediatePh")} />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaContributingCause")}</label>
-                <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder="Factores que contribuyeron…" />
+                <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaContributingPh")} />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaRootCause")}</label>
-                <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder="Causa raíz identificada…" />
+                <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaRootPh")} />
               </div>
 
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.rcaPreventiveActions")}</label>
-                <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder="Acciones para evitar recurrencia…" />
+                <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder={t("def.rcaPreventivePh")} />
               </div>
 
               {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
@@ -1357,10 +1357,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                   ))}
                 </div>
                 {repairType === "PERMANENTE" && (
-                  <p className="text-[11px] text-emerald-400/70">Al guardar se cerrará la OT asociada y este registro de defecto.</p>
+                  <p className="text-[11px] text-emerald-400/70">{t("def.saveWillCloseWo")}</p>
                 )}
                 {repairType === "TEMPORARIA" && (
-                  <p className="text-[11px] text-yellow-400/70">Al guardar se preguntará si deseas crear una OT para la reparación permanente.</p>
+                  <p className="text-[11px] text-yellow-400/70">{t("def.saveWillAskWo")}</p>
                 )}
               </div>
             )}
@@ -1583,7 +1583,7 @@ export const DefectsPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del defecto...</div>}
+      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
 
       <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => { void openDetail(row); }} />

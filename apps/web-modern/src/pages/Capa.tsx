@@ -44,10 +44,11 @@ interface ListResponse {
   total: number;
 }
 
-const SOURCE_TYPE_LABEL: Record<string, string> = {
-  DEFECT:     "Defecto",
-  WORK_ORDER: "Orden de trabajo",
-  INSPECTION: "Inspección",
+import type { TranslationKey } from "../lib/i18n";
+const SOURCE_TYPE_TKEY: Record<string, TranslationKey> = {
+  DEFECT:     "capa.src.defect",
+  WORK_ORDER: "capa.src.workOrder",
+  INSPECTION: "capa.src.inspection",
 };
 
 function normalizeOptionalText(value: string): string | null {
@@ -74,7 +75,7 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
 
   const onSave = useCallback(async () => {
     if (!actionsTaken.trim()) {
-      setActionError("Describí las acciones realizadas antes de sugerir el cierre.");
+      setActionError(t("capa.describeActionsFirst"));
       return;
     }
     setSaving(true);
@@ -99,23 +100,23 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">Sugerir cierre de CAPA</h2>
+          <h2 className="text-base font-bold text-white">{t("capa.suggestClose")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
             <p className="text-[11px] text-text-industrial/80 leading-relaxed">
-              La CAPA pasará a estado <strong className="text-white">PENDIENTE DE VERIFICACIÓN</strong>.
-              Gerencia Técnica revisará las acciones y aprobará el cierre.
+              {t("capa.willMoveToPendingVerification")} <strong className="text-white">{t("capa.pendingVerification")}</strong>.
+              {" "}{t("capa.gtechWillReview")}
             </p>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Acciones realizadas *</label>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.actionsTaken")}</label>
             <textarea
               rows={6}
               value={actionsTaken}
               onChange={e => setActionsTaken(e.target.value)}
-              placeholder="Detallá las acciones correctivas/preventivas ejecutadas, fechas, recursos utilizados, evidencia disponible…"
+              placeholder={t("capa.actionsTakenPh")}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
             />
           </div>
@@ -180,17 +181,17 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, o
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           {actionsTaken && (
             <div className="rounded-xl bg-accent/5 border border-accent/20 p-3">
-              <p className="text-[10px] uppercase tracking-wider text-accent mb-1">Acciones realizadas (informe a bordo)</p>
+              <p className="text-[10px] uppercase tracking-wider text-accent mb-1">{t("capa.actionsTakenOnboard")}</p>
               <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{actionsTaken}</p>
             </div>
           )}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Verificación de Gerencia Técnica *</label>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.verification")}</label>
             <textarea
               rows={4}
               value={verificationNote}
               onChange={e => setVerificationNote(e.target.value)}
-              placeholder="Conformidad con las acciones reportadas, observaciones, criterio de cierre…"
+              placeholder={t("capa.verificationPh")}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
             />
           </div>
@@ -376,15 +377,15 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
                 <p className="text-sm"><VesselLabel code={record.vesselCode} className="text-sm" showCode /></p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Equipo</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.equipment")}</p>
                 <p className="text-sm text-white">{record.assetName ?? <span className="text-text-industrial/40 italic">— sin nombre —</span>}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.sourceType")}</p>
-                <p className="text-sm text-white">{SOURCE_TYPE_LABEL[record.sourceType] ?? record.sourceType}</p>
+                <p className="text-sm text-white">{SOURCE_TYPE_TKEY[record.sourceType] ? t(SOURCE_TYPE_TKEY[record.sourceType]) : record.sourceType}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Origen</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.source")}</p>
                 <p className="text-sm font-mono text-white">{record.sourceCode ?? <span className="text-text-industrial/40 italic">— origen no disponible —</span>}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3">
@@ -393,13 +394,13 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               </div>
               {record.actionsTaken && (
                 <div className="bg-accent/5 border border-accent/20 rounded-xl p-3 sm:col-span-2">
-                  <p className="text-[10px] uppercase tracking-wider text-accent">Acciones realizadas (sugerido por responsable a bordo)</p>
+                  <p className="text-[10px] uppercase tracking-wider text-accent">{t("capa.actionsTakenSuggested")}</p>
                   <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.actionsTaken}</p>
                 </div>
               )}
               {record.verificationNote && (
                 <div className="bg-success-sea/5 border border-success-sea/20 rounded-xl p-3 sm:col-span-2">
-                  <p className="text-[10px] uppercase tracking-wider text-success-sea">Verificación de Gerencia Técnica</p>
+                  <p className="text-[10px] uppercase tracking-wider text-success-sea">{t("capa.verificationShown")}</p>
                   <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.verificationNote}</p>
                 </div>
               )}
@@ -457,7 +458,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               type="button"
               onClick={() => { void downloadAuthedFile(`/app/pms/capa/${record.id}/pdf`, `${record.capaCode}-${record.vesselCode}.pdf`); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-              title="Descargar PDF"
+              title={t("capa.downloadPdf")}
             >
               <Download className="w-3.5 h-3.5" /> PDF
             </button>
@@ -593,7 +594,7 @@ export const CapaPage: React.FC = () => {
         <ExportExcelButton module="capa" />
       </PageHeader>
 
-      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del CAPA...</div>}
+      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("capa.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
       <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.capa")} onRowClick={row => { void openDetail(row); }} />

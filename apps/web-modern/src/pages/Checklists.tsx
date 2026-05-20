@@ -10,23 +10,23 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 
-const TYPE_LABEL: Record<string, string> = {
-  PRE_ARRIVAL: "Pre-Arrival",
-  PRE_DEPARTURE: "Pre-Departure",
-  PRE_BUNKERING: "Pre-Bunkering",
-  PRE_CARGO_TRANSFER: "Pre-Cargo Transfer",
-  ENCLOSED_SPACE_ENTRY: "Enclosed Space Entry",
-  HOT_WORK: "Hot Work",
-  PILOT_BOARDING: "Pilot Boarding",
-  ANCHOR: "Fondeo",
-  MOORING: "Amarre",
-  OTHER: "Otro",
+const TYPE_TKEY: Record<string, TranslationKey> = {
+  PRE_ARRIVAL: "cl.type.preArrival",
+  PRE_DEPARTURE: "cl.type.preDeparture",
+  PRE_BUNKERING: "cl.type.preBunkering",
+  PRE_CARGO_TRANSFER: "cl.type.preCargoTransfer",
+  ENCLOSED_SPACE_ENTRY: "cl.type.enclosedSpaceEntry",
+  HOT_WORK: "cl.type.hotWork",
+  PILOT_BOARDING: "cl.type.pilotBoarding",
+  ANCHOR: "cl.type.anchor",
+  MOORING: "cl.type.mooring",
+  OTHER: "cl.type.other",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  IN_PROGRESS: "En curso", COMPLETED: "Completado", CANCELLED: "Cancelado",
+const STATUS_TKEY: Record<string, TranslationKey> = {
+  IN_PROGRESS: "cl.status.inProgress", COMPLETED: "cl.status.completed", CANCELLED: "cl.status.cancelled",
 };
 const STATUS_COLOR: Record<string, string> = {
   IN_PROGRESS: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
@@ -34,8 +34,8 @@ const STATUS_COLOR: Record<string, string> = {
   CANCELLED:   "bg-white/5 text-text-industrial/50 border-white/10",
 };
 
-const RESPONSE_LABEL: Record<string, string> = {
-  PENDING: "Pendiente", CONFORMING: "Conforme", NOT_CONFORMING: "No conforme", NOT_APPLICABLE: "N/A",
+const RESPONSE_TKEY: Record<string, TranslationKey> = {
+  PENDING: "cl.resp.pending", CONFORMING: "cl.resp.conforming", NOT_CONFORMING: "cl.resp.notConforming", NOT_APPLICABLE: "cl.resp.notApplicable",
 };
 
 interface Template {
@@ -217,7 +217,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
             </div>
             {exec && (
               <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[exec.status]}`}>
-                {STATUS_LABEL[exec.status]}
+                {t(STATUS_TKEY[exec.status])}
               </span>
             )}
           </div>
@@ -238,7 +238,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
                 <div><label className={labelCls}>Template *</label>
                   <select value={templateId} onChange={e => setTemplateId(e.target.value)} className={inputCls}>
                     <option value="">— Seleccionar —</option>
-                    {(templatesData?.items ?? []).map(t => <option key={t.id} value={t.id}>{TYPE_LABEL[t.type]} — {t.name}</option>)}
+                    {(templatesData?.items ?? []).map(tpl => <option key={tpl.id} value={tpl.id}>{t(TYPE_TKEY[tpl.type])} — {tpl.name}</option>)}
                   </select>
                 </div>
                 <div><label className={labelCls}>Fecha/hora *</label>
@@ -260,7 +260,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Tipo</p>
-                  <p className="text-xs font-bold text-white">{TYPE_LABEL[exec.type] ?? exec.type}</p>
+                  <p className="text-xs font-bold text-white">{TYPE_TKEY[exec.type] ? t(TYPE_TKEY[exec.type]) : exec.type}</p>
                 </div>
                 <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Fecha</p>
@@ -411,6 +411,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
 // ─── Templates modal ─────────────────────────────────────────────────────────
 
 const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ onClose, onMocTrigger }) => {
+  const t = useT();
   const { data, loading, reload } = useFetch<{ items: Template[] }>("/app/checklist-templates");
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
@@ -421,32 +422,32 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Settings className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-bold text-white">Templates de checklists</h2>
+            <h2 className="text-sm font-bold text-white">{t("cl.templatesTitle")}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> Nuevo</button>
+            <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
           </div>
         </div>
         <div className="overflow-y-auto flex-1 p-6">
           {loading ? <Loader2 className="w-5 h-5 animate-spin text-accent mx-auto" />
-            : (data?.items ?? []).length === 0 ? <p className="text-xs text-text-industrial/40 text-center py-6">Sin templates. Creá el primero.</p>
+            : (data?.items ?? []).length === 0 ? <p className="text-xs text-text-industrial/40 text-center py-6">{t("cl.templatesEmpty")}</p>
             : (
               <div className="space-y-2">
-                {data!.items.map(t => (
-                  <button key={t.id} onClick={() => setEditing(t)} className="w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-2 hover:bg-white/10 transition-colors">
+                {data!.items.map(tpl => (
+                  <button key={tpl.id} onClick={() => setEditing(tpl)} className="w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-2 hover:bg-white/10 transition-colors">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-accent">{TYPE_LABEL[t.type]}</span>
-                      <span className="text-xs font-bold text-white">{t.name}</span>
-                      {t.approvedAt && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-accent">{t(TYPE_TKEY[tpl.type])}</span>
+                      <span className="text-xs font-bold text-white">{tpl.name}</span>
+                      {tpl.approvedAt && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-success-sea/10 text-success-sea border-success-sea/30 inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-2.5 h-2.5" /> Aprobada
+                          <CheckCircle2 className="w-2.5 h-2.5" /> {t("cl.status.completed")}
                         </span>
                       )}
-                      <span className="text-[10px] text-text-industrial/40 ml-auto">{(t.itemsJson ?? []).length} ítems</span>
-                      {t.tenantId === null && <span className="text-[9px] text-text-industrial/40 uppercase">global</span>}
+                      <span className="text-[10px] text-text-industrial/40 ml-auto">{(tpl.itemsJson ?? []).length} {t("cl.items").toLowerCase()}</span>
+                      {tpl.tenantId === null && <span className="text-[9px] text-text-industrial/40 uppercase">global</span>}
                     </div>
-                    {t.description && <p className="text-[10px] text-text-industrial/50 mt-0.5">{t.description}</p>}
+                    {tpl.description && <p className="text-[10px] text-text-industrial/50 mt-0.5">{tpl.description}</p>}
                   </button>
                 ))}
               </div>
@@ -467,6 +468,7 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
 };
 
 const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void; onSaved: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ template, onClose, onSaved, onMocTrigger }) => {
+  const t = useT();
   const isNew = !template;
   const [type, setType]         = useState(template?.type ?? "PRE_ARRIVAL");
   const [name, setName]         = useState(template?.name ?? "");
@@ -511,7 +513,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
           prefill: {
             category: "PROCEDURE_CHANGE",
             title: `Modificación de plantilla aprobada: ${name}`,
-            reasonForChange: `Se modificó la plantilla de checklist "${name}" (tipo ${TYPE_LABEL[type] ?? type}), aprobada el ${fmtDate(template!.approvedAt)}.`,
+            reasonForChange: `Se modificó la plantilla de checklist "${name}" (tipo ${TYPE_TKEY[type] ? t(TYPE_TKEY[type]) : type}), aprobada el ${fmtDate(template!.approvedAt)}.`,
             proposedChange: `Cambios aplicados al procedimiento. Total de ítems: ${filtered.length}.`,
             sourceLabel: `Desde Checklists · Plantilla ${name}`,
           },
@@ -539,7 +541,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo template" : "Editar template"}</h2>
+          <h2 className="text-sm font-bold text-white">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
@@ -572,29 +574,29 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Tipo</label>
+            <div><label className={labelCls}>{t("cl.type")}</label>
               <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {Object.entries(TYPE_TKEY).map(([v, k]) => <option key={v} value={v}>{t(k)}</option>)}
               </select>
             </div>
-            <div><label className={labelCls}>Nombre *</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Pre-Arrival General" className={inputCls} />
+            <div><label className={labelCls}>{t("cl.templateName")}</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder={t("cl.templateNamePh")} className={inputCls} />
             </div>
-            <div className="col-span-2"><label className={labelCls}>Descripción</label>
+            <div className="col-span-2"><label className={labelCls}>{t("cl.templateDesc")}</label>
               <textarea rows={2} value={description} onChange={e => setDesc(e.target.value)} className={inputCls + " resize-y"} />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <p className={labelCls + " mb-0"}>Ítems ({items.length})</p>
+              <p className={labelCls + " mb-0"}>{t("cl.items")} ({items.length})</p>
               <button onClick={addItem} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"><Plus className="w-3 h-3" /> Agregar</button>
             </div>
             {items.map((it, i) => (
               <div key={i} className="grid grid-cols-12 gap-1.5 items-start bg-white/[0.03] border border-white/10 rounded-lg p-2">
-                <input value={it.code} onChange={e => updateItem(i, { code: e.target.value })} placeholder="Código" className={inputCls + " col-span-2 text-xs"} />
-                <input value={it.text} onChange={e => updateItem(i, { text: e.target.value })} placeholder="Texto del ítem" className={inputCls + " col-span-6 text-xs"} />
-                <input value={it.category ?? ""} onChange={e => updateItem(i, { category: e.target.value })} placeholder="Categoría" className={inputCls + " col-span-2 text-xs"} />
+                <input value={it.code} onChange={e => updateItem(i, { code: e.target.value })} placeholder={t("cl.itemCode")} className={inputCls + " col-span-2 text-xs"} />
+                <input value={it.text} onChange={e => updateItem(i, { text: e.target.value })} placeholder={t("cl.itemText")} className={inputCls + " col-span-6 text-xs"} />
+                <input value={it.category ?? ""} onChange={e => updateItem(i, { category: e.target.value })} placeholder={t("cl.itemCategory")} className={inputCls + " col-span-2 text-xs"} />
                 <label className="col-span-1 flex items-center gap-1 text-[10px] text-white"><input type="checkbox" checked={!!it.isMandatory} onChange={e => updateItem(i, { isMandatory: e.target.checked })} /> Obl.</label>
                 <button onClick={() => removeItem(i)} className="col-span-1 p-1 text-text-industrial/40 hover:text-red-400"><X className="w-4 h-4" /></button>
               </div>
@@ -616,6 +618,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const ChecklistsPage: React.FC = () => {
+  const t = useT();
   const [filterStatus, setFilterStatus] = useState<"all" | "open">("open");
   const { data, loading, reload } = useFetch<{ items: Execution[] }>("/app/checklist-executions");
   const [showCreate, setShowCreate] = useState(false);
@@ -630,17 +633,17 @@ export const ChecklistsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={ListChecks} title="Checklists" total={items.length} onReload={reload}>
+      <PageHeader icon={ListChecks} title={t("cl.title")} total={items.length} onReload={reload}>
         <button onClick={() => setShowTemplates(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
           <Settings className="w-3.5 h-3.5 text-accent" /> Templates
         </button>
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
-          <Plus className="w-3.5 h-3.5" /> Nuevo checklist
+          <Plus className="w-3.5 h-3.5" /> {t("common.new")} {t("cl.singular").toLowerCase()}
         </button>
       </PageHeader>
 
       <div className="flex gap-2">
-        {([["open", "En curso"], ["all", "Todos"]] as const).map(([v, l]) => (
+        {([["open", t("cl.status.inProgress")], ["all", t("common.all")]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilterStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
               filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
@@ -651,7 +654,7 @@ export const ChecklistsPage: React.FC = () => {
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : items.length === 0 ? (
-        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin checklists. Creá uno desde un template.</div>
+        <div className="text-center py-10 text-text-industrial/30 text-sm">{t("cl.empty")}</div>
       ) : (
         <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
           {items.map(e => (
@@ -660,10 +663,10 @@ export const ChecklistsPage: React.FC = () => {
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{e.executionCode}</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-white/5 text-white border-white/10">
-                    {TYPE_LABEL[e.type] ?? e.type}
+                    {TYPE_TKEY[e.type] ? t(TYPE_TKEY[e.type]) : e.type}
                   </span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${STATUS_COLOR[e.status]}`}>
-                    {STATUS_LABEL[e.status]}
+                    {t(STATUS_TKEY[e.status])}
                   </span>
                   <VesselLabel code={e.vesselCode} className="text-[10px]" showCode />
                 </div>
