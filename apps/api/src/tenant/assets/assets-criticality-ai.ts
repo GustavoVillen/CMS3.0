@@ -4,7 +4,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 const SYSTEM_PROMPT = `Sos un experto en mantenimiento y clasificación de equipos en buques.
 Te paso los datos de un equipo (asset). Tu tarea es asignarle DOS clasificaciones independientes y justificarlas en un único rationale combinado.
@@ -100,7 +100,7 @@ export async function suggestAssetCriticality(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${JSON.stringify(payload, null, 2)}` }],
     });
   } catch (err) {
     log.error("[suggestAssetCriticality] Anthropic call failed:", err);

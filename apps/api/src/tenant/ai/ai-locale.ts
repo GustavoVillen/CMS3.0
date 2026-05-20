@@ -36,9 +36,9 @@ export async function getTenantAiLocale(tenantSlug: string): Promise<AiLocale> {
 }
 
 const LANGUAGE_LABEL: Record<AiLocale, string> = {
-  es: "español",
+  es: "español (Spanish)",
   en: "English",
-  pt: "português do Brasil",
+  pt: "português do Brasil (Brazilian Portuguese)",
 };
 
 /**
@@ -50,8 +50,24 @@ const LANGUAGE_LABEL: Record<AiLocale, string> = {
  * que devuelven JSON con enums fijos (CRITICAL, HIGH, etc.) no se ven
  * afectadas — los enums siguen siendo identificadores, sólo se traducen
  * los campos de texto libre (descripcion, reasoning, nextQuestion, etc.).
+ *
+ * IMPORTANTE: muchos prompts originales tienen ejemplos hardcodeados en
+ * español ("Criticidad <X> porque..."). Claude tiende a copiar el idioma
+ * del ejemplo más fuerte que la instrucción genérica de idioma. Por eso
+ * esta instrucción es EXPLÍCITA: ignora idioma de los ejemplos, usa
+ * SIEMPRE el idioma indicado abajo.
  */
 export function localeInstruction(locale: AiLocale): string {
   const lang = LANGUAGE_LABEL[locale];
-  return `IDIOMA DE RESPUESTA OBLIGATORIO: Toda salida en lenguaje natural (descripciones, sugerencias, bullets, explicaciones, preguntas, mensajes al usuario) DEBE estar en ${lang}. Los valores de enums técnicos (CRITICAL, HIGH, MEDIUM, LOW, OPERATIONAL, etc.) y claves JSON se mantienen en inglés/originales.`;
+  return `LANGUAGE LOCK / IDIOMA OBLIGATORIO: Toda salida en lenguaje natural (todos los campos de texto libre — descripciones, rationale, sugerencias, bullets, explicaciones, preguntas, mensajes al usuario, justificaciones) DEBE estar en ${lang}. Esta regla anula CUALQUIER ejemplo, plantilla o instrucción posterior que use otro idioma — los ejemplos en otro idioma son sólo referencia de FORMATO, no de IDIOMA. Si ves un ejemplo como "Criticidad B porque..." debés traducirlo al idioma indicado. Los enums técnicos en mayúsculas (CRITICAL, HIGH, MEDIUM, LOW, OPERATIONAL, NORMAL, DEGRADED, etc.), códigos (SFI, ISM, STCW), siglas y claves JSON se mantienen en inglés/originales.`;
+}
+
+/**
+ * Refuerzo corto para incluir al inicio del mensaje del usuario. Va junto
+ * al contenido enviado a la IA y refuerza el idioma — Claude pondera más
+ * las instrucciones cercanas al contenido a procesar.
+ */
+export function localeUserReminder(locale: AiLocale): string {
+  const lang = LANGUAGE_LABEL[locale];
+  return `[Responde en ${lang}.]`;
 }
