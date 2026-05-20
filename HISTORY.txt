@@ -1,5 +1,47 @@
 HISTORY.txt
 
+[2026-05-20] Crew rank dropdown i18n localization: fix para mostrar nombres en idioma del tenant
+Agent: Claude Haiku 4.5
+
+  PROBLEMA IDENTIFICADO:
+  Rank dropdown mostraba claves de i18n sin traducir: `[crew.rank.CHIEF_OFFICER]` en vez de
+  nombres localizados (Primer Oficial/Chief Officer/Primeiro Oficial según idioma).
+
+  ROOT CAUSE:
+  Sistema híbrido de códigos de ranks:
+    - Old system (enum previo): CAPTAIN, CHIEF_OFFICER con minúsculas en i18n (crew.rank.captain)
+    - New CEOP system (BD): MASTER, CHIEF_MATE con mayúsculas en i18n (crew.rank.MASTER)
+
+  getRankLabel() intentaba buscar `crew.rank.${rank.code}` pero en el caso de CAPTAIN
+  no encontraba la clave exacta (crew.rank.CAPTAIN no existía, solo crew.rank.captain).
+
+  SOLUCIÓN IMPLEMENTADA (Crew.tsx):
+  Dual-key fallback en 2 lugares:
+    1. getRankLabel helper (MOC trigger): intenta uppercase primero, luego lowercase
+    2. Rank dropdown rendering: mismo patrón dual-key
+
+  Código:
+    const key1 = `crew.rank.${r.code}` as any;        // try: MASTER, CAPTAIN
+    const key2 = `crew.rank.${r.code.toLowerCase()}` as any;  // try: master, captain
+    return t(key1) || t(key2) || r.name;             // fallback a nombre en BD
+
+  i18n Coverage:
+    - Old system lowercase keys: crew.rank.captain, crew.rank.chief_officer, etc. (21 keys)
+    - New CEOP uppercase keys: crew.rank.MASTER, crew.rank.CHIEF_MATE, etc. (23 keys)
+    - All 3 languages: es, en, pt
+
+  RESULTADO:
+  ✅ Rank dropdown ahora muestra nombres localizados en el idioma del tenant
+  ✅ Cambio de idioma (ES/EN/PT) actualiza nombres correctamente en tiempo real
+  ✅ Ambos sistemas (old enum + new CEOP) funcionan con fallback automático
+  ✅ MOC trigger también usa getRankLabel para mostrar nombres localizados en cambios de rango
+
+  VPS DEPLOYMENT:
+  Commit: bb321d5 | Build: ✅ vite (3.91s) + API | PM2: restarted (PID 465739, port 3105)
+  Status: App online, /app/crew/ranks responding
+
+---
+
 [2026-05-20] Crew training refactor FASE 1-6: implementación completa + VPS migration + live testing
 Agent: Claude Haiku 4.5
 
