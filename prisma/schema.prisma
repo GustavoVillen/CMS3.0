@@ -694,13 +694,15 @@ model Tenant {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  domains       TenantDomain[]
-  settings      TenantSetting?
-  memberships   TenantMembership[]
-  invitations   UserInvitation[]
-  refreshTokens RefreshToken[]
-  auditEvents   AuditEvent[]
-  aiDocuments   AiDocument[]
+  domains            TenantDomain[]
+  settings           TenantSetting?
+  memberships        TenantMembership[]
+  invitations        UserInvitation[]
+  refreshTokens      RefreshToken[]
+  auditEvents        AuditEvent[]
+  aiDocuments        AiDocument[]
+  rankDefinitions    RankDefinition[] @relation("RankDefinitions")
+  trainingItems      TrainingItem[] @relation("TrainingItems")
 }
 
 model TenantDomain {
@@ -2494,6 +2496,87 @@ model FluidParameterThreshold {
 
 // ── Block: Crew / Certificaciones / Drills (Vetting Sprint 1 — TMSA 4 Elem. 3) ─
 
+// Catálogo dinámico de rangos por tenant (reemplaza enum CrewRank fijo)
+model RankDefinition {
+  id           String   @id @default(cuid())
+  tenantId     String
+  code         String   // ej: "CMD", "IME", "OF_NAU", "ELET"
+  name         String   // nombre en idioma del tenant
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation("RankDefinitions", fields: [tenantId], references: [id])
+  requirements RankTrainingRequirement[]
+  crew         Crew[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// Catálogo dinámico de items de entrenamiento por tenant
+// (reemplaza CrewCertification type + CrewCapability area enums fijos)
+model TrainingItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  code         String   // ej: "CIR", "NR_10", "ECDIS_FURUNO"
+  name         String   // descripción del item
+  regulation   String?  // ej: "STCW II/1", "NR-10", "IMCA 117"
+  category     String?  // ej: "STCW", "NR", "ECDIS", "INTERNO"
+  validityYears Int?    // años de validez; null si sin vencimiento
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation("TrainingItems", fields: [tenantId], references: [id])
+  requirements RankTrainingRequirement[]
+  records      CrewTrainingRecord[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// Matriz: qué training items se requieren para cada rank
+model RankTrainingRequirement {
+  id               String   @id @default(cuid())
+  rankDefinitionId String
+  trainingItemId   String
+  level            String   // "OBRIGATORIO", "VALIDO", "DESEJAVEL"
+  validityYears    Int?     // override de TrainingItem.validityYears si aplica
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  rankDefinition   RankDefinition @relation(fields: [rankDefinitionId], references: [id], onDelete: Cascade)
+  trainingItem     TrainingItem   @relation(fields: [trainingItemId], references: [id], onDelete: Cascade)
+
+  @@unique([rankDefinitionId, trainingItemId])
+  @@index([rankDefinitionId])
+  @@index([trainingItemId])
+}
+
+// Registro de completitud: qué items ha completado cada tripulante
+model CrewTrainingRecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  crewId         String
+  trainingItemId String
+  completedAt    DateTime // cuándo completó el item
+  expiryDate     DateTime? // cuándo vence (si aplica)
+  docUrl         String?  // referencia a documento probatorio
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  crew           Crew     @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  trainingItem   TrainingItem @relation(fields: [trainingItemId], references: [id])
+
+  @@unique([crewId, trainingItemId])
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([trainingItemId])
+  @@index([expiryDate])
+}
+
 model Crew {
   id                 String          @id @default(cuid())
   tenantId           String
@@ -2501,7 +2584,7 @@ model Crew {
   crewCode           String
   firstName          String
   lastName           String
-  rank               CrewRank
+  rankId             String?         // FK a RankDefinition; nullable para no romper registros existentes
   nationality        String?
   dateOfBirth        DateTime?
   passportNumber     String?
@@ -2523,7 +2606,9 @@ model Crew {
   lastReopenByUserId String?
 
   vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  rankDefinition     RankDefinition? @relation(fields: [rankId], references: [id])
   certifications     CrewCertification[]
+  trainingRecords    CrewTrainingRecord[]
 
   @@unique([tenantId, vesselCode, crewCode])
   @@index([tenantId])

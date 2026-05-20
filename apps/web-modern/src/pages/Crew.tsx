@@ -13,7 +13,14 @@ import { useT } from "../lib/i18n";
 // Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
 // Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
 // puestos de mayor responsabilidad operativa y de seguridad.
-const KEY_RANKS = ["CAPTAIN", "CHIEF_ENGINEER", "CHIEF_OFFICER"];
+const KEY_RANK_CODES = ["CAPTAIN", "CHIEF_ENGINEER", "CHIEF_OFFICER"];
+
+interface Rank {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+}
 
 interface Certification {
   id: string;
@@ -34,7 +41,8 @@ interface Crew {
   crewCode: string;
   firstName: string;
   lastName: string;
-  rank: string;
+  rankId: string | null;
+  rankDefinition?: Rank | null;
   nationality: string | null;
   dateOfBirth: string | null;
   passportNumber: string | null;
@@ -118,10 +126,14 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
   const isNew = !crew;
   const isLocked = crew?.status === "SIGNED_OFF";
 
+  const { data: ranksData } = useFetch<{ items: Rank[]; total: number }>("/app/crew/ranks", []);
+  const ranks = ranksData?.items ?? [];
+  const defaultRankId = ranks.length > 0 ? ranks.find(r => r.code === "AB_SEAMAN")?.id || ranks[0]?.id : "";
+
   const [vesselCode, setVesselCode] = useState(crew?.vesselCode ?? vessels[0]?.code ?? "");
   const [firstName, setFirstName]   = useState(crew?.firstName ?? "");
   const [lastName, setLastName]     = useState(crew?.lastName ?? "");
-  const [rank, setRank]             = useState(crew?.rank ?? "AB_SEAMAN");
+  const [rankId, setRankId]         = useState(crew?.rankId ?? defaultRankId);
   const [nationality, setNationality] = useState(crew?.nationality ?? "");
   const [passportNumber, setPassportNumber] = useState(crew?.passportNumber ?? "");
   const [signOnDate, setSignOnDate] = useState((crew?.signOnDate ?? "").slice(0, 10));
@@ -134,14 +146,14 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
   const [tab, setTab] = useState<"details" | "certs">("details");
 
   const onSave = useCallback(async () => {
-    if (!firstName.trim() || !lastName.trim() || !vesselCode || !signOnDate) {
+    if (!firstName.trim() || !lastName.trim() || !vesselCode || !signOnDate || !rankId) {
       setErr(t("crew.validation.required")); return;
     }
     setSaving(true); setErr(null);
     try {
       const payload = {
         vesselCode, firstName: firstName.trim(), lastName: lastName.trim(),
-        rank, nationality: nationality.trim() || null,
+        rankId, nationality: nationality.trim() || null,
         passportNumber: passportNumber.trim() || null,
         signOnDate, notes: notes.trim() || null,
       };
@@ -153,18 +165,20 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
       // como MOC. Disparamos en alta con rol clave, en cambio de rango si
       // alguno de los lados es clave, y en traslado de buque si lo era/lo es.
       if (onMocTrigger) {
-        const isKeyNow = KEY_RANKS.includes(rank);
-        const wasKey = crew ? KEY_RANKS.includes(crew.rank) : false;
-        const rankChanged = crew ? crew.rank !== rank : false;
+        const currentRank = ranks.find(r => r.id === rankId);
+        const previousRank = crew?.rankDefinition || (crew?.rankId ? ranks.find(r => r.id === crew.rankId) : null);
+        const isKeyNow = currentRank ? KEY_RANK_CODES.includes(currentRank.code) : false;
+        const wasKey = previousRank ? KEY_RANK_CODES.includes(previousRank.code) : false;
+        const rankChanged = crew ? crew.rankId !== rankId : false;
         const vesselChanged = crew ? crew.vesselCode !== vesselCode : false;
 
         let reasonText: string | null = null;
         if (isNew && isKeyNow) {
-          reasonText = t("crew.mocReason.new").replace("{rank}", t(RANK_TKEY[rank] ?? "crew.rank.other"));
+          reasonText = t("crew.mocReason.new").replace("{rank}", currentRank?.name ?? t("crew.rank.other"));
         } else if (!isNew && rankChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.rankChange")
-            .replace("{from}", t(RANK_TKEY[crew!.rank] ?? "crew.rank.other"))
-            .replace("{to}", t(RANK_TKEY[rank] ?? "crew.rank.other"));
+            .replace("{from}", previousRank?.name ?? t("crew.rank.other"))
+            .replace("{to}", currentRank?.name ?? t("crew.rank.other"));
         } else if (!isNew && vesselChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.vesselChange")
             .replace("{from}", crew!.vesselCode)
@@ -173,7 +187,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         if (reasonText) {
           const fullName = `${firstName.trim()} ${lastName.trim()}`;
-          const rankLabel = t(RANK_TKEY[rank] ?? "crew.rank.other");
+          const rankLabel = currentRank?.name ?? t("crew.rank.other");
           const vessel = vessels.find(v => v.code === vesselCode);
           const vesselName = vessel?.name ?? vesselCode;
           onMocTrigger({
@@ -196,7 +210,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
     } finally {
       setSaving(false);
     }
-  }, [t, isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, vessels, onSaved, onMocTrigger]);
+  }, [t, isNew, crew, vesselCode, firstName, lastName, rankId, nationality, passportNumber, signOnDate, notes, vessels, ranks, onSaved, onMocTrigger]);
 
   const onSignOff = useCallback(async () => {
     if (!crew) return;
@@ -262,8 +276,9 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                 </div>
                 <div>
                   <label className={labelCls}>{t("crew.field.rank")}</label>
-                  <select value={rank} onChange={e => setRank(e.target.value)} disabled={isLocked} className={inputCls}>
-                    {Object.entries(RANK_TKEY).map(([v, tkey]) => <option key={v} value={v}>{t(tkey as any)}</option>)}
+                  <select value={rankId} onChange={e => setRankId(e.target.value)} disabled={isLocked} className={inputCls}>
+                    <option value="">{t("crew.selectRank")}</option>
+                    {ranks.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
                 <div>
@@ -529,7 +544,7 @@ export const CrewPage: React.FC = () => {
                     ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
                     : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">{t("crew.status.signedOff")}</span>}
                   <p className="text-sm font-bold text-white truncate">{c.firstName} {c.lastName}</p>
-                  <p className="text-xs text-text-industrial/50 truncate">{t(RANK_TKEY[c.rank] ?? "crew.rank.other")}</p>
+                  <p className="text-xs text-text-industrial/50 truncate">{c.rankDefinition?.name ?? "—"}</p>
                   <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                   {expiringCount > 0 && (
                     <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 shrink-0">
