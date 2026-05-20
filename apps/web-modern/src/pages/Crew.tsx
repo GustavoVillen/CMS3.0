@@ -172,13 +172,20 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
         const rankChanged = crew ? crew.rankId !== rankId : false;
         const vesselChanged = crew ? crew.vesselCode !== vesselCode : false;
 
+        // Helper to get localized rank name
+        const getRankLabel = (rank: typeof currentRank) => {
+          if (!rank) return t("crew.rank.other");
+          const key = (`crew.rank.${rank.code}` as any);
+          return t(key) || t("crew.rank.other");
+        };
+
         let reasonText: string | null = null;
         if (isNew && isKeyNow) {
-          reasonText = t("crew.mocReason.new").replace("{rank}", currentRank?.name ?? t("crew.rank.other"));
+          reasonText = t("crew.mocReason.new").replace("{rank}", getRankLabel(currentRank));
         } else if (!isNew && rankChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.rankChange")
-            .replace("{from}", previousRank?.name ?? t("crew.rank.other"))
-            .replace("{to}", currentRank?.name ?? t("crew.rank.other"));
+            .replace("{from}", getRankLabel(previousRank))
+            .replace("{to}", getRankLabel(currentRank));
         } else if (!isNew && vesselChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.vesselChange")
             .replace("{from}", crew!.vesselCode)
@@ -187,7 +194,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         if (reasonText) {
           const fullName = `${firstName.trim()} ${lastName.trim()}`;
-          const rankLabel = currentRank?.name ?? t("crew.rank.other");
+          const rankLabel = getRankLabel(currentRank);
           const vessel = vessels.find(v => v.code === vesselCode);
           const vesselName = vessel?.name ?? vesselCode;
           onMocTrigger({
@@ -278,7 +285,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                   <label className={labelCls}>{t("crew.field.rank")}</label>
                   <select value={rankId} onChange={e => setRankId(e.target.value)} disabled={isLocked} className={inputCls}>
                     <option value="">{t("crew.selectRank")}</option>
-                    {ranks.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {ranks.map(r => <option key={r.id} value={r.id}>{t(`crew.rank.${r.code}` as any) || r.name}</option>)}
                   </select>
                 </div>
                 <div>
