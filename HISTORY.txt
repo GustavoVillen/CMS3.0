@@ -1,5 +1,57 @@
 HISTORY.txt
 
+[2026-05-20] Crew refactor compatibility: fix 4 services using deprecated rank enum
+Agent: Claude Haiku 4.5
+
+  PROBLEMA SISTÉMICO:
+  El refactor de Crew (rankId FK + rankDefinition relation) requería actualizar
+  4 servicios backend que todavía intentaban cargar el campo `rank` (enum deprecated):
+    1. crew-matrix-service (Matriz de Competencias vacía)
+    2. rest-hours-service (Horas de Descanso vacío)
+    3. drills-pdf-service (PDF generación fallaba)
+    4. excel-export-service (Exportación de crew fallaba)
+
+  SOLUCIÓN UNIFORME (aplicada a los 4 servicios):
+  Para cada uno:
+    - Cargar `rankDefinition { select: { name: true } }` en lugar de `rank: true`
+    - Mapear rankDefinition.name → rank string para backward compatibility
+    - Actualizar type hints de Prisma si era necesario
+
+  Detalle por servicio:
+    crew-matrix-service:
+      Load: rankDefinition { code, name } (para MOC trigger)
+      Map: rankDefinition.name → rank
+      Uso: Tabla de tripulantes + capabilities
+
+    rest-hours-service:
+      Load: rankDefinition { name }
+      Map: rankDefinition.name → rank
+      Uso: Monthly snapshot (crew ONBOARD + rest hours)
+
+    drills-pdf-service:
+      Load: rankDefinition { name }
+      Map: rankDefinition.name → rank
+      Uso: PDF generation con participants list
+      Fix: Type annotation Record<string, boolean> → Record<string, unknown>
+
+    excel-export-service:
+      Load: Explicit select con rankDefinition { name }
+      Map: rankDefinition.name → rank
+      Uso: Excel export de crew module
+
+  RESULTADO:
+  ✅ Matriz de Competencias: carga tripulantes y capability grid
+  ✅ Horas de Descanso: carga crew mensual con horas registradas
+  ✅ Simulacros: PDF genera correctamente con participants list
+  ✅ Exportar: Excel exports trabajo correctamente
+
+  VPS DEPLOYMENT:
+  Commits: a8120ae (3 services), 5513001 (TypeScript fix)
+  Build: ✅ vite (3.91s) + API (clean) | PM2: restarted (PID 467093, port 3105)
+  Status: App online, todos los endpoints respondiendo
+
+---
+
 [2026-05-20] Crew matrix endpoint fix + rank translation detection improvement
 Agent: Claude Haiku 4.5
 
