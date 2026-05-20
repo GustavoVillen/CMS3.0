@@ -92,7 +92,7 @@ async function loadParticipants(
   if (ids.length === 0) return [];
   try {
     const crew = await (prisma as unknown as {
-      crew: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean>; orderBy?: unknown }): Promise<Array<{ firstName: string | null; lastName: string | null; rankDefinition: { name: string } | null }>> };
+      crew: { findMany(a: { where: Record<string, unknown>; select: Record<string, unknown>; orderBy?: unknown }): Promise<Array<{ firstName: string | null; lastName: string | null; rankDefinition: { name: string } | null }>> };
     }).crew.findMany({
       where: { id: { in: ids }, tenantId },
       select: { firstName: true, lastName: true, rankDefinition: { select: { name: true } } },
