@@ -223,11 +223,11 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
       {rows.map((row, i) => (
         <div key={i} className="grid grid-cols-4 gap-2 items-end bg-white/3 border border-white/8 rounded-xl p-3">
           <div className="col-span-2 space-y-1">
-            <label className={labelCls}>Equipo</label>
-            <input value={row.equipmentLabel} readOnly tabIndex={-1} placeholder="Motor principal #1" className={`${inputCls} cursor-default select-none opacity-70 pointer-events-none`} />
+            <label className={labelCls}>{t("dr.equipment")}</label>
+            <input value={row.equipmentLabel} readOnly tabIndex={-1} placeholder={t("dr.equipmentPh")} className={`${inputCls} cursor-default select-none opacity-70 pointer-events-none`} />
           </div>
           <div className="space-y-1">
-            <label className={labelCls}>Hs. Acumuladas</label>
+            <label className={labelCls}>{t("dr.cumHours")}</label>
             <input type="number" value={row.runningHoursTotal} onChange={e => updateRow(i, "runningHoursTotal", e.target.value)} disabled={disabled} placeholder="0" className={inputCls} />
           </div>
           <div className="flex items-end justify-center">
@@ -236,7 +236,7 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
               <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${row.inService ? "bg-green-500 border-green-500" : "border-white/30"}`}>
                 {row.inService && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </span>
-              <span className="text-xs font-semibold whitespace-nowrap">En servicio</span>
+              <span className="text-xs font-semibold whitespace-nowrap">{t("dr.inService")}</span>
             </label>
           </div>
         </div>
@@ -296,11 +296,11 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
     <div className="space-y-4 max-w-md">
       <div className="flex items-center gap-2 mb-2">
         <Droplets className="w-4 h-4 text-accent" />
-        <h3 className="text-xs font-bold text-white uppercase tracking-wider">Consumos del día</h3>
+        <h3 className="text-xs font-bold text-white uppercase tracking-wider">{t("dr.dailyConsumption")}</h3>
       </div>
       <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-4">
         <div className="space-y-1.5">
-          <label className={labelCls}>Combustible consumido (Litros)</label>
+          <label className={labelCls}>{t("dr.fuelConsumed")}</label>
           <input
             type="number"
             min="0"
@@ -313,7 +313,7 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
           />
         </div>
         <div className="space-y-1.5">
-          <label className={labelCls}>Aceite consumido (Litros)</label>
+          <label className={labelCls}>{t("dr.oilConsumed")}</label>
           <input
             type="number"
             min="0"
@@ -449,7 +449,7 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> OT{rows.length !== 1 ? "s" : ""} cargadas automáticamente del período {periodLabel}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -458,18 +458,18 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
         <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 space-y-1">
-              <label className={labelCls}>Tarea realizada</label>
-              <input value={row.taskTitle} onChange={e => updateRow(i, "taskTitle", e.target.value)} disabled={disabled} placeholder="Descripción de la tarea..." className={inputCls} />
+              <label className={labelCls}>{t("dr.taskPerformed")}</label>
+              <input value={row.taskTitle} onChange={e => updateRow(i, "taskTitle", e.target.value)} disabled={disabled} placeholder={t("dr.taskPh")} className={inputCls} />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Tipo</label>
+              <label className={labelCls}>{t("dr.type")}</label>
               <select value={row.taskType} onChange={e => updateRow(i, "taskType", e.target.value)} disabled={disabled} className={selectCls}>
                 {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -477,14 +477,14 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1">
-              <label className={labelCls}>Resultado</label>
+              <label className={labelCls}>{t("dr.result")}</label>
               <select value={row.resultStatus} onChange={e => updateRow(i, "resultStatus", e.target.value)} disabled={disabled} className={selectCls}>
                 {RESULT_STATUSES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Ejecutado por</label>
-              <input value={row.performedBy} onChange={e => updateRow(i, "performedBy", e.target.value)} disabled={disabled} placeholder="Nombre del técnico" className={inputCls} />
+              <label className={labelCls}>{t("dr.executedBy")}</label>
+              <input value={row.performedBy} onChange={e => updateRow(i, "performedBy", e.target.value)} disabled={disabled} placeholder={t("dr.techNamePh")} className={inputCls} />
             </div>
             <div className="flex items-end justify-between gap-2 pb-0.5">
               <label className="flex items-center gap-1.5 text-[10px] text-text-industrial/60 cursor-pointer">
@@ -609,7 +609,7 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> repuesto{rows.length !== 1 ? "s" : ""} recibido{rows.length !== 1 ? "s" : ""} en el período {periodLabelS}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -618,22 +618,22 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
         <div key={i} className="grid grid-cols-4 gap-2 items-end bg-white/3 border border-white/8 rounded-xl p-3">
           <div className="col-span-2 space-y-1">
-            <label className={labelCls}>Repuesto</label>
-            <input value={row.spareName} onChange={e => updateRow(i, "spareName", e.target.value)} disabled={disabled} placeholder="Nombre del repuesto" className={inputCls} />
+            <label className={labelCls}>{t("dr.spare")}</label>
+            <input value={row.spareName} onChange={e => updateRow(i, "spareName", e.target.value)} disabled={disabled} placeholder={t("dr.sparePh")} className={inputCls} />
           </div>
           <div className="space-y-1">
-            <label className={labelCls}>Cantidad</label>
+            <label className={labelCls}>{t("dr.quantity")}</label>
             <input type="number" value={row.quantity} onChange={e => updateRow(i, "quantity", e.target.value)} disabled={disabled} placeholder="0" className={inputCls} />
           </div>
           <div className="flex items-end gap-2">
             <div className="flex-1 space-y-1">
-              <label className={labelCls}>Unidad</label>
+              <label className={labelCls}>{t("dr.unit")}</label>
               <input value={row.unit} onChange={e => updateRow(i, "unit", e.target.value)} disabled={disabled} placeholder="UN" className={inputCls} />
             </div>
             {!disabled && (
@@ -756,7 +756,7 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> defecto{rows.length !== 1 ? "s" : ""} reportado{rows.length !== 1 ? "s" : ""} en el período {periodLabelD}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -765,18 +765,18 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">Limpiar</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
         <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 space-y-1">
-              <label className={labelCls}>Descripción del defecto</label>
-              <input value={row.description} onChange={e => updateRow(i, "description", e.target.value)} disabled={disabled} placeholder="Descripción..." className={inputCls} />
+              <label className={labelCls}>{t("dr.defectDesc")}</label>
+              <input value={row.description} onChange={e => updateRow(i, "description", e.target.value)} disabled={disabled} placeholder={t("dr.defectDescPh")} className={inputCls} />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Severidad</label>
+              <label className={labelCls}>{t("dr.severity")}</label>
               <select value={row.severitySuggested} onChange={e => updateRow(i, "severitySuggested", e.target.value)} disabled={disabled} className={selectCls}>
                 {DEFECT_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -784,8 +784,8 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 space-y-1">
-              <label className={labelCls}>Acción inmediata tomada</label>
-              <input value={row.immediateActionTaken} onChange={e => updateRow(i, "immediateActionTaken", e.target.value)} disabled={disabled} placeholder="Acción tomada..." className={inputCls} />
+              <label className={labelCls}>{t("dr.immediateAction")}</label>
+              <input value={row.immediateActionTaken} onChange={e => updateRow(i, "immediateActionTaken", e.target.value)} disabled={disabled} placeholder={t("dr.immediateActionPh")} className={inputCls} />
             </div>
             <div className="flex items-end justify-between gap-2 pb-0.5">
               <label className="flex items-center gap-1.5 text-[10px] text-text-industrial/60 cursor-pointer">
@@ -820,6 +820,7 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
 // ─── Deferrals Tab ───────────────────────────────────────────────────────────
 
 const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
+  const t = useT();
   const { data, loading, error } = useFetch<{ items: DeferralEntry[] }>(
     `/app/pms/deferrals?vesselCode=${vesselCode}`,
     [vesselCode],
@@ -839,19 +840,19 @@ const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
       {active.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-10 text-text-industrial/20">
           <CheckCircle className="w-6 h-6" />
-          <p className="text-xs">Sin diferimientos activos para este buque</p>
+          <p className="text-xs">{t("dr.noDeferralsVessel")}</p>
         </div>
       ) : (
         <div className="border border-white/10 rounded-xl overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-white/30 uppercase tracking-wider">
-                <th className="px-3 py-2 text-left">Código</th>
-                <th className="px-3 py-2 text-left">Estado</th>
-                <th className="px-3 py-2 text-left">Tipo origen</th>
-                <th className="px-3 py-2 text-left">Referencia</th>
-                <th className="px-3 py-2 text-left">Fecha límite</th>
-                <th className="px-3 py-2 text-left">Justificación</th>
+                <th className="px-3 py-2 text-left">{t("dr.colCode")}</th>
+                <th className="px-3 py-2 text-left">{t("col.status")}</th>
+                <th className="px-3 py-2 text-left">{t("dr.colSourceType")}</th>
+                <th className="px-3 py-2 text-left">{t("dr.colReference")}</th>
+                <th className="px-3 py-2 text-left">{t("dr.colDeadline")}</th>
+                <th className="px-3 py-2 text-left">{t("dr.colJustification")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1164,10 +1165,10 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <div>
             {isNew ? (
-              <h2 className="text-base font-bold text-white">Nuevo Reporte Diario</h2>
+              <h2 className="text-base font-bold text-white">{t("dr.newDaily")}</h2>
             ) : (
               <>
-                <h2 className="text-base font-bold text-white">Reporte Diario — {liveReport!.vesselCode}</h2>
+                <h2 className="text-base font-bold text-white">{t("dr.dailyReportFor")} {liveReport!.vesselCode}</h2>
                 <p className="text-[10px] text-text-industrial/40">{fmtDate(liveReport!.reportDate)} · {liveReport!.status}{liveReport!.integratedAt ? " · INTEGRADO" : ""}</p>
               </>
             )}
@@ -1205,34 +1206,34 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
               {isNew && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Embarcación *</label>
+                    <label className={labelCls}>{t("dr.vesselReq")}</label>
                     <select value={newVesselCode} onChange={e => setNewVesselCode(e.target.value)} className={selectCls}>
                       <option value="">— Seleccionar —</option>
                       {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Fecha *</label>
+                    <label className={labelCls}>{t("dr.dateReq")}</label>
                     <input type="date" value={newReportDate} onChange={e => setNewReportDate(e.target.value)} className={inputCls} />
                   </div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Estado</label>
+                  <label className={labelCls}>{t("col.status")}</label>
                   <select value={status} onChange={e => setStatus(e.target.value)} disabled={isClosed} className={selectCls}>
                     {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Puerto actual</label>
-                  <input value={currentPort} onChange={e => setCurrentPort(e.target.value)} disabled={isClosed} placeholder="Buenos Aires" className={inputCls} />
+                  <label className={labelCls}>{t("mr.currentPort")}</label>
+                  <input value={currentPort} onChange={e => setCurrentPort(e.target.value)} disabled={isClosed} placeholder={t("mr.currentPortPh")} className={inputCls} />
                 </div>
               </div>
               {/* Posición geográfica */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className={labelCls}>Posición geográfica</label>
+                  <label className={labelCls}>{t("mr.geoPosition")}</label>
                   {!isClosed && (
                     <button type="button" onClick={fetchGeoPosition} disabled={geolocating}
                       className="flex items-center gap-1 text-[10px] text-accent hover:text-accent/80 disabled:opacity-40 transition-colors font-semibold">
@@ -1243,7 +1244,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[9px] text-text-industrial/30 mb-1">Latitud</p>
+                    <p className="text-[9px] text-text-industrial/30 mb-1">{t("mr.latitude")}</p>
                     <input
                       value={posLat}
                       onChange={e => setPosLat(e.target.value)}
@@ -1257,7 +1258,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                     />
                   </div>
                   <div>
-                    <p className="text-[9px] text-text-industrial/30 mb-1">Longitud</p>
+                    <p className="text-[9px] text-text-industrial/30 mb-1">{t("mr.longitude")}</p>
                     <input
                       value={posLon}
                       onChange={e => setPosLon(e.target.value)}
@@ -1278,7 +1279,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                   <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ height: 180 }}>
                     <iframe
                       key={`${mapCoords.lat},${mapCoords.lon}`}
-                      title="Posición actual"
+                      title={t("mr.currentPos")}
                       src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCoords.lon - 0.025},${mapCoords.lat - 0.018},${mapCoords.lon + 0.025},${mapCoords.lat + 0.018}&layer=mapnik&marker=${mapCoords.lat},${mapCoords.lon}`}
                       className="w-full h-full"
                       style={{ border: 0, filter: "invert(0.88) hue-rotate(180deg) saturate(0.6)" }}
@@ -1293,23 +1294,23 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                 ) : geolocating ? (
                   <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 text-text-industrial/30" style={{ height: 180 }}>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-xs">Obteniendo ubicación…</span>
+                    <span className="text-xs">{t("mr.gettingLocation")}</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/2 text-text-industrial/20" style={{ height: 180 }}>
                     <Locate className="w-5 h-5" />
-                    <span className="text-[10px]">Sin posición registrada</span>
+                    <span className="text-[10px]">{t("mr.noPosition")}</span>
                   </div>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelCls}>Resumen</label>
+                <label className={labelCls}>{t("dr.summary")}</label>
                 <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={3} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Próximo puerto</label>
+                  <label className={labelCls}>{t("mr.nextPort")}</label>
                   <input value={nextPort} onChange={e => setNextPort(e.target.value)} disabled={isClosed} placeholder="Puerto destino" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
