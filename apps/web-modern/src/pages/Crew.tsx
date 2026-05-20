@@ -175,9 +175,13 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
         // Helper to get localized rank name
         const getRankLabel = (rank: typeof currentRank) => {
           if (!rank) return t("crew.rank.other");
-          const key1 = `crew.rank.${rank.code}` as any;
-          const key2 = `crew.rank.${rank.code.toLowerCase()}` as any;
-          return t(key1) || t(key2) || t("crew.rank.other");
+          const mapKey = RANK_TKEY[rank.code];
+          if (mapKey) return t(mapKey as any);
+          const tryKey1 = t(`crew.rank.${rank.code}` as any);
+          if (!tryKey1.startsWith('[')) return tryKey1;
+          const tryKey2 = t(`crew.rank.${rank.code.toLowerCase()}` as any);
+          if (!tryKey2.startsWith('[')) return tryKey2;
+          return t("crew.rank.other");
         };
 
         let reasonText: string | null = null;
@@ -287,9 +291,20 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                   <select value={rankId} onChange={e => setRankId(e.target.value)} disabled={isLocked} className={inputCls}>
                     <option value="">{t("crew.selectRank")}</option>
                     {ranks.map(r => {
-                      const key1 = `crew.rank.${r.code}` as any;
-                      const key2 = `crew.rank.${r.code.toLowerCase()}` as any;
-                      return <option key={r.id} value={r.id}>{t(key1) || t(key2) || r.name}</option>;
+                      // Use RANK_TKEY map first (covers all old system ranks)
+                      // Then try dynamic keys for new CEOP system
+                      let label = r.name;
+                      const mapKey = RANK_TKEY[r.code];
+                      if (mapKey) {
+                        label = t(mapKey as any);
+                      } else {
+                        const tryKey1 = t(`crew.rank.${r.code}` as any);
+                        const tryKey2 = t(`crew.rank.${r.code.toLowerCase()}` as any);
+                        // Only use if translation was found (doesn't start with '[')
+                        if (!tryKey1.startsWith('[')) label = tryKey1;
+                        else if (!tryKey2.startsWith('[')) label = tryKey2;
+                      }
+                      return <option key={r.id} value={r.id}>{label}</option>;
                     })}
                   </select>
                 </div>
