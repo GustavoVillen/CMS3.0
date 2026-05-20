@@ -47,7 +47,7 @@ const BADGE_KEY: Record<string, keyof SidebarCounts> = {
   "/spare-requests":    "spareRequestsPending",
   "/checklists":        "checklistsOverdue",
   "/permits":           "permitsAttention",
-  "/crew":              "crewCertsAttention",
+  "/crew-matrix":       "crewCertsAttention",
   "/drills":            "drillsOverdue",
   "/spares":            "sparesCriticalLow",
   "/providers":         "providerNcOpen",
