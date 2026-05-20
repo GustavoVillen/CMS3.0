@@ -64,7 +64,6 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "deletedByUserId",
   ],
   spares: [
-    "currentStock",
     "createdByUserId",
     "updatedByUserId",
     "deletedAt",

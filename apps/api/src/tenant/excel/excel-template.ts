@@ -103,6 +103,7 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "internalPartNumber",     header: "internalPartNumber",     required: false, width: 25 },
     { key: "manufacturerPartNumber", header: "manufacturerPartNumber", required: false, width: 28 },
     { key: "unit",                   header: "unit",                   required: false, width: 12 },
+    { key: "currentStock",           header: "currentStock",           required: false, width: 14 },
     { key: "minStock",               header: "minStock",               required: false, width: 12 },
     { key: "reorderPoint",           header: "reorderPoint",           required: false, width: 15 },
     { key: "targetStock",            header: "targetStock",            required: false, width: 14 },

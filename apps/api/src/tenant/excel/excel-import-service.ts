@@ -375,7 +375,7 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
         internalPartNumber:     d.internalPartNumber ?? null,
         manufacturerPartNumber: d.manufacturerPartNumber ?? null,
         unit:                   d.unit ?? "unit",
-        currentStock:           0,
+        currentStock:           d.currentStock ? Number(d.currentStock) : 0,
         minStock:               d.minStock     ? Number(d.minStock)     : 0,
         reorderPoint:           d.reorderPoint ? Number(d.reorderPoint) : 0,
         targetStock:            d.targetStock  ? Number(d.targetStock)  : null,
