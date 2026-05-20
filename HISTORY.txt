@@ -1,5 +1,48 @@
 HISTORY.txt
 
+[2026-05-20] Crew matrix endpoint fix + rank translation detection improvement
+Agent: Claude Haiku 4.5
+
+  PROBLEMA 1: Matriz de Competencias vacía
+  Endpoint `/app/crew-matrix` intentaba cargar campo `rank` (enum deprecated) que no existe
+  después del refactor. El modelo Crew fue cambio a `rankId` FK + relación `rankDefinition`.
+
+  SOLUCIÓN:
+  Actualizar crew-matrix-service.ts:
+    - Load `rankDefinition { code, name }` en lugar de `rank` enum
+    - Mapear rankDefinition.name → rank string para backward compatibility con frontend
+    - API devuelve crew con nombre de rango desde BD (localizado en idioma actual)
+
+  RESULTADO:
+  ✅ Matriz de Competencias ahora carga tripulantes + sus capability areas
+  ✅ Rank display muestra nombre actual del rango (pt/es/en según el refactor)
+  ✅ Tabla carga columnas de areas y filas de crew correctamente
+
+  PROBLEMA 2: Dropdown de rank mostraba claves sin traducir
+  La lógica `t(key1) || t(key2)` fallaba porque t() retorna `[key]` (string truthy)
+  cuando no encuentra la clave. El `||` operator veía `[crew.rank.CAPTAIN]` como valor
+  válido y nunca intentaba la fallback key2.
+
+  SOLUCIÓN:
+  Reemplazar chain `||` con lógica explícita que detecta claves no traducidas:
+    1. Usar RANK_TKEY map (covers old system: CAPTAIN, CHIEF_OFFICER, etc.)
+    2. Try dynamic uppercase key (new CEOP: MASTER, CHIEF_MATE)
+    3. Try dynamic lowercase key (fallback para old system)
+    4. Check si resultado starts with '[' (indica fallback no traducido)
+    5. Fall back a r.name si no hay traducción
+
+  RESULTADO:
+  ✅ Rank dropdown muestra nombres localizados correctamente
+  ✅ Both old system (CAPTAIN) y new CEOP system (MASTER) soportados
+  ✅ Cambio de idioma actualiza nombres en tiempo real
+
+  VPS DEPLOYMENT:
+  Commits: a91b76e (rank detection), d642b47 (crew matrix)
+  Build: ✅ vite (3.56s) + API | PM2: restarted (PID 466525, port 3105)
+  Status: App online, /app/crew-matrix responding
+
+---
+
 [2026-05-20] Crew rank dropdown i18n localization: fix para mostrar nombres en idioma del tenant
 Agent: Claude Haiku 4.5
 
