@@ -45,52 +45,52 @@ interface Crew {
   certifications: Certification[];
 }
 
-const RANK_LABEL: Record<string, string> = {
-  CAPTAIN: "Capitán",
-  CHIEF_OFFICER: "Primer Oficial",
-  SECOND_OFFICER: "Segundo Oficial",
-  THIRD_OFFICER: "Tercer Oficial",
-  CHIEF_ENGINEER: "Jefe de Máquinas",
-  SECOND_ENGINEER: "Segundo Maquinista",
-  THIRD_ENGINEER: "Tercer Maquinista",
-  FOURTH_ENGINEER: "Cuarto Maquinista",
-  ELECTRICIAN: "Electricista",
-  BOSUN: "Contramaestre",
-  AB_SEAMAN: "Marinero AB",
-  OS_SEAMAN: "Marinero OS",
-  OILER: "Aceitero",
-  WIPER: "Limpiador",
-  COOK: "Cocinero",
-  STEWARD: "Camarero",
-  CADET: "Cadete",
-  RADIO_OPERATOR: "Operador Radio",
-  PILOT: "Práctico",
-  PILOTIN: "Pilotín",
-  OTHER: "Otro",
+const RANK_TKEY: Record<string, string> = {
+  CAPTAIN: "crew.rank.captain",
+  CHIEF_OFFICER: "crew.rank.chief_officer",
+  SECOND_OFFICER: "crew.rank.second_officer",
+  THIRD_OFFICER: "crew.rank.third_officer",
+  CHIEF_ENGINEER: "crew.rank.chief_engineer",
+  SECOND_ENGINEER: "crew.rank.second_engineer",
+  THIRD_ENGINEER: "crew.rank.third_engineer",
+  FOURTH_ENGINEER: "crew.rank.fourth_engineer",
+  ELECTRICIAN: "crew.rank.electrician",
+  BOSUN: "crew.rank.bosun",
+  AB_SEAMAN: "crew.rank.ab_seaman",
+  OS_SEAMAN: "crew.rank.os_seaman",
+  OILER: "crew.rank.oiler",
+  WIPER: "crew.rank.wiper",
+  COOK: "crew.rank.cook",
+  STEWARD: "crew.rank.steward",
+  CADET: "crew.rank.cadet",
+  RADIO_OPERATOR: "crew.rank.radio_operator",
+  PILOT: "crew.rank.pilot",
+  PILOTIN: "crew.rank.pilotin",
+  OTHER: "crew.rank.other",
 };
 
-const CERT_TYPE_LABEL: Record<string, string> = {
-  STCW_II_1: "STCW II/1 (Oficial Cubierta)",
-  STCW_II_2: "STCW II/2 (Capitán/Oficial)",
-  STCW_III_1: "STCW III/1 (Oficial Máquinas)",
-  STCW_III_2: "STCW III/2 (Jefe Máquinas)",
-  STCW_IV_2: "STCW IV/2 (Radioperador)",
-  STCW_V_1: "STCW V/1 (Tanqueros)",
-  STCW_VI_1: "STCW VI/1 (Familiarización)",
-  STCW_VI_2: "STCW VI/2 (Botes/Balsas)",
-  STCW_VI_3: "STCW VI/3 (Lucha c/Fuego Avanzada)",
-  STCW_VI_4: "STCW VI/4 (Primeros Auxilios)",
-  GMDSS_GOC: "GMDSS GOC",
-  GMDSS_ROC: "GMDSS ROC",
-  BST: "BST (Basic Safety Training)",
-  MEDICAL_ENOG: "Médico Embarque (ENOG)",
-  MEDICAL_FIRST_AID: "Primeros Auxilios Médicos",
-  ADVANCED_FIRE_FIGHTING: "Lucha c/Fuego Avanzada",
-  SHIP_SECURITY_OFFICER: "SSO (Oficial Seguridad)",
-  CROWD_MANAGEMENT: "Manejo de Multitudes",
-  PASSPORT: "Pasaporte",
-  SEAMANS_BOOK: "Libreta de Embarco",
-  OTHER: "Otro",
+const CERT_TYPE_TKEY: Record<string, string> = {
+  STCW_II_1: "cert.type.stcw_ii_1",
+  STCW_II_2: "cert.type.stcw_ii_2",
+  STCW_III_1: "cert.type.stcw_iii_1",
+  STCW_III_2: "cert.type.stcw_iii_2",
+  STCW_IV_2: "cert.type.stcw_iv_2",
+  STCW_V_1: "cert.type.stcw_v_1",
+  STCW_VI_1: "cert.type.stcw_vi_1",
+  STCW_VI_2: "cert.type.stcw_vi_2",
+  STCW_VI_3: "cert.type.stcw_vi_3",
+  STCW_VI_4: "cert.type.stcw_vi_4",
+  GMDSS_GOC: "cert.type.gmdss_goc",
+  GMDSS_ROC: "cert.type.gmdss_roc",
+  BST: "cert.type.bst",
+  MEDICAL_ENOG: "cert.type.medical_enog",
+  MEDICAL_FIRST_AID: "cert.type.medical_first_aid",
+  ADVANCED_FIRE_FIGHTING: "cert.type.advanced_fire_fighting",
+  SHIP_SECURITY_OFFICER: "cert.type.ship_security_officer",
+  CROWD_MANAGEMENT: "cert.type.crowd_management",
+  PASSPORT: "cert.type.passport",
+  SEAMANS_BOOK: "cert.type.seamans_book",
+  OTHER: "cert.type.other",
 };
 
 function fmtDate(value: string | null): string {
@@ -160,11 +160,11 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         let reasonText: string | null = null;
         if (isNew && isKeyNow) {
-          reasonText = t("crew.mocReason.new").replace("{rank}", RANK_LABEL[rank] ?? rank);
+          reasonText = t("crew.mocReason.new").replace("{rank}", t(RANK_TKEY[rank] ?? "crew.rank.other"));
         } else if (!isNew && rankChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.rankChange")
-            .replace("{from}", RANK_LABEL[crew!.rank] ?? crew!.rank)
-            .replace("{to}", RANK_LABEL[rank] ?? rank);
+            .replace("{from}", t(RANK_TKEY[crew!.rank] ?? "crew.rank.other"))
+            .replace("{to}", t(RANK_TKEY[rank] ?? "crew.rank.other"));
         } else if (!isNew && vesselChanged && (wasKey || isKeyNow)) {
           reasonText = t("crew.mocReason.vesselChange")
             .replace("{from}", crew!.vesselCode)
@@ -173,7 +173,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         if (reasonText) {
           const fullName = `${firstName.trim()} ${lastName.trim()}`;
-          const rankLabel = RANK_LABEL[rank] ?? rank;
+          const rankLabel = t(RANK_TKEY[rank] ?? "crew.rank.other");
           const vessel = vessels.find(v => v.code === vesselCode);
           const vesselName = vessel?.name ?? vesselCode;
           onMocTrigger({
@@ -263,7 +263,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                 <div>
                   <label className={labelCls}>{t("crew.field.rank")}</label>
                   <select value={rank} onChange={e => setRank(e.target.value)} disabled={isLocked} className={inputCls}>
-                    {Object.entries(RANK_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    {Object.entries(RANK_TKEY).map(([v, tkey]) => <option key={v} value={v}>{t(tkey as any)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -408,7 +408,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
             <div className="col-span-2">
               <label className={labelCls}>{t("cert.type")}</label>
               <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                {Object.entries(CERT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {Object.entries(CERT_TYPE_TKEY).map(([v, tkey]) => <option key={v} value={v}>{t(tkey as any)}</option>)}
               </select>
             </div>
             <div>
@@ -454,7 +454,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
             <div key={c.id} className="py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                  <span className="text-sm font-medium text-white">{CERT_TYPE_LABEL[c.type] ?? c.type}</span>
+                  <span className="text-sm font-medium text-white">{t(CERT_TYPE_TKEY[c.type] ?? "cert.type.other")}</span>
                   <CertStatusBadge status={c.status} />
                   {c.certificateNumber && <span className="text-[10px] font-mono text-text-industrial/40">#{c.certificateNumber}</span>}
                 </div>
@@ -529,7 +529,7 @@ export const CrewPage: React.FC = () => {
                     ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
                     : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">{t("crew.status.signedOff")}</span>}
                   <p className="text-sm font-bold text-white truncate">{c.firstName} {c.lastName}</p>
-                  <p className="text-xs text-text-industrial/50 truncate">{RANK_LABEL[c.rank] ?? c.rank}</p>
+                  <p className="text-xs text-text-industrial/50 truncate">{t(RANK_TKEY[c.rank] ?? "crew.rank.other")}</p>
                   <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                   {expiringCount > 0 && (
                     <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 shrink-0">
