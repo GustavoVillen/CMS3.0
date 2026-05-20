@@ -40,10 +40,20 @@ Agent: Claude Haiku 4.5
   Build status: API ✅ (clean). Web-modern ✅ (11 unused-var warnings, non-critical).
   VPS app: online 🟢 (PM2 PID 447966, port 3105), API responding.
 
+  FASE 7 (completada esta sesión):
+    Seeds CEOP + Spanish defaults:
+      - seed-ranks-ceop-capitalmaritima.sql: 23 ranks PT (CEOP Brazilian standard)
+      - seed-training-items-ceop-capitalmaritima.sql: ~38 training items PT (STCW, GMDSS, DP, ECDIS, MARPOL)
+      - seed-rank-requirements-ceop-capitalmaritima.sql: ~200+ rank-requirement mappings (OBRIGATORIO/VALIDO/DESEJAVEL)
+      - seed-training-items-default-es.sql: ~38 training items ES para mercurio + demo
+      - seed-rank-requirements-default-es.sql: 21 ranks × items with simplified matrix
+      - README.md: Usage guide para ejecutar seeds via psql
+    Características: Idempotent (ON CONFLICT), tenant-scoped, expandible a full CEOP ~1000+ entries
+
   PENDING (próxima sesión):
-    - FASE 7: Seeds CEOP completos (full ~1000-entry rank-requirement matrix) para capitalmaritima (PT)
-    - FASE 7: Seeds ES para mercurio/demo (21 ranks → 94 items con requirements básicas)
     - FASE 8: CrewMatrix.tsx refactor (loading training-items from API, columnas dinámicas)
+    - FASE 8: Execute seed files en VPS (capitalmaritima + mercurio/demo)
+    - FASE 8: Full type-check (tsc) + git commit + VPS deploy
 
 [2026-05-19] Drills refactor — DrillType enum → DrillRequirement catálogo per-tenant
 Agent: Claude Opus 4.7
