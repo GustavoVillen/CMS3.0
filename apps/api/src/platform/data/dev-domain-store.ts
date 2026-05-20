@@ -315,7 +315,7 @@ export interface DevAttachmentRecord {
     | "DAILY_REPORT"
     | "RCA"
     | "CAPA"
-    | "SPARE_ORDER";
+    | "SPARE_REQUEST";
   targetId: string;
   filename: string;
   mimeType: string;
@@ -357,7 +357,7 @@ export interface DevStockMovementRecord {
   quantity: number;
   unit: string;
   occurredAt: string;
-  referenceType?: "SPARE_ORDER" | "WORK_ORDER" | "DEFECT" | "ADJUSTMENT";
+  referenceType?: "SPARE_REQUEST" | "WORK_ORDER" | "DEFECT" | "ADJUSTMENT";
   referenceId?: string;
   notes?: string;
   createdAt: string;
@@ -477,7 +477,7 @@ export interface DevDomainEventRecord {
     | "DEFECT"
     | "CAPA"
     | "SPARE"
-    | "SPARE_ORDER"
+    | "SPARE_REQUEST"
     | "CERTIFICATE"
     | "INSPECTION";
   targetId?: string | null;
@@ -1953,7 +1953,7 @@ const DEV_STOCK_MOVEMENTS: DevStockMovementRecord[] = [
     quantity: 2,
     unit: "pcs",
     occurredAt: "2026-04-12T15:30:00.000Z",
-    referenceType: "SPARE_ORDER",
+    referenceType: "SPARE_REQUEST",
     referenceId: "spare-order-demo-latere-001",
     notes: "Thermostat delivery received.",
     createdAt,
@@ -2025,7 +2025,7 @@ const DEV_STOCK_MOVEMENTS: DevStockMovementRecord[] = [
     quantity: 6,
     unit: "pcs",
     occurredAt: "2026-03-28T14:05:00.000Z",
-    referenceType: "SPARE_ORDER",
+    referenceType: "SPARE_REQUEST",
     referenceId: "spare-order-demo-glt-004",
     notes: "Partial delivery received.",
     createdAt,
@@ -2433,7 +2433,7 @@ const DEV_DOMAIN_EVENTS: DevDomainEventRecord[] = [
     eventType: "spare_order_received",
     title: "Spare order SO-0005 received",
     summary: "Order received and stocked for GLT001.",
-    targetType: "SPARE_ORDER",
+    targetType: "SPARE_REQUEST",
     targetId: "spare-order-demo-glt-005",
     severity: "LOW",
     occurredAt: "2026-03-22T12:00:00.000Z",

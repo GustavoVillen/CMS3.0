@@ -41,7 +41,7 @@ const ENTITY_TYPE_MAP: Record<string, string> = {
   Certificate:         "CERTIFICATE",
   DailyReport:         "DAILY_REPORT",
   Capa:                "CAPA",
-  SpareOrder:          "SPARE_ORDER",
+  SpareOrder:          "SPARE_REQUEST",
   InspectionExecution: "INSPECTION_EXECUTION",
   WorkLog:             "WORK_LOG",
 };

@@ -17,7 +17,7 @@ export interface CreateStockMovementInput {
   quantity: number;
   unit: string;
   occurredAt: string | Date;
-  referenceType?: "SPARE_ORDER" | "WORK_ORDER" | "DEFECT" | "ADJUSTMENT" | null;
+  referenceType?: "SPARE_REQUEST" | "WORK_ORDER" | "DEFECT" | "ADJUSTMENT" | null;
   referenceId?: string | null;
   notes?: string | null;
 }

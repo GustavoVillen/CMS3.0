@@ -162,7 +162,7 @@ export async function consumeReservation(session: TenantAccessSession, reservati
         quantity: res.quantity,
         unit: res.spare.unit,
         occurredAt: new Date(),
-        referenceType: "SPARE_ORDER",
+        referenceType: "SPARE_REQUEST",
         referenceId: res.requestItem.spareRequest.requestCode,
         notes: `Consumo de reserva para ${res.requestItem.spareRequest.requestCode}`,
         createdByUserId: session.user.id,
