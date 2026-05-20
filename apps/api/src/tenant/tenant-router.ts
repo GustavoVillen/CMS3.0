@@ -29,6 +29,7 @@ import {
 import {
   getMatrix, upsertCapability, deleteCapability,
 } from "./crew-matrix/crew-matrix-service";
+import { getTrainingMatrix } from "./crew-matrix/crew-training-matrix-service";
 import {
   listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
 } from "./moc/moc-service";
@@ -1898,7 +1899,17 @@ export async function handleTenantRoutes(
     if (method === "DELETE") { await deleteExecution(session, id); sendJson(response, 200, { ok: true }); return true; }
   }
 
-  // ── Crew Capability Matrix ────────────────────────────────────────────────
+  // ── Crew Training Matrix (CEOP-based) ─────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/crew-training-matrix") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getTrainingMatrix(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      category:   url.searchParams.get("category"),
+    }));
+    return true;
+  }
+
+  // ── Crew Capability Matrix (legacy) ───────────────────────────────────────
   if (method === "GET" && url.pathname === "/app/crew-matrix") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     sendJson(response, 200, await getMatrix(session, {
