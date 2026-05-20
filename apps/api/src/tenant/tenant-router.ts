@@ -31,6 +31,9 @@ import {
 } from "./crew-matrix/crew-matrix-service";
 import { getTrainingMatrix } from "./crew-matrix/crew-training-matrix-service";
 import {
+  getRequirementsMatrix, upsertRequirement, deleteRequirement,
+} from "./crew-matrix/crew-requirements-matrix-service";
+import {
   listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
 } from "./moc/moc-service";
 import { suggestRiskAssessment } from "./moc/moc-ai-suggestions";
@@ -1897,6 +1900,30 @@ export async function handleTenantRoutes(
       return true;
     }
     if (method === "DELETE") { await deleteExecution(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  // ── Crew Requirements Matrix (config, admin only) ─────────────────────────
+  if (method === "GET" && url.pathname === "/app/crew-requirements-matrix") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getRequirementsMatrix(session, {
+      category: url.searchParams.get("category"),
+    }));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/crew-requirements") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof upsertRequirement>[1];
+    sendJson(response, 200, await upsertRequirement(session, body));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/crew-requirements\/[^/]+\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    const rankId = parts[3]!;
+    const itemId = parts[4]!;
+    await deleteRequirement(session, rankId, itemId);
+    sendJson(response, 200, { ok: true });
+    return true;
   }
 
   // ── Crew Training Matrix (CEOP-based) ─────────────────────────────────────

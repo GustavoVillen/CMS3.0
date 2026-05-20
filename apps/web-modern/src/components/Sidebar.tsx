@@ -113,6 +113,8 @@ const NAV: NavSection[] = [
       { icon: CalendarCheck,   labelKey: "nav.drills",           path: "/drills" },
       { icon: Clock,           labelKey: "nav.restHours",        path: "/rest-hours" },
       { icon: Grid3x3,         labelKey: "nav.crewMatrix",       path: "/crew-matrix" },
+      { icon: ClipboardList,   labelKey: "nav.requirementsMatrix", path: "/crew-requirements-matrix",
+        roles: ["TENANT_ADMIN"] },
     ],
   },
   {

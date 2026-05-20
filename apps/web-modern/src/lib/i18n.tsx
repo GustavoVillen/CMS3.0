@@ -56,6 +56,7 @@ const dict = {
   "nav.externalAudits":    { es: "Auditorías Externas", en: "External Audits",     pt: "Auditorias Externas" },
   "nav.checklists":        { es: "Checklists",          en: "Checklists",          pt: "Checklists" },
   "nav.crewMatrix":        { es: "Matriz Competencias", en: "Capability Matrix",   pt: "Matriz Competências" },
+  "nav.requirementsMatrix":{ es: "Matriz Requerimientos", en: "Requirements Matrix", pt: "Matriz de Requisitos" },
   "nav.moc":               { es: "MOC",                 en: "MOC",                 pt: "MOC" },
 
   // Page titles (Layout header)

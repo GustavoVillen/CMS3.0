@@ -52,6 +52,7 @@ import { NearMissPage } from "./pages/NearMiss";
 import { RestHoursPage } from "./pages/RestHours";
 import { ChecklistsPage } from "./pages/Checklists";
 import { CrewMatrixPage } from "./pages/CrewMatrix";
+import { RequirementsMatrixPage } from "./pages/RequirementsMatrix";
 import { MocPage } from "./pages/Moc";
 
 // ---------------------------------------------------------------------------
@@ -158,6 +159,7 @@ export default function App() {
               <Route path="/rest-hours"        element={<RestHoursPage />} />
               <Route path="/checklists"        element={<ChecklistsPage />} />
               <Route path="/crew-matrix"       element={<CrewMatrixPage />} />
+              <Route path="/crew-requirements-matrix" element={<RequireRole roles={["TENANT_ADMIN"]}><RequirementsMatrixPage /></RequireRole>} />
               <Route path="/moc"               element={<MocPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
