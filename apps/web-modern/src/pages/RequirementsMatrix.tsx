@@ -6,6 +6,7 @@ import { ClipboardList, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/PageHeader";
+import { useT } from "../lib/i18n";
 
 interface Rank {
   id: string;
@@ -39,18 +40,23 @@ interface MatrixData {
   requirements: Requirement[];
 }
 
-const LEVEL_OPTIONS = [
-  { value: "",            label: "—",   cls: "bg-white/[0.02] text-text-industrial/30 border-white/5" },
-  { value: "OBRIGATORIO", label: "OBL", cls: "bg-red-500/15 text-red-300 border-red-500/40" },
-  { value: "VALIDO",      label: "VAL", cls: "bg-success-sea/15 text-success-sea border-success-sea/40" },
-  { value: "DESEJAVEL",   label: "DES", cls: "bg-yellow-500/15 text-yellow-300 border-yellow-500/40" },
-];
-
-const LEVEL_CLS: Record<string, string> = Object.fromEntries(LEVEL_OPTIONS.map(o => [o.value, o.cls]));
-const LEVEL_LABEL: Record<string, string> = Object.fromEntries(LEVEL_OPTIONS.map(o => [o.value, o.label]));
+const LEVEL_CLS: Record<string, string> = {
+  "":            "bg-white/[0.02] text-text-industrial/30 border-white/5",
+  "OBRIGATORIO": "bg-red-500/15 text-red-300 border-red-500/40",
+  "VALIDO":      "bg-success-sea/15 text-success-sea border-success-sea/40",
+  "DESEJAVEL":   "bg-yellow-500/15 text-yellow-300 border-yellow-500/40",
+};
 
 export const RequirementsMatrixPage: React.FC = () => {
+  const t = useT();
   const { user } = useAuth();
+  const LEVEL_OPTIONS = [
+    { value: "",            label: "—" },
+    { value: "OBRIGATORIO", label: t("rm.lvlObligatorio") },
+    { value: "VALIDO",      label: t("rm.lvlValido") },
+    { value: "DESEJAVEL",   label: t("rm.lvlDeseable") },
+  ];
+  const LEVEL_LABEL: Record<string, string> = Object.fromEntries(LEVEL_OPTIONS.map(o => [o.value, o.label]));
   const isAdmin = user?.role === "TENANT_ADMIN";
 
   const [category, setCategory] = useState<string>("");
@@ -119,7 +125,7 @@ export const RequirementsMatrixPage: React.FC = () => {
     return (
       <div className="p-6">
         <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4 text-orange-200 text-sm">
-          Solo administradores del tenant pueden ver y editar la matriz de requerimientos.
+          {t("rm.adminOnly")}
         </div>
       </div>
     );
@@ -127,43 +133,42 @@ export const RequirementsMatrixPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={ClipboardList} title="Matriz de Requerimientos" total={totalRequirements} onReload={reload}>
+      <PageHeader icon={ClipboardList} title={t("nav.requirementsMatrix")} total={totalRequirements} onReload={reload}>
         <></>
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
         <select value={category} onChange={e => setCategory(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
-          <option value="">Todas las categorías</option>
+          <option value="">{t("rm.allCategories")}</option>
           {(data?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         <div className="ml-auto flex items-center gap-3 text-[10px] text-text-industrial/60">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/40 border border-red-500/60" /> Obligatorio</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success-sea/40 border border-success-sea/60" /> Válido</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500/40 border border-yellow-500/60" /> Deseable</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/40 border border-red-500/60" /> {t("rm.legendObligatorio")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success-sea/40 border border-success-sea/60" /> {t("rm.legendValido")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500/40 border border-yellow-500/60" /> {t("rm.legendDeseable")}</span>
         </div>
       </div>
 
       <div className="text-[11px] text-text-industrial/50">
-        Define qué entrenamientos requiere cada rango. Cambios se guardan al modificar la celda.
-        Esto define los indicadores rojos de "falta obligatorio" en la <strong>Matriz de Entrenamientos</strong>.
+        {t("rm.helpPart1")} {t("rm.helpPart2")} <strong>{t("rm.trainingsMatrix")}</strong>.
       </div>
 
       {loading && !data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : !data || data.ranks.length === 0 ? (
-        <div className="text-center py-10 text-text-industrial/40 text-sm">Sin rangos configurados para este tenant.</div>
+        <div className="text-center py-10 text-text-industrial/40 text-sm">{t("rm.noRanks")}</div>
       ) : data.trainingItems.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/40 text-sm">
-          Sin items de entrenamiento configurados.
-          {category && <span className="block mt-1">Probá quitar el filtro de categoría.</span>}
+          {t("rm.noItems")}
+          {category && <span className="block mt-1">{t("rm.tryRemoveFilter")}</span>}
         </div>
       ) : (
         <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">Rango</th>
+                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">{t("rm.colRank")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
                     <span title={`${it.name}${it.regulation ? " — " + it.regulation : ""}${it.validityYears ? " · " + it.validityYears + "y" : ""}`}>{it.code}</span>
@@ -190,7 +195,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                           value={currentLevel}
                           disabled={isSaving}
                           onChange={e => { void onChangeLevel(r.id, it.id, e.target.value); }}
-                          title={req ? `${LEVEL_LABEL[currentLevel]} para ${r.name}` : `Sin requerimiento — click para definir`}
+                          title={req ? t("rm.cellTitleHas").replace("{level}", LEVEL_LABEL[currentLevel]).replace("{rank}", r.name) : t("rm.cellTitleEmpty")}
                           className={`w-full h-7 rounded border text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${cls} ${isSaving ? "opacity-50" : ""}`}
                         >
                           {LEVEL_OPTIONS.map(o => (

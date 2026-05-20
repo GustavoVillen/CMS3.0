@@ -8,6 +8,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
+import { useT } from "../lib/i18n";
 
 interface CrewMember {
   id: string;
@@ -58,6 +59,7 @@ interface DayEditorProps {
 }
 
 const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHours, initialNotes, onClose, onSaved }) => {
+  const t = useT();
   const [hours, setHours] = useState<boolean[]>(() => initialHours.slice());
   const [notes, setNotes] = useState(initialNotes);
   const [saving, setSaving] = useState(false);
@@ -104,7 +106,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
         notes: notes.trim() || null,
       });
       onSaved();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [vesselCode, crew.id, date, hours, notes, onSaved]);
 
@@ -113,7 +115,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
       <div className="w-full max-w-3xl bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Horas de descanso · {date}</p>
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("rh.editorHeader")} · {date}</p>
             <h2 className="text-sm font-bold text-white">{crew.firstName} {crew.lastName} — {crew.rank}</h2>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
@@ -121,18 +123,28 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
         <div className="p-6 space-y-4">
           <p className="text-[11px] text-text-industrial/60">
-            Click en cada celda para marcar la hora como <span className="text-success-sea font-bold">descanso</span> o
-            {" "}<span className="text-red-400 font-bold">trabajo</span>. Click+arrastrar para pintar varias.
+            {(() => {
+              const parts = t("rh.editorHelp").split(/\{rest\}|\{work\}/);
+              return (
+                <>
+                  {parts[0]}
+                  <span className="text-success-sea font-bold">{t("rh.rest")}</span>
+                  {parts[1]}
+                  <span className="text-red-400 font-bold">{t("rh.work")}</span>
+                  {parts[2]}
+                </>
+              );
+            })()}
           </p>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
-                Total descanso: <span className={totalRest >= 10 ? "text-success-sea" : "text-red-400"}>{totalRest}h</span> / 24h
+                {t("rh.totalRest")}: <span className={totalRest >= 10 ? "text-success-sea" : "text-red-400"}>{totalRest}h</span> / 24h
               </span>
               <div className="flex gap-1">
-                <button onClick={() => fillAll(true)} className="px-2 py-0.5 rounded text-[10px] bg-success-sea/10 border border-success-sea/30 text-success-sea hover:bg-success-sea/20">Todo descanso</button>
-                <button onClick={() => fillAll(false)} className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20">Todo trabajo</button>
+                <button onClick={() => fillAll(true)} className="px-2 py-0.5 rounded text-[10px] bg-success-sea/10 border border-success-sea/30 text-success-sea hover:bg-success-sea/20">{t("rh.allRest")}</button>
+                <button onClick={() => fillAll(false)} className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20">{t("rh.allWork")}</button>
               </div>
             </div>
             <div className="grid grid-cols-12 gap-0.5 select-none">
@@ -144,7 +156,10 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
                   className={`aspect-square text-[9px] font-mono rounded border transition-colors ${
                     isRest ? "bg-success-sea/30 text-success-sea border-success-sea/40 hover:bg-success-sea/40" : "bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30"
                   }`}
-                  title={`${String(h).padStart(2, "0")}:00 - ${String((h + 1) % 24).padStart(2, "0")}:00 — ${isRest ? "descanso" : "trabajo"}`}
+                  title={t("rh.cellTitle")
+                    .replace("{from}", `${String(h).padStart(2, "0")}:00`)
+                    .replace("{to}", `${String((h + 1) % 24).padStart(2, "0")}:00`)
+                    .replace("{state}", isRest ? t("rh.rest") : t("rh.work"))}
                 >
                   {String(h).padStart(2, "0")}
                 </button>
@@ -153,24 +168,24 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">Notas</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} placeholder="Maniobra, guardia extra…" />
+            <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{t("rh.notes")}</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} placeholder={t("rh.notesPh")} />
           </div>
 
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
           <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-[10px] text-text-industrial/70 space-y-0.5">
-            <p className="font-bold uppercase tracking-wider text-text-industrial/50">Reglas STCW</p>
-            <p>≥ 10 h de descanso en cualquier período de 24 h.</p>
-            <p>≥ 77 h de descanso en cualquier período de 7 días.</p>
-            <p>Máximo 2 períodos de descanso por día; uno debe ser de ≥ 6 h consecutivas.</p>
+            <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("rh.rules")}</p>
+            <p>{t("rh.rule10h")}</p>
+            <p>{t("rh.rule77h")}</p>
+            <p>{t("rh.rule2periods")}</p>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cancelar</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
       </div>
@@ -181,6 +196,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export const RestHoursPage: React.FC = () => {
+  const t = useT();
   const { vessels, selectedVesselCode } = useVesselContext();
   const [vesselCode, setVesselCode] = useState(selectedVesselCode ?? vessels[0]?.code ?? "");
   const today = new Date();
@@ -239,18 +255,18 @@ export const RestHoursPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={Clock} title="Horas de Descanso (STCW / MLC)" total={data?.rows.length ?? 0} onReload={reload}>
+      <PageHeader icon={Clock} title={t("rh.pageTitle")} total={data?.rows.length ?? 0} onReload={reload}>
         <ExportExcelButton module="crew_rest_hours" />
         {totalViolations > 0 && (
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold">
-            <AlertTriangle className="w-3.5 h-3.5" /> {totalViolations} día(s) con violaciones STCW
+            <AlertTriangle className="w-3.5 h-3.5" /> {t("rh.violations").replace("{n}", String(totalViolations))}
           </span>
         )}
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
         <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
-          <option value="">— Vessel —</option>
+          <option value="">{t("rh.vesselPlaceholder")}</option>
           {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
         </select>
         <div className="flex items-center gap-1 border border-white/10 rounded-lg p-0.5">
@@ -261,17 +277,17 @@ export const RestHoursPage: React.FC = () => {
       </div>
 
       {!vesselCode ? (
-        <div className="text-center py-10 text-text-industrial/40 text-sm">Seleccioná un vessel para ver la planilla.</div>
+        <div className="text-center py-10 text-text-industrial/40 text-sm">{t("rh.selectVesselHint")}</div>
       ) : loading && !data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : !data || data.crew.length === 0 ? (
-        <div className="text-center py-10 text-text-industrial/40 text-sm">No hay tripulación ONBOARD en {vesselCode}.</div>
+        <div className="text-center py-10 text-text-industrial/40 text-sm">{t("rh.noCrewOnboard").replace("{vessel}", vesselCode)}</div>
       ) : (
         <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[180px]">Tripulante</th>
+                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[180px]">{t("rh.colCrew")}</th>
                 {dayCols.map(d => (
                   <th key={d} className="px-1 py-2 text-center font-mono text-text-industrial/50 min-w-[28px]">{d}</th>
                 ))}
@@ -296,10 +312,10 @@ export const RestHoursPage: React.FC = () => {
                       ? "bg-success-sea/15 text-success-sea border-success-sea/30 hover:bg-success-sea/25"
                       : "bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25";
                     const title = !row
-                      ? "Sin registro — click para cargar"
+                      ? t("rh.noRecord")
                       : violation
-                      ? `${total}h descanso · ${row.violationsJson?.map(v => v.details).join("; ") ?? "violación"}`
-                      : `${total}h descanso`;
+                      ? `${total}h ${t("rh.rest")} · ${row.violationsJson?.map(v => v.details).join("; ") ?? t("rh.legendViolation")}`
+                      : `${total}h ${t("rh.rest")}`;
                     return (
                       <td key={d} className="px-0.5 py-0.5">
                         <button
@@ -317,10 +333,10 @@ export const RestHoursPage: React.FC = () => {
             </tbody>
           </table>
           <div className="flex items-center gap-3 px-3 py-2 border-t border-white/10 text-[10px] text-text-industrial/50">
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-success-sea/30" /> ≥10h OK</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-500/30" /> &lt;10h advertencia</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500/30" /> Violación STCW</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white/10" /> Sin registro</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-success-sea/30" /> {t("rh.legendOk")}</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-500/30" /> {t("rh.legendWarn")}</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500/30" /> {t("rh.legendViolation")}</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white/10" /> {t("rh.legendNone")}</span>
           </div>
         </div>
       )}
