@@ -55,7 +55,7 @@ const dict = {
   "nav.nearMiss":          { es: "Near Miss",           en: "Near Miss",           pt: "Quase-Acidentes" },
   "nav.externalAudits":    { es: "Auditorías Externas", en: "External Audits",     pt: "Auditorias Externas" },
   "nav.checklists":        { es: "Checklists",          en: "Checklists",          pt: "Checklists" },
-  "nav.crewMatrix":        { es: "Matriz Competencias", en: "Capability Matrix",   pt: "Matriz Competências" },
+  "nav.crewMatrix":        { es: "Certificados Tripulación", en: "Crew Certificates",   pt: "Certificados da Tripulação" },
   "nav.requirementsMatrix":{ es: "Matriz Requerimientos", en: "Requirements Matrix", pt: "Matriz de Requisitos" },
   "nav.moc":               { es: "MOC",                 en: "MOC",                 pt: "MOC" },
 

@@ -8,6 +8,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
+import { useT } from "../lib/i18n";
 
 // Niveles de requirement según matriz CEOP:
 //   OBRIGATORIO — el rango debe tener este entrenamiento sí o sí
@@ -196,6 +197,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
 
 export const CrewMatrixPage: React.FC = () => {
   const { vessels = [], selectedVesselCode } = useVesselContext();
+  const t = useT();
   const [vesselCode, setVesselCode] = useState(selectedVesselCode ?? "");
   const [category, setCategory]     = useState<string>("");
   const [data, setData] = useState<MatrixData | null>(null);
@@ -249,7 +251,7 @@ export const CrewMatrixPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={Grid3x3} title="Matriz de Entrenamientos" total={totalRecords} onReload={reload}>
+      <PageHeader icon={Grid3x3} title={t("nav.crewMatrix")} total={totalRecords} onReload={reload}>
         <ExportExcelButton module="crew_certifications" />
       </PageHeader>
 

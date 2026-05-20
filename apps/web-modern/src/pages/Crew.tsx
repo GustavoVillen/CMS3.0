@@ -130,9 +130,6 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
 
-  // Tab: details | certifications
-  const [tab, setTab] = useState<"details" | "certs">("details");
-
   const onSave = useCallback(async () => {
     if (!firstName.trim() || !lastName.trim() || !vesselCode || !signOnDate || !rankId) {
       setErr(t("crew.validation.required")); return;
@@ -251,15 +248,8 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
 
-        {!isNew && (
-          <div className="flex border-b border-white/10 px-6 shrink-0">
-            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("crew.tab.details")}</button>
-            <button onClick={() => setTab("certs")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "certs" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("crew.tab.certifications")}</button>
-          </div>
-        )}
-
         <div className="overflow-y-auto flex-1 p-6">
-          {(isNew || tab === "details") && (
+          {(
             <div className="space-y-4">
               {isLocked && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
@@ -329,9 +319,6 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             </div>
           )}
 
-          {!isNew && tab === "certs" && crew && (
-            <CertificationsTab crew={crew} isLocked={isLocked} onChanged={onSaved} />
-          )}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
