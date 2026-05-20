@@ -96,6 +96,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
   const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const fourHoursAhead = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  const thirtyDaysAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   // Cast genérico al cliente Prisma. Mantiene este servicio robusto frente
   // a regeneraciones donde los nombres de delegados pueden faltar.
@@ -172,14 +173,25 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
         ],
       },
     })),
-    // CrewCertification: filtro a través de la relación Crew (tiene vesselCode).
-    safe(() => p.crewCertification.count({
-      where: {
-        tenantId: base.tenantId, deletedAt: null,
-        status: { in: ["EXPIRED", "EXPIRING_SOON"] },
-        crew: { ...base, deletedAt: null },
-      },
-    })),
+    // CrewCertification (docs personales) + CrewTrainingRecord (matriz CEOP):
+    // vencidos o por vencer en 30d. Calculado por expiryDate, no por el campo
+    // "status" precomputado (puede estar desactualizado si nadie editó el row).
+    Promise.all([
+      safe(() => p.crewCertification.count({
+        where: {
+          tenantId: base.tenantId, deletedAt: null,
+          expiryDate: { not: null, lt: thirtyDaysAhead },
+          crew: { ...base, deletedAt: null },
+        },
+      })),
+      safe(() => (p as unknown as { crewTrainingRecord: Delegate }).crewTrainingRecord.count({
+        where: {
+          tenantId: base.tenantId,
+          expiryDate: { not: null, lt: thirtyDaysAhead },
+          crew: { ...base, deletedAt: null },
+        },
+      })),
+    ]).then(([a, b]) => a + b),
     // Drills SCHEDULED con fecha pasada = vencidos.
     safe(() => p.drill.count({ where: { ...base, deletedAt: null, status: "SCHEDULED", scheduledDate: { lt: now } } })),
     // Provider non-conformities abiertas o en revisión. NCRs son fleet-wide

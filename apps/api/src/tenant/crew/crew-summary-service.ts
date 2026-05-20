@@ -21,6 +21,7 @@ export interface CrewSummary {
 type SummaryClient = {
   crew: { count(args: { where: Record<string, unknown> }): Promise<number> };
   crewCertification: { count(args: { where: Record<string, unknown> }): Promise<number> };
+  crewTrainingRecord: { count(args: { where: Record<string, unknown> }): Promise<number> };
   drill: { count(args: { where: Record<string, unknown> }): Promise<number> };
 };
 
@@ -60,13 +61,33 @@ export async function getCrewSummary(
     crew: crewVesselFilter,
   };
 
-  const [onboard, certsExpired, certsExpiringSoon, drillsScheduled, drillsCompletedYear] = await Promise.all([
+  // Training records (matriz de entrenamientos) — viven en otro modelo
+  const trainingBase: Record<string, unknown> = {
+    tenantId: tenant.id,
+    expiryDate: { not: null },
+    crew: crewVesselFilter,
+  };
+
+  const [
+    onboard,
+    docsExpired, docsExpiringSoon,
+    trainExpired, trainExpiringSoon,
+    drillsScheduled, drillsCompletedYear,
+  ] = await Promise.all([
     prisma.crew.count({ where: { ...whereVesselScoped, status: "ONBOARD" } }),
-    prisma.crewCertification.count({ where: { ...certBase, expiryDate: { lt: now }, status: { not: "EXPIRED" } } }).catch(() => 0),
+    prisma.crewCertification.count({ where: { ...certBase, expiryDate: { lt: now } } }).catch(() => 0),
     prisma.crewCertification.count({ where: { ...certBase, expiryDate: { gte: now, lt: in30d } } }).catch(() => 0),
+    prisma.crewTrainingRecord.count({ where: { ...trainingBase, expiryDate: { lt: now } } }).catch(() => 0),
+    prisma.crewTrainingRecord.count({ where: { ...trainingBase, expiryDate: { gte: now, lt: in30d } } }).catch(() => 0),
     prisma.drill.count({ where: { ...whereVesselScoped, status: "SCHEDULED", scheduledDate: { gte: monthStart, lt: monthEnd } } }),
     prisma.drill.count({ where: { ...whereVesselScoped, status: "COMPLETED", completedDate: { gte: yearStart, lt: yearEnd } } }),
   ]);
 
-  return { onboard, certsExpired, certsExpiringSoon, drillsScheduled, drillsCompletedYear };
+  return {
+    onboard,
+    certsExpired: docsExpired + trainExpired,
+    certsExpiringSoon: docsExpiringSoon + trainExpiringSoon,
+    drillsScheduled,
+    drillsCompletedYear,
+  };
 }
