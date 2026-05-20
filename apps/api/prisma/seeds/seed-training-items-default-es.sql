@@ -11,8 +11,7 @@ BEGIN
   -- Insert for both mercurio and demo tenants
   FOR tenant_rec IN SELECT id, slug FROM "Tenant" WHERE slug IN ('mercurio', 'demo')
   LOOP
-    -- Delete existing training items for this tenant
-    DELETE FROM "TrainingItem" WHERE "tenantId" = tenant_rec.id;
+    -- Note: Do NOT delete existing training items. ON CONFLICT clause will update them.
 
     -- Insert Spanish/Default training items
     INSERT INTO "TrainingItem" (id, "tenantId", code, name, regulation, category, "validityYears", "sortOrder", "createdAt", "updatedAt")

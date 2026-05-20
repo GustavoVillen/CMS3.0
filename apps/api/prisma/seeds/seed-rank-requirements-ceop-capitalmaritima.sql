@@ -19,10 +19,7 @@ BEGIN
     RAISE EXCEPTION 'Tenant capitalmaritima não encontrado';
   END IF;
 
-  -- Delete existing requirements (for re-seeding)
-  DELETE FROM "RankTrainingRequirement" WHERE "rankDefinitionId" IN (
-    SELECT id FROM "RankDefinition" WHERE "tenantId" = v_tenant_id
-  );
+  -- Note: Do NOT delete existing requirements. ON CONFLICT clause will update them.
 
   -- Define requirements matrix using a dynamic approach
   -- For each rank, assign requirements based on rank type

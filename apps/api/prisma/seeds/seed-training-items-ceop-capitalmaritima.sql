@@ -15,8 +15,7 @@ BEGIN
     RAISE EXCEPTION 'Tenant capitalmaritima não encontrado';
   END IF;
 
-  -- Delete existing training items for this tenant
-  DELETE FROM "TrainingItem" WHERE "tenantId" = v_tenant_id;
+  -- Note: Do NOT delete existing training items. ON CONFLICT clause will update them.
 
   -- Insert STCW & Maritime Training Items
   INSERT INTO "TrainingItem" (id, "tenantId", code, name, regulation, category, "validityYears", "sortOrder", "createdAt", "updatedAt")

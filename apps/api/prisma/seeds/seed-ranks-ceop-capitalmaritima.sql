@@ -15,8 +15,8 @@ BEGIN
     RAISE EXCEPTION 'Tenant capitalmaritima não encontrado';
   END IF;
 
-  -- Delete existing ranks for this tenant (cleanup before seed)
-  DELETE FROM "RankDefinition" WHERE "tenantId" = v_tenant_id;
+  -- Note: Do NOT delete existing ranks as they may be referenced by Crew records.
+  -- ON CONFLICT clause will update existing ranks instead.
 
   -- Insert 23 CEOP ranks for capitalmaritima
   INSERT INTO "RankDefinition" (id, "tenantId", code, name, "sortOrder", "createdAt", "updatedAt")

@@ -13,10 +13,7 @@ BEGIN
   -- Process for both mercurio and demo tenants
   FOR tenant_rec IN SELECT id, slug FROM "Tenant" WHERE slug IN ('mercurio', 'demo')
   LOOP
-    -- Delete existing requirements for this tenant
-    DELETE FROM "RankTrainingRequirement" WHERE "rankDefinitionId" IN (
-      SELECT id FROM "RankDefinition" WHERE "tenantId" = tenant_rec.id
-    );
+    -- Note: Do NOT delete existing requirements. ON CONFLICT clause will update them.
 
     -- CAPTAIN (Capitán/Comandante) - All STCW deck, mandatory safety
     FOR rank_row IN SELECT id, code FROM "RankDefinition" WHERE "tenantId" = tenant_rec.id AND code = 'CAPTAIN'
