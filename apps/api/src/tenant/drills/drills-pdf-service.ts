@@ -11,33 +11,163 @@ import { RouteError } from "../../http/route-error";
 import { log } from "../../common/logger";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDrill } from "./drills-service";
+import { getTenantAiLocale, type AiLocale } from "../ai/ai-locale";
 
-const DRILL_STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: "Programado",
-  COMPLETED: "Realizado",
-  CANCELLED: "Cancelado",
+type DrillStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+
+const I18N: Record<AiLocale, {
+  pdfTitle: string;
+  registry: string;
+  status: Record<DrillStatus, string>;
+  type: string;
+  statusLabel: string;
+  schedDate: string;
+  doneDate: string;
+  regRef: string;
+  goodPractice: string;
+  scenario: string;
+  observations: string;
+  lessons: string;
+  participants: (n: number) => string;
+  noParticipants: string;
+  noName: string;
+  checklistTitle: string;
+  applicable: string;
+  colItem: string;
+  colOk: string;
+  colNa: string;
+  colObs: string;
+  sigDrill: string;
+  sigCaptain: string;
+  generated: string;
+  dateFormatLocale: string;
+  drillTitle: string;
+  checklist: string[];
+}> = {
+  es: {
+    pdfTitle: "Simulacro",
+    registry: "REGISTRO DE SIMULACRO",
+    status: { SCHEDULED: "Programado", COMPLETED: "Realizado", CANCELLED: "Cancelado" },
+    type: "Tipo",
+    statusLabel: "Estado",
+    schedDate: "Fecha programada",
+    doneDate: "Fecha realizada",
+    regRef: "REFERENCIA NORMATIVA",
+    goodPractice: "Buena practica maritima.",
+    scenario: "Escenario",
+    observations: "Observaciones",
+    lessons: "Lecciones aprendidas",
+    participants: n => `Participantes (${n})`,
+    noParticipants: "Sin participantes registrados.",
+    noName: "(sin nombre)",
+    checklistTitle: "LISTA DE CHEQUEO REGULATORIA",
+    applicable: "Aplicable",
+    colItem: "ITEM",
+    colOk: "OK",
+    colNa: "N/A",
+    colObs: "OBS.",
+    sigDrill: "FIRMA RESPONSABLE DEL SIMULACRO",
+    sigCaptain: "FIRMA CAPITAN / OFICIAL DE GUARDIA",
+    generated: "Generado",
+    dateFormatLocale: "es-AR",
+    drillTitle: "Simulacro",
+    checklist: [
+      "Alarma / inicio del simulacro registrado en bitacora",
+      "Briefing pre-drill realizado",
+      "Roles y responsabilidades asignados",
+      "Equipos necesarios verificados operativos",
+      "Comunicaciones internas funcionando",
+      "Tiempo de respuesta documentado",
+      "Reporte de novedades / heridos / desaparecidos",
+      "Stand-down y debriefing al final",
+      "Lecciones aprendidas documentadas",
+    ],
+  },
+  en: {
+    pdfTitle: "Drill",
+    registry: "DRILL RECORD",
+    status: { SCHEDULED: "Scheduled", COMPLETED: "Completed", CANCELLED: "Cancelled" },
+    type: "Type",
+    statusLabel: "Status",
+    schedDate: "Scheduled date",
+    doneDate: "Completion date",
+    regRef: "REGULATORY REFERENCE",
+    goodPractice: "Good maritime practice.",
+    scenario: "Scenario",
+    observations: "Observations",
+    lessons: "Lessons learned",
+    participants: n => `Participants (${n})`,
+    noParticipants: "No participants recorded.",
+    noName: "(no name)",
+    checklistTitle: "REGULATORY CHECKLIST",
+    applicable: "Applicable",
+    colItem: "ITEM",
+    colOk: "OK",
+    colNa: "N/A",
+    colObs: "OBS.",
+    sigDrill: "DRILL RESPONSIBLE SIGNATURE",
+    sigCaptain: "CAPTAIN / WATCH OFFICER SIGNATURE",
+    generated: "Generated",
+    dateFormatLocale: "en-GB",
+    drillTitle: "Drill",
+    checklist: [
+      "Alarm / drill start recorded in logbook",
+      "Pre-drill briefing performed",
+      "Roles and responsibilities assigned",
+      "Required equipment verified operational",
+      "Internal communications working",
+      "Response time documented",
+      "Status / injuries / missing persons report",
+      "Stand-down and debriefing at the end",
+      "Lessons learned documented",
+    ],
+  },
+  pt: {
+    pdfTitle: "Simulado",
+    registry: "REGISTRO DE SIMULADO",
+    status: { SCHEDULED: "Programado", COMPLETED: "Realizado", CANCELLED: "Cancelado" },
+    type: "Tipo",
+    statusLabel: "Estado",
+    schedDate: "Data programada",
+    doneDate: "Data realizada",
+    regRef: "REFERÊNCIA NORMATIVA",
+    goodPractice: "Boa prática marítima.",
+    scenario: "Cenário",
+    observations: "Observações",
+    lessons: "Lições aprendidas",
+    participants: n => `Participantes (${n})`,
+    noParticipants: "Sem participantes registrados.",
+    noName: "(sem nome)",
+    checklistTitle: "LISTA DE VERIFICAÇÃO REGULATÓRIA",
+    applicable: "Aplicável",
+    colItem: "ITEM",
+    colOk: "OK",
+    colNa: "N/A",
+    colObs: "OBS.",
+    sigDrill: "ASSINATURA RESPONSÁVEL PELO SIMULADO",
+    sigCaptain: "ASSINATURA CAPITÃO / OFICIAL DE QUARTO",
+    generated: "Gerado",
+    dateFormatLocale: "pt-BR",
+    drillTitle: "Simulado",
+    checklist: [
+      "Alarme / início do simulado registrado no diário",
+      "Briefing pré-simulado realizado",
+      "Funções e responsabilidades atribuídas",
+      "Equipamentos necessários verificados operacionais",
+      "Comunicações internas funcionando",
+      "Tempo de resposta documentado",
+      "Relatório de novidades / feridos / desaparecidos",
+      "Stand-down e debriefing ao final",
+      "Lições aprendidas documentadas",
+    ],
+  },
 };
 
-// Checklist genérico aplicable a cualquier simulacro. Las verificaciones
-// específicas por escenario van en el campo "scenario" del drill o en el
-// campo "notes" del DrillRequirement (catálogo per-tenant).
-const GENERIC_DRILL_CHECKLIST: string[] = [
-  "Alarma / inicio del simulacro registrado en bitacora",
-  "Briefing pre-drill realizado",
-  "Roles y responsabilidades asignados",
-  "Equipos necesarios verificados operativos",
-  "Comunicaciones internas funcionando",
-  "Tiempo de respuesta documentado",
-  "Reporte de novedades / heridos / desaparecidos",
-  "Stand-down y debriefing al final",
-  "Lecciones aprendidas documentadas",
-];
 
-
-function fmt(d: Date | string | null | undefined): string {
+function fmt(d: Date | string | null | undefined, dateLocale: string): string {
   if (!d) return "-";
   try {
-    return new Date(d).toLocaleDateString("es-AR");
+    return new Date(d).toLocaleDateString(dateLocale);
   } catch {
     return "-";
   }
@@ -133,8 +263,10 @@ export async function buildDrillPdf(session: TenantAccessSession, id: string): P
   }
   tenantName = sanitize(tenantName);
 
+  const locale = await getTenantAiLocale(session.tenantSlug);
+
   try {
-    return await renderPdf({ tenantName, drill, participants });
+    return await renderPdf({ tenantName, drill, participants, locale });
   } catch (err) {
     log.error("[buildDrillPdf] render failed:", err);
     throw new RouteError(500, "PDF_RENDER_FAILED", err instanceof Error ? err.message : "No se pudo generar el PDF.");
@@ -145,11 +277,13 @@ function renderPdf(ctx: {
   tenantName: string;
   drill: DrillRow;
   participants: Array<{ firstName: string | null; lastName: string | null; rank: string | null }>;
+  locale: AiLocale;
 }): Promise<Buffer> {
-  const { tenantName, drill, participants } = ctx;
+  const { tenantName, drill, participants, locale } = ctx;
+  const L = I18N[locale];
 
   return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: sanitize(`Simulacro ${drill.drillCode}`) } });
+    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: sanitize(`${L.drillTitle} ${drill.drillCode}`) } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end",  () => resolve(Buffer.concat(chunks)));
@@ -180,7 +314,7 @@ function renderPdf(ctx: {
       .text(tenantName.toUpperCase(), ML, 18, { width: W, characterSpacing: 1.5 });
     setFont(16, true);
     doc.fillColor("#ffffff")
-      .text("REGISTRO DE SIMULACRO", ML, 32, { width: W });
+      .text(L.registry, ML, 32, { width: W });
     y = 80;
 
     // ── Identificacion ──
@@ -211,8 +345,9 @@ function renderPdf(ctx: {
     }
 
     const reqTitle = drill.requirement?.title ?? "-";
-    rowPair("Tipo", reqTitle, "Estado", DRILL_STATUS_LABEL[drill.status] ?? drill.status);
-    rowPair("Fecha programada", fmt(drill.scheduledDate), "Fecha realizada", fmt(drill.completedDate));
+    const statusLbl = L.status[drill.status as DrillStatus] ?? drill.status;
+    rowPair(L.type, reqTitle, L.statusLabel, statusLbl);
+    rowPair(L.schedDate, fmt(drill.scheduledDate, L.dateFormatLocale), L.doneDate, fmt(drill.completedDate, L.dateFormatLocale));
 
     // ── Referencia normativa ──
     y += 6;
@@ -223,7 +358,7 @@ function renderPdf(ctx: {
     doc.rect(ML, y, W, refH).fillColor(bgBox).fill();
     setFont(7, true);
     doc.fillColor(navy)
-      .text("REFERENCIA NORMATIVA", ML + 8, y + 6, { characterSpacing: 0.8 });
+      .text(L.regRef, ML + 8, y + 6, { characterSpacing: 0.8 });
     setFont(9.5, false);
     doc.fillColor(black)
       .text(ref, ML + 8, y + 18, { width: W - 16, lineGap: 2 });
@@ -248,23 +383,23 @@ function renderPdf(ctx: {
       y += bodyH + 4;
     }
 
-    textBlock("Escenario", drill.scenario ?? "");
-    textBlock("Observaciones", drill.observations ?? "");
-    textBlock("Lecciones aprendidas", drill.lessonsLearned ?? "");
+    textBlock(L.scenario, drill.scenario ?? "");
+    textBlock(L.observations, drill.observations ?? "");
+    textBlock(L.lessons, drill.lessonsLearned ?? "");
 
     // ── Participantes ──
-    const partLabel = `Participantes (${participants.length})`;
+    const partLabel = L.participants(participants.length);
     const partRows = participants.length > 0
       ? participants.map((p, i) => {
-          const name = [p.firstName, p.lastName].filter(Boolean).join(" ") || "(sin nombre)";
+          const name = [p.firstName, p.lastName].filter(Boolean).join(" ") || L.noName;
           const rank = p.rank ?? "-";
           return `${i + 1}. ${name} - ${rank}`;
         }).join("\n")
-      : "Sin participantes registrados.";
+      : L.noParticipants;
     textBlock(partLabel, partRows);
 
     // ── Lista de chequeo regulatoria (segun SOLAS / ISPS / MARPOL / IAMSAR) ──
-    const checklist = GENERIC_DRILL_CHECKLIST;
+    const checklist = L.checklist;
     if (checklist && checklist.length > 0) {
       // Header de la seccion (mismo estilo que textBlock pero sin caja blanca)
       const labelH = 14;
@@ -272,13 +407,13 @@ function renderPdf(ctx: {
       doc.rect(ML, y, W, labelH).fillColor(navy).fill();
       setFont(7, true);
       doc.fillColor("#ffffff")
-        .text("LISTA DE CHEQUEO REGULATORIA", ML + 8, y + 4, { width: W - 16, characterSpacing: 0.8 });
+        .text(L.checklistTitle, ML + 8, y + 4, { width: W - 16, characterSpacing: 0.8 });
       y += labelH;
 
       // Subtitulo: norma aplicable
       setFont(7, false);
       doc.fillColor(gray)
-        .text(`Aplicable: ${sanitize(drill.requirement?.solasRegulation ?? "Buena practica maritima.")}`,
+        .text(`${L.applicable}: ${sanitize(drill.requirement?.solasRegulation ?? L.goodPractice)}`,
           ML + 8, y + 2, { width: W - 16, lineGap: 1 });
       y += 14;
 
@@ -295,10 +430,10 @@ function renderPdf(ctx: {
       setFont(6.5, true);
       doc.fillColor(gray);
       doc.text("#",     ML + 2,                                    y + 4, { width: colCheckW, align: "center", characterSpacing: 0.4 });
-      doc.text("ITEM",  ML + colCheckW + 4,                        y + 4, { width: colTextW, characterSpacing: 0.4 });
-      doc.text("OK",    ML + colCheckW + colTextW + 8,             y + 4, { width: colOkW, align: "center", characterSpacing: 0.4 });
-      doc.text("N/A",   ML + colCheckW + colTextW + colOkW + 12,   y + 4, { width: colNaW, align: "center", characterSpacing: 0.4 });
-      doc.text("OBS.",  ML + colCheckW + colTextW + colOkW + colNaW + 16, y + 4, { width: colNotesW, align: "center", characterSpacing: 0.4 });
+      doc.text(L.colItem,  ML + colCheckW + 4,                     y + 4, { width: colTextW, characterSpacing: 0.4 });
+      doc.text(L.colOk,    ML + colCheckW + colTextW + 8,          y + 4, { width: colOkW, align: "center", characterSpacing: 0.4 });
+      doc.text(L.colNa,    ML + colCheckW + colTextW + colOkW + 12, y + 4, { width: colNaW, align: "center", characterSpacing: 0.4 });
+      doc.text(L.colObs,   ML + colCheckW + colTextW + colOkW + colNaW + 16, y + 4, { width: colNotesW, align: "center", characterSpacing: 0.4 });
       doc.moveTo(ML, y + rowH).lineTo(ML + W, y + rowH).strokeColor(border).lineWidth(0.5).stroke();
       y += rowH;
 
@@ -343,8 +478,8 @@ function renderPdf(ctx: {
     doc.rect(ML + sigW + 20, y, sigW, 60).strokeColor(border).lineWidth(0.5).stroke();
     setFont(7, true);
     doc.fillColor(gray)
-      .text("FIRMA RESPONSABLE DEL SIMULACRO", ML + 8, y + 6, { width: sigW - 16, characterSpacing: 0.8 });
-    doc.text("FIRMA CAPITAN / OFICIAL DE GUARDIA", ML + sigW + 28, y + 6, { width: sigW - 16, characterSpacing: 0.8 });
+      .text(L.sigDrill, ML + 8, y + 6, { width: sigW - 16, characterSpacing: 0.8 });
+    doc.text(L.sigCaptain, ML + sigW + 28, y + 6, { width: sigW - 16, characterSpacing: 0.8 });
     y += 60;
 
     // ── Footer ──
@@ -352,7 +487,7 @@ function renderPdf(ctx: {
     setFont(7, false);
     doc.fillColor(gray)
       .text(
-        sanitize(`Generado: ${new Date().toLocaleString("es-AR")}   -   ${drill.drillCode}   -   ${tenantName}`),
+        sanitize(`${L.generated}: ${new Date().toLocaleString(L.dateFormatLocale)}   -   ${drill.drillCode}   -   ${tenantName}`),
         ML, footerY, { width: W, align: "center" }
       );
 
