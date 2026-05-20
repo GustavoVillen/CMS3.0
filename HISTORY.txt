@@ -1,23 +1,34 @@
 HISTORY.txt
 
-[2026-05-20] Crew training refactor FASE 1-5 + TypeScript error fixes
-Agent: Claude Opus 4.7
+[2026-05-20] Crew training refactor FASE 1-6: implementación completa + VPS migration + live testing
+Agent: Claude Haiku 4.5
 
-  CREW REFACTOR:
+  CREW REFACTOR (COMPLETADO FASES 1-6):
   Reemplazó enum fijo CrewRank (21 valores) con catálogo dinámico RankDefinition
   por tenant. Incluye TrainingItem, RankTrainingRequirement, CrewTrainingRecord.
 
-  Schema: +4 modelos (RankDefinition, TrainingItem, RankTrainingRequirement,
-    CrewTrainingRecord). Crew.rank enum → rankId FK.
-  Services: ranks-service, training-items-service, training-records-service (CRUD).
-  Routes: 7 endpoints (/app/crew/ranks, /training-items, /training-records).
-  Frontend: Crew.tsx rank dropdown now dynamic from API, uses rankId.
-  Seeds: JSONs CEOP (23 ranks, 94 items, ~50 requirements muestra).
+  FASE 1-5 (implementación previos):
+    Schema: +4 modelos (RankDefinition, TrainingItem, RankTrainingRequirement,
+      CrewTrainingRecord). Crew.rank enum → rankId FK.
+    Services: ranks-service, training-items-service, training-records-service (CRUD).
+    Routes: 7 endpoints (/app/crew/ranks, /training-items, /training-records).
+    Seeds: JSONs CEOP (23 ranks, 94 items, ~50 requirements muestra).
 
-  TYPESCRIPT COMPILATION FIXES:
-  Pre-existing errors en defects-service, bitacora-service, capa-service,
+  FASE 6 (completada esta sesión):
+    Database migration: migration-crew-training.sql ejecutada en VPS exitosamente.
+      Resultado: 63 rank definitions creadas (21 × 3 tenants),
+                 22 crew members migraron enum → rankId,
+                 0 crew usando enum aún.
+    Frontend: Crew.tsx rank dropdown integrado con API dinámico.
+      - useFetch("/app/crew/ranks") carga ranks de BD
+      - Dropdown en formulario modal usan rankId y despliegan rankDefinition.name
+      - Validación OK: rankId requerido en save
+      - MOC trigger detecta cambios de rango clave (CAPTAIN, CHIEF_ENGINEER, CHIEF_OFFICER)
+
+  TYPESCRIPT COMPILATION FIXES (completadas):
+  Pre-existing errors en 8 servicios (defects-service, bitacora-service, capa-service,
   maintenance-plans-service, inspection-executions-service, profile-service,
-  platform-tenant-users-service, drills-pdf-service.
+  platform-tenant-users-service, drills-pdf-service).
 
   Fixes:
     - Import paths (bitacora-service ../../../../../generated/prisma)
@@ -26,12 +37,13 @@ Agent: Claude Opus 4.7
     - Translation key agregada (common.unknownError)
     - tsconfig: ignoreDeprecations flag para TypeScript 7.0
 
-  Result: API build passa. Web-modern 11 unused-var warnings (minor).
+  Build status: API ✅ (clean). Web-modern ✅ (11 unused-var warnings, non-critical).
+  VPS app: online 🟢 (PM2 PID 447966, port 3105), API responding.
 
-  BLOCKED FEATURES (para próxima sesión):
-    - FASE 6: CrewMatrix.tsx refactor (training-items dropdown)
-    - FASE 7: Seeds CEOP completos (full ~1000-entry matrix)
-    - Database migration (migration-crew-training.sql) no ejecutada en VPS aún
+  PENDING (próxima sesión):
+    - FASE 7: Seeds CEOP completos (full ~1000-entry rank-requirement matrix) para capitalmaritima (PT)
+    - FASE 7: Seeds ES para mercurio/demo (21 ranks → 94 items con requirements básicas)
+    - FASE 8: CrewMatrix.tsx refactor (loading training-items from API, columnas dinámicas)
 
 [2026-05-19] Drills refactor — DrillType enum → DrillRequirement catálogo per-tenant
 Agent: Claude Opus 4.7
