@@ -4,7 +4,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { buildPermitTypeRegulationContext } from "../../common/regulations/maritime";
 
 const MODEL = "claude-haiku-4-5-20251001";
@@ -110,7 +110,7 @@ async function callClaude(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: userContent }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${userContent}` }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);
   } catch (err) {

@@ -17,7 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 // Antes OCR usaba Sonnet 4.6. Haiku 4.5 ya soporta visión y es ~5× más
 // rápido/barato. Si se observa caída de precisión en OCR de fotos, revertir.
@@ -89,7 +89,7 @@ export async function extractTextFromPhoto(
               type: "image",
               source: { type: "base64", media_type: mime as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: base64 },
             },
-            { type: "text", text: "Analizá la imagen y devolvé el JSON." },
+            { type: "text", text: `${localeUserReminder(locale)}\nAnalizá la imagen y devolvé el JSON.` },
           ],
         },
       ],
@@ -205,7 +205,7 @@ export async function rewriteObservations(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: REWRITE_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${JSON.stringify(payload, null, 2)}` }],
     });
   } catch (err) {
     log.error("[progress-ai] Rewrite call failed:", err);
@@ -302,6 +302,7 @@ async function detectSparesFromText(
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
+  const locale = await getTenantAiLocale(tenantSlug);
 
   const payload = {
     observaciones: text.trim(),
@@ -320,10 +321,10 @@ async function detectSparesFromText(
       model: REWRITE_MODEL,
       max_tokens: 1024,
       system: [
-        { type: "text", text: localeInstruction(await getTenantAiLocale(tenantSlug)) },
+        { type: "text", text: localeInstruction(locale) },
         { type: "text", text: SPARE_DETECTION_PROMPT },
       ],
-      messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${JSON.stringify(payload, null, 2)}` }],
     });
   } catch (err) {
     log.error("[progress-ai] Spare detection call failed:", err);

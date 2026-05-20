@@ -3,7 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { buildFluidAnalysisRegulationContext } from "../../common/regulations/maritime";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 const SYSTEM_PROMPT_BASE = `Sos un experto en mantenimiento predictivo y análisis de fluidos para flotas marítimas.
 Te paso el resultado de UN análisis de fluido (con sus parámetros) más el HISTORIAL de muestras anteriores
@@ -118,7 +118,7 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: JSON.stringify(dataPayload, null, 2) }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${JSON.stringify(dataPayload, null, 2)}` }],
     });
   } catch (err) {
     log.error("[fluid-ai-insights] Anthropic call failed:", err);

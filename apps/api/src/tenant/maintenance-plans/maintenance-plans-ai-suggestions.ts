@@ -5,7 +5,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -103,7 +103,7 @@ async function callClaude(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: userContent }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${userContent}` }],
     });
   } catch (err) {
     log.error(`[${feature}] Anthropic call failed:`, err);

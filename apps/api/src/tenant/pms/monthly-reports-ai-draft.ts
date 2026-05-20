@@ -13,7 +13,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -249,7 +249,7 @@ export async function generateMonthlyDraft(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: PROMPT, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: contextLines.join("\n") }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${contextLines.join("\n")}` }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms`);
   } catch (err) {

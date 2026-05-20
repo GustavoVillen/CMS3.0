@@ -8,7 +8,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { recordAiUsage } from "../usage/usage-service";
 
 export interface ExtractedField<T> {
@@ -106,16 +106,16 @@ export async function extractFluidReport(
       source: { type: "base64", media_type: "application/pdf", data: base64 },
     } as unknown as Anthropic.ContentBlockParam);
   }
+  const fluidModel = "claude-haiku-4-5-20251001";
+  const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
   contentBlocks.push({
     type: "text",
-    text: "Extraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.",
+    text: `${localeUserReminder(locale)}\nExtraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.`,
   });
 
   // Antes Sonnet 4.6 + 4096. Haiku ya hace OCR de PDF y es ~5× más rápido/barato.
   // Se mantiene Sonnet como fallback potencial si se mide caída de precisión.
-  const fluidModel = "claude-haiku-4-5-20251001";
-  const aiStarted = Date.now();
-  const locale = await getTenantAiLocale(session.tenantSlug);
   const response = await client.messages.create({
     model: fluidModel,
     max_tokens: 2048,

@@ -4,7 +4,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
-import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
+import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -54,7 +54,7 @@ export async function suggestCompensatoryMeasures(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: PROMPT_COMPENSATORY, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: buildContext(input) }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${buildContext(input)}` }],
     });
   } catch (err) {
     log.error("[suggestCompensatoryMeasures] Anthropic call failed:", err);
