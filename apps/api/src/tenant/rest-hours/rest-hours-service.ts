@@ -275,13 +275,20 @@ export async function monthlySnapshot(
     where: { tenantId, vesselCode, recordDate: { gte: start, lt: end } },
   });
   const crew = await (prisma as unknown as {
-    crew: { findMany(a: unknown): Promise<Array<{ id: string; firstName: string; lastName: string; rank: string; status: string }>> };
+    crew: { findMany(a: unknown): Promise<Array<{ id: string; firstName: string; lastName: string; rankDefinition: { name: string } | null; status: string }>> };
   }).crew.findMany({
     where: { tenantId, vesselCode, deletedAt: null, status: "ONBOARD" },
-    select: { id: true, firstName: true, lastName: true, rank: true, status: true },
+    select: { id: true, firstName: true, lastName: true, rankDefinition: { select: { name: true } }, status: true },
     orderBy: { lastName: "asc" },
   });
-  return { month: filters.month, year: filters.year, crew, rows };
+
+  // Map rankDefinition to rank string for backward compatibility
+  const crewWithRank = crew.map(c => ({
+    ...c,
+    rank: c.rankDefinition?.name ?? "Unknown",
+  }));
+
+  return { month: filters.month, year: filters.year, crew: crewWithRank, rows };
 }
 
 export async function deleteRestHoursDay(session: TenantAccessSession, id: string) {

@@ -341,10 +341,25 @@ async function fetchRecords(
     // ── Módulos export-only ──────────────────────────────────────────────
     case "crew": {
       if (filters.status) where.status = filters.status;
-      return (prisma as any).crew.findMany({
+      const crew = await (prisma as any).crew.findMany({
         where,
+        select: {
+          id: true, tenantId: true, vesselCode: true, crewCode: true,
+          firstName: true, lastName: true, rankId: true,
+          nationality: true, dateOfBirth: true, passportNumber: true,
+          signOnDate: true, signOffDate: true, status: true, notes: true,
+          createdAt: true, createdByUserId: true,
+          updatedAt: true, updatedByUserId: true,
+          deletedAt: true, deletedByUserId: true,
+          rankDefinition: { select: { name: true } },
+        },
         orderBy: [{ vesselCode: "asc" }, { lastName: "asc" }],
-      }) as any;
+      });
+      // Map rankDefinition.name to rank for backward compatibility with export templates
+      return crew.map((c: any) => ({
+        ...c,
+        rank: c.rankDefinition?.name ?? null,
+      }));
     }
 
     case "crew_certifications": {

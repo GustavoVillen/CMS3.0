@@ -91,13 +91,19 @@ async function loadParticipants(
 ): Promise<Array<{ firstName: string | null; lastName: string | null; rank: string | null }>> {
   if (ids.length === 0) return [];
   try {
-    return await (prisma as unknown as {
-      crew: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean>; orderBy?: unknown }): Promise<Array<{ firstName: string | null; lastName: string | null; rank: string | null }>> };
+    const crew = await (prisma as unknown as {
+      crew: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean>; orderBy?: unknown }): Promise<Array<{ firstName: string | null; lastName: string | null; rankDefinition: { name: string } | null }>> };
     }).crew.findMany({
       where: { id: { in: ids }, tenantId },
-      select: { firstName: true, lastName: true, rank: true },
+      select: { firstName: true, lastName: true, rankDefinition: { select: { name: true } } },
       orderBy: { lastName: "asc" },
     });
+    // Map rankDefinition to rank string for backward compatibility
+    return crew.map(c => ({
+      firstName: c.firstName,
+      lastName: c.lastName,
+      rank: c.rankDefinition?.name ?? null,
+    }));
   } catch (err) {
     log.warn("[buildDrillPdf] crew lookup failed:", err);
     return [];
