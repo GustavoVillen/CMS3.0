@@ -744,6 +744,11 @@ const dict = {
   "rm.itemCategory":        { es: "Categoría",                                       en: "Category",                                            pt: "Categoria" },
   "rm.itemValidity":        { es: "Vigencia (años)",                                 en: "Validity (years)",                                    pt: "Validade (anos)" },
   "rm.confirmDeleteItem":   { es: "¿Eliminar el item '{code}'? Se borrarán también sus requerimientos.", en: "Delete item '{code}'? Its requirements will also be removed.", pt: "Excluir o item '{code}'? Seus requisitos também serão removidos." },
+  "rm.newRank":             { es: "+ Cargo",                                         en: "+ Rank",                                              pt: "+ Cargo" },
+  "rm.createRankTitle":     { es: "Crear cargo",                                     en: "Create rank",                                         pt: "Criar cargo" },
+  "rm.rankCode":            { es: "Código",                                          en: "Code",                                                pt: "Código" },
+  "rm.rankSortOrder":       { es: "Orden",                                           en: "Sort order",                                          pt: "Ordem" },
+  "rm.confirmDeleteRank":   { es: "¿Eliminar el cargo '{code}'? Se borrarán también sus requerimientos.", en: "Delete rank '{code}'? Its requirements will also be removed.", pt: "Excluir o cargo '{code}'? Seus requisitos também serão removidos." },
 
   // Common — adicionales
   "common.refresh":         { es: "Refrescar",            en: "Refresh",            pt: "Atualizar" },

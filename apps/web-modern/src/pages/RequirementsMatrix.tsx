@@ -67,6 +67,10 @@ export const RequirementsMatrixPage: React.FC = () => {
   const [newItem, setNewItem] = useState({ code: "", name: "", regulation: "", category: "", validityYears: "" });
   const [savingNew, setSavingNew] = useState(false);
   const [deletingItem, setDeletingItem] = useState<string | null>(null);
+  const [showNewRank, setShowNewRank] = useState(false);
+  const [newRank, setNewRank] = useState({ code: "", name: "", sortOrder: "" });
+  const [savingNewRank, setSavingNewRank] = useState(false);
+  const [deletingRank, setDeletingRank] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -156,6 +160,37 @@ export const RequirementsMatrixPage: React.FC = () => {
     }
   }
 
+  async function onCreateRank(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isAdmin || !newRank.code.trim() || !newRank.name.trim()) return;
+    setSavingNewRank(true);
+    try {
+      await api.post(`/app/crew/ranks`, {
+        code: newRank.code.trim().toUpperCase(),
+        name: newRank.name.trim(),
+        sortOrder: newRank.sortOrder ? Number(newRank.sortOrder) : undefined,
+      });
+      setNewRank({ code: "", name: "", sortOrder: "" });
+      setShowNewRank(false);
+      await reload();
+    } finally {
+      setSavingNewRank(false);
+    }
+  }
+
+  async function onDeleteRank(rankId: string, code: string) {
+    if (!isAdmin) return;
+    const msg = t("rm.confirmDeleteRank").replace("{code}", code);
+    if (!window.confirm(msg)) return;
+    setDeletingRank(rankId);
+    try {
+      await api.delete(`/app/crew/ranks/${rankId}`);
+      await reload();
+    } finally {
+      setDeletingRank(null);
+    }
+  }
+
   const totalRequirements = data?.requirements.length ?? 0;
 
   if (!isAdmin) {
@@ -187,6 +222,15 @@ export const RequirementsMatrixPage: React.FC = () => {
         >
           <Plus className="w-3.5 h-3.5" />
           {t("rm.newItem")}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowNewRank(true)}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-accent/15 border border-accent/40 text-accent hover:bg-accent/25 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {t("rm.newRank")}
         </button>
 
         <div className="ml-auto flex items-center gap-3 text-[10px] text-text-industrial/60">
@@ -233,10 +277,19 @@ export const RequirementsMatrixPage: React.FC = () => {
             </thead>
             <tbody>
               {data.ranks.map(r => (
-                <tr key={r.id} className="border-b border-white/5 last:border-b-0">
-                  <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2">
+                <tr key={r.id} className="group border-b border-white/5 last:border-b-0">
+                  <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2 relative">
                     <div className="text-xs font-bold text-white">{r.name}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{r.code}</div>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteRank(r.id, r.code)}
+                      disabled={deletingRank === r.id}
+                      title={t("common.delete")}
+                      className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </td>
                   {data.trainingItems.map(it => {
                     const req = reqByCell.get(`${r.id}|${it.id}`);
@@ -349,6 +402,71 @@ export const RequirementsMatrixPage: React.FC = () => {
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-accent/15 border border-accent/40 text-accent hover:bg-accent/25 disabled:opacity-50"
               >
                 {savingNew && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t("common.create")}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showNewRank && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => !savingNewRank && setShowNewRank(false)}>
+          <form
+            onSubmit={onCreateRank}
+            onClick={e => e.stopPropagation()}
+            className="bg-[#0D1B2A] border border-white/10 rounded-xl p-6 w-full max-w-md space-y-3"
+          >
+            <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{t("rm.createRankTitle")}</h2>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.rankCode")} *</label>
+              <input
+                type="text"
+                required
+                value={newRank.code}
+                onChange={e => setNewRank({ ...newRank, code: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                placeholder="OS_2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("common.name")} *</label>
+              <input
+                type="text"
+                required
+                value={newRank.name}
+                onChange={e => setNewRank({ ...newRank, name: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.rankSortOrder")}</label>
+              <input
+                type="number"
+                min="0"
+                value={newRank.sortOrder}
+                onChange={e => setNewRank({ ...newRank, sortOrder: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowNewRank(false)}
+                disabled={savingNewRank}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-text-industrial/70 hover:bg-white/10"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                disabled={savingNewRank || !newRank.code.trim() || !newRank.name.trim()}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-accent/15 border border-accent/40 text-accent hover:bg-accent/25 disabled:opacity-50"
+              >
+                {savingNewRank && <Loader2 className="w-3 h-3 animate-spin" />}
                 {t("common.create")}
               </button>
             </div>
