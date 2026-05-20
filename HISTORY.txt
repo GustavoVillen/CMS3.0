@@ -1,5 +1,38 @@
 HISTORY.txt
 
+[2026-05-20] Crew training refactor FASE 1-5 + TypeScript error fixes
+Agent: Claude Opus 4.7
+
+  CREW REFACTOR:
+  Reemplazó enum fijo CrewRank (21 valores) con catálogo dinámico RankDefinition
+  por tenant. Incluye TrainingItem, RankTrainingRequirement, CrewTrainingRecord.
+
+  Schema: +4 modelos (RankDefinition, TrainingItem, RankTrainingRequirement,
+    CrewTrainingRecord). Crew.rank enum → rankId FK.
+  Services: ranks-service, training-items-service, training-records-service (CRUD).
+  Routes: 7 endpoints (/app/crew/ranks, /training-items, /training-records).
+  Frontend: Crew.tsx rank dropdown now dynamic from API, uses rankId.
+  Seeds: JSONs CEOP (23 ranks, 94 items, ~50 requirements muestra).
+
+  TYPESCRIPT COMPILATION FIXES:
+  Pre-existing errors en defects-service, bitacora-service, capa-service,
+  maintenance-plans-service, inspection-executions-service, profile-service,
+  platform-tenant-users-service, drills-pdf-service.
+
+  Fixes:
+    - Import paths (bitacora-service ../../../../../generated/prisma)
+    - Type casts para Prisma delegation API (.count() → .findMany())
+    - Preservación de tipos en query results (getDefect type preservation)
+    - Translation key agregada (common.unknownError)
+    - tsconfig: ignoreDeprecations flag para TypeScript 7.0
+
+  Result: API build passa. Web-modern 11 unused-var warnings (minor).
+
+  BLOCKED FEATURES (para próxima sesión):
+    - FASE 6: CrewMatrix.tsx refactor (training-items dropdown)
+    - FASE 7: Seeds CEOP completos (full ~1000-entry matrix)
+    - Database migration (migration-crew-training.sql) no ejecutada en VPS aún
+
 [2026-05-19] Drills refactor — DrillType enum → DrillRequirement catálogo per-tenant
 Agent: Claude Opus 4.7
 
