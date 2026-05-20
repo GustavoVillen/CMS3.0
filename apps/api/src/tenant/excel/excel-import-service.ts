@@ -459,7 +459,31 @@ async function createRecord(
     }
     case "assets":            await prisma.asset.create({ data: data as any }); break;
     case "maintenance_plans": await prisma.maintenancePlan.create({ data: data as any }); break;
-    case "spares":            await prisma.spare.create({ data: data as any }); break;
+    case "spares": {
+      const createdSpare = await prisma.spare.create({ data: data as any });
+      // Si la planilla trae stock inicial, generar StockMovement RECEIPT para que aparezca en la UI
+      // (la UI calcula onHand sumando movements, no usa Spare.currentStock directo).
+      const initialStock = Number((data as any).currentStock ?? 0);
+      if (initialStock > 0) {
+        await prisma.stockMovement.create({
+          data: {
+            tenantId:        createdSpare.tenantId,
+            vesselCode:      createdSpare.vesselCode,
+            spareId:         createdSpare.id,
+            locationId:      null,
+            movementCode:    `MOV-${createdSpare.vesselCode}-${Date.now()}-${createdSpare.id.slice(-6)}`,
+            movementType:    "RECEIPT",
+            quantity:        initialStock,
+            unit:            createdSpare.unit ?? "unit",
+            occurredAt:      new Date(),
+            referenceType:   "ADJUSTMENT",
+            notes:           "Stock inicial importado desde planilla",
+            createdByUserId: (data as any).createdByUserId as string,
+          },
+        });
+      }
+      break;
+    }
     case "providers":         await prisma.provider.create({ data: data as any }); break;
     case "certificates":      await prisma.certificate.create({ data: data as any }); break;
   }
