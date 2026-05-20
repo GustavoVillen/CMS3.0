@@ -202,23 +202,23 @@ const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onIte
     } catch { /* ignore */ }
   };
 
-if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">Cargando ítems…</p>;
+if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{t("sr.loadingItems")}</p>;
 
   return (
     <div className="space-y-4">
       {/* Item list */}
       {items.length === 0
-        ? <p className="text-xs text-white/20 py-4 text-center">Sin ítems. Agrega repuestos a solicitar.</p>
+        ? <p className="text-xs text-white/20 py-4 text-center">{t("sr.noItemsHint")}</p>
         : (
           <div className="border border-white/10 rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-white/30 uppercase tracking-wider">
-                  <th className="px-3 py-2 text-left">Descripción / SKU</th>
-                  <th className="px-3 py-2 text-right">Cant.</th>
+                  <th className="px-3 py-2 text-left">{t("sr.colDescSku")}</th>
+                  <th className="px-3 py-2 text-right">{t("sr.colQty")}</th>
                   <th className="px-3 py-2 text-left">Ud.</th>
-                  <th className="px-3 py-2 text-left">Estado</th>
-                  <th className="px-3 py-2 text-right">Entregado</th>
+                  <th className="px-3 py-2 text-left">{t("col.status")}</th>
+                  <th className="px-3 py-2 text-right">{t("sr.colDelivered")}</th>
                   <th className="px-2 py-2" />
                 </tr>
               </thead>
@@ -261,15 +261,15 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
       {/* Receipt form */}
       {receiving && (
         <div className="border border-emerald-500/20 rounded-xl p-4 space-y-3 bg-emerald-500/5">
-          <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Confirmar recepción</p>
+          <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{t("sr.confirmReceipt")}</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Fecha de recepción *</label>
+              <label className={labelCls}>{t("sr.receivedDate")}</label>
               <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Comentarios</label>
-              <input value={receiptNotes} onChange={e => setReceiptNotes(e.target.value)} placeholder="Estado del producto, observaciones…" className={inputCls} />
+              <label className={labelCls}>{t("sr.comments")}</label>
+              <input value={receiptNotes} onChange={e => setReceiptNotes(e.target.value)} placeholder={t("sr.commentsPh")} className={inputCls} />
             </div>
           </div>
           {deliverErr && <p className="text-[10px] text-red-400">{deliverErr}</p>}
@@ -290,7 +290,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
       {canEdit && (
         <div className="border border-white/10 rounded-xl p-4 space-y-3 bg-white/[0.02]">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Agregar ítem</p>
+            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">{t("sr.addItem")}</p>
             {vesselCode && (
               <button type="button" onClick={() => setShowNewSpare(v => !v)}
                 className="text-[10px] text-accent/70 hover:text-accent underline">
@@ -302,26 +302,26 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
           {/* Mini-form to register new spare */}
           {showNewSpare && (
             <div className="border border-accent/20 rounded-xl p-3 space-y-2 bg-accent/5">
-              <p className="text-[10px] font-bold text-accent/70 uppercase tracking-wider">Registrar repuesto (stock 0)</p>
+              <p className="text-[10px] font-bold text-accent/70 uppercase tracking-wider">{t("sr.registerSpareZero")}</p>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className={labelCls}>SKU *</label>
+                  <label className={labelCls}>{t("sp.sku")}</label>
                   <input value={newSpareSku} onChange={e => setNewSpareSku(e.target.value.toUpperCase())} placeholder="REP-001" className={inputCls} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Nombre *</label>
-                  <input value={newSpareName} onChange={e => setNewSpareName(e.target.value)} placeholder="Descripción del repuesto" className={inputCls} />
+                  <label className={labelCls}>{t("sp.nameReq")}</label>
+                  <input value={newSpareName} onChange={e => setNewSpareName(e.target.value)} placeholder={t("sr.sparePh")} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Unidad *</label>
-                  <input value={newSpareUnit} onChange={e => setNewSpareUnit(e.target.value)} placeholder="ud, kg…" className={inputCls} />
+                  <label className={labelCls}>{t("sp.unitReq")}</label>
+                  <input value={newSpareUnit} onChange={e => setNewSpareUnit(e.target.value)} placeholder={t("sr.unitPh")} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Criticidad</label>
+                  <label className={labelCls}>{t("common.criticality")}</label>
                   <select value={newSpareCrit} onChange={e => setNewSpareCrit(e.target.value)} className={inputCls}>
-                    <option value="A">A — Crítico</option>
-                    <option value="B">B — Importante</option>
-                    <option value="C">C — Menor</option>
+                    <option value="A">{t("sp.critAImportant")}</option>
+                    <option value="B">{t("sp.critB")}</option>
+                    <option value="C">{t("sp.critC")}</option>
                   </select>
                 </div>
               </div>
@@ -342,7 +342,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
                 onChange={e => { setSearch(e.target.value); setSpareId(""); setSpareName(""); setSpareUnit(""); setDropdown(true); }}
                 onFocus={() => setDropdown(true)}
                 onBlur={() => setTimeout(() => setDropdown(false), 150)}
-                placeholder="Buscar por SKU o nombre…"
+                placeholder={t("sr.searchSkuName")}
                 className={inputCls}
               />
               {dropdown && (
@@ -353,7 +353,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
                       ? spares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
                       : spares.slice(0, 30);
                     if (filtered.length === 0)
-                      return <p className="px-3 py-2 text-xs text-white/30">Sin resultados{!vesselCode ? " — seleccioná un buque primero" : ""}</p>;
+                      return <p className="px-3 py-2 text-xs text-white/30">{t("sr.noResults")}{!vesselCode ? ` — ${t("sr.selectVesselFirst")}` : ""}</p>;
                     return filtered.map(s => (
                       <button key={s.id} type="button"
                         onMouseDown={() => {
@@ -367,7 +367,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">C
                         <CritBadge crit={s.criticality} />
                         <span className="flex-1 text-white">{s.sku} — {s.name}</span>
                         {s.available <= 0
-                          ? <span className="text-red-400 text-[10px] font-semibold shrink-0">SIN STOCK</span>
+                          ? <span className="text-red-400 text-[10px] font-semibold shrink-0">{t("sr.noStock")}</span>
                           : <span className="text-white/30 text-[10px] shrink-0">disp: {s.available} {s.unit}</span>
                         }
                       </button>

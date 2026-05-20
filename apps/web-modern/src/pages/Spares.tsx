@@ -89,28 +89,29 @@ function MovBadge({ type }: { type: string }) {
 }
 
 const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
+  const t = useT();
   const { data, loading } = useFetch<{ items: StockMovement[] }>(`/app/pms/stock-movements?spareId=${spareId}`);
   const movements = data?.items ?? [];
 
   if (loading) return (
     <div className="px-4 pb-4 flex items-center gap-2 text-xs text-white/30">
-      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando...
+      <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
     </div>
   );
   if (movements.length === 0) return (
-    <p className="px-4 pb-4 text-xs text-white/20">Sin movimientos registrados.</p>
+    <p className="px-4 pb-4 text-xs text-white/20">{t("common.noMovements")}</p>
   );
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-[10px] text-white/30 border-b border-white/10">
-            <th className="text-left px-4 py-2">Fecha</th>
-            <th className="text-left px-4 py-2">Tipo</th>
-            <th className="text-right px-4 py-2">Cantidad</th>
-            <th className="text-left px-4 py-2">Buque</th>
-            <th className="text-left px-4 py-2">OT / Referencia</th>
-            <th className="text-left px-4 py-2">Notas</th>
+            <th className="text-left px-4 py-2">{t("common.date")}</th>
+            <th className="text-left px-4 py-2">{t("common.type")}</th>
+            <th className="text-right px-4 py-2">{t("common.quantity")}</th>
+            <th className="text-left px-4 py-2">{t("col.vessel")}</th>
+            <th className="text-left px-4 py-2">{t("sp.colWoRef")}</th>
+            <th className="text-left px-4 py-2">{t("common.notes")}</th>
           </tr>
         </thead>
         <tbody>
@@ -313,19 +314,19 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
           <div className="flex items-center gap-3">
             <Package className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo Repuesto" : spare.sku}</h2>
+              <h2 className="text-sm font-bold text-white">{isNew ? t("sp.newSpareTitle") : spare.sku}</h2>
               {!isNew && <p className="text-[10px] text-white/40 mt-0.5">{spare.name} · Vessel: {spare.vesselCode}</p>}
             </div>
             {!isNew && (
               <div className="flex items-center gap-2">
                 <CriticalityBadge value={spare.criticality} />
-                {isCriticalStock && <span className="text-[10px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">Stock crítico</span>}
-                {isWarnStock     && <span className="text-[10px] font-semibold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">Por debajo del punto de reorden</span>}
+                {isCriticalStock && <span className="text-[10px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">{t("sp.criticalStock")}</span>}
+                {isWarnStock     && <span className="text-[10px] font-semibold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">{t("sp.belowReorderPoint")}</span>}
               </div>
             )}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("common.reduce") : t("common.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
@@ -337,10 +338,10 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Vessel *</label>
+              <label className={labelCls}>{t("form.vessel")}</label>
               {isNew
                 ? <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
-                    <option value="">— Seleccionar vessel —</option>
+                    <option value="">{t("sp.selectVesselPh")}</option>
                     {vessels.map(v => (
                       <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
                     ))}
@@ -348,45 +349,45 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
                 : <p className="text-sm"><VesselLabel code={spare.vesselCode} className="text-sm" showCode /></p>}
             </div>
             <div>
-              <label className={labelCls}>SKU *</label>
+              <label className={labelCls}>{t("sp.sku")}</label>
               <input value={sku} onChange={e => setSku(e.target.value.toUpperCase())} placeholder="SKU-001" className={inputCls} />
             </div>
           </div>
 
           <div>
-            <label className={labelCls}>Nombre *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del repuesto" className={inputCls} />
+            <label className={labelCls}>{t("sp.nameReq")}</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder={t("sp.namePh")} className={inputCls} />
           </div>
 
           {longDescription !== undefined && (
             <div>
-              <label className={labelCls}>Descripción larga</label>
-              <textarea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder="Descripción técnica detallada…" rows={2} className={`${inputCls} resize-none`} />
+              <label className={labelCls}>{t("sp.longDesc")}</label>
+              <textarea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} />
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Categoría</label>
-              <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Ej. Filtros, Rodamientos…" className={inputCls} />
+              <label className={labelCls}>{t("common.category")}</label>
+              <input value={category} onChange={e => setCategory(e.target.value)} placeholder={t("sp.categoryPh")} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Criticidad</label>
+              <label className={labelCls}>{t("common.criticality")}</label>
               <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
-                <option value="A">A — Crítica</option>
-                <option value="B">B — Importante</option>
-                <option value="C">C — Rutinaria</option>
+                <option value="A">{t("sp.critAImportant")}</option>
+                <option value="B">{t("sp.critB")}</option>
+                <option value="C">{t("sp.critC")}</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Fabricante</label>
+              <label className={labelCls}>{t("sp.manufacturer")}</label>
               <input value={manufacturer} onChange={e => setManufacturer(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Modelo</label>
+              <label className={labelCls}>{t("sp.model")}</label>
               <input value={model} onChange={e => setModel(e.target.value)} className={inputCls} />
             </div>
           </div>
@@ -401,7 +402,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
               className="mt-0.5 accent-accent"
             />
             <div className="flex-1">
-              <p className="text-xs font-semibold text-white">Repuesto equivalente / no-OEM</p>
+              <p className="text-xs font-semibold text-white">{t("sp.equivNotOem")}</p>
               <p className="text-[10px] text-white/40 mt-0.5">
                 Marcalo si el repuesto NO es del fabricante original del equipo.
                 En componentes de criticidad A el sistema sugerirá registrar un MOC.
@@ -411,7 +412,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className={labelCls}>Unidad *</label>
+              <label className={labelCls}>{t("sp.unitReq")}</label>
               <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="ud, m, kg, L…" className={inputCls} />
             </div>
             <div>

@@ -10,7 +10,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -78,11 +78,11 @@ interface CrewItem {
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
-const TYPE_LABEL: Record<PermitType, string> = {
-  HOT_WORK: "Trabajo en caliente",
-  ENCLOSED_SPACE_ENTRY: "Espacio confinado",
-  WORKING_ALOFT: "Trabajo en altura",
-  ELECTRICAL_ISOLATION: "Aislamiento eléctrico",
+const TYPE_TKEY: Record<PermitType, TranslationKey> = {
+  HOT_WORK: "pm.type.hotWork",
+  ENCLOSED_SPACE_ENTRY: "pm.type.enclosedSpace",
+  WORKING_ALOFT: "pm.type.workingAloft",
+  ELECTRICAL_ISOLATION: "pm.type.electricalIso",
 };
 
 const TYPE_ICON: Record<PermitType, React.FC<{ className?: string }>> = {
@@ -92,14 +92,14 @@ const TYPE_ICON: Record<PermitType, React.FC<{ className?: string }>> = {
   ELECTRICAL_ISOLATION: Zap,
 };
 
-const STATUS_LABEL: Record<PermitStatus, string> = {
-  DRAFT: "Borrador",
-  REQUESTED: "Solicitado",
-  APPROVED: "Aprobado",
-  REJECTED: "Rechazado",
-  ACTIVE: "Activo",
-  CLOSED: "Cerrado",
-  CANCELLED: "Cancelado",
+const STATUS_TKEY: Record<PermitStatus, TranslationKey> = {
+  DRAFT: "pm.status.draft",
+  REQUESTED: "pm.status.requested",
+  APPROVED: "pm.status.approved",
+  REJECTED: "pm.status.rejected",
+  ACTIVE: "pm.status.active",
+  CLOSED: "pm.status.closed",
+  CANCELLED: "pm.status.cancelled",
 };
 
 const STATUS_COLOR: Record<PermitStatus, string> = {
@@ -156,6 +156,7 @@ interface PermitModalProps {
 }
 
 export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved, onMocTrigger }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -294,10 +295,10 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             prefill: {
               category: "TEMPORARY",
               vesselCode,
-              title: `Override de alarma — ${TYPE_LABEL[type]} en ${vessel?.name ?? vesselCode}`,
+              title: `Override de alarma — ${t(TYPE_TKEY[type])} en ${vessel?.name ?? vesselCode}`,
               reasonForChange: `Permiso de trabajo con bypass/override de alarma crítica. Ubicación: ${location.trim()}.`,
               proposedChange: `${description.trim()}. Vigencia planeada: ${plannedStart} → ${plannedEnd}.`,
-              sourceLabel: `Desde Permisos de Trabajo · ${TYPE_LABEL[type]}`,
+              sourceLabel: `Desde Permisos de Trabajo · ${t(TYPE_TKEY[type])}`,
             },
           });
         }
@@ -385,20 +386,20 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Permiso de trabajo</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo permiso" : `${permit!.permitCode} — ${TYPE_LABEL[permit!.type]}`}</h2>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.title")}</p>
+              <h2 className="text-sm font-bold text-white">{isNew ? t("pm.newPermit") : `${permit!.permitCode} — ${t(TYPE_TKEY[permit!.type])}`}</h2>
             </div>
-            {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{STATUS_LABEL[permit.status]}</span>}
+            {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>}
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
 
         {!isNew && (
           <div className="flex border-b border-white/10 px-6 shrink-0">
-            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Detalles</button>
-            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Participantes ({permit!.participants.length})</button>
+            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabDetails")}</button>
+            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabParticipants")} ({permit!.participants.length})</button>
             {permit!.type === "ENCLOSED_SPACE_ENTRY" && (
-              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Gas Tests ({permit!.gasTests.length})</button>
+              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabGasTests")} ({permit!.gasTests.length})</button>
             )}
           </div>
         )}
@@ -409,46 +410,46 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               {isTerminal && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-orange-200">Este permiso está {STATUS_LABEL[permit!.status]}. Para corregirlo, un administrador debe re-abrirlo con justificación.</p>
+                  <p className="text-xs text-orange-200">{t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit!.status]))}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Vessel</label>
+                  <label className={labelCls}>{t("pm.vessel")}</label>
                   <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || !isEditable} className={inputCls}>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Tipo</label>
+                  <label className={labelCls}>{t("pm.type")}</label>
                   <select value={type} onChange={e => setType(e.target.value as PermitType)} disabled={!isNew || !isEditable} className={inputCls}>
-                    {(Object.keys(TYPE_LABEL) as PermitType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                    {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Ubicación</label>
-                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder="ej. Sala de máquinas, tanque #3" />
+                  <label className={labelCls}>{t("common.location")}</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("pm.locationPh")} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Descripción del trabajo</label>
+                  <label className={labelCls}>{t("pm.workDesc")}</label>
                   <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Inicio planeado</label>
+                  <label className={labelCls}>{t("pm.plannedStart")}</label>
                   <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Fin planeado</label>
+                  <label className={labelCls}>{t("pm.plannedEnd")}</label>
                   <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
                 </div>
                 {permit && (permit.validFrom || permit.validTo) && (
                   <div className="col-span-2 grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>Válido desde</label>
+                      <label className={labelCls}>{t("pm.validFrom")}</label>
                       <input value={fmtDateTime(permit.validFrom)} disabled className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Válido hasta</label>
+                      <label className={labelCls}>{t("pm.validUntil")}</label>
                       <input value={fmtDateTime(permit.validTo)} disabled className={inputCls} />
                     </div>
                   </div>
@@ -463,7 +464,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     Peligros identificados
                     {loadingHazards && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder="Riesgos específicos del trabajo y ubicación" />
+                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label
@@ -475,7 +476,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     Medidas de control
                     {loadingControls && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder="Aislamientos, ventilación, vigía, comms, etc." />
+                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label
@@ -487,7 +488,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     EPP requerido
                     {loadingPpe && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder="Arnés, máscara con suministro de aire, guantes ignífugos, etc." />
+                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
                 </div>
 
                 {/* Override / bypass de alarma crítica — al guardar el sistema sugiere abrir MOC TEMPORARY. */}
@@ -500,7 +501,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     className="mt-0.5 accent-orange-400"
                   />
                   <div className="flex-1">
-                    <p className="text-xs font-semibold text-orange-200">Override / bypass de alarma crítica</p>
+                    <p className="text-xs font-semibold text-orange-200">{t("pm.overrideBypass")}</p>
                     <p className="text-[10px] text-orange-200/70 mt-0.5">
                       Marcalo si este permiso requiere anular o by-passear una alarma de safety
                       (fire detection, gas, ESD, etc.). El sistema sugerirá registrar un MOC temporal.
@@ -516,19 +517,19 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                 </div>
                 {permit?.rejectionReason && (
                   <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-red-400 font-bold mb-1">Motivo de rechazo</p>
+                    <p className="text-[10px] uppercase tracking-wider text-red-400 font-bold mb-1">{t("pm.rejectReason")}</p>
                     <p className="text-xs text-red-200">{permit.rejectionReason}</p>
                   </div>
                 )}
                 {permit?.cancelReason && (
                   <div className="col-span-2 bg-white/5 border border-white/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold mb-1">Motivo de cancelación</p>
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold mb-1">{t("pm.cancelReason")}</p>
                     <p className="text-xs text-text-industrial/70">{permit.cancelReason}</p>
                   </div>
                 )}
                 {permit?.closeNotes && (
                   <div className="col-span-2 bg-success-sea/5 border border-success-sea/20 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-success-sea font-bold mb-1">Notas de cierre</p>
+                    <p className="text-[10px] uppercase tracking-wider text-success-sea font-bold mb-1">{t("pm.closeNotes")}</p>
                     <p className="text-xs text-text-industrial/80">{permit.closeNotes}</p>
                   </div>
                 )}
@@ -554,29 +555,29 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               </button>
             )}
             {!isNew && permit?.status === "DRAFT" && (
-              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">Pedir aprobación</button>
+              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">{t("common.requestApproval")}</button>
             )}
             {!isNew && permit?.status === "REQUESTED" && canApprove && (
               <>
-                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">Aprobar</button>
-                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">Rechazar</button>
+                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">{t("common.approve")}</button>
+                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">{t("common.reject")}</button>
               </>
             )}
             {!isNew && permit?.status === "APPROVED" && (
-              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">Activar</button>
+              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">{t("common.activate")}</button>
             )}
             {!isNew && permit?.status === "ACTIVE" && (
-              <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">Cerrar</button>
+              <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">{t("common.close")}</button>
             )}
             {!isNew && permit && !isTerminal && (
-              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 font-bold text-xs hover:bg-white/10 disabled:opacity-50">Cancelar</button>
+              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 font-bold text-xs hover:bg-white/10 disabled:opacity-50">{t("common.cancel")}</button>
             )}
             {!isNew && isTerminal && isAdmin && (
-              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">Re-abrir</button>
+              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">{t("common.reopen")}</button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
             {(isNew || tab === "details") && isEditable && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
@@ -832,6 +833,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const PermitsPage: React.FC = () => {
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState<"" | PermitStatus>("");
   const [typeFilter, setTypeFilter]     = useState<"" | PermitType>("");
 
@@ -860,12 +862,12 @@ export const PermitsPage: React.FC = () => {
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as "" | PermitStatus)}
           className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
           <option value="">— Estado: todos —</option>
-          {(Object.keys(STATUS_LABEL) as PermitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          {(Object.keys(STATUS_TKEY) as PermitStatus[]).map(s => <option key={s} value={s}>{t(STATUS_TKEY[s])}</option>)}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as "" | PermitType)}
           className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
           <option value="">— Tipo: todos —</option>
-          {(Object.keys(TYPE_LABEL) as PermitType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+          {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
         </select>
       </div>
 

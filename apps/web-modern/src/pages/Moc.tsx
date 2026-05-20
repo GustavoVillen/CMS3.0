@@ -384,39 +384,39 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
           {prefill?.sourceLabel && (
             <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-accent font-bold">Origen</p>
+              <p className="text-[10px] uppercase tracking-wider text-accent font-bold">{t("moc.origin")}</p>
               <p className="text-xs text-text-industrial mt-0.5">{prefill.sourceLabel}</p>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Vessel *</label>
+            <div><label className={labelCls}>{t("form.vessel")}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
             </div>
-            <div><label className={labelCls}>Categoría *</label>
+            <div><label className={labelCls}>{t("moc.categoryReq")}</label>
               <select value={category} onChange={e => onCategoryChange(e.target.value)} disabled={isLocked} className={inputCls}>
                 {Object.entries(CATEGORY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
-            <div className="col-span-2"><label className={labelCls}>Título *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} disabled={isLocked} placeholder="Resumen breve del cambio" className={inputCls} />
+            <div className="col-span-2"><label className={labelCls}>{t("moc.titleReq")}</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} disabled={isLocked} placeholder={t("moc.titlePh")} className={inputCls} />
             </div>
-            <div className="col-span-2"><label className={labelCls}>Razón del cambio *</label>
+            <div className="col-span-2"><label className={labelCls}>{t("moc.reasonReq")}</label>
               <textarea rows={2} value={reasonForChange} onChange={e => setReason(e.target.value)} disabled={isLocked} placeholder={template?.reasonPlaceholder} className={inputCls + " resize-y"} />
             </div>
-            <div className="col-span-2"><label className={labelCls}>Cambio propuesto *</label>
+            <div className="col-span-2"><label className={labelCls}>{t("moc.proposedReq")}</label>
               <textarea rows={2} value={proposedChange} onChange={e => setProposed(e.target.value)} disabled={isLocked} placeholder={template?.proposedPlaceholder} className={inputCls + " resize-y"} />
             </div>
-            <div><label className={labelCls}>Riesgo</label>
+            <div><label className={labelCls}>{t("moc.risk")}</label>
               <select value={riskLevel} onChange={e => setRiskLevel(e.target.value)} disabled={isLocked} className={inputCls}>
                 {Object.entries(RISK_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
-            <div><label className={labelCls}>Fecha planeada</label>
+            <div><label className={labelCls}>{t("moc.plannedDate")}</label>
               <input type="date" value={plannedDate} onChange={e => setPlanned(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
-            <div className="col-span-2"><label className={labelCls}>Áreas de impacto</label>
+            <div className="col-span-2"><label className={labelCls}>{t("moc.impactAreas")}</label>
               <div className="flex flex-wrap gap-1.5">
                 {IMPACT_AREAS.map(a => (
                   <button key={a} type="button" disabled={isLocked} onClick={() => toggleImpact(a)}
@@ -428,7 +428,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
             </div>
             <div className="col-span-2">
               <div className="flex items-center justify-between mb-1.5">
-                <label className={labelCls + " mb-0"}>Notas análisis de riesgo</label>
+                <label className={labelCls + " mb-0"}>{t("moc.riskAnalysisNotes")}</label>
                 <button
                   type="button"
                   onClick={() => { void suggestRiskAssessmentAI(); }}
@@ -447,14 +447,14 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>Medidas de mitigación</label>
+              <label className={labelCls}>{t("moc.mitigationMeasures")}</label>
               <textarea rows={6} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
           </div>
 
           {moc && (
             <div className="rounded-lg bg-white/[0.04] border border-white/10 p-3 space-y-1.5 text-[11px]">
-              <p className="font-bold uppercase tracking-wider text-text-industrial/50">Trazabilidad</p>
+              <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("moc.traceability")}</p>
               {moc.approvedAt && <p className="text-text-industrial/70">Aprobado por {moc.approvedByName ?? "—"} el {fmtDate(moc.approvedAt)}</p>}
               {moc.rejectedReason && <p className="text-red-300">Rechazado: {moc.rejectedReason}</p>}
               {moc.implementedAt && <p className="text-text-industrial/70">Implementado el {fmtDate(moc.implementedAt)}{moc.implementedByName ? ` por ${moc.implementedByName}` : ""}.{moc.implementationNotes ? ` ${moc.implementationNotes}` : ""}</p>}
@@ -469,7 +469,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           <div className="flex flex-wrap gap-2">
             {/* Transiciones según estado */}
             {moc?.status === "REQUESTED" && (
-              <button onClick={() => { void transition("UNDER_ANALYSIS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs disabled:opacity-50">Iniciar análisis</button>
+              <button onClick={() => { void transition("UNDER_ANALYSIS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs disabled:opacity-50">{t("moc.startAnalysis")}</button>
             )}
             {moc?.status === "UNDER_ANALYSIS" && canApprove && (
               <>
@@ -478,19 +478,19 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               </>
             )}
             {moc?.status === "APPROVED" && (
-              <button onClick={() => { void transition("IN_PROGRESS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs disabled:opacity-50">Iniciar implementación</button>
+              <button onClick={() => { void transition("IN_PROGRESS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs disabled:opacity-50">{t("moc.startImplementation")}</button>
             )}
             {moc?.status === "IN_PROGRESS" && (
-              <button onClick={() => askAndTransition("IMPLEMENTED", "implementationNotes", "Notas de implementación:")} disabled={saving} className="px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 text-xs disabled:opacity-50">Marcar implementado</button>
+              <button onClick={() => askAndTransition("IMPLEMENTED", "implementationNotes", t("moc.implementationNotes"))} disabled={saving} className="px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 text-xs disabled:opacity-50">{t("moc.markImplemented")}</button>
             )}
             {moc?.status === "IMPLEMENTED" && (
               <button onClick={() => askAndTransition("REVIEWED", "reviewOutcome", "Resultado revisión (SATISFACTORY / WITH_OBSERVATIONS):")} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/15 border border-success-sea/40 text-success-sea text-xs flex items-center gap-1 disabled:opacity-50"><ClockIcon className="w-3.5 h-3.5" /> Revisar y cerrar</button>
             )}
             {moc && !["REVIEWED", "CANCELLED", "REJECTED"].includes(moc.status) && (
-              <button onClick={() => { void transition("CANCELLED"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400 disabled:opacity-50">Cancelar MOC</button>
+              <button onClick={() => { void transition("CANCELLED"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400 disabled:opacity-50">{t("moc.cancelMoc")}</button>
             )}
             {!isNew && isAdmin && (
-              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400">Eliminar</button>
+              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400">{t("common.delete")}</button>
             )}
           </div>
           <div className="flex gap-2">
@@ -508,7 +508,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
                 PDF
               </button>
             )}
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
             {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}

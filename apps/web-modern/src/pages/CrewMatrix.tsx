@@ -157,7 +157,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
         </div>
         <div className="p-6 space-y-3">
           <div>
-            <label className={labelCls}>Fecha de realización *</label>
+            <label className={labelCls}>{t("cm.cellDate")}</label>
             <input type="date" value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
           </div>
           <div>
@@ -167,23 +167,23 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
             <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>URL del documento / certificado</label>
+            <label className={labelCls}>{t("cm.docUrl")}</label>
             <input type="url" value={docUrl} onChange={e => setDocUrl(e.target.value)} className={inputCls} placeholder="https://…" />
           </div>
           <div>
-            <label className={labelCls}>Notas / observaciones</label>
-            <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-y"} placeholder="Instituto, número de certificado, comentarios…" />
+            <label className={labelCls}>{t("common.notesObs")}</label>
+            <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-y"} placeholder={t("cm.notesPh")} />
           </div>
           {err && <p className="text-xs text-red-400">{err}</p>}
         </div>
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10">
           <div>
             {existing && (
-              <button onClick={() => { void onRemove(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">Quitar</button>
+              <button onClick={() => { void onRemove(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">{t("common.remove")}</button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial">{t("common.close")}</button>
             <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </button>
@@ -258,11 +258,11 @@ export const CrewMatrixPage: React.FC = () => {
 
       <div className="flex flex-wrap items-center gap-2">
         <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
-          <option value="">Todos los buques</option>
+          <option value="">{t("common.allVessels")}</option>
           {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
         </select>
         <select value={category} onChange={e => setCategory(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
-          <option value="">Todas las categorías</option>
+          <option value="">{t("common.allCategories")}</option>
           {(data?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
@@ -276,18 +276,18 @@ export const CrewMatrixPage: React.FC = () => {
       {loading && !data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : !data || data.crew.length === 0 ? (
-        <div className="text-center py-10 text-text-industrial/40 text-sm">Sin tripulación ONBOARD.</div>
+        <div className="text-center py-10 text-text-industrial/40 text-sm">{t("common.noCrewOnboard")}</div>
       ) : data.trainingItems.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/40 text-sm">
           Sin items de entrenamiento configurados.
-          {category && <span className="block mt-1">Probá quitar el filtro de categoría.</span>}
+          {category && <span className="block mt-1">{t("common.tryRemoveFilter")}</span>}
         </div>
       ) : (
         <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[220px]">Tripulante</th>
+                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[220px]">{t("common.crewMember")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
                     <span title={`${it.name}${it.regulation ? " — " + it.regulation : ""}`}>{it.code}</span>
