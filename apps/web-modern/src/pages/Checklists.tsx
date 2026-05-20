@@ -10,6 +10,7 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
+import { useT } from "../lib/i18n";
 
 const TYPE_LABEL: Record<string, string> = {
   PRE_ARRIVAL: "Pre-Arrival",
@@ -88,6 +89,7 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 // ─── Execution modal (con responses inline) ──────────────────────────────────
 
 const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templateId: string; vesselCode: string }; onClose: () => void; onSaved: () => void }> = ({ executionId, onCreate, onClose, onSaved }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -173,7 +175,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   const cancel = async () => {
     if (!exec) return;
-    if (!window.confirm("¿Cancelar este checklist?")) return;
+    if (!window.confirm(t("confirm.cancelChecklist"))) return;
     try {
       await api.patch(`/app/checklist-executions/${exec.id}`, { status: "CANCELLED" });
       onSaved();
@@ -182,7 +184,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   const onDelete = async () => {
     if (!exec || !isAdmin) return;
-    if (!window.confirm(`¿Eliminar ${exec.executionCode}?`)) return;
+    if (!window.confirm(t("confirm.deleteNamed").replace("{code}", exec.executionCode))) return;
     try { await api.delete(`/app/checklist-executions/${exec.id}`); onSaved(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
   };

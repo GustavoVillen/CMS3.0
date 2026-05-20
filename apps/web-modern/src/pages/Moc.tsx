@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
+import { useT } from "../lib/i18n";
 
 const CATEGORY_LABEL: Record<string, string> = {
   EQUIPMENT_CHANGE: "Cambio de equipo",
@@ -170,6 +171,7 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 // ─── Modal ───────────────────────────────────────────────────────────────────
 
 export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose: () => void; onSaved: () => void }> = ({ moc, prefill, onClose, onSaved }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isNew = !moc;
@@ -355,7 +357,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
   const onDelete = async () => {
     if (!moc || !isAdmin) return;
-    if (!window.confirm(`¿Eliminar ${moc.mocCode}?`)) return;
+    if (!window.confirm(t("confirm.deleteNamed").replace("{code}", moc.mocCode))) return;
     try { await api.delete(`/app/mocs/${moc.id}`); onSaved(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
   };

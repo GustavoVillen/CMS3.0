@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -54,12 +55,16 @@ async function callClaude(
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
+  const locale = await getTenantAiLocale(session.tenantSlug);
   let response;
   try {
     response = await client.messages.create({
       model: MODEL,
       max_tokens: maxTokens,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: userContent }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);

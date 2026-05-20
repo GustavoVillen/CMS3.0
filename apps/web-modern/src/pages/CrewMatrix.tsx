@@ -79,6 +79,7 @@ interface CellEditorProps {
 }
 
 const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requirementLevel, onClose, onSaved }) => {
+  const t = useT();
   const [completedAt, setCompletedAt] = useState(existing?.completedAt?.slice(0, 10) ?? "");
   const [expiryDate, setExpiryDate]   = useState(existing?.expiryDate?.slice(0, 10) ?? "");
   const [docUrl, setDocUrl]           = useState(existing?.docUrl ?? "");
@@ -118,7 +119,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
 
   const onRemove = async () => {
     if (!existing) return;
-    if (!window.confirm(`¿Quitar registro de ${item.name} para ${crew.firstName} ${crew.lastName}?`)) return;
+    if (!window.confirm(t("confirm.removeMatrixRecord").replace("{item}", item.name).replace("{name}", `${crew.firstName} ${crew.lastName}`))) return;
     try {
       await api.delete(`/app/crew/${crew.id}/training-records/${existing.id}`);
       onSaved();

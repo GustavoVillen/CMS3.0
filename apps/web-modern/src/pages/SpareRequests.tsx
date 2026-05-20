@@ -195,7 +195,7 @@ const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onIte
   };
 
   const handleDelete = async (itemId: string) => {
-    if (!window.confirm("¿Eliminar este ítem?")) return;
+    if (!window.confirm(t("confirm.deleteItem"))) return;
     try {
       await api.delete(`/app/pms/spare-requests/${request.id}/items/${itemId}`);
       onItemsChange();

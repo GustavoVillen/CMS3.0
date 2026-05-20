@@ -40,6 +40,7 @@ interface ModalProps {
 }
 
 const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => {
+  const t = useT();
   const isNew = provider === null;
 
   const [vesselCode,    setVesselCode]    = useState(provider?.vesselCode    ?? "");
@@ -103,7 +104,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
   const handleDelete = async () => {
     if (!provider) return;
-    if (!window.confirm(`¿Eliminar el proveedor "${provider.name}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(t("confirm.deleteProvider").replace("{name}", provider.name))) return;
     setSaving(true);
     try {
       await api.delete(`/app/providers/${provider.id}`);

@@ -10,6 +10,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
+import { useT } from "../lib/i18n";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -591,6 +592,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 // ─── Participants Tab ────────────────────────────────────────────────────────
 
 const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () => void }> = ({ permit, canEdit, onChanged }) => {
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [crewId, setCrewId] = useState<string>("");
   const [name, setName]     = useState("");
@@ -617,9 +619,9 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
   }, [permit.id, crewId, name, role, onChanged]);
 
   const onDelete = useCallback(async (id: string) => {
-    if (!confirm("¿Quitar este participante?")) return;
+    if (!confirm(t("confirm.deleteParticipant"))) return;
     try { await api.delete(`/app/permits/${permit.id}/participants/${id}`); onChanged(); }
-    catch (e) { alert(e instanceof ApiError ? e.message : "Error al borrar."); }
+    catch (e) { alert(e instanceof ApiError ? e.message : t("error.delete")); }
   }, [permit.id, onChanged]);
 
   return (
@@ -685,6 +687,7 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
 // ─── Gas Tests Tab ───────────────────────────────────────────────────────────
 
 const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () => void }> = ({ permit, canEdit, onChanged }) => {
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [testedByName, setTestedByName] = useState("");
   const [location, setLocation]         = useState("");
@@ -722,9 +725,9 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
   }, [permit.id, testedByName, location, o2, lel, h2s, co, notes, onChanged]);
 
   const onDelete = useCallback(async (id: string) => {
-    if (!confirm("¿Borrar este gas test?")) return;
+    if (!confirm(t("confirm.deleteGasTest"))) return;
     try { await api.delete(`/app/permits/${permit.id}/gas-tests/${id}`); onChanged(); }
-    catch (e) { alert(e instanceof ApiError ? e.message : "Error al borrar."); }
+    catch (e) { alert(e instanceof ApiError ? e.message : t("error.delete")); }
   }, [permit.id, onChanged]);
 
   return (

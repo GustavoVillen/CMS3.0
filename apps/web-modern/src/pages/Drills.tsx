@@ -9,6 +9,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { printDrill } from "../lib/print-drill";
+import { useT } from "../lib/i18n";
 
 interface DrillRequirement {
   id: string;
@@ -80,6 +81,7 @@ const DrillModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ drill, prefill, requirements, onClose, onSaved }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -206,7 +208,7 @@ const DrillModal: React.FC<{
 
   const onComplete = useCallback(async () => {
     if (!drill) return;
-    if (!confirm("¿Marcar este simulacro como realizado?")) return;
+    if (!confirm(t("confirm.markDrillDone"))) return;
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/drills/${drill.id}/complete`, {
@@ -544,6 +546,7 @@ function toDraft(r: DrillRequirement): RequirementDraft {
 }
 
 const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => void }> = ({ onClose, onSaved }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { data, loading, reload } = useFetch<{ items: DrillRequirement[] }>("/app/drills/requirements", []);
   const [editing, setEditing] = useState<RequirementDraft | null>(null);
@@ -593,7 +596,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
   };
 
   const onDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este tipo de simulacro? Los simulacros ya creados con este tipo no se borran.")) return;
+    if (!confirm(t("confirm.deleteDrillType"))) return;
     setSaving(true); setErr(null);
     try {
       await api.delete(`/app/drills/requirements/${id}`);

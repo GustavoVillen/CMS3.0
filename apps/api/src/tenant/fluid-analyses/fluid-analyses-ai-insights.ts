@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { buildFluidAnalysisRegulationContext } from "../../common/regulations/maritime";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 const SYSTEM_PROMPT_BASE = `Sos un experto en mantenimiento predictivo y análisis de fluidos para flotas marítimas.
 Te paso el resultado de UN análisis de fluido (con sus parámetros) más el HISTORIAL de muestras anteriores
@@ -106,13 +107,17 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const model = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(input.tenantSlug);
 
   let response;
   try {
     response = await client.messages.create({
       model,
       max_tokens: 1024,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: JSON.stringify(dataPayload, null, 2) }],
     });
   } catch (err) {

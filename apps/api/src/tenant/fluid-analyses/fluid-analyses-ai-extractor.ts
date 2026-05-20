@@ -8,6 +8,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 import { recordAiUsage } from "../usage/usage-service";
 
 export interface ExtractedField<T> {
@@ -114,10 +115,14 @@ export async function extractFluidReport(
   // Se mantiene Sonnet como fallback potencial si se mide caída de precisión.
   const fluidModel = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
   const response = await client.messages.create({
     model: fluidModel,
     max_tokens: 2048,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+    system: [
+      { type: "text", text: localeInstruction(locale) },
+      { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+    ],
     messages: [{ role: "user", content: contentBlocks }],
   });
 

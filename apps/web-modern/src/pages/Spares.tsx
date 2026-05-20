@@ -281,7 +281,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
   const handleDelete = async () => {
     if (!spare) return;
-    if (!window.confirm(`¿Eliminar el repuesto ${spare.sku}? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(t("confirm.deleteSpare").replace("{sku}", spare.sku))) return;
     setSaving(true);
     try {
       await api.delete(`/app/pms/spares/${spare.id}`);

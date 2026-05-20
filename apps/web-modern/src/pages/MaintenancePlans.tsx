@@ -1418,7 +1418,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
     const res = await fetch(`/app/pms/maintenance-plans/${plan.id}/pdf`, { headers });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      alert(`Error ${res.status}: ${text.slice(0, 300) || "No se pudo generar el PDF."}`);
+      alert(`Error ${res.status}: ${text.slice(0, 300) || t("error.pdfFailed")}`);
       return;
     }
     const blob = await res.blob();
@@ -1601,7 +1601,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 </body></html>`;
 
     const win = window.open("", "_blank", "width=900,height=700");
-    if (!win) { alert("El navegador bloqueó la ventana emergente. Permita popups para este sitio."); return; }
+    if (!win) { alert(t("error.popupBlocked")); return; }
     win.document.write(html);
     win.document.close();
     win.focus();

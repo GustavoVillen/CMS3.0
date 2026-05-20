@@ -6,6 +6,7 @@ import { fmtDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/DataTable";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 
 interface AiDocumentVersion {
   id: string;
@@ -130,6 +131,7 @@ function DocumentCard({
   onAddVersion: () => void;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewVersionId, setViewVersionId] = useState<string | null>(null);
   const activeVersion = document.versions.find((version) => version.status === "ACTIVE");
@@ -147,7 +149,7 @@ function DocumentCard({
   };
 
   const deleteVersion = async (versionId: string) => {
-    const confirmed = window.confirm("¿Eliminar esta versión DRAFT?");
+    const confirmed = window.confirm(t("confirm.deleteDocDraft"));
     if (!confirmed) return;
     setBusyId(versionId);
     try {
@@ -161,7 +163,7 @@ function DocumentCard({
   };
 
   const archiveDocument = async () => {
-    const confirmed = window.confirm(`Archivar "${document.name}"?`);
+    const confirmed = window.confirm(t("confirm.archiveDoc").replace("{name}", document.name));
     if (!confirmed) return;
     setBusyId(document.id);
     try {

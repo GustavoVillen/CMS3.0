@@ -712,7 +712,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   };
 
   const removePhotoEdit = async (photoId: string) => {
-    if (!window.confirm("¿Eliminar esta foto?")) return;
+    if (!window.confirm(t("confirm.deletePhoto"))) return;
     try { await deleteDefectPhoto(photoId); await reloadPhotos(); }
     catch (e) { setActionError(e instanceof ApiError ? e.message : "Error al eliminar la foto."); }
   };

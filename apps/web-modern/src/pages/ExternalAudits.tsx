@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
+import { useT } from "../lib/i18n";
 
 const AUDIT_TYPE_LABEL: Record<string, string> = {
   PSC: "Port State Control",
@@ -75,6 +76,7 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 // ─── Audit modal ────────────────────────────────────────────────────────────
 
 const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: () => void }> = ({ audit, onClose, onSaved }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -131,7 +133,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 
   const onDelete = useCallback(async () => {
     if (!audit || !isAdmin) return;
-    if (!window.confirm(`¿Eliminar la auditoría ${audit.auditCode}?`)) return;
+    if (!window.confirm(t("confirm.deleteAudit").replace("{code}", audit.auditCode))) return;
     try {
       await api.delete(`/app/external-audits/${audit.id}`);
       onSaved();
@@ -338,6 +340,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
 };
 
 const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: () => void; onSaved: () => void }> = ({ auditId, finding, onClose, onSaved }) => {
+  const t = useT();
   const [status, setStatus] = useState(finding.status);
   const [clearingDate, setClearingDate] = useState(finding.clearingDate?.slice(0, 10) ?? "");
   const [evidenceNotes, setEvidenceNotes] = useState(finding.evidenceNotes ?? "");
@@ -359,7 +362,7 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
     finally { setSaving(false); }
   };
   const onDelete = async () => {
-    if (!window.confirm("¿Eliminar este finding?")) return;
+    if (!window.confirm(t("confirm.deleteFinding"))) return;
     try { await api.delete(`/app/external-audits/${auditId}/findings/${finding.id}`); onSaved(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
   };

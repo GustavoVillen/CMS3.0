@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage } from "../usage/usage-service";
 import { log } from "../../common/logger";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 // Antes OCR usaba Sonnet 4.6. Haiku 4.5 ya soporta visión y es ~5× más
 // rápido/barato. Si se observa caída de precisión en OCR de fotos, revertir.
@@ -69,13 +70,17 @@ export async function extractTextFromPhoto(
   const base64 = buffer.toString("base64");
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
+  const locale = await getTenantAiLocale(tenantSlug);
 
   let response;
   try {
     response = await client.messages.create({
       model: OCR_MODEL,
       max_tokens: 1024,
-      system: [{ type: "text", text: OCR_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: OCR_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [
         {
           role: "user",
@@ -176,6 +181,7 @@ export async function rewriteObservations(
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
+  const locale = await getTenantAiLocale(tenantSlug);
 
   const payload = {
     contexto: {
@@ -195,7 +201,10 @@ export async function rewriteObservations(
       model: REWRITE_MODEL,
       // 2048 estaba sobredimensionado; la salida real ronda 400-700 tokens.
       max_tokens: 1024,
-      system: [{ type: "text", text: REWRITE_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: REWRITE_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
   } catch (err) {
@@ -310,7 +319,10 @@ async function detectSparesFromText(
     response = await client.messages.create({
       model: REWRITE_MODEL,
       max_tokens: 1024,
-      system: SPARE_DETECTION_PROMPT,
+      system: [
+        { type: "text", text: localeInstruction(await getTenantAiLocale(tenantSlug)) },
+        { type: "text", text: SPARE_DETECTION_PROMPT },
+      ],
       messages: [{ role: "user", content: JSON.stringify(payload, null, 2) }],
     });
   } catch (err) {

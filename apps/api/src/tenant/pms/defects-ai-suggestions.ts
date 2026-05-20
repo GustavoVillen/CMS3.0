@@ -9,6 +9,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -64,6 +65,7 @@ async function callClaude(
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
 
   let response;
   try {
@@ -72,7 +74,12 @@ async function callClaude(
       max_tokens: maxTokens,
       // cache_control ephemeral — el prompt es constante por feature; ahorra
       // input tokens cuando varios users del tenant invocan el mismo feature.
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      // Locale va como bloque separado al inicio (no cacheable porque varía
+      // por tenant); el prompt principal sí se cachea.
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: userContent }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);
@@ -161,6 +168,7 @@ export async function analyzeDefectPhoto(
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "defect_photo_analysis";
+  const locale = await getTenantAiLocale(session.tenantSlug);
 
   const contextLines = [
     input.assetLabel ? `Equipo afectado: ${input.assetLabel}` : null,
@@ -173,7 +181,10 @@ export async function analyzeDefectPhoto(
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 400,
-      system: [{ type: "text", text: PROMPT_PHOTO_ANALYSIS, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: PROMPT_PHOTO_ANALYSIS, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{
         role: "user",
         content: [

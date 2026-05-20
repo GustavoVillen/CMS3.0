@@ -23,6 +23,8 @@ export interface CachedTenant {
     displayName: string | null;
     logoUrl: string | null;
     logoUrlLight: string | null;
+    defaultLocale: string | null;
+    enabledLocales: string[] | null;
   } | null;
 }
 
@@ -47,12 +49,24 @@ export async function getCachedTenantBySlug(slug: string): Promise<CachedTenant 
     select: {
       id: true,
       slug: true,
-      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true } },
+      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, defaultLocale: true, enabledLocales: true } },
     },
   });
 
   const value: CachedTenant | null = row
-    ? { id: row.id, slug: row.slug, settings: row.settings ?? null }
+    ? {
+        id: row.id,
+        slug: row.slug,
+        settings: row.settings
+          ? {
+              displayName: row.settings.displayName,
+              logoUrl: row.settings.logoUrl,
+              logoUrlLight: row.settings.logoUrlLight,
+              defaultLocale: row.settings.defaultLocale ?? null,
+              enabledLocales: (row.settings.enabledLocales as string[] | null) ?? null,
+            }
+          : null,
+      }
     : null;
   cache.set(slug, { value, expiresAt: now + TTL_MS });
   return value;

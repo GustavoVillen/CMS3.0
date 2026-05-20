@@ -493,6 +493,7 @@ const ProgressNotesPanel: React.FC<{
   onAdd: () => void;
   reloadKey: number;
 }> = ({ workOrderId, canAdd, canDelete, onAdd, reloadKey }) => {
+  const t = useT();
   const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
@@ -506,12 +507,12 @@ const ProgressNotesPanel: React.FC<{
   const visualNotes = notes.filter(n => (n.kind === "PHOTO" || n.kind === "VIDEO") && n.fileUrl);
 
   const handleDelete = useCallback(async (noteId: string) => {
-    if (!window.confirm("¿Borrar este avance?")) return;
+    if (!window.confirm(t("confirm.deleteProgress"))) return;
     try {
       await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
       await reload();
     } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "Error al borrar el avance");
+      window.alert(e instanceof ApiError ? e.message : t("error.deleteProgress"));
     }
   }, [workOrderId, reload]);
 

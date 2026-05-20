@@ -4,6 +4,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -169,6 +170,7 @@ export async function suggestRiskAssessment(
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
 
   let response;
   try {
@@ -180,7 +182,10 @@ export async function suggestRiskAssessment(
       // System prompt en forma de array con cache_control ephemeral. El prompt
       // pesa ~2.3 KB y es idéntico entre invocaciones: cacheándolo bajamos
       // ~80% el input charge y mejoramos latencia warm.
-      system: [{ type: "text", text: PROMPT_RISK_ASSESSMENT, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: PROMPT_RISK_ASSESSMENT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: buildContext(input) }],
     });
   } catch (err) {

@@ -454,6 +454,7 @@ function SampleDetailModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   const [sample, setSample]       = useState<FluidSample | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -470,7 +471,7 @@ function SampleDetailModal({
   useEffect(() => { void load(); }, [id]);
 
   const remove = async () => {
-    if (!confirm("¿Eliminar esta muestra?")) return;
+    if (!confirm(t("confirm.deleteSample"))) return;
     try { await api.delete(`/app/fluid-analyses/${id}`); onChanged(); onClose(); } catch { /* noop */ }
   };
 

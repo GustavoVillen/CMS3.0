@@ -13,6 +13,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { getTenantAiLocale, localeInstruction } from "../ai/ai-locale";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -237,13 +238,17 @@ export async function generateMonthlyDraft(
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "monthly_report_draft";
+  const locale = await getTenantAiLocale(session.tenantSlug);
 
   let response;
   try {
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 800,
-      system: [{ type: "text", text: PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [{ role: "user", content: contextLines.join("\n") }],
     });
     log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms`);
