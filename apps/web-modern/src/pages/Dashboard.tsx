@@ -468,7 +468,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   </div>
                   <p className="text-xl font-bold text-white tabular-nums">{c.onboard}</p>
                 </button>
-                <button onClick={() => navigate("/crew")}
+                <button onClick={() => navigate("/crew-matrix")}
                   className={`text-left rounded-lg p-3 transition-colors ${
                     c.certsExpired + c.certsExpiringSoon > 0
                       ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
@@ -478,12 +478,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewCertsAttn")}</span>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
+                  <p className={`text-xl font-bold tabular-nums leading-none ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
                     {c.certsExpired + c.certsExpiringSoon}
                   </p>
-                  {c.certsExpired > 0 && (
-                    <p className="text-[10px] text-red-400 mt-0.5">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</p>
-                  )}
+                  <div className="mt-1 space-y-0.5 min-h-[14px]">
+                    {c.certsExpired > 0 && (
+                      <p className="text-[10px] text-red-400 leading-tight">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</p>
+                    )}
+                    {c.certsExpiringSoon > 0 && (
+                      <p className="text-[10px] text-yellow-400 leading-tight">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</p>
+                    )}
+                  </div>
                 </button>
                 <button onClick={() => navigate("/drills")}
                   className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">

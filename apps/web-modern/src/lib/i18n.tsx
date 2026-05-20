@@ -1242,6 +1242,7 @@ const dict = {
   "dashboard.crewOnboard":        { es: "A bordo",              en: "Onboard",             pt: "A bordo" },
   "dashboard.crewCertsAttn":      { es: "Certs. atención",      en: "Certs. attention",    pt: "Certs. atenção" },
   "dashboard.crewExpiredCount":   { es: "{n} vencidos",         en: "{n} expired",         pt: "{n} vencidos" },
+  "dashboard.crewExpiringSoon":   { es: "{n} por vencer",       en: "{n} expiring soon",   pt: "{n} a vencer" },
   "dashboard.drillsMonth":        { es: "Simulacros mes",       en: "Drills month",        pt: "Simulados mês" },
   "dashboard.drillsYear":         { es: "Simulacros año",       en: "Drills year",         pt: "Simulados ano" },
   "dashboard.drillsScheduled":    { es: "programados",          en: "scheduled",           pt: "programados" },
