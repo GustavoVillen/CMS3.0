@@ -215,7 +215,7 @@ export const FluidAnalysesPage: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <select value={filters.fluidType} onChange={e => setFilters(f => ({ ...f, fluidType: e.target.value }))}
             className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
-            <option value="">Todos los fluidos</option>
+            <option value="">{t("fa.allFluids")}</option>
             {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
           </select>
           {canManage && (
@@ -223,7 +223,7 @@ export const FluidAnalysesPage: React.FC = () => {
               onClick={() => setCreatingSample(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" /> Nueva muestra
+              <Plus className="w-3.5 h-3.5" /> {t("fa.newSample")}
             </button>
           )}
         </div>
@@ -235,7 +235,7 @@ export const FluidAnalysesPage: React.FC = () => {
         {!loading && !error && samples.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-text-industrial/30 gap-3">
             <FlaskConical className="w-8 h-8" />
-            <p className="text-sm">No hay muestras registradas con los filtros actuales.</p>
+            <p className="text-sm">{t("fa.emptyState")}</p>
           </div>
         )}
         {!loading && !error && samples.length > 0 && (
@@ -330,6 +330,7 @@ function SampleFormModal({
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
+  const t = useT();
   const [vesselCode, setVesselCode]   = useState(sample?.vesselCode ?? "");
   const [assetId, setAssetId]         = useState(sample?.assetId ?? "");
   const [fluidType, setFluidType]     = useState<FluidType>(sample?.fluidType ?? "ENGINE_OIL");
@@ -373,69 +374,69 @@ function SampleFormModal({
   useEscapeGuard({ isDirty, onSave: submit, onClose });
 
   return (
-    <ModalShell title={mode === "create" ? "Nueva muestra" : `Editar ${sample?.sampleCode}`} onClose={onClose}>
+    <ModalShell title={mode === "create" ? t("fa.newSample") : `${t("fa.editSample")} ${sample?.sampleCode}`} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Buque *</label>
+            <label className={labelCls}>{t("form.vessel")}</label>
             <select value={vesselCode} onChange={e => { setVesselCode(e.target.value); setAssetId(""); }} className={inputCls}>
-              <option value="">Seleccionar...</option>
+              <option value="">{t("fa.selectPh")}</option>
               {vessels.map(v => <option key={v.code} value={v.code}>{v.code}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Equipo *</label>
+            <label className={labelCls}>{t("form.equipment")}</label>
             <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls} disabled={!vesselCode}>
-              <option value="">Seleccionar...</option>
+              <option value="">{t("fa.selectPh")}</option>
               {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name ?? a.assetCode}</option>)}
             </select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Tipo de fluido *</label>
+            <label className={labelCls}>{t("fa.fluidType")}</label>
             <select value={fluidType} onChange={e => setFluidType(e.target.value as FluidType)} className={inputCls}>
               {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Producto / marca</label>
+            <label className={labelCls}>{t("fa.productBrand")}</label>
             <input value={fluidProduct} onChange={e => setFluidProduct(e.target.value)} className={inputCls} placeholder="Mobilgard M312 SAE 30" />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className={labelCls}>Fecha toma *</label>
+            <label className={labelCls}>{t("fa.sampleDate")}</label>
             <input type="date" value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Horas máquina</label>
+            <label className={labelCls}>{t("fa.runHours")}</label>
             <input type="number" value={runningHours} onChange={e => setRunningHours(e.target.value)} className={inputCls} placeholder="12500" />
           </div>
           <div>
-            <label className={labelCls}>ID frasco</label>
+            <label className={labelCls}>{t("fa.containerId")}</label>
             <input value={containerCode} onChange={e => setContainerCode(e.target.value)} className={inputCls} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Laboratorio</label>
+            <label className={labelCls}>{t("fa.lab")}</label>
             <input value={labName} onChange={e => setLabName(e.target.value)} className={inputCls} placeholder="Mobil Serv" />
           </div>
           <div>
-            <label className={labelCls}>Ref. laboratorio</label>
+            <label className={labelCls}>{t("fa.labRef")}</label>
             <input value={labReference} onChange={e => setLabReference(e.target.value)} className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Notas</label>
+          <label className={labelCls}>{t("fa.notes")}</label>
           <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-none"} />
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-white">Cancelar</button>
+          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-white">{t("common.cancel")}</button>
           <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
       </div>
@@ -504,34 +505,34 @@ function SampleDetailModal({
           <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
             <div className="flex items-center gap-2 text-xs text-accent/80">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Generada automáticamente al cerrar una OT.</span>
+              <span>{t("fa.autoGen")}</span>
             </div>
             <button
               onClick={() => navigate(`/work-orders?openId=${encodeURIComponent(sample.sourceWorkOrderId!)}`)}
               className="text-xs font-bold text-accent hover:text-white inline-flex items-center gap-1"
             >
-              Ver OT origen →
+              {t("fa.viewSourceWo")}
             </button>
           </div>
         )}
 
         {/* Header info */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Buque" value={sample.vesselCode} />
-          <Stat label="Equipo" value={assetLabel(sample.assetId, assets)} />
-          <Stat label="Fecha toma" value={fmtDate(sample.sampledAt)} />
-          <Stat label="Horas" value={sample.runningHours != null ? String(sample.runningHours) : "—"} />
-          <Stat label="Producto" value={sample.fluidProduct ?? "—"} />
-          <Stat label="Laboratorio" value={sample.labName ?? "—"} />
-          <Stat label="Ref. lab" value={sample.labReference ?? "—"} />
-          <Stat label="Estado" value={sample.status} />
+          <Stat label={t("col.vessel")} value={sample.vesselCode} />
+          <Stat label={t("capa.equipment")} value={assetLabel(sample.assetId, assets)} />
+          <Stat label={t("fa.sampleDate").replace(" *", "")} value={fmtDate(sample.sampledAt)} />
+          <Stat label={t("fa.statHours")} value={sample.runningHours != null ? String(sample.runningHours) : "—"} />
+          <Stat label={t("fa.statProduct")} value={sample.fluidProduct ?? "—"} />
+          <Stat label={t("fa.statLab")} value={sample.labName ?? "—"} />
+          <Stat label={t("fa.statLabRef")} value={sample.labReference ?? "—"} />
+          <Stat label={t("col.status")} value={sample.status} />
         </div>
 
         {/* Result section */}
         {sample.result ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-white">Resultado del laboratorio</h3>
+              <h3 className="text-sm font-bold text-white">{t("fa.labResult")}</h3>
               <VerdictBadge verdict={sample.result.verdict} />
             </div>
             {sample.result.summary && (
@@ -543,21 +544,21 @@ function SampleDetailModal({
             {sample.result.reportUrl && (
               <a href={sample.result.reportUrl} target="_blank" rel="noreferrer"
                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
-                <FileText className="w-3.5 h-3.5 text-accent" /> Ver reporte original
+                <FileText className="w-3.5 h-3.5 text-accent" /> {t("fa.viewOrigReport")}
               </a>
             )}
             {canManage && (
               <button onClick={() => setShowResultForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
-                <Edit3 className="w-3.5 h-3.5 text-accent" /> Modificar resultado
+                <Edit3 className="w-3.5 h-3.5 text-accent" /> {t("fa.modifyResult")}
               </button>
             )}
           </div>
         ) : (
           <div className="p-4 rounded-xl border border-dashed border-white/10 text-center">
-            <p className="text-xs text-text-industrial/50 mb-3">Esta muestra todavía no tiene resultado del laboratorio.</p>
+            <p className="text-xs text-text-industrial/50 mb-3">{t("fa.noLabResult")}</p>
             {canManage && (
               <button onClick={() => setShowResultForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
-                <Sparkles className="w-3.5 h-3.5" /> Cargar resultado (IA)
+                <Sparkles className="w-3.5 h-3.5" /> {t("fa.loadResultAi")}
               </button>
             )}
           </div>
@@ -567,7 +568,7 @@ function SampleDetailModal({
         {sample.kind === "FLUID" && sample.fluidType && (
           <div className="space-y-2 pt-2 border-t border-white/10">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-accent" /> Tendencia del equipo
+              <TrendingUp className="w-4 h-4 text-accent" /> {t("fa.assetTrend")}
             </h3>
             <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
           </div>
@@ -580,7 +581,7 @@ function SampleDetailModal({
 
         {sample.notes && (
           <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("fa.notes")}</p>
             <p className="text-xs text-text-industrial/70 whitespace-pre-wrap">{sample.notes}</p>
           </div>
         )}
@@ -588,11 +589,11 @@ function SampleDetailModal({
         <div className="flex justify-between items-center gap-2 pt-2 border-t border-white/10">
           <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white hover:border-accent/30">
-            <FileText className="w-3.5 h-3.5 text-accent" /> Guardar PDF
+            <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
           </button>
           {canManage && (
             <button onClick={remove} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20">
-              <Trash2 className="w-3.5 h-3.5" /> Eliminar
+              <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
             </button>
           )}
         </div>
@@ -704,16 +705,17 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function ParametersTable({ parameters }: { parameters: Record<string, FluidParameter | number | string> }) {
+  const t = useT();
   const entries = Object.entries(parameters);
-  if (entries.length === 0) return <p className="text-xs text-text-industrial/40">Sin parámetros registrados.</p>;
+  if (entries.length === 0) return <p className="text-xs text-text-industrial/40">{t("fa.noParams")}</p>;
   return (
     <div className="rounded-xl border border-white/10 overflow-hidden">
       <table className="w-full text-xs">
         <thead className="bg-white/5">
           <tr className="text-text-industrial/40 text-[10px] uppercase tracking-widest">
-            <th className="text-left px-3 py-2 font-semibold">Parámetro</th>
-            <th className="text-right px-3 py-2 font-semibold">Valor</th>
-            <th className="text-left px-3 py-2 font-semibold">Unidad</th>
+            <th className="text-left px-3 py-2 font-semibold">{t("fa.colParam")}</th>
+            <th className="text-right px-3 py-2 font-semibold">{t("fa.colValue")}</th>
+            <th className="text-left px-3 py-2 font-semibold">{t("fa.colUnit")}</th>
           </tr>
         </thead>
         <tbody>
@@ -752,6 +754,7 @@ interface ThresholdRow {
 }
 
 function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidType }) {
+  const t = useT();
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const [thresholds, setThresholds] = useState<ThresholdRow[]>([]);
   const [selectedParam, setSelectedParam] = useState<string>("");
@@ -785,7 +788,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
   if (points.length < 2) {
     return (
       <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
-        <p className="text-xs text-text-industrial/40">Se necesitan al menos 2 muestras del mismo equipo para mostrar tendencia.</p>
+        <p className="text-xs text-text-industrial/40">{t("fa.needTwoSamples")}</p>
       </div>
     );
   }
@@ -806,7 +809,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
       <div className="space-y-2">
         <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
         <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
-          <p className="text-xs text-text-industrial/40">Sin suficientes muestras con valores de "{param}" para graficar tendencia.</p>
+          <p className="text-xs text-text-industrial/40">{t("fa.notEnoughForParam").replace("{param}", param)}</p>
         </div>
       </div>
     );
@@ -816,7 +819,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
-        <span className="text-[10px] text-text-industrial/40">Últimas {data.length} muestras</span>
+        <span className="text-[10px] text-text-industrial/40">{t("fa.lastNSamples").replace("{n}", String(data.length))}</span>
       </div>
       <div className="rounded-xl border border-white/10 bg-white/5 p-3">
         <ResponsiveContainer width="100%" height={220}>
@@ -828,10 +831,10 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
               labelStyle={{ color: "#fbbf24" }}
               formatter={(value: any, _name: any, props: any) => [`${value}${threshold?.direction ? "" : ""}`, props.payload.sampleCode]}
             />
-            {threshold?.cautionMax != null && <ReferenceLine y={threshold.cautionMax} stroke="#facc15" strokeDasharray="3 3" label={{ value: "Caución", fill: "#facc15", fontSize: 9, position: "right" }} />}
-            {threshold?.criticalMax != null && <ReferenceLine y={threshold.criticalMax} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Crítico", fill: "#ef4444", fontSize: 9, position: "right" }} />}
-            {threshold?.cautionMin != null && <ReferenceLine y={threshold.cautionMin} stroke="#facc15" strokeDasharray="3 3" label={{ value: "Caución", fill: "#facc15", fontSize: 9, position: "right" }} />}
-            {threshold?.criticalMin != null && <ReferenceLine y={threshold.criticalMin} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Crítico", fill: "#ef4444", fontSize: 9, position: "right" }} />}
+            {threshold?.cautionMax != null && <ReferenceLine y={threshold.cautionMax} stroke="#facc15" strokeDasharray="3 3" label={{ value: t("fa.refCaution"), fill: "#facc15", fontSize: 9, position: "right" }} />}
+            {threshold?.criticalMax != null && <ReferenceLine y={threshold.criticalMax} stroke="#ef4444" strokeDasharray="3 3" label={{ value: t("fa.refCritical"), fill: "#ef4444", fontSize: 9, position: "right" }} />}
+            {threshold?.cautionMin != null && <ReferenceLine y={threshold.cautionMin} stroke="#facc15" strokeDasharray="3 3" label={{ value: t("fa.refCaution"), fill: "#facc15", fontSize: 9, position: "right" }} />}
+            {threshold?.criticalMin != null && <ReferenceLine y={threshold.criticalMin} stroke="#ef4444" strokeDasharray="3 3" label={{ value: t("fa.refCritical"), fill: "#ef4444", fontSize: 9, position: "right" }} />}
             <Line type="monotone" dataKey="value" stroke="#fb923c" strokeWidth={2} dot={{ r: 4, strokeWidth: 0, fill: "#fb923c" }} activeDot={{ r: 6 }} />
           </LineChart>
         </ResponsiveContainer>
@@ -841,10 +844,11 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
 }
 
 function ParamSelector({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-2">
       <TrendingUp className="w-3.5 h-3.5 text-accent" />
-      <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">Parámetro</span>
+      <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">{t("fa.paramLabel")}</span>
       <select value={value} onChange={e => onChange(e.target.value)} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono">
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -1002,7 +1006,7 @@ function ResultFormModal({
         >
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
-            <p className="text-xs font-bold text-accent">Subí el reporte del laboratorio (PDF, JPG, PNG, foto)</p>
+            <p className="text-xs font-bold text-accent">{t("fa.uploadLabReport")}</p>
           </div>
           <p className="text-[11px] text-text-industrial/60">
             La IA va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.

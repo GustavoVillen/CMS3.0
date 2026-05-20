@@ -113,6 +113,7 @@ interface LiveInventoryReport {
 }
 
 const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot | null }> = ({ vesselCode, snapshot }) => {
+  const t = useT();
   // If we have a frozen snapshot use it; otherwise pull live data.
   const liveUrl = snapshot ? null : (vesselCode ? `/app/pms/reports/spare-inventory?vesselCode=${encodeURIComponent(vesselCode)}` : null);
   const live = useFetch<LiveInventoryReport>(liveUrl ?? "");
@@ -132,15 +133,15 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-3 text-xs">
         <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Buque</div>
+          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("col.vessel")}</div>
           <div className="text-white font-semibold">{vesselCode || "—"}</div>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Total ítems</div>
+          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("mr.totalItems")}</div>
           <div className="text-white text-xl font-bold">{summary.totalItems}</div>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Bajo reorden</div>
+          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("mr.belowReorder")}</div>
           <div className={`text-xl font-bold ${summary.belowReorderCount > 0 ? "text-red-400" : "text-white"}`}>{summary.belowReorderCount}</div>
         </div>
       </div>
@@ -152,21 +153,21 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
           <thead className="border-b border-white/10">
             <tr className="text-[10px] uppercase tracking-wider text-white/40">
               <th className="px-3 py-2 text-left">SKU</th>
-              <th className="px-3 py-2 text-left">Nombre</th>
+              <th className="px-3 py-2 text-left">{t("mr.colName")}</th>
               <th className="px-3 py-2 text-left">SFI</th>
-              <th className="px-3 py-2 text-left">Depto</th>
-              <th className="px-3 py-2 text-right">Stock</th>
+              <th className="px-3 py-2 text-left">{t("mr.colDept")}</th>
+              <th className="px-3 py-2 text-right">{t("mr.colStock")}</th>
               <th className="px-3 py-2 text-left">Un</th>
-              <th className="px-3 py-2 text-left">Ubicación</th>
-              <th className="px-3 py-2 text-left">Últ. mov.</th>
+              <th className="px-3 py-2 text-left">{t("mr.colLocation")}</th>
+              <th className="px-3 py-2 text-left">{t("mr.colLastMov")}</th>
             </tr>
           </thead>
           <tbody className="text-white/80">
             {!snapshot && live.loading && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Cargando inventario…</td></tr>
+              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />{t("mr.loadingInventory")}</td></tr>
             )}
             {items.length === 0 && (!snapshot ? !live.loading : true) && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30">Sin ítems para mostrar.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30">{t("mr.noItemsShow")}</td></tr>
             )}
             {items.map(it => {
               const sfi = (it as InventorySnapshotItem).sfiName
@@ -364,7 +365,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <div>
             <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo Reporte Mensual" : `Reporte ${fmtMonth(liveReport!.reportYear, liveReport!.reportMonth)} — ${liveReport!.vesselCode}`}</h2>
-            {!isNew && <p className="text-[10px] text-white/40">Estado: {liveReport!.status}{liveReport!.submittedAt ? ` · Enviado ${fmtDate(liveReport!.submittedAt)}` : ""}</p>}
+            {!isNew && <p className="text-[10px] text-white/40">{t("mr.statusLabel")}: {liveReport!.status}{liveReport!.submittedAt ? ` · ${t("mr.sentOn")} ${fmtDate(liveReport!.submittedAt)}` : ""}</p>}
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5">
             <X className="w-4 h-4 text-white/60" />
@@ -395,20 +396,20 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
               {isNew && (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Buque *</label>
+                    <label className={labelCls}>{t("form.vessel")}</label>
                     <select value={newVesselCode} onChange={e => setNewVesselCode(e.target.value)} className={selectCls}>
                       <option value="">— Seleccionar —</option>
                       {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Mes *</label>
+                    <label className={labelCls}>{t("mr.month")}</label>
                     <select value={reportMonth} onChange={e => setReportMonth(Number(e.target.value))} className={selectCls}>
                       {MONTH_NAMES.map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className={labelCls}>Año *</label>
+                    <label className={labelCls}>{t("mr.year")}</label>
                     <select value={reportYear} onChange={e => setReportYear(Number(e.target.value))} className={selectCls}>
                       {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
@@ -418,19 +419,19 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Estado</label>
+                  <label className={labelCls}>{t("col.status")}</label>
                   <select value={status} onChange={e => setStatus(e.target.value as MonthlyReport["status"])} disabled={isClosed} className={selectCls}>
                     {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Puerto actual</label>
-                  <input value={currentPort} onChange={e => setCurrentPort(e.target.value)} disabled={isClosed} placeholder="Buenos Aires" className={inputCls} />
+                  <label className={labelCls}>{t("mr.currentPort")}</label>
+                  <input value={currentPort} onChange={e => setCurrentPort(e.target.value)} disabled={isClosed} placeholder={t("mr.currentPortPh")} className={inputCls} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelCls}>Estado operacional</label>
+                <label className={labelCls}>{t("form.operationalState")}</label>
                 <select value={operationalStatus} onChange={e => setOperationalStatus(e.target.value)} disabled={isClosed} className={selectCls}>
                   <option value="">—</option>
                   {OPERATIONAL_STATUSES.map(s => <option key={s} value={s}>{t(`opStatus.${s}` as never)}</option>)}
@@ -440,7 +441,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
               {/* Posición */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className={labelCls}>Posición geográfica</label>
+                  <label className={labelCls}>{t("mr.geoPosition")}</label>
                   {!isClosed && (
                     <button type="button" onClick={fetchGeoPosition} disabled={geolocating}
                       className="flex items-center gap-1 text-[10px] text-accent hover:text-accent/80 disabled:opacity-40 transition-colors font-semibold">
@@ -451,7 +452,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[9px] text-text-industrial/30 mb-1">Latitud</p>
+                    <p className="text-[9px] text-text-industrial/30 mb-1">{t("mr.latitude")}</p>
                     <input
                       value={posLat}
                       onChange={e => setPosLat(e.target.value)}
@@ -465,7 +466,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                     />
                   </div>
                   <div>
-                    <p className="text-[9px] text-text-industrial/30 mb-1">Longitud</p>
+                    <p className="text-[9px] text-text-industrial/30 mb-1">{t("mr.longitude")}</p>
                     <input
                       value={posLon}
                       onChange={e => setPosLon(e.target.value)}
@@ -485,7 +486,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                   <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ height: 180 }}>
                     <iframe
                       key={`${mapCoords.lat},${mapCoords.lon}`}
-                      title="Posición actual"
+                      title={t("mr.currentPos")}
                       src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCoords.lon - 0.025},${mapCoords.lat - 0.018},${mapCoords.lon + 0.025},${mapCoords.lat + 0.018}&layer=mapnik&marker=${mapCoords.lat},${mapCoords.lon}`}
                       className="w-full h-full"
                       style={{ border: 0, filter: "invert(0.88) hue-rotate(180deg) saturate(0.6)" }}
@@ -500,12 +501,12 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 ) : geolocating ? (
                   <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 text-text-industrial/30" style={{ height: 180 }}>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-xs">Obteniendo ubicación…</span>
+                    <span className="text-xs">{t("mr.gettingLocation")}</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/2 text-text-industrial/20" style={{ height: 180 }}>
                     <Locate className="w-5 h-5" />
-                    <span className="text-[10px]">Sin posición registrada</span>
+                    <span className="text-[10px]">{t("mr.noPosition")}</span>
                   </div>
                 )}
               </div>
@@ -517,8 +518,8 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                     <div className="flex items-center gap-2 min-w-0">
                       <Sparkles className="w-4 h-4 text-accent shrink-0" />
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-accent">Asistente IA</p>
-                        <p className="text-[11px] text-text-industrial/60">Generar borrador del resumen + notas con datos reales del mes</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-accent">{t("mr.aiAssistant")}</p>
+                        <p className="text-[11px] text-text-industrial/60">{t("mr.aiAssistDesc")}</p>
                       </div>
                     </div>
                     <button
@@ -559,24 +560,24 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
               )}
 
               <div className="space-y-1.5">
-                <label className={labelCls}>Resumen</label>
-                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={5} className={inputCls} placeholder="Resumen ejecutivo del mes — usá el botón 'Generar borrador' para que la IA pre-llene con datos reales." />
+                <label className={labelCls}>{t("mr.summary")}</label>
+                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={5} className={inputCls} placeholder={t("mr.summaryPh")} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Próximo puerto</label>
-                  <input value={nextPort} onChange={e => setNextPort(e.target.value)} disabled={isClosed} placeholder="Puerto destino" className={inputCls} />
+                  <label className={labelCls}>{t("mr.nextPort")}</label>
+                  <input value={nextPort} onChange={e => setNextPort(e.target.value)} disabled={isClosed} placeholder={t("mr.nextPortPh")} className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>ETA próximo puerto</label>
+                  <label className={labelCls}>{t("mr.etaNextPort")}</label>
                   <input type="date" value={etaNextPort} onChange={e => setEtaNextPort(e.target.value)} disabled={isClosed} className={inputCls} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelCls}>Notas</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder="Notas operativas, alertas y pendientes para el próximo mes." />
+                <label className={labelCls}>{t("mr.notes")}</label>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder={t("mr.notesPh")} />
               </div>
 
               {saveError && <p className="text-xs text-red-400">{saveError}</p>}
