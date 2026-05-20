@@ -120,7 +120,7 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ crew, onClose, onSaved, onMocTrigger }) => {
   const t = useT();
-  const { vessels } = useVesselContext();
+  const { vessels = [] } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
   const isNew = !crew;
@@ -130,7 +130,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
   const ranks = ranksData?.items ?? [];
   const defaultRankId = ranks.length > 0 ? ranks.find(r => r.code === "AB_SEAMAN")?.id || ranks[0]?.id : "";
 
-  const [vesselCode, setVesselCode] = useState(crew?.vesselCode ?? vessels[0]?.code ?? "");
+  const [vesselCode, setVesselCode] = useState(crew?.vesselCode ?? (vessels.length > 0 ? vessels[0]?.code : "") ?? "");
   const [firstName, setFirstName]   = useState(crew?.firstName ?? "");
   const [lastName, setLastName]     = useState(crew?.lastName ?? "");
   const [rankId, setRankId]         = useState(crew?.rankId ?? defaultRankId);
