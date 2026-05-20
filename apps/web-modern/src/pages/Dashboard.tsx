@@ -459,17 +459,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           {(() => {
             const c = crewSummary.data ?? { onboard: 0, certsExpired: 0, certsExpiringSoon: 0, drillsScheduled: 0, drillsCompletedYear: 0 };
             return (
-              <div className="flex-1 grid grid-cols-2 gap-2 content-start">
+              <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-2 auto-rows-fr">
                 <button onClick={() => navigate("/crew")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Users className="w-3 h-3 text-text-industrial/40" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewOnboard")}</span>
                   </div>
-                  <p className="text-xl font-bold text-white tabular-nums">{c.onboard}</p>
+                  <p className="text-xl font-bold text-white tabular-nums leading-none">{c.onboard}</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1">&nbsp;</p>
                 </button>
                 <button onClick={() => navigate("/crew-matrix")}
-                  className={`text-left rounded-lg p-3 transition-colors ${
+                  className={`text-left rounded-lg p-3 transition-colors flex flex-col ${
                     c.certsExpired + c.certsExpiringSoon > 0
                       ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
                       : "bg-white/5 border border-white/10 hover:bg-white/10"
@@ -481,32 +482,34 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <p className={`text-xl font-bold tabular-nums leading-none ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
                     {c.certsExpired + c.certsExpiringSoon}
                   </p>
-                  <div className="mt-1 space-y-0.5 min-h-[14px]">
+                  <p className="text-[10px] mt-auto pt-1 leading-none">
                     {c.certsExpired > 0 && (
-                      <p className="text-[10px] text-red-400 leading-tight">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</p>
+                      <span className="text-red-400">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</span>
                     )}
+                    {c.certsExpired > 0 && c.certsExpiringSoon > 0 && <span className="text-text-industrial/40"> · </span>}
                     {c.certsExpiringSoon > 0 && (
-                      <p className="text-[10px] text-yellow-400 leading-tight">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</p>
+                      <span className="text-yellow-400">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</span>
                     )}
-                  </div>
+                    {c.certsExpired === 0 && c.certsExpiringSoon === 0 && <span>&nbsp;</span>}
+                  </p>
                 </button>
                 <button onClick={() => navigate("/drills")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsMonth")}</span>
                   </div>
-                  <p className="text-xl font-bold text-white tabular-nums">{c.drillsScheduled}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-0.5">{t("dashboard.drillsScheduled")}</p>
+                  <p className="text-xl font-bold text-white tabular-nums leading-none">{c.drillsScheduled}</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1 leading-none">{t("dashboard.drillsScheduled")}</p>
                 </button>
                 <button onClick={() => navigate("/drills?status=COMPLETED")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-success-sea" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsYear")}</span>
                   </div>
-                  <p className="text-xl font-bold text-success-sea tabular-nums">{c.drillsCompletedYear}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-0.5">{t("dashboard.drillsCompleted")}</p>
+                  <p className="text-xl font-bold text-success-sea tabular-nums leading-none">{c.drillsCompletedYear}</p>
+                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1 leading-none">{t("dashboard.drillsCompleted")}</p>
                 </button>
               </div>
             );
