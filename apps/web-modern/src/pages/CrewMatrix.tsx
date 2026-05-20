@@ -78,7 +78,7 @@ interface CellEditorProps {
 }
 
 const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requirementLevel, onClose, onSaved }) => {
-  const [completedAt, setCompletedAt] = useState(existing?.completedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  const [completedAt, setCompletedAt] = useState(existing?.completedAt?.slice(0, 10) ?? "");
   const [expiryDate, setExpiryDate]   = useState(existing?.expiryDate?.slice(0, 10) ?? "");
   const [docUrl, setDocUrl]           = useState(existing?.docUrl ?? "");
   const [notes, setNotes]             = useState(existing?.notes ?? "");
