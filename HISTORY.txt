@@ -13104,3 +13104,43 @@ SESIÓN 2026-05-19 (cont) — Cierre: restaurar rutas + push a main
     - restart pm2 con cleanup /tmp/tsx-* (cambios BE en código TS servido
       por tsx, regla del 2026-05-02).
 
+[2026-05-19 (continuación)] i18n Crew + seed 13 tripulantes capitalmaritima
+Agent: Claude Opus 4.7
+
+  1. i18n Crew.tsx:
+     - Añadidos 38 claves crew.* + 19 claves cert.* al dict i18n (es/en/pt).
+     - Reemplazados todos los strings UI hardcoded (labels, tabs, botones,
+       status badges, errores, validaciones, MOC trigger reasons) por t("...").
+     - Se dejó RANK_LABEL y CERT_TYPE_LABEL sin i18n porque se removerán en
+       la refactor Crew Option B en curso (serán RankDefinition.title /
+       TrainingItem.title dinámicos por tenant).
+     - tsc frontend: limpio. Todas las claves validadas.
+
+  2. Seed 13 tripulantes capitalmaritima / ACEDEF:
+     - Bandera: CYPRUS. Lugar embarque/desembarque: Rio de Janeiro-RJ.
+     - Mapping BR ranks → CrewRank enum:
+       CMT→CAPTAIN, IMT→CHIEF_OFFICER, OQN→SECOND/THIRD_OFFICER,
+       CFM→CHIEF_ENGINEER, SCM→SECOND_ENGINEER, OQM→THIRD_ENGINEER,
+       ELT→ELECTRICIAN, MNC→AB_SEAMAN, MNM→OILER.
+     - Status: SIGNED_OFF (histórico, desembarcaron 2025-09-03).
+     - Cada tripulante cargó con 2 certificaciones:
+       * PASSPORT (pasaporte + vencimiento).
+       * OTHER (vacuna fiebre amarela, sin vencimiento por OMS 2016).
+     - 1 tripulante (Luis Fernando Jacinto, CR-012) con pasaporte EXPIRED
+       (vencía 2026-01-22).
+     - Seed SQL: seed-crew-capitalmaritima.sql (transacción atomic).
+     - Ejecutado en VPS: 13 Crew + 26 CrewCertifications insertas.
+     - Verificación: SELECT muestra 13 filas, cada una con 2 certs.
+
+  Cambios en repo (local, sin commit):
+    - apps/web-modern/src/lib/i18n.tsx: +57 claves crew.*/cert.*.
+    - apps/web-modern/src/pages/Crew.tsx: importo useT, reemplazo todos los
+      strings por t(...). Actualizo CertStatusBadge, CrewModal,
+      CertificationsTab, CrewPage.
+    - seed-crew-capitalmaritima.sql: creado + ejecutado en VPS.
+
+  Pendiente:
+    - git commit (i18n + seed crew).
+    - vite build + push a VPS (cambios FE Crew i18n ya desplegados en SQL seed).
+    - Crew refactor Option B aún pendiente (schema ya en local, db push no).
+

@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
+import { useT } from "../lib/i18n";
 
 // Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
 // Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
@@ -98,9 +99,10 @@ function fmtDate(value: string | null): string {
 }
 
 function CertStatusBadge({ status }: { status: string }) {
-  if (status === "EXPIRED") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">Vencido</span>;
-  if (status === "EXPIRING_SOON") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">Por vencer</span>;
-  return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">Vigente</span>;
+  const t = useT();
+  if (status === "EXPIRED") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("cert.status.expired")}</span>;
+  if (status === "EXPIRING_SOON") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("cert.status.expiring")}</span>;
+  return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("cert.status.valid")}</span>;
 }
 
 const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
@@ -109,6 +111,7 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
 // ─── Crew Modal ──────────────────────────────────────────────────────────────
 
 const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () => void; onMocTrigger?: (e: MocTriggerEvent) => void }> = ({ crew, onClose, onSaved, onMocTrigger }) => {
+  const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
@@ -132,7 +135,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
   const onSave = useCallback(async () => {
     if (!firstName.trim() || !lastName.trim() || !vesselCode || !signOnDate) {
-      setErr("Completá vessel, nombre, apellido y fecha de embarque."); return;
+      setErr(t("crew.validation.required")); return;
     }
     setSaving(true); setErr(null);
     try {
@@ -157,11 +160,15 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         let reasonText: string | null = null;
         if (isNew && isKeyNow) {
-          reasonText = `Alta de tripulante con rol clave (${RANK_LABEL[rank] ?? rank})`;
+          reasonText = t("crew.mocReason.new").replace("{rank}", RANK_LABEL[rank] ?? rank);
         } else if (!isNew && rankChanged && (wasKey || isKeyNow)) {
-          reasonText = `Cambio de rango (${RANK_LABEL[crew!.rank] ?? crew!.rank} → ${RANK_LABEL[rank] ?? rank})`;
+          reasonText = t("crew.mocReason.rankChange")
+            .replace("{from}", RANK_LABEL[crew!.rank] ?? crew!.rank)
+            .replace("{to}", RANK_LABEL[rank] ?? rank);
         } else if (!isNew && vesselChanged && (wasKey || isKeyNow)) {
-          reasonText = `Traslado de buque (${crew!.vesselCode} → ${vesselCode}) en rol clave`;
+          reasonText = t("crew.mocReason.vesselChange")
+            .replace("{from}", crew!.vesselCode)
+            .replace("{to}", vesselCode);
         }
 
         if (reasonText) {
@@ -174,10 +181,10 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             prefill: {
               category: "ORGANIZATIONAL",
               vesselCode,
-              title: `Cambio organizacional: ${rankLabel} — ${vesselName}`,
-              reasonForChange: `${reasonText}. Tripulante: ${fullName}.`,
-              proposedChange: `Designar a ${fullName} como ${rankLabel} en ${vesselName}.`,
-              sourceLabel: `Desde Tripulación · ${fullName}`,
+              title: t("crew.mocPrefill.title").replace("{rank}", rankLabel).replace("{vessel}", vesselName),
+              reasonForChange: t("crew.mocPrefill.reason").replace("{reason}", reasonText).replace("{name}", fullName),
+              proposedChange: t("crew.mocPrefill.proposed").replace("{name}", fullName).replace("{rank}", rankLabel).replace("{vessel}", vesselName),
+              sourceLabel: t("crew.mocPrefill.source").replace("{name}", fullName),
             },
           });
         }
@@ -185,34 +192,34 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
       onSaved();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al guardar.");
+      setErr(e instanceof ApiError ? e.message : t("crew.error.save"));
     } finally {
       setSaving(false);
     }
-  }, [isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, vessels, onSaved, onMocTrigger]);
+  }, [t, isNew, crew, vesselCode, firstName, lastName, rank, nationality, passportNumber, signOnDate, notes, vessels, onSaved, onMocTrigger]);
 
   const onSignOff = useCallback(async () => {
     if (!crew) return;
-    if (!confirm(`¿Confirmás el desembarque de ${crew.firstName} ${crew.lastName}?`)) return;
+    if (!confirm(t("crew.signOffConfirm").replace("{name}", `${crew.firstName} ${crew.lastName}`))) return;
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/crew/${crew.id}/sign-off`, { signOffDate: new Date().toISOString().slice(0, 10) });
       onSaved();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al desembarcar."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("crew.error.signOff")); }
     finally { setSaving(false); }
-  }, [crew, onSaved]);
+  }, [t, crew, onSaved]);
 
   const onReopen = useCallback(async () => {
     if (!crew) return;
-    const reason = prompt("Motivo de re-apertura (mín. 5 caracteres):");
+    const reason = prompt(t("crew.reopenPrompt"));
     if (!reason || reason.trim().length < 5) return;
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/crew/${crew.id}/reopen`, { reason: reason.trim() });
       onSaved();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al re-abrir."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("crew.error.reopen")); }
     finally { setSaving(false); }
-  }, [crew, onSaved]);
+  }, [t, crew, onSaved]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -221,19 +228,19 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Tripulante</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo tripulante" : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("crew.singular")}</p>
+              <h2 className="text-sm font-bold text-white">{isNew ? t("crew.new") : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
             </div>
-            {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">Desembarcado</span>}
-            {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">A bordo</span>}
+            {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">{t("crew.status.signedOff")}</span>}
+            {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
         </div>
 
         {!isNew && (
           <div className="flex border-b border-white/10 px-6 shrink-0">
-            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Detalles</button>
-            <button onClick={() => setTab("certs")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "certs" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>Certificaciones</button>
+            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("crew.tab.details")}</button>
+            <button onClick={() => setTab("certs")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "certs" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("crew.tab.certifications")}</button>
           </div>
         )}
 
@@ -243,48 +250,48 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
               {isLocked && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-orange-200">Este tripulante está SIGNED_OFF. Para editarlo, un administrador debe re-abrirlo con justificación.</p>
+                  <p className="text-xs text-orange-200">{t("crew.lockedNotice")}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Vessel</label>
+                  <label className={labelCls}>{t("crew.field.vessel")}</label>
                   <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Rango</label>
+                  <label className={labelCls}>{t("crew.field.rank")}</label>
                   <select value={rank} onChange={e => setRank(e.target.value)} disabled={isLocked} className={inputCls}>
                     {Object.entries(RANK_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Nombre</label>
+                  <label className={labelCls}>{t("crew.field.firstName")}</label>
                   <input value={firstName} onChange={e => setFirstName(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Apellido</label>
+                  <label className={labelCls}>{t("crew.field.lastName")}</label>
                   <input value={lastName} onChange={e => setLastName(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Nacionalidad</label>
+                  <label className={labelCls}>{t("crew.field.nationality")}</label>
                   <input value={nationality} onChange={e => setNationality(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
                 </div>
                 <div>
-                  <label className={labelCls}>Pasaporte / Libreta</label>
+                  <label className={labelCls}>{t("crew.field.passport")}</label>
                   <input value={passportNumber} onChange={e => setPassportNumber(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
                 </div>
                 <div>
-                  <label className={labelCls}>Fecha embarque</label>
+                  <label className={labelCls}>{t("crew.field.signOnDate")}</label>
                   <input type="date" value={signOnDate} onChange={e => setSignOnDate(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Fecha desembarque</label>
+                  <label className={labelCls}>{t("crew.field.signOffDate")}</label>
                   <input type="date" value={(crew?.signOffDate ?? "").slice(0, 10)} disabled className={inputCls} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Notas</label>
+                  <label className={labelCls}>{t("crew.field.notes")}</label>
                   <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
               </div>
@@ -302,22 +309,22 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             {!isNew && crew?.status === "ONBOARD" && (
               <button onClick={() => { void onSignOff(); }} disabled={saving}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
-                <LogOut className="w-3.5 h-3.5" /> Desembarcar
+                <LogOut className="w-3.5 h-3.5" /> {t("crew.signOff")}
               </button>
             )}
             {!isNew && crew?.status === "SIGNED_OFF" && isAdmin && (
               <button onClick={() => { void onReopen(); }} disabled={saving}
                 className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
-                Re-abrir
+                {t("crew.reopen")}
               </button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
             {(isNew || tab === "details") && !isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
               </button>
             )}
           </div>
@@ -330,6 +337,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 // ─── Certifications Tab ──────────────────────────────────────────────────────
 
 const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: () => void }> = ({ crew, isLocked, onChanged }) => {
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Certification | null>(null);
   const [type, setType]               = useState("STCW_VI_1");
@@ -374,22 +382,22 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
       else await api.post(`/app/crew/${crew.id}/certifications`, payload);
       resetForm();
       onChanged();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("cert.error.save")); }
     finally { setSaving(false); }
-  }, [editing, crew.id, type, certificateNumber, issuingAuthority, issuedDate, expiryDate, docUrl, notes, onChanged]);
+  }, [t, editing, crew.id, type, certificateNumber, issuingAuthority, issuedDate, expiryDate, docUrl, notes, onChanged]);
 
   const onDelete = useCallback(async (certId: string) => {
-    if (!confirm("¿Eliminar esta certificación?")) return;
+    if (!confirm(t("cert.delete.confirm"))) return;
     try { await api.delete(`/app/crew/${crew.id}/certifications/${certId}`); onChanged(); }
-    catch (e) { alert(e instanceof ApiError ? e.message : "Error al eliminar."); }
-  }, [crew.id, onChanged]);
+    catch (e) { alert(e instanceof ApiError ? e.message : t("cert.error.delete")); }
+  }, [t, crew.id, onChanged]);
 
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
         {!adding && !isLocked && (
           <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20">
-            <Plus className="w-3.5 h-3.5" /> Agregar certificación
+            <Plus className="w-3.5 h-3.5" /> {t("cert.add")}
           </button>
         )}
       </div>
@@ -398,48 +406,48 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className={labelCls}>Tipo</label>
+              <label className={labelCls}>{t("cert.type")}</label>
               <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
                 {Object.entries(CERT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Nº Certificado</label>
+              <label className={labelCls}>{t("cert.number")}</label>
               <input value={certificateNumber} onChange={e => setCN(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Autoridad emisora</label>
-              <input value={issuingAuthority} onChange={e => setAuth(e.target.value)} className={inputCls} placeholder="ej. Prefectura Naval Arg." />
+              <label className={labelCls}>{t("cert.authority")}</label>
+              <input value={issuingAuthority} onChange={e => setAuth(e.target.value)} className={inputCls} placeholder={t("cert.authorityPlaceholder")} />
             </div>
             <div>
-              <label className={labelCls}>Emitida</label>
+              <label className={labelCls}>{t("cert.issued")}</label>
               <input type="date" value={issuedDate} onChange={e => setIssued(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Vence</label>
+              <label className={labelCls}>{t("cert.expires")}</label>
               <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} className={inputCls} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>URL / Documento</label>
-              <input value={docUrl} onChange={e => setDocUrl(e.target.value)} className={inputCls} placeholder="https:// o ruta de red" />
+              <label className={labelCls}>{t("cert.url")}</label>
+              <input value={docUrl} onChange={e => setDocUrl(e.target.value)} className={inputCls} placeholder={t("cert.urlPlaceholder")} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>Notas</label>
+              <label className={labelCls}>{t("crew.field.notes")}</label>
               <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
-            <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
             <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
           </div>
         </div>
       )}
 
       {crew.certifications.length === 0 && !adding ? (
-        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin certificaciones registradas</div>
+        <div className="text-center py-10 text-text-industrial/30 text-sm">{t("cert.empty")}</div>
       ) : (
         <div className="divide-y divide-white/5">
           {crew.certifications.map(c => (
@@ -452,14 +460,14 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
                 </div>
                 <div className="text-xs text-text-industrial/50 flex flex-wrap gap-3">
                   {c.issuingAuthority && <span>{c.issuingAuthority}</span>}
-                  {c.issuedDate && <span>Emitida: {fmtDate(c.issuedDate)}</span>}
-                  {c.expiryDate && <span>Vence: {fmtDate(c.expiryDate)}</span>}
+                  {c.issuedDate && <span>{t("cert.issuedLabel").replace("{date}", fmtDate(c.issuedDate))}</span>}
+                  {c.expiryDate && <span>{t("cert.expiresLabel").replace("{date}", fmtDate(c.expiryDate))}</span>}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-white/5 text-text-industrial/40 hover:text-accent" title="Ver documento"><FileText className="w-4 h-4" /></a>}
-                {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">Editar</button>}
-                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-400 hover:underline ml-2">Eliminar</button>}
+                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-white/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
+                {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">{t("common.edit")}</button>}
+                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-400 hover:underline ml-2">{t("common.delete")}</button>}
               </div>
             </div>
           ))}
@@ -472,6 +480,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const CrewPage: React.FC = () => {
+  const t = useT();
   const [status, setStatus] = useState<"ONBOARD" | "SIGNED_OFF" | "">("ONBOARD");
   const path = useMemo(() => {
     const p = new URLSearchParams();
@@ -486,15 +495,15 @@ export const CrewPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={Users} title="Tripulación" total={data?.total} onReload={reload}>
+      <PageHeader icon={Users} title={t("crew.title")} total={data?.total} onReload={reload}>
         <ExportExcelButton module="crew" />
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
-          <Plus className="w-3.5 h-3.5" /> Nuevo tripulante
+          <Plus className="w-3.5 h-3.5" /> {t("crew.new")}
         </button>
       </PageHeader>
 
       <div className="flex gap-2">
-        {([["ONBOARD", "A bordo"], ["SIGNED_OFF", "Desembarcados"], ["", "Todos"]] as const).map(([v, l]) => (
+        {([["ONBOARD", t("crew.filter.onboard")], ["SIGNED_OFF", t("crew.filter.signedOff")], ["", t("crew.filter.all")]] as const).map(([v, l]) => (
           <button key={v || "all"} onClick={() => setStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
               status === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
@@ -506,7 +515,7 @@ export const CrewPage: React.FC = () => {
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
       ) : !data?.items?.length ? (
-        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin tripulantes</div>
+        <div className="text-center py-10 text-text-industrial/30 text-sm">{t("crew.empty")}</div>
       ) : (
         <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
           {data.items.map(c => {
@@ -517,19 +526,19 @@ export const CrewPage: React.FC = () => {
                 <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40 shrink-0">{c.crewCode}</span>
                   {c.status === "ONBOARD"
-                    ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">A bordo</span>
-                    : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">Desembarcado</span>}
+                    ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
+                    : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">{t("crew.status.signedOff")}</span>}
                   <p className="text-sm font-bold text-white truncate">{c.firstName} {c.lastName}</p>
                   <p className="text-xs text-text-industrial/50 truncate">{RANK_LABEL[c.rank] ?? c.rank}</p>
                   <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                   {expiringCount > 0 && (
                     <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 shrink-0">
-                      {expiringCount} cert. atención
+                      {t("crew.attentionCerts").replace("{n}", String(expiringCount))}
                     </span>
                   )}
                 </div>
                 <div className="text-right shrink-0 hidden sm:block">
-                  <p className="text-[10px] text-text-industrial/40 leading-tight">Embarcado</p>
+                  <p className="text-[10px] text-text-industrial/40 leading-tight">{t("crew.embarked")}</p>
                   <p className="text-xs text-white font-mono leading-tight">{fmtDate(c.signOnDate)}</p>
                 </div>
                 {c.status === "ONBOARD" && expiringCount === 0 && <CheckCircle className="w-4 h-4 text-success-sea shrink-0" />}
