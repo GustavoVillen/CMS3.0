@@ -1,5 +1,4 @@
-import { Prisma } from '../../../generated/prisma';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '../../../../../generated/prisma';
 
 export interface TrainingItemRow {
   id: string;

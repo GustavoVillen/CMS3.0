@@ -1443,30 +1443,38 @@ export async function handleTenantRoutes(
   // ── Crew Ranks (catálogo dinámico por tenant) ─────────────────────────────────
   if (method === "GET" && url.pathname === "/app/crew/ranks") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const items = await listRanksByTenant(session.db, session.tenantId);
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await prisma?.tenant.findUnique({ where: { slug: session.tenantSlug } });
+    if (!prisma || !tenant) return false;
+    const items = await listRanksByTenant(prisma, tenant.id);
     sendJson(response, 200, { items, total: items.length });
     return true;
   }
   if (method === "POST" && url.pathname === "/app/crew/ranks") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await prisma?.tenant.findUnique({ where: { slug: session.tenantSlug } });
+    if (!prisma || !tenant) return false;
     const body = await readJsonBody(request) as { code: string; name: string; sortOrder?: number };
-    sendJson(response, 201, await createRank(session.db, session.tenantId, body));
+    sendJson(response, 201, await createRank(prisma, tenant.id, body));
     return true;
   }
   if (/^\/app\/crew\/ranks\/[^/]+$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) return false;
     const rankId = url.pathname.split("/")[4]!;
     if (method === "GET") {
-      sendJson(response, 200, await getRankById(session.db, rankId));
+      sendJson(response, 200, await getRankById(prisma, rankId));
       return true;
     }
     if (method === "PATCH") {
       const body = await readJsonBody(request) as { name?: string; sortOrder?: number };
-      sendJson(response, 200, await updateRank(session.db, rankId, body));
+      sendJson(response, 200, await updateRank(prisma, rankId, body));
       return true;
     }
     if (method === "DELETE") {
-      await deleteRank(session.db, rankId);
+      await deleteRank(prisma, rankId);
       sendJson(response, 200, { ok: true });
       return true;
     }
@@ -1475,34 +1483,42 @@ export async function handleTenantRoutes(
   // ── Crew Training Items (catálogo dinámico por tenant) ───────────────────────
   if (method === "GET" && url.pathname === "/app/crew/training-items") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const items = await listTrainingItemsByTenant(session.db, session.tenantId);
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await prisma?.tenant.findUnique({ where: { slug: session.tenantSlug } });
+    if (!prisma || !tenant) return false;
+    const items = await listTrainingItemsByTenant(prisma, tenant.id);
     sendJson(response, 200, { items, total: items.length });
     return true;
   }
   if (method === "POST" && url.pathname === "/app/crew/training-items") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await prisma?.tenant.findUnique({ where: { slug: session.tenantSlug } });
+    if (!prisma || !tenant) return false;
     const body = await readJsonBody(request) as {
       code: string; name: string; regulation?: string; category?: string; validityYears?: number; sortOrder?: number;
     };
-    sendJson(response, 201, await createTrainingItem(session.db, session.tenantId, body));
+    sendJson(response, 201, await createTrainingItem(prisma, tenant.id, body));
     return true;
   }
   if (/^\/app\/crew\/training-items\/[^/]+$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) return false;
     const itemId = url.pathname.split("/")[4]!;
     if (method === "GET") {
-      sendJson(response, 200, await getTrainingItemById(session.db, itemId));
+      sendJson(response, 200, await getTrainingItemById(prisma, itemId));
       return true;
     }
     if (method === "PATCH") {
       const body = await readJsonBody(request) as {
         name?: string; regulation?: string; category?: string; validityYears?: number; sortOrder?: number;
       };
-      sendJson(response, 200, await updateTrainingItem(session.db, itemId, body));
+      sendJson(response, 200, await updateTrainingItem(prisma, itemId, body));
       return true;
     }
     if (method === "DELETE") {
-      await deleteTrainingItem(session.db, itemId);
+      await deleteTrainingItem(prisma, itemId);
       sendJson(response, 200, { ok: true });
       return true;
     }
@@ -1511,18 +1527,23 @@ export async function handleTenantRoutes(
   // ── Crew Training Records ──────────────────────────────────────────────────────
   if (method === "GET" && /^\/app\/crew\/[^/]+\/training-records$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) return false;
     const crewId = url.pathname.split("/")[3]!;
-    const items = await listRecordsByCrewMember(session.db, crewId);
+    const items = await listRecordsByCrewMember(prisma, crewId);
     sendJson(response, 200, { items, total: items.length });
     return true;
   }
   if (method === "POST" && /^\/app\/crew\/[^/]+\/training-records$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    const tenant = await prisma?.tenant.findUnique({ where: { slug: session.tenantSlug } });
+    if (!prisma || !tenant) return false;
     const crewId = url.pathname.split("/")[3]!;
     const body = await readJsonBody(request) as {
       trainingItemId: string; completedAt: string; expiryDate?: string; docUrl?: string; notes?: string;
     };
-    sendJson(response, 201, await getOrCreateRecord(session.db, crewId, body.trainingItemId, session.tenantId, {
+    sendJson(response, 201, await getOrCreateRecord(prisma, crewId, body.trainingItemId, tenant.id, {
       completedAt: new Date(body.completedAt),
       expiryDate: body.expiryDate ? new Date(body.expiryDate) : undefined,
       docUrl: body.docUrl,
@@ -1532,26 +1553,28 @@ export async function handleTenantRoutes(
   }
   if (/^\/app\/crew\/[^/]+\/training-records\/[^/]+$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
+    if (!prisma) return false;
     const parts = url.pathname.split("/");
     const recordId = parts[5]!;
     if (method === "GET") {
-      sendJson(response, 200, await getRecordById(session.db, recordId));
+      sendJson(response, 200, await getRecordById(prisma, recordId));
       return true;
     }
     if (method === "PATCH") {
       const body = await readJsonBody(request) as {
         completedAt?: string; expiryDate?: string | null; docUrl?: string | null; notes?: string | null;
       };
-      sendJson(response, 200, await updateRecord(session.db, recordId, {
+      sendJson(response, 200, await updateRecord(prisma, recordId, {
         completedAt: body.completedAt ? new Date(body.completedAt) : undefined,
-        expiryDate: body.expiryDate ? new Date(body.expiryDate) : body.expiryDate,
+        expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
         docUrl: body.docUrl,
         notes: body.notes,
       }));
       return true;
     }
     if (method === "DELETE") {
-      await deleteRecord(session.db, recordId);
+      await deleteRecord(prisma, recordId);
       sendJson(response, 200, { ok: true });
       return true;
     }
