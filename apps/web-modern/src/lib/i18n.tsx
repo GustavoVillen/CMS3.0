@@ -1398,10 +1398,16 @@ export function useLocale(): Locale {
 /** Returns a translation function bound to the active locale. */
 export function useT() {
   const locale = useLocale();
-  return (key: TranslationKey): string => dict[key][locale] ?? dict[key]["es"];
+  return (key: TranslationKey): string => {
+    const entry = dict[key as keyof typeof dict];
+    if (!entry) return `[${key}]`;
+    return entry[locale] ?? entry["es"] ?? `[${key}]`;
+  };
 }
 
 /** Standalone translate — useful outside React (e.g. chart data builders). */
 export function translate(key: TranslationKey, locale: Locale): string {
-  return dict[key][locale] ?? dict[key]["es"];
+  const entry = dict[key as keyof typeof dict];
+  if (!entry) return `[${key}]`;
+  return entry[locale] ?? entry["es"] ?? `[${key}]`;
 }
