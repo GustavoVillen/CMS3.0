@@ -175,8 +175,9 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
         // Helper to get localized rank name
         const getRankLabel = (rank: typeof currentRank) => {
           if (!rank) return t("crew.rank.other");
-          const key = (`crew.rank.${rank.code}` as any);
-          return t(key) || t("crew.rank.other");
+          const key1 = `crew.rank.${rank.code}` as any;
+          const key2 = `crew.rank.${rank.code.toLowerCase()}` as any;
+          return t(key1) || t(key2) || t("crew.rank.other");
         };
 
         let reasonText: string | null = null;
@@ -285,7 +286,11 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                   <label className={labelCls}>{t("crew.field.rank")}</label>
                   <select value={rankId} onChange={e => setRankId(e.target.value)} disabled={isLocked} className={inputCls}>
                     <option value="">{t("crew.selectRank")}</option>
-                    {ranks.map(r => <option key={r.id} value={r.id}>{t(`crew.rank.${r.code}` as any) || r.name}</option>)}
+                    {ranks.map(r => {
+                      const key1 = `crew.rank.${r.code}` as any;
+                      const key2 = `crew.rank.${r.code.toLowerCase()}` as any;
+                      return <option key={r.id} value={r.id}>{t(key1) || t(key2) || r.name}</option>;
+                    })}
                   </select>
                 </div>
                 <div>
