@@ -2,7 +2,7 @@
 // para cada rango. Solo TENANT_ADMIN.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ClipboardList, Loader2 } from "lucide-react";
+import { ClipboardList, Loader2, Plus, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/PageHeader";
@@ -63,6 +63,10 @@ export const RequirementsMatrixPage: React.FC = () => {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingCell, setSavingCell] = useState<string | null>(null); // key rankId|itemId
+  const [showNewItem, setShowNewItem] = useState(false);
+  const [newItem, setNewItem] = useState({ code: "", name: "", regulation: "", category: "", validityYears: "" });
+  const [savingNew, setSavingNew] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -119,6 +123,39 @@ export const RequirementsMatrixPage: React.FC = () => {
     }
   }
 
+  async function onCreateItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isAdmin || !newItem.code.trim() || !newItem.name.trim()) return;
+    setSavingNew(true);
+    try {
+      await api.post(`/app/crew/training-items`, {
+        code: newItem.code.trim().toUpperCase(),
+        name: newItem.name.trim(),
+        regulation: newItem.regulation.trim() || undefined,
+        category: newItem.category.trim() || undefined,
+        validityYears: newItem.validityYears ? Number(newItem.validityYears) : undefined,
+      });
+      setNewItem({ code: "", name: "", regulation: "", category: "", validityYears: "" });
+      setShowNewItem(false);
+      await reload();
+    } finally {
+      setSavingNew(false);
+    }
+  }
+
+  async function onDeleteItem(itemId: string, code: string) {
+    if (!isAdmin) return;
+    const msg = t("rm.confirmDeleteItem").replace("{code}", code);
+    if (!window.confirm(msg)) return;
+    setDeletingItem(itemId);
+    try {
+      await api.delete(`/app/crew/training-items/${itemId}`);
+      await reload();
+    } finally {
+      setDeletingItem(null);
+    }
+  }
+
   const totalRequirements = data?.requirements.length ?? 0;
 
   if (!isAdmin) {
@@ -142,6 +179,15 @@ export const RequirementsMatrixPage: React.FC = () => {
           <option value="">{t("rm.allCategories")}</option>
           {(data?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+
+        <button
+          type="button"
+          onClick={() => setShowNewItem(true)}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-accent/15 border border-accent/40 text-accent hover:bg-accent/25 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {t("rm.newItem")}
+        </button>
 
         <div className="ml-auto flex items-center gap-3 text-[10px] text-text-industrial/60">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/40 border border-red-500/60" /> {t("rm.legendObligatorio")}</span>
@@ -170,8 +216,17 @@ export const RequirementsMatrixPage: React.FC = () => {
               <tr className="border-b border-white/10">
                 <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">{t("rm.colRank")}</th>
                 {data.trainingItems.map(it => (
-                  <th key={it.id} className="px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
+                  <th key={it.id} className="group relative px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
                     <span title={`${it.name}${it.regulation ? " — " + it.regulation : ""}${it.validityYears ? " · " + it.validityYears + "y" : ""}`}>{it.code}</span>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteItem(it.id, it.code)}
+                      disabled={deletingItem === it.id}
+                      title={t("common.delete")}
+                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -209,6 +264,95 @@ export const RequirementsMatrixPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showNewItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => !savingNew && setShowNewItem(false)}>
+          <form
+            onSubmit={onCreateItem}
+            onClick={e => e.stopPropagation()}
+            className="bg-[#0D1B2A] border border-white/10 rounded-xl p-6 w-full max-w-md space-y-3"
+          >
+            <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{t("rm.createItemTitle")}</h2>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemCode")} *</label>
+              <input
+                type="text"
+                required
+                value={newItem.code}
+                onChange={e => setNewItem({ ...newItem, code: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                placeholder="STCW_VI_3"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("common.name")} *</label>
+              <input
+                type="text"
+                required
+                value={newItem.name}
+                onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemRegulation")}</label>
+              <input
+                type="text"
+                value={newItem.regulation}
+                onChange={e => setNewItem({ ...newItem, regulation: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemCategory")}</label>
+              <input
+                type="text"
+                list="rm-categories"
+                value={newItem.category}
+                onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+              <datalist id="rm-categories">
+                {(data?.categories ?? []).map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemValidity")}</label>
+              <input
+                type="number"
+                min="0"
+                value={newItem.validityYears}
+                onChange={e => setNewItem({ ...newItem, validityYears: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowNewItem(false)}
+                disabled={savingNew}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-text-industrial/70 hover:bg-white/10"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                disabled={savingNew || !newItem.code.trim() || !newItem.name.trim()}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-accent/15 border border-accent/40 text-accent hover:bg-accent/25 disabled:opacity-50"
+              >
+                {savingNew && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t("common.create")}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

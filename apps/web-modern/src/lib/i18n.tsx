@@ -737,6 +737,13 @@ const dict = {
   "rm.lvlObligatorio":      { es: "OBL",                                             en: "MAN",                                                 pt: "OBR" },
   "rm.lvlValido":           { es: "VAL",                                             en: "VAL",                                                 pt: "VAL" },
   "rm.lvlDeseable":         { es: "DES",                                             en: "DES",                                                 pt: "DES" },
+  "rm.newItem":             { es: "+ Item",                                          en: "+ Item",                                              pt: "+ Item" },
+  "rm.createItemTitle":     { es: "Crear training item",                             en: "Create training item",                                pt: "Criar item de treinamento" },
+  "rm.itemCode":            { es: "Código",                                          en: "Code",                                                pt: "Código" },
+  "rm.itemRegulation":      { es: "Regulación",                                      en: "Regulation",                                          pt: "Regulamentação" },
+  "rm.itemCategory":        { es: "Categoría",                                       en: "Category",                                            pt: "Categoria" },
+  "rm.itemValidity":        { es: "Vigencia (años)",                                 en: "Validity (years)",                                    pt: "Validade (anos)" },
+  "rm.confirmDeleteItem":   { es: "¿Eliminar el item '{code}'? Se borrarán también sus requerimientos.", en: "Delete item '{code}'? Its requirements will also be removed.", pt: "Excluir o item '{code}'? Seus requisitos também serão removidos." },
 
   // Common — adicionales
   "common.refresh":         { es: "Refrescar",            en: "Refresh",            pt: "Atualizar" },
