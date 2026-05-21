@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-05-20] Import maintenance plans: mapear estimatedHours (export/import asimetrico)
+Agent: Claude Opus 4.7
+
+  PROBLEMA REPORTADO:
+  "En Maintenance Plan importa todo menos la columna estimatedHours."
+
+  DIAGNOSTICO:
+  Asimetria export/import. El campo MaintenancePlan.estimatedHours existe en el
+  schema fuente (prisma/schema.prisma:1079) y se usa en la UI
+  (MaintenancePlans.tsx: form, lista, execute). El export lo incluye porque
+  buildWorkbook agrega dinamicamente TODAS las columnas de la DB
+  (excel-export-service.ts:610-618). Pero buildModelData para maintenance_plans
+  NO mapeaba estimatedHours, asi que el ciclo exportar-editar-reimportar lo
+  descartaba silenciosamente.
+
+  Nota: el schema generado en node_modules/.prisma estaba desactualizado (sin
+  estimatedHours); el schema fuente es prisma/schema.prisma (raiz del repo).
+
+  FIX (2 lineas, sin cambio de schema):
+    - excel-import-service.ts buildModelData case maintenance_plans:
+      if ("estimatedHours" in d) r.estimatedHours = parseNumeric(d.estimatedHours);
+    - excel-template.ts: agregar columna estimatedHours al template estatico de
+      maintenance_plans (queda documentada/ordenada; reserved set evita duplicado
+      en export).
+
+  COMMIT: e881fbb
+
 [2026-05-20] Import de repuestos: respetar currentStock + generar StockMovement inicial
 Agent: Claude Sonnet 4.6 + Opus 4.7
 
