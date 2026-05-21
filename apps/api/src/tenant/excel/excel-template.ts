@@ -56,6 +56,7 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "triggerType",         header: "triggerType",          required: false, width: 18 },
     { key: "frequencyMonths",     header: "frequencyMonths",      required: false, width: 18 },
     { key: "frequencyHours",      header: "frequencyHours",       required: false, width: 18 },
+    { key: "estimatedHours",      header: "estimatedHours",       required: false, width: 16 },
     { key: "responsible",         header: "responsible",          required: false, width: 25 },
     { key: "acceptanceCriteria",  header: "acceptanceCriteria",   required: false, width: 50 },
     { key: "loto",                header: "loto",                 required: false, width: 40 },

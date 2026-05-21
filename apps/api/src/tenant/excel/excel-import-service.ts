@@ -351,6 +351,7 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       if ("consequenceRationale" in d) r.consequenceRationale = d.consequenceRationale ?? null;
       if ("frequencyMonths"   in d) r.frequencyMonths   = d.frequencyMonths   ? Number(d.frequencyMonths) : null;
       if ("frequencyHours"    in d) r.frequencyHours    = parseNumeric(d.frequencyHours);
+      if ("estimatedHours"    in d) r.estimatedHours    = parseNumeric(d.estimatedHours);
       if ("windowLeadDays"    in d) r.windowLeadDays    = d.windowLeadDays    ? Number(d.windowLeadDays) : null;
       if ("windowLeadHours"   in d) r.windowLeadHours   = parseNumeric(d.windowLeadHours);
       if ("lastExecutionDate" in d) r.lastExecutionDate = d.lastExecutionDate ? new Date(String(d.lastExecutionDate)) : null;
