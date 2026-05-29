@@ -1,5 +1,26 @@
 HISTORY.txt
 
+[2026-05-29] UI: quitar el CriticalNotificationBanner persistente
+Agent: Claude Sonnet 4.6
+
+  PROBLEMA REPORTADO:
+  Banner rojo "Certificado vencido — ..." aparecia sobre todas las paginas
+  y era molesto. Saturaba la vista en tenants con certificados expirados.
+
+  CAUSA:
+  CriticalNotificationBanner se montaba en Layout.tsx:48 y se renderizaba
+  cuando habia >=1 notification con severity=CRITICAL no leida. Los
+  certificados vencidos generan automaticamente insights CRITICAL via
+  insight-generator.ts:316.
+
+  SOLUCION:
+  Removida la importacion y el render del banner en Layout.tsx. El componente
+  CriticalNotificationBanner.tsx se preserva intacto por si se reactiva.
+  Las notifications siguen siendo accesibles desde el panel y My Day.
+
+  COMMIT:
+    - 206a132 ui(layout): quitar el CriticalNotificationBanner persistente
+
 [2026-05-20] Import maintenance plans: mapear estimatedHours (export/import asimetrico)
 Agent: Claude Opus 4.7
 
