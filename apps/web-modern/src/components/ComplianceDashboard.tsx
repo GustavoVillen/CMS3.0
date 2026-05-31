@@ -8,7 +8,7 @@
 // MAINTENANCE_MANAGER). Se renderiza arriba del Dashboard.
 
 import React, { useEffect, useState } from "react";
-import { TrendingUp, Loader2, Download } from "lucide-react";
+import { TrendingUp, Loader2, Download, ChevronDown, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -70,6 +70,10 @@ export const ComplianceDashboard: React.FC = () => {
 
   const [scores, setScores] = useState<ComplianceScore[] | null>(null);
   const [loading, setLoading] = useState(true);
+  // En ADMIN la sección viene colapsada y se despliega al clic en el título;
+  // los demás managers la siguen viendo expandida por defecto.
+  const isAdmin = role === "TENANT_ADMIN";
+  const [collapsed, setCollapsed] = useState(isAdmin);
 
   useEffect(() => {
     if (!isManager) { setLoading(false); return; }
@@ -103,10 +107,20 @@ export const ComplianceDashboard: React.FC = () => {
       {!loading && scores && scores.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-accent" />
-            <h2 className="text-xs font-bold uppercase tracking-widest text-white">
-              {t("compliance.scoreTitle")}
-            </h2>
+            <button
+              type="button"
+              onClick={() => setCollapsed(v => !v)}
+              className="flex items-center gap-2 group"
+              aria-expanded={!collapsed}
+            >
+              <TrendingUp className="w-4 h-4 text-accent" />
+              <h2 className="text-xs font-bold uppercase tracking-widest text-white group-hover:text-accent transition-colors">
+                {t("compliance.scoreTitle")}
+              </h2>
+              {collapsed
+                ? <ChevronRight className="w-4 h-4 text-text-industrial/60 group-hover:text-accent transition-colors" />
+                : <ChevronDown className="w-4 h-4 text-text-industrial/60 group-hover:text-accent transition-colors" />}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -124,9 +138,11 @@ export const ComplianceDashboard: React.FC = () => {
               PDF
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {scores.map(s => <ScoreCard key={s.vesselCode} score={s} />)}
-          </div>
+          {!collapsed && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              {scores.map(s => <ScoreCard key={s.vesselCode} score={s} />)}
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-05-31] UI: "Compliance score por buque" colapsable en ADMIN
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  En rol ADMIN, la seccion "Compliance score por buque" del dashboard debia
+  venir colapsada y desplegarse solo al presionar el titulo.
+
+  CAMBIO:
+  ComplianceDashboard.tsx — el titulo (TrendingUp + h2) ahora es un boton que
+  togglea un estado `collapsed`, con chevron (ChevronRight/ChevronDown) como
+  indicador. Default colapsado solo para TENANT_ADMIN (`isAdmin`); los demas
+  managers (FLEET_SUPERINTENDENT / MAINTENANCE_MANAGER) lo siguen viendo
+  expandido. El grid de ScoreCards se renderiza condicionalmente segun
+  `collapsed`. El boton PDF quedo fuera del boton de toggle para no dispararlo.
+
+  VERIFICACION:
+  tsc --noEmit sin errores.
+
+
 [2026-05-29] UI: quitar el CriticalNotificationBanner persistente
 Agent: Claude Sonnet 4.6
 
