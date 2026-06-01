@@ -1,5 +1,55 @@
 HISTORY.txt
 
+[2026-06-01] PDF: ficha de equipo (asset) con historial de mantenimiento
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Boton para generar un PDF con toda la informacion del asset + el historial
+  de mantenimiento/inspecciones.
+
+  CAMBIOS:
+  - apps/api/src/tenant/pms/asset-pdf-service.ts (NUEVO)
+    buildAssetPdf(): header con logo del tenant, boxes con identidad del equipo
+    (buque c/nombre, SFI, criticidad, estado, ISM 10.3, reporte diario, horas,
+    fabricante, modelo, serial, fechas) + Fundamento de Criticidad como texto
+    libre via renderLabeledTextBox (regla obligatoria del skill pms-pdf) +
+    tabla "Historial de mantenimientos e inspecciones" (OT, tipo, descripcion,
+    f. apertura, f. realizacion, estado) con re-dibujo de header al paginar.
+    Reusa getTenantAsset y listTenantWorkOrders({ assetId }).
+  - apps/api/src/tenant/pms/assets-router.ts
+    + GET /app/pms/assets/:id/pdf (rate-limit pdf, attachment). AUDITOR_READONLY
+      habilitado para descargar.
+  - apps/web-modern/src/pages/Assets.tsx
+    + helper downloadAssetPdf() (fetch blob, igual patron que Defects) y boton
+      "Descargar PDF" en el footer del modal, solo en modo edicion.
+  - apps/web-modern/src/lib/i18n.tsx
+    + claves asset.downloadPdf / asset.pdfError (es/en/pt).
+
+  VERIFICACION:
+  typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Render runtime del
+  PDF a validar en VPS con data real. Sin cambios de schema.
+
+
+[2026-06-01] UI: filas del historial de OT navegan a la OT (Editar Asset)
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Al presionar una fila de la planilla "Historial de mantenimientos e
+  inspecciones" del form Editar Asset, ir directo a esa OT.
+
+  CAMBIOS (solo frontend):
+  - apps/web-modern/src/pages/Assets.tsx
+    + AssetHistory: cada fila es clickeable y navega a
+      /work-orders?autoCode=<workOrderCode>. La pagina WorkOrders ya soporta
+      autoCode para auto-abrir la OT (mismo patron que badges de planes).
+    + codigo de OT en color accent + hover/cursor en la fila.
+  - apps/web-modern/src/lib/i18n.tsx
+    + clave asset.history.openWo (tooltip, es/en/pt).
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. Sin cambios de backend ni schema.
+
+
 [2026-06-01] UI: historial de mantenimientos/inspecciones en form Editar Asset
 Agent: Claude Opus 4.8
 

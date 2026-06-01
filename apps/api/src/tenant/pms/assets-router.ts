@@ -14,6 +14,7 @@ import {
   updateTenantAsset,
 } from "../assets/assets-service";
 import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
+import { buildAssetPdf } from "./asset-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -23,7 +24,7 @@ function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
 
 function enforceAuditorListOnly(method: string, path: string, role: string): void {
   if (role !== "AUDITOR_READONLY") return;
-  const canListOnly = method === "GET" && (path === "/app/pms/assets" || /^\/app\/pms\/assets\/[^/]+$/.test(path));
+  const canListOnly = method === "GET" && (path === "/app/pms/assets" || /^\/app\/pms\/assets\/[^/]+$/.test(path) || /^\/app\/pms\/assets\/[^/]+\/pdf$/.test(path));
   if (!canListOnly) {
     throw new RouteError(403, "FORBIDDEN", "AUDITOR_READONLY solo puede listar.");
   }
@@ -67,6 +68,21 @@ export async function handleAssetRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
     sendJson(response, 200, await suggestAssetCriticality(session, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/assets\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const asset = await getTenantAsset(session, id);
+    const buffer = await buildAssetPdf(session, id);
+    const filename = `${asset.assetCode}-${asset.vesselCode}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

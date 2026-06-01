@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { FileDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -163,6 +163,22 @@ function buildFormattedAssetCode(
   return nextSequentialAssetCode(prefix, existingCodes);
 }
 
+async function downloadAssetPdf(asset: { id: string; assetCode: string; vesselCode: string }): Promise<void> {
+  const token = localStorage.getItem("gpms_token") ?? "";
+  const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
+  const res = await fetch(`/app/pms/assets/${asset.id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
+  });
+  if (!res.ok) throw new ApiError(res.status, "PDF_ERROR", "No se pudo generar el PDF.");
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `${asset.assetCode}-${asset.vesselCode}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface AssetWorkOrder {
   id: string;
   workOrderCode: string;
@@ -193,6 +209,7 @@ const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
 // Solo lectura, se muestra al final del formulario en modo edición.
 const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
   const t = useT();
+  const navigate = useNavigate();
   const { data, loading, error } = useFetch<{ items: AssetWorkOrder[] }>(
     `/app/pms/work-orders?assetId=${encodeURIComponent(assetId)}`,
     [assetId],
@@ -223,8 +240,13 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
             </thead>
             <tbody>
               {items.map(wo => (
-                <tr key={wo.id} className="border-t border-white/5">
-                  <td className="px-3 py-2 font-mono font-bold text-white whitespace-nowrap">{wo.workOrderCode}</td>
+                <tr
+                  key={wo.id}
+                  onClick={() => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`)}
+                  className="border-t border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                  title={t("asset.history.openWo")}
+                >
+                  <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">{wo.workOrderCode}</td>
                   <td className="px-3 py-2 whitespace-nowrap"><WoTypeBadge type={wo.type} /></td>
                   <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{wo.title ?? "—"}</span></td>
                   <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(wo.openDate)}</td>
@@ -300,6 +322,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded,    setExpanded]    = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useCopilotEmitter({
     module: "ASSETS",
@@ -860,11 +883,35 @@ const AssetModal: React.FC<AssetModalProps> = ({
           {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
-          </button>
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
+          <div>
+            {isEdit && initial && (
+              <button
+                onClick={async () => {
+                  setDownloadingPdf(true);
+                  setActionError(null);
+                  try {
+                    await downloadAssetPdf(initial);
+                  } catch (err) {
+                    setActionError(err instanceof ApiError ? err.message : t("asset.pdfError"));
+                  } finally {
+                    setDownloadingPdf(false);
+                  }
+                }}
+                disabled={downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 hover:text-white disabled:opacity-50 transition-all"
+              >
+                {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
+                {t("asset.downloadPdf")}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+            </button>
+          </div>
         </div>
       </div>
     </div>

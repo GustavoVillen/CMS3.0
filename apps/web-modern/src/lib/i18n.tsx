@@ -700,6 +700,9 @@ const dict = {
   "asset.history.col.openDate": { es: "F. Apertura",                                          en: "Open date",                                          pt: "Data abertura" },
   "asset.history.col.completedDate": { es: "F. Realización",                                  en: "Completed date",                                     pt: "Data conclusão" },
   "asset.history.col.status":   { es: "Estado",                                               en: "Status",                                             pt: "Estado" },
+  "asset.history.openWo":       { es: "Abrir esta orden de trabajo",                          en: "Open this work order",                               pt: "Abrir esta ordem de trabalho" },
+  "asset.downloadPdf":          { es: "Descargar PDF",                                        en: "Download PDF",                                       pt: "Baixar PDF" },
+  "asset.pdfError":             { es: "No se pudo generar el PDF.",                           en: "Could not generate the PDF.",                        pt: "Não foi possível gerar o PDF." },
 
   // RestHours (STCW/MLC)
   "rh.pageTitle":           { es: "Horas de Descanso (STCW / MLC)",                  en: "Hours of Rest (STCW / MLC)",                          pt: "Horas de Descanso (STCW / MLC)" },
