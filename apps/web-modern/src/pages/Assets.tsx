@@ -163,6 +163,83 @@ function buildFormattedAssetCode(
   return nextSequentialAssetCode(prefix, existingCodes);
 }
 
+interface AssetWorkOrder {
+  id: string;
+  workOrderCode: string;
+  type: string;
+  status: string;
+  title: string | null;
+  openDate: string;
+  completedDate: string | null;
+}
+
+function fmtHistoryDate(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString();
+}
+
+const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
+  const t = useT();
+  if (type === "INSPECTION")
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+  if (type === "CORRECTIVE")
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+};
+
+// Historial de mantenimientos/inspecciones (órdenes de trabajo) del asset.
+// Solo lectura, se muestra al final del formulario en modo edición.
+const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
+  const t = useT();
+  const { data, loading, error } = useFetch<{ items: AssetWorkOrder[] }>(
+    `/app/pms/work-orders?assetId=${encodeURIComponent(assetId)}`,
+    [assetId],
+  );
+  const items = data?.items ?? [];
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-white/10">
+      <h3 className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.history.title")}</h3>
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
+      ) : error ? (
+        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.history.loadError")}</p>
+      ) : items.length === 0 ? (
+        <p className="text-xs text-text-industrial/50 bg-white/3 border border-white/8 rounded-xl px-3 py-3">{t("asset.history.empty")}</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-white/5 text-text-industrial/50">
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.code")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.type")}</th>
+                <th className="text-left font-semibold px-3 py-2">{t("asset.history.col.title")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.openDate")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.completedDate")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.status")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(wo => (
+                <tr key={wo.id} className="border-t border-white/5">
+                  <td className="px-3 py-2 font-mono font-bold text-white whitespace-nowrap">{wo.workOrderCode}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><WoTypeBadge type={wo.type} /></td>
+                  <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{wo.title ?? "—"}</span></td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(wo.openDate)}</td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(wo.completedDate)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={wo.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface AssetModalProps {
   initial: Asset | null;
   defaultVesselCode?: string | null;
@@ -780,6 +857,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               />
             </div>
           </div>
+          {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">

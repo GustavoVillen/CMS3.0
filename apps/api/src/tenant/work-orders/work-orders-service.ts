@@ -16,6 +16,7 @@ export interface WorkOrderListFilters {
   type?: string | null;
   priority?: string | null;
   assignedToUserId?: string | null;
+  assetId?: string | null;
 }
 
 export interface CreateWorkOrderInput {
@@ -279,8 +280,10 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       const assignedToUserId = "assignedToUserId" in item
         ? (item as unknown as { assignedToUserId?: string | null }).assignedToUserId
         : undefined;
+      const assetId = "assetId" in item ? (item as unknown as { assetId?: string | null }).assetId : undefined;
       if (filters.priority && priority !== filters.priority) return false;
       if (filters.assignedToUserId && assignedToUserId !== filters.assignedToUserId) return false;
+      if (filters.assetId && assetId !== filters.assetId) return false;
       return true;
     });
   }
@@ -295,6 +298,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   if (filters.type) where.type = filters.type;
   if (filters.priority) where.priority = filters.priority;
   if (filters.assignedToUserId) where.assignedToUserId = filters.assignedToUserId;
+  if (filters.assetId) where.assetId = filters.assetId;
 
   const orders = await prisma.workOrder.findMany({ where, orderBy: { openDate: "desc" } });
 

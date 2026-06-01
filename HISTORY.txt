@@ -1,5 +1,59 @@
 HISTORY.txt
 
+[2026-06-01] UI: historial de mantenimientos/inspecciones en form Editar Asset
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Al final del bloque de campos del form "Editar Asset" mostrar una planilla
+  que liste todos los mantenimientos/inspecciones realizados al equipo.
+
+  ALCANCE (decidido con el usuario):
+  Solo Ordenes de Trabajo (WorkOrder) del asset. Su campo `type` ya cubre
+  PREVENTIVE / CORRECTIVE / INSPECTION, por lo que es el registro unificado de
+  trabajos hechos al equipo. (Las InspectionExecution del modulo Control quedan
+  fuera para mantener el cambio minimo.)
+
+  CAMBIOS:
+  - apps/api/src/tenant/work-orders/work-orders-service.ts
+    + filtro `assetId` en WorkOrderListFilters, aplicado al where (rama Prisma y
+      rama dev sin Prisma).
+  - apps/api/src/tenant/pms/maintenance-router.ts
+    + GET /app/pms/work-orders ahora lee el query param `assetId`.
+  - apps/web-modern/src/pages/Assets.tsx
+    + componente AssetHistory (solo lectura) que hace GET
+      /app/pms/work-orders?assetId=<id> y renderiza una tabla con OT, tipo,
+      descripcion, fecha apertura, fecha realizacion y estado.
+    + se muestra solo en modo edicion (isEdit && initial.id), al final del form.
+  - apps/web-modern/src/lib/i18n.tsx
+    + claves asset.history.* (es/en/pt).
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. typecheck api = OK. Sin cambios de schema.
+
+
+[2026-05-31] VPS: fix error "Unknown field rank" en rest-hours (cache tsx)
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  En pm2 logs del VPS firaba repetido:
+    "Unknown field `rank` for select statement on model `Crew`"
+    at async monthlySnapshot (rest-hours-service.ts:277)
+
+  CAUSA RAIZ:
+  No era el codigo ni el schema. El codigo desplegado ya usa `rankDefinition`
+  (fix a8120ae, ancestro de HEAD) y el cliente Prisma del VPS ya conocia el
+  schema nuevo (sin campo `rank`). El proceso corre via tsx; `pm2 restart` NO
+  invalida el cache de modulos transpilados en /tmp/tsx-*, asi que seguia
+  ejecutando la version vieja de rest-hours-service que seleccionaba `rank`.
+
+  FIX (solo VPS, sin cambio de codigo):
+  ssh gpms-vps "rm -rf /tmp/tsx-* && pm2 stop gpms && pm2 start gpms --update-env"
+  Tras esto el codigo nuevo (rankDefinition) corre y el error desaparece.
+  HTTP 127.0.0.1:3105 = 200. Logs limpios sin errores de rank.
+
+  NOTA: trampa ya documentada en memoria feedback_actualiza_vps (caso tsx).
+
+
 [2026-05-31] UI: "Compliance score por buque" colapsable en ADMIN
 Agent: Claude Opus 4.8
 

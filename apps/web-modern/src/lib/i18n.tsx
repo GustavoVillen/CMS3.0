@@ -691,6 +691,15 @@ const dict = {
   "asset.critRationalePh":      { es: "Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA.", en: "Justification for the criticality level and/or ISM flag. You can generate it automatically with the AI buttons.", pt: "Justificativa do nível de criticidade e/ou flag ISM. Você pode gerá-la automaticamente com os botões IA." },
   "asset.expand":               { es: "Ampliar",                                              en: "Expand",                                             pt: "Ampliar" },
   "asset.collapse":             { es: "Reducir",                                              en: "Collapse",                                           pt: "Reduzir" },
+  "asset.history.title":        { es: "Historial de mantenimientos e inspecciones",           en: "Maintenance and inspection history",                 pt: "Histórico de manutenções e inspeções" },
+  "asset.history.empty":        { es: "Este equipo aún no tiene órdenes de trabajo registradas.", en: "This asset has no work orders recorded yet.",     pt: "Este equipamento ainda não tem ordens de trabalho registradas." },
+  "asset.history.loadError":    { es: "No se pudo cargar el historial.",                      en: "Could not load the history.",                        pt: "Não foi possível carregar o histórico." },
+  "asset.history.col.code":     { es: "OT",                                                   en: "WO",                                                 pt: "OT" },
+  "asset.history.col.type":     { es: "Tipo",                                                 en: "Type",                                               pt: "Tipo" },
+  "asset.history.col.title":    { es: "Descripción",                                          en: "Description",                                        pt: "Descrição" },
+  "asset.history.col.openDate": { es: "F. Apertura",                                          en: "Open date",                                          pt: "Data abertura" },
+  "asset.history.col.completedDate": { es: "F. Realización",                                  en: "Completed date",                                     pt: "Data conclusão" },
+  "asset.history.col.status":   { es: "Estado",                                               en: "Status",                                             pt: "Estado" },
 
   // RestHours (STCW/MLC)
   "rh.pageTitle":           { es: "Horas de Descanso (STCW / MLC)",                  en: "Hours of Rest (STCW / MLC)",                          pt: "Horas de Descanso (STCW / MLC)" },

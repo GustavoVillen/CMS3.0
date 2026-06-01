@@ -244,6 +244,7 @@ export async function handleMaintenanceRoutes(
       type: url.searchParams.get("type"),
       priority: url.searchParams.get("priority"),
       assignedToUserId: url.searchParams.get("assignedToUserId"),
+      assetId: url.searchParams.get("assetId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
