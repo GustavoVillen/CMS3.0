@@ -1,5 +1,73 @@
 HISTORY.txt
 
+[2026-06-01] Fix Repuestos: stock app vs Excel + export ignora buque seleccionado
+Agent: Claude Opus 4.8
+
+  SINTOMAS (usuario):
+  1. La app lista "Stock Actual" en 0 aunque el Excel exporta stock.
+  2. Stock no coincide: CUM-4BTA-OIL app=200 vs Excel=21.
+  3. Export del buque DONCHI trae todos los buques.
+
+  CAUSA RAIZ:
+  - 1 y 2: dos fuentes de stock desincronizadas. La app usa onHand = suma de
+    StockMovement (ledger real; tambien lo usan alertas/reservas/pedidos) e
+    IGNORA Spare.currentStock. El Excel exportaba el campo currentStock crudo,
+    que solo se setea al crear (RECEIPT solo en alta) y nunca se actualiza con
+    movimientos ni con re-imports (UPDATE no creaba movimiento). Por eso queda
+    viejo en ambos sentidos.
+  - 3: ExcelPanel llamaba /app/excel/export/{module} sin pasar vesselCode. El
+    backend ya soportaba el filtro; nunca lo recibia.
+
+  DECISION (usuario): ledger canonico + reconciliar import.
+
+  FIX:
+  - apps/api/src/tenant/excel/excel-export-service.ts
+    Export de spares: currentStock = onHand (getOnHandMap), asi el Excel coincide
+    con la app y el round-trip export->import reconcilia.
+  - apps/api/src/tenant/excel/excel-import-service.ts
+    UPDATE de spares: si la planilla trae stock (>0) distinto al onHand, crea un
+    StockMovement ADJUSTMENT por la diferencia. Gateado en >0 (como el alta) para
+    no vaciar stock si la columna no viene (llega como 0). Idempotente.
+  - apps/web-modern/src/components/ExcelPanel.tsx
+    Pasa ?vesselCode del contexto global a la URL de export (a href + fetch).
+
+  VERIFICACION:
+  typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Sin cambios de schema.
+
+
+[2026-06-01] Fix dashboard: planes nunca ejecutados Y vencidos ahora cuentan como Vencidas
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  Un plan vencido (nextDueDate pasada, fecha roja en la lista) no aparecia como
+  "Vencida" en el donut "Estado de ejecucion" del dashboard; quedaba sumado a
+  "Sin ejecutar" (1258).
+
+  CAUSA RAIZ:
+  Dos funciones derivaban el estado con logica distinta:
+  - deriveExecutionStatus (lista): si nextDueDate paso -> OVERDUE (sin importar
+    ejecucion previa). Por eso la lista marcaba la fecha en rojo.
+  - deriveDashboardStatus (donut): tenia una rama "NEVER_EXECUTED" ANTES del
+    chequeo de vencimiento, asi que un plan nunca ejecutado y vencido caia en
+    "Sin ejecutar" y OVERDUE quedaba en 0 (la categoria roja se ocultaba).
+  Ademas computeStatus (badge de la lista) tenia el mismo bug: badge "SIN
+  EJECUTAR" con la fecha en rojo (inconsistencia interna).
+
+  DECISION (usuario): vencido tiene prioridad sobre "nunca ejecutado".
+
+  FIX:
+  - apps/api/src/tenant/maintenance-plans/maintenance-plans-service.ts
+    deriveDashboardStatus: OVERDUE se evalua antes de NEVER_EXECUTED. Solo los
+    nunca-ejecutados que AUN no vencieron siguen en "Sin ejecutar".
+  - apps/web-modern/src/pages/MaintenancePlans.tsx
+    computeStatus: mismo reordenamiento, para que el badge de la lista diga
+    "Vencido" cuando la fecha esta vencida (coherente con el rojo y el donut).
+  El dashboard mobile usa el mismo endpoint mp-summary -> cubierto por backend.
+
+  VERIFICACION:
+  typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Sin cambios de schema.
+
+
 [2026-06-01] Fix Defectos: no confundir OT de ORIGEN con OT RESOLUTORA
 Agent: Claude Opus 4.8
 

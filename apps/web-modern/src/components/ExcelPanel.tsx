@@ -4,6 +4,7 @@ import {
   FileSpreadsheet, ChevronRight, RotateCcw, Wrench,
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { useVesselContext } from "../lib/vessel-context";
 
 // ---------------------------------------------------------------------------
 // Types matching the backend excel-import-service
@@ -69,6 +70,11 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
   const [result, setResult]       = useState<ImportResult | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [fileName, setFileName]   = useState<string | null>(null);
+
+  // El export debe respetar el buque seleccionado globalmente (igual que la lista),
+  // no exportar todos los buques del scope.
+  const { selectedVesselCode } = useVesselContext();
+  const exportUrl = `/app/excel/export/${module}${selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : ""}`;
 
   // ---- Download template ----
   const handleDownload = async () => {
@@ -213,13 +219,13 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
               <Section title="Exportar datos">
                 <p className="text-xs text-text-industrial/50 mb-3">Descarga todos los registros actuales en formato Excel.</p>
                 <a
-                  href={`/app/excel/export/${module}`}
+                  href={exportUrl}
                   download
                   onClick={e => {
                     e.preventDefault();
                     const token = localStorage.getItem("gpms_token") ?? "";
                     const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
-                    fetch(`/app/excel/export/${module}`, {
+                    fetch(exportUrl, {
                       headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
                     }).then(async r => {
                       if (!r.ok) {

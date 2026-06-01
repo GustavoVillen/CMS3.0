@@ -671,11 +671,18 @@ function deriveDashboardStatus(p: {
   assetCurrentHours: number | null;
 }): DashboardStatus {
   if (p.executionStatus === "IN_WINDOW") return "IN_WINDOW";
-  if (p.lastExecutionDate == null && p.lastExecutionHours == null) return "NEVER_EXECUTED";
+
+  // Un plan VENCIDO se cuenta como OVERDUE aunque nunca se haya ejecutado: el
+  // vencimiento tiene prioridad sobre "nunca ejecutado". "NEVER_EXECUTED" queda
+  // solo para los planes que todavía NO vencieron y nunca corrieron — coherente
+  // con deriveExecutionStatus (la lista) que ya prioriza OVERDUE.
+  const neverExecuted = p.lastExecutionDate == null && p.lastExecutionHours == null;
+
   if (p.nextDueHours != null) {
     const hours = p.assetCurrentHours ?? 0;
     const diff = p.nextDueHours - hours;
     if (diff <= 0) return "OVERDUE";
+    if (neverExecuted) return "NEVER_EXECUTED";
     if (diff <= 50) return "DUE";
     if (diff <= 250) return "UPCOMING";
     return "FUTURE";
@@ -684,9 +691,12 @@ function deriveDashboardStatus(p: {
     const due = typeof p.nextDueDate === "string" ? new Date(p.nextDueDate) : p.nextDueDate;
     const days = (due.getTime() - Date.now()) / 86_400_000;
     if (days < 0) return "OVERDUE";
+    if (neverExecuted) return "NEVER_EXECUTED";
     if (days <= 7) return "DUE";
     if (days <= 30) return "UPCOMING";
+    return "FUTURE";
   }
+  if (neverExecuted) return "NEVER_EXECUTED";
   return "FUTURE";
 }
 

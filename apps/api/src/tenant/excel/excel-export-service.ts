@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import type { TenantAccessSession } from "../auth/session-store";
 import type { ExcelModule } from "./excel-permissions";
 import { getModuleColumns } from "./excel-template";
+import { getOnHandMap } from "../pms/stock-calc-service";
 
 const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
   vessels: [
@@ -325,7 +326,13 @@ async function fetchRecords(
     case "spares": {
       if (filters.status)      where.status      = filters.status;
       if (filters.criticality) where.criticality = filters.criticality;
-      return prisma.spare.findMany({ where, orderBy: [{ vesselCode: "asc" }, { sku: "asc" }] }) as any;
+      const rows = await prisma.spare.findMany({ where, orderBy: [{ vesselCode: "asc" }, { sku: "asc" }] });
+      // El stock real es el onHand del ledger de movimientos; la app ignora el
+      // campo Spare.currentStock (que puede quedar viejo). Exportamos
+      // currentStock = onHand para que el Excel coincida con la app y el
+      // round-trip export→import reconcilie correctamente.
+      const onHandMap = await getOnHandMap(prisma as any, rows.map((r) => r.id));
+      return rows.map((r) => ({ ...r, currentStock: onHandMap.get(r.id) ?? 0 })) as any;
     }
     case "providers": {
       if (filters.status)   where.status   = filters.status;

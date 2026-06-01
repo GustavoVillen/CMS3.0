@@ -2,6 +2,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import type { TenantAccessSession } from "../auth/session-store";
 import { parseExcelBuffer, getMatchingKey } from "./excel-parser";
 import type { ExcelModule } from "./excel-permissions";
+import { getOnHandQty } from "../pms/stock-calc-service";
 
 export interface PreviewRow {
   rowNumber: number;
@@ -513,7 +514,38 @@ async function updateRecord(
     }
     case "assets":            await prisma.asset.update({ where: { id }, data: data as any }); break;
     case "maintenance_plans": await prisma.maintenancePlan.update({ where: { id }, data: data as any }); break;
-    case "spares":            await prisma.spare.update({ where: { id }, data: data as any }); break;
+    case "spares": {
+      const updatedSpare = await prisma.spare.update({ where: { id }, data: data as any });
+      // Reconciliar el ledger con el stock de la planilla: la app calcula onHand
+      // sumando StockMovement (ignora Spare.currentStock). Si la planilla trae un
+      // stock (>0) distinto al onHand actual, generamos un ADJUSTMENT por la
+      // diferencia para que la app refleje la planilla. Gateado en >0 igual que el
+      // alta: una columna ausente llega como 0 y NO debe vaciar stock existente.
+      const sheetStock = Number((data as any).currentStock ?? 0);
+      if (Number.isFinite(sheetStock) && sheetStock > 0) {
+        const onHand = await getOnHandQty(prisma as any, id);
+        const delta = sheetStock - onHand;
+        if (delta !== 0) {
+          await prisma.stockMovement.create({
+            data: {
+              tenantId:        updatedSpare.tenantId,
+              vesselCode:      updatedSpare.vesselCode,
+              spareId:         updatedSpare.id,
+              locationId:      null,
+              movementCode:    `MOV-${updatedSpare.vesselCode}-${Date.now()}-${updatedSpare.id.slice(-6)}`,
+              movementType:    "ADJUSTMENT",
+              quantity:        delta, // signo conservado: + suma, - resta
+              unit:            updatedSpare.unit ?? "unit",
+              occurredAt:      new Date(),
+              referenceType:   "ADJUSTMENT",
+              notes:           "Reconciliación de stock por importación de planilla",
+              createdByUserId: ((data as any).updatedByUserId as string) ?? updatedSpare.updatedByUserId,
+            },
+          });
+        }
+      }
+      break;
+    }
     case "providers":         await prisma.provider.update({ where: { id }, data: data as any }); break;
     case "certificates":      await prisma.certificate.update({ where: { id }, data: data as any }); break;
   }

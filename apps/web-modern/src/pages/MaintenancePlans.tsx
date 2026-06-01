@@ -99,12 +99,15 @@ interface SfiNode {
 
 function computeStatus(plan: MaintenancePlan): string {
   if (plan.executionStatus === "IN_WINDOW") return "IN_WINDOW";
-  if (plan.lastExecutionDate == null && plan.lastExecutionHours == null) return "NEVER_EXECUTED";
+  // Vencido tiene prioridad sobre "nunca ejecutado": NEVER_EXECUTED queda solo
+  // para planes que aún no vencieron y nunca corrieron. (Igual que el dashboard.)
+  const neverExecuted = plan.lastExecutionDate == null && plan.lastExecutionHours == null;
   const now = Date.now();
   if (plan.nextDueHours != null) {
     const hours = plan.assetCurrentHours ?? 0;
     const diff = plan.nextDueHours - hours;
     if (diff <= 0)   return "OVERDUE";
+    if (neverExecuted) return "NEVER_EXECUTED";
     if (diff <= 50)  return "DUE";
     if (diff <= 250) return "UPCOMING";
     return "FUTURE";
@@ -112,10 +115,12 @@ function computeStatus(plan: MaintenancePlan): string {
   if (plan.nextDueDate) {
     const daysLeft = (parseLocalDate(plan.nextDueDate).getTime() - now) / 86_400_000;
     if (daysLeft < 0)   return "OVERDUE";
+    if (neverExecuted) return "NEVER_EXECUTED";
     if (daysLeft <= 7)  return "DUE";
     if (daysLeft <= 30) return "UPCOMING";
     return "FUTURE";
   }
+  if (neverExecuted) return "NEVER_EXECUTED";
   return plan.executionStatus ?? "FUTURE";
 }
 
