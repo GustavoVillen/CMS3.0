@@ -100,6 +100,40 @@ async function downloadDefectPdf(defect: Defect) {
 }
 
 
+// ─── Origen del defecto ───────────────────────────────────────────────────────
+// El origen se deriva de la clasificación: las clasificaciones generadas por el
+// sistema (WORK_ORDER_FINDING, INSPECTION_FINDING, PREDICTIVE_FLUID_ANALYSIS)
+// indican que el defecto nació de una OT / inspección / análisis. Cualquier otra
+// clasificación es un registro cargado manualmente.
+
+type DefectOriginKey = "wo" | "inspection" | "fluid" | "manual";
+
+function defectOriginKey(classification: string): DefectOriginKey {
+  switch (classification) {
+    case "WORK_ORDER_FINDING":        return "wo";
+    case "INSPECTION_FINDING":        return "inspection";
+    case "PREDICTIVE_FLUID_ANALYSIS": return "fluid";
+    default:                          return "manual";
+  }
+}
+
+const ORIGIN_STYLES: Record<DefectOriginKey, string> = {
+  wo:         "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  inspection: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+  fluid:      "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  manual:     "bg-white/5 text-text-industrial/60 border-white/10",
+};
+
+const OriginBadge: React.FC<{ classification: string }> = ({ classification }) => {
+  const t = useT();
+  const key = defectOriginKey(classification);
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${ORIGIN_STYLES[key]}`}>
+      {t("def.origin.prefix")}: {t(`def.origin.${key}` as Parameters<typeof t>[0])}
+    </span>
+  );
+};
+
 // ─── AssetLiveSearch ──────────────────────────────────────────────────────────
 
 interface AssetLiveSearchProps {
@@ -1138,7 +1172,23 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
             {/* Clasificación + selects */}
             <div className="space-y-1.5">
-              <label className={fldLabel}>{t("def.classification")}</label>
+              <div className="flex items-center justify-between gap-2">
+                <label className={fldLabel}>{t("def.classification")}</label>
+                {defectOriginKey(defect.classification) === "wo" && defect.workOrderCode ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)}
+                    title={t("def.origin.openWo")}
+                    className="inline-flex items-center gap-1.5 group"
+                  >
+                    <OriginBadge classification={defect.classification} />
+                    <span className="font-mono text-[10px] text-blue-400 group-hover:underline">{defect.workOrderCode}</span>
+                    <ExternalLink className="w-3 h-3 text-blue-400/60 group-hover:text-blue-400 shrink-0" />
+                  </button>
+                ) : (
+                  <OriginBadge classification={defect.classification} />
+                )}
+              </div>
               <input value={classification} onChange={e => setClassification(e.target.value)} disabled={isClosed} className={fldCls} />
             </div>
 
@@ -1535,14 +1585,23 @@ export const DefectsPage: React.FC = () => {
     {
       key: "classification",
       header: t("def.classification"),
-      render: row => (
-        <div className="space-y-0.5">
-          <div className="font-medium text-white line-clamp-1">{row.classification}</div>
-          {row.description && (
-            <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>
-          )}
-        </div>
-      ),
+      render: row => {
+        const originKey = defectOriginKey(row.classification);
+        const mainText = originKey === "manual"
+          ? row.classification
+          : t(`def.class.${originKey}` as Parameters<typeof t>[0]);
+        return (
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <OriginBadge classification={row.classification} />
+              <span className="font-medium text-white line-clamp-1">{mainText}</span>
+            </div>
+            {row.description && (
+              <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "vesselCode",

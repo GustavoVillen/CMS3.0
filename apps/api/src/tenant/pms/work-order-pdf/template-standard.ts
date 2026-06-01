@@ -6,9 +6,10 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import {
   fmt, val, typeLabel, statusLabel, priorityLabel, riskLabel, woResultLabel,
-  STATUS_COLOR, PRIORITY_COLOR, LOGO_PATH, PAGE_H,
+  STATUS_COLOR, PRIORITY_COLOR, LOGO_PATH, PAGE_H, sanitizePdfText,
   type WorkOrderPdfContext,
 } from "./shared";
+import { renderLabeledTextBox } from "../pdf-helpers";
 
 const CM             = 72 / 2.54;
 const MARGIN_V       = Math.round(1.5 * CM);
@@ -333,19 +334,15 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     y += 6;
 
     // ── SECCIÓN 2: PLAN ──────────────────────────────────────────────────────
+    // LOTO + análisis de riesgo se trasladaron al "Anexo Seguridad" (hoja aparte).
     sectionHeader("Plan de la Tarea");
     textRow("Título de la OT", val((wo as any).title), 3, 3);
-    textRowHighlight("Descripción / Tarea a ejecutar", val((wo as any).description), 3, 3);
     inlineRow([
       { label: "Responsable asignado", value: assignedName ?? val((wo as any).assignedToUserId) },
-      { label: "Nivel de Riesgo",      value: riskLabel((wo as any).riskLevel) },
       { label: "Horas estimadas",      value: (wo as any).estimatedHours != null ? `${(wo as any).estimatedHours} h` : "—" },
     ]);
-    textRowHighlight("LOTO (Lockout/Tagout)", val((wo as any).loto), 3, 3);
+    textRowHighlight("Descripción / Tarea a ejecutar", val((wo as any).description), 3, 3);
     textRowHighlight("Criterios de Aceptación", val((wo as any).acceptanceCriteria), 3, 3);
-    if ((wo as any).riskAnalysisResult) {
-      textRowHighlight("Resultado Análisis de Riesgo", val((wo as any).riskAnalysisResult), 3, 3);
-    }
     y += 6;
 
     // ── SECCIÓN 3: RESULTADO ─────────────────────────────────────────────────
@@ -448,6 +445,48 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
           }
         }
         y += cellH;
+      }
+    }
+
+    // ── ANEXO SEGURIDAD ────────────────────────────────────────────────────────
+    // Hoja separada con letra reducida (~70% del cuerpo estándar). Agrupa LOTO y
+    // el análisis de riesgo. Usa renderLabeledTextBox (regla del skill pms-pdf)
+    // para que el badge gris contenga el texto al paginar.
+    {
+      const lotoText         = val((wo as any).loto);
+      const riskAnalysisText = val((wo as any).riskAnalysisResult);
+      const riskLevelRaw     = (wo as any).riskLevel as string | null | undefined;
+      const hasSecurity = lotoText !== "—" || riskAnalysisText !== "—" || !!riskLevelRaw;
+      if (hasSecurity) {
+        doc.addPage();
+        y = MARGIN_V;
+        sectionHeader("Anexo Seguridad");
+
+        const FS  = 6.7; // cuerpo ~70% de 9.5pt
+        const LFS = 7;   // label
+        const onPageAdd = () => { y = MARGIN_V; };
+        const common = {
+          x: ML, width: W,
+          pageBottom: CONTENT_BOTTOM, pageTop: MARGIN_V,
+          fontSize: FS, labelFontSize: LFS, sectionGap: 8, onPageAdd,
+        };
+
+        y = renderLabeledTextBox(doc, {
+          ...common, y,
+          label: "LOTO (Lockout/Tagout)",
+          text: lotoText === "—" ? "" : sanitizePdfText(lotoText),
+        });
+        y = renderLabeledTextBox(doc, {
+          ...common, y,
+          label: "Análisis de Riesgo",
+          text: riskLevelRaw ? sanitizePdfText(riskLabel(riskLevelRaw)) : "",
+          textColor: PRIORITY_COLOR[riskLevelRaw ?? ""] ?? black,
+        });
+        y = renderLabeledTextBox(doc, {
+          ...common, y,
+          label: "Resultado de Análisis de Riesgo",
+          text: riskAnalysisText === "—" ? "" : sanitizePdfText(riskAnalysisText),
+        });
       }
     }
 

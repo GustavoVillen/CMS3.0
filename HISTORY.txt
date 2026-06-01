@@ -1,5 +1,66 @@
 HISTORY.txt
 
+[2026-06-01] UI Defectos: badge de "Origen" (OT / Inspección / Fluidos / Manual)
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Mostrar de forma evidente si un defecto se origino en una OT o es un registro
+  nuevo manual, en vez del enum crudo "WORK_ORDER_FINDING".
+
+  DIAGNOSTICO:
+  El origen se deriva de la clasificacion del defecto:
+  - WORK_ORDER_FINDING        -> OT (deficiencia al cerrar una OT)
+  - INSPECTION_FINDING        -> Inspeccion
+  - PREDICTIVE_FLUID_ANALYSIS -> Analisis de fluidos
+  - cualquier otra            -> Manual
+  Ojo: defect.workOrderId solo NO sirve como marcador de origen, porque tambien
+  se setea cuando el defecto se RESUELVE creando una OT correctiva.
+
+  CAMBIOS (solo frontend):
+  - apps/web-modern/src/pages/Defects.tsx
+    + helper defectOriginKey() + componente OriginBadge.
+    + lista: la columna Clasificacion ahora muestra el badge de origen + una
+      etiqueta legible ("Hallazgo en OT", etc.) en lugar del enum crudo.
+    + detalle: badge de origen junto al label Clasificacion; si el origen es
+      una OT, linkea a /work-orders?autoCode=<code> (OT de origen).
+  - apps/web-modern/src/lib/i18n.tsx
+    + claves def.origin.* y def.class.* (es/en/pt).
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. Sin cambios de backend ni schema.
+
+
+[2026-06-01] PDF OT: reordenar secciones + nuevo "Anexo Seguridad" (hoja aparte)
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Reordenar el PDF de la Orden de Trabajo: Informacion General, Plan de la
+  Tarea, Descripcion/Tarea a ejecutar, Criterios de Aceptacion, Resultado de
+  la Ejecucion. Luego, en hoja separada, Anexo Fotografico. Luego, en hoja
+  separada, "Anexo Seguridad" con letra ~70% (LOTO, Analisis de Riesgo,
+  Resultado de Analisis de Riesgo).
+
+  CONTEXTO:
+  Los 3 tenants (incl. Mercurio Group) usan workOrderPdfTemplate=STANDARD
+  (verificado por psql en VPS). Se modifico solo template-standard.ts.
+
+  CAMBIOS (apps/api/src/tenant/pms/work-order-pdf/template-standard.ts):
+  - Plan de la Tarea ahora: Titulo, fila (Responsable, Horas estimadas),
+    Descripcion/Tarea a ejecutar, Criterios de Aceptacion. Se quitaron de la
+    pagina principal LOTO, "Nivel de Riesgo" inline y "Resultado Analisis de
+    Riesgo".
+  - Esos 3 campos pasaron a un nuevo "Anexo Seguridad" en hoja separada
+    (despues del Anexo Fotografico), con letra ~70% (fontSize 6.7) via
+    renderLabeledTextBox (regla obligatoria skill pms-pdf, soporta paginado).
+    Mapeo: LOTO=loto, "Analisis de Riesgo"=riskLevel (coloreado),
+    "Resultado de Analisis de Riesgo"=riskAnalysisResult.
+  - El anexo solo se agrega si hay al menos un campo de seguridad cargado.
+
+  VERIFICACION:
+  typecheck api = exit 0. Smoke test con texto largo (>1 pagina) en LOTO y
+  analisis: PDF valido (%PDF-), 5 paginas, sin errores de runtime.
+
+
 [2026-06-01] PDF: ficha de equipo (asset) con historial de mantenimiento
 Agent: Claude Opus 4.8
 
