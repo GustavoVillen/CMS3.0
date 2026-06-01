@@ -1,22 +1,14 @@
 import React from "react";
 import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
-import { useVesselContext } from "../lib/vessel-context";
 
 interface WO { status: string; dueDate: string | null; }
 interface Defect { status: string; }
 interface Spare { currentStock: number; minStock: number; reorderPoint: number; }
 interface Certificate { status: string; expiryDate: string | null; }
-interface Insight { id: string; title: string; summary: string; priority: string; }
 interface MpSummaryCounts { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number; }
 interface DailyReport { reportDate: string; createdAt: string; status: string; }
 interface CrewSummary { onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number; }
-
-const PRIORITY_BG: Record<string, string> = {
-  CRITICAL: "border-red-500/40 bg-red-500/5",
-  HIGH:     "border-orange-500/40 bg-orange-500/5",
-  MEDIUM:   "border-yellow-500/40 bg-yellow-500/5",
-};
 
 interface KpiProps {
   label: string;
@@ -55,14 +47,9 @@ interface Props {
 }
 
 export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
-  const { selectedVesselCode } = useVesselContext();
-  const aiPath = selectedVesselCode
-    ? `/app/ai-insights?status=OPEN&vesselCode=${encodeURIComponent(selectedVesselCode)}`
-    : "/app/ai-insights?status=OPEN";
   const { data: woData,    loading: woLoading    } = useFetch<{ items: WO[]            }>("/app/pms/work-orders");
   const { data: defData,   loading: defLoading   } = useFetch<{ items: Defect[]        }>("/app/pms/defects");
   const { data: spData                            } = useFetch<{ items: Spare[]         }>("/app/pms/spares");
-  const { data: aiData                            } = useFetch<{ items: Insight[]      }>(aiPath, [aiPath]);
   const { data: certData                          } = useFetch<{ items: Certificate[] }>("/app/certificates");
   const { data: mpSummary                         } = useFetch<{ counts: MpSummaryCounts }>("/app/dashboard/mp-summary");
   const { data: drData                            } = useFetch<{ items: DailyReport[] }>("/app/daily-reports");
@@ -83,7 +70,6 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
   const mpCounts   = mpSummary?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
   const planAlert  = mpCounts.OVERDUE + mpCounts.DUE;
 
-  const insights   = (aiData?.items ?? []).slice(0, 5);
   const loading    = woLoading || defLoading;
 
   // Reporte diario de hoy
@@ -187,21 +173,6 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Alertas IA */}
-      {insights.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/50">Alertas IA</p>
-          {insights.map(ins => (
-            <div
-              key={ins.id}
-              className={`rounded-xl border p-3 ${PRIORITY_BG[ins.priority] ?? "border-white/10 bg-white/5"}`}
-            >
-              <p className="text-xs font-bold text-white leading-snug">{ins.title}</p>
-              <p className="text-xs text-text-industrial/50 mt-0.5 line-clamp-2">{ins.summary}</p>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };

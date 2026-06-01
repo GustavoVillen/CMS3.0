@@ -1,5 +1,77 @@
 HISTORY.txt
 
+[2026-06-01] PDF: ficha de repuesto (boton "Guardar PDF" en el modal)
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Boton "Guardar PDF" para los repuestos.
+
+  CONTEXTO:
+  Existian PDFs de inventario/consumo/pedidos, pero no una ficha por repuesto.
+  Se hizo espejando la ficha de equipo (asset-pdf-service), ya en produccion.
+
+  CAMBIOS:
+  - apps/api/src/tenant/pms/spare-pdf-service.ts (NUEVO)
+    buildSparePdf(): header con logo, identidad (buque, categoria, criticidad,
+    estado, fabricante, modelo, unidad, ubicacion, SFI, P/N interno/fabricante,
+    equivalente no-OEM, lead time), NIVELES DE STOCK (stock actual/disponible/
+    reservado desde el ledger + minimo/reorden/objetivo), Descripcion via
+    renderLabeledTextBox, y tabla HISTORIAL DE MOVIMIENTOS (fecha, tipo,
+    cantidad con signo, notas) con paginado.
+  - apps/api/src/tenant/pms/spares-router.ts
+    + GET /app/pms/spares/:id/pdf (rate-limit pdf, attachment).
+  - apps/web-modern/src/pages/Spares.tsx
+    + helper downloadSparePdf + boton "Guardar PDF" en el footer del modal
+      (solo en edicion, junto a Eliminar).
+
+  VERIFICACION:
+  typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Sin cambios de schema.
+  Render runtime a validar en VPS con un repuesto real.
+
+
+[2026-06-01] MOBILE: quitar sección "Alertas IA" del dashboard mobile
+Agent: Claude Opus 4.8
+
+  CONTEXTO:
+  En el dashboard mobile (/m, tab Panel) había una sección "Alertas IA" que
+  listaba los AI insights abiertos (certificados/OT vencidos, etc.). El usuario
+  pidió sacarla.
+
+  CAMBIOS (MobileDashboard.tsx):
+  - Eliminado el bloque JSX "Alertas IA".
+  - Limpiado el código huérfano que solo lo alimentaba: fetch a
+    /app/ai-insights, interface Insight, const PRIORITY_BG, var insights,
+    aiPath y el hook useVesselContext/selectedVesselCode (ya no se usaban).
+  Verificado: tsc --noEmit en verde, sin referencias huérfanas.
+
+
+[2026-06-01] DATA (VPS): siembra de stock inicial desde Spare.currentStock
+Agent: Claude Opus 4.8
+
+  CONTEXTO:
+  Tras el fix del ledger, la mayoria de los repuestos mostraban 0 en la app
+  porque el campo Spare.currentStock tenia valores pero no existian StockMovement.
+  El usuario pidio sembrar el stock inicial (solo los que estaban en 0), alcance
+  "absolutamente todo".
+
+  OPERACION (SQL directo en VPS, no código):
+  INSERT en "StockMovement" de un RECEIPT = currentStock por cada Spare con
+  currentStock>0 y SIN movimientos previos (deletedAt IS NULL).
+  - movementType=RECEIPT, referenceType=ADJUSTMENT, occurredAt=now()
+  - notes='Stock inicial sembrado desde currentStock (seed 2026-06-01)'
+  Resultado: 917 movimientos creados; 0 repuestos quedan sin sembrar.
+  Los repuestos que YA tenian movimientos NO se tocaron (p.ej. DONCHI
+  CUM-4BTA-OIL siguio en 200, no en el campo 21).
+
+  REVERTIR (si hiciera falta):
+  DELETE FROM "StockMovement"
+   WHERE notes = 'Stock inicial sembrado desde currentStock (seed 2026-06-01)';
+
+  PENDIENTE (decision del usuario): los repuestos con movimientos previos que no
+  coinciden con currentStock (CUM-4BTA-OIL 200 vs 21, etc.) se ajustan via Excel
+  (editar currentStock y re-importar -> el import crea el ADJUSTMENT) o a mano.
+
+
 [2026-06-01] Fix Repuestos: stock app vs Excel + export ignora buque seleccionado
 Agent: Claude Opus 4.8
 
