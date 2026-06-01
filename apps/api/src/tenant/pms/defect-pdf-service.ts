@@ -218,10 +218,18 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
     labeledBox(ML + (third + 8) * 2, y, third, 44, "Estado",            defect.status,           STATUS_COLOR[defect.status] ?? black);
     y += 58;
 
-    // ── Banner OT vinculada — solo cuando el defecto se resolvió con OT ────────
+    // ── Banner OT — distinguir ORIGEN vs RESOLUTORA ───────────────────────────
+    // Si el defecto se originó en una OT (WORK_ORDER_FINDING), workOrderId ES la
+    // OT de origen (no se le crea correctiva). En cualquier otro caso, una OT
+    // vinculada es la que resolvió el defecto. No confundir ambas.
+    const originIsWo = defect.classification === "WORK_ORDER_FINDING";
     const resolvedWithWo =
-      (defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderId;
-    if (resolvedWithWo) {
+      !originIsWo && (defect.status === "RESOLVED" || defect.status === "CLOSED") && !!defect.workOrderId;
+    if (originIsWo && defect.workOrderId) {
+      ensureSpace(44);
+      labeledBox(ML, y, W, 38, "Origen: Orden de Trabajo", linkedWoCode ?? defect.workOrderId, "#0369a1");
+      y += 50;
+    } else if (resolvedWithWo) {
       ensureSpace(44);
       // Banner ancho con color success-sea (verde), más visible que la caja chica
       const woLabel = linkedWoCode ?? defect.workOrderId ?? "—";
@@ -244,7 +252,7 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
       y += 58;
     }
 
-    if (defect.workOrderId && !resolvedWithWo) {
+    if (defect.workOrderId && !resolvedWithWo && !originIsWo) {
       ensureSpace(58);
       labeledBox(ML, y, W / 3, 44, "Work Order Vinculada", linkedWoCode ?? defect.workOrderId, "#0369a1");
       y += 58;

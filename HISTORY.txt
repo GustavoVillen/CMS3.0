@@ -1,5 +1,37 @@
 HISTORY.txt
 
+[2026-06-01] Fix Defectos: no confundir OT de ORIGEN con OT RESOLUTORA
+Agent: Claude Opus 4.8
+
+  PEDIDO/CORRECCION (usuario):
+  Un defecto puede tener origen en una OT o ser Manual, y luego ser resuelto por
+  OTRA OT distinta. No confundir ambas OT.
+
+  CAUSA RAIZ:
+  El modelo tiene un solo campo Defect.workOrderId, reutilizado para dos cosas:
+  - origen: cuando el defecto nace de una OT (classification=WORK_ORDER_FINDING),
+    workOrderId = OT de origen. (El boton "Crear OT Correctiva" queda
+    DESHABILITADO si ya hay workOrderId, asi que esa OT nunca es la resolutora.)
+  - resolutora: cuando un defecto MANUAL se cierra creando OT correctiva,
+    workOrderId = OT resolutora.
+  El banner "Resuelto via OT" (UI y PDF) mostraba workOrderId sin distinguir, asi
+  que en un defecto WORK_ORDER_FINDING cerrado etiquetaba la OT de ORIGEN como
+  resolutora.
+
+  FIX:
+  - apps/web-modern/src/pages/Defects.tsx
+    El banner verde "Resuelto via OT" ahora solo se muestra si el origen NO es OT
+    (defectOriginKey(classification) !== "wo"). Para origen=OT, la unica OT que se
+    muestra es el badge de Origen (que linkea a la OT de origen).
+  - apps/api/src/tenant/pms/defect-pdf-service.ts
+    Mismo criterio: si classification==WORK_ORDER_FINDING, se muestra caja
+    "Origen: Orden de Trabajo"; si no, "Resuelto via Orden de Trabajo" /
+    "Work Order Vinculada". Nunca ambas para la misma OT.
+
+  VERIFICACION:
+  typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Sin cambios de schema.
+
+
 [2026-06-01] UI Defectos: badge de "Origen" (OT / Inspección / Fluidos / Manual)
 Agent: Claude Opus 4.8
 

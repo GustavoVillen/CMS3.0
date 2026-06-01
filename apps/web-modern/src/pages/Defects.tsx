@@ -1139,8 +1139,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               ))}
             </div>
 
-            {/* Badge OT vinculada — visible cuando el defecto se resolvió/cerró abriendo una OT */}
-            {(defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderCode && (
+            {/* Banner OT RESOLUTORA — solo cuando workOrderId representa la OT que resolvió
+                el defecto. Si el origen es una OT (WORK_ORDER_FINDING), workOrderId ES la OT
+                de origen (no se puede crear correctiva: el botón queda deshabilitado), así que
+                NO se muestra acá para no confundirla con una resolutora — ya la muestra el
+                badge de Origen. */}
+            {defectOriginKey(defect.classification) !== "wo" && (defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderCode && (
               <button
                 type="button"
                 onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)}
