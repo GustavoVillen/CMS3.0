@@ -246,6 +246,22 @@ export async function handleSparesRoutes(
     }
   }
 
+  if (method === "GET" && /^\/app\/pms\/spares\/[^/]+\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const spare = await getTenantSpare(session, id);
+    const { buildSparePdf } = await import("./spare-pdf-service");
+    const buffer = await buildSparePdf(session, id);
+    const filename = `${spare.sku}-${spare.vesselCode}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
   if (/^\/app\/pms\/spares\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "GET") {

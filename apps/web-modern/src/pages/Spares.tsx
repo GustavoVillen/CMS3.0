@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, Search, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, Search, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
@@ -157,6 +157,22 @@ interface SpareModalProps {
   onMocTrigger?: (e: MocTriggerEvent) => void;
 }
 
+async function downloadSparePdf(spare: { id: string; sku: string; vesselCode: string }): Promise<void> {
+  const token = localStorage.getItem("gpms_token") ?? "";
+  const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
+  const res = await fetch(`/app/pms/spares/${spare.id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
+  });
+  if (!res.ok) throw new Error("No se pudo generar el PDF.");
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `${spare.sku}-${spare.vesselCode}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocTrigger }) => {
   const isNew = spare === null;
   const { user } = useAuth();
@@ -212,6 +228,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
   const [error,       setError]       = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [adjQty,     setAdjQty]     = useState(String(spare?.onHand ?? 0));
   const [adjNotes,   setAdjNotes]   = useState("");
@@ -582,10 +599,30 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
         <div className="px-6 py-4 border-t border-white/10 shrink-0 space-y-2">
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="flex gap-2">
               {!isNew && (
                 <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
                   Eliminar
+                </button>
+              )}
+              {!isNew && spare && (
+                <button
+                  onClick={async () => {
+                    setDownloadingPdf(true);
+                    setError(null);
+                    try {
+                      await downloadSparePdf(spare);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "No se pudo generar el PDF.");
+                    } finally {
+                      setDownloadingPdf(false);
+                    }
+                  }}
+                  disabled={downloadingPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-accent/30 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
+                  Guardar PDF
                 </button>
               )}
             </div>
