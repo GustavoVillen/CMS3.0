@@ -2337,7 +2337,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   try {
                     await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
                     setConfirmDelete(false);
-                    void onSaved();
+                    await onSaved();
+                    onClose();
                   } catch (err) {
                     setActionError(err instanceof Error ? err.message : t("mp.modal.deleteError"));
                     setDeleting(false);

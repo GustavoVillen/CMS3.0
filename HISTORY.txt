@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-06-02] Fix UX: cerrar el modal del plan tras eliminar la tarea
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  Al confirmar "Eliminar plan de mantenimiento", se cerraba el dialogo de
+  confirmacion pero el modal de edicion del plan quedaba abierto (mostrando un
+  plan ya eliminado).
+
+  CAUSA:
+  El handler de borrado hacia setConfirmDelete(false) + onSaved(), pero no
+  llamaba onClose() (a diferencia del guardado normal que hace
+  await onSaved(); onClose();).
+
+  FIX (apps/web-modern/src/pages/MaintenancePlans.tsx):
+  Tras api.delete -> setConfirmDelete(false); await onSaved(); onClose();
+
+  VERIFICACION: tsc --noEmit web-modern = exit 0. Solo frontend.
+
+
 [2026-06-02] ESTETICA: theming light/dark — light por defecto (infra + shell + piloto WO)
 Agent: Claude Opus 4.8
 
