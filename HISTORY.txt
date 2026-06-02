@@ -1,5 +1,40 @@
 HISTORY.txt
 
+[2026-06-02] INFRA: subdominios por tenant ACTIVADOS en VPS (*.shipcms.cloud)
+Agent: Claude Opus 4.8
+
+  Se completo la migracion a subdominios por tenant. AHORA cada tenant entra por
+  su URL: mercurio/demo/capitalmaritima.shipcms.cloud (slug = label del subdominio).
+
+  PASOS HECHOS (infra, no codigo del repo):
+  1. DNS Hostinger: A wildcard "*" -> 177.7.43.187 (apex @, www, gastos intactos).
+  2. Cert TLS wildcard *.shipcms.cloud via certbot --manual DNS-01 (TXT
+     _acme-challenge). cert-name shipcms-wildcard. Vence 2026-08-31.
+     OJO: NO auto-renueva (manual DNS-01). Repetir certbot antes del vencimiento.
+  3. Nginx: nuevo server block /etc/nginx/sites-available/gpms-wildcard
+     (server_name *.shipcms.cloud, mismo proxy + root, cert wildcard). El block de
+     apex/www (gpms) y gastos quedan intactos (exact match gana sobre wildcard).
+  4. .env VPS: APP_ROOT_DOMAIN localhost -> shipcms.cloud (el backend ya resolvia
+     por subdominio en tenant-resolution.ts; faltaba esta var).
+     + fix: MAIL_FROM quoteado ("GPMS <noreply@shipcms.cloud>") porque los <> sin
+       comillas rompian `. /app/.env` (sourcing usado en deploys/prisma).
+  5. Frontend deployado (commit 939e748): Login deriva slug del hostname.
+
+  TRAMPA QUE MORDIO (anotada): pm2 restart --update-env NO toma el .env si se
+  sourcea en subshell `( . .env )` — hay que sourcear en el MISMO shell:
+  `set -a; . /app/.env; set +a; pm2 restart gpms --update-env`. Verificar con
+  `tr '\0' '\n' < /proc/$(pm2 pid gpms)/environ | grep APP_ROOT_DOMAIN`.
+
+  VERIFICACION:
+  POST /app/auth/login sin header X-Tenant-Slug en demo/mercurio/capitalmaritima
+  .shipcms.cloud -> AUTH_INVALID_CREDENTIALS (tenant resuelto por Host), antes daba
+  TENANT_UNRESOLVED. apex + gastos siguen 200. Cert wildcard valido (CN *.shipcms.cloud).
+
+  PENDIENTE (hardening, post-demo): NODE_ENV=production + APP_ALLOW_TENANT_HEADER_
+  FALLBACK=false (cierra el bypass de aislamiento). Se dejo el fallback ON como red
+  de seguridad por ahora.
+
+
 [2026-06-02] FEAT Login: tenant por subdominio (deriva slug del hostname)
 Agent: Claude Opus 4.8
 
