@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-06-01] FIX Permisos de Trabajo: pantalla vacia al abrir el modulo
+Agent: Claude Opus 4.8
+
+  SINTOMA (usuario):
+  Al entrar a "Permisos de Trabajo" (sidebar) se abria una ventana vacia.
+
+  CAUSA RAIZ (Permits.tsx, listado de la pagina):
+  Las filas referenciaban dos constantes inexistentes: STATUS_LABEL[p.status]
+  y TYPE_LABEL[p.type]. En el archivo solo existen STATUS_TKEY/TYPE_TKEY
+  (i18n) + STATUS_COLOR/TYPE_ICON/ROLE_LABEL. Con la lista vacia mostraba
+  "Sin permisos" sin fallar, pero apenas habia 1 permiso real el render
+  lanzaba ReferenceError y se caia toda la pagina -> pantalla en blanco.
+
+  FIX:
+  - apps/web-modern/src/pages/Permits.tsx
+    STATUS_LABEL[p.status] -> t(STATUS_TKEY[p.status])
+    TYPE_LABEL[p.type]     -> t(TYPE_TKEY[p.type])
+    (mismo patron i18n que ya usa el resto del archivo; `t` ya disponible.)
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. Sin cambios de schema ni backend.
+
+
 [2026-06-01] PDF: ficha de repuesto (boton "Guardar PDF" en el modal)
 Agent: Claude Opus 4.8
 

@@ -886,9 +886,9 @@ export const PermitsPage: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-[10px] font-mono text-text-industrial/40">{p.permitCode}</span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{t(STATUS_TKEY[p.status])}</span>
                     <VesselLabel code={p.vesselCode} className="text-[10px]" showCode />
-                    <span className="text-[10px] text-text-industrial/50">{TYPE_LABEL[p.type]}</span>
+                    <span className="text-[10px] text-text-industrial/50">{t(TYPE_TKEY[p.type])}</span>
                     {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-white/5 border-white/10 text-text-industrial/60">
                         {p.gasTests.length} gas test{p.gasTests.length !== 1 ? "s" : ""}
