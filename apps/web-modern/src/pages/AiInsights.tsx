@@ -74,7 +74,7 @@ export const AiInsightsPage: React.FC = () => {
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 text-accent animate-spin" /></div>
       ) : error ? (
-        <div className="flex items-center gap-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>
+        <div className="flex items-center gap-3 text-red-700 dark:text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>
       ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-text-industrial/20 gap-3">
           <CheckCircle2 className="w-8 h-8" />

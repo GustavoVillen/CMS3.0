@@ -24,10 +24,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const RISK_LABEL: Record<string, string> = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto", CRITICAL: "Crítico" };
 const RISK_COLOR: Record<string, string> = {
-  LOW:      "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  MEDIUM:   "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
-  HIGH:     "bg-orange-500/10 text-orange-400 border-orange-500/30",
-  CRITICAL: "bg-red-500/10 text-red-400 border-red-500/30",
+  LOW:      "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  MEDIUM:   "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+  HIGH:     "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30",
+  CRITICAL: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,13 +42,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  REQUESTED:      "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  UNDER_ANALYSIS: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
+  REQUESTED:      "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  UNDER_ANALYSIS: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
   APPROVED:       "bg-success-sea/10 text-success-sea border-success-sea/30",
   IN_PROGRESS:    "bg-accent/15 text-accent border-accent/40",
-  IMPLEMENTED:    "bg-purple-500/15 text-purple-300 border-purple-500/30",
+  IMPLEMENTED:    "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30",
   REVIEWED:       "bg-success-sea/15 text-success-sea border-success-sea/40",
-  REJECTED:       "bg-red-500/10 text-red-400 border-red-500/30",
+  REJECTED:       "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
   CANCELLED:      "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
@@ -364,7 +364,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <GitBranch className="w-4 h-4 text-accent" />
@@ -456,32 +456,32 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
             <div className="rounded-lg bg-fg/[0.04] border border-fg/10 p-3 space-y-1.5 text-[11px]">
               <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("moc.traceability")}</p>
               {moc.approvedAt && <p className="text-text-industrial/70">Aprobado por {moc.approvedByName ?? "—"} el {fmtDate(moc.approvedAt)}</p>}
-              {moc.rejectedReason && <p className="text-red-300">Rechazado: {moc.rejectedReason}</p>}
+              {moc.rejectedReason && <p className="text-red-700 dark:text-red-300">Rechazado: {moc.rejectedReason}</p>}
               {moc.implementedAt && <p className="text-text-industrial/70">Implementado el {fmtDate(moc.implementedAt)}{moc.implementedByName ? ` por ${moc.implementedByName}` : ""}.{moc.implementationNotes ? ` ${moc.implementationNotes}` : ""}</p>}
               {moc.reviewedAt && <p className="text-success-sea">Revisado el {fmtDate(moc.reviewedAt)}: {moc.reviewOutcome ?? "—"}.{moc.reviewNotes ? ` ${moc.reviewNotes}` : ""}</p>}
             </div>
           )}
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
           <div className="flex flex-wrap gap-2">
             {/* Transiciones según estado */}
             {moc?.status === "REQUESTED" && (
-              <button onClick={() => { void transition("UNDER_ANALYSIS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs disabled:opacity-50">{t("moc.startAnalysis")}</button>
+              <button onClick={() => { void transition("UNDER_ANALYSIS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 text-xs disabled:opacity-50">{t("moc.startAnalysis")}</button>
             )}
             {moc?.status === "UNDER_ANALYSIS" && canApprove && (
               <>
                 <button onClick={() => askAndTransition("APPROVED", "approvedByName", "Nombre del aprobador:")} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea text-xs flex items-center gap-1 disabled:opacity-50"><CheckCircle2 className="w-3.5 h-3.5" /> Aprobar</button>
-                <button onClick={() => askAndTransition("REJECTED", "rejectedReason", "Motivo del rechazo:")} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-1 disabled:opacity-50"><XCircle className="w-3.5 h-3.5" /> Rechazar</button>
+                <button onClick={() => askAndTransition("REJECTED", "rejectedReason", "Motivo del rechazo:")} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs flex items-center gap-1 disabled:opacity-50"><XCircle className="w-3.5 h-3.5" /> Rechazar</button>
               </>
             )}
             {moc?.status === "APPROVED" && (
               <button onClick={() => { void transition("IN_PROGRESS"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs disabled:opacity-50">{t("moc.startImplementation")}</button>
             )}
             {moc?.status === "IN_PROGRESS" && (
-              <button onClick={() => askAndTransition("IMPLEMENTED", "implementationNotes", t("moc.implementationNotes"))} disabled={saving} className="px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 text-xs disabled:opacity-50">{t("moc.markImplemented")}</button>
+              <button onClick={() => askAndTransition("IMPLEMENTED", "implementationNotes", t("moc.implementationNotes"))} disabled={saving} className="px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-700 dark:text-purple-300 text-xs disabled:opacity-50">{t("moc.markImplemented")}</button>
             )}
             {moc?.status === "IMPLEMENTED" && (
               <button onClick={() => askAndTransition("REVIEWED", "reviewOutcome", "Resultado revisión (SATISFACTORY / WITH_OBSERVATIONS):")} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/15 border border-success-sea/40 text-success-sea text-xs flex items-center gap-1 disabled:opacity-50"><ClockIcon className="w-3.5 h-3.5" /> Revisar y cerrar</button>
@@ -510,7 +510,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
             )}
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {!isLocked && (
-              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
               </button>
             )}
@@ -529,7 +529,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
 const MocFilterGate: React.FC<{ onProceed: () => void; onCancel: () => void }> = ({ onProceed, onCancel }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div className="w-full max-w-xl bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+    <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center gap-2">
         <GitBranch className="w-4 h-4 text-accent" />
         <h2 className="text-sm font-bold text-fg">¿Tu cambio necesita MOC?</h2>
@@ -560,7 +560,7 @@ const MocFilterGate: React.FC<{ onProceed: () => void; onCancel: () => void }> =
         <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">
           No, es operación rutinaria
         </button>
-        <button onClick={onProceed} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">
+        <button onClick={onProceed} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5" /> Sí, abrir MOC
         </button>
       </div>
@@ -583,7 +583,7 @@ export const MocPage: React.FC = () => {
     <div className="p-6 space-y-4">
       <PageHeader icon={GitBranch} title="Management of Change (MOC)" total={items.length} onReload={reload}>
         <ExportExcelButton module="moc" />
-        <button onClick={() => setShowFilterGate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setShowFilterGate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nuevo MOC
         </button>
       </PageHeader>

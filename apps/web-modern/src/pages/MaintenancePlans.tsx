@@ -130,7 +130,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
   if (es === "OVERDUE")
     return (
       <div className="flex flex-col items-start gap-0.5">
-        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 whitespace-nowrap">
           <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.overdue")}
         </span>
       </div>
@@ -138,7 +138,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
   if (es === "DUE")
     return (
       <div className="flex flex-col items-start gap-0.5">
-        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20 whitespace-nowrap">
           <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.due")}
         </span>
       </div>
@@ -146,7 +146,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
   if (es === "IN_WINDOW")
     return (
       <div className="flex flex-col items-start gap-1">
-        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-300 border-orange-500/20 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20 whitespace-nowrap">
           <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.inWindow")}
         </span>
         {plan.activeWorkOrderCode && (
@@ -170,19 +170,19 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
     );
   if (es === "UPCOMING")
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 whitespace-nowrap">
         <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.upcoming")}
       </span>
     );
   if (es === "COMPLETED")
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 whitespace-nowrap">
         <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
       </span>
     );
   // FUTURE
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 whitespace-nowrap">
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 whitespace-nowrap">
       <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
     </span>
   );
@@ -193,9 +193,9 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
 const EDITABLE_STATUSES = ["ACTIVE", "INACTIVE", "DRAFT"] as const;
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 const RISK_LEVEL_OPTS: [string, string, string, string][] = [
-  ["LOW",      "L", "bg-success-sea text-primary-bg border-success-sea",  "text-success-sea border-success-sea/40"],
-  ["MEDIUM",   "M", "bg-yellow-400 text-primary-bg border-yellow-400",    "text-yellow-400 border-yellow-400/40"],
-  ["HIGH",     "H", "bg-red-500 text-fg border-red-500",               "text-red-400 border-red-400/40"],
+  ["LOW",      "L", "bg-success-sea text-accent-fg border-success-sea",  "text-success-sea border-success-sea/40"],
+  ["MEDIUM",   "M", "bg-yellow-400 text-accent-fg border-yellow-400",    "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+  ["HIGH",     "H", "bg-red-500 text-fg border-red-500",               "text-red-700 dark:text-red-400 border-red-400/40"],
   ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",               "text-red-600 border-red-600/40"],
 ];
 
@@ -328,7 +328,7 @@ function AssetSearchDropdown({ assets, value, onChange, disabled, placeholder }:
         {selected ? (
           <>
             {selected.name
-              ? <span className="flex-1 truncate text-yellow-400 text-sm font-semibold">{selected.name}</span>
+              ? <span className="flex-1 truncate text-yellow-700 dark:text-yellow-400 text-sm font-semibold">{selected.name}</span>
               : <span className="flex-1 truncate font-mono text-accent text-sm">{selected.assetCode}</span>}
             {selected.name && <span className="text-fg/40 text-xs font-mono truncate max-w-[160px]">{selected.assetCode}</span>}
             <X className="w-3.5 h-3.5 text-fg/30 hover:text-fg shrink-0" onClick={handleClear} />
@@ -343,7 +343,7 @@ function AssetSearchDropdown({ assets, value, onChange, disabled, placeholder }:
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#111827] border border-fg/10 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-surface dark:bg-[#111827] border border-fg/10 rounded-xl shadow-xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-fg/10">
             <Search className="w-3.5 h-3.5 text-fg/30 shrink-0" />
@@ -371,7 +371,7 @@ function AssetSearchDropdown({ assets, value, onChange, disabled, placeholder }:
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-fg/5 transition-colors ${a.id === value ? "bg-accent/10" : ""}`}
               >
                 {a.name
-                  ? <span className="text-yellow-400 text-xs font-semibold truncate flex-1">{a.name}</span>
+                  ? <span className="text-yellow-700 dark:text-yellow-400 text-xs font-semibold truncate flex-1">{a.name}</span>
                   : <span className="font-mono text-accent text-xs shrink-0">{a.assetCode}</span>}
                 {a.name && <span className="font-mono text-fg/40 text-xs shrink-0">{a.assetCode}</span>}
               </button>
@@ -552,7 +552,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
   if (showPrintConfirm) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("mp.exec.savedTitle")}</h2>
             <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
@@ -562,7 +562,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10">
               <span className="text-xs text-text-industrial/60 font-mono">{t("wo.entityLabelShort")}: {plan.activeWorkOrderCode}</span>
             </div>
-            {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+            {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
           </div>
           <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
             <button
@@ -578,7 +578,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
                 void createDefectAndNavigate();
               }}
               disabled={openingDefect}
-              className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
             >
               {openingDefect ? <Loader2 className="w-4 h-4 animate-spin" /> : t("mp.exec.printAndContinue")}
             </button>
@@ -590,7 +590,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <h2 className="text-base font-bold text-fg">{t("mp.exec.reportTitle")}</h2>
@@ -612,8 +612,8 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
                   className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
                     result === r
                       ? r === "SATISFACTORIO"
-                        ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
-                        : "bg-yellow-500/15 border-yellow-500/50 text-yellow-400"
+                        ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                        : "bg-yellow-500/15 border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
                       : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
                   }`}
                 >
@@ -675,7 +675,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
           {/* Deficiencies */}
           {result === "CON_DEFICIENCIAS" && (
             <div className="space-y-1.5">
-              <label className={labelCls + " text-yellow-400"}>{t("mp.exec.deficienciesLabel")}</label>
+              <label className={labelCls + " text-yellow-700 dark:text-yellow-400"}>{t("mp.exec.deficienciesLabel")}</label>
               <textarea
                 value={deficienciesNotes}
                 onChange={e => setDeficienciesNotes(e.target.value)}
@@ -706,7 +706,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
           {/* ── DEF question — último campo ───────────────────────────────── */}
           {result === "CON_DEFICIENCIAS" && (
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 space-y-3">
-              <p className="text-xs font-semibold text-yellow-300 uppercase tracking-wider">{t("mp.exec.defLogQuestion")}</p>
+              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 uppercase tracking-wider">{t("mp.exec.defLogQuestion")}</p>
 
               {/* AI analysis */}
               {aiLoading && (
@@ -726,7 +726,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
                 type="button"
                 onClick={() => void handleOpenDef()}
                 disabled={saving || openingDefect || uploading}
-                className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 font-bold text-xs hover:bg-red-500/25 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/25 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
                 {(saving || openingDefect) ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {t("mp.exec.openDefRecord")}
@@ -734,7 +734,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
             </div>
           )}
 
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
@@ -750,7 +750,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
           <button
             onClick={() => { void handleSave(); }}
             disabled={saving || uploading}
-            className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
+            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
           >
             {uploading ? <span className="flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin" /> {t("mp.exec.uploading")}</span>
               : saving ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -857,7 +857,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <h2 className="text-base font-bold text-fg">{t("mp.postpone.title")}</h2>
@@ -962,7 +962,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
             />
           </div>
 
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
@@ -978,7 +978,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
             <button
               onClick={() => { void save(false); }}
               disabled={saving}
-              className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
+              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
@@ -1616,7 +1616,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-fg">
@@ -1633,7 +1633,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
           </div>
 
           {readOnly && (
-            <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
+            <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-700 dark:text-yellow-400">
               {t("mp.modal.readOnly")}
             </div>
           )}
@@ -2024,7 +2024,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     <div className="flex items-center justify-between gap-3">
                       <button type="button"
                         onClick={() => { void downloadAuthedFile(checklistTemplate); }}
-                        className="flex items-center gap-2 text-sm text-green-400 hover:text-green-300 truncate"
+                        className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 hover:text-green-300 truncate"
                         title="Descargar plantilla">
                         <ClipboardList className="w-4 h-4 shrink-0" />
                         <span className="truncate">{checklistTemplate.split("/").pop()}</span>
@@ -2035,10 +2035,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     <p className="text-xs text-text-industrial/40">{t("mp.checklistNoFile")}</p>
                   )}
                   {isNew ? (
-                    <p className="text-[10px] text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
+                    <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
                   ) : (
                     <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                      checklistUploading ? "border-fg/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-400 hover:bg-green-500/10"
+                      checklistUploading ? "border-fg/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-500/10"
                     }`}>
                       {checklistUploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.checklistUploading")}</> : <><FileSpreadsheet className="w-3.5 h-3.5" /> {t("mp.checklistUpload")}</>}
                       <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="sr-only"
@@ -2061,22 +2061,22 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                       />
                     </label>
                   )}
-                  {checklistUploadError && <p className="text-xs text-red-400">{checklistUploadError}</p>}
+                  {checklistUploadError && <p className="text-xs text-red-700 dark:text-red-400">{checklistUploadError}</p>}
                 </div>
               </div>
             )}
 
-            {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </fieldset>
 
           {/* Footer — always shows Reportar Ejecución + Postergar for active plans */}
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 bg-[#0D1B2A] shrink-0">
+          <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A] shrink-0">
             <div className="flex gap-2">
               {/* Delete button — only ADMIN or FLEET_SUPERINTENDENT, existing plans only */}
               {!isNew && canDelete && (
                 <button
                   onClick={() => setConfirmDelete(true)}
-                  className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> {t("mp.modal.delete")}
                 </button>
@@ -2092,7 +2092,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               {canExecute && !needsWO && (
                 <button
                   onClick={() => setShowExecution(true)}
-                  className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/15 transition-all"
+                  className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/15 transition-all"
                 >
                   {t("mp.modal.reportResult")}
                 </button>
@@ -2122,7 +2122,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     else void onSave();
                   }}
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-primary-bg hover:brightness-110"
+                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-accent-fg hover:brightness-110"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
                 </button>
@@ -2134,16 +2134,16 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
       {confirmDuplicateWO && plan.activeWorkOrderCode && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#0D1B2A] border border-yellow-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-yellow-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-yellow-400" />
+                <Zap className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
               </div>
               <div>
                 <p className="text-sm font-bold text-fg">{t("mp.modal.duplicateWoTitle")}</p>
                 <p className="text-xs text-text-industrial/70 mt-1">
                   {t("mp.modal.duplicateWoText")}{" "}
-                  <span className="font-mono font-bold text-yellow-400">#{plan.activeWorkOrderCode}</span>.
+                  <span className="font-mono font-bold text-yellow-700 dark:text-yellow-400">#{plan.activeWorkOrderCode}</span>.
                   <br />{t("mp.modal.duplicateWoConfirm")}
                 </p>
               </div>
@@ -2157,7 +2157,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
               </button>
               <button
                 onClick={() => { setConfirmDuplicateWO(false); setShowExecution(true); }}
-                className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all"
+                className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all"
               >
                 {t("mp.modal.openWoAnyway")}
               </button>
@@ -2219,9 +2219,9 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
         *      después puede volver a guardar el plan */}
       {showMocPrompt && !isNew && plan !== null && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-[#0D1B2A] border border-yellow-500/40 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-yellow-500/40 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
-              <GitBranch className="w-5 h-5 text-yellow-300" />
+              <GitBranch className="w-5 h-5 text-yellow-700 dark:text-yellow-300" />
               <h2 className="text-sm font-bold text-fg">¿Gestionar MOC para este cambio?</h2>
             </div>
             <p className="text-sm text-text-industrial leading-relaxed">
@@ -2261,7 +2261,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                   setShowMocPrompt(false);
                   setShowMoc(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 flex items-center gap-1.5"
               >
                 <GitBranch className="w-3.5 h-3.5" /> Abrir MOC primero
               </button>
@@ -2308,10 +2308,10 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
       {confirmDelete && !isNew && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
-                <Trash2 className="w-4 h-4 text-red-400" />
+                <Trash2 className="w-4 h-4 text-red-700 dark:text-red-400" />
               </div>
               <div>
                 <p className="text-sm font-bold text-fg">{t("mp.modal.deleteTitle")}</p>
@@ -2321,7 +2321,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                 </p>
               </div>
             </div>
-            {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400">{actionError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setConfirmDelete(false)}
@@ -2496,7 +2496,7 @@ export const MaintenancePlansPage: React.FC = () => {
             <span className="text-[10px] text-text-industrial/50 font-mono leading-tight">
               SFI: {row.sfiSubgroupCode ?? row.sfiGroupNumber}
               {row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL" ? (
-                <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 text-red-400 text-[8px] font-bold border border-red-500/30">!</span>
+                <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 text-red-700 dark:text-red-400 text-[8px] font-bold border border-red-500/30">!</span>
               ) : null}
             </span>
           )}
@@ -2564,11 +2564,11 @@ export const MaintenancePlansPage: React.FC = () => {
         const isOverdue = row.executionStatus === "OVERDUE";
         if (needsHours(row.triggerType)) {
           return row.nextDueHours != null
-            ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-400 font-bold" : "text-fg"}`}>{row.nextDueHours.toLocaleString()} hs</span>
+            ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-700 dark:text-red-400 font-bold" : "text-fg"}`}>{row.nextDueHours.toLocaleString()} hs</span>
             : <span className="text-text-industrial/30 text-xs">—</span>;
         }
         return row.nextDueDate
-          ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-400 font-bold" : "text-fg"}`}>{fmtDate(row.nextDueDate)}</span>
+          ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-700 dark:text-red-400 font-bold" : "text-fg"}`}>{fmtDate(row.nextDueDate)}</span>
           : <span className="text-text-industrial/30 text-xs">—</span>;
       },
     },
@@ -2612,7 +2612,7 @@ export const MaintenancePlansPage: React.FC = () => {
         ) : (
           <button
             onClick={e => { e.stopPropagation(); setReporting(row); }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
           >
             <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
           </button>
@@ -2628,7 +2628,7 @@ export const MaintenancePlansPage: React.FC = () => {
         {/* Nueva tarea */}
         <button
           onClick={() => { setEditing(null); setShowModal(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
         >
           <Plus className="w-3.5 h-3.5" /> {t("mp.page.newTask")}
         </button>
@@ -2644,7 +2644,7 @@ export const MaintenancePlansPage: React.FC = () => {
           onClick={() => setOverdueOnly(o => !o)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
             overdueOnly
-              ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
+              ? "bg-orange-500/20 border-orange-500/40 text-orange-700 dark:text-orange-300"
               : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-orange-400/30"
           }`}
         >
@@ -2697,7 +2697,7 @@ export const MaintenancePlansPage: React.FC = () => {
               onClick={() => setSfiTab(tab.key)}
               className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-all ${
                 isActive
-                  ? "bg-accent text-primary-bg border-accent"
+                  ? "bg-accent text-accent-fg border-accent"
                   : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10 hover:text-fg"
               }`}
             >
@@ -2713,7 +2713,7 @@ export const MaintenancePlansPage: React.FC = () => {
       </div>
 
       {pageError && (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pageError}</p>
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pageError}</p>
       )}
       {loadingDetailId && (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60">

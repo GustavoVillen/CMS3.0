@@ -35,7 +35,7 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
       {open && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setOpen(false)}>
           <div
-            className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3 animate-in slide-in-from-bottom duration-200"
+            className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3 animate-in slide-in-from-bottom duration-200"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
@@ -53,7 +53,7 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
                 Icon={AlertTriangle}
                 label="Reportar defecto"
                 hint="Algo está roto o degradado"
-                color="text-orange-400 bg-orange-500/10 border-orange-500/30"
+                color="text-orange-700 dark:text-orange-400 bg-orange-500/10 border-orange-500/30"
                 onClick={() => fire("defect")}
                 onMicClick={() => fire("defect-voice")}
                 micAriaLabel="Reportar defecto por voz"
@@ -62,7 +62,7 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
                 Icon={AlertOctagon}
                 label="Near miss"
                 hint="Casi pasa algo grave"
-                color="text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
+                color="text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
                 onClick={() => fire("near-miss")}
                 onMicClick={() => fire("near-miss-voice")}
                 micAriaLabel="Reportar near miss por voz"
@@ -91,7 +91,7 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Acción rápida"
-        className="fixed bottom-20 right-4 z-[60] w-14 h-14 rounded-full bg-accent text-primary-bg shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center"
+        className="fixed bottom-20 right-4 z-[60] w-14 h-14 rounded-full bg-accent text-accent-fg shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center"
       >
         <Plus className="w-7 h-7" strokeWidth={2.5} />
       </button>

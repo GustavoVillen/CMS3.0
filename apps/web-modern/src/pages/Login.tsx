@@ -75,7 +75,7 @@ export const Login: React.FC = () => {
           <img src="/logo-white.png" alt="CMS" className="w-14 h-14 object-contain" />
           <div>
             <h1 className="text-2xl font-bold text-fg tracking-widest uppercase">CMS</h1>
-            <p className="text-xs font-bold text-teal-400 tracking-widest uppercase">Copilot Management System</p>
+            <p className="text-xs font-bold text-teal-700 dark:text-teal-400 tracking-widest uppercase">Copilot Management System</p>
           </div>
         </div>
 
@@ -129,7 +129,7 @@ export const Login: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">
                 {error}
               </div>
             )}
@@ -137,7 +137,7 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-accent text-primary-bg font-bold text-sm hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-accent text-accent-fg font-bold text-sm hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
             >
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</> : "Ingresar"}
             </button>

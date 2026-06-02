@@ -30,10 +30,10 @@ type Filter = PlansFilter;
 type View = "list" | "detail";
 
 const STATUS_COLOR: Record<string, string> = {
-  OVERDUE:   "bg-red-500/15 text-red-400 border-red-500/30",
-  DUE:       "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  IN_WINDOW: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  UPCOMING:  "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  OVERDUE:   "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+  DUE:       "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30",
+  IN_WINDOW: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+  UPCOMING:  "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
   FUTURE:    "bg-fg/5 text-text-industrial/40 border-fg/10",
   COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/30",
 };
@@ -147,12 +147,12 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
             </div>
           )}
 
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
 
           <div className="space-y-2 pt-2">
             {hasActiveWO ? (
               <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-yellow-200 leading-snug">
                   Ya hay una OT abierta para este plan: <span className="font-mono font-bold">{selected.activeWorkOrderCode}</span>.
                   Cerrala primero desde la solapa de OTs.
@@ -163,7 +163,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
                 type="button"
                 onClick={handleExecute}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -187,8 +187,8 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
       {/* Filter chips */}
       <div className="shrink-0 px-3 py-2.5 border-b border-fg/10 flex gap-1.5 overflow-x-auto">
         {([
-          ["due",      "Próximos",  counts.due,      "text-orange-400"],
-          ["upcoming", "Por vencer", counts.upcoming, "text-blue-400"],
+          ["due",      "Próximos",  counts.due,      "text-orange-700 dark:text-orange-400"],
+          ["upcoming", "Por vencer", counts.upcoming, "text-blue-700 dark:text-blue-400"],
           ["all",      "Todos",      counts.all,      "text-text-industrial/60"],
         ] as [Filter, string, number, string][]).map(([f, label, count, color]) => (
           <button

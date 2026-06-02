@@ -25,8 +25,8 @@ function stockStatus(s: Spare): "critical" | "warning" | "ok" {
 
 function StockBadge({ spare }: { spare: Spare }) {
   const st = stockStatus(spare);
-  if (st === "critical") return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 shrink-0">BAJO MÍN</span>;
-  if (st === "warning")  return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 shrink-0">REORDEN</span>;
+  if (st === "critical") return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30 shrink-0">BAJO MÍN</span>;
+  if (st === "warning")  return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30 shrink-0">REORDEN</span>;
   return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-success-sea/10 text-success-sea border border-success-sea/20 shrink-0">OK</span>;
 }
 
@@ -144,8 +144,8 @@ export const MobileSpares: React.FC = () => {
           filtered.map(s => {
             const st = stockStatus(s);
             const numColor =
-              st === "critical" ? "text-red-400" :
-              st === "warning"  ? "text-yellow-400" : "text-fg";
+              st === "critical" ? "text-red-700 dark:text-red-400" :
+              st === "warning"  ? "text-yellow-700 dark:text-yellow-400" : "text-fg";
             return (
               <button
                 key={s.id}

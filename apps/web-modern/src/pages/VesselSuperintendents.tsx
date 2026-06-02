@@ -82,7 +82,7 @@ const MatrixCell: React.FC<CellProps> = ({ superintendent, vesselCode, onAssign,
   const cellStyle = assignment
     ? assignment.assignmentType === "PRIMARY"
       ? "bg-accent/20 border-accent/40 text-accent"
-      : "bg-blue-500/20 border-blue-500/40 text-blue-400"
+      : "bg-blue-500/20 border-blue-500/40 text-blue-700 dark:text-blue-400"
     : "bg-fg/3 border-fg/10 text-text-industrial/20 hover:bg-fg/8 hover:border-fg/20 cursor-pointer";
 
   return (
@@ -112,7 +112,7 @@ const MatrixCell: React.FC<CellProps> = ({ superintendent, vesselCode, onAssign,
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-          <div className="fixed z-200 w-44 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-2xl overflow-hidden" style={{ top: menuPos.top, left: menuPos.left, transform: "translateX(-50%)" }}>
+          <div className="fixed z-200 w-44 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-2xl overflow-hidden" style={{ top: menuPos.top, left: menuPos.left, transform: "translateX(-50%)" }}>
             {assignment?.assignmentType !== "PRIMARY" && (
               <button
                 onClick={async () => { setMenuOpen(false); await onAssign(superintendent.userId, vesselCode, "PRIMARY"); }}
@@ -124,7 +124,7 @@ const MatrixCell: React.FC<CellProps> = ({ superintendent, vesselCode, onAssign,
             {assignment?.assignmentType !== "SECONDARY" && (
               <button
                 onClick={async () => { setMenuOpen(false); await onAssign(superintendent.userId, vesselCode, "SECONDARY"); }}
-                className="w-full text-left px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 transition-colors"
+                className="w-full text-left px-3 py-2 text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-colors"
               >
                 {t("sup.assignSecondary")}
               </button>
@@ -132,7 +132,7 @@ const MatrixCell: React.FC<CellProps> = ({ superintendent, vesselCode, onAssign,
             {assignment && (
               <button
                 onClick={async () => { setMenuOpen(false); await onDeactivate(assignment.id, superintendent.userId); }}
-                className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors border-t border-fg/10"
+                className="w-full text-left px-3 py-2 text-xs text-red-700 dark:text-red-400 hover:bg-red-500/10 transition-colors border-t border-fg/10"
               >
                 {t("sup.removeAssign")}
               </button>
@@ -232,7 +232,7 @@ const AddSuperintendentPanel: React.FC<AddPanelProps> = ({ onPromoted }) => {
               <button
                 onClick={() => { void handlePromote(); }}
                 disabled={!selectedUserId || promoting}
-                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all flex items-center gap-1.5 shrink-0"
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all flex items-center gap-1.5 shrink-0"
               >
                 {promoting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 Promover
@@ -241,7 +241,7 @@ const AddSuperintendentPanel: React.FC<AddPanelProps> = ({ onPromoted }) => {
           )}
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
+            <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
           )}
         </div>
       )}
@@ -279,7 +279,7 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">Remover superintendente</h2>
           <p className="text-xs text-text-industrial/40 mt-0.5">{fullName(superintendent.user)}</p>
@@ -300,7 +300,7 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
             </select>
           </div>
           {error && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
+            <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
           )}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
@@ -310,7 +310,7 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
           <button
             onClick={() => { void handleDemote(); }}
             disabled={demoting}
-            className="px-4 py-2 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1.5"
           >
             {demoting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
             Remover rol
@@ -380,7 +380,7 @@ export const VesselSuperintendentsPage: React.FC = () => {
       />
 
       {actionError && (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
           {actionError}
         </p>
       )}
@@ -409,7 +409,7 @@ export const VesselSuperintendentsPage: React.FC = () => {
       )}
 
       {supsError && (
-        <p className="text-sm text-red-400 text-center py-10">{supsError}</p>
+        <p className="text-sm text-red-700 dark:text-red-400 text-center py-10">{supsError}</p>
       )}
 
       {!loading && !supsError && superintendents.length === 0 && (
@@ -422,7 +422,7 @@ export const VesselSuperintendentsPage: React.FC = () => {
           <table className="min-w-max w-full text-xs border-collapse">
             <thead>
               <tr className="border-b border-fg/10 bg-fg/3">
-                <th className="text-left px-4 py-3 font-semibold text-text-industrial/60 sticky left-0 bg-[#0D1B2A] z-10 min-w-[200px]">
+                <th className="text-left px-4 py-3 font-semibold text-text-industrial/60 sticky left-0 bg-surface dark:bg-[#0D1B2A] z-10 min-w-[200px]">
                   Superintendente
                 </th>
                 {vessels.map(v => (
@@ -436,7 +436,7 @@ export const VesselSuperintendentsPage: React.FC = () => {
             <tbody>
               {superintendents.map((sup, idx) => (
                 <tr key={sup.userId} className={`border-b border-fg/5 ${idx % 2 === 0 ? "" : "bg-fg/2"}`}>
-                  <td className="px-4 py-3 sticky left-0 bg-[#0D1B2A] z-10">
+                  <td className="px-4 py-3 sticky left-0 bg-surface dark:bg-[#0D1B2A] z-10">
                     <div>
                       <p className="font-semibold text-fg">{fullName(sup.user)}</p>
                       <p className="text-text-industrial/40 text-[10px]">{sup.user.email}</p>

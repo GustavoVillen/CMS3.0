@@ -112,7 +112,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("rh.editorHeader")} · {date}</p>
@@ -130,7 +130,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
                   {parts[0]}
                   <span className="text-success-sea font-bold">{t("rh.rest")}</span>
                   {parts[1]}
-                  <span className="text-red-400 font-bold">{t("rh.work")}</span>
+                  <span className="text-red-700 dark:text-red-400 font-bold">{t("rh.work")}</span>
                   {parts[2]}
                 </>
               );
@@ -140,11 +140,11 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
-                {t("rh.totalRest")}: <span className={totalRest >= 10 ? "text-success-sea" : "text-red-400"}>{totalRest}h</span> / 24h
+                {t("rh.totalRest")}: <span className={totalRest >= 10 ? "text-success-sea" : "text-red-700 dark:text-red-400"}>{totalRest}h</span> / 24h
               </span>
               <div className="flex gap-1">
                 <button onClick={() => fillAll(true)} className="px-2 py-0.5 rounded text-[10px] bg-success-sea/10 border border-success-sea/30 text-success-sea hover:bg-success-sea/20">{t("rh.allRest")}</button>
-                <button onClick={() => fillAll(false)} className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20">{t("rh.allWork")}</button>
+                <button onClick={() => fillAll(false)} className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 hover:bg-red-500/20">{t("rh.allWork")}</button>
               </div>
             </div>
             <div className="grid grid-cols-12 gap-0.5 select-none">
@@ -154,7 +154,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
                   onMouseDown={() => onMouseDown(h)}
                   onMouseEnter={() => onMouseEnter(h)}
                   className={`aspect-square text-[9px] font-mono rounded border transition-colors ${
-                    isRest ? "bg-success-sea/30 text-success-sea border-success-sea/40 hover:bg-success-sea/40" : "bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30"
+                    isRest ? "bg-success-sea/30 text-success-sea border-success-sea/40 hover:bg-success-sea/40" : "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30 hover:bg-red-500/30"
                   }`}
                   title={t("rh.cellTitle")
                     .replace("{from}", `${String(h).padStart(2, "0")}:00`)
@@ -172,7 +172,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
             <input value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} placeholder={t("rh.notesPh")} />
           </div>
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
           <div className="rounded-lg bg-fg/[0.04] border border-fg/10 p-2 text-[10px] text-text-industrial/70 space-y-0.5">
             <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("rh.rules")}</p>
@@ -184,7 +184,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -258,7 +258,7 @@ export const RestHoursPage: React.FC = () => {
       <PageHeader icon={Clock} title={t("rh.pageTitle")} total={data?.rows.length ?? 0} onReload={reload}>
         <ExportExcelButton module="crew_rest_hours" />
         {totalViolations > 0 && (
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 text-xs font-bold">
             <AlertTriangle className="w-3.5 h-3.5" /> {t("rh.violations").replace("{n}", String(totalViolations))}
           </span>
         )}
@@ -287,7 +287,7 @@ export const RestHoursPage: React.FC = () => {
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-fg/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[180px]">{t("rh.colCrew")}</th>
+                <th className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[180px]">{t("rh.colCrew")}</th>
                 {dayCols.map(d => (
                   <th key={d} className="px-1 py-2 text-center font-mono text-text-industrial/50 min-w-[28px]">{d}</th>
                 ))}
@@ -296,7 +296,7 @@ export const RestHoursPage: React.FC = () => {
             <tbody>
               {data.crew.map(c => (
                 <tr key={c.id} className="border-b border-fg/5 last:border-b-0">
-                  <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2">
+                  <td className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] px-3 py-2">
                     <div className="text-xs font-bold text-fg truncate">{c.firstName} {c.lastName}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{c.rank}</div>
                   </td>
@@ -307,10 +307,10 @@ export const RestHoursPage: React.FC = () => {
                     const cls = !row
                       ? "bg-fg/[0.02] text-text-industrial/30 border-fg/5 hover:bg-fg/10"
                       : violation
-                      ? "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30"
+                      ? "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40 hover:bg-red-500/30"
                       : total !== null && total >= 10
                       ? "bg-success-sea/15 text-success-sea border-success-sea/30 hover:bg-success-sea/25"
-                      : "bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25";
+                      : "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25";
                     const title = !row
                       ? t("rh.noRecord")
                       : violation

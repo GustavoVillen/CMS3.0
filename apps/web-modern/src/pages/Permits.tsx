@@ -104,10 +104,10 @@ const STATUS_TKEY: Record<PermitStatus, TranslationKey> = {
 
 const STATUS_COLOR: Record<PermitStatus, string> = {
   DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
-  REQUESTED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  APPROVED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
-  ACTIVE: "bg-green-500/10 text-green-400 border-green-500/20",
+  REQUESTED: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  APPROVED: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  REJECTED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  ACTIVE: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
   CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
@@ -381,7 +381,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[92vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-4 h-4 text-accent" />
@@ -409,7 +409,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             <div className="space-y-4">
               {isTerminal && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-orange-200">{t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit!.status]))}</p>
                 </div>
               )}
@@ -510,14 +510,14 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                 </label>
 
                 <div className="col-span-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                  <Sparkles className="w-3 h-3 text-blue-400 shrink-0 mt-0.5" />
+                  <Sparkles className="w-3 h-3 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-blue-200/80 leading-snug">
                     Las sugerencias de Peligros / Controles / EPP son orientativas (asistente IA). Cada aseveración cuantitativa debería estar respaldada por la regulación aplicable. Para entrada a espacio confinado, los umbrales son ISGOTT 6 Cap. 11 (O₂ 19.5–23%, LEL &lt;1%, H₂S &lt;10 ppm, CO &lt;50 ppm); el sistema los valida server-side al hacer el gas test.
                   </p>
                 </div>
                 {permit?.rejectionReason && (
                   <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-red-400 font-bold mb-1">{t("pm.rejectReason")}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 font-bold mb-1">{t("pm.rejectReason")}</p>
                     <p className="text-xs text-red-200">{permit.rejectionReason}</p>
                   </div>
                 )}
@@ -534,7 +534,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   </div>
                 )}
               </div>
-              {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
             </div>
           )}
 
@@ -555,16 +555,16 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               </button>
             )}
             {!isNew && permit?.status === "DRAFT" && (
-              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">{t("common.requestApproval")}</button>
+              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">{t("common.requestApproval")}</button>
             )}
             {!isNew && permit?.status === "REQUESTED" && canApprove && (
               <>
-                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">{t("common.approve")}</button>
-                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">{t("common.reject")}</button>
+                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">{t("common.approve")}</button>
+                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">{t("common.reject")}</button>
               </>
             )}
             {!isNew && permit?.status === "APPROVED" && (
-              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">{t("common.activate")}</button>
+              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">{t("common.activate")}</button>
             )}
             {!isNew && permit?.status === "ACTIVE" && (
               <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">{t("common.close")}</button>
@@ -573,13 +573,13 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 font-bold text-xs hover:bg-fg/10 disabled:opacity-50">{t("common.cancel")}</button>
             )}
             {!isNew && isTerminal && isAdmin && (
-              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">{t("common.reopen")}</button>
+              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">{t("common.reopen")}</button>
             )}
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {(isNew || tab === "details") && isEditable && (
-              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
               </button>
             )}
@@ -656,10 +656,10 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
               </select>
             </div>
           </div>
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={() => { setAdding(false); setErr(null); }} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">Cancelar</button>
-            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Agregar"}
             </button>
           </div>
@@ -676,7 +676,7 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
                 <p className="text-sm font-medium text-fg">{p.name}</p>
                 <p className="text-[10px] text-text-industrial/40">{ROLE_LABEL[p.role]}</p>
               </div>
-              {canEdit && <button onClick={() => { void onDelete(p.id); }} className="text-[10px] text-red-400 hover:underline">Quitar</button>}
+              {canEdit && <button onClick={() => { void onDelete(p.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline">Quitar</button>}
             </div>
           ))}
         </div>
@@ -778,10 +778,10 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
               <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={reset} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">Cancelar</button>
-            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Registrar"}
             </button>
           </div>
@@ -817,9 +817,9 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
                   <td className="p-2 text-center">
                     {g.verdict === "PASS"
                       ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-success-sea"><CheckCircle className="w-3 h-3" /> PASS</span>
-                      : <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400"><XCircle className="w-3 h-3" /> FAIL</span>}
+                      : <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 dark:text-red-400"><XCircle className="w-3 h-3" /> FAIL</span>}
                   </td>
-                  {canEdit && <td className="p-2 text-right"><button onClick={() => { void onDelete(g.id); }} className="text-[10px] text-red-400 hover:underline">Borrar</button></td>}
+                  {canEdit && <td className="p-2 text-right"><button onClick={() => { void onDelete(g.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline">Borrar</button></td>}
                 </tr>
               ))}
             </tbody>
@@ -853,7 +853,7 @@ export const PermitsPage: React.FC = () => {
     <div className="p-6 space-y-4">
       <PageHeader icon={ShieldAlert} title="Permisos de Trabajo" total={data?.total} onReload={reload}>
         <ExportExcelButton module="permits" />
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nuevo permiso
         </button>
       </PageHeader>

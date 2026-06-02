@@ -310,7 +310,7 @@ export const MobileCopilot: React.FC = () => {
   const showSendButton = input.trim().length > 0;
 
   return (
-    <div className="flex flex-col h-full bg-[#0A1A2A] select-none">
+    <div className="flex flex-col h-full bg-surface dark:bg-[#0A1A2A] select-none">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 select-text">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-text-industrial/40 gap-3 text-center px-6">
@@ -330,7 +330,7 @@ export const MobileCopilot: React.FC = () => {
               <div
                 className={`max-w-[82%] px-3 py-2 rounded-2xl text-sm break-words ${
                   m.role === "user"
-                    ? "bg-accent text-fg rounded-br-sm"
+                    ? "bg-accent text-accent-fg rounded-br-sm"
                     : "bg-fg/5 text-fg rounded-bl-sm border border-fg/10"
                 }`}
               >
@@ -349,7 +349,7 @@ export const MobileCopilot: React.FC = () => {
           );
         })}
         {error && (
-          <div className="text-center text-xs text-red-400 px-4">{error}</div>
+          <div className="text-center text-xs text-red-700 dark:text-red-400 px-4">{error}</div>
         )}
       </div>
 
@@ -364,7 +364,7 @@ export const MobileCopilot: React.FC = () => {
         </button>
       )}
 
-      <div className="shrink-0 border-t border-fg/10 p-3 bg-[#0D1B2A]">
+      <div className="shrink-0 border-t border-fg/10 p-3 bg-surface dark:bg-[#0D1B2A]">
         <div className="flex gap-2 items-end">
           {recording ? (
             <div className="flex-1 flex items-center gap-3 h-10 px-3 rounded-xl bg-red-500/15 border border-red-500/40">
@@ -374,7 +374,7 @@ export const MobileCopilot: React.FC = () => {
               <button
                 type="button"
                 onClick={cancelRecording}
-                className="text-xs font-bold text-red-300 hover:text-fg px-2"
+                className="text-xs font-bold text-red-700 dark:text-red-300 hover:text-fg px-2"
               >
                 Cancelar
               </button>
@@ -400,7 +400,7 @@ export const MobileCopilot: React.FC = () => {
               type="button"
               onClick={handleTextSend}
               disabled={streaming}
-              className="w-10 h-10 shrink-0 rounded-xl bg-accent text-fg flex items-center justify-center disabled:opacity-30"
+              className="w-10 h-10 shrink-0 rounded-xl bg-accent text-accent-fg flex items-center justify-center disabled:opacity-30"
               aria-label="Enviar"
             >
               {streaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -423,7 +423,7 @@ export const MobileCopilot: React.FC = () => {
               onPointerCancel={() => { if (recording) cancelRecording(); }}
               onContextMenu={e => e.preventDefault()}
               className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center disabled:opacity-30 touch-none transition-colors ${
-                recording ? "bg-red-500 text-fg" : "bg-accent text-fg"
+                recording ? "bg-red-500 text-fg" : "bg-accent text-accent-fg"
               }`}
               aria-label="Mantené presionado para hablar"
             >

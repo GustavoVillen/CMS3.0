@@ -147,7 +147,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             onClick={() => setMode("count")}
             className={`px-3 py-1 text-xs rounded-md transition-colors ${
               mode === "count"
-                ? "bg-accent text-primary-bg font-bold"
+                ? "bg-accent text-accent-fg font-bold"
                 : "text-text-industrial/70 hover:text-fg"
             }`}
           >
@@ -157,7 +157,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             onClick={() => setMode("hours")}
             className={`px-3 py-1 text-xs rounded-md transition-colors ${
               mode === "hours"
-                ? "bg-accent text-primary-bg font-bold"
+                ? "bg-accent text-accent-fg font-bold"
                 : "text-text-industrial/70 hover:text-fg"
             }`}
           >
@@ -185,9 +185,9 @@ export const MaintenanceWorkloadPage: React.FC = () => {
       {/* Aviso de planes sin estimación (solo en modo horas) */}
       {isHours && data && data.plansWithoutEstimate > 0 && (
         <div className="bento-card p-3! flex items-start gap-3 border-orange-500/30 bg-orange-500/5">
-          <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400 shrink-0 mt-0.5" />
           <div className="text-xs text-text-industrial/70">
-            <span className="font-bold text-orange-300">{data.plansWithoutEstimate}</span>{" "}
+            <span className="font-bold text-orange-700 dark:text-orange-300">{data.plansWithoutEstimate}</span>{" "}
             {t(data.plansWithoutEstimate === 1 ? "mwl.warnNoEstimate.one" : "mwl.warnNoEstimate.many")}
           </div>
         </div>
@@ -196,17 +196,17 @@ export const MaintenanceWorkloadPage: React.FC = () => {
       {/* Aviso de planes sin proyectar */}
       {data && (data.unscheduledHoursPlans > 0 || data.unscheduledDatePlans > 0) && (
         <div className="bento-card p-3! flex items-start gap-3 border-yellow-500/30 bg-yellow-500/5">
-          <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
           <div className="text-xs text-text-industrial/70 space-y-1">
             {data.unscheduledHoursPlans > 0 && (
               <p>
-                <span className="font-bold text-yellow-300">{data.unscheduledHoursPlans}</span>{" "}
+                <span className="font-bold text-yellow-700 dark:text-yellow-300">{data.unscheduledHoursPlans}</span>{" "}
                 {t(data.unscheduledHoursPlans === 1 ? "mwl.warnNoHoursSched.one" : "mwl.warnNoHoursSched.many")}
               </p>
             )}
             {data.unscheduledDatePlans > 0 && (
               <p>
-                <span className="font-bold text-yellow-300">{data.unscheduledDatePlans}</span>{" "}
+                <span className="font-bold text-yellow-700 dark:text-yellow-300">{data.unscheduledDatePlans}</span>{" "}
                 {t(data.unscheduledDatePlans === 1 ? "mwl.warnNoDateSched.one" : "mwl.warnNoDateSched.many")}
               </p>
             )}
@@ -230,7 +230,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         </div>
 
         {error ? (
-          <div className="flex items-center gap-2 text-red-400 text-xs py-8 justify-center">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-xs py-8 justify-center">
             <AlertTriangle className="w-4 h-4" />
             <span>{error}</span>
           </div>

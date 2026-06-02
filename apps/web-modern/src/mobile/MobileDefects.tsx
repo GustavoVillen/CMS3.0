@@ -45,10 +45,10 @@ interface Defect {
 interface Asset { id: string; name: string; code: string; }
 
 const SEV_COLOR: Record<string, string> = {
-  CRITICAL: "bg-red-500/10 text-red-400 border-red-500/20",
-  HIGH:     "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  MEDIUM:   "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  LOW:      "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  CRITICAL: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  HIGH:     "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+  MEDIUM:   "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  LOW:      "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
 };
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
@@ -372,7 +372,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
                   <div key={i} className={`relative aspect-square bg-fg/5 border rounded-lg overflow-hidden ${p.analyzed ? "border-accent/40" : "border-fg/10"}`}>
                     <img src={p.preview} alt="" className="w-full h-full object-cover" />
                     {p.analyzed && (
-                      <span className="absolute top-1 left-1 px-1 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                      <span className="absolute top-1 left-1 px-1 py-0.5 rounded bg-accent text-accent-fg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5" />IA
                       </span>
                     )}
@@ -404,12 +404,12 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
             </label>
           </div>
 
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
           <button
             type="button"
             onClick={handleCreate}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Registrar defecto"}
           </button>
@@ -481,12 +481,12 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               className={inputCls + " resize-none"}
             />
           </div>
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
           <button
             type="button"
             onClick={handleCreateNearMiss}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Reportar near miss"}
           </button>
@@ -584,7 +584,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
       <button
         type="button"
         onClick={() => openCreate()}
-        className="absolute bottom-5 right-5 w-14 h-14 rounded-full bg-accent text-fg flex items-center justify-center shadow-xl shadow-accent/20"
+        className="absolute bottom-5 right-5 w-14 h-14 rounded-full bg-accent text-accent-fg flex items-center justify-center shadow-xl shadow-accent/20"
         aria-label="Nuevo defecto"
       >
         <Plus className="w-6 h-6" />

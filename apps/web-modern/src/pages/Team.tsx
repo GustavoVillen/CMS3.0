@@ -70,14 +70,14 @@ function useRoleLabels(): Record<string, string> {
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE:    "bg-success-sea/10 text-success-sea border-success-sea/20",
-  INVITED:   "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  REVOKED:   "bg-red-500/10 text-red-400 border-red-500/20",
-  SUSPENDED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  INVITED:   "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  REVOKED:   "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  SUSPENDED: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
 };
 
 const ROLE_COLORS: Record<string, string> = {
   TENANT_ADMIN:         "text-accent font-bold",
-  FLEET_SUPERINTENDENT: "text-blue-400 font-semibold",
+  FLEET_SUPERINTENDENT: "text-blue-700 dark:text-blue-400 font-semibold",
   MAINTENANCE_MANAGER:  "text-fg",
   TECHNICIAN_OPERATOR:  "text-text-industrial/70",
   INSPECTOR_COMPLIANCE: "text-text-industrial/70",
@@ -162,7 +162,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">Agregar miembro</h2>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
@@ -223,11 +223,11 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
                   {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
                 </select>
               </div>
-              {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+              {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-              <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+              <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 Agregar
               </button>
@@ -247,11 +247,11 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
                   {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
                 </select>
               </div>
-              {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+              {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-              <button onClick={() => { void handleInvite(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+              <button onClick={() => { void handleInvite(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 {t("team.sendInvite")}
               </button>
@@ -300,7 +300,7 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ selected, o
                 }`}
               >
                 <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${active ? "bg-accent border-accent" : "border-fg/20"}`}>
-                  {active && <Check className="w-2.5 h-2.5 text-primary-bg" />}
+                  {active && <Check className="w-2.5 h-2.5 text-accent-fg" />}
                 </div>
                 <div>
                   <p className="text-[10px] font-mono font-bold leading-none">{v.code}</p>
@@ -363,7 +363,7 @@ const MemberCredentialsSection: React.FC<MemberCredentialsSectionProps> = ({
           className={inputCls}
         />
         {emailIsLogin && (
-          <p className="text-[10px] text-amber-400/80 mt-1">Este usuario inicia sesión con su email; al cambiarlo cambia su login.</p>
+          <p className="text-[10px] text-amber-700 dark:text-amber-400/80 mt-1">Este usuario inicia sesión con su email; al cambiarlo cambia su login.</p>
         )}
       </div>
       <div>
@@ -495,14 +495,14 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
             <h2 className="text-base font-bold text-fg">{fullName(member)}</h2>
             {!isInternalEmail(member.email) && (
               <p className="text-[10px] text-text-industrial/40">{member.email}</p>
             )}
-            <p className="text-[10px] text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
+            <p className="text-[10px] text-blue-700 dark:text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
           </div>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -537,7 +537,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             <div className="border border-accent/15 rounded-xl p-4 bg-accent/3">
               <FleetAssignmentPanel selected={selectedVessels} onToggle={toggleVessel} />
               {hasNoVesselsAssigned && (
-                <p className="text-[10px] text-amber-400 mt-2">
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-2">
                   ⚠ Este rol necesita al menos una embarcación asignada para ver datos del sistema.
                 </p>
               )}
@@ -554,7 +554,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             </div>
           )}
 
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
         {/* Footer — un solo Guardar + Eliminar */}
@@ -568,7 +568,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                   <button
                     onClick={() => { void handleDelete(); }}
                     disabled={deactivating}
-                    className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {deactivating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
                     Eliminar
@@ -577,7 +577,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <button onClick={() => setConfirmDeactivate(true)} className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
+                <button onClick={() => setConfirmDeactivate(true)} className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-300 transition-colors">
                   <UserMinus className="w-3.5 h-3.5" />
                   Eliminar
                 </button>
@@ -585,7 +585,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                   <button
                     onClick={() => { void handleSaveAll(); }}
                     disabled={saving || !dirty}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all"
                   >
                     {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     Guardar
@@ -620,7 +620,7 @@ const PendingInvitationsPanel: React.FC<{ reload: number }> = ({ reload }) => {
               <p className="text-xs font-medium text-fg">{inv.email}</p>
               <p className="text-[10px] text-text-industrial/40">{roleLabels[inv.role] ?? inv.role} · vence {fmtDate(inv.expiresAt)}</p>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20 font-bold">{t("team.statusInvited")}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20 font-bold">{t("team.statusInvited")}</span>
           </div>
         ))}
       </div>
@@ -688,7 +688,7 @@ export const TeamPage: React.FC = () => {
         {user?.role === "TENANT_ADMIN" && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold hover:brightness-110 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110 transition-all"
           >
             <UserPlus className="w-3.5 h-3.5" />
             Agregar

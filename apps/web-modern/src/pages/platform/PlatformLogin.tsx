@@ -26,7 +26,7 @@ export const PlatformLogin: React.FC = () => {
       <div className="relative w-full max-w-md">
         <div className="flex items-center justify-center gap-3 mb-10">
           <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-            <ShieldCheck className="text-red-400 w-7 h-7" />
+            <ShieldCheck className="text-red-700 dark:text-red-400 w-7 h-7" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-fg tracking-tight">Super Admin</h1>
@@ -51,7 +51,7 @@ export const PlatformLogin: React.FC = () => {
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
                 placeholder="••••••••" />
             </div>
-            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
+            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>}
             <button type="submit" disabled={loading}
               className="w-full py-3 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</> : "Ingresar"}

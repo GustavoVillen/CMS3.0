@@ -117,7 +117,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
@@ -203,11 +203,11 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <div>
               {!isNew && (
-                <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
+                <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-700 dark:text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
                   Eliminar
                 </button>
               )}

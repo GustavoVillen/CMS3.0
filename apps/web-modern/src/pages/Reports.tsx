@@ -141,7 +141,7 @@ const InventoryTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> 
             <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
               <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">Buque</div>
               <div className="text-fg font-semibold">{data.vessel.code} — {data.vessel.name}</div>
-              {data.vessel.isBarcaza && <span className="inline-block mt-1 px-2 py-0.5 text-[9px] bg-blue-500/20 text-blue-400 rounded">BARCAZA</span>}
+              {data.vessel.isBarcaza && <span className="inline-block mt-1 px-2 py-0.5 text-[9px] bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded">BARCAZA</span>}
             </div>
             <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
               <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">Total ítems</div>
@@ -149,7 +149,7 @@ const InventoryTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> 
             </div>
             <div className={`border rounded-lg p-3 ${data.summary.belowReorderCount > 0 ? "bg-red-500/10 border-red-500/30" : "bg-fg/5 border-fg/10"}`}>
               <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">Bajo reorder</div>
-              <div className={`text-xl font-bold ${data.summary.belowReorderCount > 0 ? "text-red-400" : "text-fg"}`}>{data.summary.belowReorderCount}</div>
+              <div className={`text-xl font-bold ${data.summary.belowReorderCount > 0 ? "text-red-700 dark:text-red-400" : "text-fg"}`}>{data.summary.belowReorderCount}</div>
             </div>
           </div>
 
@@ -172,12 +172,12 @@ const InventoryTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> 
                   <tr><td colSpan={8} className="px-3 py-6 text-center text-fg/30">Sin ítems para los filtros seleccionados.</td></tr>
                 )}
                 {data.items.map(it => (
-                  <tr key={it.id} className={`border-b border-fg/5 hover:bg-fg/5 ${it.belowReorder ? "text-red-400" : ""}`}>
+                  <tr key={it.id} className={`border-b border-fg/5 hover:bg-fg/5 ${it.belowReorder ? "text-red-700 dark:text-red-400" : ""}`}>
                     <td className="px-3 py-2 font-mono">{it.sku}</td>
                     <td className="px-3 py-2">{it.name}</td>
                     <td className="px-3 py-2 font-mono text-[10px]">{it.sfiCode ?? "—"}</td>
                     <td className="px-3 py-2 text-[10px]">{it.department ?? "—"}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${it.belowReorder ? "text-red-400" : ""}`}>{it.onHand}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${it.belowReorder ? "text-red-700 dark:text-red-400" : ""}`}>{it.onHand}</td>
                     <td className="px-3 py-2 text-[10px]">{it.unit}</td>
                     <td className="px-3 py-2 text-[10px]">{it.location ?? "—"}</td>
                     <td className="px-3 py-2 text-[10px]">{fmtDate(it.lastMovementAt)}</td>
@@ -393,7 +393,7 @@ const HistoryPanel: React.FC<{ vesselCode: string; refreshKey: number }> = ({ ve
               <tr key={it.id} className="border-b border-fg/5 hover:bg-fg/5">
                 <td className="px-3 py-2 font-mono text-[11px]">{fmtDateTime(it.createdAt)}</td>
                 <td className="px-3 py-2">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${it.type === "INVENTORY" ? "bg-accent/15 text-accent" : "bg-emerald-500/15 text-emerald-400"}`}>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${it.type === "INVENTORY" ? "bg-accent/15 text-accent" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"}`}>
                     {it.type === "INVENTORY" ? "Inventario" : "Consumo"}
                   </span>
                 </td>

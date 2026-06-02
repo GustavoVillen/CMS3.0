@@ -26,10 +26,10 @@ function KpiCard({ label, value, icon: Icon, warn, onClick }: KpiProps) {
       className={`bg-fg/5 border ${warn ? "border-amber-500/40" : "border-fg/10"} rounded-xl p-3 text-left w-full ${onClick ? "hover:bg-fg/10 active:bg-fg/15 transition-colors" : ""}`}
     >
       <div className="flex items-center gap-1.5 mb-1">
-        <Icon className={`w-3 h-3 ${warn ? "text-amber-400" : "text-text-industrial/40"}`} />
+        <Icon className={`w-3 h-3 ${warn ? "text-amber-700 dark:text-amber-400" : "text-text-industrial/40"}`} />
         <div className="text-[9px] font-bold uppercase tracking-wider text-text-industrial/50 leading-tight">{label}</div>
       </div>
-      <div className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-400" : "text-fg"}`}>{value}</div>
+      <div className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-700 dark:text-amber-400" : "text-fg"}`}>{value}</div>
     </Wrapper>
   );
 }
@@ -113,9 +113,9 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           </>
         ) : (
           <>
-            <XCircle className="w-5 h-5 text-orange-400 shrink-0" />
+            <XCircle className="w-5 h-5 text-orange-700 dark:text-orange-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-orange-300">Falta reporte diario de hoy</p>
+              <p className="text-xs font-bold text-orange-700 dark:text-orange-300">Falta reporte diario de hoy</p>
               <p className="text-[10px] text-text-industrial/50">Tocá para registrarlo</p>
             </div>
           </>
@@ -134,10 +134,10 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 mb-0.5">
-              <AlertTriangle className={`w-3 h-3 ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+              <AlertTriangle className={`w-3 h-3 ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Cert. atención</span>
             </div>
-            <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-fg"}`}>
+            <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>
               {crewData.certsExpired + crewData.certsExpiringSoon}
             </p>
           </div>
@@ -165,10 +165,10 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
             </button>
           </div>
           <div className="grid grid-cols-4 gap-2 text-center">
-            <PlanStat label="Vencidos"   value={mpCounts.OVERDUE}    color="text-red-400"    onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
-            <PlanStat label="Próximos"   value={mpCounts.DUE}         color="text-orange-400" onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
-            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW}   color="text-yellow-400" onClick={() => onNavigate?.("planes", { plansFilter: "all" })} />
-            <PlanStat label="Por vencer" value={mpCounts.UPCOMING}    color="text-blue-400"   onClick={() => onNavigate?.("planes", { plansFilter: "upcoming" })} />
+            <PlanStat label="Vencidos"   value={mpCounts.OVERDUE}    color="text-red-700 dark:text-red-400"    onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
+            <PlanStat label="Próximos"   value={mpCounts.DUE}         color="text-orange-700 dark:text-orange-400" onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
+            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW}   color="text-yellow-700 dark:text-yellow-400" onClick={() => onNavigate?.("planes", { plansFilter: "all" })} />
+            <PlanStat label="Por vencer" value={mpCounts.UPCOMING}    color="text-blue-700 dark:text-blue-400"   onClick={() => onNavigate?.("planes", { plansFilter: "upcoming" })} />
           </div>
         </div>
       )}

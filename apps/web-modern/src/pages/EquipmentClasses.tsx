@@ -140,7 +140,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full sm:max-w-2xl bg-[#0D1B2A] border border-fg/10 sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+      <div className="w-full sm:max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
             <h2 className="text-base font-bold text-fg">{isEdit ? "Editar Clase" : "Nueva Clase de Equipo"}</h2>
@@ -209,7 +209,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
                       ))}
                     </select>
                   </div>
-                  <button onClick={() => { void addTemplate(); }} disabled={!selectedTaskId} className="px-3 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40">
+                  <button onClick={() => { void addTemplate(); }} disabled={!selectedTaskId} className="px-3 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40">
                     Agregar
                   </button>
                   <button onClick={() => { setAddingTask(false); setSelectedTaskId(""); }} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">
@@ -217,7 +217,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
                   </button>
                 </div>
               )}
-              {addErr && <p className="text-xs text-red-400">{addErr}</p>}
+              {addErr && <p className="text-xs text-red-700 dark:text-red-400">{addErr}</p>}
 
               {(tmplData?.items ?? []).length === 0 && !addingTask && (
                 <p className="text-xs text-text-industrial/30 py-2">Sin tareas asociadas.</p>
@@ -240,12 +240,12 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
             </div>
           )}
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
-          <button onClick={() => { void save(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
+          <button onClick={() => { void save(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
           </button>
         </div>
@@ -265,7 +265,7 @@ export const EquipmentClassesPage: React.FC = () => {
     { key: "code",               header: t("col.code"),        render: r => <span className="font-mono font-bold text-fg text-xs">{r.code}</span> },
     { key: "name",               header: t("col.name"),        render: r => <span className="font-medium text-fg">{r.name}</span> },
     { key: "defaultSfiCode",     header: "SFI",                render: r => <span className="font-mono text-xs text-text-industrial/60">{r.defaultSfiCode ?? "—"}</span> },
-    { key: "defaultCriticality", header: t("col.criticality"), render: r => r.defaultCriticality ? <span className={`font-bold text-xs ${r.defaultCriticality === "A" ? "text-red-400" : r.defaultCriticality === "B" ? "text-yellow-400" : "text-text-industrial/60"}`}>{r.defaultCriticality}</span> : <span className="text-text-industrial/30">—</span> },
+    { key: "defaultCriticality", header: t("col.criticality"), render: r => r.defaultCriticality ? <span className={`font-bold text-xs ${r.defaultCriticality === "A" ? "text-red-700 dark:text-red-400" : r.defaultCriticality === "B" ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/60"}`}>{r.defaultCriticality}</span> : <span className="text-text-industrial/30">—</span> },
     { key: "status",             header: t("col.status"),      render: r => <StatusBadge status={r.status} /> },
     { key: "isGlobal",           header: "Alcance",            render: r => <span className="text-xs text-text-industrial/50">{r.isGlobal ? "Global" : "Tenant"}</span> },
   ];

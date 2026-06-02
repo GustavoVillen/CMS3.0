@@ -32,12 +32,12 @@ export const CriticalNotificationBanner: React.FC = () => {
 
   return (
     <div className="bg-red-500/15 border-b border-red-500/40 px-6 py-3 flex items-center gap-4">
-      <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 animate-pulse" />
+      <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 animate-pulse" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-red-300 truncate">
+        <p className="text-sm font-bold text-red-700 dark:text-red-300 truncate">
           {latest.title}
           {extra > 0 && (
-            <span className="ml-2 text-xs font-normal text-red-300/70">
+            <span className="ml-2 text-xs font-normal text-red-700 dark:text-red-300/70">
               {t("notifications.plusMore").replace("{n}", String(extra))}
             </span>
           )}
@@ -54,7 +54,7 @@ export const CriticalNotificationBanner: React.FC = () => {
       </button>
       <button
         onClick={() => void dismiss(latest.id)}
-        className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 transition-colors shrink-0"
+        className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-700 dark:text-red-300 transition-colors shrink-0"
         title={t("notifications.dismiss")}
       >
         <X className="w-4 h-4" />

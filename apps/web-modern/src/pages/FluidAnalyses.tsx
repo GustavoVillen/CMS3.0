@@ -48,10 +48,10 @@ const FLUID_LABELS: Record<FluidType, string> = {
 };
 
 const VERDICT_STYLES: Record<Verdict, { bg: string; text: string; border: string; label: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  NORMAL:           { bg: "bg-green-500/10",  text: "text-green-400",  border: "border-green-500/20",  label: "NORMAL",           Icon: CheckCircle2 },
-  CAUTION:          { bg: "bg-yellow-500/10", text: "text-yellow-400", border: "border-yellow-500/20", label: "PRECAUCIÓN",       Icon: AlertTriangle },
-  CRITICAL:         { bg: "bg-red-500/10",    text: "text-red-400",    border: "border-red-500/20",    label: "CRÍTICO",          Icon: AlertOctagon },
-  ACTION_REQUIRED:  { bg: "bg-red-500/15",    text: "text-red-300",    border: "border-red-500/30",    label: "ACCIÓN REQUERIDA", Icon: AlertOctagon },
+  NORMAL:           { bg: "bg-green-500/10",  text: "text-green-700 dark:text-green-400",  border: "border-green-500/20",  label: "NORMAL",           Icon: CheckCircle2 },
+  CAUTION:          { bg: "bg-yellow-500/10", text: "text-yellow-700 dark:text-yellow-400", border: "border-yellow-500/20", label: "PRECAUCIÓN",       Icon: AlertTriangle },
+  CRITICAL:         { bg: "bg-red-500/10",    text: "text-red-700 dark:text-red-400",    border: "border-red-500/20",    label: "CRÍTICO",          Icon: AlertOctagon },
+  ACTION_REQUIRED:  { bg: "bg-red-500/15",    text: "text-red-700 dark:text-red-300",    border: "border-red-500/30",    label: "ACCIÓN REQUERIDA", Icon: AlertOctagon },
 };
 
 interface FluidParameter { value: number | string; unit?: string; }
@@ -221,7 +221,7 @@ export const FluidAnalysesPage: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setCreatingSample(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> {t("fa.newSample")}
             </button>
@@ -231,7 +231,7 @@ export const FluidAnalysesPage: React.FC = () => {
 
       <div className="bento-card overflow-hidden p-0">
         {loading && <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}
-        {!loading && error && <p className="p-6 text-xs text-red-400">{error}</p>}
+        {!loading && error && <p className="p-6 text-xs text-red-700 dark:text-red-400">{error}</p>}
         {!loading && !error && samples.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-text-industrial/30 gap-3">
             <FlaskConical className="w-8 h-8" />
@@ -432,10 +432,10 @@ function SampleFormModal({
           <label className={labelCls}>{t("fa.notes")}</label>
           <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-none"} />
         </div>
-        {err && <p className="text-xs text-red-400">{err}</p>}
+        {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">{t("common.cancel")}</button>
-          <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+          <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -477,7 +477,7 @@ function SampleDetailModal({
   };
 
   if (loading) return <ModalShell title="Cargando…" onClose={onClose}><div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div></ModalShell>;
-  if (err)     return <ModalShell title="Error"     onClose={onClose}><p className="text-xs text-red-400">{err}</p></ModalShell>;
+  if (err)     return <ModalShell title="Error"     onClose={onClose}><p className="text-xs text-red-700 dark:text-red-400">{err}</p></ModalShell>;
   if (!sample) return null;
 
   if (showResultForm) {
@@ -557,7 +557,7 @@ function SampleDetailModal({
           <div className="p-4 rounded-xl border border-dashed border-fg/10 text-center">
             <p className="text-xs text-text-industrial/50 mb-3">{t("fa.noLabResult")}</p>
             {canManage && (
-              <button onClick={() => setShowResultForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+              <button onClick={() => setShowResultForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
                 <Sparkles className="w-3.5 h-3.5" /> {t("fa.loadResultAi")}
               </button>
             )}
@@ -592,7 +592,7 @@ function SampleDetailModal({
             <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
           </button>
           {canManage && (
-            <button onClick={remove} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20">
+            <button onClick={remove} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/20">
               <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
             </button>
           )}
@@ -1014,7 +1014,7 @@ function ResultFormModal({
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <label className="cursor-pointer">
-              <span className="px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 inline-flex items-center gap-1.5">
+              <span className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 inline-flex items-center gap-1.5">
                 <Upload className="w-3.5 h-3.5" /> {file ? "Cambiar archivo" : "Subir reporte"}
               </span>
               <input type="file" accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,image/heic" onChange={handleFileChange} className="hidden" disabled={extracting || saving} />
@@ -1031,7 +1031,7 @@ function ResultFormModal({
             {extracting && <span className="text-xs text-accent flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando con IA...</span>}
             {file && !extracting && <span className="text-xs text-text-industrial/60 truncate max-w-[300px]">{file.name}</span>}
           </div>
-          {extractError && <p className="text-xs text-red-400">{extractError}</p>}
+          {extractError && <p className="text-xs text-red-700 dark:text-red-400">{extractError}</p>}
           {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer" className="text-xs text-accent inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver archivo cargado</a>}
         </div>
 
@@ -1084,10 +1084,10 @@ function ResultFormModal({
           </div>
         </div>
 
-        {err && <p className="text-xs text-red-400">{err}</p>}
+        {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         <div className="flex justify-end gap-2 pt-2 border-t border-fg/10">
           <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">Cancelar</button>
-          <button onClick={submit} disabled={saving || extracting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+          <button onClick={submit} disabled={saving || extracting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             <Save className="w-3.5 h-3.5" />{saving ? "Guardando..." : "Confirmar y guardar"}
           </button>
         </div>
@@ -1098,9 +1098,9 @@ function ResultFormModal({
 
 function ConfidenceBadge({ confidence }: { confidence: "high" | "medium" | "low" }) {
   const m = {
-    high:   { bg: "bg-green-500/10",  text: "text-green-400",  label: "Alta" },
-    medium: { bg: "bg-yellow-500/10", text: "text-yellow-400", label: "Verificar" },
-    low:    { bg: "bg-red-500/10",    text: "text-red-400",    label: "Dudosa" },
+    high:   { bg: "bg-green-500/10",  text: "text-green-700 dark:text-green-400",  label: "Alta" },
+    medium: { bg: "bg-yellow-500/10", text: "text-yellow-700 dark:text-yellow-400", label: "Verificar" },
+    low:    { bg: "bg-red-500/10",    text: "text-red-700 dark:text-red-400",    label: "Dudosa" },
   }[confidence];
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${m.bg} ${m.text}`}>
@@ -1115,8 +1115,8 @@ function ModalShell({ title, onClose, children, wide }: { title: string; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${wide ? "max-w-5xl" : "max-w-2xl"} max-h-[92vh] overflow-y-auto bg-[#0D1526] border border-fg/10 rounded-2xl shadow-2xl`}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-fg/10 sticky top-0 bg-[#0D1526] z-10">
+      <div className={`relative w-full ${wide ? "max-w-5xl" : "max-w-2xl"} max-h-[92vh] overflow-y-auto bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl shadow-2xl`}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-fg/10 sticky top-0 bg-surface dark:bg-[#0D1526] z-10">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg"><X className="w-4 h-4" /></button>
         </div>

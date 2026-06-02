@@ -42,9 +42,9 @@ const RISK_LABEL: Record<string, string> = {
 
 const RISK_COLOR: Record<string, string> = {
   LOW:      "text-success-sea",
-  MEDIUM:   "text-yellow-400",
-  HIGH:     "text-orange-400",
-  CRITICAL: "text-red-400",
+  MEDIUM:   "text-yellow-700 dark:text-yellow-400",
+  HIGH:     "text-orange-700 dark:text-orange-400",
+  CRITICAL: "text-red-700 dark:text-red-400",
 };
 
 const CONSEQUENCE_LABEL: Record<string, string> = {
@@ -66,17 +66,17 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  PLANNED:     "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  PLANNED:     "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
   IN_PROGRESS: "bg-accent/10 text-accent border-accent/20",
-  ON_HOLD:     "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  ON_HOLD:     "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
   DONE:        "bg-success-sea/10 text-success-sea border-success-sea/20",
   CLOSED:      "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
 const CRIT_COLOR: Record<string, string> = {
-  A: "text-red-400",
-  B: "text-orange-400",
-  C: "text-yellow-400",
+  A: "text-red-700 dark:text-red-400",
+  B: "text-orange-700 dark:text-orange-400",
+  C: "text-yellow-700 dark:text-yellow-400",
   D: "text-text-industrial/50",
 };
 
@@ -240,7 +240,7 @@ const ProgressNotesPanel: React.FC<{
           <button
             type="button"
             onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-fg text-xs font-bold hover:brightness-110"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110"
           >
             <Plus className="w-3.5 h-3.5" />
             Registrar avance
@@ -372,8 +372,8 @@ const HoursPanel: React.FC<{
     const abs = Math.abs(pct);
     const color =
       abs <= 20 ? "text-success-sea"
-      : abs <= 50 ? "text-yellow-400"
-      : "text-red-400";
+      : abs <= 50 ? "text-yellow-700 dark:text-yellow-400"
+      : "text-red-700 dark:text-red-400";
     const sign = diff > 0 ? "+" : "";
     deviation = { pct, color, label: `${sign}${pct.toFixed(0)}%` };
   }
@@ -447,7 +447,7 @@ const HoursPanel: React.FC<{
               type="button"
               onClick={saveEdit}
               disabled={saving}
-              className="py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Guardar</>}
             </button>
@@ -631,7 +631,7 @@ export const MobileWorkOrders: React.FC = () => {
                     woResult === r
                       ? r === "SATISFACTORY"
                         ? "bg-success-sea/15 text-success-sea border-success-sea/30"
-                        : "bg-orange-500/15 text-orange-400 border-orange-500/30"
+                        : "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30"
                       : "bg-fg/5 text-text-industrial/50 border-fg/10"
                   }`}
                 >
@@ -743,12 +743,12 @@ export const MobileWorkOrders: React.FC = () => {
             )}
           </div>
 
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
           <button
             type="button"
             onClick={handleClose}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmar cierre"}
           </button>
@@ -782,7 +782,7 @@ export const MobileWorkOrders: React.FC = () => {
             </div>
             <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Vencimiento</p>
-              <p className={`text-sm font-bold ${isOverdue(selected) ? "text-red-400" : "text-fg"}`}>
+              <p className={`text-sm font-bold ${isOverdue(selected) ? "text-red-700 dark:text-red-400" : "text-fg"}`}>
                 {selected.dueDate ? selected.dueDate.slice(0, 10) : "—"}
               </p>
             </div>
@@ -861,7 +861,7 @@ export const MobileWorkOrders: React.FC = () => {
             </div>
           )}
 
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
           <div className="space-y-2 pt-2">
             {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD") && (
               <button
@@ -940,7 +940,7 @@ export const MobileWorkOrders: React.FC = () => {
                   )}
                 </div>
                 {wo.dueDate && (
-                  <div className={`text-[10px] font-mono shrink-0 mt-0.5 ${isOverdue(wo) ? "text-red-400 font-bold" : "text-text-industrial/30"}`}>
+                  <div className={`text-[10px] font-mono shrink-0 mt-0.5 ${isOverdue(wo) ? "text-red-700 dark:text-red-400 font-bold" : "text-text-industrial/30"}`}>
                     {wo.dueDate.slice(5, 10)}
                   </div>
                 )}

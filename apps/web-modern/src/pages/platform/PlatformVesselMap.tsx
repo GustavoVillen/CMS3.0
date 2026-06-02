@@ -120,7 +120,7 @@ export function PlatformVesselMapPage() {
             <span className="text-xs text-text-industrial/40 animate-pulse">Cargando…</span>
           )}
           {error && (
-            <span className="text-xs text-red-400">{error}</span>
+            <span className="text-xs text-red-700 dark:text-red-400">{error}</span>
           )}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10">
             <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />

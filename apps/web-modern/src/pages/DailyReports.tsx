@@ -231,7 +231,7 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
             <input type="number" value={row.runningHoursTotal} onChange={e => updateRow(i, "runningHoursTotal", e.target.value)} disabled={disabled} placeholder="0" className={inputCls} />
           </div>
           <div className="flex items-end justify-center">
-            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${row.inService ? "bg-green-500/20 border-green-500/40 text-green-400" : "bg-fg/5 border-fg/10 text-text-industrial/40"} ${disabled ? "cursor-default" : "hover:brightness-110"}`}>
+            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${row.inService ? "bg-green-500/20 border-green-500/40 text-green-700 dark:text-green-400" : "bg-fg/5 border-fg/10 text-text-industrial/40"} ${disabled ? "cursor-default" : "hover:brightness-110"}`}>
               <input type="checkbox" checked={row.inService} onChange={e => updateRow(i, "inService", e.target.checked)} disabled={disabled} className="hidden" />
               <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${row.inService ? "bg-green-500 border-green-500" : "border-fg/30"}`}>
                 {row.inService && <svg className="w-2.5 h-2.5 text-fg" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -242,10 +242,10 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
         </div>
       ))}
       {rows.length === 0 && <p className="text-xs text-text-industrial/30 text-center py-4">{t("common.noData")}</p>}
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
       {!disabled && (
         <div className="flex justify-end pt-1">
-          <button onClick={() => { void save(); }} disabled={saving} className="px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={() => { void save(); }} disabled={saving} className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -326,13 +326,13 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
           />
         </div>
       </div>
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
       {!disabled && (
         <div className="flex justify-end">
           <button
             onClick={() => { void save(); }}
             disabled={saving}
-            className="px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"
+            className="px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <CheckCircle className="w-3.5 h-3.5" /> : null}
             {saved ? "Guardado" : t("common.save")}
@@ -492,7 +492,7 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
                 Requiere seguimiento
               </label>
               {!disabled && (
-                <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-300 transition-colors">
+                <button onClick={() => removeRow(i)} className="text-red-700 dark:text-red-400 hover:text-red-300 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -501,13 +501,13 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
         </div>
       ))}
       {rows.length === 0 && <p className="text-xs text-text-industrial/30 text-center py-4">{t("common.noData")}</p>}
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
       {!disabled && (
         <div className="flex items-center gap-2 pt-1">
           <button onClick={addRow} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors">
             <Plus className="w-3.5 h-3.5" /> Agregar tarea
           </button>
-          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -637,7 +637,7 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
               <input value={row.unit} onChange={e => updateRow(i, "unit", e.target.value)} disabled={disabled} placeholder="UN" className={inputCls} />
             </div>
             {!disabled && (
-              <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-300 transition-colors pb-1.5">
+              <button onClick={() => removeRow(i)} className="text-red-700 dark:text-red-400 hover:text-red-300 transition-colors pb-1.5">
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
@@ -645,13 +645,13 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
         </div>
       ))}
       {rows.length === 0 && <p className="text-xs text-text-industrial/30 text-center py-4">{t("common.noData")}</p>}
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
       {!disabled && (
         <div className="flex items-center gap-2 pt-1">
           <button onClick={addRow} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors">
             <Plus className="w-3.5 h-3.5" /> Agregar repuesto
           </button>
-          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -793,7 +793,7 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
                 Requiere seguimiento
               </label>
               {!disabled && (
-                <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-300 transition-colors">
+                <button onClick={() => removeRow(i)} className="text-red-700 dark:text-red-400 hover:text-red-300 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -802,13 +802,13 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
         </div>
       ))}
       {rows.length === 0 && <p className="text-xs text-text-industrial/30 text-center py-4">{t("common.noData")}</p>}
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
       {!disabled && (
         <div className="flex items-center gap-2 pt-1">
           <button onClick={addRow} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors">
             <Plus className="w-3.5 h-3.5" /> Agregar defecto
           </button>
-          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={() => { void save(); }} disabled={saving} className="ml-auto px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -829,7 +829,7 @@ const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
   const active = (data?.items ?? []).filter(d => ACTIVE_DEFERRAL_STATUSES.has(d.status));
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
-  if (error)   return <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>;
+  if (error)   return <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>;
 
   return (
     <div className="space-y-3">
@@ -891,10 +891,10 @@ interface DetailDrawerProps {
 const ACTIVE_DEFERRAL_STATUSES = new Set(["REQUESTED", "UNDER_REVIEW", "APPROVED", "ACTIVE"]);
 
 const DEFERRAL_STATUS_CLS: Record<string, string> = {
-  REQUESTED:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  UNDER_REVIEW: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  APPROVED:     "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  ACTIVE:       "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  REQUESTED:    "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  UNDER_REVIEW: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  APPROVED:     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  ACTIVE:       "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
 };
 
 const DEFERRAL_STATUS_LABEL: Record<string, string> = {
@@ -1158,7 +1158,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div
-        className="w-full h-full bg-[#0D1B2A] flex flex-col"
+        className="w-full h-full bg-surface dark:bg-[#0D1B2A] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1272,7 +1272,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                     />
                   </div>
                 </div>
-                {geoError && <p className="text-[10px] text-red-400">{geoError}</p>}
+                {geoError && <p className="text-[10px] text-red-700 dark:text-red-400">{geoError}</p>}
 
                 {/* Mini mapa */}
                 {mapCoords ? (
@@ -1336,8 +1336,8 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                 <label className={labelCls}>Comentarios operativos</label>
                 <input value={opRemarks} onChange={e => setOpRemarks(e.target.value)} disabled={isClosed} className={inputCls} />
               </div>
-              {saveError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{saveError}</p>}
-              {submitResult && <p className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 shrink-0" />{submitResult}</p>}
+              {saveError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{saveError}</p>}
+              {submitResult && <p className="text-xs text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 shrink-0" />{submitResult}</p>}
               <div className="flex justify-end gap-2">
                 {!isClosed && (
                   <>
@@ -1351,7 +1351,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                         Submit
                       </button>
                     )}
-                    <button onClick={() => { void saveInfo(); }} disabled={saving || submitting} className="px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+                    <button onClick={() => { void saveInfo(); }} disabled={saving || submitting} className="px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
                       {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
                     </button>
                   </>
@@ -1468,7 +1468,7 @@ export const DailyReportsPage: React.FC = () => {
         {canManage && (
           <button
             onClick={() => setDetailReport("new")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold hover:brightness-110 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
             Nuevo reporte

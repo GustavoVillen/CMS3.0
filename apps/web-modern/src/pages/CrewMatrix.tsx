@@ -130,7 +130,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">
@@ -144,10 +144,10 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
             {requirementLevel && (
               <span className={`inline-block mt-1.5 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                 isMandatory
-                  ? "bg-red-500/15 text-red-300 border border-red-500/40"
+                  ? "bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/40"
                   : requirementLevel === "VALIDO"
                   ? "bg-success-sea/15 text-success-sea border border-success-sea/40"
-                  : "bg-yellow-500/15 text-yellow-300 border border-yellow-500/40"
+                  : "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border border-yellow-500/40"
               }`}>
                 {REQ_LEVEL_LABEL[requirementLevel] ?? requirementLevel}
               </span>
@@ -174,17 +174,17 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
             <label className={labelCls}>{t("common.notesObs")}</label>
             <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-y"} placeholder={t("cm.notesPh")} />
           </div>
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         </div>
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
           <div>
             {existing && (
-              <button onClick={() => { void onRemove(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">{t("common.remove")}</button>
+              <button onClick={() => { void onRemove(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs">{t("common.remove")}</button>
             )}
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial">{t("common.close")}</button>
-            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </button>
           </div>
@@ -287,7 +287,7 @@ export const CrewMatrixPage: React.FC = () => {
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-fg/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[220px]">{t("common.crewMember")}</th>
+                <th className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[220px]">{t("common.crewMember")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
                     <span title={`${it.name}${it.regulation ? " — " + it.regulation : ""}`}>{it.code}</span>
@@ -298,7 +298,7 @@ export const CrewMatrixPage: React.FC = () => {
             <tbody>
               {data.crew.map(c => (
                 <tr key={c.id} className="border-b border-fg/5 last:border-b-0">
-                  <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2">
+                  <td className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] px-3 py-2">
                     <div className="text-xs font-bold text-fg">{c.firstName} {c.lastName}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{c.rankName ?? "—"} · {c.vesselCode}</div>
                   </td>
@@ -315,10 +315,10 @@ export const CrewMatrixPage: React.FC = () => {
                       const expired = !!expiry && expiry < now;
                       const soon    = !!expiry && !expired && expiry < soonThreshold;
                       if (expired) {
-                        cls = "bg-red-500/15 text-red-300 border-red-500/40 hover:bg-red-500/25";
+                        cls = "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40 hover:bg-red-500/25";
                         symbol = <><AlertCircle className="w-2.5 h-2.5 inline" /> EXP</>;
                       } else if (soon) {
-                        cls = "bg-yellow-500/15 text-yellow-300 border-yellow-500/40 hover:bg-yellow-500/25";
+                        cls = "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/40 hover:bg-yellow-500/25";
                         symbol = "⚠";
                       } else {
                         cls = "bg-success-sea/15 text-success-sea border-success-sea/40 hover:bg-success-sea/25";
@@ -326,7 +326,7 @@ export const CrewMatrixPage: React.FC = () => {
                       }
                     } else if (isMandatory) {
                       // No tiene el entrenamiento y es obligatorio: rojo apagado
-                      cls = "bg-red-500/5 text-red-400/60 border-red-500/20 hover:bg-red-500/15";
+                      cls = "bg-red-500/5 text-red-700 dark:text-red-400/60 border-red-500/20 hover:bg-red-500/15";
                       symbol = "!";
                     } else if (reqLevel === "DESEJAVEL") {
                       cls = "bg-fg/[0.02] text-yellow-500/40 border-yellow-500/10 hover:bg-yellow-500/5";

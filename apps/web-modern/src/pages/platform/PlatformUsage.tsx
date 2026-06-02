@@ -169,7 +169,7 @@ const AI_COLS_RAW: Column<UsageEvent>[] = [
   { key: "inputTokens",  header: "Input",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",  render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
   { key: "cacheReadTokens", header: "Cache↓", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.cacheReadTokens > 0 ? fmtTok(r.cacheReadTokens) : "—"}</span> },
-  { key: "costUsd",      header: "Costo",   render: r => <span className="font-mono text-xs text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
+  { key: "costUsd",      header: "Costo",   render: r => <span className="font-mono text-xs text-yellow-700 dark:text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
   { key: "latencyMs",    header: "Lat.",    render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
   { key: "errored",      header: "",        render: r => r.errored ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" title="Error" /> : null },
 ];
@@ -178,7 +178,7 @@ const HTTP_COLS_RAW: Column<UsageEvent>[] = [
   ...COMMON_COLS_RAW,
   { key: "method",     header: "Mét.",    render: r => <span className="font-mono text-[10px] text-text-industrial/60">{r.method ?? "—"}</span> },
   { key: "route",      header: "Ruta",    render: r => <span className="font-mono text-[10px] text-text-industrial/60 truncate block max-w-[280px]" title={r.route ?? ""}>{r.route ?? "—"}</span> },
-  { key: "statusCode", header: "Status",  render: r => <span className={`font-mono text-xs ${r.statusCode && r.statusCode >= 400 ? "text-red-400" : "text-text-industrial/60"}`}>{r.statusCode ?? "—"}</span> },
+  { key: "statusCode", header: "Status",  render: r => <span className={`font-mono text-xs ${r.statusCode && r.statusCode >= 400 ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{r.statusCode ?? "—"}</span> },
   { key: "bytesIn",    header: "↑ In",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
   { key: "bytesOut",   header: "↓ Out",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesOut)}</span> },
   { key: "latencyMs",  header: "Lat.",    render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
@@ -200,7 +200,7 @@ const AI_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "inputTokens",  header: "Input",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
   { key: "cacheReadTokens", header: "Cache↓", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.cacheReadTokens > 0 ? fmtTok(r.cacheReadTokens) : "—"}</span> },
-  { key: "costUsd",      header: "Costo",     render: r => <span className="font-mono text-xs text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
+  { key: "costUsd",      header: "Costo",     render: r => <span className="font-mono text-xs text-yellow-700 dark:text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
   { key: "latencyMs",    header: "Lat. avg",  render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
   { key: "errored",      header: "",          render: r => r.errored ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" title="Hubo error en el bucket" /> : null },
 ];
@@ -509,7 +509,7 @@ export const PlatformUsagePage: React.FC = () => {
             <>
               <span>Input: <span className="text-fg">{fmtTok(totalInputTok)}</span></span>
               <span>Output: <span className="text-fg">{fmtTok(totalOutputTok)}</span></span>
-              <span>Costo: <span className="text-yellow-400/80">{fmtUsd(totalCost)}</span></span>
+              <span>Costo: <span className="text-yellow-700 dark:text-yellow-400/80">{fmtUsd(totalCost)}</span></span>
             </>
           )}
           {kind === "http_request" && (

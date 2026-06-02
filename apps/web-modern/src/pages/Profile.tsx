@@ -139,12 +139,12 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {infoError && (
-              <p className="text-xs text-red-400 flex items-center gap-1.5">
+              <p className="text-xs text-red-700 dark:text-red-400 flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />{infoError}
               </p>
             )}
             {infoSuccess && (
-              <p className="text-xs text-green-400 flex items-center gap-1.5">
+              <p className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5" />{t("profile.savedOk")}
               </p>
             )}
@@ -152,7 +152,7 @@ export const ProfilePage: React.FC = () => {
             <button
               type="submit"
               disabled={infoSaving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-primary-bg text-xs font-semibold hover:bg-accent/90 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 disabled:opacity-50 transition-colors"
             >
               {infoSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {t("profile.saveInfo")}
@@ -200,12 +200,12 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {pwdError && (
-              <p className="text-xs text-red-400 flex items-center gap-1.5">
+              <p className="text-xs text-red-700 dark:text-red-400 flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />{pwdError}
               </p>
             )}
             {pwdSuccess && (
-              <p className="text-xs text-green-400 flex items-center gap-1.5">
+              <p className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5" />{t("profile.pwdChangedOk")}
               </p>
             )}

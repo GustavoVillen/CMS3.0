@@ -82,11 +82,24 @@ Agent: Claude Opus 4.8
     infra/docker-compose.yml up -d`. No es bug de código; en prod la DB corre como
     servicio siempre-on (no depende de Docker en la PC del cliente).
 
+  POLISH GLOBAL (idempotente, perl con lookbehind (?<!:) para no tocar lo migrado):
+    - Modales/paneles dark-hex (bg-[#0D1B2A] y 7 variantes) → bg-surface dark:bg-[#hex]
+      (blancos en light, navy en dark). 83+ ocurrencias.
+    - text-primary-bg → text-accent-fg (texto sobre acento, 106).
+    - bg-accent text-fg → bg-accent text-accent-fg (15).
+    - Badges a dos tonos: text-{color}-400/300 → text-{color}-700 dark:text-{color}-N
+      (red/orange/amber/yellow/green/emerald/teal/blue/indigo/violet/purple/cyan/sky/...).
+    - 63 archivos. vite build OK. Verificado modal Nuevo Defecto en light (blanco) y
+      dark (navy). Idempotencia chequeada (0 dark:bg-surface, 0 dark:text-*-700 dobles).
+
+  NOTA: el área /platform y Login usan bg-primary-bg (alias→bg, theme-aware) — quedan
+  claros solos, no son modales, sin cambios.
+
   PENDIENTE (follow-up):
-    - Polish por página del resto (~65): badges dos tonos, modales a bg-surface,
-      botones de acento a text-accent-fg.
+    - Repaso visual fino por módulo si aparece algún caso puntual (combos de color
+      raros, gráficos específicos).
     - Opcional: default de tema por tenant (requiere campo en AuthTenant).
-    - git commit de estos cambios FE.
+    - Deploy a VPS ("Actualiza VPS") cuando se quiera publicar.
 
 [2026-06-02] INFRA: subdominios por tenant ACTIVADOS en VPS (*.shipcms.cloud)
 Agent: Claude Opus 4.8

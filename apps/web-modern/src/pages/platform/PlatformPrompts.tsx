@@ -54,7 +54,7 @@ function usePlatformList<T>(path: string) {
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-xl shadow-2xl">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
@@ -79,7 +79,7 @@ const sel = inp + " appearance-none";
 const textarea = inp + " resize-none font-mono text-xs leading-relaxed";
 
 function ErrMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
+  return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
 }
 
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
@@ -188,13 +188,13 @@ export const PlatformPromptsPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={MessageSquare} title="Platform Prompts" total={data?.total} onReload={reload}>
         <button onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
           <Plus className="w-3.5 h-3.5" /> Nuevo Prompt
         </button>
       </PageHeader>
 
       {actMsg && (
-        <div className={`flex items-center gap-2 text-xs p-3 rounded-xl border ${actMsg.startsWith("Error") ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-green-500/10 border-green-500/20 text-green-400"}`}>
+        <div className={`flex items-center gap-2 text-xs p-3 rounded-xl border ${actMsg.startsWith("Error") ? "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400" : "bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400"}`}>
           {actMsg.startsWith("Error") ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
           {actMsg}
         </div>
@@ -203,7 +203,7 @@ export const PlatformPromptsPage: React.FC = () => {
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 text-accent animate-spin" /></div>
       ) : error ? (
-        <div className="flex items-center gap-2 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>
+        <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>
       ) : prompts.length === 0 ? (
         <div className="text-center py-16 text-text-industrial/20 text-sm">Sin prompts registrados</div>
       ) : (
@@ -234,7 +234,7 @@ export const PlatformPromptsPage: React.FC = () => {
                   <button
                     onClick={() => handleAction(p, "publish")}
                     disabled={actLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold hover:bg-green-500/20 disabled:opacity-50 transition-all">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-xs font-bold hover:bg-green-500/20 disabled:opacity-50 transition-all">
                     <Send className="w-3 h-3" /> Publicar
                   </button>
                 )}
@@ -242,7 +242,7 @@ export const PlatformPromptsPage: React.FC = () => {
                   <button
                     onClick={() => handleAction(p, "rollback")}
                     disabled={actLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold hover:bg-yellow-500/20 disabled:opacity-50 transition-all">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-xs font-bold hover:bg-yellow-500/20 disabled:opacity-50 transition-all">
                     <RotateCcw className="w-3 h-3" /> Revertir
                   </button>
                 )}

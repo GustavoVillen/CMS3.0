@@ -5,9 +5,9 @@ import { useNotifications, type NotificationDto } from "../lib/notifications";
 import { useT } from "../lib/i18n";
 
 function severityClasses(sev: string): { dot: string; label: string } {
-  if (sev === "CRITICAL") return { dot: "bg-red-500", label: "text-red-400" };
-  if (sev === "HIGH")     return { dot: "bg-amber-500", label: "text-amber-400" };
-  return { dot: "bg-sky-500", label: "text-sky-400" };
+  if (sev === "CRITICAL") return { dot: "bg-red-500", label: "text-red-700 dark:text-red-400" };
+  if (sev === "HIGH")     return { dot: "bg-amber-500", label: "text-amber-700 dark:text-amber-400" };
+  return { dot: "bg-sky-500", label: "text-sky-700 dark:text-sky-400" };
 }
 
 function timeAgo(iso: string, t: (k: string) => string): string {
@@ -112,7 +112,7 @@ export const NotificationsBell: React.FC = () => {
                       {n.body && <p className="text-xs text-text-industrial/60 mt-0.5 line-clamp-2">{n.body}</p>}
                       <div className="flex items-center gap-2 mt-1">
                         {n.severity === "CRITICAL" && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 uppercase">
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-700 dark:text-red-400 uppercase">
                             <AlertTriangle className="w-3 h-3" />
                             {t("notifications.critical")}
                           </span>

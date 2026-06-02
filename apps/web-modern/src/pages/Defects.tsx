@@ -57,9 +57,9 @@ interface ListResponse {
 
 const OP_STATE_STYLES: Record<string, string> = {
   NORMAL: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  DEGRADED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  DEGRADED: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
   RESTRICTED: "bg-accent/10 text-accent border-accent/20",
-  NO_GO: "bg-red-500/10 text-red-400 border-red-500/20",
+  NO_GO: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
 };
 
 function OperationalStateBadge({ value }: { value: string }) {
@@ -118,9 +118,9 @@ function defectOriginKey(classification: string): DefectOriginKey {
 }
 
 const ORIGIN_STYLES: Record<DefectOriginKey, string> = {
-  wo:         "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  inspection: "bg-teal-500/10 text-teal-400 border-teal-500/20",
-  fluid:      "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  wo:         "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  inspection: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
+  fluid:      "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
   manual:     "bg-fg/5 text-text-industrial/60 border-fg/10",
 };
 
@@ -187,7 +187,7 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
         autoComplete="off"
       />
       {open && !disabled && filtered.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
           {filtered.map(a => (
             <button
               key={a.id}
@@ -202,7 +202,7 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
         </div>
       )}
       {open && !disabled && !loading && filtered.length === 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-lg px-3 py-2 text-xs text-text-industrial/40">
+        <div className="absolute z-50 w-full mt-1 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-lg px-3 py-2 text-xs text-text-industrial/40">
           Sin resultados
         </div>
       )}
@@ -468,7 +468,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <h2 className="text-base font-bold text-fg">{t("def.newTitle")}</h2>
           <div className="flex items-center gap-1">
@@ -556,7 +556,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                   <span className="px-2 py-0.5 rounded-md bg-fg/10 text-fg text-xs font-bold">{suggestion.classification}</span>
                   <span className="text-[10px] text-text-industrial/60 ml-2">{t("def.sevLabel")}</span>
                   <span className="px-2 py-0.5 rounded-md bg-fg/10 text-fg text-xs font-bold">{suggestion.severity}</span>
-                  <button type="button" onClick={applySuggestion} className="ml-auto px-2.5 py-1 rounded-lg bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wider">
+                  <button type="button" onClick={applySuggestion} className="ml-auto px-2.5 py-1 rounded-lg bg-accent text-accent-fg text-[10px] font-bold uppercase tracking-wider">
                     Aplicar
                   </button>
                 </div>
@@ -568,8 +568,8 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
           {similar.length > 0 && (
             <div className="rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-3 space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
-                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">
+                <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-700 dark:text-orange-400">
                   {similar.length === 1 ? "Posible duplicado" : `${similar.length} posibles duplicados`}
                 </p>
               </div>
@@ -577,7 +577,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               <ul className="space-y-1 mt-1">
                 {similar.map(s => (
                   <li key={s.id} className="text-[11px] text-text-industrial/80 bg-fg/[0.04] border border-fg/10 rounded-md px-2 py-1 flex items-center gap-2">
-                    <span className="font-mono text-orange-300/80 shrink-0">{s.defectCode}</span>
+                    <span className="font-mono text-orange-700 dark:text-orange-300/80 shrink-0">{s.defectCode}</span>
                     <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-fg/5 text-text-industrial/60 shrink-0">{s.status}</span>
                     <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-fg/5 text-text-industrial/60 shrink-0">{s.severity}</span>
                     <span className="truncate">{s.description}</span>
@@ -644,7 +644,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                   <div key={i} className={`relative aspect-square bg-fg/5 border rounded-lg overflow-hidden group ${p.analyzed ? "border-accent/40" : "border-fg/10"}`}>
                     <img src={p.preview} alt="" className="w-full h-full object-cover" />
                     {p.analyzed && (
-                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-accent text-accent-fg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5" />IA
                       </span>
                     )}
@@ -662,10 +662,10 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             )}
           </div>
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5">
+            <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               Crear defecto
             </button>
@@ -1055,7 +1055,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   if (postSaveStep === "ask-permanent-wo") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("def.tempRepairTitle")}</h2>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -1063,7 +1063,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           <div className="p-6 space-y-3">
             <p className="text-sm text-fg/80">{t("def.tempRepairAsk")}</p>
             <p className="text-xs text-text-industrial/40">{t("def.tempRepairHint")}</p>
-            {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
           <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
             <button onClick={onSaved} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg transition-colors">
@@ -1071,7 +1071,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             </button>
             <button
               onClick={() => { setPostSaveStep(null); setShowCreateWo(true); }}
-              className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
+              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
             >
               Sí, crear OT permanente
             </button>
@@ -1109,7 +1109,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
@@ -1186,8 +1186,8 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                     className="inline-flex items-center gap-1.5 group"
                   >
                     <OriginBadge classification={defect.classification} />
-                    <span className="font-mono text-[10px] text-blue-400 group-hover:underline">{defect.workOrderCode}</span>
-                    <ExternalLink className="w-3 h-3 text-blue-400/60 group-hover:text-blue-400 shrink-0" />
+                    <span className="font-mono text-[10px] text-blue-700 dark:text-blue-400 group-hover:underline">{defect.workOrderCode}</span>
+                    <ExternalLink className="w-3 h-3 text-blue-700 dark:text-blue-400/60 group-hover:text-blue-400 shrink-0" />
                   </button>
                 ) : (
                   <OriginBadge classification={defect.classification} />
@@ -1297,7 +1297,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">{t("def.rcaTitle")}</p>
                 <div className="flex items-center gap-2">
                   {rcaApprovedAt && (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40">
                       {t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}
                     </span>
                   )}
@@ -1377,7 +1377,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                       setActionError(err instanceof ApiError ? err.message : "Error al aprobar el RCA.");
                     }
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
                 >
                   {t("def.rcaApprove")}
                 </button>
@@ -1385,7 +1385,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             </div>
 
             {rcaAnalysisError && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{rcaAnalysisError}</p>
+              <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{rcaAnalysisError}</p>
             )}
 
             {/* Tipo de reparación — último campo */}
@@ -1401,8 +1401,8 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                       className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
                         repairType === rt
                           ? rt === "PERMANENTE"
-                            ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
-                            : "bg-yellow-500/15 border-yellow-500/50 text-yellow-400"
+                            ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                            : "bg-yellow-500/15 border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
                           : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
                       }`}
                     >
@@ -1411,15 +1411,15 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                   ))}
                 </div>
                 {repairType === "PERMANENTE" && (
-                  <p className="text-[11px] text-emerald-400/70">{t("def.saveWillCloseWo")}</p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400/70">{t("def.saveWillCloseWo")}</p>
                 )}
                 {repairType === "TEMPORARIA" && (
-                  <p className="text-[11px] text-yellow-400/70">{t("def.saveWillAskWo")}</p>
+                  <p className="text-[11px] text-yellow-700 dark:text-yellow-400/70">{t("def.saveWillAskWo")}</p>
                 )}
               </div>
             )}
 
-            {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
 
           <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
@@ -1455,7 +1455,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                   className={`px-4 py-2 rounded-xl font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all ${
                     repairType === "PERMANENTE"
                       ? "bg-emerald-500/80 text-fg"
-                      : "bg-accent text-primary-bg"
+                      : "bg-accent text-accent-fg"
                   }`}>
                   {(saving || closing) ? <Loader2 className="w-4 h-4 animate-spin" />
                     : repairType === "PERMANENTE" ? "Guardar y cerrar"
@@ -1647,7 +1647,7 @@ export const DefectsPage: React.FC = () => {
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
-      {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
+      {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
 
       <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => { void openDetail(row); }} />
 

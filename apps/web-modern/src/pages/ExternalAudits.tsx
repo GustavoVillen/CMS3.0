@@ -31,8 +31,8 @@ const FINDING_TYPE_LABEL: Record<string, string> = {
 };
 
 const FINDING_STATUS_COLOR: Record<string, string> = {
-  OPEN:                "bg-red-500/10 text-red-400 border-red-500/30",
-  IN_PROGRESS:         "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
+  OPEN:                "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+  IN_PROGRESS:         "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
   CLOSED:              "bg-success-sea/10 text-success-sea border-success-sea/30",
   REJECTED_BY_AUDITOR: "bg-fg/5 text-text-industrial/60 border-fg/10",
 };
@@ -150,7 +150,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ClipboardCheck className="w-4 h-4 text-accent" />
@@ -226,20 +226,20 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
             <FindingAddForm auditId={audit.id} onClose={() => setShowAddFinding(false)} onSaved={() => { setShowAddFinding(false); void reloadFindings(); }} />
           )}
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div>
             {!isNew && isAdmin && (
-              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20">
+              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs hover:bg-red-500/20">
                 Eliminar
               </button>
             )}
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
-            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </button>
           </div>
@@ -263,7 +263,7 @@ const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => 
             {finding.status}
           </span>
           {finding.detentionRelated && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-300 font-bold uppercase tracking-wider flex items-center gap-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300 font-bold uppercase tracking-wider flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" /> Detention
             </span>
           )}
@@ -328,10 +328,10 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
         </div>
       </div>
       <div><label className={labelCls}>Descripción *</label><textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} /></div>
-      {err && <p className="text-[11px] text-red-400">{err}</p>}
+      {err && <p className="text-[11px] text-red-700 dark:text-red-400">{err}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial">Cancelar</button>
-        <button onClick={() => { void onSave(); }} disabled={saving} className="px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
+        <button onClick={() => { void onSave(); }} disabled={saving} className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Agregar"}
         </button>
       </div>
@@ -385,12 +385,12 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
       <div><label className={labelCls}>URL evidencia</label>
         <input value={evidenceDocUrl} onChange={e => setEvidenceDocUrl(e.target.value)} className={inputCls + " text-xs"} />
       </div>
-      {err && <p className="text-[11px] text-red-400">{err}</p>}
+      {err && <p className="text-[11px] text-red-700 dark:text-red-400">{err}</p>}
       <div className="flex justify-between gap-2">
-        <button onClick={() => { void onDelete(); }} className="px-3 py-1 rounded-lg text-[10px] text-red-400 hover:text-red-300">Eliminar</button>
+        <button onClick={() => { void onDelete(); }} className="px-3 py-1 rounded-lg text-[10px] text-red-700 dark:text-red-400 hover:text-red-300">Eliminar</button>
         <div className="flex gap-2">
           <button onClick={onClose} className="px-3 py-1 rounded-lg text-xs text-text-industrial">Cancelar</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-3 py-1 rounded-lg bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-3 py-1 rounded-lg bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Guardar"}
           </button>
         </div>
@@ -418,7 +418,7 @@ export const ExternalAuditsPage: React.FC = () => {
     <div className="p-6 space-y-4">
       <PageHeader icon={ClipboardCheck} title="Auditorías Externas" total={items.length} onReload={reload}>
         <ExportExcelButton module="external_audits" />
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nueva auditoría
         </button>
       </PageHeader>
@@ -449,7 +449,7 @@ export const ExternalAuditsPage: React.FC = () => {
                   </span>
                   <VesselLabel code={a.vesselCode} className="text-[10px]" showCode />
                   {(a.findingsOpen ?? 0) > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/30">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30">
                       {a.findingsOpen} abiertos
                     </span>
                   )}

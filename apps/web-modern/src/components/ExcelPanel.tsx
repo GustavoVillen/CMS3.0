@@ -306,7 +306,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
               <button
                 onClick={handleConfirm}
                 disabled={preview.rows.every(r => r.status === "ERROR")}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 Confirmar importación <ChevronRight className="w-3 h-3" />
               </button>
@@ -336,7 +336,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 );
 
 const ErrorBanner: React.FC<{ msg: string }> = ({ msg }) => (
-  <div className="flex items-center gap-2 text-xs text-red-400 p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+  <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 p-3 bg-red-500/10 rounded-xl border border-red-500/20">
     <AlertCircle className="w-4 h-4 shrink-0" />{msg}
   </div>
 );
@@ -344,19 +344,19 @@ const ErrorBanner: React.FC<{ msg: string }> = ({ msg }) => (
 const STATUS_STYLES: Record<RowStatus, { label: string; cls: string }> = {
   CREATE:                { label: "Nuevo",     cls: "bg-success-sea/10 text-success-sea border-success-sea/20" },
   UPDATE:                { label: "Actualizar",cls: "bg-accent/10 text-accent border-accent/20" },
-  ERROR:                 { label: "Error",     cls: "bg-red-500/10 text-red-400 border-red-500/20" },
-  CONFLICT_SOFT_DELETED: { label: "Restaurar", cls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
+  ERROR:                 { label: "Error",     cls: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20" },
+  CONFLICT_SOFT_DELETED: { label: "Restaurar", cls: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" },
 };
 
 const FixesBanner: React.FC<{ fixes: string[] }> = ({ fixes }) => (
   <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3 space-y-1.5">
-    <div className="flex items-center gap-2 text-xs font-bold text-yellow-400">
+    <div className="flex items-center gap-2 text-xs font-bold text-yellow-700 dark:text-yellow-400">
       <Wrench className="w-3.5 h-3.5" />
       {fixes.length} corrección{fixes.length !== 1 ? "es" : ""} aplicada{fixes.length !== 1 ? "s" : ""} automáticamente
     </div>
     <ul className="space-y-0.5">
       {fixes.map((fix, i) => (
-        <li key={i} className="text-[11px] text-yellow-300/70 pl-5 list-disc">{fix}</li>
+        <li key={i} className="text-[11px] text-yellow-700 dark:text-yellow-300/70 pl-5 list-disc">{fix}</li>
       ))}
     </ul>
   </div>
@@ -446,7 +446,7 @@ const PreviewSummary: React.FC<{ preview: PreviewResult; fileName: string | null
                     </td>
                     <td className="px-3 py-2 text-text-industrial/60 max-w-xs">
                       {row.status === "ERROR"
-                        ? <span className="text-red-400">{row.errorMessage ?? "Fila inválida"}</span>
+                        ? <span className="text-red-700 dark:text-red-400">{row.errorMessage ?? "Fila inválida"}</span>
                         : <span className="truncate block">{preview_val}</span>
                       }
                     </td>
@@ -473,12 +473,12 @@ const ImportDone: React.FC<{ result: ImportResult; onReset: () => void }> = ({ r
     <div className="flex gap-6">
       <Stat label="Creados"     value={result.created}  color="text-success-sea" />
       <Stat label="Actualizados"value={result.updated}  color="text-accent" />
-      <Stat label="Rechazados"  value={result.rejected} color="text-red-400" />
+      <Stat label="Rechazados"  value={result.rejected} color="text-red-700 dark:text-red-400" />
     </div>
     {(result.rowErrors?.length ?? 0) > 0 && (
       <div className="w-full space-y-1">
         {result.rowErrors!.map(e => (
-          <div key={e.rowNumber} className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-1.5 border border-red-500/20">
+          <div key={e.rowNumber} className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 rounded-lg px-3 py-1.5 border border-red-500/20">
             Fila {e.rowNumber}: {e.error}
           </div>
         ))}

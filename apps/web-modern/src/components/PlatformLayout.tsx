@@ -25,7 +25,7 @@ export const PlatformLayout: React.FC = () => {
         <div className="p-5 border-b border-red-500/10">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-              <ShieldCheck className="text-red-400 w-4 h-4" />
+              <ShieldCheck className="text-red-700 dark:text-red-400 w-4 h-4" />
             </div>
             <div>
               <p className="text-xs font-bold text-fg">Super Admin</p>
@@ -39,7 +39,7 @@ export const PlatformLayout: React.FC = () => {
             <NavLink key={item.path} to={item.path}
               className={({ isActive }) =>
                 `flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-150 group text-xs font-medium ${
-                  isActive ? "bg-red-500/10 text-red-400 border border-red-500/20" : "text-text-industrial/60 hover:text-fg hover:bg-fg/5"
+                  isActive ? "bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20" : "text-text-industrial/60 hover:text-fg hover:bg-fg/5"
                 }`
               }
             >
@@ -55,10 +55,10 @@ export const PlatformLayout: React.FC = () => {
         <div className="p-3 border-t border-red-500/10 space-y-2">
           <div className="px-3 py-2">
             <p className="text-[10px] text-text-industrial/30 truncate">{user?.email}</p>
-            <p className="text-[10px] text-red-400 font-bold">{user?.role}</p>
+            <p className="text-[10px] text-red-700 dark:text-red-400 font-bold">{user?.role}</p>
           </div>
           <button onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all">
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-700 dark:text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all">
             <LogOut className="w-3.5 h-3.5" /> Cerrar sesión
           </button>
         </div>
@@ -67,9 +67,9 @@ export const PlatformLayout: React.FC = () => {
       {/* Content */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-12 border-b border-red-500/10 flex items-center px-6 bg-primary-bg/30 backdrop-blur-md shrink-0 relative z-50">
-          <span className="text-xs text-red-400/60 font-mono">PLATFORM ADMIN CONSOLE</span>
+          <span className="text-xs text-red-700 dark:text-red-400/60 font-mono">PLATFORM ADMIN CONSOLE</span>
         </header>
-        <main className="flex-1 overflow-y-auto p-6 bg-[#080D1D]">
+        <main className="flex-1 overflow-y-auto p-6 bg-surface dark:bg-[#080D1D]">
           <Outlet />
         </main>
       </div>

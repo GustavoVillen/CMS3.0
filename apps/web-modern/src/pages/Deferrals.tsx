@@ -75,9 +75,9 @@ interface MaintenancePlanReference {
 }
 
 const SOURCE_STYLES: Record<string, string> = {
-  DEFECT: "bg-red-500/10 text-red-400 border-red-500/20",
+  DEFECT: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
   WORK_ORDER: "bg-accent/10 text-accent border-accent/20",
-  MAINTENANCE_PLAN: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  MAINTENANCE_PLAN: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
 };
 
 function SourceTypeBadge({ sourceType }: { sourceType: string }) {
@@ -128,7 +128,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.review")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -138,11 +138,11 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.reviewNotes")}</label>
             <textarea rows={4} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -195,7 +195,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.approve")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -213,11 +213,11 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.compensatory")}</label>
             <textarea rows={4} value={compensatoryMeasures} onChange={e => setCompensatoryMeasures(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving || !approverName.trim()} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving || !approverName.trim()} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -268,7 +268,7 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.reject")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -282,11 +282,11 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")} *</label>
             <textarea rows={4} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving || !rejectorName.trim() || !rejectionReason.trim()} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving || !rejectorName.trim() || !rejectionReason.trim()} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -327,7 +327,7 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.close")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -337,11 +337,11 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def.closeNotes")}</label>
             <textarea rows={4} value={closeNotes} onChange={e => setCloseNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -554,7 +554,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("page.deferrals")}</h2>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -691,7 +691,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                 Resolviendo nombres de referencias...
               </div>
             )}
-            {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">
             <div className="flex items-center gap-2">
@@ -728,7 +728,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${
                     confirmCancel
                       ? "bg-red-500 text-fg border-red-500 hover:bg-red-600"
-                      : "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                      : "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-500/20"
                   }`}
                 >
                   {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -755,7 +755,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   <button onClick={() => setShowApprove(true)} className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 transition-all">
                     {t("def2.approve")}
                   </button>
-                  <button onClick={() => setShowReject(true)} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all">
+                  <button onClick={() => setShowReject(true)} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all">
                     {t("def2.reject")}
                   </button>
                 </>
@@ -971,7 +971,7 @@ export const DeferralsPage: React.FC = () => {
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del diferimiento...</div>}
-      {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
+      {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
       <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => { void openDetail(row); }} />
 

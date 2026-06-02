@@ -96,9 +96,9 @@ function fmtDate(value: string | null): string {
 
 function CertStatusBadge({ status }: { status: string }) {
   const t = useT();
-  if (status === "EXPIRED") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("cert.status.expired")}</span>;
-  if (status === "EXPIRING_SOON") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("cert.status.expiring")}</span>;
-  return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("cert.status.valid")}</span>;
+  if (status === "EXPIRED") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("cert.status.expired")}</span>;
+  if (status === "EXPIRING_SOON") return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("cert.status.expiring")}</span>;
+  return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("cert.status.valid")}</span>;
 }
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
@@ -234,7 +234,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-accent" />
@@ -243,7 +243,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
               <h2 className="text-sm font-bold text-fg">{isNew ? t("crew.new") : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
             </div>
             {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("crew.status.signedOff")}</span>}
-            {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
+            {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
@@ -253,7 +253,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             <div className="space-y-4">
               {isLocked && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-orange-200">{t("crew.lockedNotice")}</p>
                 </div>
               )}
@@ -315,7 +315,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                   <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
               </div>
-              {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
             </div>
           )}
 
@@ -325,13 +325,13 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
           <div className="flex gap-2">
             {!isNew && crew?.status === "ONBOARD" && (
               <button onClick={() => { void onSignOff(); }} disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-700 dark:text-orange-400 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
                 <LogOut className="w-3.5 h-3.5" /> {t("crew.signOff")}
               </button>
             )}
             {!isNew && crew?.status === "SIGNED_OFF" && isAdmin && (
               <button onClick={() => { void onReopen(); }} disabled={saving}
-                className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
+                className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">
                 {t("crew.reopen")}
               </button>
             )}
@@ -340,7 +340,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {(isNew || tab === "details") && !isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
-                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
               </button>
             )}
@@ -453,10 +453,10 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
               <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
-            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
           </div>
@@ -484,7 +484,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
               <div className="flex items-center gap-1.5 shrink-0">
                 {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-fg/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
                 {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">{t("common.edit")}</button>}
-                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-400 hover:underline ml-2">{t("common.delete")}</button>}
+                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline ml-2">{t("common.delete")}</button>}
               </div>
             </div>
           ))}
@@ -514,7 +514,7 @@ export const CrewPage: React.FC = () => {
     <div className="p-6 space-y-4">
       <PageHeader icon={Users} title={t("crew.title")} total={data?.total} onReload={reload}>
         <ExportExcelButton module="crew" />
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> {t("crew.new")}
         </button>
       </PageHeader>
@@ -543,13 +543,13 @@ export const CrewPage: React.FC = () => {
                 <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40 shrink-0">{c.crewCode}</span>
                   {c.status === "ONBOARD"
-                    ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
+                    ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
                     : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10 shrink-0">{t("crew.status.signedOff")}</span>}
                   <p className="text-sm font-bold text-fg truncate">{c.firstName} {c.lastName}</p>
                   <p className="text-xs text-text-industrial/50 truncate">{c.rankDefinition?.name ?? "—"}</p>
                   <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                   {expiringCount > 0 && (
-                    <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20 shrink-0">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20 shrink-0">
                       {t("crew.attentionCerts").replace("{n}", String(expiringCount))}
                     </span>
                   )}

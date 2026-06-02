@@ -109,9 +109,9 @@ type ChecklistItemFormState = {
 
 const RESULT_STYLES: Record<string, string> = {
   SATISFACTORY: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  SATISFACTORY_WITH_OBSERVATIONS: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  UNSATISFACTORY_FOLLOW_UP_REQUIRED: "bg-red-500/10 text-red-400 border-red-500/20",
-  CRITICAL_DEFICIENCY_IMMEDIATE_ACTION: "bg-red-500/10 text-red-400 border-red-500/20",
+  SATISFACTORY_WITH_OBSERVATIONS: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  UNSATISFACTORY_FOLLOW_UP_REQUIRED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  CRITICAL_DEFICIENCY_IMMEDIATE_ACTION: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
 };
 
 function ResultBadge({ result }: { result: string | null }) {
@@ -275,7 +275,7 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("insp.complete")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -292,7 +292,7 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
             </select>
           </div>
           {shouldWarnDefect && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
               ⚠ Se creará automáticamente un Defecto en el sistema al completar esta inspección.
             </div>
           )}
@@ -308,11 +308,11 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.inspectorName")}</label>
             <input value={inspectorName} onChange={e => setInspectorName(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           </div>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -457,7 +457,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-5xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-5xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">
               {editing.execution.executionCode} · {editing.execution.vesselCode}
@@ -531,11 +531,11 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
               </div>
             )}
 
-            {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
           <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
             {canStart && (
-              <button onClick={() => { void onStart(); }} disabled={starting} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+              <button onClick={() => { void onStart(); }} disabled={starting} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
                 {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.start")}
               </button>
             )}
@@ -544,13 +544,13 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
                 <button onClick={() => { void onSaveResults(); }} disabled={savingResults} className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial font-bold text-xs hover:text-fg hover:border-fg/20 disabled:opacity-50 transition-all">
                   {savingResults ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.saveResults")}
                 </button>
-                <button onClick={() => setShowCompleteModal(true)} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+                <button onClick={() => setShowCompleteModal(true)} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
                   {t("insp.complete")}
                 </button>
               </>
             )}
             {(canStart || canInProgressActions) && (
-              <button onClick={() => { void onCancel(); }} disabled={cancelling} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50 transition-all">
+              <button onClick={() => { void onCancel(); }} disabled={cancelling} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50 transition-all">
                 {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.cancel")}
               </button>
             )}
@@ -589,7 +589,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-4xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("insp.templates")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -837,7 +837,7 @@ export const InspectionsPage: React.FC = () => {
     {
       key: "isGlobal",
       header: t("insp.isGlobal"),
-      render: row => (row.isGlobal ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("insp.isGlobal")}</span> : <span className="text-text-industrial/30 text-xs">—</span>),
+      render: row => (row.isGlobal ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("insp.isGlobal")}</span> : <span className="text-text-industrial/30 text-xs">—</span>),
       sortValue: row => row.isGlobal ? 1 : 0,
     },
   ], [t]);
@@ -906,16 +906,16 @@ export const InspectionsPage: React.FC = () => {
       </PageHeader>
 
       <div className="flex gap-1 p-1 bg-fg/5 rounded-xl w-fit border border-fg/10">
-        <button onClick={() => setActiveTab("executions")} className={activeTab === "executions" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
+        <button onClick={() => setActiveTab("executions")} className={activeTab === "executions" ? "px-4 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
           {t("insp.executions")}
         </button>
-        <button onClick={() => setActiveTab("templates")} className={activeTab === "templates" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
+        <button onClick={() => setActiveTab("templates")} className={activeTab === "templates" ? "px-4 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
           {t("insp.templates")}
         </button>
       </div>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle...</div>}
-      {detailError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
+      {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
       {activeTab === "executions" ? (
         <DataTable columns={executionColumns} data={executionsData?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.inspections")} onRowClick={row => { void openExecutionDetail(row); }} />

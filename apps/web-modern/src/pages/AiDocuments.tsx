@@ -70,7 +70,7 @@ export const AiDocumentsPage: React.FC = () => {
         {isAdmin && (
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
           >
             <Plus className="w-3.5 h-3.5" /> Nuevo documento
           </button>
@@ -95,7 +95,7 @@ export const AiDocumentsPage: React.FC = () => {
           <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
           {error}
         </div>
       ) : documents.length === 0 ? (
@@ -208,7 +208,7 @@ function DocumentCard({
             <button
               onClick={archiveDocument}
               disabled={busyId === document.id}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
             >
               <Archive className="w-3.5 h-3.5" /> Archivar
             </button>
@@ -268,7 +268,7 @@ function DocumentCard({
                       <button
                         onClick={() => deleteVersion(version.id)}
                         disabled={busyId === version.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Eliminar
                       </button>
@@ -352,7 +352,7 @@ function ViewEditVersionModal({
           <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
         </div>
       ) : error ? (
-        <p className="text-xs text-red-400">{error}</p>
+        <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
       ) : version ? (
         <div className="space-y-4">
           {!canEdit && version.status === "ACTIVE" && (
@@ -385,7 +385,7 @@ function ViewEditVersionModal({
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !dirty}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
               >
                 <Save className="w-3.5 h-3.5" />
                 {saving ? "Guardando..." : "Guardar cambios"}
@@ -450,13 +450,13 @@ function CreateDocumentModal({
           />
         </Field>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? "Guardando..." : "Crear documento"}
           </button>
         </div>
@@ -511,13 +511,13 @@ function CreateVersionModal({
           />
         </Field>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+          <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? "Guardando..." : "Crear versión"}
           </button>
         </div>

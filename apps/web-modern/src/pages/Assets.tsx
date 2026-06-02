@@ -199,10 +199,10 @@ function fmtHistoryDate(value: string | null): string {
 const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   const t = useT();
   if (type === "INSPECTION")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
   if (type === "CORRECTIVE")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
 };
 
 // Historial de mantenimientos/inspecciones (órdenes de trabajo) del asset.
@@ -222,7 +222,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
       ) : error ? (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.history.loadError")}</p>
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.history.loadError")}</p>
       ) : items.length === 0 ? (
         <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-3">{t("asset.history.empty")}</p>
       ) : (
@@ -640,7 +640,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <h2 className="text-base font-bold text-fg">{isEdit ? t("asset.editTitle") : t("asset.newTitle")}</h2>
           <div className="flex items-center gap-1">
@@ -699,7 +699,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 ))}
               </select>
               {sfiError && (
-                <p className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
+                <p className="text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
                   {t("mp.errorLoadingSfi")}{sfiError}
                 </p>
               )}
@@ -881,7 +881,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             </div>
           </div>
           {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">
           <div>
@@ -908,7 +908,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
           </div>
@@ -943,7 +943,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("common.delete")}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
@@ -952,7 +952,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
           <p className="text-sm text-text-industrial/70">
             ¿Eliminar asset <span className="text-fg font-semibold">{asset.assetCode}</span> ({asset.name})?
           </p>
-          {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
@@ -1071,7 +1071,7 @@ export const AssetsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="font-medium text-fg line-clamp-1">{row.name}</span>
           {row.isSafetyCritical && (
-            <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center text-amber-400">
+            <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center text-amber-700 dark:text-amber-400">
               <ShieldAlert className="w-3.5 h-3.5" />
             </span>
           )}
@@ -1124,7 +1124,7 @@ export const AssetsPage: React.FC = () => {
       )}
       {deleteTarget && <DeleteAssetModal asset={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={onDeleted} />}
       <PageHeader icon={Settings} title={t("page.assets")} total={filteredAssets?.length ?? data?.total} onReload={reload}>
-        <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+        <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
@@ -1173,7 +1173,7 @@ export const AssetsPage: React.FC = () => {
               className={[
                 "px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
                 isActive
-                  ? "bg-accent text-primary-bg border-accent"
+                  ? "bg-accent text-accent-fg border-accent"
                   : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:text-fg hover:border-fg/20",
               ].join(" ")}
             >
@@ -1193,8 +1193,8 @@ export const AssetsPage: React.FC = () => {
               className={[
                 "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
                 isActive
-                  ? "bg-amber-500 text-primary-bg border-amber-500"
-                  : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50",
+                  ? "bg-amber-500 text-accent-fg border-amber-500"
+                  : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50",
               ].join(" ")}
             >
               <ShieldAlert className="w-3.5 h-3.5" />

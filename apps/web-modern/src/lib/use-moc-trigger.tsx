@@ -62,7 +62,7 @@ const MocTriggerDialog: React.FC<{
   const reasonKey = `moc.trigger.reason.${event.reason}` as TranslationKey;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           <GitBranch className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-bold text-fg">{t("moc.trigger.title")}</h2>
@@ -80,7 +80,7 @@ const MocTriggerDialog: React.FC<{
           <button onClick={onLater} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">
             {t("moc.trigger.btnLater")}
           </button>
-          <button onClick={onCreate} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">
+          <button onClick={onCreate} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">
             <Plus className="w-3.5 h-3.5" /> {t("moc.trigger.btnCreate")}
           </button>
         </div>

@@ -138,7 +138,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
   if (!supported) {
     return (
       <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={close}>
-        <div className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-fg">Reporte por voz</h2>
             <button onClick={close}><X className="w-5 h-5 text-text-industrial/40" /></button>
@@ -154,7 +154,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={close}>
-      <div className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
@@ -186,7 +186,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                 className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all ${
                   listening
                     ? "bg-red-500 text-fg animate-pulse"
-                    : "bg-accent text-primary-bg"
+                    : "bg-accent text-accent-fg"
                 }`}
               >
                 {listening ? <Square className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
@@ -205,14 +205,14 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
               </div>
             )}
 
-            {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+            {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
 
             <div className="flex gap-2">
               <button onClick={close} className="flex-1 px-4 py-3 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial">Cancelar</button>
               <button
                 onClick={() => { void submitInitial(); }}
                 disabled={!transcript.trim() || listening}
-                className="flex-1 px-4 py-3 rounded-xl bg-accent text-primary-bg font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+                className="flex-1 px-4 py-3 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
               >
                 <Send className="w-3.5 h-3.5" /> Procesar con IA
               </button>
@@ -271,13 +271,13 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                   type="button"
                   onClick={() => ansListening ? ansStop() : ansStart()}
                   className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
-                    ansListening ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse" : "bg-fg/5 border border-fg/10 text-accent"
+                    ansListening ? "bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40 animate-pulse" : "bg-fg/5 border border-fg/10 text-accent"
                   }`}
                 >
                   {ansListening ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </button>
               </div>
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
               <div className="flex gap-2">
                 <button
                   onClick={() => onComplete({ type: parsed.type === "near_miss" ? "near_miss" : "defect", fields: parsed.fields, reasoning: parsed.reasoning })}
@@ -288,7 +288,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                 <button
                   onClick={() => { void submitAnswer(answerText); }}
                   disabled={!answerText.trim()}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-primary-bg font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
                 >
                   <Send className="w-3.5 h-3.5" /> Enviar
                 </button>
@@ -300,10 +300,10 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
         {/* ── ETAPA error sin parsed (e.g. backend tiró 503 en el primer call) ─ */}
         {stage === "error" && parsed && (
           <div className="space-y-2">
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
+            <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
             <div className="flex gap-2">
               <button onClick={close} className="flex-1 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial">Cancelar</button>
-              <button onClick={() => setStage("awaiting-answer")} className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-primary-bg font-bold text-xs">Reintentar</button>
+              <button onClick={() => setStage("awaiting-answer")} className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-accent-fg font-bold text-xs">Reintentar</button>
             </div>
           </div>
         )}

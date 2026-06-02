@@ -329,7 +329,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-2xl flex flex-col max-h-[90vh]"
+        className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border-t border-fg/10 rounded-t-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle */}
@@ -496,7 +496,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   </div>
                   <div className="text-[10px] text-text-industrial/60 flex items-center gap-1.5">
                     {srStatus === "active" && <span className="text-success-sea">● Transcribiendo en vivo</span>}
-                    {srStatus === "error" && <span className="text-orange-400">⚠ Transcripción falló — el audio se guarda igual</span>}
+                    {srStatus === "error" && <span className="text-orange-700 dark:text-orange-400">⚠ Transcripción falló — el audio se guarda igual</span>}
                     {srStatus === "unavailable" && <span className="text-text-industrial/40">Transcripción no soportada por el navegador</span>}
                     {srStatus === "idle" && <span>Iniciando transcripción...</span>}
                   </div>
@@ -537,14 +537,14 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
               {filePreview && !text.trim() && (
-                <p className="text-[10px] text-orange-400/80">
+                <p className="text-[10px] text-orange-700 dark:text-orange-400/80">
                   ⚠ Sin texto, la nota se guarda pero no contribuye a las Observaciones.
                 </p>
               )}
             </>
           )}
 
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         </div>
 
         {/* Footer */}
@@ -553,7 +553,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
             type="button"
             onClick={() => { void handleSave(); }}
             disabled={saving || recording || videoRecording || compressing}
-            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar avance"}
           </button>

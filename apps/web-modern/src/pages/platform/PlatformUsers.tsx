@@ -39,7 +39,7 @@ function usePlatformList<T>(path: string) {
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
@@ -63,7 +63,7 @@ const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm tex
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
+  return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
 }
 
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
@@ -173,7 +173,7 @@ export const PlatformUsersPage: React.FC = () => {
   const COLUMNS: Column<PlatformUser>[] = [
     { key: "email",     header: "Email",   render: r => <span className="font-mono text-fg text-xs">{r.email}</span> },
     { key: "firstName", header: "Nombre",  render: r => [r.firstName, r.lastName].filter(Boolean).join(" ") || "—" },
-    { key: "role",      header: "Rol",     render: r => <span className="text-xs font-bold text-red-400">{r.role}</span> },
+    { key: "role",      header: "Rol",     render: r => <span className="text-xs font-bold text-red-700 dark:text-red-400">{r.role}</span> },
     { key: "status",    header: "Estado",  render: r => <StatusBadge status={r.status} /> },
     { key: "createdAt", header: "Creado",  render: r => fmtDate(r.createdAt) },
   ];
@@ -182,7 +182,7 @@ export const PlatformUsersPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Users} title="Platform Users" total={data?.total} onReload={reload}>
         <button onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
           <Plus className="w-3.5 h-3.5" /> Nuevo Usuario
         </button>
       </PageHeader>

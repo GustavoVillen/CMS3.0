@@ -47,7 +47,7 @@ export const MicButton: React.FC<MicButtonProps> = ({ onAppend, lang, className,
       title={listening ? (interim ? `Escuchando: "${interim}"` : "Tocá para detener") : "Dictar por voz"}
       className={`p-1.5 rounded-md transition-colors ${
         listening
-          ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse"
+          ? "bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40 animate-pulse"
           : "text-text-industrial/50 hover:text-accent hover:bg-fg/5 border border-transparent"
       }`}
     >

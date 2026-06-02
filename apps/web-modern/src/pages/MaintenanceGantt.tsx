@@ -32,11 +32,11 @@ interface ListResponse {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; bar: string; progress: string }> = {
-  COMPLETED:  { bg: "bg-emerald-500/10", text: "text-emerald-400", bar: "#22c55e",  progress: "#16a34a" },
-  IN_WINDOW:  { bg: "bg-blue-500/10",    text: "text-blue-400",    bar: "#3b82f6",  progress: "#2563eb" },
-  UPCOMING:   { bg: "bg-yellow-500/10",  text: "text-yellow-400",  bar: "#eab308",  progress: "#ca8a04" },
-  DUE:        { bg: "bg-orange-500/10",  text: "text-orange-400",  bar: "#f97316",  progress: "#ea580c" },
-  OVERDUE:    { bg: "bg-red-500/10",     text: "text-red-400",     bar: "#ef4444",  progress: "#dc2626" },
+  COMPLETED:  { bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", bar: "#22c55e",  progress: "#16a34a" },
+  IN_WINDOW:  { bg: "bg-blue-500/10",    text: "text-blue-700 dark:text-blue-400",    bar: "#3b82f6",  progress: "#2563eb" },
+  UPCOMING:   { bg: "bg-yellow-500/10",  text: "text-yellow-700 dark:text-yellow-400",  bar: "#eab308",  progress: "#ca8a04" },
+  DUE:        { bg: "bg-orange-500/10",  text: "text-orange-700 dark:text-orange-400",  bar: "#f97316",  progress: "#ea580c" },
+  OVERDUE:    { bg: "bg-red-500/10",     text: "text-red-700 dark:text-red-400",     bar: "#ef4444",  progress: "#dc2626" },
   FUTURE:     { bg: "bg-slate-500/10",   text: "text-slate-400",   bar: "#64748b",  progress: "#475569" },
 };
 
@@ -159,7 +159,7 @@ const CustomTaskListHeader: React.FC<{
   fontSize: string;
 }> = ({ headerHeight }) => (
   <div
-    className="flex items-center border-b border-fg/10 bg-[#0a0f1e]"
+    className="flex items-center border-b border-fg/10 bg-surface dark:bg-[#0a0f1e]"
     style={{ height: headerHeight }}
   >
     <div
@@ -196,7 +196,7 @@ const CustomTaskListTable: React.FC<{
   setSelectedTask: (taskId: string) => void;
   onExpanderClick: (task: Task) => void;
 }> = ({ rowHeight, tasks, selectedTaskId, setSelectedTask, onExpanderClick }) => (
-  <div className="bg-[#0a0f1e]">
+  <div className="bg-surface dark:bg-[#0a0f1e]">
     {tasks.map((task) => {
       const isProject  = task.type === "project";
       const isSelected = task.id === selectedTaskId;
@@ -502,14 +502,14 @@ export function MaintenanceGanttPage() {
       <GanttLegend />
 
       {/* Content */}
-      <div className="flex-1 min-h-0 rounded-xl border border-fg/10 overflow-hidden bg-[#0a0f1e]">
+      <div className="flex-1 min-h-0 rounded-xl border border-fg/10 overflow-hidden bg-surface dark:bg-[#0a0f1e]">
         {loading ? (
           <div className="flex items-center justify-center h-full gap-3 text-text-industrial/40">
             <Loader2 className="w-5 h-5 animate-spin" />
             <span className="text-sm">Cargando planes de mantenimiento…</span>
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-full gap-3 text-red-400">
+          <div className="flex items-center justify-center h-full gap-3 text-red-700 dark:text-red-400">
             <AlertTriangle className="w-5 h-5" />
             <span className="text-sm">{error}</span>
           </div>
@@ -547,15 +547,15 @@ export function MaintenanceGanttPage() {
       {!loading && !error && plans.length > 0 && (
         <div className="flex items-center gap-6 px-4 py-2.5 rounded-xl bg-fg/3 border border-fg/8 text-[11px] text-text-industrial/50 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
             <span>{plans.filter(p => p.executionStatus === "COMPLETED").length} completados</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+            <AlertTriangle className="w-3.5 h-3.5 text-red-700 dark:text-red-400" />
             <span>{plans.filter(p => p.executionStatus === "OVERDUE").length} vencidos</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-orange-400" />
+            <Clock className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400" />
             <span>{plans.filter(p => p.executionStatus === "DUE").length} por vencer</span>
           </div>
           <div className="flex items-center gap-1.5">

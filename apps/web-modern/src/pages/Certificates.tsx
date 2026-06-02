@@ -50,9 +50,9 @@ function computeAutoCertificateStatus(expiryDateValue: string): "ACTIVE" | "EXPI
 
 const CERT_STATUS_STYLES: Record<string, string> = {
   ACTIVE: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  EXPIRING_SOON: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  EXPIRED: "bg-red-500/10 text-red-400 border-red-500/20",
-  SUSPENDED: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  EXPIRING_SOON: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  EXPIRED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  SUSPENDED: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
   CLOSED: "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
@@ -63,7 +63,7 @@ function ExpiryCell({ date }: { date?: string | null }) {
   if (!date) return <span className="text-text-industrial/30">—</span>;
   const d = new Date(date);
   const diff = Math.floor((d.getTime() - Date.now()) / 86400000);
-  const cls = diff < 0 ? "text-red-400 font-bold" : diff <= 30 ? "text-yellow-400 font-bold" : "text-text-industrial/70";
+  const cls = diff < 0 ? "text-red-700 dark:text-red-400 font-bold" : diff <= 30 ? "text-yellow-700 dark:text-yellow-400 font-bold" : "text-text-industrial/70";
   return <span className={cls}>{fmtDate(date)}{diff < 0 ? " ⚠" : diff <= 30 ? " ⏰" : ""}</span>;
 }
 
@@ -202,7 +202,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-3">
             <FileText className="w-4 h-4 text-accent" />
@@ -282,7 +282,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
               >
                 {uploading
                   ? <Loader2 className="w-4 h-4 animate-spin text-accent" />
-                  : <Folder className={`w-4 h-4 ${hasLink ? "text-yellow-400" : "text-text-industrial/40"}`} />
+                  : <Folder className={`w-4 h-4 ${hasLink ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/40"}`} />
                 }
               </button>
               <button
@@ -300,17 +300,17 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             </div>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFilePicked} />
             {sourceError && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{sourceError}</p>
+              <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{sourceError}</p>
             )}
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Notas</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
           </div>
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
-            <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+            <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : isEdit ? t("common.saveChanges") : t("common.create")}
             </button>
           </div>
@@ -340,12 +340,12 @@ const DeleteConfirm: React.FC<{ cert: Certificate; onClose: () => void; onDelete
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-sm bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
         <h2 className="text-sm font-bold text-fg">¿Eliminar certificado?</h2>
         <p className="text-xs text-text-industrial/60">
           <span className="text-fg font-bold">{cert.certificateCode} — {cert.name}</span>
         </p>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
           <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
@@ -451,7 +451,7 @@ export const CertificatesPage: React.FC = () => {
 
       <PageHeader icon={FileText} title={t("page.certificates")} total={data?.total} onReload={reload}>
         {canWrite && (
-          <button onClick={() => setFormCert(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+          <button onClick={() => setFormCert(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("common.new")}
           </button>
         )}

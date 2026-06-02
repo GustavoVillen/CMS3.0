@@ -52,19 +52,19 @@ const ENTITY_TYPE_VALUES = Object.keys(ENTITY_TKEY);
 
 function actionBadgeCls(action: string): string {
   const a = action.toLowerCase();
-  if (a.includes("created"))   return "bg-green-500/10 text-green-400 border-green-500/20";
-  if (a.includes("executed"))  return "bg-teal-500/10 text-teal-400 border-teal-500/20";
-  if (a.includes("completed")) return "bg-teal-500/10 text-teal-400 border-teal-500/20";
-  if (a.includes("closed"))    return "bg-teal-500/10 text-teal-400 border-teal-500/20";
-  if (a.includes("approved"))  return "bg-green-500/10 text-green-400 border-green-500/20";
-  if (a.includes("updated"))   return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-  if (a.includes("started"))   return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
-  if (a.includes("held"))      return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
+  if (a.includes("created"))   return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
+  if (a.includes("executed"))  return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
+  if (a.includes("completed")) return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
+  if (a.includes("closed"))    return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
+  if (a.includes("approved"))  return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
+  if (a.includes("updated"))   return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+  if (a.includes("started"))   return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
+  if (a.includes("held"))      return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
   if (a.includes("opened"))    return "bg-accent/10 text-accent border-accent/20";
-  if (a.includes("cancelled")) return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-  if (a.includes("deferred"))  return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-  if (a.includes("rejected"))  return "bg-red-500/10 text-red-400 border-red-500/20";
-  if (a.includes("deleted"))   return "bg-red-500/10 text-red-400 border-red-500/20";
+  if (a.includes("cancelled")) return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20";
+  if (a.includes("deferred"))  return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20";
+  if (a.includes("rejected"))  return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
+  if (a.includes("deleted"))   return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
   return "bg-fg/5 text-text-industrial/60 border-fg/10";
 }
 
@@ -314,7 +314,7 @@ export const BitacoraPage: React.FC = () => {
   if (user?.role !== "TENANT_ADMIN") {
     return (
       <div className="flex items-center justify-center h-40">
-        <p className="text-sm text-red-400">{t("bit.adminOnly")}</p>
+        <p className="text-sm text-red-700 dark:text-red-400">{t("bit.adminOnly")}</p>
       </div>
     );
   }
@@ -371,7 +371,7 @@ export const BitacoraPage: React.FC = () => {
             <Loader2 className="w-6 h-6 animate-spin text-accent" />
           </div>
         )}
-        {!loading && error && <p className="text-xs text-red-400 p-6">{error}</p>}
+        {!loading && error && <p className="text-xs text-red-700 dark:text-red-400 p-6">{error}</p>}
         {!loading && !error && (
           <table className="w-full text-xs">
             <thead>

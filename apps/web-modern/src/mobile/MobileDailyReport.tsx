@@ -465,7 +465,7 @@ export const MobileDailyReport: React.FC = () => {
               className={inputCls + " resize-none"}
             />
           </div>
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
 
           {/* Dos acciones para DRAFT (Guardar borrador / Enviar).
               Para SUBMITTED solo "Re-Enviar" — re-integra las horas a los planes. */}
@@ -475,7 +475,7 @@ export const MobileDailyReport: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
+                className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar y re-enviar"}
               </button>
@@ -498,7 +498,7 @@ export const MobileDailyReport: React.FC = () => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
+                  className="py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold disabled:opacity-40"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Enviar"}
                 </button>
@@ -553,7 +553,7 @@ export const MobileDailyReport: React.FC = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold"
+            className="w-full py-3 rounded-xl bg-accent text-accent-fg text-sm font-bold"
           >
             + Registrar reporte de hoy
           </button>

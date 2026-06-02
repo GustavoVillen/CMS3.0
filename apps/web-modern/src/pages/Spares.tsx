@@ -44,8 +44,8 @@ function StockCell({ spare }: { spare: Spare }) {
   const warning  = !critical && spare.onHand <= spare.reorderPoint;
   return (
     <div className="flex items-center gap-1.5">
-      {critical && <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />}
-      <span className={`font-bold text-xs ${critical ? "text-red-400" : warning ? "text-yellow-400" : "text-emerald-400"}`}>
+      {critical && <AlertTriangle className="w-3 h-3 text-red-700 dark:text-red-400 shrink-0" />}
+      <span className={`font-bold text-xs ${critical ? "text-red-700 dark:text-red-400" : warning ? "text-yellow-700 dark:text-yellow-400" : "text-emerald-700 dark:text-emerald-400"}`}>
         {spare.onHand}
       </span>
       <span className="text-fg/20 text-[10px]">{spare.unit}</span>
@@ -55,8 +55,8 @@ function StockCell({ spare }: { spare: Spare }) {
 
 function CriticalityBadge({ value }: { value: string }) {
   const colors: Record<string, string> = {
-    A: "bg-red-500/10 text-red-400 border-red-500/20",
-    B: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    A: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+    B: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
     C: "bg-fg/5 text-fg/40 border-fg/10",
   };
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${colors[value] ?? colors.C}`}>{value}</span>;
@@ -83,8 +83,8 @@ const NEGATIVE_TYPES = new Set(["ISSUE", "TRANSFER_OUT", "ADJUSTMENT_MINUS"]);
 function MovBadge({ type }: { type: string }) {
   const neg = NEGATIVE_TYPES.has(type);
   const cls = neg
-    ? "bg-red-500/10 text-red-400 border-red-500/20"
-    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+    ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20";
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold ${cls}`}>{MOV_LABEL[type] ?? type}</span>;
 }
 
@@ -120,7 +120,7 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
               <td className="px-4 py-2 text-fg/50 whitespace-nowrap">{fmtDate(m.occurredAt)}</td>
               <td className="px-4 py-2"><MovBadge type={m.movementType} /></td>
               <td className="px-4 py-2 text-right font-mono">
-                <span className={NEGATIVE_TYPES.has(m.movementType) ? "text-red-400" : "text-emerald-400"}>
+                <span className={NEGATIVE_TYPES.has(m.movementType) ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}>
                   {NEGATIVE_TYPES.has(m.movementType) ? "−" : "+"}{m.quantity} {m.unit}
                 </span>
               </td>
@@ -324,7 +324,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
@@ -337,8 +337,8 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             {!isNew && (
               <div className="flex items-center gap-2">
                 <CriticalityBadge value={spare.criticality} />
-                {isCriticalStock && <span className="text-[10px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">{t("sp.criticalStock")}</span>}
-                {isWarnStock     && <span className="text-[10px] font-semibold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">{t("sp.belowReorderPoint")}</span>}
+                {isCriticalStock && <span className="text-[10px] font-semibold text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">{t("sp.criticalStock")}</span>}
+                {isWarnStock     && <span className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">{t("sp.belowReorderPoint")}</span>}
               </div>
             )}
           </div>
@@ -474,7 +474,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             {!isNew && (
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-fg/40">Stock actual (calculado):</span>
-                <span className={`font-bold ${isCriticalStock ? "text-red-400" : isWarnStock ? "text-yellow-400" : "text-emerald-400"}`}>
+                <span className={`font-bold ${isCriticalStock ? "text-red-700 dark:text-red-400" : isWarnStock ? "text-yellow-700 dark:text-yellow-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                   {spare.onHand} {spare.unit}
                 </span>
                 {spare.available !== spare.onHand && (
@@ -501,7 +501,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
           {/* Manual stock adjustment — ADMIN / FLEET_SUPERINTENDENT only */}
           {canAdjustStock && (
             <div className="border border-yellow-500/20 rounded-xl p-4 space-y-3 bg-yellow-500/5">
-              <p className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-wider">Ajuste manual de stock</p>
+              <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400/70 uppercase tracking-wider">Ajuste manual de stock</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Nueva cantidad</label>
@@ -523,8 +523,8 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
                   />
                 </div>
               </div>
-              {adjError   && <p className="text-xs text-red-400">{adjError}</p>}
-              {adjSuccess  && <p className="text-xs text-emerald-400">Stock actualizado y registrado en bitácora.</p>}
+              {adjError   && <p className="text-xs text-red-700 dark:text-red-400">{adjError}</p>}
+              {adjSuccess  && <p className="text-xs text-emerald-700 dark:text-emerald-400">Stock actualizado y registrado en bitácora.</p>}
               <button
                 disabled={adjSaving}
                 onClick={async () => {
@@ -556,7 +556,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
                     setAdjError(e instanceof Error ? e.message : "Error al ajustar stock.");
                   } finally { setAdjSaving(false); }
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all disabled:opacity-50"
               >
                 {adjSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Aplicar ajuste
@@ -597,11 +597,11 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
-          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
               {!isNew && (
-                <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
+                <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-700 dark:text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
                   Eliminar
                 </button>
               )}
@@ -774,7 +774,7 @@ export const SparesPage: React.FC = () => {
         {/* Below reorder toggle */}
         <button
           onClick={() => setBelowReorder(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${belowReorder ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-400" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-yellow-500/20"}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${belowReorder ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-700 dark:text-yellow-400" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-yellow-500/20"}`}
         >
           <AlertTriangle className="w-3.5 h-3.5" />
           Alertas reorden

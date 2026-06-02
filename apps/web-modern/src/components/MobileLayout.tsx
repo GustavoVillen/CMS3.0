@@ -86,10 +86,10 @@ export const MobileLayout: React.FC = () => {
 
   return (
     <CopilotContextProvider>
-      <div className="flex flex-col h-screen bg-[#0A1A2A] overflow-hidden">
+      <div className="flex flex-col h-screen bg-surface dark:bg-[#0A1A2A] overflow-hidden">
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <header className="shrink-0 px-4 py-2.5 border-b border-fg/10 flex items-center gap-3 bg-[#0D1B2A]">
+        <header className="shrink-0 px-4 py-2.5 border-b border-fg/10 flex items-center gap-3 bg-surface dark:bg-[#0D1B2A]">
           <CmsLogo className="w-7 h-7 shrink-0" title={tenant?.displayName ?? "CMS"} />
 
           {vessels.length > 1 ? (
@@ -144,7 +144,7 @@ export const MobileLayout: React.FC = () => {
         )}
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
-        <nav className="shrink-0 grid grid-cols-7 border-t border-fg/10 bg-[#0D1B2A]">
+        <nav className="shrink-0 grid grid-cols-7 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A]">
           {TABS.map(({ id, label, Icon }) => (
             <button
               key={id}

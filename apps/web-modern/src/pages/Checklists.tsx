@@ -29,7 +29,7 @@ const STATUS_TKEY: Record<string, TranslationKey> = {
   IN_PROGRESS: "cl.status.inProgress", COMPLETED: "cl.status.completed", CANCELLED: "cl.status.cancelled",
 };
 const STATUS_COLOR: Record<string, string> = {
-  IN_PROGRESS: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
+  IN_PROGRESS: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
   COMPLETED:   "bg-success-sea/10 text-success-sea border-success-sea/30",
   CANCELLED:   "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
@@ -207,7 +207,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ListChecks className="w-4 h-4 text-accent" />
@@ -310,13 +310,13 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
             </div>
           ) : null}
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             {!isCreating && exec?.status === "IN_PROGRESS" && (
-              <button onClick={() => { void cancel(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20">Cancelar checklist</button>
+              <button onClick={() => { void cancel(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs hover:bg-red-500/20">Cancelar checklist</button>
             )}
             {!isCreating && isAdmin && (
               <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 text-xs hover:text-red-400">Eliminar</button>
@@ -325,7 +325,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
             {isCreating ? (
-              <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
+              <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Crear"}
               </button>
             ) : exec?.status === "IN_PROGRESS" && (
@@ -333,7 +333,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
                 <button onClick={() => { void saveMeta(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-fg disabled:opacity-50">
                   Guardar
                 </button>
-                <button onClick={() => { void complete(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-success-sea text-primary-bg font-bold text-xs disabled:opacity-50">
+                <button onClick={() => { void complete(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-success-sea text-accent-fg font-bold text-xs disabled:opacity-50">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Completar y firmar"}
                 </button>
               </>
@@ -367,7 +367,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <span className="text-[10px] font-mono text-accent">{response.itemCode}</span>
-            {isMandatory && <span className="text-[9px] font-bold text-red-400 uppercase">*</span>}
+            {isMandatory && <span className="text-[9px] font-bold text-red-700 dark:text-red-400 uppercase">*</span>}
             {category && <span className="text-[9px] text-text-industrial/40 uppercase">{category}</span>}
           </div>
           <p className="text-xs text-fg">{response.itemText}</p>
@@ -377,7 +377,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {statusBtn("CONFORMING", CheckCircle2, "bg-success-sea/15 text-success-sea border-success-sea/40", "Conforme")}
-          {statusBtn("NOT_CONFORMING", XCircle, "bg-red-500/15 text-red-400 border-red-500/40", "No conforme")}
+          {statusBtn("NOT_CONFORMING", XCircle, "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/40", "No conforme")}
           {statusBtn("NOT_APPLICABLE", MinusCircle, "bg-fg/10 text-text-industrial/60 border-fg/20", "N/A")}
         </div>
       </div>
@@ -400,7 +400,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
           />
           <button
             onClick={() => { onSet(response.status, notes); setEditingNotes(false); }}
-            className="px-2 py-1 rounded bg-accent text-primary-bg text-[10px] font-bold"
+            className="px-2 py-1 rounded bg-accent text-accent-fg text-[10px] font-bold"
           >Guardar</button>
         </div>
       )}
@@ -418,14 +418,14 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-2">
             <Settings className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold text-fg">{t("cl.templatesTitle")}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
+            <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
             <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
         </div>
@@ -539,7 +539,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -549,9 +549,9 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
             <div className={`rounded-xl border px-3 py-2 flex items-center gap-3 ${isApproved ? "bg-success-sea/5 border-success-sea/30" : "bg-yellow-500/5 border-yellow-500/20"}`}>
               {isApproved
                 ? <CheckCircle2 className="w-4 h-4 text-success-sea shrink-0" />
-                : <MinusCircle className="w-4 h-4 text-yellow-400 shrink-0" />}
+                : <MinusCircle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0" />}
               <div className="flex-1 min-w-0">
-                <p className={`text-xs font-bold ${isApproved ? "text-success-sea" : "text-yellow-300"}`}>
+                <p className={`text-xs font-bold ${isApproved ? "text-success-sea" : "text-yellow-700 dark:text-yellow-300"}`}>
                   {isApproved ? "Procedimiento aprobado" : "Pendiente de aprobación"}
                 </p>
                 <p className="text-[10px] text-text-industrial/60 truncate">
@@ -602,11 +602,11 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
               </div>
             ))}
           </div>
-          {err && <p className="text-xs text-red-400">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial">Cancelar</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
           </button>
         </div>
@@ -637,7 +637,7 @@ export const ChecklistsPage: React.FC = () => {
         <button onClick={() => setShowTemplates(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
           <Settings className="w-3.5 h-3.5 text-accent" /> Templates
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")} {t("cl.singular").toLowerCase()}
         </button>
       </PageHeader>

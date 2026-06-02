@@ -42,9 +42,9 @@ interface MatrixData {
 
 const LEVEL_CLS: Record<string, string> = {
   "":            "bg-fg/[0.02] text-text-industrial/30 border-fg/5",
-  "OBRIGATORIO": "bg-red-500/15 text-red-300 border-red-500/40",
+  "OBRIGATORIO": "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40",
   "VALIDO":      "bg-success-sea/15 text-success-sea border-success-sea/40",
-  "DESEJAVEL":   "bg-yellow-500/15 text-yellow-300 border-yellow-500/40",
+  "DESEJAVEL":   "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/40",
 };
 
 export const RequirementsMatrixPage: React.FC = () => {
@@ -258,7 +258,7 @@ export const RequirementsMatrixPage: React.FC = () => {
           <table className="text-[10px] min-w-full">
             <thead>
               <tr className="border-b border-fg/10">
-                <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">{t("rm.colRank")}</th>
+                <th className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">{t("rm.colRank")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="group relative px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
                     <span title={`${it.name}${it.regulation ? " — " + it.regulation : ""}${it.validityYears ? " · " + it.validityYears + "y" : ""}`}>{it.code}</span>
@@ -267,7 +267,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                       onClick={() => onDeleteItem(it.id, it.code)}
                       disabled={deletingItem === it.id}
                       title={t("common.delete")}
-                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
+                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-700 dark:text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -278,7 +278,7 @@ export const RequirementsMatrixPage: React.FC = () => {
             <tbody>
               {data.ranks.map(r => (
                 <tr key={r.id} className="group border-b border-fg/5 last:border-b-0">
-                  <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2 relative">
+                  <td className="sticky left-0 z-10 bg-surface dark:bg-[#0D1B2A] px-3 py-2 relative">
                     <div className="text-xs font-bold text-fg">{r.name}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{r.code}</div>
                     <button
@@ -286,7 +286,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                       onClick={() => onDeleteRank(r.id, r.code)}
                       disabled={deletingRank === r.id}
                       title={t("common.delete")}
-                      className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
+                      className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-700 dark:text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-30"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -307,7 +307,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                           className={`w-full h-7 rounded border text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${cls} ${isSaving ? "opacity-50" : ""}`}
                         >
                           {LEVEL_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value} className="bg-[#0D1B2A] text-fg">{o.label}</option>
+                            <option key={o.value} value={o.value} className="bg-surface dark:bg-[#0D1B2A] text-fg">{o.label}</option>
                           ))}
                         </select>
                       </td>
@@ -325,7 +325,7 @@ export const RequirementsMatrixPage: React.FC = () => {
           <form
             onSubmit={onCreateItem}
             onClick={e => e.stopPropagation()}
-            className="bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
+            className="bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
             <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createItemTitle")}</h2>
 
@@ -414,7 +414,7 @@ export const RequirementsMatrixPage: React.FC = () => {
           <form
             onSubmit={onCreateRank}
             onClick={e => e.stopPropagation()}
-            className="bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
+            className="bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
             <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createRankTitle")}</h2>
 

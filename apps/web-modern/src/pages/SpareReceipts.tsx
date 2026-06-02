@@ -28,7 +28,7 @@ const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-s
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
 const PRIORITY_COLOR: Record<string, string> = {
-  LOW: "text-fg/40", MEDIUM: "text-blue-400", HIGH: "text-yellow-400", CRITICAL: "text-red-400",
+  LOW: "text-fg/40", MEDIUM: "text-blue-700 dark:text-blue-400", HIGH: "text-yellow-700 dark:text-yellow-400", CRITICAL: "text-red-700 dark:text-red-400",
 };
 
 // ── PendingRequestsPanel ──────────────────────────────────────────────────────
@@ -216,10 +216,10 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
   if (success) {
     return (
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 text-center space-y-3">
-        <Truck className="w-8 h-8 text-emerald-400 mx-auto" />
-        <p className="text-sm font-bold text-emerald-400">Recepción registrada correctamente</p>
+        <Truck className="w-8 h-8 text-emerald-700 dark:text-emerald-400 mx-auto" />
+        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Recepción registrada correctamente</p>
         <p className="text-xs text-fg/40">El stock ha sido actualizado.</p>
-        <button onClick={() => setSuccess(false)} className="px-4 py-2 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/20">
+        <button onClick={() => setSuccess(false)} className="px-4 py-2 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl hover:bg-emerald-500/20">
           Registrar otra recepción
         </button>
       </div>
@@ -227,7 +227,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
   }
 
   return (
-    <div className="bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-5">
+    <div className="bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-5">
 
       {/* Header: prefill badge or manual title */}
       {prefillRequest ? (
@@ -267,9 +267,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
       {/* Items de la solicitud sin spare vinculado */}
       {prefillRequest && reqItems.some(i => !i.spareId && i.status !== "FULFILLED") && (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 space-y-1">
-          <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Ítems sin repuesto vinculado</p>
+          <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400 uppercase tracking-wider">Ítems sin repuesto vinculado</p>
           <p className="text-xs text-fg/40">Estos ítems de la solicitud no están vinculados a un repuesto del catálogo y no se incluirán en los movimientos de stock:</p>
-          <ul className="text-xs text-yellow-300/70 space-y-0.5 pt-1">
+          <ul className="text-xs text-yellow-700 dark:text-yellow-300/70 space-y-0.5 pt-1">
             {reqItems.filter(i => !i.spareId && i.status !== "FULFILLED").map(i => (
               <li key={i.id}>· {i.description} ({i.quantity} {i.unit})</li>
             ))}
@@ -305,7 +305,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
                 {lines.map((l, i) => (
                   <tr key={i} className="border-b border-fg/5 last:border-0">
                     <td className="px-3 py-2 text-fg">{l.spareName || <span className="text-fg/30 italic">Sin spare vinculado</span>}</td>
-                    <td className="px-3 py-2 text-right text-emerald-400 font-bold">+{l.qty}</td>
+                    <td className="px-3 py-2 text-right text-emerald-700 dark:text-emerald-400 font-bold">+{l.qty}</td>
                     <td className="px-3 py-2 text-fg/40">{l.unit}</td>
                     <td className="px-3 py-2 text-fg/30 truncate max-w-[140px]">{l.notes || "—"}</td>
                     <td className="px-2 py-2">
@@ -363,7 +363,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
                     </select>
                   </div>
                 </div>
-                {newSpareErr && <p className="text-[10px] text-red-400">{newSpareErr}</p>}
+                {newSpareErr && <p className="text-[10px] text-red-700 dark:text-red-400">{newSpareErr}</p>}
                 <button onClick={() => void handleRegisterSpare()} disabled={savingSpare}
                   className="px-3 py-1.5 text-[10px] font-bold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40">
                   {savingSpare ? "Registrando…" : "Registrar y seleccionar"}
@@ -391,18 +391,18 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
               </div>
             </div>
             <button onClick={addLine} disabled={!lineSpareId}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/20 disabled:opacity-40">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl hover:bg-emerald-500/20 disabled:opacity-40">
               <Plus className="w-3.5 h-3.5" /> Agregar
             </button>
           </div>
         )}
       </div>
 
-      {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+      {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
       <div className="flex justify-end pt-2 border-t border-fg/10">
         <button onClick={() => void handleSubmit()} disabled={saving || lines.filter(l => l.spareId).length === 0}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-accent text-primary-bg rounded-xl hover:brightness-110 disabled:opacity-40 transition-all">
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-accent text-accent-fg rounded-xl hover:brightness-110 disabled:opacity-40 transition-all">
           <Truck className="w-4 h-4" />
           {saving ? "Registrando…" : `Confirmar recepción (${lines.filter(l => l.spareId).length} ítem${lines.filter(l => l.spareId).length !== 1 ? "s" : ""})`}
         </button>
@@ -445,7 +445,7 @@ const HistoryPanel: React.FC<{ refresh: number }> = ({ refresh }) => {
                     <td className="px-3 py-2 text-fg">
                       {m.spare ? `${m.spare.sku} — ${m.spare.name}` : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right text-emerald-400 font-bold">+{m.quantity} {m.unit}</td>
+                    <td className="px-3 py-2 text-right text-emerald-700 dark:text-emerald-400 font-bold">+{m.quantity} {m.unit}</td>
                     <td className="px-3 py-2 text-fg/50">{fmtDate(m.occurredAt)}</td>
                   </tr>
                 ))}

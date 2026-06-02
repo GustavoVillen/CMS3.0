@@ -71,7 +71,7 @@ function usePlatformList<T>(path: string) {
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
           <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
@@ -95,10 +95,10 @@ const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm tex
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
+  return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
 }
 function OkMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
+  return <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
 }
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
   return (
@@ -371,7 +371,7 @@ function AddInviteModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
       <div className="space-y-3">
         <OkMsg msg="Invitación generada correctamente" />
         <Field label="Token (copia antes de cerrar)">
-          <code className="block bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-xs text-green-400 break-all select-all">{token}</code>
+          <code className="block bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-xs text-green-700 dark:text-green-400 break-all select-all">{token}</code>
         </Field>
         <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-sm text-fg font-bold hover:bg-fg/10 transition-all">Cerrar</button>
       </div>
@@ -465,7 +465,7 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
         <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
         <Field label="Email">
           <input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" />
-          {isNamedEmail && <p className="text-[10px] text-yellow-400/70 mt-1">Este usuario no tiene email real — asigná uno.</p>}
+          {isNamedEmail && <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70 mt-1">Este usuario no tiene email real — asigná uno.</p>}
         </Field>
         <Field label="Rol">
           <select className={sel} value={form.role} onChange={set("role")}>
@@ -539,7 +539,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
     <>
       <div className="fixed inset-0 top-12 left-56 z-40 flex">
         <div className="flex-1 bg-black/50 backdrop-blur-sm" />
-        <aside className="w-[460px] bg-[#0A1020] border-l border-fg/10 flex flex-col h-full overflow-hidden">
+        <aside className="w-[460px] bg-surface dark:bg-[#0A1020] border-l border-fg/10 flex flex-col h-full overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5 shrink-0">
             <div>
               <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
@@ -551,7 +551,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
           <div className="flex border-b border-fg/5 shrink-0">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
+                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-700 dark:text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
                 <t.icon className="w-3.5 h-3.5" />{t.label}
               </button>
             ))}
@@ -563,7 +563,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
               <>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-text-industrial/40">Dominios registrados</p>
-                  <button onClick={() => setAddDomain(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Agregar</button>
+                  <button onClick={() => setAddDomain(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Agregar</button>
                 </div>
                 {dLoading
                   ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
@@ -577,7 +577,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                       </div>
                       <div className="flex items-center gap-2">
                         {d.isPrimary
-                          ? <span className="flex items-center gap-1 text-[10px] text-yellow-400 font-bold"><Star className="w-3 h-3" /> Primario</span>
+                          ? <span className="flex items-center gap-1 text-[10px] text-yellow-700 dark:text-yellow-400 font-bold"><Star className="w-3 h-3" /> Primario</span>
                           : <button onClick={() => setPrimary(d)} className="flex items-center gap-1 text-[10px] text-text-industrial/30 hover:text-yellow-400 transition-colors"><StarOff className="w-3 h-3" /> Hacer primario</button>
                         }
                       </div>
@@ -593,7 +593,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   <p className="text-xs text-text-industrial/40">{users?.total ?? "—"} usuarios</p>
                   <div className="flex items-center gap-2">
                     <button onClick={uReload} className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all" title="Recargar"><Loader2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
+                    <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
                   </div>
                 </div>
                 {uLoading
@@ -638,7 +638,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
               <>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-text-industrial/40">Invitaciones enviadas</p>
-                  <button onClick={() => setAddInvite(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Invitar</button>
+                  <button onClick={() => setAddInvite(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Invitar</button>
                 </div>
                 {iLoading
                   ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
@@ -701,7 +701,7 @@ export const PlatformTenantsPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Building2} title="Tenants" total={data?.total} onReload={reload}>
         <button onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
           <Plus className="w-3.5 h-3.5" /> Nuevo Tenant
         </button>
       </PageHeader>

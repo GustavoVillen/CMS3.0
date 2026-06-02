@@ -4,7 +4,7 @@ import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, Sparkles, X }
 const KpiPill: React.FC<{ label: string; value: number; alert?: boolean }> = ({ label, value, alert }) => (
   <div className={`rounded-md border px-2 py-1.5 ${alert ? "bg-red-500/10 border-red-500/30" : "bg-fg/5 border-fg/10"}`}>
     <p className="text-[8px] uppercase tracking-wider text-text-industrial/40 truncate">{label}</p>
-    <p className={`text-sm font-bold ${alert ? "text-red-300" : "text-fg"}`}>{value}</p>
+    <p className={`text-sm font-bold ${alert ? "text-red-700 dark:text-red-300" : "text-fg"}`}>{value}</p>
   </div>
 );
 import { useFetch } from "../lib/hooks";
@@ -142,7 +142,7 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
         </div>
         <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
           <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">{t("mr.belowReorder")}</div>
-          <div className={`text-xl font-bold ${summary.belowReorderCount > 0 ? "text-red-400" : "text-fg"}`}>{summary.belowReorderCount}</div>
+          <div className={`text-xl font-bold ${summary.belowReorderCount > 0 ? "text-red-700 dark:text-red-400" : "text-fg"}`}>{summary.belowReorderCount}</div>
         </div>
       </div>
 
@@ -179,7 +179,7 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
                   <td className="px-3 py-2">{it.name}</td>
                   <td className="px-3 py-2 text-[10px]">{sfi}</td>
                   <td className="px-3 py-2 text-[10px]">{it.department ?? "—"}</td>
-                  <td className={`px-3 py-2 text-right font-bold ${it.belowReorder ? "text-red-400" : ""}`}>{it.onHand}</td>
+                  <td className={`px-3 py-2 text-right font-bold ${it.belowReorder ? "text-red-700 dark:text-red-400" : ""}`}>{it.onHand}</td>
                   <td className="px-3 py-2 text-[10px]">{it.unit}</td>
                   <td className="px-3 py-2 text-[10px]">{it.location ?? "—"}</td>
                   <td className="px-3 py-2 text-[10px] font-mono">{fmtDate(it.lastMovementAt)}</td>
@@ -480,7 +480,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                     />
                   </div>
                 </div>
-                {geoError && <p className="text-[10px] text-red-400">{geoError}</p>}
+                {geoError && <p className="text-[10px] text-red-700 dark:text-red-400">{geoError}</p>}
 
                 {mapCoords ? (
                   <div className="relative rounded-xl overflow-hidden border border-fg/10" style={{ height: 180 }}>
@@ -538,13 +538,13 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                         } finally { setGeneratingDraft(false); }
                       }}
                       disabled={generatingDraft}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-[11px] uppercase tracking-wider hover:brightness-110 disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-[11px] uppercase tracking-wider hover:brightness-110 disabled:opacity-50"
                     >
                       {generatingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                       {summary || notes ? "Regenerar borrador" : "Generar borrador"}
                     </button>
                   </div>
-                  {draftError && <p className="text-[11px] text-red-400">{draftError}</p>}
+                  {draftError && <p className="text-[11px] text-red-700 dark:text-red-400">{draftError}</p>}
                   {draftKpis && (
                     <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5 text-center pt-1">
                       <KpiPill label="Def. creados"    value={draftKpis.defectsCreated} />
@@ -580,7 +580,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder={t("mr.notesPh")} />
               </div>
 
-              {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+              {saveError && <p className="text-xs text-red-700 dark:text-red-400">{saveError}</p>}
             </div>
           )}
 
@@ -594,7 +594,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
           <button
             onClick={() => { void handleSubmit(); }}
             disabled={submitting || saving || isClosed}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs hover:bg-emerald-500/25 disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/25 disabled:opacity-40"
           >
             {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             Submit
@@ -602,7 +602,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
           <button
             onClick={() => { void handleSave(); }}
             disabled={saving || submitting || isClosed}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Guardar
@@ -646,7 +646,7 @@ export const MonthlyReportsPage: React.FC = () => {
     { key: "vesselCode", header: "Vessel", render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "status",     header: "Estado", render: r => <StatusBadge status={r.status} /> },
     { key: "currentPort",header: "Puerto", render: r => <span className="text-xs">{r.currentPort ?? "—"}</span> },
-    { key: "submittedAt",header: "Enviado", render: r => <span className="text-[11px] text-emerald-400">{fmtDate(r.submittedAt)}</span> },
+    { key: "submittedAt",header: "Enviado", render: r => <span className="text-[11px] text-emerald-700 dark:text-emerald-400">{fmtDate(r.submittedAt)}</span> },
     { key: "createdAt",  header: "Creado", render: r => <span className="text-[11px] text-fg/40">{fmtDate(r.createdAt)}</span> },
   ];
 
@@ -665,7 +665,7 @@ export const MonthlyReportsPage: React.FC = () => {
         <ExportExcelButton module="monthly_reports" />
         <button
           onClick={() => setSelected("new")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110"
         >
           <Plus className="w-3.5 h-3.5" /> Nuevo reporte
         </button>
