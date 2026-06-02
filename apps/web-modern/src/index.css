@@ -1,99 +1,172 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary-bg: #0B132B;
-  --color-surface: #1C2541;
-  --color-accent: #FF9F1C;
-  --color-text-industrial: #E0E1DD;
-  --color-success-sea: #06D6A0;
-  
+/* Variante dark basada en clase en <html> (no en prefers-color-scheme),
+   para que el toggle/persistencia la controle por completo. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Tokens semánticos ──────────────────────────────────────────────────────
+   LIGHT es el default (regla del PMS: lectura prolongada, tablas densas).
+   DARK = el navy + glassmorphism original, conservado tal cual.
+   Las utilidades (bg-bg, bg-surface, text-fg, border-border, ...) se exponen
+   vía @theme inline más abajo y cambian solas según la clase .dark. */
+:root {
+  /* LIGHT */
+  --bg:        #F4F5F7;            /* gris muy claro, no blanco puro */
+  --surface:   #FFFFFF;           /* cards / paneles */
+  --surface-2: #F0F1F4;           /* raised / hover sutil */
+  --fg:        #1A1D24;           /* texto principal casi negro */
+  --border:    #E2E4E9;           /* borde gris suave */
+  --accent:    #0284C7;           /* acento celeste (sky-600, legible sobre blanco) */
+  --accent-fg: #FFFFFF;           /* texto SOBRE el acento (blanco sobre celeste medio) */
+  --success:   #0E9F6E;
+  --warning:   #D97706;
+  --danger:    #DC2626;
+  --info:      #2563EB;
+}
+
+.dark {
+  /* DARK = navy original */
+  --bg:        #080D1D;
+  --surface:   #1C2541;
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --fg:        #E0E1DD;
+  --border:    rgba(255, 255, 255, 0.10);
+  --accent:    #38BDF8;           /* acento celeste (sky-400, brilla sobre navy) */
+  --accent-fg: #0B132B;           /* texto SOBRE el acento (navy sobre celeste brillante) */
+  --success:   #06D6A0;
+  --warning:   #FBBF24;
+  --danger:    #F87171;
+  --info:      #60A5FA;
+}
+
+@theme inline {
+  --color-bg:        var(--bg);
+  --color-surface:   var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg:        var(--fg);
+  --color-border:    var(--border);
+  --color-accent:    var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-success:   var(--success);
+  --color-warning:   var(--warning);
+  --color-danger:    var(--danger);
+  --color-info:      var(--info);
+
+  /* Aliases de compatibilidad: mantienen vivos los tokens nombrados que ya
+     usa la app (primary-bg, surface, text-industrial, success-sea, accent)
+     mientras se migran las pantallas. Ahora también son theme-aware. */
+  --color-primary-bg:       var(--bg);
+  --color-text-industrial:  var(--fg);
+  --color-success-sea:      var(--success);
+
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 :root {
-  background-color: var(--color-primary-bg);
-  color: var(--color-text-industrial);
+  background-color: var(--bg);
+  color: var(--fg);
   font-family: var(--font-sans);
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--fg);
 }
 
-/* Glassmorphism Utility */
+/* ─── Glassmorphism ──────────────────────────────────────────────────────────
+   Theme-aware: en dark es el navy translúcido + blur original; en light es una
+   card blanca sólida con borde suave (sin blur, para legibilidad de tablas). */
 .glass {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.dark .glass {
   background: rgba(28, 37, 65, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .glass-glow {
-  box-shadow: 0 0 20px rgba(255, 159, 28, 0.1);
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.12);
 }
 
-/* Bento Item Styles - Fixed @apply issue */
+/* Bento Item Styles */
 .bento-card {
-  /* Copying .glass properties because @apply cannot apply custom CSS classes in TW4 */
-  background: rgba(28, 37, 65, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
 
   /* No hover:scale en el base — solo color del borde. Los tiles clickeables
      que quieran escalar agregan hover:scale-[1.02] en su propio className. */
   @apply rounded-2xl p-6 transition-colors duration-300;
 }
+.dark .bento-card {
+  background: rgba(28, 37, 65, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
 
 .bento-card:hover {
-  border-color: rgba(255, 159, 28, 0.4);
+  border-color: rgba(14, 165, 233, 0.4);
 }
 
 .input-field {
   width: 100%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;
-  color: #E0E1DD;
+  color: var(--fg);
   outline: none;
   transition: border-color 0.15s;
 }
+.dark .input-field {
+  background: rgba(255, 255, 255, 0.05);
+}
 .input-field::placeholder {
-  color: #555;
+  color: color-mix(in srgb, var(--fg) 40%, transparent);
 }
 .input-field:focus {
-  border-color: rgba(255, 159, 28, 0.5);
+  border-color: rgba(14, 165, 233, 0.6);
 }
 .input-field option {
-  background: #1C2541;
+  background: var(--surface);
 }
 
 /* Native select contrast fix (notably on Windows dropdown list rendering).
    Algunos navegadores (Chrome/Edge en Windows) ignoran las reglas option:checked
    y muestran el item seleccionado con el highlight del sistema, dejando texto
-   blanco sobre fondo blanco. Forzamos con !important + colores del tema. */
+   ilegible. Forzamos con colores del tema. El popup nativo del <select> no hereda
+   bien las variables, así que se fija un color por modo. */
 select {
-  color: #ffffff;
+  color: var(--fg);
 }
 
 select option {
-  background-color: #0D1B2A !important;
-  color: #E0E1DD !important;
+  background-color: #FFFFFF;
+  color: #1A1D24;
+}
+.dark select option {
+  background-color: #0D1B2A;
+  color: #E0E1DD;
 }
 
 select option:checked,
 select option:hover,
 select option:focus,
 select option[selected] {
-  background: #FF9F1C !important;
-  color: #0B132B !important;
+  background: #0284C7;
+  color: #FFFFFF;
   font-weight: 600;
 }
 
 select option:disabled {
-  color: rgba(224, 225, 221, 0.4) !important;
+  color: color-mix(in srgb, var(--fg) 40%, transparent);
 }

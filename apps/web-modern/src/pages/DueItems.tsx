@@ -37,7 +37,7 @@ interface DueItemsSummary {
 }
 
 const EXEC_STATUS_STYLES: Record<string, string> = {
-  FUTURE: "bg-white/5 text-text-industrial/40 border-white/10",
+  FUTURE: "bg-fg/5 text-text-industrial/40 border-fg/10",
   UPCOMING: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   IN_WINDOW: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   DUE: "bg-accent/10 text-accent border-accent/20",
@@ -46,7 +46,7 @@ const EXEC_STATUS_STYLES: Record<string, string> = {
 };
 
 function ExecutionStatusBadge({ status }: { status: string }) {
-  const cls = EXEC_STATUS_STYLES[status] ?? "bg-white/5 text-text-industrial/40 border-white/10";
+  const cls = EXEC_STATUS_STYLES[status] ?? "bg-fg/5 text-text-industrial/40 border-fg/10";
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
       {status}
@@ -94,10 +94,10 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("mp.quickClose")}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+      <div className="w-full max-w-lg bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("mp.quickClose")}</h2>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -106,7 +106,7 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={4}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+              className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               placeholder="Observaciones del cierre rapido"
             />
           </div>
@@ -116,8 +116,8 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
             </p>
           )}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">Cancelar</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
           </button>
@@ -184,12 +184,12 @@ export const DueItemsPage: React.FC = () => {
     {
       key: "taskCode",
       header: t("mp.taskCode"),
-      render: row => <span className="font-mono font-bold text-white text-xs">{row.taskCode}</span>,
+      render: row => <span className="font-mono font-bold text-fg text-xs">{row.taskCode}</span>,
     },
     {
       key: "title",
       header: t("col.title"),
-      render: row => <span className="font-medium text-white line-clamp-1">{row.title}</span>,
+      render: row => <span className="font-medium text-fg line-clamp-1">{row.title}</span>,
     },
     {
       key: "vesselCode",
@@ -258,7 +258,7 @@ export const DueItemsPage: React.FC = () => {
         <select
           value={toFilterSelectValue(executionStatusFilter)}
           onChange={e => updateFilters({ executionStatus: fromFilterSelectValue(e.target.value) })}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50"
         >
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="OVERDUE">OVERDUE</option>
@@ -274,18 +274,18 @@ export const DueItemsPage: React.FC = () => {
               if (e.key === "Enter") updateFilters({ vesselCode: vesselInput.trim() });
             }}
             placeholder={t("common.filterByVessel")}
-            className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+            className="w-44 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
           />
           <button
             onClick={() => updateFilters({ vesselCode: vesselInput.trim() })}
-            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
           >
             {t("common.apply")}
           </button>
           {(vesselFilter || executionStatusFilter) && (
             <button
               onClick={() => updateFilters({ vesselCode: "", executionStatus: "" })}
-              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all"
+              className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all"
             >
               {t("common.clear")}
             </button>

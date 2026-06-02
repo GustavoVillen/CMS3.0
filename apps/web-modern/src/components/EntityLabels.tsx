@@ -42,7 +42,7 @@ export const VesselLabel: React.FC<VesselLabelProps> = ({ code, name, className,
   }
 
   return (
-    <span className={`${className ?? "text-xs"} text-white inline-flex items-center gap-1.5`} title={code ?? undefined}>
+    <span className={`${className ?? "text-xs"} text-fg inline-flex items-center gap-1.5`} title={code ?? undefined}>
       <span className="font-medium">{resolved}</span>
       {showCode && code && (
         <span className="font-mono text-[9px] text-accent/70">{code}</span>
@@ -106,5 +106,5 @@ export const AssetLabel: React.FC<AssetLabelProps> = ({ id, fallbackName, classN
   useAssetsCache();
   const name = fallbackName ?? (id ? getAssetName(id) : null);
   if (!name) return <span className="text-text-industrial/30 text-xs">—</span>;
-  return <span className={className ?? "text-xs text-white"} title={id ?? undefined}>{name}</span>;
+  return <span className={className ?? "text-xs text-fg"} title={id ?? undefined}>{name}</span>;
 };

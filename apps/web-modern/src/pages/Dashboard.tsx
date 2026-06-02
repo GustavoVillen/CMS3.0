@@ -10,6 +10,7 @@ import { useT, useLocale, translate } from "../lib/i18n";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
+import { useTheme } from "../lib/theme";
 import { MyDayPanel } from "../components/MyDayPanel";
 import { ComplianceDashboard } from "../components/ComplianceDashboard";
 import { domToPng } from "modern-screenshot";
@@ -60,6 +61,17 @@ export const Dashboard: React.FC = () => {
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
+  const { theme }    = useTheme();
+  const isDark       = theme === "dark";
+  // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
+  const chartTooltip = {
+    contentStyle: {
+      backgroundColor: isDark ? "#1C2541" : "#FFFFFF",
+      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+      borderRadius: "12px",
+    },
+    itemStyle: { color: isDark ? "#E0E1DD" : "#1A1D24" },
+  };
   const [showInsights, setShowInsights] = React.useState(false);
 
   // useFetch injects vesselCode automatically from VesselContext
@@ -234,7 +246,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <button
           onClick={() => { void exportDashboardHtml(); }}
           disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
           title={t("dashboard.exportHtmlTitle")}
         >
           {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
@@ -267,7 +279,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.woTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.woTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.woSubtitle")}</p>
             </div>
             {workOrders.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -280,21 +292,21 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {statusCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{workOrders.data?.items.length ?? 0}</span>
+                  <span className="text-xl font-bold text-fg">{workOrders.data?.items.length ?? 0}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
                 {statusCounts.map(s => (
                   <button key={s.name} type="button" onClick={() => navigate(`/work-orders?view=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
                   </button>
                 ))}
               </div>
@@ -312,7 +324,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]" style={mpStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.mpTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.mpTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.mpSubtitle")}</p>
             </div>
             {mpSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -325,21 +337,21 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <Pie data={mpStatusCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {mpStatusCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{mpSummary.data?.total ?? 0}</span>
+                  <span className="text-xl font-bold text-fg">{mpSummary.data?.total ?? 0}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
                 {mpStatusCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/maintenance-plans?executionStatus=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
                   </button>
                 ))}
               </div>
@@ -353,7 +365,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.deferralsTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.deferralsTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.deferralsSubtitle")}</p>
             </div>
             {deferrals.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -371,21 +383,21 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <Pie data={deferralCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {deferralCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{deferralCounts.reduce((a, s) => a + s.value, 0)}</span>
+                  <span className="text-xl font-bold text-fg">{deferralCounts.reduce((a, s) => a + s.value, 0)}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
                 {deferralCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/deferrals?status=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
                   </button>
                 ))}
               </div>
@@ -403,7 +415,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]" style={csStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.criticalSparesTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.criticalSparesTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.criticalSparesSubtitle")}</p>
             </div>
             {criticalSpares.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -421,21 +433,21 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <Pie data={critSparesCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {critSparesCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{criticalSpares.data?.total ?? 0}</span>
+                  <span className="text-xl font-bold text-fg">{criticalSpares.data?.total ?? 0}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
                 {critSparesCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/spares?criticality=A&stockStatus=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
                   </button>
                 ))}
               </div>
@@ -449,7 +461,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.spareReqTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.spareReqTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.spareReqSubtitle")}</p>
             </div>
             {spareRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -467,21 +479,21 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <Pie data={spareReqCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {spareReqCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }} itemStyle={{ color: "#E0E1DD" }} />
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-white">{spareReqCounts.reduce((a, s) => a + s.value, 0)}</span>
+                  <span className="text-xl font-bold text-fg">{spareReqCounts.reduce((a, s) => a + s.value, 0)}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.itemsLabel")}</span>
                 </div>
               </div>
               <div className="w-[130px] space-y-2">
                 {spareReqCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/spare-requests?status=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-white/5 transition-colors group">
+                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-white transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-white">{s.value}</span>
+                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
+                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
                   </button>
                 ))}
               </div>
@@ -493,7 +505,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.crewTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.crewTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.crewSubtitle")}</p>
             </div>
             {crewSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -503,49 +515,49 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             return (
               <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-2 auto-rows-fr">
                 <button onClick={() => navigate("/crew")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
+                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Users className="w-3 h-3 text-text-industrial/40" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewOnboard")}</span>
                   </div>
-                  <p className="text-xl font-bold text-white tabular-nums leading-none">{c.onboard}</p>
+                  <p className="text-xl font-bold text-fg tabular-nums leading-none">{c.onboard}</p>
                   <p className="text-[10px] text-text-industrial/40 mt-auto pt-1">&nbsp;</p>
                 </button>
                 <button onClick={() => navigate("/crew-matrix")}
                   className={`text-left rounded-lg p-3 transition-colors flex flex-col ${
                     c.certsExpired + c.certsExpiringSoon > 0
                       ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
-                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+                    <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewCertsAttn")}</span>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums leading-none ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
+                  <p className={`text-xl font-bold tabular-nums leading-none ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>
                     {c.certsExpired + c.certsExpiringSoon}
                   </p>
                   <p className="text-[10px] mt-auto pt-1 leading-none">
                     {c.certsExpired > 0 && (
-                      <span className="text-red-400">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</span>
+                      <span className="text-red-700 dark:text-red-400">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</span>
                     )}
                     {c.certsExpired > 0 && c.certsExpiringSoon > 0 && <span className="text-text-industrial/40"> · </span>}
                     {c.certsExpiringSoon > 0 && (
-                      <span className="text-yellow-400">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</span>
+                      <span className="text-yellow-700 dark:text-yellow-400">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</span>
                     )}
                     {c.certsExpired === 0 && c.certsExpiringSoon === 0 && <span>&nbsp;</span>}
                   </p>
                 </button>
                 <button onClick={() => navigate("/drills")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
+                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsMonth")}</span>
                   </div>
-                  <p className="text-xl font-bold text-white tabular-nums leading-none">{c.drillsScheduled}</p>
+                  <p className="text-xl font-bold text-fg tabular-nums leading-none">{c.drillsScheduled}</p>
                   <p className="text-[10px] text-text-industrial/40 mt-auto pt-1 leading-none">{t("dashboard.drillsScheduled")}</p>
                 </button>
                 <button onClick={() => navigate("/drills?status=COMPLETED")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors flex flex-col">
+                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
                   <div className="flex items-center gap-1.5 mb-1">
                     <CalendarCheck className="w-3 h-3 text-success-sea" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsYear")}</span>
@@ -562,7 +574,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="bento-card p-4! flex flex-col h-[226px]">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-xs font-bold text-white">{t("dashboard.permitsTitle")}</h2>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.permitsTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.permitsSubtitle")}</p>
             </div>
             {permitsSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
@@ -572,7 +584,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             return (
               <div className="flex-1 grid grid-cols-2 gap-2 content-start">
                 <button onClick={() => navigate("/permits?status=ACTIVE")}
-                  className="text-left rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors">
+                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ShieldAlert className="w-3 h-3 text-success-sea" />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsActive")}</span>
@@ -583,37 +595,37 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   className={`text-left rounded-lg p-3 transition-colors ${
                     p.pendingApproval > 0
                       ? "bg-yellow-500/5 border border-yellow-500/30 hover:bg-yellow-500/10"
-                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <Clock className={`w-3 h-3 ${p.pendingApproval > 0 ? "text-yellow-400" : "text-text-industrial/40"}`} />
+                    <Clock className={`w-3 h-3 ${p.pendingApproval > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/40"}`} />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsToApprove")}</span>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.pendingApproval > 0 ? "text-yellow-400" : "text-white"}`}>{p.pendingApproval}</p>
+                  <p className={`text-xl font-bold tabular-nums ${p.pendingApproval > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-fg"}`}>{p.pendingApproval}</p>
                 </button>
                 <button onClick={() => navigate("/permits?status=ACTIVE")}
                   className={`text-left rounded-lg p-3 transition-colors ${
                     p.expiringSoon > 0
                       ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
-                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className={`w-3 h-3 ${p.expiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
+                    <AlertTriangle className={`w-3 h-3 ${p.expiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpiring")}</span>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.expiringSoon > 0 ? "text-orange-400" : "text-white"}`}>{p.expiringSoon}</p>
+                  <p className={`text-xl font-bold tabular-nums ${p.expiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>{p.expiringSoon}</p>
                 </button>
                 <button onClick={() => navigate("/permits?status=ACTIVE")}
                   className={`text-left rounded-lg p-3 transition-colors ${
                     p.expired > 0
                       ? "bg-red-500/5 border border-red-500/30 hover:bg-red-500/10"
-                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
                   }`}>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <AlertCircle className={`w-3 h-3 ${p.expired > 0 ? "text-red-400" : "text-text-industrial/40"}`} />
+                    <AlertCircle className={`w-3 h-3 ${p.expired > 0 ? "text-red-700 dark:text-red-400" : "text-text-industrial/40"}`} />
                     <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpired")}</span>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.expired > 0 ? "text-red-400" : "text-white"}`}>{p.expired}</p>
+                  <p className={`text-xl font-bold tabular-nums ${p.expired > 0 ? "text-red-700 dark:text-red-400" : "text-fg"}`}>{p.expired}</p>
                 </button>
               </div>
             );
@@ -625,12 +637,12 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           const inactive = contextVessels.filter(v => v.status !== "ACTIVE");
           if (inactive.length === 0) return null;
           return (
-            <div className="lg:col-span-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-white/3 border border-white/8">
+            <div className="lg:col-span-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-fg/3 border border-fg/8">
               <Ship className="w-4 h-4 text-text-industrial/40 shrink-0" />
               <span className="text-xs text-text-industrial/50">{t("dashboard.inactiveVessels")}</span>
               <div className="flex flex-wrap gap-2 flex-1">
                 {inactive.map(v => (
-                  <span key={v.code} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-text-industrial/50 font-medium cursor-pointer hover:border-accent/30 transition-all" onClick={() => navigate("/vessels")}>
+                  <span key={v.code} className="text-[10px] px-2 py-0.5 rounded-full bg-fg/5 border border-fg/10 text-text-industrial/50 font-medium cursor-pointer hover:border-accent/30 transition-all" onClick={() => navigate("/vessels")}>
                     {v.code} · {v.status}
                   </span>
                 ))}
@@ -660,27 +672,27 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 // ---------------------------------------------------------------------------
 
 const PRIORITY_STYLES: Record<string, string> = {
-  CRITICAL: "bg-red-500/10 text-red-400 border-red-500/20",
+  CRITICAL: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
   HIGH:     "bg-accent/10 text-accent border-accent/20",
-  MEDIUM:   "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  LOW:      "bg-white/5 text-text-industrial/40 border-white/10",
+  MEDIUM:   "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  LOW:      "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
 const InsightItem = ({ insight }: { insight: AiInsight }) => (
-  <div className="p-3 rounded-xl border border-white/5 bg-white/2 hover:bg-white/4 transition-all cursor-pointer group">
+  <div className="p-3 rounded-xl border border-fg/5 bg-fg/2 hover:bg-fg/4 transition-all cursor-pointer group">
     <div className="flex items-center justify-between mb-1.5">
       <span className="text-[9px] font-bold tracking-widest text-text-industrial/30 uppercase">{insight.targetType}</span>
       <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${PRIORITY_STYLES[insight.priority]}`}>
         {insight.priority}
       </span>
     </div>
-    <h3 className="text-xs font-bold text-white group-hover:text-accent transition-colors line-clamp-1">{insight.title}</h3>
+    <h3 className="text-xs font-bold text-fg group-hover:text-accent transition-colors line-clamp-1">{insight.title}</h3>
     <p className="text-[10px] text-text-industrial/50 mt-0.5 line-clamp-2">{insight.summary}</p>
   </div>
 );
 
 const ErrorMsg = ({ msg }: { msg: string }) => (
-  <div className="flex items-center gap-2 text-red-400 text-xs p-3 bg-red-500/10 rounded-lg">
+  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-xs p-3 bg-red-500/10 rounded-lg">
     <AlertCircle className="w-4 h-4 shrink-0" />
     {msg}
   </div>
@@ -746,6 +758,14 @@ const FuelConsumptionWidget = ({
   vesselName: string;
 }) => {
   const t = useT();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const gridStroke  = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)";
+  const axisTick    = isDark ? "rgba(224,225,221,0.35)" : "rgba(26,29,36,0.5)";
+  const tooltipBg     = isDark ? "#1C2541" : "#FFFFFF";
+  const tooltipBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
+  const tooltipText   = isDark ? "#E0E1DD" : "#1A1D24";
+  const tooltipLabel  = isDark ? "rgba(224,225,221,0.5)" : "rgba(26,29,36,0.6)";
   const chartData = React.useMemo(() => buildDropletsChartData(data), [data]);
   const hasData = data.length > 0;
 
@@ -753,7 +773,7 @@ const FuelConsumptionWidget = ({
     <div className="bento-card p-4! flex flex-col h-[190px]">
       <div className="flex items-center justify-between mb-1">
         <div>
-          <h2 className="text-xs font-bold text-white flex items-center gap-2">
+          <h2 className="text-xs font-bold text-fg flex items-center gap-2">
             <Droplets className="w-3.5 h-3.5 text-accent" />
             {t("dashboard.fuelTitle")}
           </h2>
@@ -787,25 +807,25 @@ const FuelConsumptionWidget = ({
         <div className="flex-1 min-h-0">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: "rgba(224,225,221,0.35)", fontSize: 10 }}
+                tick={{ fill: axisTick, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 interval={4}
               />
               <YAxis
-                tick={{ fill: "rgba(224,225,221,0.35)", fontSize: 10 }}
+                tick={{ fill: axisTick, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 width={48}
                 tickFormatter={v => `${(v as number).toLocaleString("es")}L`}
               />
               <Tooltip
-                contentStyle={{ backgroundColor: "#1C2541", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }}
-                itemStyle={{ color: "#E0E1DD" }}
-                labelStyle={{ color: "rgba(224,225,221,0.5)", fontSize: 11 }}
+                contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: "12px" }}
+                itemStyle={{ color: tooltipText }}
+                labelStyle={{ color: tooltipLabel, fontSize: 11 }}
                 formatter={(value: number, name: string) => [
                   `${value.toLocaleString("es")} L`,
                   name === "realValue" ? t("dashboard.fuelReal") : t("dashboard.fuelEstimated"),
@@ -850,17 +870,17 @@ const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
     <div
-      className="relative z-10 w-full max-w-lg bg-primary-bg border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
+      className="relative z-10 w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-fg/10 shrink-0">
         <div className="flex items-center gap-2 text-accent">
           <Sparkles className="w-4 h-4" />
           <h2 className="text-sm font-bold">AI Insights</h2>
           <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 font-bold text-accent">{insights.length}</span>
         </div>
-        <button onClick={onClose} className="text-text-industrial/40 hover:text-white text-lg leading-none transition-colors">✕</button>
+        <button onClick={onClose} className="text-text-industrial/40 hover:text-fg text-lg leading-none transition-colors">✕</button>
       </div>
 
       {/* List */}
@@ -877,9 +897,9 @@ const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-white/10 shrink-0">
+      <div className="px-5 py-3 border-t border-fg/10 shrink-0">
         <button onClick={onNavigate}
-          className="w-full py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+          className="w-full py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
           {t("dashboard.viewAllInsights")}
         </button>
       </div>

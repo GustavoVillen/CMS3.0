@@ -78,7 +78,7 @@ const STATUS_COLORS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   TENANT_ADMIN:         "text-accent font-bold",
   FLEET_SUPERINTENDENT: "text-blue-400 font-semibold",
-  MAINTENANCE_MANAGER:  "text-white",
+  MAINTENANCE_MANAGER:  "text-fg",
   TECHNICIAN_OPERATOR:  "text-text-industrial/70",
   INSPECTOR_COMPLIANCE: "text-text-industrial/70",
   PROCUREMENT_STORE:    "text-text-industrial/70",
@@ -96,8 +96,8 @@ function isInternalEmail(email: string): boolean {
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
-const inputCls  = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
-const selectCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50";
+const inputCls  = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 const labelCls  = "block text-[10px] font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 // ─── Add Member Modal ─────────────────────────────────────────────────────────
@@ -162,23 +162,23 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">Agregar miembro</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+      <div className="w-full max-w-lg bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">Agregar miembro</h2>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10">
+        <div className="flex border-b border-fg/10">
           <button
             onClick={() => { setTab("direct"); setError(null); }}
-            className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "direct" ? "text-accent border-b-2 border-accent" : "text-text-industrial/50 hover:text-white"}`}
+            className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "direct" ? "text-accent border-b-2 border-accent" : "text-text-industrial/50 hover:text-fg"}`}
           >
             Crear directamente
           </button>
           <button
             onClick={() => { setTab("invite"); setError(null); }}
-            className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "invite" ? "text-accent border-b-2 border-accent" : "text-text-industrial/50 hover:text-white"}`}
+            className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "invite" ? "text-accent border-b-2 border-accent" : "text-text-industrial/50 hover:text-fg"}`}
           >
             Invitar por email
           </button>
@@ -192,17 +192,17 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
             </div>
             <p className="text-xs text-text-industrial/60">{t("team.tokenCopy")}</p>
             <div className="flex items-center gap-2">
-              <input readOnly value={acceptUrl} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none" />
+              <input readOnly value={acceptUrl} className="flex-1 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-xs text-fg font-mono focus:outline-none" />
               <button
                 onClick={() => { void handleCopy(); }}
-                className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${copied ? "bg-success-sea/20 border-success-sea/40 text-success-sea" : "bg-white/5 border-white/10 text-text-industrial hover:border-accent/40 hover:text-white"}`}
+                className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${copied ? "bg-success-sea/20 border-success-sea/40 text-success-sea" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/40 hover:text-fg"}`}
               >
                 {copied ? <div className="flex items-center gap-1"><Check className="w-3.5 h-3.5" />{t("team.copied")}</div>
                         : <div className="flex items-center gap-1"><Copy className="w-3.5 h-3.5" />{t("team.copyLink")}</div>}
               </button>
             </div>
             <div className="flex justify-end pt-2">
-              <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:text-white transition-colors">{t("common.close")}</button>
+              <button onClick={onClose} className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg transition-colors">{t("common.close")}</button>
             </div>
           </div>
         ) : tab === "direct" ? (
@@ -225,8 +225,8 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
               </div>
               {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
             </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
               <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 Agregar
@@ -249,8 +249,8 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
               </div>
               {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
             </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
               <button onClick={() => { void handleInvite(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 {t("team.sendInvite")}
@@ -296,10 +296,10 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ selected, o
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
                   active
                     ? "bg-accent/15 border-accent/40 text-accent"
-                    : "bg-white/3 border-white/10 text-text-industrial/50 hover:bg-white/8 hover:text-white"
+                    : "bg-fg/3 border-fg/10 text-text-industrial/50 hover:bg-fg/8 hover:text-fg"
                 }`}
               >
-                <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${active ? "bg-accent border-accent" : "border-white/20"}`}>
+                <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${active ? "bg-accent border-accent" : "border-fg/20"}`}>
                   {active && <Check className="w-2.5 h-2.5 text-primary-bg" />}
                 </div>
                 <div>
@@ -348,7 +348,7 @@ const MemberCredentialsSection: React.FC<MemberCredentialsSectionProps> = ({
         <label className={labelCls + " mb-1"}>Usuario (para login)</label>
         <div className="flex items-center gap-2">
           <input readOnly value={username} className={`${inputCls} flex-1 opacity-70 cursor-default`} />
-          <button type="button" onClick={() => { void handleCopy(); }} className="shrink-0 p-2 rounded-lg border border-white/10 text-text-industrial/40 hover:text-white transition-colors">
+          <button type="button" onClick={() => { void handleCopy(); }} className="shrink-0 p-2 rounded-lg border border-fg/10 text-text-industrial/40 hover:text-fg transition-colors">
             {copied ? <Check className="w-3.5 h-3.5 text-success-sea" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -376,7 +376,7 @@ const MemberCredentialsSection: React.FC<MemberCredentialsSectionProps> = ({
             placeholder="Nueva contraseña…"
             className={`${inputCls} pr-10`}
           />
-          <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-white transition-colors">
+          <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-fg transition-colors">
             {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -495,22 +495,22 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
-            <h2 className="text-base font-bold text-white">{fullName(member)}</h2>
+            <h2 className="text-base font-bold text-fg">{fullName(member)}</h2>
             {!isInternalEmail(member.email) && (
               <p className="text-[10px] text-text-industrial/40">{member.email}</p>
             )}
             <p className="text-[10px] text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
           {/* Status */}
           <div className="flex items-center gap-3">
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLORS[member.status] ?? "bg-white/5 text-white border-white/10"}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLORS[member.status] ?? "bg-fg/5 text-fg border-fg/10"}`}>
               {statusLabel[member.status] ?? member.status}
             </span>
             {member.joinedAt && (
@@ -559,12 +559,12 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
         {/* Footer — un solo Guardar + Eliminar */}
         {!isSelf && (
-          <div className="px-6 py-4 border-t border-white/10 shrink-0">
+          <div className="px-6 py-4 border-t border-fg/10 shrink-0">
             {confirmDeactivate ? (
               <div className="space-y-3">
                 <p className="text-xs text-text-industrial/60">{t("confirm.deleteTeamMember").replace("{name}", fullName(member))}</p>
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => setConfirmDeactivate(false)} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+                  <button onClick={() => setConfirmDeactivate(false)} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
                   <button
                     onClick={() => { void handleDelete(); }}
                     disabled={deactivating}
@@ -617,7 +617,7 @@ const PendingInvitationsPanel: React.FC<{ reload: number }> = ({ reload }) => {
         {invites.map(inv => (
           <div key={inv.id} className="flex items-center justify-between px-4 py-2.5 bg-blue-500/5 border border-blue-500/15 rounded-xl">
             <div>
-              <p className="text-xs font-medium text-white">{inv.email}</p>
+              <p className="text-xs font-medium text-fg">{inv.email}</p>
               <p className="text-[10px] text-text-industrial/40">{roleLabels[inv.role] ?? inv.role} · vence {fmtDate(inv.expiresAt)}</p>
             </div>
             <span className="text-[10px] px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20 font-bold">{t("team.statusInvited")}</span>
@@ -649,7 +649,7 @@ export const TeamPage: React.FC = () => {
       header: "Nombre",
       render: m => (
         <div>
-          <p className="font-semibold text-white text-sm">{fullName(m)}</p>
+          <p className="font-semibold text-fg text-sm">{fullName(m)}</p>
           {!isInternalEmail(m.email) && <p className="text-[10px] text-text-industrial/40">{m.email}</p>}
         </div>
       ),
@@ -657,13 +657,13 @@ export const TeamPage: React.FC = () => {
     {
       key: "role",
       header: t("team.role"),
-      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-white"}`}>{roleLabels[m.role] ?? m.role}</span>,
+      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-fg"}`}>{roleLabels[m.role] ?? m.role}</span>,
     },
     {
       key: "status",
       header: t("col.status"),
       render: m => (
-        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLORS[m.status] ?? "bg-white/5 text-white border-white/10"}`}>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLORS[m.status] ?? "bg-fg/5 text-fg border-fg/10"}`}>
           {m.status}
         </span>
       ),

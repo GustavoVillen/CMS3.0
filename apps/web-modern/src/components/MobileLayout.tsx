@@ -89,14 +89,14 @@ export const MobileLayout: React.FC = () => {
       <div className="flex flex-col h-screen bg-[#0A1A2A] overflow-hidden">
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <header className="shrink-0 px-4 py-2.5 border-b border-white/10 flex items-center gap-3 bg-[#0D1B2A]">
+        <header className="shrink-0 px-4 py-2.5 border-b border-fg/10 flex items-center gap-3 bg-[#0D1B2A]">
           <CmsLogo className="w-7 h-7 shrink-0" title={tenant?.displayName ?? "CMS"} />
 
           {vessels.length > 1 ? (
             <select
               value={selectedVesselCode ?? ""}
               onChange={e => setSelectedVesselCode(e.target.value || null)}
-              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-accent/50 appearance-none min-w-0"
+              className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-xs text-fg focus:outline-none focus:border-accent/50 appearance-none min-w-0"
             >
               <option value="">— Todos —</option>
               {vessels.map(v => (
@@ -112,7 +112,7 @@ export const MobileLayout: React.FC = () => {
           <button
             type="button"
             onClick={logout}
-            className="shrink-0 p-2 -mr-1 text-text-industrial/40 hover:text-white transition-colors"
+            className="shrink-0 p-2 -mr-1 text-text-industrial/40 hover:text-fg transition-colors"
             aria-label="Cerrar sesión"
           >
             <LogOut className="w-4 h-4" />
@@ -144,14 +144,14 @@ export const MobileLayout: React.FC = () => {
         )}
 
         {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
-        <nav className="shrink-0 grid grid-cols-7 border-t border-white/10 bg-[#0D1B2A]">
+        <nav className="shrink-0 grid grid-cols-7 border-t border-fg/10 bg-[#0D1B2A]">
           {TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
               className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors min-w-0 ${
-                tab === id ? "text-accent" : "text-text-industrial/40 hover:text-white/60"
+                tab === id ? "text-accent" : "text-text-industrial/40 hover:text-fg/60"
               }`}
             >
               <Icon className="w-5 h-5" />

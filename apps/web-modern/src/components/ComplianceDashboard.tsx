@@ -49,8 +49,8 @@ interface ComplianceScore {
 const LABEL_COLOR: Record<ComplianceScore["label"], string> = {
   EXCELLENT: "text-success-sea",
   GOOD:      "text-accent",
-  FAIR:      "text-yellow-400",
-  POOR:      "text-red-400",
+  FAIR:      "text-yellow-700 dark:text-yellow-400",
+  POOR:      "text-red-700 dark:text-red-400",
 };
 
 const LABEL_KEY: Record<ComplianceScore["label"], TranslationKey> = {
@@ -114,7 +114,7 @@ export const ComplianceDashboard: React.FC = () => {
               aria-expanded={!collapsed}
             >
               <TrendingUp className="w-4 h-4 text-accent" />
-              <h2 className="text-xs font-bold uppercase tracking-widest text-white group-hover:text-accent transition-colors">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-fg group-hover:text-accent transition-colors">
                 {t("compliance.scoreTitle")}
               </h2>
               {collapsed
@@ -131,7 +131,7 @@ export const ComplianceDashboard: React.FC = () => {
                   : `compliance-flota-${dateStr}.pdf`;
                 void downloadAuthedFile(`/app/compliance/scores/pdf${qs}`, filename);
               }}
-              className="ml-1 flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] text-text-industrial hover:border-accent/30 hover:text-accent transition-all"
+              className="ml-1 flex items-center gap-1 px-2 py-0.5 rounded-md bg-fg/5 border border-fg/10 text-[10px] text-text-industrial hover:border-accent/30 hover:text-accent transition-all"
               title={t("compliance.pdfTitle")}
             >
               <Download className="w-3 h-3" />
@@ -156,12 +156,12 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
     <button
       type="button"
       onClick={() => setOpen(v => !v)}
-      className="text-left bg-white/[0.04] border border-white/10 rounded-xl p-3 hover:border-accent/40 hover:bg-white/[0.07] transition-all"
+      className="text-left bg-fg/[0.04] border border-fg/10 rounded-xl p-3 hover:border-accent/40 hover:bg-fg/[0.07] transition-all"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 truncate">{score.vesselCode}</p>
-          <p className="text-xs font-bold text-white truncate">{score.vesselName}</p>
+          <p className="text-xs font-bold text-fg truncate">{score.vesselName}</p>
         </div>
         <div className="text-right shrink-0">
           <p className={`text-2xl font-bold leading-none ${LABEL_COLOR[score.label]}`}>{score.score}</p>
@@ -170,7 +170,7 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
       </div>
 
       {/* Mini bar */}
-      <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+      <div className="mt-2 h-1.5 bg-fg/5 rounded-full overflow-hidden">
         <div
           className={`h-full ${
             score.label === "EXCELLENT" ? "bg-success-sea" :
@@ -183,7 +183,7 @@ const ScoreCard: React.FC<{ score: ComplianceScore }> = ({ score }) => {
       </div>
 
       {open && (
-        <div className="mt-2.5 space-y-1 pt-2 border-t border-white/5">
+        <div className="mt-2.5 space-y-1 pt-2 border-t border-fg/5">
           <ComponentRow label={t("compliance.row.woCompliance")} value={score.components.woComplianceRate}  hint={t("compliance.hint.onTime").replace("{a}", String(score.totals.woCompletedOnTime)).replace("{b}", String(score.totals.woClosedTotal))} />
           {/* Drills y STCW solo aplican a buques tripulados (barcazas se omiten). */}
           {score.crewedOperation && (
@@ -215,8 +215,8 @@ const ComponentRow: React.FC<{ label: string; value: number; hint: string; inver
   const colorCls =
     value >= 0.85 ? "text-success-sea" :
     value >= 0.6  ? "text-accent" :
-    value >= 0.4  ? "text-yellow-400" :
-    "text-red-400";
+    value >= 0.4  ? "text-yellow-700 dark:text-yellow-400" :
+    "text-red-700 dark:text-red-400";
   return (
     <div className="flex items-center justify-between gap-2 text-[10px]">
       <span className="text-text-industrial/70 truncate">{label}</span>

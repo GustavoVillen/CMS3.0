@@ -140,13 +140,13 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-4xl bg-surface border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="relative w-full max-w-4xl bg-surface border border-fg/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-3">
             <Ship className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-bold text-white">{isEdit ? t("vessel.editTitle") : t("vessel.newTitle")}</h2>
+            <h2 className="text-sm font-bold text-fg">{isEdit ? t("vessel.editTitle") : t("vessel.newTitle")}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-text-industrial/40 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg transition-all"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-[1fr_7fr] gap-4">
@@ -226,7 +226,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
           </Field>
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">{t("common.cancel")}</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? t("common.saving") : isEdit ? t("vessel.saveChanges") : t("vessel.create")}
             </button>
@@ -251,13 +251,13 @@ const DeleteConfirm: React.FC<{ vessel: Vessel; onClose: () => void; onDeleted: 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm bg-surface border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4">
-        <h2 className="text-sm font-bold text-white">{t("vessel.deleteTitle")}</h2>
-        <p className="text-xs text-text-industrial/60"><span className="text-white font-bold">{vessel.code} \u2014 {vessel.name}</span></p>
+      <div className="relative w-full max-w-sm bg-surface border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4">
+        <h2 className="text-sm font-bold text-fg">{t("vessel.deleteTitle")}</h2>
+        <p className="text-xs text-text-industrial/60"><span className="text-fg font-bold">{vessel.code} \u2014 {vessel.name}</span></p>
         {error && <p className="text-xs text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">{t("common.cancel")}</button>
-          <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-white font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
+          <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
             {deleting ? t("vessel.deleting") : t("common.delete")}
           </button>
         </div>
@@ -302,8 +302,8 @@ export const VesselsPage: React.FC = () => {
   };
 
   const COLUMNS: Column<Vessel>[] = [
-    { key: "code",      header: t("col.code"),      render: r => <span className="font-mono font-bold text-white">{r.code}</span> },
-    { key: "name",      header: t("col.name"),      render: r => <span className="font-medium text-white">{r.name}</span> },
+    { key: "code",      header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg">{r.code}</span> },
+    { key: "name",      header: t("col.name"),      render: r => <span className="font-medium text-fg">{r.name}</span> },
     { key: "vesselType",header: "TIPO",            render: r => <span className="text-text-industrial/80">{r.vesselType ?? "—"}</span> },
     { key: "status",    header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },
     {
@@ -323,17 +323,17 @@ export const VesselsPage: React.FC = () => {
       {deleteTarget && <DeleteConfirm vessel={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={() => { setDeleteTarget(null); reload(); }} />}
       <PageHeader icon={Ship} title={t("page.vessels")} total={data?.total} onReload={reload}>
         {user?.role === "TENANT_ADMIN" && (
-          <button onClick={() => navigate("/vessel-map")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+          <button onClick={() => navigate("/vessel-map")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
             <Map className="w-3.5 h-3.5 text-accent" /> {t("nav.vesselMap")}
           </button>
         )}
         <button onClick={() => setFormVessel(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="ACTIVE">{t("status.active")}</option>
           <option value="INACTIVE">{t("status.inactive")}</option>

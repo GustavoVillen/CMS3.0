@@ -71,10 +71,10 @@ function usePlatformList<T>(path: string) {
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0D1526] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <h2 className="text-sm font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+      <div className="bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
+          <h2 className="text-sm font-bold text-fg">{title}</h2>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-6 py-5 space-y-4">{children}</div>
       </div>
@@ -91,7 +91,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inp = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
@@ -102,7 +102,7 @@ function OkMsg({ msg }: { msg: string }) {
 }
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
   return (
-    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-white font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
       {l ? <><Loader2 className="w-4 h-4 animate-spin" />{label}...</> : label}
     </button>
   );
@@ -185,7 +185,7 @@ function LogoVariant({ label, bg, value, onClear }: { label: string; bg: string;
   return (
     <div className="flex flex-col gap-1.5 flex-1">
       <span className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">{label}</span>
-      <div className="rounded-xl border border-white/10 flex items-center justify-center h-16 overflow-hidden relative" style={{ background: bg }}>
+      <div className="rounded-xl border border-fg/10 flex items-center justify-center h-16 overflow-hidden relative" style={{ background: bg }}>
         {value
           ? <img src={value} alt={label} className="w-full h-full object-contain p-2" />
           : <span className="text-[10px] text-text-industrial/20">Sin imagen</span>
@@ -234,7 +234,7 @@ function DualLogoPicker({ dark, light, onChange }: {
         <LogoVariant label="Versión clara (fondo oscuro)" bg="#0D1526" value={light} onClear={() => onChange(dark, null)} />
       </div>
       <button type="button" onClick={() => ref.current?.click()} disabled={processing}
-        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-white/20 text-xs text-text-industrial/40 hover:border-red-500/40 hover:text-red-400 transition-all disabled:opacity-50">
+        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-fg/20 text-xs text-text-industrial/40 hover:border-red-500/40 hover:text-red-400 transition-all disabled:opacity-50">
         {processing
           ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando logos...</>
           : <><ImagePlus className="w-3.5 h-3.5" /> {dark || light ? "Reemplazar imagen" : "Seleccionar imagen"}</>
@@ -371,9 +371,9 @@ function AddInviteModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
       <div className="space-y-3">
         <OkMsg msg="Invitación generada correctamente" />
         <Field label="Token (copia antes de cerrar)">
-          <code className="block bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-green-400 break-all select-all">{token}</code>
+          <code className="block bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-xs text-green-400 break-all select-all">{token}</code>
         </Field>
-        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white font-bold hover:bg-white/10 transition-all">Cerrar</button>
+        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-sm text-fg font-bold hover:bg-fg/10 transition-all">Cerrar</button>
       </div>
     </ModalWrapper>
   );
@@ -454,7 +454,7 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
     <ModalWrapper title="Usuario actualizado" onClose={() => { onSaved(); onClose(); }}>
       <div className="space-y-3">
         <OkMsg msg="Usuario actualizado correctamente." />
-        <button onClick={() => { onSaved(); onClose(); }} className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white font-bold hover:bg-white/10 transition-all">Cerrar</button>
+        <button onClick={() => { onSaved(); onClose(); }} className="w-full py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-sm text-fg font-bold hover:bg-fg/10 transition-all">Cerrar</button>
       </div>
     </ModalWrapper>
   );
@@ -472,7 +472,7 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
             {TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}
           </select>
         </Field>
-        <div className="border-t border-white/5 pt-3 space-y-3">
+        <div className="border-t border-fg/5 pt-3 space-y-3">
           <p className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">Nueva contraseña (opcional)</p>
           <Field label="Contraseña">
             <PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="Dejar vacío para no cambiar" />
@@ -539,19 +539,19 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
     <>
       <div className="fixed inset-0 top-12 left-56 z-40 flex">
         <div className="flex-1 bg-black/50 backdrop-blur-sm" />
-        <aside className="w-[460px] bg-[#0A1020] border-l border-white/10 flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+        <aside className="w-[460px] bg-[#0A1020] border-l border-fg/10 flex flex-col h-full overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5 shrink-0">
             <div>
               <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
-              <h2 className="text-base font-bold text-white">{tenant.displayName}</h2>
+              <h2 className="text-base font-bold text-fg">{tenant.displayName}</h2>
             </div>
-            <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
           </div>
 
-          <div className="flex border-b border-white/5 shrink-0">
+          <div className="flex border-b border-fg/5 shrink-0">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-400" : "border-transparent text-text-industrial/40 hover:text-white"}`}>
+                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
                 <t.icon className="w-3.5 h-3.5" />{t.label}
               </button>
             ))}
@@ -572,7 +572,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : domains.map(d => (
                     <div key={d.id} className="flex items-center justify-between bento-card py-3 px-4">
                       <div>
-                        <p className="text-sm font-mono text-white">{d.host}</p>
+                        <p className="text-sm font-mono text-fg">{d.host}</p>
                         <p className="text-[10px] text-text-industrial/30 mt-0.5">{fmtDate(d.createdAt)}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -592,7 +592,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-text-industrial/40">{users?.total ?? "—"} usuarios</p>
                   <div className="flex items-center gap-2">
-                    <button onClick={uReload} className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/40 hover:text-white transition-all" title="Recargar"><Loader2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={uReload} className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all" title="Recargar"><Loader2 className="w-3.5 h-3.5" /></button>
                     <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
                   </div>
                 </div>
@@ -605,7 +605,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : users.items.map(u => (
                     <div key={u.id} className="bento-card py-3 px-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm text-white font-medium truncate">{u.firstName || u.email}</p>
+                        <p className="text-sm text-fg font-medium truncate">{u.firstName || u.email}</p>
                         <p className="text-[10px] text-text-industrial/40 mt-0.5 truncate">{u.firstName ? u.email : "—"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -614,7 +614,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                         <button
                           onClick={() => setEditUser(u)}
                           title="Editar usuario"
-                          className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/30 hover:text-yellow-400 transition-all"
+                          className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/30 hover:text-yellow-400 transition-all"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -647,7 +647,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : invites.map(inv => (
                     <div key={inv.id} className="bento-card py-3 px-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm text-white truncate">{inv.email}</p>
+                        <p className="text-sm text-fg truncate">{inv.email}</p>
                         <p className="text-[10px] text-text-industrial/40 mt-0.5">Expira: {fmtDate(inv.expiresAt)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -680,8 +680,8 @@ export const PlatformTenantsPage: React.FC = () => {
   const [detail, setDetail]     = useState<Tenant | null>(null);
 
   const BASE_COLS: Column<Tenant>[] = [
-    { key: "slug",         header: "Slug",    render: r => <span className="font-mono font-bold text-white text-xs">{r.slug}</span> },
-    { key: "displayName",  header: "Nombre",  render: r => <span className="font-medium text-white">{r.displayName}</span> },
+    { key: "slug",         header: "Slug",    render: r => <span className="font-mono font-bold text-fg text-xs">{r.slug}</span> },
+    { key: "displayName",  header: "Nombre",  render: r => <span className="font-medium text-fg">{r.displayName}</span> },
     { key: "status",       header: "Estado",  render: r => <StatusBadge status={r.status} /> },
     { key: "defaultLocale",header: "Locale",  render: r => r.defaultLocale },
     { key: "currency",     header: "Moneda",  render: r => r.currency },
@@ -690,7 +690,7 @@ export const PlatformTenantsPage: React.FC = () => {
       key: "id", header: "",
       render: r => (
         <button title="Ver detalle" onClick={e => { e.stopPropagation(); setDetail(r); }}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-text-industrial/40 hover:text-white transition-all">
+          className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all">
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       ),

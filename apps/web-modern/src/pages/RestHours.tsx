@@ -36,7 +36,7 @@ interface MonthlyData {
   rows: RestHoursRow[];
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
@@ -112,13 +112,13 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="w-full max-w-3xl bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("rh.editorHeader")} · {date}</p>
-            <h2 className="text-sm font-bold text-white">{crew.firstName} {crew.lastName} — {crew.rank}</h2>
+            <h2 className="text-sm font-bold text-fg">{crew.firstName} {crew.lastName} — {crew.rank}</h2>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="p-6 space-y-4">
@@ -174,7 +174,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
-          <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-[10px] text-text-industrial/70 space-y-0.5">
+          <div className="rounded-lg bg-fg/[0.04] border border-fg/10 p-2 text-[10px] text-text-industrial/70 space-y-0.5">
             <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("rh.rules")}</p>
             <p>{t("rh.rule10h")}</p>
             <p>{t("rh.rule77h")}</p>
@@ -182,8 +182,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
@@ -265,14 +265,14 @@ export const RestHoursPage: React.FC = () => {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">{t("rh.vesselPlaceholder")}</option>
           {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
         </select>
-        <div className="flex items-center gap-1 border border-white/10 rounded-lg p-0.5">
-          <button onClick={prevMonth} className="p-1 rounded-md text-text-industrial/60 hover:text-white"><ChevronLeft className="w-4 h-4" /></button>
-          <span className="px-3 text-xs font-bold text-white min-w-[100px] text-center">{String(month).padStart(2, "0")}/{year}</span>
-          <button onClick={nextMonth} className="p-1 rounded-md text-text-industrial/60 hover:text-white"><ChevronRight className="w-4 h-4" /></button>
+        <div className="flex items-center gap-1 border border-fg/10 rounded-lg p-0.5">
+          <button onClick={prevMonth} className="p-1 rounded-md text-text-industrial/60 hover:text-fg"><ChevronLeft className="w-4 h-4" /></button>
+          <span className="px-3 text-xs font-bold text-fg min-w-[100px] text-center">{String(month).padStart(2, "0")}/{year}</span>
+          <button onClick={nextMonth} className="p-1 rounded-md text-text-industrial/60 hover:text-fg"><ChevronRight className="w-4 h-4" /></button>
         </div>
       </div>
 
@@ -283,10 +283,10 @@ export const RestHoursPage: React.FC = () => {
       ) : !data || data.crew.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/40 text-sm">{t("rh.noCrewOnboard").replace("{vessel}", vesselCode)}</div>
       ) : (
-        <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
+        <div className="overflow-x-auto bg-fg/[0.03] border border-fg/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-fg/10">
                 <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[180px]">{t("rh.colCrew")}</th>
                 {dayCols.map(d => (
                   <th key={d} className="px-1 py-2 text-center font-mono text-text-industrial/50 min-w-[28px]">{d}</th>
@@ -295,9 +295,9 @@ export const RestHoursPage: React.FC = () => {
             </thead>
             <tbody>
               {data.crew.map(c => (
-                <tr key={c.id} className="border-b border-white/5 last:border-b-0">
+                <tr key={c.id} className="border-b border-fg/5 last:border-b-0">
                   <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2">
-                    <div className="text-xs font-bold text-white truncate">{c.firstName} {c.lastName}</div>
+                    <div className="text-xs font-bold text-fg truncate">{c.firstName} {c.lastName}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{c.rank}</div>
                   </td>
                   {dayCols.map(d => {
@@ -305,7 +305,7 @@ export const RestHoursPage: React.FC = () => {
                     const violation = row?.hasViolation;
                     const total = row?.totalRestHours ?? null;
                     const cls = !row
-                      ? "bg-white/[0.02] text-text-industrial/30 border-white/5 hover:bg-white/10"
+                      ? "bg-fg/[0.02] text-text-industrial/30 border-fg/5 hover:bg-fg/10"
                       : violation
                       ? "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30"
                       : total !== null && total >= 10
@@ -332,11 +332,11 @@ export const RestHoursPage: React.FC = () => {
               ))}
             </tbody>
           </table>
-          <div className="flex items-center gap-3 px-3 py-2 border-t border-white/10 text-[10px] text-text-industrial/50">
+          <div className="flex items-center gap-3 px-3 py-2 border-t border-fg/10 text-[10px] text-text-industrial/50">
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-success-sea/30" /> {t("rh.legendOk")}</span>
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-500/30" /> {t("rh.legendWarn")}</span>
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500/30" /> {t("rh.legendViolation")}</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white/10" /> {t("rh.legendNone")}</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-fg/10" /> {t("rh.legendNone")}</span>
           </div>
         </div>
       )}

@@ -106,7 +106,7 @@ interface AssetItem { id: string; name: string | null; assetCode: string | null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const inputCls  = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+const inputCls  = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls  = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1.5";
 
 function VerdictBadge({ verdict }: { verdict: Verdict }) {
@@ -214,7 +214,7 @@ export const FluidAnalysesPage: React.FC = () => {
         <ExportExcelButton module="fluid_samples" />
         <div className="flex items-center gap-2 flex-wrap">
           <select value={filters.fluidType} onChange={e => setFilters(f => ({ ...f, fluidType: e.target.value }))}
-            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
+            className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
             <option value="">{t("fa.allFluids")}</option>
             {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
           </select>
@@ -241,7 +241,7 @@ export const FluidAnalysesPage: React.FC = () => {
         {!loading && !error && samples.length > 0 && (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
+              <tr className="border-b border-fg/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
                 <SortTh label="Código"    col="sampleCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Buque"     col="vesselCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Equipo"    col="assetId"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -256,7 +256,7 @@ export const FluidAnalysesPage: React.FC = () => {
             <tbody>
               {samples.map(s => (
                 <tr key={s.id} onClick={() => setOpenDetailId(s.id)}
-                    className="border-b border-white/5 hover:bg-white/3 transition-colors cursor-pointer">
+                    className="border-b border-fg/5 hover:bg-fg/3 transition-colors cursor-pointer">
                   <td className="px-4 py-3 font-mono font-bold text-accent">{s.sampleCode}</td>
                   <td className="px-4 py-3 text-text-industrial/70">{s.vesselCode}</td>
                   <td className="px-4 py-3 text-text-industrial/70">{assetLabel(s.assetId, assetsData?.items ?? [])}</td>
@@ -268,7 +268,7 @@ export const FluidAnalysesPage: React.FC = () => {
                   <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.sampledAt)}</td>
                   <td className="px-4 py-3 text-right text-text-industrial/60 font-mono">{s.runningHours ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-text-industrial/60">
+                    <span className="inline-block px-2 py-0.5 rounded-full bg-fg/5 border border-fg/10 text-[10px] font-bold text-text-industrial/60">
                       {s.status}
                     </span>
                   </td>
@@ -303,7 +303,7 @@ function SortTh({ label, col, sortKey, sortDir, onSort, align = "left" }: {
       <button
         type="button"
         onClick={() => onSort(col)}
-        className={`inline-flex items-center gap-1 hover:text-white transition-colors ${active ? "text-accent" : ""}`}
+        className={`inline-flex items-center gap-1 hover:text-fg transition-colors ${active ? "text-accent" : ""}`}
       >
         {label}
         <Icon className="w-3 h-3 shrink-0" />
@@ -434,7 +434,7 @@ function SampleFormModal({
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-white">{t("common.cancel")}</button>
+          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">{t("common.cancel")}</button>
           <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
@@ -509,7 +509,7 @@ function SampleDetailModal({
             </div>
             <button
               onClick={() => navigate(`/work-orders?openId=${encodeURIComponent(sample.sourceWorkOrderId!)}`)}
-              className="text-xs font-bold text-accent hover:text-white inline-flex items-center gap-1"
+              className="text-xs font-bold text-accent hover:text-fg inline-flex items-center gap-1"
             >
               {t("fa.viewSourceWo")}
             </button>
@@ -532,29 +532,29 @@ function SampleDetailModal({
         {sample.result ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-white">{t("fa.labResult")}</h3>
+              <h3 className="text-sm font-bold text-fg">{t("fa.labResult")}</h3>
               <VerdictBadge verdict={sample.result.verdict} />
             </div>
             {sample.result.summary && (
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
                 <p className="text-xs text-text-industrial/70">{sample.result.summary}</p>
               </div>
             )}
             <ParametersTable parameters={sample.result.parameters} />
             {sample.result.reportUrl && (
               <a href={sample.result.reportUrl} target="_blank" rel="noreferrer"
-                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
+                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
                 <FileText className="w-3.5 h-3.5 text-accent" /> {t("fa.viewOrigReport")}
               </a>
             )}
             {canManage && (
-              <button onClick={() => setShowResultForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
+              <button onClick={() => setShowResultForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
                 <Edit3 className="w-3.5 h-3.5 text-accent" /> {t("fa.modifyResult")}
               </button>
             )}
           </div>
         ) : (
-          <div className="p-4 rounded-xl border border-dashed border-white/10 text-center">
+          <div className="p-4 rounded-xl border border-dashed border-fg/10 text-center">
             <p className="text-xs text-text-industrial/50 mb-3">{t("fa.noLabResult")}</p>
             {canManage && (
               <button onClick={() => setShowResultForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
@@ -566,8 +566,8 @@ function SampleDetailModal({
 
         {/* Trend chart — solo para muestras de fluido (los otros kinds usan otros parámetros). */}
         {sample.kind === "FLUID" && sample.fluidType && (
-          <div className="space-y-2 pt-2 border-t border-white/10">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div className="space-y-2 pt-2 border-t border-fg/10">
+            <h3 className="text-sm font-bold text-fg flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-accent" /> {t("fa.assetTrend")}
             </h3>
             <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
@@ -580,15 +580,15 @@ function SampleDetailModal({
         )}
 
         {sample.notes && (
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("fa.notes")}</p>
             <p className="text-xs text-text-industrial/70 whitespace-pre-wrap">{sample.notes}</p>
           </div>
         )}
 
-        <div className="flex justify-between items-center gap-2 pt-2 border-t border-white/10">
+        <div className="flex justify-between items-center gap-2 pt-2 border-t border-fg/10">
           <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white hover:border-accent/30">
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30">
             <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
           </button>
           {canManage && (
@@ -624,11 +624,11 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
 
   if (!result.aiAnalysis) {
     return (
-      <div className="space-y-2 pt-2 border-t border-white/10">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+      <div className="space-y-2 pt-2 border-t border-fg/10">
+        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
         </h3>
-        <div className="p-3 rounded-xl bg-white/5 border border-dashed border-white/10 text-center">
+        <div className="p-3 rounded-xl bg-fg/5 border border-dashed border-fg/10 text-center">
           <p className="text-xs text-text-industrial/50">
             {regenerating
               ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> Generando análisis...</>
@@ -646,9 +646,9 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
   }
 
   return (
-    <div className="space-y-2 pt-2 border-t border-white/10">
+    <div className="space-y-2 pt-2 border-t border-fg/10">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
         </h3>
         <div className="flex items-center gap-2">
@@ -697,9 +697,9 @@ async function downloadFluidPdf(sampleId: string, sampleCode: string) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+    <div className="rounded-xl border border-fg/10 bg-fg/5 px-3 py-2">
       <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">{label}</p>
-      <p className="text-xs font-bold text-white truncate mt-0.5">{value}</p>
+      <p className="text-xs font-bold text-fg truncate mt-0.5">{value}</p>
     </div>
   );
 }
@@ -709,9 +709,9 @@ function ParametersTable({ parameters }: { parameters: Record<string, FluidParam
   const entries = Object.entries(parameters);
   if (entries.length === 0) return <p className="text-xs text-text-industrial/40">{t("fa.noParams")}</p>;
   return (
-    <div className="rounded-xl border border-white/10 overflow-hidden">
+    <div className="rounded-xl border border-fg/10 overflow-hidden">
       <table className="w-full text-xs">
-        <thead className="bg-white/5">
+        <thead className="bg-fg/5">
           <tr className="text-text-industrial/40 text-[10px] uppercase tracking-widest">
             <th className="text-left px-3 py-2 font-semibold">{t("fa.colParam")}</th>
             <th className="text-right px-3 py-2 font-semibold">{t("fa.colValue")}</th>
@@ -723,9 +723,9 @@ function ParametersTable({ parameters }: { parameters: Record<string, FluidParam
             const val = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).value : raw;
             const unit = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).unit ?? "" : "";
             return (
-              <tr key={key} className="border-t border-white/5">
+              <tr key={key} className="border-t border-fg/5">
                 <td className="px-3 py-2 font-mono text-text-industrial/80">{key}</td>
-                <td className="px-3 py-2 text-right font-mono text-white">{String(val)}</td>
+                <td className="px-3 py-2 text-right font-mono text-fg">{String(val)}</td>
                 <td className="px-3 py-2 text-text-industrial/50">{unit}</td>
               </tr>
             );
@@ -787,7 +787,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
   if (loading) return <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>;
   if (points.length < 2) {
     return (
-      <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+      <div className="rounded-xl border border-dashed border-fg/10 p-4 text-center">
         <p className="text-xs text-text-industrial/40">{t("fa.needTwoSamples")}</p>
       </div>
     );
@@ -808,7 +808,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
     return (
       <div className="space-y-2">
         <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
-        <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+        <div className="rounded-xl border border-dashed border-fg/10 p-4 text-center">
           <p className="text-xs text-text-industrial/40">{t("fa.notEnoughForParam").replace("{param}", param)}</p>
         </div>
       </div>
@@ -821,7 +821,7 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
         <ParamSelector value={param} options={availableParams} onChange={setSelectedParam} />
         <span className="text-[10px] text-text-industrial/40">{t("fa.lastNSamples").replace("{n}", String(data.length))}</span>
       </div>
-      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="rounded-xl border border-fg/10 bg-fg/5 p-3">
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={data} margin={{ top: 5, right: 12, left: 0, bottom: 5 }}>
             <XAxis dataKey="label" stroke="#64748b" fontSize={10} />
@@ -849,7 +849,7 @@ function ParamSelector({ value, options, onChange }: { value: string; options: s
     <div className="flex items-center gap-2">
       <TrendingUp className="w-3.5 h-3.5 text-accent" />
       <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">{t("fa.paramLabel")}</span>
-      <select value={value} onChange={e => onChange(e.target.value)} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono">
+      <select value={value} onChange={e => onChange(e.target.value)} className="bg-fg/5 border border-fg/10 rounded px-2 py-1 text-xs text-fg font-mono">
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>
@@ -1010,7 +1010,7 @@ function ResultFormModal({
           </div>
           <p className="text-[11px] text-text-industrial/60">
             La IA va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.
-            También podés <kbd className="px-1 py-0.5 rounded bg-white/10 border border-white/20 text-[10px] font-mono">Ctrl+V</kbd> una imagen del portapapeles.
+            También podés <kbd className="px-1 py-0.5 rounded bg-fg/10 border border-fg/20 text-[10px] font-mono">Ctrl+V</kbd> una imagen del portapapeles.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <label className="cursor-pointer">
@@ -1024,7 +1024,7 @@ function ResultFormModal({
               onClick={() => { void handlePasteButton(); }}
               disabled={extracting || saving}
               title="Pegar imagen desde el portapapeles"
-              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/15 text-xs text-text-industrial hover:text-white hover:border-accent/40 disabled:opacity-50 inline-flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/15 text-xs text-text-industrial hover:text-fg hover:border-accent/40 disabled:opacity-50 inline-flex items-center gap-1.5 transition-all"
             >
               <Clipboard className="w-3.5 h-3.5 text-accent" /> Pegar imagen
             </button>
@@ -1085,8 +1085,8 @@ function ResultFormModal({
         </div>
 
         {err && <p className="text-xs text-red-400">{err}</p>}
-        <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-white">Cancelar</button>
+        <div className="flex justify-end gap-2 pt-2 border-t border-fg/10">
+          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">Cancelar</button>
           <button onClick={submit} disabled={saving || extracting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             <Save className="w-3.5 h-3.5" />{saving ? "Guardando..." : "Confirmar y guardar"}
           </button>
@@ -1115,10 +1115,10 @@ function ModalShell({ title, onClose, children, wide }: { title: string; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${wide ? "max-w-5xl" : "max-w-2xl"} max-h-[92vh] overflow-y-auto bg-[#0D1526] border border-white/10 rounded-2xl shadow-2xl`}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 sticky top-0 bg-[#0D1526] z-10">
-          <h2 className="text-sm font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-text-industrial/40 hover:text-white"><X className="w-4 h-4" /></button>
+      <div className={`relative w-full ${wide ? "max-w-5xl" : "max-w-2xl"} max-h-[92vh] overflow-y-auto bg-[#0D1526] border border-fg/10 rounded-2xl shadow-2xl`}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-fg/10 sticky top-0 bg-[#0D1526] z-10">
+          <h2 className="text-sm font-bold text-fg">{title}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>

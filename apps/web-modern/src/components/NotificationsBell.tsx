@@ -48,22 +48,22 @@ export const NotificationsBell: React.FC = () => {
     <div className="relative" ref={wrapperRef}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative p-2 rounded-full hover:bg-white/5 transition-colors"
+        className="relative p-2 rounded-full hover:bg-fg/5 transition-colors"
         aria-label={t("notifications.bellAria")}
       >
         <Bell className="w-5 h-5 text-text-industrial/60" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-md">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-fg text-[10px] font-bold flex items-center justify-center shadow-md">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-96 max-h-[70vh] bg-surface border border-white/10 rounded-xl shadow-2xl overflow-hidden z-200 flex flex-col">
-          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+        <div className="absolute right-0 top-12 w-96 max-h-[70vh] bg-surface border border-fg/10 rounded-xl shadow-2xl overflow-hidden z-200 flex flex-col">
+          <div className="px-4 py-3 border-b border-fg/10 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-white">{t("notifications.title")}</p>
+              <p className="text-sm font-bold text-fg">{t("notifications.title")}</p>
               <p className="text-xs text-text-industrial/50">
                 {unreadCount > 0
                   ? t("notifications.unreadCount").replace("{n}", String(unreadCount))
@@ -73,7 +73,7 @@ export const NotificationsBell: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 onClick={() => void markAllRead()}
-                className="flex items-center gap-1 text-xs text-accent hover:text-white transition-colors"
+                className="flex items-center gap-1 text-xs text-accent hover:text-fg transition-colors"
                 title={t("notifications.markAllRead")}
               >
                 <CheckCheck className="w-3.5 h-3.5" />
@@ -93,17 +93,17 @@ export const NotificationsBell: React.FC = () => {
               return (
                 <div
                   key={n.id}
-                  className={`px-4 py-3 border-b border-white/5 hover:bg-white/3 transition-colors cursor-pointer group ${n.readAt ? "opacity-60" : ""}`}
+                  className={`px-4 py-3 border-b border-fg/5 hover:bg-fg/3 transition-colors cursor-pointer group ${n.readAt ? "opacity-60" : ""}`}
                   onClick={() => handleOpen(n)}
                 >
                   <div className="flex items-start gap-3">
                     <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${sev.dot}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-white truncate">{n.title}</p>
+                        <p className="text-sm font-semibold text-fg truncate">{n.title}</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-text-industrial/40 hover:text-white shrink-0"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-text-industrial/40 hover:text-fg shrink-0"
                           title={t("notifications.dismiss")}
                         >
                           <X className="w-3.5 h-3.5" />

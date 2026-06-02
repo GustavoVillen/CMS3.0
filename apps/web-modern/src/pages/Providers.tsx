@@ -26,8 +26,8 @@ interface ListResponse { items: Provider[]; total: number; }
 // Helpers
 // ---------------------------------------------------------------------------
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-accent/50";
-const labelCls = "block text-[10px] font-semibold text-white/50 uppercase tracking-wider mb-1";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-fg/20 focus:outline-none focus:border-accent/50";
+const labelCls = "block text-[10px] font-semibold text-fg/50 uppercase tracking-wider mb-1";
 
 // ---------------------------------------------------------------------------
 // ProviderModal
@@ -117,23 +117,23 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Truck className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo Proveedor" : provider.name}</h2>
-              {!isNew && <p className="text-[10px] text-white/40 mt-0.5">{provider.providerCode} · Vessel: {provider.vesselCode}</p>}
+              <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo Proveedor" : provider.name}</h2>
+              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{provider.providerCode} · Vessel: {provider.vesselCode}</p>}
             </div>
             {!isNew && <StatusBadge status={provider.status} />}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-fg/40 hover:text-fg" /></button>
           </div>
         </div>
 
@@ -151,7 +151,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
               <label className={labelCls}>Código proveedor</label>
               {isNew
                 ? <input value={providerCode} onChange={e => setProviderCode(e.target.value.toUpperCase())} placeholder="Auto-generado si vacío" className={inputCls} />
-                : <p className="text-sm font-mono text-white/60">{provider.providerCode}</p>}
+                : <p className="text-sm font-mono text-fg/60">{provider.providerCode}</p>}
             </div>
           </div>
 
@@ -175,8 +175,8 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
           </div>
 
           {/* Contact info */}
-          <div className="border border-white/10 rounded-xl p-4 space-y-3">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Contacto</p>
+          <div className="border border-fg/10 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Contacto</p>
             <div>
               <label className={labelCls}>Nombre de contacto</label>
               <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Nombre y apellido" className={inputCls} />
@@ -198,11 +198,11 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Ciudad, País…" className={inputCls} />
           </div>
 
-          {!isNew && <p className="text-[10px] text-white/20">Alta: {fmtDate(provider.createdAt)}</p>}
+          {!isNew && <p className="text-[10px] text-fg/20">Alta: {fmtDate(provider.createdAt)}</p>}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 shrink-0 space-y-2">
+        <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -213,7 +213,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
               )}
             </div>
             <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-1.5 text-xs text-white/50 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-colors">Cerrar</button>
+              <button onClick={onClose} className="px-4 py-1.5 text-xs text-fg/50 hover:text-fg rounded-lg border border-fg/10 hover:border-fg/20 transition-colors">Cerrar</button>
               <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
                 {saving ? "Guardando…" : (isNew ? "Crear proveedor" : "Guardar")}
               </button>
@@ -256,15 +256,15 @@ export const ProvidersPage: React.FC = () => {
   const categories = [...new Set((data?.items ?? []).map(p => p.category).filter(Boolean) as string[])].sort();
 
   const COLUMNS: Column<Provider>[] = [
-    { key: "providerCode", header: t("col.code"),     render: r => <span className="font-mono font-bold text-white text-xs">{r.providerCode}</span> },
-    { key: "name",         header: t("col.name"),     render: r => <span className="font-medium text-white text-xs">{r.name}</span> },
+    { key: "providerCode", header: t("col.code"),     render: r => <span className="font-mono font-bold text-fg text-xs">{r.providerCode}</span> },
+    { key: "name",         header: t("col.name"),     render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
     { key: "vesselCode",   header: t("col.vessel"),   render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "category",     header: t("col.category"), render: r => <span className="text-xs text-white/60">{r.category ?? "—"}</span> },
+    { key: "category",     header: t("col.category"), render: r => <span className="text-xs text-fg/60">{r.category ?? "—"}</span> },
     { key: "status",       header: t("col.status"),   render: r => <StatusBadge status={r.status} /> },
-    { key: "contactName",  header: "Contacto",        render: r => <span className="text-xs text-white/70">{r.contactName ?? "—"}</span> },
-    { key: "contactEmail", header: "Email",           render: r => r.contactEmail ? <a href={`mailto:${r.contactEmail}`} onClick={e => e.stopPropagation()} className="text-accent hover:underline text-xs">{r.contactEmail}</a> : <span className="text-white/20 text-xs">—</span> },
-    { key: "contactPhone", header: t("col.phone"),    render: r => <span className="text-xs text-white/60">{r.contactPhone ?? "—"}</span> },
-    { key: "location",     header: t("col.location"), render: r => <span className="text-xs text-white/50">{r.location ?? "—"}</span> },
+    { key: "contactName",  header: "Contacto",        render: r => <span className="text-xs text-fg/70">{r.contactName ?? "—"}</span> },
+    { key: "contactEmail", header: "Email",           render: r => r.contactEmail ? <a href={`mailto:${r.contactEmail}`} onClick={e => e.stopPropagation()} className="text-accent hover:underline text-xs">{r.contactEmail}</a> : <span className="text-fg/20 text-xs">—</span> },
+    { key: "contactPhone", header: t("col.phone"),    render: r => <span className="text-xs text-fg/60">{r.contactPhone ?? "—"}</span> },
+    { key: "location",     header: t("col.location"), render: r => <span className="text-xs text-fg/50">{r.location ?? "—"}</span> },
     { key: "createdAt",    header: t("col.createdAt"),render: r => fmtDate(r.createdAt) },
   ];
 
@@ -281,7 +281,7 @@ export const ProvidersPage: React.FC = () => {
 
       <PageHeader icon={Truck} title={t("page.providers")} total={data?.total} onReload={reload}>
         {/* Excel */}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
 

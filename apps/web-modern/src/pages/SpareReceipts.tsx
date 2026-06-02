@@ -24,11 +24,11 @@ interface SpareRequest {
 
 interface ReceiptLine { spareId: string; spareName: string; unit: string; qty: number; notes: string; }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
 const PRIORITY_COLOR: Record<string, string> = {
-  LOW: "text-white/40", MEDIUM: "text-blue-400", HIGH: "text-yellow-400", CRITICAL: "text-red-400",
+  LOW: "text-fg/40", MEDIUM: "text-blue-400", HIGH: "text-yellow-400", CRITICAL: "text-red-400",
 };
 
 // ── PendingRequestsPanel ──────────────────────────────────────────────────────
@@ -45,18 +45,18 @@ const PendingRequestsPanel: React.FC<PendingRequestsPanelProps> = ({ onSelect })
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
+      <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">
         Solicitudes aprobadas pendientes de recepción
       </p>
       {requests.length === 0 ? (
-        <p className="text-xs text-white/20 py-4 text-center">Sin solicitudes aprobadas pendientes.</p>
+        <p className="text-xs text-fg/20 py-4 text-center">Sin solicitudes aprobadas pendientes.</p>
       ) : (
         <div className="space-y-2">
           {requests.map(req => (
             <button
               key={req.id}
               onClick={() => onSelect(req)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-white/10 bg-white/2 hover:bg-white/5 hover:border-accent/30 transition-all group text-left"
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-fg/10 bg-fg/2 hover:bg-fg/5 hover:border-accent/30 transition-all group text-left"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -66,15 +66,15 @@ const PendingRequestsPanel: React.FC<PendingRequestsPanelProps> = ({ onSelect })
                     {req.priority}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-white/40 pl-5">
+                <div className="flex items-center gap-3 text-xs text-fg/40 pl-5">
                   {req.requestedForVesselCode && (
-                    <span className="font-mono text-white/60">{req.requestedForVesselCode}</span>
+                    <span className="font-mono text-fg/60">{req.requestedForVesselCode}</span>
                   )}
                   <span>{req.items?.length ?? 0} ítem{(req.items?.length ?? 0) !== 1 ? "s" : ""}</span>
                   {req.notes && <span className="truncate max-w-[200px]">{req.notes}</span>}
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-accent transition-colors shrink-0" />
+              <ChevronRight className="w-4 h-4 text-fg/20 group-hover:text-accent transition-colors shrink-0" />
             </button>
           ))}
         </div>
@@ -218,7 +218,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 text-center space-y-3">
         <Truck className="w-8 h-8 text-emerald-400 mx-auto" />
         <p className="text-sm font-bold text-emerald-400">Recepción registrada correctamente</p>
-        <p className="text-xs text-white/40">El stock ha sido actualizado.</p>
+        <p className="text-xs text-fg/40">El stock ha sido actualizado.</p>
         <button onClick={() => setSuccess(false)} className="px-4 py-2 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/20">
           Registrar otra recepción
         </button>
@@ -227,23 +227,23 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
   }
 
   return (
-    <div className="bg-[#0D1B2A] border border-white/10 rounded-2xl p-6 space-y-5">
+    <div className="bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-5">
 
       {/* Header: prefill badge or manual title */}
       {prefillRequest ? (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-accent" />
-            <span className="text-sm font-bold text-white">
+            <span className="text-sm font-bold text-fg">
               Recepción para <span className="text-accent font-mono">{prefillRequest.requestCode}</span>
             </span>
           </div>
-          <button onClick={onClearPrefill} className="text-[10px] text-white/30 hover:text-white underline">
+          <button onClick={onClearPrefill} className="text-[10px] text-fg/30 hover:text-fg underline">
             Cambiar solicitud
           </button>
         </div>
       ) : (
-        <p className="text-xs font-bold text-white/60 uppercase tracking-wider">Nueva recepción manual</p>
+        <p className="text-xs font-bold text-fg/60 uppercase tracking-wider">Nueva recepción manual</p>
       )}
 
       {/* Vessel + fecha */}
@@ -268,7 +268,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
       {prefillRequest && reqItems.some(i => !i.spareId && i.status !== "FULFILLED") && (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 space-y-1">
           <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Ítems sin repuesto vinculado</p>
-          <p className="text-xs text-white/40">Estos ítems de la solicitud no están vinculados a un repuesto del catálogo y no se incluirán en los movimientos de stock:</p>
+          <p className="text-xs text-fg/40">Estos ítems de la solicitud no están vinculados a un repuesto del catálogo y no se incluirán en los movimientos de stock:</p>
           <ul className="text-xs text-yellow-300/70 space-y-0.5 pt-1">
             {reqItems.filter(i => !i.spareId && i.status !== "FULFILLED").map(i => (
               <li key={i.id}>· {i.description} ({i.quantity} {i.unit})</li>
@@ -280,7 +280,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
       {/* Lista de ítems */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Repuestos a recibir</p>
+          <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Repuestos a recibir</p>
           {vc && (
             <button onClick={() => { setShowLineForm(v => !v); setShowNewSpare(false); }}
               className="text-[10px] text-accent/70 hover:text-accent underline">
@@ -290,10 +290,10 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
         </div>
 
         {lines.length > 0 && (
-          <div className="border border-white/10 rounded-xl overflow-hidden">
+          <div className="border border-fg/10 rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-[10px] text-white/30 border-b border-white/10 uppercase tracking-wider">
+                <tr className="text-[10px] text-fg/30 border-b border-fg/10 uppercase tracking-wider">
                   <th className="px-3 py-2 text-left">Repuesto</th>
                   <th className="px-3 py-2 text-right">Cant.</th>
                   <th className="px-3 py-2 text-left">Ud.</th>
@@ -303,13 +303,13 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
               </thead>
               <tbody>
                 {lines.map((l, i) => (
-                  <tr key={i} className="border-b border-white/5 last:border-0">
-                    <td className="px-3 py-2 text-white">{l.spareName || <span className="text-white/30 italic">Sin spare vinculado</span>}</td>
+                  <tr key={i} className="border-b border-fg/5 last:border-0">
+                    <td className="px-3 py-2 text-fg">{l.spareName || <span className="text-fg/30 italic">Sin spare vinculado</span>}</td>
                     <td className="px-3 py-2 text-right text-emerald-400 font-bold">+{l.qty}</td>
-                    <td className="px-3 py-2 text-white/40">{l.unit}</td>
-                    <td className="px-3 py-2 text-white/30 truncate max-w-[140px]">{l.notes || "—"}</td>
+                    <td className="px-3 py-2 text-fg/40">{l.unit}</td>
+                    <td className="px-3 py-2 text-fg/30 truncate max-w-[140px]">{l.notes || "—"}</td>
                     <td className="px-2 py-2">
-                      <button onClick={() => removeLine(i)} className="text-white/20 hover:text-red-400 transition-colors">
+                      <button onClick={() => removeLine(i)} className="text-fg/20 hover:text-red-400 transition-colors">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -321,7 +321,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
         )}
 
         {lines.length === 0 && !showLineForm && (
-          <p className="text-xs text-white/20 py-2">
+          <p className="text-xs text-fg/20 py-2">
             {vc
               ? (prefillRequest ? "Cargando ítems de la solicitud…" : "Agrega los repuestos recibidos.")
               : "Ingresa el código de vessel para seleccionar repuestos."}
@@ -330,9 +330,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
 
         {/* Agregar línea manual */}
         {showLineForm && (
-          <div className="border border-white/10 rounded-xl p-3 space-y-3 bg-white/2">
+          <div className="border border-fg/10 rounded-xl p-3 space-y-3 bg-fg/2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-white/40 uppercase tracking-wider">Agregar repuesto</p>
+              <p className="text-[10px] text-fg/40 uppercase tracking-wider">Agregar repuesto</p>
               <button onClick={() => setShowNewSpare(v => !v)} className="text-[10px] text-accent/60 hover:text-accent underline">
                 {showNewSpare ? "Cancelar" : "+ Repuesto nuevo (stock 0)"}
               </button>
@@ -400,7 +400,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ onDone, prefillRequest, onCle
 
       {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
-      <div className="flex justify-end pt-2 border-t border-white/10">
+      <div className="flex justify-end pt-2 border-t border-fg/10">
         <button onClick={() => void handleSubmit()} disabled={saving || lines.filter(l => l.spareId).length === 0}
           className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-accent text-primary-bg rounded-xl hover:brightness-110 disabled:opacity-40 transition-all">
           <Truck className="w-4 h-4" />
@@ -422,14 +422,14 @@ const HistoryPanel: React.FC<{ refresh: number }> = ({ refresh }) => {
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Recepciones recientes</p>
+      <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Recepciones recientes</p>
       {movements.length === 0
-        ? <p className="text-xs text-white/20 py-4 text-center">Sin recepciones registradas.</p>
+        ? <p className="text-xs text-fg/20 py-4 text-center">Sin recepciones registradas.</p>
         : (
-          <div className="border border-white/10 rounded-xl overflow-hidden">
+          <div className="border border-fg/10 rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-[10px] text-white/30 border-b border-white/10 uppercase tracking-wider">
+                <tr className="text-[10px] text-fg/30 border-b border-fg/10 uppercase tracking-wider">
                   <th className="px-3 py-2 text-left">Código</th>
                   <th className="px-3 py-2 text-left">Vessel</th>
                   <th className="px-3 py-2 text-left">Repuesto</th>
@@ -439,14 +439,14 @@ const HistoryPanel: React.FC<{ refresh: number }> = ({ refresh }) => {
               </thead>
               <tbody>
                 {movements.map(m => (
-                  <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/5">
+                  <tr key={m.id} className="border-b border-fg/5 last:border-0 hover:bg-fg/5">
                     <td className="px-3 py-2 font-mono text-accent text-[10px]">{m.movementCode}</td>
-                    <td className="px-3 py-2 font-mono text-white/60">{m.vesselCode}</td>
-                    <td className="px-3 py-2 text-white">
+                    <td className="px-3 py-2 font-mono text-fg/60">{m.vesselCode}</td>
+                    <td className="px-3 py-2 text-fg">
                       {m.spare ? `${m.spare.sku} — ${m.spare.name}` : "—"}
                     </td>
                     <td className="px-3 py-2 text-right text-emerald-400 font-bold">+{m.quantity} {m.unit}</td>
-                    <td className="px-3 py-2 text-white/50">{fmtDate(m.occurredAt)}</td>
+                    <td className="px-3 py-2 text-fg/50">{fmtDate(m.occurredAt)}</td>
                   </tr>
                 ))}
               </tbody>

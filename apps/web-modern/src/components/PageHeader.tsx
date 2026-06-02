@@ -16,9 +16,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ icon: Icon, title, total
         <Icon className="w-5 h-5 text-accent" />
       </div>
       <div>
-        <h2 className="text-lg font-bold text-white">{title}</h2>
+        <h2 className="text-lg font-bold text-fg">{title}</h2>
         {total !== undefined && (
-          <p className="text-xs text-text-industrial/40">{total} registro{total !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-fg/40">{total} registro{total !== 1 ? "s" : ""}</p>
         )}
       </div>
     </div>
@@ -27,7 +27,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ icon: Icon, title, total
       {onReload && (
         <button
           onClick={onReload}
-          className="p-1.5 rounded-lg hover:bg-white/5 text-text-industrial/40 hover:text-white transition-all"
+          className="p-1.5 rounded-lg hover:bg-fg/5 text-fg/40 hover:text-fg transition-all"
           title="Actualizar"
         >
           <RefreshCw className="w-4 h-4" />

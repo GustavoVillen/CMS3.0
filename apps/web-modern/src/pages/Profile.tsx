@@ -92,8 +92,8 @@ export const ProfilePage: React.FC = () => {
       <div className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
 
         {/* Personal info */}
-        <section className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+        <section className="bg-fg/3 border border-fg/10 rounded-2xl p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-fg flex items-center gap-2">
             <User className="w-4 h-4 text-accent" />
             Información personal
           </h2>
@@ -104,7 +104,7 @@ export const ProfilePage: React.FC = () => {
               <input
                 readOnly
                 value={profile?.email ?? user?.email ?? ""}
-                className="w-full bg-white/3 border border-white/10 rounded-lg px-3 py-2 text-sm text-text-industrial/40 cursor-not-allowed"
+                className="w-full bg-fg/3 border border-fg/10 rounded-lg px-3 py-2 text-sm text-text-industrial/40 cursor-not-allowed"
               />
             </div>
 
@@ -114,7 +114,7 @@ export const ProfilePage: React.FC = () => {
                 <input
                   value={firstName}
                   onChange={e => setFirstName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
                 />
               </div>
               <div>
@@ -122,7 +122,7 @@ export const ProfilePage: React.FC = () => {
                 <input
                   value={lastName}
                   onChange={e => setLastName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
                 />
               </div>
             </div>
@@ -132,7 +132,7 @@ export const ProfilePage: React.FC = () => {
               <select
                 value={locale}
                 onChange={e => setLocale(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               >
                 {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
@@ -161,8 +161,8 @@ export const ProfilePage: React.FC = () => {
         </section>
 
         {/* Change password */}
-        <section className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+        <section className="bg-fg/3 border border-fg/10 rounded-2xl p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-fg flex items-center gap-2">
             <Lock className="w-4 h-4 text-accent" />
             {t("profile.changePassword")}
           </h2>
@@ -174,7 +174,7 @@ export const ProfilePage: React.FC = () => {
                 value={currentPwd}
                 onChange={e => setCurrentPwd(e.target.value)}
                 required
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -185,7 +185,7 @@ export const ProfilePage: React.FC = () => {
                   onChange={e => setNewPwd(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
                 />
               </div>
               <div>
@@ -194,7 +194,7 @@ export const ProfilePage: React.FC = () => {
                   value={confirmPwd}
                   onChange={e => setConfirmPwd(e.target.value)}
                   required
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
                 />
               </div>
             </div>
@@ -213,7 +213,7 @@ export const ProfilePage: React.FC = () => {
             <button
               type="submit"
               disabled={pwdSaving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs font-semibold hover:bg-white/10 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-xs font-semibold hover:bg-fg/10 disabled:opacity-50 transition-colors"
             >
               {pwdSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {t("profile.changePassword")}

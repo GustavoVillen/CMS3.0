@@ -164,7 +164,7 @@ const COMMON_COLS_RAW: Column<UsageEvent>[] = [
 
 const AI_COLS_RAW: Column<UsageEvent>[] = [
   ...COMMON_COLS_RAW,
-  { key: "feature",      header: "Feature", render: r => <span className="text-xs text-white/70">{r.feature ?? "—"}</span> },
+  { key: "feature",      header: "Feature", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
   { key: "model",        header: "Modelo",  render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "inputTokens",  header: "Input",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",  render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
@@ -194,7 +194,7 @@ const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
 
 const AI_COLS_AGG: Column<AggregatedRow>[] = [
   ...COMMON_COLS_AGG,
-  { key: "feature",      header: "Feature",   render: r => <span className="text-xs text-white/70">{r.feature ?? "—"}</span> },
+  { key: "feature",      header: "Feature",   render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
   { key: "model",        header: "Modelo",    render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "requests",     header: "Reqs",      render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
   { key: "inputTokens",  header: "Input",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
@@ -319,19 +319,19 @@ const UsageChart: React.FC<{
 
   if (points.length === 0) {
     return (
-      <div className="rounded-xl bg-white/5 border border-white/10 p-8 text-center text-text-industrial/40 text-sm">
+      <div className="rounded-xl bg-fg/5 border border-fg/10 p-8 text-center text-text-industrial/40 text-sm">
         Sin datos para graficar.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl bg-white/3 border border-white/10 p-4">
+    <div className="rounded-xl bg-fg/3 border border-fg/10 p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs text-text-industrial/60">
-          {yLabel} por usuario · agrupado por <span className="text-white">{bucketLabel}</span> · {users.length} usuario{users.length === 1 ? "" : "s"}
+          {yLabel} por usuario · agrupado por <span className="text-fg">{bucketLabel}</span> · {users.length} usuario{users.length === 1 ? "" : "s"}
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-white/10 text-text-industrial/40 hover:text-white transition-all" title="Cerrar gráfico">
+        <button onClick={onClose} className="p-1 rounded hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all" title="Cerrar gráfico">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -446,10 +446,10 @@ export const PlatformUsagePage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Activity} title="Consumo IA + Satelital" total={data?.total} onReload={reload}>
         <button onClick={() => setShowChart(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${showChart ? "bg-accent/15 border-accent/30 text-accent" : "bg-white/5 border-white/10 text-text-industrial hover:border-accent/30"}`}>
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${showChart ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"}`}>
           <LineChartIcon className="w-3.5 h-3.5" /> Gráfico
         </button>
-        <button onClick={exportXlsx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={exportXlsx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <Download className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
       </PageHeader>
@@ -457,21 +457,21 @@ export const PlatformUsagePage: React.FC = () => {
       {/* Tabs IA / HTTP */}
       <div className="flex gap-1.5 items-center">
         <button onClick={() => setKind("ai_call")}
-          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "ai_call" ? "bg-accent/15 border-accent/30 text-accent" : "bg-white/5 border-white/10 text-text-industrial/60 hover:border-accent/20"}`}>
+          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "ai_call" ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/20"}`}>
           Tokens IA
         </button>
         <button onClick={() => setKind("http_request")}
-          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "http_request" ? "bg-accent/15 border-accent/30 text-accent" : "bg-white/5 border-white/10 text-text-industrial/60 hover:border-accent/20"}`}>
+          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "http_request" ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/20"}`}>
           Bytes Satelital
         </button>
 
         <span className="ml-4 text-[10px] text-text-industrial/40 uppercase tracking-wider">Agrupar:</span>
         <button onClick={() => setGroupBy("minute")}
-          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "minute" ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/10 text-text-industrial/50 hover:border-white/20"}`}>
+          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "minute" ? "bg-fg/10 border-fg/20 text-fg" : "bg-transparent border-fg/10 text-text-industrial/50 hover:border-fg/20"}`}>
           Por minuto
         </button>
         <button onClick={() => setGroupBy("none")}
-          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "none" ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/10 text-text-industrial/50 hover:border-white/20"}`}>
+          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "none" ? "bg-fg/10 border-fg/20 text-fg" : "bg-transparent border-fg/10 text-text-industrial/50 hover:border-fg/20"}`}>
           Sin agrupar
         </button>
       </div>
@@ -479,21 +479,21 @@ export const PlatformUsagePage: React.FC = () => {
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-end">
         <input value={tenantSlug} onChange={e => setTenantSlug(e.target.value)} placeholder="Tenant slug…"
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-32" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-32" />
         <input value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="Email contiene…"
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-48" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-48" />
         {kind === "ai_call" && (
           <select value={feature} onChange={e => setFeature(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+            className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
             <option value="">Toda feature</option>
             <option value="copiloto">copiloto</option>
             <option value="fluid_analyses">fluid_analyses</option>
           </select>
         )}
         <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
         <input type="date" value={to} onChange={e => setTo(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
         <button onClick={reload}
           className="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all">
           Aplicar
@@ -503,19 +503,19 @@ export const PlatformUsagePage: React.FC = () => {
       {/* Resumen */}
       {data && (
         <div className="flex flex-wrap gap-4 text-xs text-text-industrial/60">
-          <span>Eventos crudos: <span className="text-white">{data.total}</span></span>
-          {groupBy === "minute" && <span>Filas mostradas: <span className="text-white">{showingCount}</span></span>}
+          <span>Eventos crudos: <span className="text-fg">{data.total}</span></span>
+          {groupBy === "minute" && <span>Filas mostradas: <span className="text-fg">{showingCount}</span></span>}
           {kind === "ai_call" && (
             <>
-              <span>Input: <span className="text-white">{fmtTok(totalInputTok)}</span></span>
-              <span>Output: <span className="text-white">{fmtTok(totalOutputTok)}</span></span>
+              <span>Input: <span className="text-fg">{fmtTok(totalInputTok)}</span></span>
+              <span>Output: <span className="text-fg">{fmtTok(totalOutputTok)}</span></span>
               <span>Costo: <span className="text-yellow-400/80">{fmtUsd(totalCost)}</span></span>
             </>
           )}
           {kind === "http_request" && (
             <>
-              <span>Total ↑: <span className="text-white">{fmtKb(totalIn)}</span></span>
-              <span>Total ↓: <span className="text-white">{fmtKb(totalOut)}</span></span>
+              <span>Total ↑: <span className="text-fg">{fmtKb(totalIn)}</span></span>
+              <span>Total ↓: <span className="text-fg">{fmtKb(totalOut)}</span></span>
             </>
           )}
         </div>

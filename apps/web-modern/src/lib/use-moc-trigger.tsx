@@ -62,10 +62,10 @@ const MocTriggerDialog: React.FC<{
   const reasonKey = `moc.trigger.reason.${event.reason}` as TranslationKey;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-white/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           <GitBranch className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-bold text-white">{t("moc.trigger.title")}</h2>
+          <h2 className="text-sm font-bold text-fg">{t("moc.trigger.title")}</h2>
         </div>
         <p className="text-sm text-text-industrial leading-relaxed">{t("moc.trigger.askCreate")}</p>
         <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
@@ -77,7 +77,7 @@ const MocTriggerDialog: React.FC<{
         </div>
         <p className="text-[11px] text-text-industrial/60">{t("moc.trigger.note")}</p>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onLater} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">
+          <button onClick={onLater} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">
             {t("moc.trigger.btnLater")}
           </button>
           <button onClick={onCreate} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">

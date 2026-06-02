@@ -120,7 +120,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
               `workload_${today}.html`,
             );
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
           title={t("mwl.htmlSnapshotTitle")}
         >
           <FileCode className="w-3.5 h-3.5 text-accent" /> HTML
@@ -130,7 +130,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
           <select
             value={weeks}
             onChange={e => setWeeks(parseInt(e.target.value, 10))}
-            className="bg-primary-bg/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent"
+            className="bg-primary-bg/60 border border-fg/10 rounded-lg px-2 py-1 text-xs text-fg focus:outline-none focus:ring-1 focus:ring-accent"
           >
             {WEEK_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
@@ -142,13 +142,13 @@ export const MaintenanceWorkloadPage: React.FC = () => {
       {/* Toggle modo */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-text-industrial/60">{t("mwl.metric")}</span>
-        <div className="inline-flex rounded-lg border border-white/10 bg-primary-bg/60 p-0.5">
+        <div className="inline-flex rounded-lg border border-fg/10 bg-primary-bg/60 p-0.5">
           <button
             onClick={() => setMode("count")}
             className={`px-3 py-1 text-xs rounded-md transition-colors ${
               mode === "count"
                 ? "bg-accent text-primary-bg font-bold"
-                : "text-text-industrial/70 hover:text-white"
+                : "text-text-industrial/70 hover:text-fg"
             }`}
           >
             {t("mwl.byCount")}
@@ -158,7 +158,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             className={`px-3 py-1 text-xs rounded-md transition-colors ${
               mode === "hours"
                 ? "bg-accent text-primary-bg font-bold"
-                : "text-text-industrial/70 hover:text-white"
+                : "text-text-industrial/70 hover:text-fg"
             }`}
           >
             {t("mwl.byManHours")}
@@ -218,7 +218,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
       <div className="bento-card p-4!">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h2 className="text-sm font-bold text-white">
+            <h2 className="text-sm font-bold text-fg">
               {t(isHours ? "mwl.chartTitleHours" : "mwl.chartTitleCount")
                 .replace("{months}", String(Math.round(weeks / 4.33)))}
             </h2>
@@ -331,7 +331,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
 const StatCard: React.FC<{ label: string; value: number; hint?: string }> = ({ label, value, hint }) => (
   <div className="bento-card p-3!">
     <p className="text-[10px] text-text-industrial/50 uppercase tracking-widest">{label}</p>
-    <p className="text-2xl font-bold text-white mt-1">{value}</p>
+    <p className="text-2xl font-bold text-fg mt-1">{value}</p>
     {hint && <p className="text-[10px] text-text-industrial/40 mt-0.5">{hint}</p>}
   </div>
 );

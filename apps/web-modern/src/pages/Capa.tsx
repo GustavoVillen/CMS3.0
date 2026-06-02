@@ -98,15 +98,15 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("capa.suggestClose")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("capa.suggestClose")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
             <p className="text-[11px] text-text-industrial/80 leading-relaxed">
-              {t("capa.willMoveToPendingVerification")} <strong className="text-white">{t("capa.pendingVerification")}</strong>.
+              {t("capa.willMoveToPendingVerification")} <strong className="text-fg">{t("capa.pendingVerification")}</strong>.
               {" "}{t("capa.gtechWillReview")}
             </p>
           </div>
@@ -117,13 +117,13 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
               value={actionsTaken}
               onChange={e => setActionsTaken(e.target.value)}
               placeholder={t("capa.actionsTakenPh")}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+              className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
             />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sugerir cierre"}
           </button>
@@ -173,16 +173,16 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, o
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("capa.close")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("capa.close")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           {actionsTaken && (
             <div className="rounded-xl bg-accent/5 border border-accent/20 p-3">
               <p className="text-[10px] uppercase tracking-wider text-accent mb-1">{t("capa.actionsTakenOnboard")}</p>
-              <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{actionsTaken}</p>
+              <p className="text-sm text-fg whitespace-pre-wrap leading-relaxed">{actionsTaken}</p>
             </div>
           )}
           <div className="space-y-1.5">
@@ -192,13 +192,13 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, o
               value={verificationNote}
               onChange={e => setVerificationNote(e.target.value)}
               placeholder={t("capa.verificationPh")}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+              className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
             />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
@@ -245,20 +245,20 @@ const CancelCapaModal: React.FC<CancelCapaModalProps> = ({ capaId, onClose, onSu
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("capa.cancel")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("capa.cancel")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.cancelReason")}</label>
-            <textarea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <textarea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
@@ -361,53 +361,53 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-            <h2 className="text-base font-bold text-white">{t("page.capa")}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+            <h2 className="text-base font-bold text-fg">{t("page.capa")}</h2>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.code")}</p>
-                <p className="text-sm font-mono font-bold text-white">{record.capaCode}</p>
+                <p className="text-sm font-mono font-bold text-fg">{record.capaCode}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
                 <p className="text-sm"><VesselLabel code={record.vesselCode} className="text-sm" showCode /></p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.equipment")}</p>
-                <p className="text-sm text-white">{record.assetName ?? <span className="text-text-industrial/40 italic">— sin nombre —</span>}</p>
+                <p className="text-sm text-fg">{record.assetName ?? <span className="text-text-industrial/40 italic">— sin nombre —</span>}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.sourceType")}</p>
-                <p className="text-sm text-white">{SOURCE_TYPE_TKEY[record.sourceType] ? t(SOURCE_TYPE_TKEY[record.sourceType]) : record.sourceType}</p>
+                <p className="text-sm text-fg">{SOURCE_TYPE_TKEY[record.sourceType] ? t(SOURCE_TYPE_TKEY[record.sourceType]) : record.sourceType}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.source")}</p>
-                <p className="text-sm font-mono text-white">{record.sourceCode ?? <span className="text-text-industrial/40 italic">— origen no disponible —</span>}</p>
+                <p className="text-sm font-mono text-fg">{record.sourceCode ?? <span className="text-text-industrial/40 italic">— origen no disponible —</span>}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("status.completed")}</p>
-                <p className="text-sm text-white">{fmtDate(record.completedAt)}</p>
+                <p className="text-sm text-fg">{fmtDate(record.completedAt)}</p>
               </div>
               {record.actionsTaken && (
                 <div className="bg-accent/5 border border-accent/20 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-accent">{t("capa.actionsTakenSuggested")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.actionsTaken}</p>
+                  <p className="text-sm text-fg whitespace-pre-wrap mt-1">{record.actionsTaken}</p>
                 </div>
               )}
               {record.verificationNote && (
                 <div className="bg-success-sea/5 border border-success-sea/20 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-success-sea">{t("capa.verificationShown")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap mt-1">{record.verificationNote}</p>
+                  <p className="text-sm text-fg whitespace-pre-wrap mt-1">{record.verificationNote}</p>
                 </div>
               )}
               {record.cancelReason && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("capa.cancelReason")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap">{record.cancelReason}</p>
+                  <p className="text-sm text-fg whitespace-pre-wrap">{record.cancelReason}</p>
                 </div>
               )}
             </div>
@@ -426,16 +426,16 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
             )}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.title")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} disabled={isTerminal} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+              <input value={title} onChange={e => setTitle(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.description")}</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} disabled={isTerminal} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.priority")}</label>
-                <select value={priority} onChange={e => setPriority(e.target.value)} disabled={isTerminal} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60">
+                <select value={priority} onChange={e => setPriority(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60">
                   <option value="LOW">LOW</option>
                   <option value="MEDIUM">MEDIUM</option>
                   <option value="HIGH">HIGH</option>
@@ -444,20 +444,20 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.owner")}</label>
-                <input value={owner} onChange={e => setOwner(e.target.value)} disabled={isTerminal} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+                <input value={owner} onChange={e => setOwner(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.dueDate")}</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={isTerminal} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
               </div>
             </div>
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
-          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">
             <button
               type="button"
               onClick={() => { void downloadAuthedFile(`/app/pms/capa/${record.id}/pdf`, `${record.capaCode}-${record.vesselCode}.pdf`); }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
               title={t("capa.downloadPdf")}
             >
               <Download className="w-3.5 h-3.5" /> PDF
@@ -478,7 +478,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
                 {t("capa.cancel")}
               </button>
             )}
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
             {!isTerminal && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
@@ -554,12 +554,12 @@ export const CapaPage: React.FC = () => {
     {
       key: "capaCode",
       header: t("col.code"),
-      render: row => <span className="font-mono font-bold text-white text-xs">{row.capaCode}</span>,
+      render: row => <span className="font-mono font-bold text-fg text-xs">{row.capaCode}</span>,
     },
     {
       key: "title",
       header: t("col.title"),
-      render: row => <span className="font-medium text-white line-clamp-1">{row.title}</span>,
+      render: row => <span className="font-medium text-fg line-clamp-1">{row.title}</span>,
     },
     {
       key: "vesselCode",

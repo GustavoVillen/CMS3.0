@@ -42,8 +42,8 @@ interface TaskMaster {
 
 interface ListResponse { items: EquipmentClass[]; total: number; }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
-const selectCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 const labelCls = "text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 // ─── Drawer ───────────────────────────────────────────────────────────────────
@@ -140,13 +140,13 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full sm:max-w-2xl bg-[#0D1B2A] border border-white/10 sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full sm:max-w-2xl bg-[#0D1B2A] border border-fg/10 sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
-            <h2 className="text-base font-bold text-white">{isEdit ? "Editar Clase" : "Nueva Clase de Equipo"}</h2>
+            <h2 className="text-base font-bold text-fg">{isEdit ? "Editar Clase" : "Nueva Clase de Equipo"}</h2>
             {isEdit && <p className="text-[10px] text-text-industrial/40">{initial!.code}</p>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -189,7 +189,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
           {/* Task templates — only in edit mode */}
           {isEdit && (
-            <div className="space-y-3 pt-2 border-t border-white/10">
+            <div className="space-y-3 pt-2 border-t border-fg/10">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Tareas asociadas</p>
                 {!addingTask && availableTasks.length > 0 && (
@@ -212,7 +212,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
                   <button onClick={() => { void addTemplate(); }} disabled={!selectedTaskId} className="px-3 py-2 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40">
                     Agregar
                   </button>
-                  <button onClick={() => { setAddingTask(false); setSelectedTaskId(""); }} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-white">
+                  <button onClick={() => { setAddingTask(false); setSelectedTaskId(""); }} className="px-3 py-2 rounded-lg text-xs text-text-industrial/60 hover:text-fg">
                     Cancelar
                   </button>
                 </div>
@@ -223,9 +223,9 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
                 <p className="text-xs text-text-industrial/30 py-2">Sin tareas asociadas.</p>
               )}
               {(tmplData?.items ?? []).map(tmpl => (
-                <div key={tmpl.id} className="flex items-center justify-between bg-white/3 border border-white/8 rounded-xl px-4 py-3">
+                <div key={tmpl.id} className="flex items-center justify-between bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
                   <div>
-                    <p className="text-xs font-semibold text-white">{tmpl.taskMaster?.code} — {tmpl.taskMaster?.title}</p>
+                    <p className="text-xs font-semibold text-fg">{tmpl.taskMaster?.code} — {tmpl.taskMaster?.title}</p>
                     <p className="text-[10px] text-text-industrial/40 mt-0.5">
                       {tmpl.taskMaster?.taskType} · {tmpl.taskMaster?.triggerType}
                       {tmpl.taskMaster?.frequencyDays ? ` · cada ${tmpl.taskMaster.frequencyDays}d` : ""}
@@ -243,8 +243,8 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">Cancelar</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
           <button onClick={() => { void save(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
           </button>
@@ -262,8 +262,8 @@ export const EquipmentClassesPage: React.FC = () => {
   const [editing, setEditing] = useState<EquipmentClass | null | "new">(null);
 
   const COLUMNS: Column<EquipmentClass>[] = [
-    { key: "code",               header: t("col.code"),        render: r => <span className="font-mono font-bold text-white text-xs">{r.code}</span> },
-    { key: "name",               header: t("col.name"),        render: r => <span className="font-medium text-white">{r.name}</span> },
+    { key: "code",               header: t("col.code"),        render: r => <span className="font-mono font-bold text-fg text-xs">{r.code}</span> },
+    { key: "name",               header: t("col.name"),        render: r => <span className="font-medium text-fg">{r.name}</span> },
     { key: "defaultSfiCode",     header: "SFI",                render: r => <span className="font-mono text-xs text-text-industrial/60">{r.defaultSfiCode ?? "—"}</span> },
     { key: "defaultCriticality", header: t("col.criticality"), render: r => r.defaultCriticality ? <span className={`font-bold text-xs ${r.defaultCriticality === "A" ? "text-red-400" : r.defaultCriticality === "B" ? "text-yellow-400" : "text-text-industrial/60"}`}>{r.defaultCriticality}</span> : <span className="text-text-industrial/30">—</span> },
     { key: "status",             header: t("col.status"),      render: r => <StatusBadge status={r.status} /> },

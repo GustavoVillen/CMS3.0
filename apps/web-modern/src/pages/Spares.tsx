@@ -48,7 +48,7 @@ function StockCell({ spare }: { spare: Spare }) {
       <span className={`font-bold text-xs ${critical ? "text-red-400" : warning ? "text-yellow-400" : "text-emerald-400"}`}>
         {spare.onHand}
       </span>
-      <span className="text-white/20 text-[10px]">{spare.unit}</span>
+      <span className="text-fg/20 text-[10px]">{spare.unit}</span>
     </div>
   );
 }
@@ -57,7 +57,7 @@ function CriticalityBadge({ value }: { value: string }) {
   const colors: Record<string, string> = {
     A: "bg-red-500/10 text-red-400 border-red-500/20",
     B: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    C: "bg-white/5 text-white/40 border-white/10",
+    C: "bg-fg/5 text-fg/40 border-fg/10",
   };
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${colors[value] ?? colors.C}`}>{value}</span>;
 }
@@ -94,18 +94,18 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
   const movements = data?.items ?? [];
 
   if (loading) return (
-    <div className="px-4 pb-4 flex items-center gap-2 text-xs text-white/30">
+    <div className="px-4 pb-4 flex items-center gap-2 text-xs text-fg/30">
       <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
     </div>
   );
   if (movements.length === 0) return (
-    <p className="px-4 pb-4 text-xs text-white/20">{t("common.noMovements")}</p>
+    <p className="px-4 pb-4 text-xs text-fg/20">{t("common.noMovements")}</p>
   );
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-[10px] text-white/30 border-b border-white/10">
+          <tr className="text-[10px] text-fg/30 border-b border-fg/10">
             <th className="text-left px-4 py-2">{t("common.date")}</th>
             <th className="text-left px-4 py-2">{t("common.type")}</th>
             <th className="text-right px-4 py-2">{t("common.quantity")}</th>
@@ -116,8 +116,8 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
         </thead>
         <tbody>
           {movements.map(m => (
-            <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
-              <td className="px-4 py-2 text-white/50 whitespace-nowrap">{fmtDate(m.occurredAt)}</td>
+            <tr key={m.id} className="border-b border-fg/5 last:border-0 hover:bg-fg/[0.03]">
+              <td className="px-4 py-2 text-fg/50 whitespace-nowrap">{fmtDate(m.occurredAt)}</td>
               <td className="px-4 py-2"><MovBadge type={m.movementType} /></td>
               <td className="px-4 py-2 text-right font-mono">
                 <span className={NEGATIVE_TYPES.has(m.movementType) ? "text-red-400" : "text-emerald-400"}>
@@ -127,10 +127,10 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
               <td className="px-4 py-2"><VesselLabel code={m.vesselCode} className="text-[10px]" showCode /></td>
               <td className="px-4 py-2">
                 {m.referenceCode
-                  ? <span className="font-mono text-white/70">{m.referenceCode}</span>
-                  : <span className="text-white/20">—</span>}
+                  ? <span className="font-mono text-fg/70">{m.referenceCode}</span>
+                  : <span className="text-fg/20">—</span>}
               </td>
-              <td className="px-4 py-2 text-white/40 max-w-[160px] truncate" title={m.notes ?? undefined}>{m.notes ?? "—"}</td>
+              <td className="px-4 py-2 text-fg/40 max-w-[160px] truncate" title={m.notes ?? undefined}>{m.notes ?? "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -143,8 +143,8 @@ const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
 // Input style helpers
 // ---------------------------------------------------------------------------
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-accent/50";
-const labelCls = "block text-[10px] font-semibold text-white/50 uppercase tracking-wider mb-1";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-fg/20 focus:outline-none focus:border-accent/50";
+const labelCls = "block text-[10px] font-semibold text-fg/50 uppercase tracking-wider mb-1";
 
 // ---------------------------------------------------------------------------
 // SpareModal
@@ -324,15 +324,15 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Package className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">{isNew ? t("sp.newSpareTitle") : spare.sku}</h2>
-              {!isNew && <p className="text-[10px] text-white/40 mt-0.5">{spare.name} · Vessel: {spare.vesselCode}</p>}
+              <h2 className="text-sm font-bold text-fg">{isNew ? t("sp.newSpareTitle") : spare.sku}</h2>
+              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{spare.name} · Vessel: {spare.vesselCode}</p>}
             </div>
             {!isNew && (
               <div className="flex items-center gap-2">
@@ -343,10 +343,10 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             )}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("common.reduce") : t("common.expand")}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.reduce") : t("common.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-fg/40 hover:text-fg" /></button>
           </div>
         </div>
 
@@ -411,7 +411,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
           {/* Repuesto equivalente / no-OEM — al guardar con criticidad A
               el sistema sugiere abrir un MOC EQUIPMENT_CHANGE. */}
-          <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-white/3 border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+          <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-fg/3 border border-fg/10 cursor-pointer hover:bg-fg/5 transition-colors">
             <input
               type="checkbox"
               checked={isEquivalent}
@@ -419,8 +419,8 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
               className="mt-0.5 accent-accent"
             />
             <div className="flex-1">
-              <p className="text-xs font-semibold text-white">{t("sp.equivNotOem")}</p>
-              <p className="text-[10px] text-white/40 mt-0.5">
+              <p className="text-xs font-semibold text-fg">{t("sp.equivNotOem")}</p>
+              <p className="text-[10px] text-fg/40 mt-0.5">
                 Marcalo si el repuesto NO es del fabricante original del equipo.
                 En componentes de criticidad A el sistema sugerirá registrar un MOC.
               </p>
@@ -469,16 +469,16 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
           </div>
 
           {/* Stock thresholds — no currentStock field, only policy levels */}
-          <div className="border border-white/10 rounded-xl p-4 space-y-3">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Niveles de stock</p>
+          <div className="border border-fg/10 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Niveles de stock</p>
             {!isNew && (
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-white/40">Stock actual (calculado):</span>
+                <span className="text-fg/40">Stock actual (calculado):</span>
                 <span className={`font-bold ${isCriticalStock ? "text-red-400" : isWarnStock ? "text-yellow-400" : "text-emerald-400"}`}>
                   {spare.onHand} {spare.unit}
                 </span>
                 {spare.available !== spare.onHand && (
-                  <span className="text-white/30 text-[10px]">Disponible: {spare.available}</span>
+                  <span className="text-fg/30 text-[10px]">Disponible: {spare.available}</span>
                 )}
               </div>
             )}
@@ -578,17 +578,17 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             </div>
           </div>
 
-          {!isNew && <p className="text-[10px] text-white/20">Alta: {fmtDate(spare.createdAt)}</p>}
+          {!isNew && <p className="text-[10px] text-fg/20">Alta: {fmtDate(spare.createdAt)}</p>}
 
           {!isNew && (
-            <div className="border border-white/10 rounded-xl overflow-hidden">
+            <div className="border border-fg/10 rounded-xl overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowHistory(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-fg/5 transition-colors"
               >
-                <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Historial de movimientos</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform ${showHistory ? "rotate-180" : ""}`} />
+                <span className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Historial de movimientos</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-fg/30 transition-transform ${showHistory ? "rotate-180" : ""}`} />
               </button>
               {showHistory && <SpareHistoryPanel spareId={spare.id} />}
             </div>
@@ -596,7 +596,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 shrink-0 space-y-2">
+        <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
@@ -619,7 +619,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
                     }
                   }}
                   disabled={downloadingPdf}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-accent/30 rounded-lg transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg/60 hover:text-fg border border-fg/10 hover:border-accent/30 rounded-lg transition-colors disabled:opacity-40"
                 >
                   {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
                   Guardar PDF
@@ -627,7 +627,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
               )}
             </div>
             <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-1.5 text-xs text-white/50 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-colors">Cerrar</button>
+              <button onClick={onClose} className="px-4 py-1.5 text-xs text-fg/50 hover:text-fg rounded-lg border border-fg/10 hover:border-fg/20 transition-colors">Cerrar</button>
               <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
                 {saving ? "Guardando…" : (isNew ? "Crear repuesto" : "Guardar")}
               </button>
@@ -699,14 +699,14 @@ export const SparesPage: React.FC = () => {
   const mocTrigger = useMocTrigger();
 
   const COLUMNS: Column<Spare>[] = [
-    { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-white text-xs">{r.sku}</span> },
-    { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-white text-xs">{r.name}</span> },
+    { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-fg text-xs">{r.sku}</span> },
+    { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
     { key: "vesselCode",   header: t("col.vessel"),        render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "category",     header: t("col.category"),      render: r => <span className="text-xs text-white/60">{r.category ?? "—"}</span> },
+    { key: "category",     header: t("col.category"),      render: r => <span className="text-xs text-fg/60">{r.category ?? "—"}</span> },
     { key: "criticality",  header: t("col.criticality"),   render: r => <CriticalityBadge value={r.criticality} /> },
     { key: "onHand",       header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },
-    { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-white/50">{r.minStock}</span> },
-    { key: "reorderPoint", header: t("col.reorder"),       render: r => <span className="text-xs text-white/50">{r.reorderPoint}</span> },
+    { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-fg/50">{r.minStock}</span> },
+    { key: "reorderPoint", header: t("col.reorder"),       render: r => <span className="text-xs text-fg/50">{r.reorderPoint}</span> },
     { key: "status",       header: t("col.status"),        render: r => <StatusBadge status={r.status} /> },
   ];
 
@@ -726,7 +726,7 @@ export const SparesPage: React.FC = () => {
 
       <PageHeader icon={Package} title={t("page.spares")} total={data?.total} onReload={reload}>
         {/* Search */}
-        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5">
           <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
           <input
             value={searchText}
@@ -735,19 +735,19 @@ export const SparesPage: React.FC = () => {
             className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
           />
           {searchText && (
-            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-white transition-colors">
+            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg transition-colors">
               <X className="w-3 h-3" />
             </button>
           )}
         </div>
 
         {/* Excel */}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
 
         {/* Criticality filter */}
-        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => setCriticalityFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => setCriticalityFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>Toda criticidad</option>
           <option value="A">A — Crítica</option>
           <option value="B">B — Importante</option>
@@ -755,7 +755,7 @@ export const SparesPage: React.FC = () => {
         </select>
 
         {/* Status filter */}
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="ACTIVE">{t("status.active")}</option>
           <option value="OBSOLETE">Obsoleto</option>
@@ -774,7 +774,7 @@ export const SparesPage: React.FC = () => {
         {/* Below reorder toggle */}
         <button
           onClick={() => setBelowReorder(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${belowReorder ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-400" : "bg-white/5 border-white/10 text-text-industrial hover:border-yellow-500/20"}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${belowReorder ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-400" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-yellow-500/20"}`}
         >
           <AlertTriangle className="w-3.5 h-3.5" />
           Alertas reorden

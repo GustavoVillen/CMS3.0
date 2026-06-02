@@ -36,7 +36,7 @@ const NEAR_MISS_CAT_KEY: Record<string, TranslationKey> = {
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
-  LOW: "text-blue-400", MEDIUM: "text-yellow-400", HIGH: "text-orange-400", CRITICAL: "text-red-400",
+  LOW: "text-blue-700 dark:text-blue-400", MEDIUM: "text-yellow-700 dark:text-yellow-400", HIGH: "text-orange-700 dark:text-orange-400", CRITICAL: "text-red-700 dark:text-red-400",
 };
 
 interface MyDayPanelProps {
@@ -63,11 +63,11 @@ export const MyDayPanel: React.FC<MyDayPanelProps> = ({ onShowInsights }) => {
   const vesselQS = selectedVesselCode ? `?vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
 
   return (
-    <section className="bg-gradient-to-br from-accent/[0.08] via-white/[0.02] to-transparent border border-accent/20 rounded-2xl p-5 space-y-4">
+    <section className="bg-gradient-to-br from-accent/[0.08] via-fg/[0.02] to-transparent border border-accent/20 rounded-2xl p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-widest text-accent font-bold">{t("myday.label")}</p>
-          <h2 className="text-base font-bold text-white">
+          <h2 className="text-base font-bold text-fg">
             {isOperational ? t("myday.myTasks") : t("myday.vesselView")}
             {selectedVessel?.name && <span className="text-text-industrial/60 font-normal ml-2 text-sm">— {selectedVessel.name}</span>}
           </h2>
@@ -103,13 +103,13 @@ export const MyDayPanel: React.FC<MyDayPanelProps> = ({ onShowInsights }) => {
 // ─── Tiles (operacional) ─────────────────────────────────────────────────────
 
 const TileShell: React.FC<{ icon: React.FC<{ className?: string }>; label: string; count: number | string; loading?: boolean; emptyText?: string; accent?: string; onClick: () => void; children?: React.ReactNode }> = ({ icon: Icon, label, count, loading, emptyText, accent, onClick, children }) => (
-  <button onClick={onClick} className="text-left bg-white/[0.04] border border-white/10 rounded-xl p-3 hover:border-accent/40 hover:bg-white/[0.07] transition-all group">
+  <button onClick={onClick} className="text-left bg-fg/[0.04] border border-fg/10 rounded-xl p-3 hover:border-accent/40 hover:bg-fg/[0.07] transition-all group">
     <div className="flex items-start justify-between gap-2 mb-2">
       <div className="flex items-center gap-2 min-w-0">
         <Icon className={`w-4 h-4 ${accent ?? "text-accent"} shrink-0`} />
         <span className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/60 truncate">{label}</span>
       </div>
-      <span className={`text-lg font-bold ${accent ?? "text-white"} shrink-0`}>{loading ? "·" : count}</span>
+      <span className={`text-lg font-bold ${accent ?? "text-fg"} shrink-0`}>{loading ? "·" : count}</span>
     </div>
     {children ?? (typeof count === "number" && count === 0 && emptyText
       ? <p className="text-[10px] text-text-industrial/40 italic">{emptyText}</p>
@@ -206,7 +206,7 @@ const RecentNearMissTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   if (!loading && recent.length === 0) return null;
 
   return (
-    <TileShell icon={AlertOctagon} label={t("myday.recentNearMiss")} count={recent.length} loading={loading} accent="text-yellow-400" onClick={() => navigate("/near-miss")}>
+    <TileShell icon={AlertOctagon} label={t("myday.recentNearMiss")} count={recent.length} loading={loading} accent="text-yellow-700 dark:text-yellow-400" onClick={() => navigate("/near-miss")}>
       {recent.length > 0 && (
         <ul className="space-y-0.5 mt-1">
           {recent.slice(0, 3).map(n => (
@@ -235,12 +235,12 @@ const ExpiringCertsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   if (!loading && count === 0) return null;
 
   return (
-    <TileShell icon={FileCheck} label={t("myday.expiringCerts")} count={count} loading={loading} accent={expired > 0 ? "text-red-400" : "text-orange-400"} onClick={() => navigate("/certificates")}>
+    <TileShell icon={FileCheck} label={t("myday.expiringCerts")} count={count} loading={loading} accent={expired > 0 ? "text-red-700 dark:text-red-400" : "text-orange-700 dark:text-orange-400"} onClick={() => navigate("/certificates")}>
       {count > 0 && (
         <p className="text-[10px] text-text-industrial/70">
-          {expired > 0 && <span className="text-red-400 font-bold">{t("myday.expiredCount").replace("{n}", String(expired))}</span>}
+          {expired > 0 && <span className="text-red-700 dark:text-red-400 font-bold">{t("myday.expiredCount").replace("{n}", String(expired))}</span>}
           {expired > 0 && soon > 0 && <span className="text-text-industrial/40"> · </span>}
-          {soon > 0 && <span className="text-orange-400">{t("myday.expiringSoonCount").replace("{n}", String(soon))}</span>}
+          {soon > 0 && <span className="text-orange-700 dark:text-orange-400">{t("myday.expiringSoonCount").replace("{n}", String(soon))}</span>}
         </p>
       )}
     </TileShell>
@@ -265,12 +265,12 @@ const CriticalWoTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
   if (!loading && critical.length === 0) return null;
 
   return (
-    <TileShell icon={Wrench} label={t("myday.criticalWo")} count={critical.length} loading={loading} accent="text-red-400" onClick={() => navigate("/work-orders?view=overdue")}>
+    <TileShell icon={Wrench} label={t("myday.criticalWo")} count={critical.length} loading={loading} accent="text-red-700 dark:text-red-400" onClick={() => navigate("/work-orders?view=overdue")}>
       {critical.length > 0 && (
         <ul className="space-y-0.5 mt-1">
           {critical.slice(0, 3).map(w => (
             <li key={w.id} className="text-[10px] text-text-industrial/70 truncate">
-              <span className="font-mono text-red-400/80">{w.workOrderCode}</span> — {w.assetName ?? w.title ?? "—"}
+              <span className="font-mono text-red-700 dark:text-red-400/80">{w.workOrderCode}</span> — {w.assetName ?? w.title ?? "—"}
             </li>
           ))}
           {critical.length > 3 && <li className="text-[10px] text-text-industrial/40 italic">{t("myday.moreItems").replace("{n}", String(critical.length - 3))}</li>}
@@ -293,8 +293,8 @@ const RestHoursViolationsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) =
   if (!loading && count === 0) return null;
 
   return (
-    <TileShell icon={Clock} label={t("myday.restHoursViolations")} count={count} loading={loading} accent="text-red-400" onClick={() => navigate("/rest-hours")}>
-      {count > 0 && <p className="text-[10px] text-red-300">{t("myday.restHoursReview")}</p>}
+    <TileShell icon={Clock} label={t("myday.restHoursViolations")} count={count} loading={loading} accent="text-red-700 dark:text-red-400" onClick={() => navigate("/rest-hours")}>
+      {count > 0 && <p className="text-[10px] text-red-700 dark:text-red-300">{t("myday.restHoursReview")}</p>}
     </TileShell>
   );
 };
@@ -309,7 +309,7 @@ const OpenFindingsTile: React.FC<{ vesselCode: string | null }> = ({ vesselCode 
   if (!loading && openCount === 0) return null;
 
   return (
-    <TileShell icon={AlertTriangle} label={t("myday.openFindings")} count={openCount} loading={loading} accent="text-yellow-400" onClick={() => navigate("/external-audits?filter=open")}>
+    <TileShell icon={AlertTriangle} label={t("myday.openFindings")} count={openCount} loading={loading} accent="text-yellow-700 dark:text-yellow-400" onClick={() => navigate("/external-audits?filter=open")}>
     </TileShell>
   );
 };
@@ -334,10 +334,10 @@ const DailyReportTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
       label={t("myday.dailyReport")}
       count="—"
       loading={loading}
-      accent="text-red-400"
+      accent="text-red-700 dark:text-red-400"
       onClick={() => navigate("/daily-reports")}
     >
-      {!loading && <p className="text-[10px] text-red-400 font-bold">{t("dashboard.noReportToday")}</p>}
+      {!loading && <p className="text-[10px] text-red-700 dark:text-red-400 font-bold">{t("dashboard.noReportToday")}</p>}
     </TileShell>
   );
 };
@@ -356,7 +356,7 @@ const OpenDefectsTile: React.FC<{ vesselQS: string }> = ({ vesselQS }) => {
       label={t("myday.openDefects")}
       count={open}
       loading={loading}
-      accent="text-orange-400"
+      accent="text-orange-700 dark:text-orange-400"
       onClick={() => navigate("/defects")}
     >
     </TileShell>

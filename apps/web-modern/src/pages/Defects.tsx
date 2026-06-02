@@ -63,7 +63,7 @@ const OP_STATE_STYLES: Record<string, string> = {
 };
 
 function OperationalStateBadge({ value }: { value: string }) {
-  const cls = OP_STATE_STYLES[value] ?? "bg-white/5 text-text-industrial/40 border-white/10";
+  const cls = OP_STATE_STYLES[value] ?? "bg-fg/5 text-text-industrial/40 border-fg/10";
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
       {value}
@@ -121,7 +121,7 @@ const ORIGIN_STYLES: Record<DefectOriginKey, string> = {
   wo:         "bg-blue-500/10 text-blue-400 border-blue-500/20",
   inspection: "bg-teal-500/10 text-teal-400 border-teal-500/20",
   fluid:      "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  manual:     "bg-white/5 text-text-industrial/60 border-white/10",
+  manual:     "bg-fg/5 text-text-industrial/60 border-fg/10",
 };
 
 const OriginBadge: React.FC<{ classification: string }> = ({ classification }) => {
@@ -187,13 +187,13 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
         autoComplete="off"
       />
       {open && !disabled && filtered.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
           {filtered.map(a => (
             <button
               key={a.id}
               type="button"
               onMouseDown={() => pick(a)}
-              className="w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-xs text-fg hover:bg-fg/5 transition-colors flex items-center gap-2"
             >
               <span className="font-mono text-accent shrink-0">{a.assetCode}</span>
               {a.name && <span className="text-text-industrial/60 truncate">{a.name}</span>}
@@ -202,7 +202,7 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
         </div>
       )}
       {open && !disabled && !loading && filtered.length === 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-lg px-3 py-2 text-xs text-text-industrial/40">
+        <div className="absolute z-50 w-full mt-1 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-lg px-3 py-2 text-xs text-text-industrial/40">
           Sin resultados
         </div>
       )}
@@ -220,7 +220,7 @@ interface CreateDefectModalProps {
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const OP_STATES  = ["NORMAL", "DEGRADED", "RESTRICTED", "NO_GO"];
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/10 transition-all disabled:opacity-50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/10 transition-all disabled:opacity-50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreated }) => {
@@ -468,14 +468,14 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-          <h2 className="text-base font-bold text-white">{t("def.newTitle")}</h2>
+      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
+          <h2 className="text-base font-bold text-fg">{t("def.newTitle")}</h2>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+            <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button type="button" onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            <button type="button" onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
           </div>
         </div>
         <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -543,7 +543,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                   <Sparkles className="w-3.5 h-3.5 text-accent" />
                   <p className="text-[10px] font-bold uppercase tracking-widest text-accent">{t("def.aiSuggestion")} <span className="text-text-industrial/40 normal-case ml-1">· {t("def.aiConfidence")} {suggestion.confidence.toLowerCase()}</span></p>
                 </div>
-                <button type="button" onClick={() => setSuggestion(null)} className="text-text-industrial/40 hover:text-white" title="Descartar"><X className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setSuggestion(null)} className="text-text-industrial/40 hover:text-fg" title="Descartar"><X className="w-3.5 h-3.5" /></button>
               </div>
               {suggestion.shouldBeNearMiss ? (
                 <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-2.5 text-xs text-yellow-200">
@@ -553,9 +553,9 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               ) : (
                 <div className="flex flex-wrap gap-2 items-center">
                   <span className="text-[10px] text-text-industrial/60">{t("def.classLabel")}</span>
-                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.classification}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-fg/10 text-fg text-xs font-bold">{suggestion.classification}</span>
                   <span className="text-[10px] text-text-industrial/60 ml-2">{t("def.sevLabel")}</span>
-                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-white text-xs font-bold">{suggestion.severity}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-fg/10 text-fg text-xs font-bold">{suggestion.severity}</span>
                   <button type="button" onClick={applySuggestion} className="ml-auto px-2.5 py-1 rounded-lg bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wider">
                     Aplicar
                   </button>
@@ -576,10 +576,10 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               <p className="text-[10px] text-orange-200/80">{t("def.similarOpen")}</p>
               <ul className="space-y-1 mt-1">
                 {similar.map(s => (
-                  <li key={s.id} className="text-[11px] text-text-industrial/80 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 flex items-center gap-2">
+                  <li key={s.id} className="text-[11px] text-text-industrial/80 bg-fg/[0.04] border border-fg/10 rounded-md px-2 py-1 flex items-center gap-2">
                     <span className="font-mono text-orange-300/80 shrink-0">{s.defectCode}</span>
-                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-text-industrial/60 shrink-0">{s.status}</span>
-                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-text-industrial/60 shrink-0">{s.severity}</span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-fg/5 text-text-industrial/60 shrink-0">{s.status}</span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-fg/5 text-text-industrial/60 shrink-0">{s.severity}</span>
                     <span className="truncate">{s.description}</span>
                     <span className="ml-auto text-[9px] text-text-industrial/40 shrink-0">{Math.round(s.similarity * 100)}%</span>
                   </li>
@@ -592,7 +592,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             <label
               onClick={handleImmediateActionClick}
               title={!description.trim() ? "Completá la descripción primero" : "Sugerir con IA"}
-              className={`flex items-center gap-1.5 text-[10px] font-bold text-accent uppercase tracking-widest mb-1.5 transition-colors ${description.trim() ? `cursor-pointer hover:text-white ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              className={`flex items-center gap-1.5 text-[10px] font-bold text-accent uppercase tracking-widest mb-1.5 transition-colors ${description.trim() ? `cursor-pointer hover:text-fg ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
             >
               {loadingImmediate ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
               Acción inmediata
@@ -621,7 +621,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                 <button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-text-industrial hover:border-accent/40 hover:text-white text-[10px] font-bold uppercase tracking-wider"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial hover:border-accent/40 hover:text-fg text-[10px] font-bold uppercase tracking-wider"
                 >
                   <Camera className="w-3 h-3" />
                   Cargar fotos
@@ -633,7 +633,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
               <button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
-                className="w-full border border-dashed border-white/10 rounded-xl py-6 flex flex-col items-center gap-2 text-text-industrial/40 hover:text-white hover:border-accent/40 transition-colors"
+                className="w-full border border-dashed border-fg/10 rounded-xl py-6 flex flex-col items-center gap-2 text-text-industrial/40 hover:text-fg hover:border-accent/40 transition-colors"
               >
                 <Camera className="w-6 h-6" />
                 <span className="text-xs">{t("def.noPhotos")}</span>
@@ -641,7 +641,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                 {pendingPhotos.map((p, i) => (
-                  <div key={i} className={`relative aspect-square bg-white/5 border rounded-lg overflow-hidden group ${p.analyzed ? "border-accent/40" : "border-white/10"}`}>
+                  <div key={i} className={`relative aspect-square bg-fg/5 border rounded-lg overflow-hidden group ${p.analyzed ? "border-accent/40" : "border-fg/10"}`}>
                     <img src={p.preview} alt="" className="w-full h-full object-cover" />
                     {p.analyzed && (
                       <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
@@ -651,7 +651,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
                     <button
                       type="button"
                       onClick={() => removePhoto(i)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-fg/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-fg transition-all"
                       title="Quitar"
                     >
                       <X className="w-3 h-3" />
@@ -664,7 +664,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
 
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">Cancelar</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
             <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               Crear defecto
@@ -684,7 +684,7 @@ interface DefectModalProps {
   onSaved: () => void;
 }
 
-const fldCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60 transition-all";
+const fldCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60 transition-all";
 const fldLabel = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) => {
@@ -1055,18 +1055,18 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   if (postSaveStep === "ask-permanent-wo") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-            <h2 className="text-base font-bold text-white">{t("def.tempRepairTitle")}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+        <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+            <h2 className="text-base font-bold text-fg">{t("def.tempRepairTitle")}</h2>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
           <div className="p-6 space-y-3">
-            <p className="text-sm text-white/80">{t("def.tempRepairAsk")}</p>
+            <p className="text-sm text-fg/80">{t("def.tempRepairAsk")}</p>
             <p className="text-xs text-text-industrial/40">{t("def.tempRepairHint")}</p>
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-            <button onClick={onSaved} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white transition-colors">
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+            <button onClick={onSaved} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg transition-colors">
               No, mantener abierto
             </button>
             <button
@@ -1109,17 +1109,17 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
-              <h2 className="text-base font-bold text-white">{t("page.defects")}</h2>
+              <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
               <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /></p>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
             </div>
           </div>
 
@@ -1132,9 +1132,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 { label: t("col.severity"),   value: defect.severity },
                 { label: t("def.operationalState"), value: defect.operationalState },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div key={label} className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-0.5">{label}</p>
-                  <p className="text-xs font-bold text-white truncate">{value}</p>
+                  <p className="text-xs font-bold text-fg truncate">{value}</p>
                 </div>
               ))}
             </div>
@@ -1222,7 +1222,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               <label
                 onClick={!isClosed ? handleImmediateActionClick : undefined}
                 title={!description.trim() ? "Completá la descripción primero" : isClosed ? undefined : "Sugerir con IA"}
-                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isClosed ? "text-text-industrial/60" : `text-accent ${description.trim() ? `cursor-pointer hover:text-white ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isClosed ? "text-text-industrial/60" : `text-accent ${description.trim() ? `cursor-pointer hover:text-fg ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}`}
               >
                 {!isClosed && (loadingImmediate ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("def.immediateAction")}
@@ -1253,7 +1253,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                       type="button"
                       onClick={() => photoInputRef.current?.click()}
                       disabled={uploadingPhotos}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-text-industrial hover:border-accent/40 hover:text-white text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial hover:border-accent/40 hover:text-fg text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
                     >
                       {uploadingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
                       Agregar fotos
@@ -1269,7 +1269,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                   {photos.map(p => (
-                    <div key={p.id} className="relative aspect-square bg-white/5 border border-white/10 rounded-lg overflow-hidden group">
+                    <div key={p.id} className="relative aspect-square bg-fg/5 border border-fg/10 rounded-lg overflow-hidden group">
                       {p.description && (
                         <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
                           <img src={p.description} alt={p.filename} className="w-full h-full object-cover" />
@@ -1279,7 +1279,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                         <button
                           type="button"
                           onClick={() => { void removePhotoEdit(p.id); }}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-fg/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-fg transition-all"
                           title="Eliminar"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -1292,7 +1292,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             </div>
 
             {/* Análisis RCA estructurado */}
-            <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
+            <div className="rounded-xl border border-fg/10 bg-fg/2 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">{t("def.rcaTitle")}</p>
                 <div className="flex items-center gap-2">
@@ -1390,7 +1390,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 
             {/* Tipo de reparación — último campo */}
             {!isClosed && (
-              <div className="rounded-xl border border-white/10 bg-white/2 p-4 space-y-3">
+              <div className="rounded-xl border border-fg/10 bg-fg/2 p-4 space-y-3">
                 <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">¿La acción fue una corrección temporaria o permanente?</p>
                 <div className="flex gap-2">
                   {(["TEMPORARIA", "PERMANENTE"] as const).map(rt => (
@@ -1403,7 +1403,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                           ? rt === "PERMANENTE"
                             ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
                             : "bg-yellow-500/15 border-yellow-500/50 text-yellow-400"
-                          : "bg-white/5 border-white/10 text-text-industrial/50 hover:border-white/20 hover:text-white"
+                          : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
                       }`}
                     >
                       {rt === "TEMPORARIA" ? "⚠ Temporaria" : "✓ Permanente"}
@@ -1422,16 +1422,16 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
 
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10">
+          <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
             <div className="flex items-center gap-2">
               <button onClick={() => { void downloadDefectPdf(defect); }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
                 <Download className="w-3.5 h-3.5" /> PDF
               </button>
               {!isClosed && (
                 <button onClick={() => setShowCreateWo(true)} disabled={!!defect.workOrderId}
                   title={defect.workOrderId ? "Ya tiene una OT asociada" : undefined}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                   Crear OT Correctiva
                 </button>
               )}
@@ -1442,19 +1442,19 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                 <button
                   onClick={() => setShowMoc(true)}
                   title="Documentar el cambio operacional con un MOC formal"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
                 >
                   <GitBranch className="w-3.5 h-3.5" /> Abrir MOC
                 </button>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
               {!isClosed && (
                 <button onClick={() => { void handleSave(); }} disabled={saving || closing}
                   className={`px-4 py-2 rounded-xl font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all ${
                     repairType === "PERMANENTE"
-                      ? "bg-emerald-500/80 text-white"
+                      ? "bg-emerald-500/80 text-fg"
                       : "bg-accent text-primary-bg"
                   }`}>
                   {(saving || closing) ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1498,14 +1498,14 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full bg-fg/10 hover:bg-fg/20 text-fg transition-colors"
             title="Cerrar"
           >
             <X className="w-5 h-5" />
           </button>
           <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
             <img src={lightboxPhoto.description} alt={lightboxPhoto.filename} className="max-h-[85vh] rounded-lg object-contain" />
-            <p className="text-[10px] text-white/40">{lightboxPhoto.filename}  ·  {fmtDate(lightboxPhoto.uploadedAt)}</p>
+            <p className="text-[10px] text-fg/40">{lightboxPhoto.filename}  ·  {fmtDate(lightboxPhoto.uploadedAt)}</p>
           </div>
         </div>
       )}
@@ -1584,7 +1584,7 @@ export const DefectsPage: React.FC = () => {
     {
       key: "defectCode",
       header: t("col.code"),
-      render: row => <span className="font-mono font-bold text-white text-xs">{row.defectCode}</span>,
+      render: row => <span className="font-mono font-bold text-fg text-xs">{row.defectCode}</span>,
     },
     {
       key: "classification",
@@ -1598,7 +1598,7 @@ export const DefectsPage: React.FC = () => {
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5">
               <OriginBadge classification={row.classification} />
-              <span className="font-medium text-white line-clamp-1">{mainText}</span>
+              <span className="font-medium text-fg line-clamp-1">{mainText}</span>
             </div>
             {row.description && (
               <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>

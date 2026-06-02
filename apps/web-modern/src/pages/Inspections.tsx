@@ -116,7 +116,7 @@ const RESULT_STYLES: Record<string, string> = {
 
 function ResultBadge({ result }: { result: string | null }) {
   if (!result) return <span className="text-text-industrial/30 text-xs">—</span>;
-  const cls = RESULT_STYLES[result] ?? "bg-white/5 text-text-industrial/40 border-white/10";
+  const cls = RESULT_STYLES[result] ?? "bg-fg/5 text-text-industrial/40 border-fg/10";
   const short: Record<string, string> = {
     SATISFACTORY: "OK",
     SATISFACTORY_WITH_OBSERVATIONS: "OK+OBS",
@@ -141,11 +141,11 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
   const hasValue = state.resultValue.trim() || state.numericValue.trim();
 
   return (
-    <div className={`rounded-xl border p-3 space-y-2 ${hasValue ? "border-accent/20 bg-accent/5" : "border-white/10 bg-white/2"}`}>
+    <div className={`rounded-xl border p-3 space-y-2 ${hasValue ? "border-accent/20 bg-accent/5" : "border-fg/10 bg-fg/2"}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-white font-medium">{item.description}</p>
+        <p className="text-sm text-fg font-medium">{item.description}</p>
         <div className="flex items-center gap-1 shrink-0">
-          {isOptional && <span className="text-[10px] text-text-industrial/40 border border-white/10 px-1.5 py-0.5 rounded-full">OPT</span>}
+          {isOptional && <span className="text-[10px] text-text-industrial/40 border border-fg/10 px-1.5 py-0.5 rounded-full">OPT</span>}
           <span className="text-[10px] text-accent border border-accent/20 px-1.5 py-0.5 rounded-full">{item.itemType}</span>
         </div>
       </div>
@@ -158,7 +158,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
         <select
           value={state.resultValue}
           onChange={e => onChange(item.id, { resultValue: e.target.value })}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+          className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
         >
           <option value="">— Seleccionar —</option>
           <option value="OK">OK</option>
@@ -170,7 +170,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
         <select
           value={state.resultValue}
           onChange={e => onChange(item.id, { resultValue: e.target.value })}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+          className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
         >
           <option value="">— Seleccionar —</option>
           <option value="PASS">PASS</option>
@@ -187,7 +187,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
             value={state.numericValue}
             onChange={e => onChange(item.id, { numericValue: e.target.value })}
             placeholder={item.nominalValue !== null ? `Nominal: ${item.nominalValue}` : "Lectura"}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+            className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
           />
           {item.unit && <span className="text-xs text-text-industrial/50 shrink-0">{item.unit}</span>}
         </div>
@@ -199,7 +199,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
           value={state.resultValue}
           onChange={e => onChange(item.id, { resultValue: e.target.value })}
           placeholder={item.itemType === "PHOTO_REQUIRED" ? "Ruta/descripción de evidencia" : ""}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+          className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
         />
       )}
 
@@ -208,7 +208,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
           rows={2}
           value={state.resultValue}
           onChange={e => onChange(item.id, { resultValue: e.target.value })}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+          className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
         />
       )}
 
@@ -217,7 +217,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
         value={state.notes}
         onChange={e => onChange(item.id, { notes: e.target.value })}
         placeholder="Notas (opcional)"
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+        className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
       />
 
       {item.itemType === "NUMERIC_READING" && (item.minValue !== null || item.maxValue !== null) && (
@@ -275,15 +275,15 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("insp.complete")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("insp.complete")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.result")}</label>
-            <select value={result} onChange={e => setResult(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50">
+            <select value={result} onChange={e => setResult(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50">
               <option value="">— Seleccionar —</option>
               <option value="SATISFACTORY">SATISFACTORY</option>
               <option value="SATISFACTORY_WITH_OBSERVATIONS">SATISFACTORY_WITH_OBSERVATIONS</option>
@@ -298,20 +298,20 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
           )}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.generalObservations")}</label>
-            <textarea rows={3} value={generalObservations} onChange={e => setGeneralObservations(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+            <textarea rows={3} value={generalObservations} onChange={e => setGeneralObservations(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.nextScheduledDate")}</label>
-            <input type="date" value={nextScheduledDate} onChange={e => setNextScheduledDate(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+            <input type="date" value={nextScheduledDate} onChange={e => setNextScheduledDate(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.inspectorName")}</label>
-            <input value={inspectorName} onChange={e => setInspectorName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+            <input value={inspectorName} onChange={e => setInspectorName(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           </div>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
@@ -457,55 +457,55 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-5xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-            <h2 className="text-base font-bold text-white">
+        <div className="w-full max-w-5xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+            <h2 className="text-base font-bold text-fg">
               {editing.execution.executionCode} · {editing.execution.vesselCode}
             </h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
           <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.code")}</p>
-                <p className="text-sm font-mono text-white">{editing.execution.executionCode}</p>
+                <p className="text-sm font-mono text-fg">{editing.execution.executionCode}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
                 <p className="text-sm"><VesselLabel code={editing.execution.vesselCode} className="text-sm" showCode /></p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.title")}</p>
-                <p className="text-sm text-white">{editing.execution.template?.title ?? editing.execution.template?.code ?? "—"}</p>
+                <p className="text-sm text-fg">{editing.execution.template?.title ?? editing.execution.template?.code ?? "—"}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.scheduledAt")}</p>
-                <p className="text-sm text-white">{fmtDate(editing.execution.scheduledAt)}</p>
+                <p className="text-sm text-fg">{fmtDate(editing.execution.scheduledAt)}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.startedAt")}</p>
-                <p className="text-sm text-white">{fmtDate(editing.execution.startedAt)}</p>
+                <p className="text-sm text-fg">{fmtDate(editing.execution.startedAt)}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.completedAt")}</p>
-                <p className="text-sm text-white">{fmtDate(editing.execution.completedAt)}</p>
+                <p className="text-sm text-fg">{fmtDate(editing.execution.completedAt)}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.inspectorName")}</p>
-                <p className="text-sm text-white">{editing.execution.inspectorName ?? "—"}</p>
+                <p className="text-sm text-fg">{editing.execution.inspectorName ?? "—"}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.result")}</p>
                 <div className="pt-1"><ResultBadge result={editing.execution.result} /></div>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.nextScheduledDate")}</p>
-                <p className="text-sm text-white">{fmtDate(editing.execution.nextScheduledDate)}</p>
+                <p className="text-sm text-fg">{fmtDate(editing.execution.nextScheduledDate)}</p>
               </div>
               {editing.execution.generalObservations && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2 lg:col-span-3">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2 lg:col-span-3">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.generalObservations")}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap">{editing.execution.generalObservations}</p>
+                  <p className="text-sm text-fg whitespace-pre-wrap">{editing.execution.generalObservations}</p>
                 </div>
               )}
             </div>
@@ -513,7 +513,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
             {showChecklist && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white">{t("insp.checklist")}</h3>
+                  <h3 className="text-sm font-bold text-fg">{t("insp.checklist")}</h3>
                   <span className="text-xs text-text-industrial/50">
                     {completedCount}/{sortedTemplateItems.length} ítems completados
                   </span>
@@ -533,7 +533,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
 
             {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
             {canStart && (
               <button onClick={() => { void onStart(); }} disabled={starting} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
                 {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.start")}
@@ -541,7 +541,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
             )}
             {canInProgressActions && (
               <>
-                <button onClick={() => { void onSaveResults(); }} disabled={savingResults} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial font-bold text-xs hover:text-white hover:border-white/20 disabled:opacity-50 transition-all">
+                <button onClick={() => { void onSaveResults(); }} disabled={savingResults} className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial font-bold text-xs hover:text-fg hover:border-fg/20 disabled:opacity-50 transition-all">
                   {savingResults ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.saveResults")}
                 </button>
                 <button onClick={() => setShowCompleteModal(true)} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
@@ -554,7 +554,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
                 {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.cancel")}
               </button>
             )}
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">
               {t("common.close")}
             </button>
           </div>
@@ -589,57 +589,57 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("insp.templates")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-4xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("insp.templates")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.code")}</p>
-              <p className="text-sm font-mono text-white">{template.code}</p>
+              <p className="text-sm font-mono text-fg">{template.code}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.title")}</p>
-              <p className="text-sm text-white">{template.title}</p>
+              <p className="text-sm text-fg">{template.title}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.triggerType")}</p>
-              <p className="text-sm text-white">{template.triggerType}</p>
+              <p className="text-sm text-fg">{template.triggerType}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Trigger Result Mode</p>
-              <p className="text-sm text-white">{template.triggerResultMode}</p>
+              <p className="text-sm text-fg">{template.triggerResultMode}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.frequency")}</p>
-              <p className="text-sm text-white">{template.frequencyDays !== null ? `${template.frequencyDays} días` : "—"}</p>
+              <p className="text-sm text-fg">{template.frequencyDays !== null ? `${template.frequencyDays} días` : "—"}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Window Mode</p>
-              <p className="text-sm text-white">{template.windowMode}</p>
+              <p className="text-sm text-fg">{template.windowMode}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Window Lead Days</p>
-              <p className="text-sm text-white">{template.windowLeadDays ?? "—"}</p>
+              <p className="text-sm text-fg">{template.windowLeadDays ?? "—"}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Evidence Required</p>
-              <p className="text-sm text-white">{template.evidenceRequired ? "YES" : "NO"}</p>
+              <p className="text-sm text-fg">{template.evidenceRequired ? "YES" : "NO"}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("insp.isGlobal")}</p>
-              <p className="text-sm text-white">{template.isGlobal ? "YES" : "NO"}</p>
+              <p className="text-sm text-fg">{template.isGlobal ? "YES" : "NO"}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.status")}</p>
               <div className="pt-1"><StatusBadge status={template.status} /></div>
             </div>
             {template.description && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:col-span-2 lg:col-span-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2 lg:col-span-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.description")}</p>
-                <p className="text-sm text-white whitespace-pre-wrap">{template.description}</p>
+                <p className="text-sm text-fg whitespace-pre-wrap">{template.description}</p>
               </div>
             )}
           </div>
@@ -647,10 +647,10 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
           {sortedItems.length > 0 ? (
             <div className="space-y-2">
               {sortedItems.map(item => (
-                <div key={item.id} className="bg-white/2 border border-white/5 rounded-lg p-2 flex items-start gap-2">
+                <div key={item.id} className="bg-fg/2 border border-fg/5 rounded-lg p-2 flex items-start gap-2">
                   <span className="text-xs text-text-industrial/50 w-10 shrink-0">#{item.sortOrder}</span>
                   <div className="flex-1 space-y-1">
-                    <p className="text-sm text-white">{item.description}</p>
+                    <p className="text-sm text-fg">{item.description}</p>
                     <span className="text-[10px] text-accent border border-accent/20 px-1.5 py-0.5 rounded-full">{item.itemType}</span>
                     {item.acceptanceCriteria && (
                       <p className="text-xs text-text-industrial/50 italic">{item.acceptanceCriteria}</p>
@@ -663,8 +663,8 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
             <p className="text-xs text-text-industrial/40">{t("empty.inspectionTemplates")}</p>
           )}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">
             {t("common.close")}
           </button>
         </div>
@@ -779,12 +779,12 @@ export const InspectionsPage: React.FC = () => {
     {
       key: "executionCode",
       header: t("col.code"),
-      render: row => <span className="font-mono font-bold text-white text-xs">{row.executionCode}</span>,
+      render: row => <span className="font-mono font-bold text-fg text-xs">{row.executionCode}</span>,
     },
     {
       key: "template",
       header: t("col.title"),
-      render: row => <span className="font-medium text-white line-clamp-1">{row.template?.title ?? row.template?.code ?? "—"}</span>,
+      render: row => <span className="font-medium text-fg line-clamp-1">{row.template?.title ?? row.template?.code ?? "—"}</span>,
     },
     {
       key: "vesselCode",
@@ -812,12 +812,12 @@ export const InspectionsPage: React.FC = () => {
     {
       key: "code",
       header: t("col.code"),
-      render: row => <span className="font-mono font-bold text-white text-xs">{row.code}</span>,
+      render: row => <span className="font-mono font-bold text-fg text-xs">{row.code}</span>,
     },
     {
       key: "title",
       header: t("col.title"),
-      render: row => <span className="font-medium text-white line-clamp-1">{row.title}</span>,
+      render: row => <span className="font-medium text-fg line-clamp-1">{row.title}</span>,
     },
     {
       key: "triggerType",
@@ -869,7 +869,7 @@ export const InspectionsPage: React.FC = () => {
       <PageHeader icon={ShieldCheck} title={t("page.inspections")} total={total} onReload={onHeaderReload}>
         {activeTab === "executions" ? (
           <>
-            <select value={toFilterSelectValue(executionStatusFilter)} onChange={e => updateExecutionFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+            <select value={toFilterSelectValue(executionStatusFilter)} onChange={e => updateExecutionFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
               <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
               <option value="SCHEDULED">SCHEDULED</option>
               <option value="IN_PROGRESS">{t("status.inProgress")}</option>
@@ -877,21 +877,21 @@ export const InspectionsPage: React.FC = () => {
               <option value="CANCELLED">{t("status.cancelled")}</option>
             </select>
             <div className="flex items-center gap-2">
-              <input value={executionVesselInput} onChange={e => setExecutionVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateExecutionFilters({ vessel: executionVesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
-              <button onClick={() => updateExecutionFilters({ vessel: executionVesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
+              <input value={executionVesselInput} onChange={e => setExecutionVesselInput(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === "Enter") updateExecutionFilters({ vessel: executionVesselInput.trim() }); }} placeholder={t("common.filterByVessel")} className="w-44 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+              <button onClick={() => updateExecutionFilters({ vessel: executionVesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
               {(executionStatusFilter || executionVesselFilter) && (
-                <button onClick={() => updateExecutionFilters({ status: "", vessel: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
+                <button onClick={() => updateExecutionFilters({ status: "", vessel: "" })} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all">{t("common.clear")}</button>
               )}
             </div>
           </>
         ) : (
           <>
-            <select value={toFilterSelectValue(templateStatusFilter)} onChange={e => updateTemplateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+            <select value={toFilterSelectValue(templateStatusFilter)} onChange={e => updateTemplateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
               <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
               <option value="ACTIVE">{t("status.active")}</option>
               <option value="INACTIVE">{t("status.inactive")}</option>
             </select>
-            <select value={toFilterSelectValue(templateTriggerFilter)} onChange={e => updateTemplateFilters({ trigger: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+            <select value={toFilterSelectValue(templateTriggerFilter)} onChange={e => updateTemplateFilters({ trigger: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
               <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
               <option value="CALENDAR">CALENDAR</option>
               <option value="RUNNING_HOURS">RUNNING_HOURS</option>
@@ -899,17 +899,17 @@ export const InspectionsPage: React.FC = () => {
               <option value="EVENT_BASED">EVENT_BASED</option>
             </select>
             {(templateStatusFilter || templateTriggerFilter) && (
-              <button onClick={() => updateTemplateFilters({ status: "", trigger: "" })} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
+              <button onClick={() => updateTemplateFilters({ status: "", trigger: "" })} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all">{t("common.clear")}</button>
             )}
           </>
         )}
       </PageHeader>
 
-      <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit border border-white/10">
-        <button onClick={() => setActiveTab("executions")} className={activeTab === "executions" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors"}>
+      <div className="flex gap-1 p-1 bg-fg/5 rounded-xl w-fit border border-fg/10">
+        <button onClick={() => setActiveTab("executions")} className={activeTab === "executions" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
           {t("insp.executions")}
         </button>
-        <button onClick={() => setActiveTab("templates")} className={activeTab === "templates" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors"}>
+        <button onClick={() => setActiveTab("templates")} className={activeTab === "templates" ? "px-4 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold" : "px-4 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg transition-colors"}>
           {t("insp.templates")}
         </button>
       </div>

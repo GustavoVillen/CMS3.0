@@ -23,13 +23,13 @@ function KpiCard({ label, value, icon: Icon, warn, onClick }: KpiProps) {
   return (
     <Wrapper
       onClick={onClick}
-      className={`bg-white/5 border ${warn ? "border-amber-500/40" : "border-white/10"} rounded-xl p-3 text-left w-full ${onClick ? "hover:bg-white/10 active:bg-white/15 transition-colors" : ""}`}
+      className={`bg-fg/5 border ${warn ? "border-amber-500/40" : "border-fg/10"} rounded-xl p-3 text-left w-full ${onClick ? "hover:bg-fg/10 active:bg-fg/15 transition-colors" : ""}`}
     >
       <div className="flex items-center gap-1.5 mb-1">
         <Icon className={`w-3 h-3 ${warn ? "text-amber-400" : "text-text-industrial/40"}`} />
         <div className="text-[9px] font-bold uppercase tracking-wider text-text-industrial/50 leading-tight">{label}</div>
       </div>
-      <div className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-400" : "text-white"}`}>{value}</div>
+      <div className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-400" : "text-fg"}`}>{value}</div>
     </Wrapper>
   );
 }
@@ -124,20 +124,20 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
 
       {/* Tripulación & Simulacros — mini chip strip */}
       {crewData && (crewData.onboard > 0 || crewData.certsExpired > 0 || crewData.certsExpiringSoon > 0 || crewData.drillsScheduled > 0) && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-3 grid grid-cols-3 gap-2">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 grid grid-cols-3 gap-2">
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <Users className="w-3 h-3 text-text-industrial/40" />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A bordo</span>
             </div>
-            <p className="text-lg font-bold text-white tabular-nums">{crewData.onboard}</p>
+            <p className="text-lg font-bold text-fg tabular-nums">{crewData.onboard}</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <AlertTriangle className={`w-3 h-3 ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-text-industrial/40"}`} />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Cert. atención</span>
             </div>
-            <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-white"}`}>
+            <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-400" : "text-fg"}`}>
               {crewData.certsExpired + crewData.certsExpiringSoon}
             </p>
           </div>
@@ -146,14 +146,14 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
               <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros mes</span>
             </div>
-            <p className="text-lg font-bold text-white tabular-nums">{crewData.drillsScheduled}</p>
+            <p className="text-lg font-bold text-fg tabular-nums">{crewData.drillsScheduled}</p>
           </div>
         </div>
       )}
 
       {/* Plan de mantenimiento — detalle por estado si hay foco */}
       {mpSummary && (mpCounts.OVERDUE + mpCounts.DUE + mpCounts.IN_WINDOW + mpCounts.UPCOMING > 0) && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/50">Plan de mantenimiento</p>
             <button
@@ -187,7 +187,7 @@ const PlanStat: React.FC<{
   return (
     <Wrapper
       onClick={onClick}
-      className={`w-full text-center ${onClick ? "rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors py-1" : ""}`}
+      className={`w-full text-center ${onClick ? "rounded-lg hover:bg-fg/5 active:bg-fg/10 transition-colors py-1" : ""}`}
     >
       <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
       <p className="text-[9px] text-text-industrial/50 uppercase tracking-wider mt-0.5 leading-tight">{label}</p>

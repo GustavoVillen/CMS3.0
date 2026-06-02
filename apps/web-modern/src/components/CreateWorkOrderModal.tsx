@@ -55,20 +55,20 @@ interface CreateWorkOrderModalProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 // [value, label, activeCls, inactiveLabelCls]
 const RISK_LEVEL_OPTS: [string, string, string, string][] = [
-  ["LOW",      "L", "bg-success-sea text-primary-bg border-success-sea",       "text-success-sea border-success-sea/40"],
-  ["MEDIUM",   "M", "bg-yellow-400 text-primary-bg border-yellow-400",         "text-yellow-400 border-yellow-400/40"],
-  ["HIGH",     "H", "bg-red-500 text-white border-red-500",                    "text-red-400 border-red-400/40"],
-  ["CRITICAL", "C", "bg-red-700 text-white border-red-700",                    "text-red-600 border-red-600/40"],
+  ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
+  ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+  ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                    "text-red-700 dark:text-red-400 border-red-400/40"],
+  ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                    "text-red-600 border-red-600/40"],
 ];
 
 function TypeBadge({ type }: { type: string }) {
   const t = useT();
-  if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
-  if (type === "CORRECTIVE")  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+  if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+  if (type === "CORRECTIVE")  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -326,14 +326,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Wrench className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">{t("wo.modal.title")}</h2>
+              <h2 className="text-sm font-bold text-fg">{t("wo.modal.title")}</h2>
               {prefill && (
                 <p className="text-[10px] text-text-industrial/50 mt-0.5">
                   {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
@@ -341,7 +341,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               )}
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         {/* Body */}
@@ -355,15 +355,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {([
                   [t("wo.modal.vessel"),    prefill.vesselCode,                   "font-mono text-accent"],
-                  [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-white"],
+                  [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-fg"],
                   [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
-                  [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-white"],
-                  [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-white"],
+                  [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-fg"],
+                  [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
                   prefill.dueDate
-                    ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-white"]
+                    ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
                     : null,
                 ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-2.5">
+                  <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
                     {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
                   </div>
@@ -439,7 +439,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
           {/* ── PLAN ── */}
           <section className="space-y-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-white/10 pt-4">{t("wo.modal.section.plan")}</p>
+            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-fg/10 pt-4">{t("wo.modal.section.plan")}</p>
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>
@@ -463,7 +463,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <label
                 onClick={handleCriteriaClick}
                 title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.acceptanceCriteria")}
@@ -476,7 +476,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <label
                 onClick={handleLotoClick}
                 title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.loto")}
@@ -489,7 +489,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <label
                 onClick={handleRiskClick}
                 title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.riskLevel")}
@@ -500,7 +500,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   <button key={val} type="button"
                     disabled={loadingRisk}
                     onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
+                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
                     {label}
                   </button>
                 ))}
@@ -518,7 +518,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <label
                 onClick={handleConsequenceClick}
                 title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
               >
                 {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.consequenceCategory")}
@@ -565,8 +565,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
           {prefill?.samplingFluidType && (
             <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
-              <Droplets className="w-4 h-4 text-teal-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-teal-300 leading-relaxed">
+              <Droplets className="w-4 h-4 text-teal-700 dark:text-teal-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-teal-700 dark:text-teal-300 leading-relaxed">
                 {t("wo.modal.fluidSampleNotice").split("{fluid}").map((part, i, arr) => (
                   <React.Fragment key={i}>
                     {part}
@@ -583,14 +583,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             </div>
           )}
 
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving}
-            className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.modal.create")}
           </button>
         </div>

@@ -217,19 +217,19 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
   const items = data?.items ?? [];
 
   return (
-    <div className="space-y-2 pt-2 border-t border-white/10">
+    <div className="space-y-2 pt-2 border-t border-fg/10">
       <h3 className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.history.title")}</h3>
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
       ) : error ? (
         <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.history.loadError")}</p>
       ) : items.length === 0 ? (
-        <p className="text-xs text-text-industrial/50 bg-white/3 border border-white/8 rounded-xl px-3 py-3">{t("asset.history.empty")}</p>
+        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-3">{t("asset.history.empty")}</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
+        <div className="overflow-x-auto rounded-xl border border-fg/10">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-white/5 text-text-industrial/50">
+              <tr className="bg-fg/5 text-text-industrial/50">
                 <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.code")}</th>
                 <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.type")}</th>
                 <th className="text-left font-semibold px-3 py-2">{t("asset.history.col.title")}</th>
@@ -243,7 +243,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
                 <tr
                   key={wo.id}
                   onClick={() => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`)}
-                  className="border-t border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                  className="border-t border-fg/5 cursor-pointer hover:bg-fg/5 transition-colors"
                   title={t("asset.history.openWo")}
                 >
                   <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">{wo.workOrderCode}</td>
@@ -640,14 +640,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-          <h2 className="text-base font-bold text-white">{isEdit ? t("asset.editTitle") : t("asset.newTitle")}</h2>
+      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
+          <h2 className="text-base font-bold text-fg">{isEdit ? t("asset.editTitle") : t("asset.newTitle")}</h2>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
           </div>
         </div>
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -658,7 +658,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 value={vesselCode}
                 onChange={e => setVesselCode(e.target.value)}
                 disabled={isEdit && !isAdmin}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
               >
                 <option value="">{t("asset.selectVessel")}</option>
                 {vessels.map(vessel => (
@@ -677,7 +677,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   setAssetCodeTouched(true);
                 }}
                 disabled={(isEdit && !isAdmin) || (!isEdit && Boolean(selectedNameOption))}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
               />
             </div>
 
@@ -687,7 +687,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 value={selectedGroup}
                 onChange={e => onGroupChanged(e.target.value)}
                 disabled={sfiLoading || Boolean(sfiError)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               >
                 <option value="">
                   {sfiLoading ? t("mp.loadingSfiGroups") : t("mp.selectSfiGroup")}
@@ -710,7 +710,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 value={selectedSubgroup}
                 onChange={e => onSubgroupChanged(e.target.value)}
                 disabled={sfiLoading || Boolean(sfiError)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
               >
                 <option value="">{t("mp.selectSfiSubgroup")}</option>
                 {subgroupOptions.map(node => (
@@ -730,7 +730,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   value={selectedNameOption?.name ?? ""}
                   onChange={e => onNameChanged(e.target.value)}
                   disabled={!selectedSubgroup}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50 disabled:opacity-60"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
                 >
                   <option value="">{t("asset.selectExistingName")}</option>
                   {nameOptions.map(option => (
@@ -745,7 +745,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 onChange={e => onNameChanged(e.target.value)}
                 disabled={!selectedSubgroup}
                 placeholder={nameOptions.length > 0 ? t("asset.namePlaceholderEdit") : t("asset.namePlaceholderNew")}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
               />
             </div>
 
@@ -755,7 +755,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 onClick={() => { void requestCriticalitySuggestion(); }}
                 disabled={!name.trim() || suggestingCriticality}
                 title={!name.trim() ? t("asset.suggestCritNeedsName") : t("asset.suggestCritTitle")}
-                className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {suggestingCriticality
                   ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -765,7 +765,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <select
                 value={criticality}
                 onChange={e => setCriticality(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               >
                 <option value="A">A</option>
                 <option value="B">B</option>
@@ -777,7 +777,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <select
                 value={status}
                 onChange={e => setStatus(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               >
                 <option value="OPERATIONAL">OPERATIONAL</option>
                 <option value="DEGRADED">DEGRADED</option>
@@ -785,7 +785,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               </select>
             </div>
             {/* ISM safety-critical (ISM Code 10.3) — el flag se sugiere desde el botón "Criticidad (IA)" */}
-            <div className="space-y-1.5 col-span-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
+            <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -793,7 +793,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   onChange={e => setIsSafetyCritical(e.target.checked)}
                   className="w-4 h-4 accent-accent"
                 />
-                <span className="text-sm text-white">
+                <span className="text-sm text-fg">
                   {t("asset.safetyCritical")} <span className="text-text-industrial/60">(ISM 10.3)</span>
                 </span>
               </label>
@@ -806,10 +806,10 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 onChange={e => setCriticalityRationale(e.target.value)}
                 rows={3}
                 placeholder={t("asset.critRationalePh")}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
               />
             </div>
-            <label className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors">
+            <label className="flex items-center gap-3 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-fg/5 transition-colors">
               <input
                 type="checkbox"
                 checked={trackDailyReport}
@@ -817,7 +817,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 className="w-4 h-4 rounded accent-accent shrink-0"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium">Reporte diario</p>
+                <p className="text-sm text-fg font-medium">Reporte diario</p>
                 <p className="text-xs text-text-industrial/50">Incluir en horas de equipo del reporte diario</p>
               </div>
               {currentHours != null && (
@@ -833,7 +833,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <input
                 value={manufacturer}
                 onChange={e => setManufacturer(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -841,7 +841,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <input
                 value={model}
                 onChange={e => setModel(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -849,7 +849,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <input
                 value={serialNumber}
                 onChange={e => setSerialNumber(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -858,7 +858,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 type="date"
                 value={installationDate}
                 onChange={e => setInstallationDate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -867,7 +867,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 type="date"
                 value={lastOverhaulDate}
                 onChange={e => setLastOverhaulDate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -876,14 +876,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 type="date"
                 value={replacementDate}
                 onChange={e => setReplacementDate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
           </div>
           {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-white/10">
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">
           <div>
             {isEdit && initial && (
               <button
@@ -899,7 +899,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   }
                 }}
                 disabled={downloadingPdf}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 hover:text-white disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 hover:text-fg disabled:opacity-50 transition-all"
               >
                 {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
                 {t("asset.downloadPdf")}
@@ -907,7 +907,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
             <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
@@ -943,20 +943,20 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-base font-bold text-white">{t("common.delete")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white transition-colors" /></button>
+      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-base font-bold text-fg">{t("common.delete")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-text-industrial/70">
-            ¿Eliminar asset <span className="text-white font-semibold">{asset.assetCode}</span> ({asset.name})?
+            ¿Eliminar asset <span className="text-fg font-semibold">{asset.assetCode}</span> ({asset.name})?
           </p>
           {actionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-          <button onClick={() => { void onDelete(); }} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-white font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
+          <button onClick={() => { void onDelete(); }} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.delete")}
           </button>
         </div>
@@ -1063,13 +1063,13 @@ export const AssetsPage: React.FC = () => {
   }, [data]);
 
   const columns: Column<Asset>[] = useMemo(() => [
-    { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-white text-xs">{row.assetCode}</span> },
+    { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-fg text-xs">{row.assetCode}</span> },
     {
       key: "name",
       header: t("col.name"),
       render: row => (
         <div className="flex items-center gap-2">
-          <span className="font-medium text-white line-clamp-1">{row.name}</span>
+          <span className="font-medium text-fg line-clamp-1">{row.name}</span>
           {row.isSafetyCritical && (
             <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center text-amber-400">
               <ShieldAlert className="w-3.5 h-3.5" />
@@ -1127,16 +1127,16 @@ export const AssetsPage: React.FC = () => {
         <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(statusFilter)} onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="OPERATIONAL">OPERATIONAL</option>
           <option value="DEGRADED">DEGRADED</option>
           <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
         </select>
-        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => updateFilters({ criticality: fromFilterSelectValue(e.target.value) })} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => updateFilters({ criticality: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="A">A</option>
           <option value="B">B</option>
@@ -1149,11 +1149,11 @@ export const AssetsPage: React.FC = () => {
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
               placeholder="Buscar por código, nombre, buque, SFI..."
-              className="w-64 pl-7 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+              className="w-64 pl-7 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
             />
           </div>
           {(statusFilter || criticalityFilter || vesselFilter || searchText) && (
-            <button onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); }} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white hover:border-red-400/40 transition-all">{t("common.clear")}</button>
+            <button onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); }} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all">{t("common.clear")}</button>
           )}
         </div>
       </PageHeader>
@@ -1174,7 +1174,7 @@ export const AssetsPage: React.FC = () => {
                 "px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
                 isActive
                   ? "bg-accent text-primary-bg border-accent"
-                  : "bg-white/5 border-white/10 text-text-industrial/60 hover:text-white hover:border-white/20",
+                  : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:text-fg hover:border-fg/20",
               ].join(" ")}
             >
               {tab.label}{count > 0 && <span className="ml-1.5 opacity-70">({count})</span>}

@@ -82,7 +82,7 @@ export const AiDocumentsPage: React.FC = () => {
           <Bot className="w-4 h-4 text-accent" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-bold text-white">Base documental del copiloto</p>
+          <p className="text-sm font-bold text-fg">Base documental del copiloto</p>
           <p className="text-xs text-text-industrial/50 leading-relaxed">
             Solo las versiones con estado `ACTIVE` entran en el contexto de IA. Las versiones `DRAFT`
             sirven para preparar cambios sin afectar respuestas en producción.
@@ -189,7 +189,7 @@ function DocumentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-bold text-white truncate">{document.name}</h3>
+            <h3 className="text-base font-bold text-fg truncate">{document.name}</h3>
             <StatusBadge status={document.status} />
           </div>
           <p className="text-xs text-text-industrial/50 leading-relaxed">
@@ -201,7 +201,7 @@ function DocumentCard({
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onAddVersion}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
             >
               <Layers className="w-3.5 h-3.5 text-accent" /> Nueva versión
             </button>
@@ -232,11 +232,11 @@ function DocumentCard({
           {document.versions.map((version) => (
             <div
               key={version.id}
-              className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 flex items-center justify-between gap-4"
+              className="rounded-xl border border-fg/10 bg-fg/[0.02] px-4 py-3 flex items-center justify-between gap-4"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-white">v{version.version}</span>
+                  <span className="text-sm font-bold text-fg">v{version.version}</span>
                   <StatusBadge status={version.status} />
                   <span className="text-[10px] text-text-industrial/35">{formatBytes(version.sizeBytes)}</span>
                 </div>
@@ -249,7 +249,7 @@ function DocumentCard({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setViewVersionId(version.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-text-industrial hover:border-accent/30 hover:text-white transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 hover:text-fg transition-all"
                   title={isAdmin && version.status === "DRAFT" ? "Ver / editar contenido" : "Ver contenido"}
                 >
                   <Eye className="w-3.5 h-3.5 text-accent" />
@@ -376,7 +376,7 @@ function ViewEditVersionModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all"
+              className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all"
             >
               {canEdit ? "Cancelar" : "Cerrar"}
             </button>
@@ -453,7 +453,7 @@ function CreateDocumentModal({
         {error && <p className="text-xs text-red-400">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">
             Cancelar
           </button>
           <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
@@ -495,7 +495,7 @@ function CreateVersionModal({
   return (
     <ModalShell title={`Nueva versión · ${document.name}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+        <div className="rounded-xl border border-fg/10 bg-fg/[0.02] px-4 py-3">
           <p className="text-xs text-text-industrial/40">
             La nueva versión se crea en estado `DRAFT`. Luego podrás activarla desde la ficha del documento.
           </p>
@@ -514,7 +514,7 @@ function CreateVersionModal({
         {error && <p className="text-xs text-red-400">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">
             Cancelar
           </button>
           <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
@@ -538,13 +538,13 @@ function ModalShell({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-surface border border-white/10 rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-surface border border-fg/10 rounded-2xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-3">
             <Bot className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-bold text-white">{title}</h2>
+            <h2 className="text-sm font-bold text-fg">{title}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-text-industrial/40 hover:text-white transition-all">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -575,9 +575,9 @@ function Field({
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+    <div className="rounded-xl border border-fg/10 bg-fg/[0.02] px-4 py-3">
       <p className="text-[10px] uppercase tracking-wider text-text-industrial/35 font-semibold">{label}</p>
-      <p className="text-sm font-bold text-white mt-1">{value}</p>
+      <p className="text-sm font-bold text-fg mt-1">{value}</p>
     </div>
   );
 }

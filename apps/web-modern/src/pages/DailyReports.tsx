@@ -118,8 +118,8 @@ const DEFECT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 
 // ─── Shared Styles ────────────────────────────────────────────────────────────
 
-const inputCls  = "w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
-const selectCls = "w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-accent/50";
+const inputCls  = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-fg focus:outline-none focus:border-accent/50";
 const labelCls  = "block text-[10px] font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 // ─── Equipment Hours Tab ──────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
   return (
     <div className="space-y-3">
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-4 gap-2 items-end bg-white/3 border border-white/8 rounded-xl p-3">
+        <div key={i} className="grid grid-cols-4 gap-2 items-end bg-fg/3 border border-fg/8 rounded-xl p-3">
           <div className="col-span-2 space-y-1">
             <label className={labelCls}>{t("dr.equipment")}</label>
             <input value={row.equipmentLabel} readOnly tabIndex={-1} placeholder={t("dr.equipmentPh")} className={`${inputCls} cursor-default select-none opacity-70 pointer-events-none`} />
@@ -231,10 +231,10 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
             <input type="number" value={row.runningHoursTotal} onChange={e => updateRow(i, "runningHoursTotal", e.target.value)} disabled={disabled} placeholder="0" className={inputCls} />
           </div>
           <div className="flex items-end justify-center">
-            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${row.inService ? "bg-green-500/20 border-green-500/40 text-green-400" : "bg-white/5 border-white/10 text-text-industrial/40"} ${disabled ? "cursor-default" : "hover:brightness-110"}`}>
+            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${row.inService ? "bg-green-500/20 border-green-500/40 text-green-400" : "bg-fg/5 border-fg/10 text-text-industrial/40"} ${disabled ? "cursor-default" : "hover:brightness-110"}`}>
               <input type="checkbox" checked={row.inService} onChange={e => updateRow(i, "inService", e.target.checked)} disabled={disabled} className="hidden" />
-              <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${row.inService ? "bg-green-500 border-green-500" : "border-white/30"}`}>
-                {row.inService && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${row.inService ? "bg-green-500 border-green-500" : "border-fg/30"}`}>
+                {row.inService && <svg className="w-2.5 h-2.5 text-fg" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </span>
               <span className="text-xs font-semibold whitespace-nowrap">{t("dr.inService")}</span>
             </label>
@@ -296,9 +296,9 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
     <div className="space-y-4 max-w-md">
       <div className="flex items-center gap-2 mb-2">
         <Droplets className="w-4 h-4 text-accent" />
-        <h3 className="text-xs font-bold text-white uppercase tracking-wider">{t("dr.dailyConsumption")}</h3>
+        <h3 className="text-xs font-bold text-fg uppercase tracking-wider">{t("dr.dailyConsumption")}</h3>
       </div>
-      <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-4">
+      <div className="bg-fg/3 border border-fg/8 rounded-xl p-4 space-y-4">
         <div className="space-y-1.5">
           <label className={labelCls}>{t("dr.fuelConsumed")}</label>
           <input
@@ -449,7 +449,7 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> OT{rows.length !== 1 ? "s" : ""} cargadas automáticamente del período {periodLabel}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -458,11 +458,11 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
+        <div key={i} className="bg-fg/3 border border-fg/8 rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 space-y-1">
               <label className={labelCls}>{t("dr.taskPerformed")}</label>
@@ -609,7 +609,7 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> repuesto{rows.length !== 1 ? "s" : ""} recibido{rows.length !== 1 ? "s" : ""} en el período {periodLabelS}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -618,11 +618,11 @@ const SpareUsageTab: React.FC<{ reportId: string; disabled: boolean; prefillEntr
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-4 gap-2 items-end bg-white/3 border border-white/8 rounded-xl p-3">
+        <div key={i} className="grid grid-cols-4 gap-2 items-end bg-fg/3 border border-fg/8 rounded-xl p-3">
           <div className="col-span-2 space-y-1">
             <label className={labelCls}>{t("dr.spare")}</label>
             <input value={row.spareName} onChange={e => updateRow(i, "spareName", e.target.value)} disabled={disabled} placeholder={t("dr.sparePh")} className={inputCls} />
@@ -756,7 +756,7 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             <span><strong>{rows.length}</strong> defecto{rows.length !== 1 ? "s" : ""} reportado{rows.length !== 1 ? "s" : ""} en el período {periodLabelD}. Revisá y guardá para confirmar.</span>
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {autoSource === "previous" && (
@@ -765,11 +765,11 @@ const DefectEntriesTab: React.FC<{ reportId: string; disabled: boolean; prefillE
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
             Pre-cargado del reporte anterior. Revisá y guardá para confirmar.
           </div>
-          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-white/30 hover:text-white transition-colors shrink-0">{t("dr.clear")}</button>
+          <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
+        <div key={i} className="bg-fg/3 border border-fg/8 rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 space-y-1">
               <label className={labelCls}>{t("dr.defectDesc")}</label>
@@ -843,10 +843,10 @@ const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
           <p className="text-xs">{t("dr.noDeferralsVessel")}</p>
         </div>
       ) : (
-        <div className="border border-white/10 rounded-xl overflow-hidden">
+        <div className="border border-fg/10 rounded-xl overflow-hidden">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/10 text-[10px] text-white/30 uppercase tracking-wider">
+              <tr className="border-b border-fg/10 text-[10px] text-fg/30 uppercase tracking-wider">
                 <th className="px-3 py-2 text-left">{t("dr.colCode")}</th>
                 <th className="px-3 py-2 text-left">{t("col.status")}</th>
                 <th className="px-3 py-2 text-left">{t("dr.colSourceType")}</th>
@@ -857,19 +857,19 @@ const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
             </thead>
             <tbody>
               {active.map(d => (
-                <tr key={d.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                <tr key={d.id} className="border-b border-fg/5 last:border-0 hover:bg-fg/2 transition-colors">
                   <td className="px-3 py-2 font-mono text-accent font-bold">{d.deferralCode}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${DEFERRAL_STATUS_CLS[d.status] ?? "bg-white/5 text-white/40 border-white/10"}`}>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${DEFERRAL_STATUS_CLS[d.status] ?? "bg-fg/5 text-fg/40 border-fg/10"}`}>
                       {DEFERRAL_STATUS_LABEL[d.status] ?? d.status}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-white/50">{d.sourceType.replace(/_/g, " ")}</td>
-                  <td className="px-3 py-2 font-mono text-white/60">{d.sourceCode ?? "—"}</td>
-                  <td className="px-3 py-2 text-white/50">
+                  <td className="px-3 py-2 text-fg/50">{d.sourceType.replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2 font-mono text-fg/60">{d.sourceCode ?? "—"}</td>
+                  <td className="px-3 py-2 text-fg/50">
                     {d.targetDate ? new Date(d.targetDate).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—"}
                   </td>
-                  <td className="px-3 py-2 text-white/40 max-w-[180px] truncate">{d.justification ?? "—"}</td>
+                  <td className="px-3 py-2 text-fg/40 max-w-[180px] truncate">{d.justification ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1162,19 +1162,19 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
             {isNew ? (
-              <h2 className="text-base font-bold text-white">{t("dr.newDaily")}</h2>
+              <h2 className="text-base font-bold text-fg">{t("dr.newDaily")}</h2>
             ) : (
               <>
-                <h2 className="text-base font-bold text-white">{t("dr.dailyReportFor")} {liveReport!.vesselCode}</h2>
+                <h2 className="text-base font-bold text-fg">{t("dr.dailyReportFor")} {liveReport!.vesselCode}</h2>
                 <p className="text-[10px] text-text-industrial/40">{fmtDate(liveReport!.reportDate)} · {liveReport!.status}{liveReport!.integratedAt ? " · INTEGRADO" : ""}</p>
               </>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { if (report === null && liveReport !== null) onSaved(); else onClose(); }} className="text-text-industrial/40 hover:text-white transition-colors">
+            <button onClick={() => { if (report === null && liveReport !== null) onSaved(); else onClose(); }} className="text-text-industrial/40 hover:text-fg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1183,15 +1183,15 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
 
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 px-6 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-1 px-6 border-b border-fg/10 shrink-0">
           {DETAIL_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-all ${
                 activeTab === tab.key
-                  ? "border-accent text-white"
-                  : "border-transparent text-text-industrial/50 hover:text-white"
+                  ? "border-accent text-fg"
+                  : "border-transparent text-text-industrial/50 hover:text-fg"
               }`}
             >
               {tab.label}
@@ -1276,7 +1276,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
 
                 {/* Mini mapa */}
                 {mapCoords ? (
-                  <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ height: 180 }}>
+                  <div className="relative rounded-xl overflow-hidden border border-fg/10" style={{ height: 180 }}>
                     <iframe
                       key={`${mapCoords.lat},${mapCoords.lon}`}
                       title={t("mr.currentPos")}
@@ -1286,18 +1286,18 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                       loading="lazy"
                     />
                     <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 pointer-events-none">
-                      <span className="font-mono text-[10px] text-white/80">
+                      <span className="font-mono text-[10px] text-fg/80">
                         {mapCoords.lat.toFixed(5)}, {mapCoords.lon.toFixed(5)}
                       </span>
                     </div>
                   </div>
                 ) : geolocating ? (
-                  <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 text-text-industrial/30" style={{ height: 180 }}>
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-fg/10 bg-fg/3 text-text-industrial/30" style={{ height: 180 }}>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-xs">{t("mr.gettingLocation")}</span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/2 text-text-industrial/20" style={{ height: 180 }}>
+                  <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-fg/8 bg-fg/2 text-text-industrial/20" style={{ height: 180 }}>
                     <Locate className="w-5 h-5" />
                     <span className="text-[10px]">{t("mr.noPosition")}</span>
                   </div>
@@ -1345,7 +1345,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                       <button
                         onClick={() => { void handleSubmit(); }}
                         disabled={submitting || saving}
-                        className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-lg bg-emerald-600 text-fg font-bold text-xs hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5"
                       >
                         {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                         Submit
@@ -1360,7 +1360,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                   <button
                     onClick={() => { void generatePdf(); }}
                     disabled={generatingPdf || saving || submitting}
-                    className="px-4 py-2 rounded-lg bg-white/10 border border-white/15 text-white font-bold text-xs hover:bg-white/15 disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-lg bg-fg/10 border border-fg/15 text-fg font-bold text-xs hover:bg-fg/15 disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                     Guardar PDF
@@ -1430,7 +1430,7 @@ export const DailyReportsPage: React.FC = () => {
     {
       key: "reportDate",
       header: t("common.date"),
-      render: r => <span className="font-mono font-bold text-white text-xs">{fmtDate(r.reportDate)}</span>,
+      render: r => <span className="font-mono font-bold text-fg text-xs">{fmtDate(r.reportDate)}</span>,
     },
     {
       key: "vesselCode",

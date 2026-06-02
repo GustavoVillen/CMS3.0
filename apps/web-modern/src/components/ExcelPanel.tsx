@@ -194,17 +194,17 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Panel */}
-      <div className="relative w-full max-w-2xl bg-surface border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-surface border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="w-5 h-5 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">Importar / Exportar Excel</h2>
+              <h2 className="text-sm font-bold text-fg">Importar / Exportar Excel</h2>
               <p className="text-xs text-text-industrial/40">{label}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-text-industrial/40 hover:text-white transition-all">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -241,7 +241,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
                       URL.revokeObjectURL(url);
                     }).catch(() => setError("No se pudo descargar el archivo"));
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-industrial hover:bg-white/10 hover:border-accent/20 transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-medium text-text-industrial hover:bg-fg/10 hover:border-accent/20 transition-all"
                 >
                   <Download className="w-4 h-4 text-accent" />
                   Exportar {label}
@@ -253,7 +253,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
                 <p className="text-xs text-text-industrial/50 mb-3">Usa esta plantilla para preparar tus datos. Los campos con <span className="text-accent font-bold">*</span> son obligatorios.</p>
                 <button
                   onClick={handleDownload}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-industrial hover:bg-white/10 hover:border-accent/20 transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-medium text-text-industrial hover:bg-fg/10 hover:border-accent/20 transition-all"
                 >
                   <Download className="w-4 h-4 text-accent" />
                   Descargar template
@@ -263,7 +263,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
               {/* Upload */}
               <Section title="Importar archivo Excel">
                 <p className="text-xs text-text-industrial/50 mb-3">Sube tu archivo .xlsx para ver una vista previa antes de confirmar.</p>
-                <label className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-white/10 hover:border-accent/40 cursor-pointer transition-all group">
+                <label className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-fg/10 hover:border-accent/40 cursor-pointer transition-all group">
                   {step === "uploading"
                     ? <Loader2 className="w-8 h-8 text-accent animate-spin" />
                     : <Upload className="w-8 h-8 text-text-industrial/30 group-hover:text-accent transition-colors" />
@@ -295,8 +295,8 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
 
         {/* Footer */}
         {step === "preview" && preview && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
-            <button onClick={handleReset} className="flex items-center gap-2 text-xs text-text-industrial/50 hover:text-white transition-colors">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-fg/10 shrink-0">
+            <button onClick={handleReset} className="flex items-center gap-2 text-xs text-text-industrial/50 hover:text-fg transition-colors">
               <RotateCcw className="w-3 h-3" /> Subir otro archivo
             </button>
             <div className="flex items-center gap-3">
@@ -315,7 +315,7 @@ export const ExcelPanel: React.FC<ExcelPanelProps> = ({ module, onClose }) => {
         )}
 
         {step === "confirming" && (
-          <div className="flex items-center justify-center px-6 py-4 border-t border-white/10 gap-2 text-xs text-text-industrial/50 shrink-0">
+          <div className="flex items-center justify-center px-6 py-4 border-t border-fg/10 gap-2 text-xs text-text-industrial/50 shrink-0">
             <Loader2 className="w-4 h-4 animate-spin text-accent" /> Importando datos…
           </div>
         )}
@@ -403,7 +403,7 @@ const PreviewSummary: React.FC<{ preview: PreviewResult; fileName: string | null
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs text-text-industrial/50">
         <FileSpreadsheet className="w-4 h-4 text-accent" />
-        <span className="text-white font-medium">{fileName}</span>
+        <span className="text-fg font-medium">{fileName}</span>
         <span>· {preview.rows.length} filas detectadas</span>
       </div>
 
@@ -423,23 +423,23 @@ const PreviewSummary: React.FC<{ preview: PreviewResult; fileName: string | null
       </div>
 
       {/* Row table */}
-      <div className="rounded-xl border border-white/10 overflow-hidden">
+      <div className="rounded-xl border border-fg/10 overflow-hidden">
         <div className="overflow-x-auto max-h-64">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-surface">
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-fg/10">
                 <th className="px-3 py-2 text-left text-text-industrial/40 font-semibold w-12 cursor-pointer select-none" onClick={() => toggleSort("rowNumber")}>{headerLabel("rowNumber", "#")}</th>
                 <th className="px-3 py-2 text-left text-text-industrial/40 font-semibold w-28 cursor-pointer select-none" onClick={() => toggleSort("status")}>{headerLabel("status", "Estado")}</th>
                 <th className="px-3 py-2 text-left text-text-industrial/40 font-semibold cursor-pointer select-none" onClick={() => toggleSort("preview")}>{headerLabel("preview", "Datos / Errores")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-fg/5">
               {sortedRows.map(row => {
                 const s = STATUS_STYLES[row.status];
                 const firstKey = Object.keys(row.data)[0];
                 const preview_val = firstKey ? String(row.data[firstKey]) : "";
                 return (
-                  <tr key={row.rowNumber} className="hover:bg-white/2">
+                  <tr key={row.rowNumber} className="hover:bg-fg/2">
                     <td className="px-3 py-2 text-text-industrial/30">{row.rowNumber}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${s.cls}`}>{s.label}</span>
@@ -467,7 +467,7 @@ const ImportDone: React.FC<{ result: ImportResult; onReset: () => void }> = ({ r
       <CheckCircle2 className="w-10 h-10 text-success-sea" />
     </div>
     <div className="text-center">
-      <h3 className="text-lg font-bold text-white mb-1">Importación completada</h3>
+      <h3 className="text-lg font-bold text-fg mb-1">Importación completada</h3>
       <p className="text-sm text-text-industrial/50">Los datos fueron procesados correctamente.</p>
     </div>
     <div className="flex gap-6">

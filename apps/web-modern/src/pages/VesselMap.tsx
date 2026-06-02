@@ -105,51 +105,51 @@ export function VesselMapPage() {
     <div className="h-full flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-lg font-bold text-white">Posición de Embarcaciones</h1>
-          <p className="text-xs text-white/40 mt-0.5">
+          <h1 className="text-lg font-bold text-fg">Posición de Embarcaciones</h1>
+          <p className="text-xs text-fg/40 mt-0.5">
             Actualizado: {lastRefresh.toLocaleTimeString()} · Refresca cada 60 s · Solo usuarios Técnico/Operador
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {loading && <span className="text-xs text-white/30 animate-pulse">Cargando…</span>}
+          {loading && <span className="text-xs text-fg/30 animate-pulse">Cargando…</span>}
           {error && <span className="text-xs text-red-400">{error}</span>}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10">
             <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            <span className="text-xs text-white font-medium">
+            <span className="text-xs text-fg font-medium">
               {positions.length} embarcación{positions.length !== 1 ? "es" : ""}
             </span>
           </div>
           <button
             onClick={fetchPositions}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-fg/5 border border-fg/10 text-fg/50 hover:text-fg hover:bg-fg/10 transition-all"
           >
             Actualizar
           </button>
         </div>
       </div>
 
-      <div className="flex-1 rounded-xl overflow-hidden border border-white/10 min-h-0" style={{ minHeight: 400 }}>
+      <div className="flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-0" style={{ minHeight: 400 }}>
         <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
       </div>
 
       {positions.length > 0 && (
-        <div className="shrink-0 rounded-xl border border-white/10 overflow-hidden">
+        <div className="shrink-0 rounded-xl border border-fg/10 overflow-hidden">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/10 bg-white/5">
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Buque</th>
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Último reporte</th>
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Lat / Long</th>
-                <th className="px-4 py-2 text-left text-white/30 font-medium">Posición</th>
+              <tr className="border-b border-fg/10 bg-fg/5">
+                <th className="px-4 py-2 text-left text-fg/30 font-medium">Buque</th>
+                <th className="px-4 py-2 text-left text-fg/30 font-medium">Último reporte</th>
+                <th className="px-4 py-2 text-left text-fg/30 font-medium">Lat / Long</th>
+                <th className="px-4 py-2 text-left text-fg/30 font-medium">Posición</th>
               </tr>
             </thead>
             <tbody>
               {positions.map((p, i) => (
-                <tr key={i} className="border-b border-white/5 hover:bg-white/3 transition-colors">
-                  <td className="px-4 py-2 font-bold text-white">{p.vesselName} <span className="text-white/30 font-mono text-[10px]">{p.vesselCode}</span></td>
-                  <td className="px-4 py-2 text-white/50">{p.userEmail ? new Date(p.userEmail).toLocaleDateString() : "—"}</td>
-                  <td className="px-4 py-2 font-mono text-white/40">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</td>
-                  <td className="px-4 py-2 text-white/30">{fmtAge(p.seenAt)}</td>
+                <tr key={i} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
+                  <td className="px-4 py-2 font-bold text-fg">{p.vesselName} <span className="text-fg/30 font-mono text-[10px]">{p.vesselCode}</span></td>
+                  <td className="px-4 py-2 text-fg/50">{p.userEmail ? new Date(p.userEmail).toLocaleDateString() : "—"}</td>
+                  <td className="px-4 py-2 font-mono text-fg/40">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</td>
+                  <td className="px-4 py-2 text-fg/30">{fmtAge(p.seenAt)}</td>
                 </tr>
               ))}
             </tbody>
@@ -158,9 +158,9 @@ export function VesselMapPage() {
       )}
 
       {!loading && positions.length === 0 && (
-        <div className="shrink-0 rounded-xl border border-white/10 bg-white/3 p-8 text-center">
-          <p className="text-sm text-white/40">Sin posiciones registradas aún.</p>
-          <p className="text-xs text-white/20 mt-1">
+        <div className="shrink-0 rounded-xl border border-fg/10 bg-fg/3 p-8 text-center">
+          <p className="text-sm text-fg/40">Sin posiciones registradas aún.</p>
+          <p className="text-xs text-fg/20 mt-1">
             Los usuarios Técnico/Operador deben permitir acceso a la ubicación en el navegador.
           </p>
         </div>

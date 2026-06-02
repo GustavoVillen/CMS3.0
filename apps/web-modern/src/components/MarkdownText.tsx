@@ -24,7 +24,7 @@ function renderInline(text: string): React.ReactNode[] {
   let key = 0;
   while ((match = re.exec(text)) !== null) {
     if (match.index > lastIdx) parts.push(text.slice(lastIdx, match.index));
-    parts.push(<strong key={`b${key++}`} className="text-white font-semibold">{match[1]}</strong>);
+    parts.push(<strong key={`b${key++}`} className="text-fg font-semibold">{match[1]}</strong>);
     lastIdx = match.index + match[0].length;
   }
   if (lastIdx < text.length) parts.push(text.slice(lastIdx));
@@ -87,9 +87,9 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ text, className = ""
             </thead>
             <tbody>
               {bodyRows.map((row, ri) => (
-                <tr key={ri} className="border-b border-white/5">
+                <tr key={ri} className="border-b border-fg/5">
                   {row.map((cell, ci) => (
-                    <td key={ci} className="px-2 py-1.5 align-top text-white/85 leading-snug">
+                    <td key={ci} className="px-2 py-1.5 align-top text-fg/85 leading-snug">
                       {renderInline(cell)}
                     </td>
                   ))}
@@ -105,7 +105,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ text, className = ""
 
     // ─── Headings ─────────────────────────────────────────────────────────
     if (line.startsWith("### ")) {
-      nodes.push(<h4 key={i} className="text-xs font-bold text-white mt-3 mb-1">{renderInline(line.slice(4))}</h4>);
+      nodes.push(<h4 key={i} className="text-xs font-bold text-fg mt-3 mb-1">{renderInline(line.slice(4))}</h4>);
       continue;
     }
     if (line.startsWith("## ")) {

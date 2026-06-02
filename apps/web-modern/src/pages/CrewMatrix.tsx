@@ -64,7 +64,7 @@ interface MatrixData {
   requirements: RankRequirement[];
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 // ─── Cell editor ─────────────────────────────────────────────────────────────
@@ -130,13 +130,13 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="w-full max-w-md bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">
               {item.code}{item.regulation ? ` · ${item.regulation}` : ""}
             </p>
-            <h2 className="text-sm font-bold text-white">{item.name}</h2>
+            <h2 className="text-sm font-bold text-fg">{item.name}</h2>
             <p className="text-[11px] text-text-industrial/60 mt-0.5">
               {crew.firstName} {crew.lastName}
               <span className="text-text-industrial/40"> — {crew.rankName ?? "—"}</span>
@@ -153,7 +153,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
               </span>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-3">
           <div>
@@ -176,7 +176,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
           </div>
           {err && <p className="text-xs text-red-400">{err}</p>}
         </div>
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
           <div>
             {existing && (
               <button onClick={() => { void onRemove(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">{t("common.remove")}</button>
@@ -257,11 +257,11 @@ export const CrewMatrixPage: React.FC = () => {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">{t("common.allVessels")}</option>
           {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
         </select>
-        <select value={category} onChange={e => setCategory(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+        <select value={category} onChange={e => setCategory(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">{t("common.allCategories")}</option>
           {(data?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -283,10 +283,10 @@ export const CrewMatrixPage: React.FC = () => {
           {category && <span className="block mt-1">{t("common.tryRemoveFilter")}</span>}
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
+        <div className="overflow-x-auto bg-fg/[0.03] border border-fg/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-fg/10">
                 <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[220px]">{t("common.crewMember")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
@@ -297,9 +297,9 @@ export const CrewMatrixPage: React.FC = () => {
             </thead>
             <tbody>
               {data.crew.map(c => (
-                <tr key={c.id} className="border-b border-white/5 last:border-b-0">
+                <tr key={c.id} className="border-b border-fg/5 last:border-b-0">
                   <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2">
-                    <div className="text-xs font-bold text-white">{c.firstName} {c.lastName}</div>
+                    <div className="text-xs font-bold text-fg">{c.firstName} {c.lastName}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{c.rankName ?? "—"} · {c.vesselCode}</div>
                   </td>
                   {data.trainingItems.map(it => {
@@ -307,7 +307,7 @@ export const CrewMatrixPage: React.FC = () => {
                     const reqLevel = c.rankId ? reqByRankItem.get(`${c.rankId}|${it.id}`) : null;
                     const isMandatory = reqLevel === "OBRIGATORIO";
 
-                    let cls = "bg-white/[0.02] text-text-industrial/30 border-white/5 hover:bg-white/10";
+                    let cls = "bg-fg/[0.02] text-text-industrial/30 border-fg/5 hover:bg-fg/10";
                     let symbol: React.ReactNode = "·";
 
                     if (rec) {
@@ -329,7 +329,7 @@ export const CrewMatrixPage: React.FC = () => {
                       cls = "bg-red-500/5 text-red-400/60 border-red-500/20 hover:bg-red-500/15";
                       symbol = "!";
                     } else if (reqLevel === "DESEJAVEL") {
-                      cls = "bg-white/[0.02] text-yellow-500/40 border-yellow-500/10 hover:bg-yellow-500/5";
+                      cls = "bg-fg/[0.02] text-yellow-500/40 border-yellow-500/10 hover:bg-yellow-500/5";
                       symbol = "·";
                     }
 

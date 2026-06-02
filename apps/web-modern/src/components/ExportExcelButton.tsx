@@ -48,7 +48,7 @@ export const ExportExcelButton: React.FC<Props> = ({ module, filters, label }) =
     <button
       onClick={() => { void handle(); }}
       disabled={busy}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       title="Descargar listado en Excel"
     >
       {busy

@@ -40,11 +40,11 @@ export const Layout: React.FC = () => {
 
   return (
     <CopilotContextProvider>
-      <div className="flex h-screen bg-primary-bg text-text-industrial overflow-hidden">
+      <div className="flex h-screen bg-bg text-fg overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 transform-[translateZ(0)]">
           <Header title={title} />
-          <main className="flex-1 overflow-y-auto p-6 bg-[#080D1D]">
+          <main className="flex-1 overflow-y-auto p-6 bg-bg">
             <Outlet />
           </main>
         </div>

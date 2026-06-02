@@ -74,21 +74,21 @@ export const Login: React.FC = () => {
         <div className="flex items-center justify-center gap-3 mb-10">
           <img src="/logo-white.png" alt="CMS" className="w-14 h-14 object-contain" />
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-widest uppercase">CMS</h1>
+            <h1 className="text-2xl font-bold text-fg tracking-widest uppercase">CMS</h1>
             <p className="text-xs font-bold text-teal-400 tracking-widest uppercase">Copilot Management System</p>
           </div>
         </div>
 
         {/* Card */}
         <div className="bento-card">
-          <h2 className="text-lg font-bold text-white mb-1">Iniciar sesión</h2>
+          <h2 className="text-lg font-bold text-fg mb-1">Iniciar sesión</h2>
           <p className="text-sm text-text-industrial/50 mb-8">Accede a tu espacio de gestión naval</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {hostTenant ? (
               <div>
                 <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Empresa / Tenant</label>
-                <div className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 flex items-center justify-between">
+                <div className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg/80 flex items-center justify-between">
                   <span className="font-semibold">{hostTenant}</span>
                   <span className="text-[10px] text-text-industrial/40 uppercase tracking-wider">{window.location.hostname}</span>
                 </div>
@@ -101,7 +101,7 @@ export const Login: React.FC = () => {
                   value={form.tenantSlug}
                   onChange={e => setForm(f => ({ ...f, tenantSlug: e.target.value }))}
                   required
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
                   placeholder="demo"
                 />
               </div>
@@ -113,7 +113,7 @@ export const Login: React.FC = () => {
                 value={form.identifier}
                 onChange={e => setForm(f => ({ ...f, identifier: e.target.value }))}
                 required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
                 placeholder="usuario@empresa.local"
               />
             </div>
@@ -123,7 +123,7 @@ export const Login: React.FC = () => {
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
                 placeholder="••••••••"
               />
             </div>

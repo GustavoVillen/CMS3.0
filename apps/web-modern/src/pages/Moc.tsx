@@ -49,7 +49,7 @@ const STATUS_COLOR: Record<string, string> = {
   IMPLEMENTED:    "bg-purple-500/15 text-purple-300 border-purple-500/30",
   REVIEWED:       "bg-success-sea/15 text-success-sea border-success-sea/40",
   REJECTED:       "bg-red-500/10 text-red-400 border-red-500/30",
-  CANCELLED:      "bg-white/5 text-text-industrial/50 border-white/10",
+  CANCELLED:      "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
 const IMPACT_AREAS = ["Safety", "Environment", "Operational", "Crew training", "Regulatory", "Cost"];
@@ -164,7 +164,7 @@ interface Moc {
   createdAt: string;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 
@@ -364,13 +364,13 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <GitBranch className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">MOC</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo MOC" : moc!.mocCode}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo MOC" : moc!.mocCode}</h2>
             </div>
             {moc && (
               <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[moc.status]}`}>
@@ -378,7 +378,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               </span>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
@@ -421,7 +421,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
                 {IMPACT_AREAS.map(a => (
                   <button key={a} type="button" disabled={isLocked} onClick={() => toggleImpact(a)}
                     className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${
-                      impactAreas.includes(a) ? "bg-accent/20 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+                      impactAreas.includes(a) ? "bg-accent/20 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
                     }`}>{a}</button>
                 ))}
               </div>
@@ -453,7 +453,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           </div>
 
           {moc && (
-            <div className="rounded-lg bg-white/[0.04] border border-white/10 p-3 space-y-1.5 text-[11px]">
+            <div className="rounded-lg bg-fg/[0.04] border border-fg/10 p-3 space-y-1.5 text-[11px]">
               <p className="font-bold uppercase tracking-wider text-text-industrial/50">{t("moc.traceability")}</p>
               {moc.approvedAt && <p className="text-text-industrial/70">Aprobado por {moc.approvedByName ?? "—"} el {fmtDate(moc.approvedAt)}</p>}
               {moc.rejectedReason && <p className="text-red-300">Rechazado: {moc.rejectedReason}</p>}
@@ -465,7 +465,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0 flex-wrap">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
           <div className="flex flex-wrap gap-2">
             {/* Transiciones según estado */}
             {moc?.status === "REQUESTED" && (
@@ -487,10 +487,10 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               <button onClick={() => askAndTransition("REVIEWED", "reviewOutcome", "Resultado revisión (SATISFACTORY / WITH_OBSERVATIONS):")} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/15 border border-success-sea/40 text-success-sea text-xs flex items-center gap-1 disabled:opacity-50"><ClockIcon className="w-3.5 h-3.5" /> Revisar y cerrar</button>
             )}
             {moc && !["REVIEWED", "CANCELLED", "REJECTED"].includes(moc.status) && (
-              <button onClick={() => { void transition("CANCELLED"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400 disabled:opacity-50">{t("moc.cancelMoc")}</button>
+              <button onClick={() => { void transition("CANCELLED"); }} disabled={saving} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 text-xs hover:text-red-400 disabled:opacity-50">{t("moc.cancelMoc")}</button>
             )}
             {!isNew && isAdmin && (
-              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400">{t("common.delete")}</button>
+              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 text-xs hover:text-red-400">{t("common.delete")}</button>
             )}
           </div>
           <div className="flex gap-2">
@@ -500,7 +500,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
                 onClick={() => { void handleDownloadPdf(); }}
                 disabled={generatingPdf || saving}
                 title={isDirty ? "Guarda los cambios y descarga el PDF" : "Descargar PDF del MOC"}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
               >
                 {generatingPdf
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -508,7 +508,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
                 PDF
               </button>
             )}
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
@@ -529,16 +529,16 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
 const MocFilterGate: React.FC<{ onProceed: () => void; onCancel: () => void }> = ({ onProceed, onCancel }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div className="w-full max-w-xl bg-[#0D1B2A] border border-white/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+    <div className="w-full max-w-xl bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center gap-2">
         <GitBranch className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-bold text-white">¿Tu cambio necesita MOC?</h2>
+        <h2 className="text-sm font-bold text-fg">¿Tu cambio necesita MOC?</h2>
       </div>
       <p className="text-sm text-text-industrial leading-relaxed">
         Iniciá un MOC formal solo si, después del cambio,
-        <span className="text-white font-bold"> el barco va a operar o mantenerse de manera diferente a lo que dice el manual / SMS / plan aprobado.</span>
+        <span className="text-fg font-bold"> el barco va a operar o mantenerse de manera diferente a lo que dice el manual / SMS / plan aprobado.</span>
       </p>
-      <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-[11px] text-text-industrial leading-relaxed space-y-1">
+      <div className="rounded-xl bg-fg/5 border border-fg/10 p-3 text-[11px] text-text-industrial leading-relaxed space-y-1">
         <p className="text-success-sea font-bold">SÍ necesita MOC:</p>
         <ul className="list-disc pl-4 space-y-0.5">
           <li>Reemplazo por equipo de <strong>distinta marca/modelo/capacidad</strong></li>
@@ -557,7 +557,7 @@ const MocFilterGate: React.FC<{ onProceed: () => void; onCancel: () => void }> =
         </ul>
       </div>
       <div className="flex justify-end gap-2 pt-1">
-        <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">
+        <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">
           No, es operación rutinaria
         </button>
         <button onClick={onProceed} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 flex items-center gap-1.5">
@@ -592,7 +592,7 @@ export const MocPage: React.FC = () => {
         {([["open", "Abiertos"], ["all", "Todos"]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilterStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
-              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}>{l}</button>
         ))}
       </div>
@@ -602,9 +602,9 @@ export const MocPage: React.FC = () => {
       ) : items.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin MOCs.</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {items.map(m => (
-            <button key={m.id} onClick={() => setEditing(m)} className="w-full text-left p-4 hover:bg-white/5 transition-colors flex items-center gap-3">
+            <button key={m.id} onClick={() => setEditing(m)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{m.mocCode}</span>
@@ -616,11 +616,11 @@ export const MocPage: React.FC = () => {
                   </span>
                   <VesselLabel code={m.vesselCode} className="text-[10px]" showCode />
                 </div>
-                <p className="text-sm font-bold text-white line-clamp-1">{m.title}</p>
+                <p className="text-sm font-bold text-fg line-clamp-1">{m.title}</p>
                 <p className="text-[10px] text-text-industrial/50 line-clamp-1">{CATEGORY_LABEL[m.category] ?? m.category} · {m.reasonForChange}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-white font-mono">{fmtDate(m.createdAt)}</p>
+                <p className="text-xs text-fg font-mono">{fmtDate(m.createdAt)}</p>
                 {m.plannedDate && <p className="text-[10px] text-text-industrial/40">Planeado: {fmtDate(m.plannedDate)}</p>}
               </div>
             </button>

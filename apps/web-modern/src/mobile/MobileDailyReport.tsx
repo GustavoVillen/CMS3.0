@@ -60,7 +60,7 @@ const OP_STATUS_LABEL: Record<string, string> = {
   REPAIR:    "En reparación",
 };
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "text-xs font-bold uppercase tracking-wider text-text-industrial/40";
 
 type View = "list" | "create" | "detail";
@@ -290,11 +290,11 @@ export const MobileDailyReport: React.FC = () => {
   if (view === "create") {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => { setView("list"); setEditingId(null); setEditingStatus(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={() => { setView("list"); setEditingId(null); setEditingStatus(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white">
+          <span className="font-bold text-sm text-fg">
             {editingId ? "Editar reporte" : "Reporte diario"} — {todayStr}
           </span>
         </div>
@@ -329,15 +329,15 @@ export const MobileDailyReport: React.FC = () => {
             ) : (
               <div className="space-y-2">
                 {trackedAssets.map(a => (
-                  <div key={a.id} className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1.5">
-                    <p className="text-[11px] font-semibold text-white truncate">{a.name}</p>
+                  <div key={a.id} className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-1.5">
+                    <p className="text-[11px] font-semibold text-fg truncate">{a.name}</p>
                     <input
                       type="number"
                       inputMode="decimal"
                       value={hoursByAsset[a.id] ?? ""}
                       onChange={e => updateAssetHours(a.id, e.target.value)}
                       placeholder="Horas totales (h)"
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                      className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
                     />
                   </div>
                 ))}
@@ -475,7 +475,7 @@ export const MobileDailyReport: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+                className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar y re-enviar"}
               </button>
@@ -490,7 +490,7 @@ export const MobileDailyReport: React.FC = () => {
                   type="button"
                   onClick={handleSaveDraft}
                   disabled={saving}
-                  className="py-3 rounded-xl bg-white/5 border border-white/15 text-text-industrial text-sm font-bold disabled:opacity-40 hover:bg-white/10"
+                  className="py-3 rounded-xl bg-fg/5 border border-fg/15 text-text-industrial text-sm font-bold disabled:opacity-40 hover:bg-fg/10"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Guardar borrador"}
                 </button>
@@ -498,7 +498,7 @@ export const MobileDailyReport: React.FC = () => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+                  className="py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Enviar"}
                 </button>
@@ -553,17 +553,17 @@ export const MobileDailyReport: React.FC = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold"
+            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold"
           >
             + Registrar reporte de hoy
           </button>
         )}
       </div>
 
-      <div className="shrink-0 px-4 py-2 border-b border-white/10">
+      <div className="shrink-0 px-4 py-2 border-b border-fg/10">
         <p className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/30">Reportes recientes</p>
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+      <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-accent" />
@@ -576,11 +576,11 @@ export const MobileDailyReport: React.FC = () => {
               key={r.id}
               type="button"
               onClick={() => { setSel(r); setView("detail"); }}
-              className="w-full text-left px-4 py-3 hover:bg-white/5 active:bg-white/10 transition-colors"
+              className="w-full text-left px-4 py-3 hover:bg-fg/5 active:bg-fg/10 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">{r.reportDate.slice(0, 10)}</p>
+                  <p className="text-sm font-medium text-fg">{r.reportDate.slice(0, 10)}</p>
                   <p className="text-xs text-text-industrial/40 mt-0.5">
                     {r.operationalStatus ? (OP_STATUS_LABEL[r.operationalStatus] ?? r.operationalStatus) : "—"}
                   </p>
@@ -609,26 +609,26 @@ const ReportDetail: React.FC<{ report: DailyReport; onBack: () => void }> = ({ r
 
   return (
     <div className="flex flex-col h-full">
-      <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-        <button type="button" onClick={onBack} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+      <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+        <button type="button" onClick={onBack} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="font-bold text-sm text-white flex-1">{report.reportDate.slice(0, 10)}</span>
+        <span className="font-bold text-sm text-fg flex-1">{report.reportDate.slice(0, 10)}</span>
         <span className="text-xs text-text-industrial/40">{STATUS_LABEL[report.status] ?? report.status}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Consumos generales */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Combustible</p>
-            <p className="text-xl font-bold text-white tabular-nums">
+            <p className="text-xl font-bold text-fg tabular-nums">
               {report.fuelConsumedLiters != null ? report.fuelConsumedLiters : "—"}
               {report.fuelConsumedLiters != null && <span className="text-xs font-normal text-text-industrial/40 ml-1">L</span>}
             </p>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Aceite</p>
-            <p className="text-xl font-bold text-white tabular-nums">
+            <p className="text-xl font-bold text-fg tabular-nums">
               {report.oilConsumedLiters != null ? report.oilConsumedLiters : "—"}
               {report.oilConsumedLiters != null && <span className="text-xs font-normal text-text-industrial/40 ml-1">L</span>}
             </p>
@@ -647,9 +647,9 @@ const ReportDetail: React.FC<{ report: DailyReport; onBack: () => void }> = ({ r
           ) : (
             <div className="space-y-1.5">
               {data!.equipmentHours.map((e, i) => (
-                <div key={(e.assetId ?? "x") + i} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-                  <p className="text-sm text-white truncate flex-1 mr-3">{e.equipmentLabel}</p>
-                  <p className="text-sm font-bold text-white tabular-nums shrink-0">
+                <div key={(e.assetId ?? "x") + i} className="bg-fg/5 border border-fg/10 rounded-xl p-3 flex items-center justify-between">
+                  <p className="text-sm text-fg truncate flex-1 mr-3">{e.equipmentLabel}</p>
+                  <p className="text-sm font-bold text-fg tabular-nums shrink-0">
                     {e.runningHoursTotal != null ? `${e.runningHoursTotal} h` : "—"}
                   </p>
                 </div>
@@ -659,15 +659,15 @@ const ReportDetail: React.FC<{ report: DailyReport; onBack: () => void }> = ({ r
         </div>
 
         {report.operationalStatus && (
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Estado</p>
-            <p className="text-sm font-bold text-white">{OP_STATUS_LABEL[report.operationalStatus] ?? report.operationalStatus}</p>
+            <p className="text-sm font-bold text-fg">{OP_STATUS_LABEL[report.operationalStatus] ?? report.operationalStatus}</p>
           </div>
         )}
         {report.notes && (
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Notas</p>
-            <p className="text-sm text-white/80 leading-relaxed">{report.notes}</p>
+            <p className="text-sm text-fg/80 leading-relaxed">{report.notes}</p>
           </div>
         )}
       </div>

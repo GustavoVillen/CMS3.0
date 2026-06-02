@@ -103,13 +103,13 @@ const STATUS_TKEY: Record<PermitStatus, TranslationKey> = {
 };
 
 const STATUS_COLOR: Record<PermitStatus, string> = {
-  DRAFT: "bg-white/5 text-text-industrial/60 border-white/10",
+  DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
   REQUESTED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   APPROVED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
   ACTIVE: "bg-green-500/10 text-green-400 border-green-500/20",
   CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  CANCELLED: "bg-white/5 text-text-industrial/50 border-white/10",
+  CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
 const ROLE_LABEL: Record<ParticipantRole, string> = {
@@ -134,7 +134,7 @@ function toLocalDateTimeInput(s: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
 // ─── Permit Modal ────────────────────────────────────────────────────────────
@@ -381,25 +381,25 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[92vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-4xl max-h-[92vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.title")}</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? t("pm.newPermit") : `${permit!.permitCode} — ${t(TYPE_TKEY[permit!.type])}`}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? t("pm.newPermit") : `${permit!.permitCode} — ${t(TYPE_TKEY[permit!.type])}`}</h2>
             </div>
             {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         {!isNew && (
-          <div className="flex border-b border-white/10 px-6 shrink-0">
-            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabDetails")}</button>
-            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabParticipants")} ({permit!.participants.length})</button>
+          <div className="flex border-b border-fg/10 px-6 shrink-0">
+            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabDetails")}</button>
+            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabParticipants")} ({permit!.participants.length})</button>
             {permit!.type === "ENCLOSED_SPACE_ENTRY" && (
-              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-white"}`}>{t("pm.tabGasTests")} ({permit!.gasTests.length})</button>
+              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabGasTests")} ({permit!.gasTests.length})</button>
             )}
           </div>
         )}
@@ -458,7 +458,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   <label
                     onClick={isEditable ? onSuggestHazards : undefined}
                     title={isEditable ? "Sugerir peligros con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingHazards ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingHazards ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingHazards ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     Peligros identificados
@@ -470,7 +470,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   <label
                     onClick={isEditable ? onSuggestControls : undefined}
                     title={isEditable ? "Sugerir medidas de control con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingControls ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingControls ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingControls ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     Medidas de control
@@ -482,7 +482,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   <label
                     onClick={isEditable ? onSuggestPpe : undefined}
                     title={isEditable ? "Sugerir EPP con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingPpe ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingPpe ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingPpe ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     EPP requerido
@@ -522,7 +522,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   </div>
                 )}
                 {permit?.cancelReason && (
-                  <div className="col-span-2 bg-white/5 border border-white/10 rounded-xl p-3">
+                  <div className="col-span-2 bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold mb-1">{t("pm.cancelReason")}</p>
                     <p className="text-xs text-text-industrial/70">{permit.cancelReason}</p>
                   </div>
@@ -547,10 +547,10 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           )}
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0 flex-wrap">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
           <div className="flex gap-2 flex-wrap">
             {!isNew && (
-              <button onClick={() => { void onDownloadPdf(); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+              <button onClick={() => { void onDownloadPdf(); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
                 <FileText className="w-3.5 h-3.5" /> PDF
               </button>
             )}
@@ -570,14 +570,14 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">{t("common.close")}</button>
             )}
             {!isNew && permit && !isTerminal && (
-              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 font-bold text-xs hover:bg-white/10 disabled:opacity-50">{t("common.cancel")}</button>
+              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 font-bold text-xs hover:bg-fg/10 disabled:opacity-50">{t("common.cancel")}</button>
             )}
             {!isNew && isTerminal && isAdmin && (
               <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">{t("common.reopen")}</button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {(isNew || tab === "details") && isEditable && (
               <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
@@ -636,7 +636,7 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
       </div>
 
       {adding && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>Tripulante a bordo</label>
@@ -658,7 +658,7 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
           </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setAdding(false); setErr(null); }} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={() => { setAdding(false); setErr(null); }} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">Cancelar</button>
             <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Agregar"}
             </button>
@@ -669,11 +669,11 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
       {permit.participants.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin participantes registrados</div>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-fg/5">
           {permit.participants.map(p => (
             <div key={p.id} className="py-2.5 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white">{p.name}</p>
+                <p className="text-sm font-medium text-fg">{p.name}</p>
                 <p className="text-[10px] text-text-industrial/40">{ROLE_LABEL[p.role]}</p>
               </div>
               {canEdit && <button onClick={() => { void onDelete(p.id); }} className="text-[10px] text-red-400 hover:underline">Quitar</button>}
@@ -733,7 +733,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
 
   return (
     <div className="space-y-3">
-      <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-[11px] text-text-industrial/70 leading-snug">
+      <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 text-[11px] text-text-industrial/70 leading-snug">
         <p className="font-bold text-text-industrial mb-1">Umbrales IMO A.1050(27):</p>
         <p>O₂ entre 19.5% – 23% · LEL &lt; 1% · H₂S &lt; 10 ppm · CO &lt; 50 ppm. El verdict se computa server-side.</p>
       </div>
@@ -747,7 +747,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
       </div>
 
       {adding && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Medido por</label>
@@ -780,7 +780,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
           </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
-            <button onClick={reset} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">Cancelar</button>
+            <button onClick={reset} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">Cancelar</button>
             <button onClick={() => { void onAdd(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Registrar"}
             </button>
@@ -794,7 +794,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-text-industrial/50 border-b border-white/10">
+              <tr className="text-[10px] uppercase tracking-wider text-text-industrial/50 border-b border-fg/10">
                 <th className="text-left p-2">Fecha/Hora</th>
                 <th className="text-left p-2">Por</th>
                 <th className="text-right p-2">O₂%</th>
@@ -805,11 +805,11 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
                 {canEdit && <th></th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-fg/5">
               {permit.gasTests.map(g => (
                 <tr key={g.id}>
-                  <td className="p-2 text-white/80 font-mono">{fmtDateTime(g.testedAt)}</td>
-                  <td className="p-2 text-white/80">{g.testedByName}</td>
+                  <td className="p-2 text-fg/80 font-mono">{fmtDateTime(g.testedAt)}</td>
+                  <td className="p-2 text-fg/80">{g.testedByName}</td>
                   <td className="p-2 text-right tabular-nums">{g.o2Pct != null ? g.o2Pct.toFixed(1) : "—"}</td>
                   <td className="p-2 text-right tabular-nums">{g.lelPct != null ? g.lelPct.toFixed(2) : "—"}</td>
                   <td className="p-2 text-right tabular-nums">{g.h2sPpm != null ? g.h2sPpm.toFixed(0) : "—"}</td>
@@ -860,12 +860,12 @@ export const PermitsPage: React.FC = () => {
 
       <div className="flex gap-2 flex-wrap">
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as "" | PermitStatus)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">— Estado: todos —</option>
           {(Object.keys(STATUS_TKEY) as PermitStatus[]).map(s => <option key={s} value={s}>{t(STATUS_TKEY[s])}</option>)}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as "" | PermitType)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">— Tipo: todos —</option>
           {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
         </select>
@@ -876,12 +876,12 @@ export const PermitsPage: React.FC = () => {
       ) : !data?.items?.length ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin permisos</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {data.items.map(p => {
             const Icon = TYPE_ICON[p.type];
             return (
               <button key={p.id} onClick={() => setEditing(p)}
-                className="w-full text-left p-4 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+                className="w-full text-left p-4 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
                 <Icon className="w-4 h-4 text-text-industrial/50 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
@@ -890,17 +890,17 @@ export const PermitsPage: React.FC = () => {
                     <VesselLabel code={p.vesselCode} className="text-[10px]" showCode />
                     <span className="text-[10px] text-text-industrial/50">{t(TYPE_TKEY[p.type])}</span>
                     {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-white/5 border-white/10 text-text-industrial/60">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-fg/5 border-fg/10 text-text-industrial/60">
                         {p.gasTests.length} gas test{p.gasTests.length !== 1 ? "s" : ""}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-white truncate">{p.description}</p>
+                  <p className="text-sm font-medium text-fg truncate">{p.description}</p>
                   <p className="text-xs text-text-industrial/50 truncate">{p.location}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-[10px] text-text-industrial/40">{p.status === "ACTIVE" ? "Vence" : "Planeado"}</p>
-                  <p className="text-xs text-white font-mono">{fmtDateTime(p.status === "ACTIVE" ? p.validTo : p.plannedStart)}</p>
+                  <p className="text-xs text-fg font-mono">{fmtDateTime(p.status === "ACTIVE" ? p.validTo : p.plannedStart)}</p>
                   <p className="text-[10px] text-text-industrial/40">{p.participants.length} participantes</p>
                 </div>
               </button>

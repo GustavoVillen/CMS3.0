@@ -65,7 +65,7 @@ function actionBadgeCls(action: string): string {
   if (a.includes("deferred"))  return "bg-orange-500/10 text-orange-400 border-orange-500/20";
   if (a.includes("rejected"))  return "bg-red-500/10 text-red-400 border-red-500/20";
   if (a.includes("deleted"))   return "bg-red-500/10 text-red-400 border-red-500/20";
-  return "bg-white/5 text-text-industrial/60 border-white/10";
+  return "bg-fg/5 text-text-industrial/60 border-fg/10";
 }
 
 function actionTKey(action: string): TranslationKey | null {
@@ -274,7 +274,7 @@ function detailLine(item: AuditLogItem): string {
   return "";
 }
 
-const inputCls = "bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50";
+const inputCls = "bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50";
 
 function downloadAuditExcel(entityType: string, from: string, to: string) {
   const params = new URLSearchParams();
@@ -346,7 +346,7 @@ export const BitacoraPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => downloadAuditExcel(entityType, from, to)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> {t("bit.exportExcel")}
           </button>
@@ -358,7 +358,7 @@ export const BitacoraPage: React.FC = () => {
           <span className="text-text-industrial/30 text-xs">→</span>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
           {hasFilters && (
-            <button onClick={clearFilters} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial/80 hover:text-white transition-all">
+            <button onClick={clearFilters} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg transition-all">
               {t("bit.clear")}
             </button>
           )}
@@ -375,7 +375,7 @@ export const BitacoraPage: React.FC = () => {
         {!loading && !error && (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
+              <tr className="border-b border-fg/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
                 <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">{t("bit.colDateTime")}</th>
                 <th className="text-left px-4 py-3 font-semibold">{t("bit.colType")}</th>
                 <th className="text-left px-4 py-3 font-semibold">{t("bit.colVessel")}</th>
@@ -400,7 +400,7 @@ export const BitacoraPage: React.FC = () => {
                   const canNav = !!(ENTITY_ROUTE[item.entityType] && item.entityId);
 
                   return (
-                    <tr key={item.id} className="border-b border-white/5 hover:bg-white/3 transition-colors">
+                    <tr key={item.id} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-text-industrial/50">
                         <div className="text-xs">{new Date(item.createdAt).toLocaleDateString("es-AR")}</div>
                         <div className="text-[10px] text-text-industrial/30">
@@ -421,12 +421,12 @@ export const BitacoraPage: React.FC = () => {
                           canNav ? (
                             <button
                               onClick={e => handleRefClick(e, item)}
-                              className="flex items-center gap-1 font-mono font-bold text-[11px] text-accent hover:text-white bg-white/5 hover:bg-accent/10 border border-white/10 hover:border-accent/30 rounded px-1.5 py-0.5 transition-all"
+                              className="flex items-center gap-1 font-mono font-bold text-[11px] text-accent hover:text-fg bg-fg/5 hover:bg-accent/10 border border-fg/10 hover:border-accent/30 rounded px-1.5 py-0.5 transition-all"
                             >
                               {code} <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                             </button>
                           ) : (
-                            <span className="font-mono font-bold text-[11px] text-white bg-white/5 border border-white/10 rounded px-1.5 py-0.5">
+                            <span className="font-mono font-bold text-[11px] text-fg bg-fg/5 border border-fg/10 rounded px-1.5 py-0.5">
                               {code}
                             </span>
                           )

@@ -34,7 +34,7 @@ const STATUS_COLOR: Record<string, string> = {
   DUE:       "bg-orange-500/15 text-orange-400 border-orange-500/30",
   IN_WINDOW: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
   UPCOMING:  "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  FUTURE:    "bg-white/5 text-text-industrial/40 border-white/10",
+  FUTURE:    "bg-fg/5 text-text-industrial/40 border-fg/10",
   COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/30",
 };
 
@@ -111,37 +111,37 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
     const hasActiveWO = selected.executionStatus === "IN_WINDOW" && !!selected.activeWorkOrderCode;
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => { setView("list"); setSelected(null); setErr(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={() => { setView("list"); setSelected(null); setErr(null); }} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white truncate flex-1">{selected.taskCode}</span>
-          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${STATUS_COLOR[selected.executionStatus] ?? "bg-white/5 text-white/40 border-white/10"}`}>
+          <span className="font-bold text-sm text-fg truncate flex-1">{selected.taskCode}</span>
+          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${STATUS_COLOR[selected.executionStatus] ?? "bg-fg/5 text-fg/40 border-fg/10"}`}>
             {STATUS_LABEL[selected.executionStatus] ?? selected.executionStatus}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
-            <p className="text-base font-bold text-white">{selected.title}</p>
+            <p className="text-base font-bold text-fg">{selected.title}</p>
             {selected.assetName && <p className="text-xs text-text-industrial/50 mt-0.5">{selected.assetName}</p>}
             <p className="text-[11px] font-mono text-text-industrial/40 mt-0.5">{selected.vesselCode}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Vence</p>
-              <p className="text-sm font-bold text-white">{formatDue(selected)}</p>
+              <p className="text-sm font-bold text-fg">{formatDue(selected)}</p>
             </div>
             {selected.estimatedHours != null && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Horas est.</p>
-                <p className="text-sm font-bold text-white">{selected.estimatedHours} h</p>
+                <p className="text-sm font-bold text-fg">{selected.estimatedHours} h</p>
               </div>
             )}
           </div>
 
           {selected.description && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Descripción</p>
               <p className="text-xs text-text-industrial/80 whitespace-pre-line leading-relaxed">{selected.description}</p>
             </div>
@@ -163,7 +163,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
                 type="button"
                 onClick={handleExecute}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -185,7 +185,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
   return (
     <div className="flex flex-col h-full">
       {/* Filter chips */}
-      <div className="shrink-0 px-3 py-2.5 border-b border-white/10 flex gap-1.5 overflow-x-auto">
+      <div className="shrink-0 px-3 py-2.5 border-b border-fg/10 flex gap-1.5 overflow-x-auto">
         {([
           ["due",      "Próximos",  counts.due,      "text-orange-400"],
           ["upcoming", "Por vencer", counts.upcoming, "text-blue-400"],
@@ -198,7 +198,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
             className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 ${
               filter === f
                 ? "bg-accent/15 text-accent border-accent/40"
-                : "bg-white/5 text-text-industrial/60 border-white/10"
+                : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}
           >
             {label}
@@ -207,7 +207,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+      <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-accent" />
@@ -223,7 +223,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
               key={plan.id}
               type="button"
               onClick={() => { setSelected(plan); setView("detail"); setErr(null); }}
-              className="w-full text-left px-4 py-3.5 hover:bg-white/5 active:bg-white/10 transition-colors"
+              className="w-full text-left px-4 py-3.5 hover:bg-fg/5 active:bg-fg/10 transition-colors"
             >
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
@@ -233,7 +233,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
                       {STATUS_LABEL[plan.executionStatus] ?? plan.executionStatus}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-white truncate">{plan.title}</p>
+                  <p className="text-sm font-medium text-fg truncate">{plan.title}</p>
                   {plan.assetName && (
                     <p className="text-xs text-text-industrial/40 truncate mt-0.5">{plan.assetName}</p>
                   )}

@@ -27,13 +27,13 @@ const PTW_STATUS_LABEL: Record<string, string> = {
   REJECTED: "Rechazado", ACTIVE: "Activo", CLOSED: "Cerrado", CANCELLED: "Cancelado",
 };
 const PTW_STATUS_COLOR: Record<string, string> = {
-  DRAFT: "bg-white/5 text-text-industrial/60 border-white/10",
-  REQUESTED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  APPROVED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
-  ACTIVE: "bg-green-500/10 text-green-400 border-green-500/20",
+  DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
+  REQUESTED: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  APPROVED: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  REJECTED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  ACTIVE: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  CANCELLED: "bg-white/5 text-text-industrial/50 border-white/10",
+  CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
 interface LinkedPermit {
@@ -138,7 +138,7 @@ function canEditStatus(status: string): boolean {
   return status === "PLANNED" || status === "IN_PROGRESS" || status === "ON_HOLD";
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 const sectionLabelCls = "block font-semibold uppercase tracking-wider px-2 py-1 rounded-sm";
 const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", color: "white", fontSize: "1.2rem" };
@@ -148,10 +148,10 @@ const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", col
 function CategoryBadge({ type }: { type: string }) {
   const t = useT();
   if (type === "INSPECTION")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
   if (type === "CORRECTIVE")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
 }
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
@@ -161,15 +161,15 @@ function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; du
   const isClosed = status === "CLOSED" || status === "CANCELLED";
   const isOpen   = !isClosed;
   const isOverdue = isOpen && !!dueDate && parseLocalDate(dueDate) < new Date();
-  if (isClosed)          return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">{t("wo.status.closed")}</span>;
+  if (isClosed)          return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("wo.status.closed")}</span>;
   if (status === "ON_HOLD") {
-    if (deferralStatus === "REJECTED") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("wo.status.postponedRejected")}</span>;
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
+    if (deferralStatus === "REJECTED") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.postponedRejected")}</span>;
+    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
   }
-  if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
-  if (status === "IN_PROGRESS") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/20">En Progreso</span>;
-  if (status === "PLANNED")     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-400 border-blue-500/20">Planificada</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("wo.status.open")}</span>;
+  if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
+  if (status === "IN_PROGRESS") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">En Progreso</span>;
+  if (status === "PLANNED")     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">Planificada</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("wo.status.open")}</span>;
 }
 
 // ── HoldModal ─────────────────────────────────────────────────────────────────
@@ -234,10 +234,10 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-sm font-bold text-white">{t("wo.hold")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-sm font-bold text-fg">{t("wo.hold")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -268,17 +268,17 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
               className={`${inputCls} disabled:opacity-50`}
             />
           </div>
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
-        <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} disabled={isBusy} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white disabled:opacity-50">{t("common.cancel")}</button>
+        <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} disabled={isBusy} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg disabled:opacity-50">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={isBusy}
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 disabled:opacity-50 flex items-center gap-1.5">
+            className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-fg font-bold text-xs hover:bg-fg/10 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             Posponer
           </button>
           <button onClick={() => { void onSubmitForReview(); }} disabled={isBusy}
-            className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
             Enviar a Revisión
           </button>
@@ -306,19 +306,19 @@ const CancelModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-sm font-bold text-white">{t("wo.cancel")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-sm font-bold text-fg">{t("wo.cancel")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-3">
           <label className={labelCls}>{t("wo.cancelReason")}</label>
           <textarea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls} />
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -355,10 +355,10 @@ const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-sm font-bold text-white">{t("wo.reopen")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-sm font-bold text-fg">{t("wo.reopen")}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="p-6 space-y-3">
           <p className="text-[11px] text-text-industrial/70 leading-snug">
@@ -366,11 +366,11 @@ const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
           </p>
           <label className={labelCls}>{t("wo.reopenReason")}</label>
           <textarea rows={4} value={reason} onChange={e => setReason(e.target.value)} className={inputCls} placeholder={t("wo.reopenReasonPlaceholder")} />
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-300 font-bold text-xs hover:bg-orange-500/30 disabled:opacity-50">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
+          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.reopen")}
           </button>
         </div>
@@ -385,9 +385,9 @@ const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
 
 function CritBadge({ crit }: { crit: string }) {
   const cls =
-    crit === "A" ? "bg-red-500/10 text-red-400 border-red-500/20"
-    : crit === "B" ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-    : "bg-white/5 text-white/40 border-white/10";
+    crit === "A" ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+    : crit === "B" ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20"
+    : "bg-fg/5 text-fg/40 border-fg/10";
   return (
     <span className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold border shrink-0 ${cls}`}>
       {crit || "?"}
@@ -414,7 +414,7 @@ const PhaseHeader: React.FC<{
     </span>
     {collapsible ? (
       <button type="button" onClick={onToggle} className="flex items-center gap-1.5 flex-1 text-left group">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-white/70 group-hover:text-white transition-colors">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70 group-hover:text-fg transition-colors">
           {label}
         </span>
         {hint && !expanded && (
@@ -423,7 +423,7 @@ const PhaseHeader: React.FC<{
         <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 ml-1 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`} />
       </button>
     ) : (
-      <span className="text-[11px] font-bold uppercase tracking-widest text-white/70 flex-1">{label}</span>
+      <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70 flex-1">{label}</span>
     )}
     {action}
   </div>
@@ -457,14 +457,14 @@ const ProgressNoteCard: React.FC<{
     return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+    <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
       <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
         <Icon className="w-3 h-3" />
         <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
         <span className="ml-auto">{fmtTime(note.createdAt)}</span>
         {onDelete && (
           <button type="button" onClick={onDelete}
-            className="p-1 -mr-1 text-text-industrial/40 hover:text-red-400 transition-colors"
+            className="p-1 -mr-1 text-text-industrial/40 hover:text-red-700 dark:text-red-400 transition-colors"
             title="Borrar avance">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -480,7 +480,7 @@ const ProgressNoteCard: React.FC<{
         <AuthedAudio src={note.fileUrl} controls className="w-full" />
       )}
       {note.text && (
-        <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>
+        <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{note.text}</p>
       )}
     </div>
   );
@@ -524,12 +524,12 @@ const ProgressNotesPanel: React.FC<{
         </p>
         <div className="flex items-center gap-2">
           {visualNotes.length > 0 && (
-            <div className="flex items-center gap-0.5 border border-white/10 rounded-lg p-0.5">
+            <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
                 title="Vista lista"
-                className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
               >
                 <List className="w-3.5 h-3.5" />
               </button>
@@ -537,7 +537,7 @@ const ProgressNotesPanel: React.FC<{
                 type="button"
                 onClick={() => setViewMode("grid")}
                 title={`Vista mosaico (${visualNotes.length} fotos/videos)`}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
               </button>
@@ -545,7 +545,7 @@ const ProgressNotesPanel: React.FC<{
           )}
           {canAdd && (
             <button type="button" onClick={onAdd}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110">
               <Plus className="w-3.5 h-3.5" />
               Registrar avance
             </button>
@@ -565,7 +565,7 @@ const ProgressNotesPanel: React.FC<{
               key={n.id}
               type="button"
               onClick={() => setLightbox(n)}
-              className="relative aspect-square bg-white/5 border border-white/10 rounded-lg overflow-hidden group hover:border-accent/40 transition-colors"
+              className="relative aspect-square bg-fg/5 border border-fg/10 rounded-lg overflow-hidden group hover:border-accent/40 transition-colors"
               title={n.text ?? undefined}
             >
               {n.kind === "PHOTO" ? (
@@ -574,11 +574,11 @@ const ProgressNotesPanel: React.FC<{
                 <>
                   <AuthedVideo src={n.fileUrl!} className="w-full h-full object-cover" muted />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                    <VideoIcon className="w-6 h-6 text-white drop-shadow" />
+                    <VideoIcon className="w-6 h-6 text-fg drop-shadow" />
                   </div>
                 </>
               )}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 text-[9px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 text-[9px] text-fg/80 opacity-0 group-hover:opacity-100 transition-opacity">
                 {new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </div>
             </button>
@@ -602,7 +602,7 @@ const ProgressNotesPanel: React.FC<{
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full bg-fg/10 hover:bg-fg/20 text-fg transition-colors"
             title="Cerrar"
           >
             <X className="w-5 h-5" />
@@ -614,9 +614,9 @@ const ProgressNotesPanel: React.FC<{
               <AuthedVideo src={lightbox.fileUrl!} controls autoPlay className="max-h-[85vh] rounded-lg" />
             )}
             {lightbox.text && (
-              <p className="text-sm text-white/90 max-w-2xl text-center whitespace-pre-line">{lightbox.text}</p>
+              <p className="text-sm text-fg/90 max-w-2xl text-center whitespace-pre-line">{lightbox.text}</p>
             )}
-            <p className="text-[10px] text-white/40">
+            <p className="text-[10px] text-fg/40">
               {new Date(lightbox.createdAt).toLocaleString("es-AR")}
             </p>
           </div>
@@ -1120,23 +1120,23 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Wrench className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("wo.entityLabel")}</p>
-              <h2 className="text-sm font-bold text-white font-mono">{workOrder.workOrderCode}</h2>
+              <h2 className="text-sm font-bold text-fg font-mono">{workOrder.workOrderCode}</h2>
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
         </div>
 
@@ -1145,20 +1145,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {/* ── 1. INFORMACIÓN ── */}
           <section>
-            <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-white/10 text-white/60" borderCls="border-white/10" />
+            <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
             <div className="mt-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {([
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
-                [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-white"],
+                [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-fg"],
                 [t("wo.modal.type"),       null, null, <CategoryBadge key="cat" type={workOrder.type} />],
                 [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
-                [t("wo.modal.priority"),   workOrder.priority,              "text-white"],
-                [t("wo.modal.criticality"),workOrder.criticality,           "text-white"],
-                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-white"],
-                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-400 font-semibold" : "text-white"],
+                [t("wo.modal.priority"),   workOrder.priority,              "text-fg"],
+                [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
+                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg"],
+                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg"],
               ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-2.5">
+                <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
                   {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
                 </div>
@@ -1170,13 +1170,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               const closed    = deferralStatus === "CLOSED" || deferralStatus === "EXPIRED";
               const rejected  = deferralStatus === "REJECTED";
               const badge = inProcess
-                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-300 border-blue-500/30" }
+                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" }
                 : approved
-                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" }
+                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
                 : rejected
-                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-300 border-red-500/30" }
+                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30" }
                 : closed
-                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-white/10 text-text-industrial/60 border-white/10" }
+                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-fg/10 text-text-industrial/60 border-fg/10" }
                 : null;
               const originalDue = workOrder.dueDate;
               const postponedTo = deferralTargetDate;
@@ -1186,10 +1186,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               const boxCls = rejected
                 ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
                 : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
-              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-400";
-              const textCls  = rejected ? "text-xs text-red-300" : "text-xs text-yellow-300";
-              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-400/70";
-              const strongCls = rejected ? "font-semibold text-red-300" : "font-semibold text-yellow-300";
+              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-700 dark:text-yellow-400";
+              const textCls  = rejected ? "text-xs text-red-700 dark:text-red-300" : "text-xs text-yellow-700 dark:text-yellow-300";
+              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-700 dark:text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-700 dark:text-yellow-400/70";
+              const strongCls = rejected ? "font-semibold text-red-700 dark:text-red-300" : "font-semibold text-yellow-700 dark:text-yellow-300";
               return (
                 <div className={boxCls}>
                   <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -1214,12 +1214,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   </div>
                   {rejected && workOrder.status === "ON_HOLD" && (
                     <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-red-300/80">El diferimiento fue rechazado. Reanude la OT o solicite uno nuevo.</p>
+                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la OT o solicite uno nuevo.</p>
                       <button
                         type="button"
                         onClick={() => { void handleResubmitDeferral(); }}
                         disabled={resuming}
-                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
+                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-800 dark:text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
                       >
                         {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                         Re-solicitar diferimiento
@@ -1227,7 +1227,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     </div>
                   )}
                   {deferralHistory.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-white/10">
+                    <div className="mt-2 pt-2 border-t border-fg/10">
                       <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
                       <div className="space-y-0.5">
                         {deferralHistory.map(d => (
@@ -1235,10 +1235,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                             type="button"
                             key={d.id}
                             onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
-                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-white/5 transition-colors text-left"
+                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-fg/5 transition-colors text-left"
                           >
                             <span className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-mono text-yellow-300/80 truncate">{d.deferralCode}</span>
+                              <span className="font-mono text-yellow-700 dark:text-yellow-300/80 truncate">{d.deferralCode}</span>
                               <DeferralStatusBadge status={d.status} />
                             </span>
                             <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
@@ -1252,8 +1252,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             })()}
             {workOrder.cancelReason && (
               <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
-                <p className="text-xs text-red-300">{workOrder.cancelReason}</p>
+                <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
+                <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
               </div>
             )}
             </div>{/* end mt-3 */}
@@ -1283,8 +1283,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         onClick={() => setDepartment(department === d ? "" : d)}
                         className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
                           department === d
-                            ? "bg-accent text-white border-accent"
-                            : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                            ? "bg-accent text-accent-fg border-accent"
+                            : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
                         }`}
                       >{d}</button>
                     ))}
@@ -1324,7 +1324,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <label
                     onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
                     title={isEditable ? t("wo.ai.criteriaTooltip") : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.acceptanceCriteria")}{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
@@ -1335,7 +1335,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <label
                     onClick={isEditable ? handleLotoClick : undefined}
                     title={isEditable ? t("wo.ai.lotoTooltip") : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.loto")}{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
@@ -1346,7 +1346,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <label
                     onClick={isEditable ? handleRiskClick : undefined}
                     title={isEditable ? t("wo.ai.riskTooltip") : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.riskLevel")}
@@ -1355,14 +1355,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   </label>
                   <div className="flex gap-1.5">
                     {([
-                      ["LOW",      "L", "bg-success-sea text-primary-bg border-success-sea",       "text-success-sea border-success-sea/40"],
-                      ["MEDIUM",   "M", "bg-yellow-400 text-primary-bg border-yellow-400",         "text-yellow-400 border-yellow-400/40"],
-                      ["HIGH",     "H", "bg-red-500 text-white border-red-500",                    "text-red-400 border-red-400/40"],
-                      ["CRITICAL", "C", "bg-red-700 text-white border-red-700",                    "text-red-600 border-red-600/40"],
+                      ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
+                      ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+                      ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                    "text-red-700 dark:text-red-400 border-red-400/40"],
+                      ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                    "text-red-600 border-red-600/40"],
                     ] as [string, string, string, string][]).map(([val, label, activeCls, inactiveLabelCls]) => (
                       <button key={val} type="button" disabled={!isEditable || loadingRisk}
                         onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                        className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-white/5 ${inactiveLabelCls} hover:bg-white/10`}`}>
+                        className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
                         {label}
                       </button>
                     ))}
@@ -1376,7 +1376,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <label
                     onClick={isEditable ? handleConsequenceClick : undefined}
                     title={isEditable ? t("wo.modal.consequenceTooltip") : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-white cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
                   >
                     {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.consequenceTitle")}
@@ -1410,7 +1410,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {/* ── 3. DOCUMENTO CHECKLIST ── */}
           <section className="space-y-3">
-            <PhaseHeader n={3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-400" borderCls="border-teal-500/25" />
+            <PhaseHeader n={3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
             <div className="space-y-1.5 mt-3">
               {checklistDocUrl && !checklistDocFile && (
                 <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
@@ -1425,7 +1425,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <PhaseHeader
               n={4}
               label="Permisos de trabajo"
-              dotCls="bg-yellow-500/15 text-yellow-400"
+              dotCls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
               borderCls="border-yellow-500/25"
               action={isEditable ? (
                 <button
@@ -1441,12 +1441,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
             {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
               <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                <ShieldAlert className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-yellow-200 font-semibold mb-1">Esta OT podría requerir permiso de trabajo</p>
-                  <p className="text-[11px] text-yellow-200/80 leading-snug mb-2">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200 font-semibold mb-1">Esta OT podría requerir permiso de trabajo</p>
+                  <p className="text-[11px] text-yellow-800 dark:text-yellow-200/80 leading-snug mb-2">
                     Por el contenido del trabajo, sugerimos: <span className="font-bold">{advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}</span>.
-                    <span className="block text-[10px] text-yellow-200/60 mt-0.5">
+                    <span className="block text-[10px] text-yellow-800 dark:text-yellow-200/60 mt-0.5">
                       Coincidencias detectadas: {advisoryMatches.flatMap(m => m.matchedKeywords).slice(0, 6).join(", ")}
                     </span>
                   </p>
@@ -1456,7 +1456,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         key={m.type}
                         type="button"
                         onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
-                        className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
+                        className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
                       >
                         Crear {PERMIT_TYPE_LABEL[m.type]}
                       </button>
@@ -1478,7 +1478,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     key={p.id}
                     type="button"
                     onClick={() => setPermitModalState({ kind: "edit", permit: p })}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:border-accent/30 text-left transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 hover:border-accent/30 text-left transition-colors"
                   >
                     <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -1489,7 +1489,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         </span>
                         <span className="text-[10px] text-text-industrial/70">{PERMIT_TYPE_LABEL[p.type as PermitType] ?? p.type}</span>
                       </div>
-                      <p className="text-xs text-white/80 truncate">{p.description}</p>
+                      <p className="text-xs text-fg/80 truncate">{p.description}</p>
                     </div>
                     <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
                   </button>
@@ -1501,7 +1501,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── 5. AVANCES ── */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
-              <PhaseHeader n={5} label="Avances" dotCls="bg-violet-500/15 text-violet-400" borderCls="border-violet-500/25" />
+              <PhaseHeader n={5} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
                 canAdd={isEditable}
@@ -1514,17 +1514,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {/* ── 6. RESULTADO ── */}
           <section className="space-y-4">
-            <PhaseHeader n={6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.result")} *</label>
               <div className="flex gap-2">
                 {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
-                  ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
+                  ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
                   <button key={val} type="button" disabled={!isEditable}
                     onClick={() => handleWoResultChange(val)}
-                    className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-white/5 text-text-industrial/50 border-white/10 hover:border-white/30"}`}>
+                    className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
                     {label}
                   </button>
                 ))}
@@ -1541,7 +1541,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     onClick={() => { void handleRewriteDeficiencies(); }}
                     disabled={!isEditable || loadingRewrite || !deficienciasText.trim()}
                     title={!deficienciasText.trim() ? t("wo.modal.rewriteEmptyError") : t("wo.modal.rewriteTooltip")}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {loadingRewrite
                       ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -1614,9 +1614,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
 
             {/* ── Repuestos utilizados ── */}
-            <div className="border border-white/10 rounded-xl p-4 space-y-3">
+            <div className="border border-fg/10 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{t("wo.spares.section")}</p>
+                <p className="text-[10px] font-bold text-fg/50 uppercase tracking-wider">{t("wo.spares.section")}</p>
                 {isEditable && (
                   <button type="button" onClick={() => setAddingUsage(v => !v)}
                     className="text-[10px] text-accent/70 hover:text-accent underline">
@@ -1628,7 +1628,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               {spareUsages.length > 0 && (
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-[10px] text-white/30 border-b border-white/10">
+                    <tr className="text-[10px] text-fg/30 border-b border-fg/10">
                       <th className="text-left py-1">{t("wo.spares.colSpare")}</th>
                       <th className="text-right py-1">{t("wo.spares.colQty")}</th>
                       <th className="text-left py-1 pl-2">{t("wo.spares.colUnit")}</th>
@@ -1637,18 +1637,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   </thead>
                   <tbody>
                     {spareUsages.map((u, i) => (
-                      <tr key={i} className="border-b border-white/5 last:border-0">
+                      <tr key={i} className="border-b border-fg/5 last:border-0">
                         <td className="py-1.5">
                           <div className="flex items-center gap-1.5">
                             <CritBadge crit={u.criticality} />
-                            <span className={u.qty > u.available ? "text-orange-300" : "text-white"}>{u.spareName}</span>
+                            <span className={u.qty > u.available ? "text-orange-700 dark:text-orange-300" : "text-fg"}>{u.spareName}</span>
                           </div>
                         </td>
-                        <td className="py-1.5 text-right text-white/70">{u.qty}</td>
-                        <td className="py-1.5 pl-2 text-white/40">{u.unit}</td>
+                        <td className="py-1.5 text-right text-fg/70">{u.qty}</td>
+                        <td className="py-1.5 pl-2 text-fg/40">{u.unit}</td>
                         {isEditable && (
                           <td className="py-1.5 text-right">
-                            <button onClick={() => removeUsage(i)} className="text-white/20 hover:text-red-400 transition-colors">
+                            <button onClick={() => removeUsage(i)} className="text-fg/20 hover:text-red-700 dark:text-red-400 transition-colors">
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </td>
@@ -1660,13 +1660,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               )}
 
               {spareUsages.some(u => u.qty > u.available) && (
-                <p className="text-[10px] text-orange-400">
+                <p className="text-[10px] text-orange-700 dark:text-orange-400">
                   {t("wo.spares.exceedsStock")}
                 </p>
               )}
 
               {addingUsage && (
-                <div className="space-y-1.5 pt-1 border-t border-white/10">
+                <div className="space-y-1.5 pt-1 border-t border-fg/10">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 relative">
                       <input
@@ -1679,22 +1679,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         className={inputCls}
                       />
                       {usageDropdown && (
-                        <div className="absolute z-20 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                        <div className="absolute z-20 w-full mt-1 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
                           {(() => {
                             const q = usageSearch.toLowerCase();
                             const filtered = q
                               ? woSpares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
                               : woSpares.slice(0, 30);
-                            if (filtered.length === 0) return <p className="px-3 py-2 text-xs text-white/30">{t("common.noResults")}</p>;
+                            if (filtered.length === 0) return <p className="px-3 py-2 text-xs text-fg/30">{t("common.noResults")}</p>;
                             return filtered.map(s => (
                               <button key={s.id} type="button"
                                 onMouseDown={() => { setUsageSpareId(s.id); setUsageSearch(`${s.sku} — ${s.name}`); setUsageDropdown(false); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5">
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-fg/5">
                                 <CritBadge crit={s.criticality} />
-                                <span className="flex-1 text-left text-white">{s.sku} — {s.name}</span>
+                                <span className="flex-1 text-left text-fg">{s.sku} — {s.name}</span>
                                 {s.available <= 0
-                                  ? <span className="text-red-400 text-[10px] font-semibold shrink-0">{t("wo.spares.outOfStock")}</span>
-                                  : <span className="text-white/30 text-[10px] shrink-0">{t("wo.spares.available")}: {s.available} {s.unit}</span>
+                                  ? <span className="text-red-700 dark:text-red-400 text-[10px] font-semibold shrink-0">{t("wo.spares.outOfStock")}</span>
+                                  : <span className="text-fg/30 text-[10px] shrink-0">{t("wo.spares.available")}: {s.available} {s.unit}</span>
                                 }
                               </button>
                             ));
@@ -1715,7 +1715,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     const spare = woSpares.find(s => s.id === usageSpareId);
                     const qty = parseFloat(usageQty);
                     if (spare && qty > spare.available) {
-                      return <p className="text-[10px] text-orange-400">{t("wo.spares.insufficientStock").replace("{avail}", String(spare.available)).replace("{unit}", spare.unit).replace("{req}", String(qty))}</p>;
+                      return <p className="text-[10px] text-orange-700 dark:text-orange-400">{t("wo.spares.insufficientStock").replace("{avail}", String(spare.available)).replace("{unit}", spare.unit).replace("{req}", String(qty))}</p>;
                     }
                     return null;
                   })()}
@@ -1723,7 +1723,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               )}
 
               {spareUsages.length === 0 && !addingUsage && (
-                <p className="text-xs text-white/20">{t("wo.spares.empty")}</p>
+                <p className="text-xs text-fg/20">{t("wo.spares.empty")}</p>
               )}
             </div>
 
@@ -1731,17 +1731,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             {woResult === "WITH_DEFICIENCIES" && defectPrompt !== "idle" && (
               <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <p className="text-xs font-semibold text-orange-300">{t("wo.defectPrompt.question")}</p>
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400 shrink-0" />
+                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">{t("wo.defectPrompt.question")}</p>
                 </div>
                 {defectPrompt === "ask" && (
                   <div className="flex gap-2">
                     <button type="button" onClick={() => { void openDefectRecord(); }}
-                      className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+                      className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
                       {t("wo.defectPrompt.openRecord")}
                     </button>
                     <button type="button" onClick={() => setDefectPrompt("declined")}
-                      className="flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 text-text-industrial/50 font-bold text-xs hover:border-white/20 transition-all">
+                      className="flex-1 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial/50 font-bold text-xs hover:border-fg/20 transition-all">
                       {t("wo.defectPrompt.skipRecord")}
                     </button>
                   </div>
@@ -1768,7 +1768,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
           {isMercurio && (
             <>
-              <section className="space-y-3 border-t border-white/10 pt-4">
+              <section className="space-y-3 border-t border-fg/10 pt-4">
                 <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">{t("wo.modal.commMethodSection")}</p>
                 <div className="flex gap-3 flex-wrap">
                   {(["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const).map(opt => (
@@ -1776,15 +1776,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       onClick={() => toggleArr(commMethod, setCommMethod, opt)}
                       className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
                         commMethod.includes(opt)
-                          ? "bg-accent text-white border-accent"
-                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                          ? "bg-accent text-accent-fg border-accent"
+                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
                       }`}
                     >{opt}</button>
                   ))}
                 </div>
               </section>
 
-              <section className="space-y-3 border-t border-white/10 pt-4">
+              <section className="space-y-3 border-t border-fg/10 pt-4">
                 <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">{t("wo.modal.distribution")}</p>
                 <div className="flex gap-2 flex-wrap">
                   {(["GGE","PDT","JTE","JOP","JRH","JVE","JCO","JSE","JUR","ADM","CAP","JMA"] as const).map(code => (
@@ -1792,8 +1792,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       onClick={() => toggleArr(distribution, setDistribution, code)}
                       className={`w-12 py-1 rounded text-xs font-bold border transition-colors ${
                         distribution.includes(code)
-                          ? "bg-accent text-white border-accent"
-                          : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-accent/40"
+                          ? "bg-accent text-accent-fg border-accent"
+                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
                       }`}
                     >{code}</button>
                   ))}
@@ -1804,38 +1804,38 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {closingWarning && (
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
-              <p className="text-xs text-orange-300">{closingWarning}</p>
-              <button onClick={onSaved} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+              <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
+              <button onClick={onSaved} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
                 {t("common.acceptAndClose")}
               </button>
             </div>
           )}
-          {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
             </button>
             {workOrder.status === "PLANNED" && (
               <button onClick={() => { void handleStart(); }} disabled={starting}
-                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
                 {starting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
                 Iniciar OT
               </button>
             )}
             {workOrder.status === "ON_HOLD" && (
               <button onClick={() => { void handleResume(); }} disabled={resuming}
-                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
                 {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
                 {t("wo.resume")}
               </button>
             )}
             <button onClick={() => canPostpone && onOpenAction(workOrder, "hold")} disabled={!canPostpone}
-              className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
+              className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.postpone")}
             </button>
             <button onClick={() => { void onClose_WO(); }} disabled={!canClose || closing}
@@ -1846,18 +1846,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
           <div className="flex gap-2">
             <button onClick={() => canCancel && onOpenAction(workOrder, "cancel")} disabled={!canCancel}
-              className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
+              className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.cancelWO")}
             </button>
             {isClosed && isAdmin && (
               <button onClick={() => onOpenAction(workOrder, "reopen")}
-                className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold text-xs hover:bg-orange-500/20">
+                className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/20">
                 {t("wo.reopen")}
               </button>
             )}
             {isEditable && canManage && (
               <button onClick={() => { void onSave(); }} disabled={saving}
-                className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
               </button>
             )}
@@ -1905,24 +1905,24 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
 };
 
 const KANBAN_COLS: Array<{ colId: string; statuses: string[]; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
-  { colId: "PLANNED",     statuses: ["PLANNED"],              labelKey: "wo.kanban.planned",    headerCls: "text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
-  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          labelKey: "wo.kanban.inProgress", headerCls: "text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
-  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              labelKey: "wo.kanban.onHold",     headerCls: "text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
-  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], labelKey: "wo.kanban.closed",     headerCls: "text-white/30",    borderCls: "border-t-2 border-white/15",       droppable: false },
+  { colId: "PLANNED",     statuses: ["PLANNED"],              labelKey: "wo.kanban.planned",    headerCls: "text-blue-700 dark:text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
+  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          labelKey: "wo.kanban.inProgress", headerCls: "text-emerald-700 dark:text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
+  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              labelKey: "wo.kanban.onHold",     headerCls: "text-yellow-700 dark:text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
+  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], labelKey: "wo.kanban.closed",     headerCls: "text-fg/30",    borderCls: "border-t-2 border-fg/15",       droppable: false },
 ];
 
 function DeferralStatusBadge({ status }: { status: string }) {
   const t = useT();
   const map: Record<string, { label: string; cls: string }> = {
-    REQUESTED:    { label: t("wo.deferral.requested"),     cls: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-    UNDER_REVIEW: { label: t("wo.deferral.underReview"),   cls: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-    APPROVED:     { label: t("wo.deferral.approved"),      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-    ACTIVE:       { label: t("wo.deferral.approvedActive"), cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-    REJECTED:     { label: t("wo.deferral.rejected"),      cls: "bg-red-500/15 text-red-300 border-red-500/30" },
-    EXPIRED:      { label: t("wo.deferral.expired"),       cls: "bg-white/5 text-text-industrial/60 border-white/10" },
-    CLOSED:       { label: t("wo.deferral.closed"),        cls: "bg-white/5 text-text-industrial/60 border-white/10" },
+    REQUESTED:    { label: t("wo.deferral.requested"),     cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+    UNDER_REVIEW: { label: t("wo.deferral.underReview"),   cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+    APPROVED:     { label: t("wo.deferral.approved"),      cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+    ACTIVE:       { label: t("wo.deferral.approvedActive"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+    REJECTED:     { label: t("wo.deferral.rejected"),      cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30" },
+    EXPIRED:      { label: t("wo.deferral.expired"),       cls: "bg-fg/5 text-text-industrial/60 border-fg/10" },
+    CLOSED:       { label: t("wo.deferral.closed"),        cls: "bg-fg/5 text-text-industrial/60 border-fg/10" },
   };
-  const meta = map[status] ?? { label: status, cls: "bg-white/5 text-text-industrial/60 border-white/10" };
+  const meta = map[status] ?? { label: status, cls: "bg-fg/5 text-text-industrial/60 border-fg/10" };
   return (
     <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${meta.cls}`}>
       {meta.label}
@@ -1941,18 +1941,18 @@ function KanbanCardContent({ wo, deferralMap }: {
     <>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <span className="font-mono font-bold text-white text-[10px]">{wo.workOrderCode}</span>
+          <span className="font-mono font-bold text-fg text-[10px]">{wo.workOrderCode}</span>
           <span className="ml-1.5"><VesselLabel code={wo.vesselCode} className="text-[10px]" showCode /></span>
         </div>
         <CategoryBadge type={wo.type} />
       </div>
       <div>
-        <p className="text-xs text-white font-medium line-clamp-1">{wo.assetName ?? "—"}</p>
+        <p className="text-xs text-fg font-medium line-clamp-1">{wo.assetName ?? "—"}</p>
         {wo.title && <p className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{wo.title}</p>}
       </div>
       <div className="flex items-center justify-between gap-2">
         {wo.dueDate ? (
-          <span className={`text-[10px] font-medium ${isOverdue ? "text-red-400" : "text-text-industrial/50"}`}>
+          <span className={`text-[10px] font-medium ${isOverdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/50"}`}>
             {isOverdue ? "⚠ " : ""}{fmtDate(wo.dueDate)}
           </span>
         ) : <span />}
@@ -1962,7 +1962,7 @@ function KanbanCardContent({ wo, deferralMap }: {
       </div>
       {deferral && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-white/5 text-yellow-300 border-yellow-500/30 font-mono">
+          <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-fg/5 text-yellow-700 dark:text-yellow-300 border-yellow-500/30 font-mono">
             {deferral.deferralCode}
           </span>
           <DeferralStatusBadge status={deferral.status} />
@@ -1982,12 +1982,12 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
 }) {
   const isDraggable = wo.status === "PLANNED" || wo.status === "IN_PROGRESS" || wo.status === "ON_HOLD";
   const isDragging  = draggingId === wo.id;
-  const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-white/10";
+  const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-fg/10";
   const deferral    = deferralMap.get(wo.id);
   const rejected    = deferral?.status === "REJECTED";
   const borderCls   = rejected
     ? "border-red-500/40 bg-red-500/[0.04] ring-1 ring-red-500/20"
-    : "border-white/10";
+    : "border-fg/10";
 
   return (
     <div
@@ -1999,10 +1999,10 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      className={`w-full bg-white/[0.03] border rounded-xl p-3 space-y-2 select-none
+      className={`w-full bg-fg/[0.03] border rounded-xl p-3 space-y-2 select-none
         ${borderCls}
         ${prioLeft}
-        ${isDragging ? "opacity-30" : "hover:bg-white/[0.07]"}
+        ${isDragging ? "opacity-30" : "hover:bg-fg/[0.07]"}
         ${isDraggable ? "cursor-grab" : "cursor-pointer"}
         ${isLoading ? "opacity-60 pointer-events-none" : ""}
         transition-colors`}
@@ -2070,11 +2070,11 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
               onDragOver={e => { if (col.droppable) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
               onDragLeave={() => setOverCol(null)}
               onDrop={e => { e.preventDefault(); void handleDrop(e, col.colId); }}
-              className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-white/[0.05] ring-1 ring-accent/30" : ""}`}
+              className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(col.labelKey)}</span>
-                <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-white/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
+                <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
@@ -2227,7 +2227,7 @@ export const WorkOrdersPage: React.FC = () => {
       sortValue: r => `${r.vesselCode} ${r.workOrderCode}`,
       render: r => (
         <div>
-          <div className="font-mono font-bold text-white text-xs">{r.workOrderCode}</div>
+          <div className="font-mono font-bold text-fg text-xs">{r.workOrderCode}</div>
           <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" showCode /></div>
         </div>
       ),
@@ -2237,7 +2237,7 @@ export const WorkOrdersPage: React.FC = () => {
       sortValue: r => r.assetName ?? r.title ?? "",
       render: r => (
         <div>
-          <div className="text-xs text-white font-medium">{r.assetName ?? "—"}</div>
+          <div className="text-xs text-fg font-medium">{r.assetName ?? "—"}</div>
           <div className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{r.title?.trim() || "—"}</div>
         </div>
       ),
@@ -2250,7 +2250,7 @@ export const WorkOrdersPage: React.FC = () => {
       render: r => {
         if (!r.dueDate) return <span className="text-xs text-text-industrial/30">—</span>;
         const overdue = r.status !== "CLOSED" && r.status !== "CANCELLED" && parseLocalDate(r.dueDate) < new Date();
-        return <span className={`text-xs whitespace-nowrap font-medium ${overdue ? "text-red-400" : "text-text-industrial/60"}`}>{fmtDate(r.dueDate)}</span>;
+        return <span className={`text-xs whitespace-nowrap font-medium ${overdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{fmtDate(r.dueDate)}</span>;
       },
     },
     {
@@ -2264,7 +2264,7 @@ export const WorkOrdersPage: React.FC = () => {
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); navigate(`/deferrals?autoCode=${deferral.deferralCode}`); }}
-                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-yellow-300 border-yellow-500/30 font-mono whitespace-nowrap hover:bg-yellow-500/10 cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-yellow-700 dark:text-yellow-300 border-yellow-500/30 font-mono whitespace-nowrap hover:bg-yellow-500/10 cursor-pointer transition-colors"
               >
                 <ExternalLink className="w-2.5 h-2.5 shrink-0" />
                 {deferral.deferralCode}
@@ -2280,27 +2280,27 @@ export const WorkOrdersPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Wrench} title={t("page.workOrders")} total={data?.total} onReload={reload}>
         {canManage && (
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 transition-all">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}
           </button>
         )}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
         <button
           onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(selectedVesselCode); } finally { setGeneratingReport(false); } }}
           disabled={generatingReport}
           title={selectedVesselCode ? t("wo.page.printOpenForVessel").replace("{vessel}", selectedVesselCode) : t("wo.page.printOpenAll")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
         >
           {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} {t("wo.page.openReport")}{selectedVesselCode ? ` (${selectedVesselCode})` : ""}
         </button>
-        <div className="flex items-center gap-0.5 border border-white/10 rounded-lg p-0.5">
+        <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
           <button
             type="button"
             onClick={() => setViewMode("list")}
             title="Vista lista"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
           >
             <List className="w-3.5 h-3.5" />
           </button>
@@ -2308,7 +2308,7 @@ export const WorkOrdersPage: React.FC = () => {
             type="button"
             onClick={() => setViewMode("kanban")}
             title="Vista Kanban"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-white/10 text-white" : "text-text-industrial/40 hover:text-white"}`}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
@@ -2316,7 +2316,7 @@ export const WorkOrdersPage: React.FC = () => {
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
-      {tableActionError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
+      {tableActionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
 
       <div className="flex flex-wrap items-center gap-1.5">
         {([
@@ -2341,7 +2341,7 @@ export const WorkOrdersPage: React.FC = () => {
               className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
                 active
                   ? "bg-accent/20 text-accent border-accent/40"
-                  : "bg-white/5 text-text-industrial/60 border-white/10 hover:border-white/20 hover:text-text-industrial"
+                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-fg/20 hover:text-text-industrial"
               }`}
             >
               {t(opt.labelKey)}

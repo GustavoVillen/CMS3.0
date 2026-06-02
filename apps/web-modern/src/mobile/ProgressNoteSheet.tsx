@@ -329,24 +329,24 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-md bg-[#0D1B2A] border-t border-white/10 rounded-t-2xl flex flex-col max-h-[90vh]"
+        className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle */}
         <div className="flex justify-center pt-2">
-          <div className="w-10 h-1 rounded-full bg-white/20" />
+          <div className="w-10 h-1 rounded-full bg-fg/20" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <span className="text-sm font-bold text-white">Registrar avance</span>
-          <button type="button" onClick={onClose} className="p-1.5 text-text-industrial/40 hover:text-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-fg/10">
+          <span className="text-sm font-bold text-fg">Registrar avance</span>
+          <button type="button" onClick={onClose} className="p-1.5 text-text-industrial/40 hover:text-fg">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tipo de avance */}
-        <div className="grid grid-cols-4 gap-1.5 p-3 border-b border-white/10">
+        <div className="grid grid-cols-4 gap-1.5 p-3 border-b border-fg/10">
           {([
             { id: "TEXT" as Kind,  label: "Texto", Icon: Type },
             { id: "PHOTO" as Kind, label: "Foto",  Icon: Camera },
@@ -360,7 +360,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
               className={`flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-colors ${
                 kind === id
                   ? "bg-accent/15 border-accent/40 text-accent"
-                  : "bg-white/5 border-white/10 text-text-industrial/60"
+                  : "bg-fg/5 border-fg/10 text-text-industrial/60"
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -381,7 +381,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 onChange={(e) => setText(e.target.value)}
                 rows={6}
                 placeholder="¿Qué hiciste? ¿Qué notaste?"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
             </div>
           )}
@@ -396,13 +396,13 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 </div>
               ) : filePreview ? (
                 <div className="relative">
-                  <img src={filePreview} alt="Foto" className="w-full rounded-xl border border-white/10 object-cover max-h-80" />
-                  <button type="button" onClick={resetMedia} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white">
+                  <img src={filePreview} alt="Foto" className="w-full rounded-xl border border-fg/10 object-cover max-h-80" />
+                  <button type="button" onClick={resetMedia} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-fg">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15">
+                <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 active:bg-fg/15">
                   <Camera className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
                   <span className="text-[10px] text-text-industrial/40 normal-case font-normal">Se comprime automáticamente</span>
@@ -414,7 +414,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 onChange={(e) => setText(e.target.value)}
                 rows={2}
                 placeholder="Descripción opcional"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
             </>
           )}
@@ -424,8 +424,8 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
             <>
               {filePreview ? (
                 <div className="relative">
-                  <video src={filePreview} controls className="w-full rounded-xl border border-white/10 max-h-80" />
-                  <button type="button" onClick={() => { resetMedia(); }} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white">
+                  <video src={filePreview} controls className="w-full rounded-xl border border-fg/10 max-h-80" />
+                  <button type="button" onClick={() => { resetMedia(); }} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-fg">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -440,13 +440,13 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   />
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                    <p className="text-sm font-bold text-white tabular-nums">{minSec(videoElapsed)}</p>
+                    <p className="text-sm font-bold text-fg tabular-nums">{minSec(videoElapsed)}</p>
                     <span className="text-[10px] text-text-industrial/50">640×480 · 15fps · 500 kbps</span>
                   </div>
                   <button
                     type="button"
                     onClick={stopVideoRecording}
-                    className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-lg bg-fg/10 border border-fg/20 text-fg text-xs font-bold flex items-center gap-1.5"
                   >
                     <Square className="w-3.5 h-3.5" />
                     Detener
@@ -456,7 +456,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 <button
                   type="button"
                   onClick={() => { void startVideoRecording(); }}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 hover:bg-white/10 active:bg-white/15"
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 hover:bg-fg/10 active:bg-fg/15"
                 >
                   <VideoIcon className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Grabar video</span>
@@ -468,7 +468,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 onChange={(e) => setText(e.target.value)}
                 rows={2}
                 placeholder="Descripción opcional"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
             </>
           )}
@@ -482,7 +482,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   <button
                     type="button"
                     onClick={() => { resetMedia(); setLiveTranscript(""); }}
-                    className="w-full py-2 text-xs text-text-industrial/60 hover:text-white flex items-center justify-center gap-1.5"
+                    className="w-full py-2 text-xs text-text-industrial/60 hover:text-fg flex items-center justify-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Descartar y grabar de nuevo
@@ -492,7 +492,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 <div className="flex flex-col items-center justify-center gap-3 py-6 rounded-xl border border-red-500/30 bg-red-500/5">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                    <p className="text-sm font-bold text-white tabular-nums">{minSec(audioElapsed)}</p>
+                    <p className="text-sm font-bold text-fg tabular-nums">{minSec(audioElapsed)}</p>
                   </div>
                   <div className="text-[10px] text-text-industrial/60 flex items-center gap-1.5">
                     {srStatus === "active" && <span className="text-success-sea">● Transcribiendo en vivo</span>}
@@ -501,14 +501,14 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                     {srStatus === "idle" && <span>Iniciando transcripción...</span>}
                   </div>
                   {liveTranscript && (
-                    <div className="w-full max-h-32 overflow-y-auto bg-black/20 rounded-lg px-3 py-2 text-xs text-white/85 leading-relaxed">
+                    <div className="w-full max-h-32 overflow-y-auto bg-black/20 rounded-lg px-3 py-2 text-xs text-fg/85 leading-relaxed">
                       {liveTranscript}
                     </div>
                   )}
                   <button
                     type="button"
                     onClick={stopRecording}
-                    className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-lg bg-fg/10 border border-fg/20 text-fg text-xs font-bold flex items-center gap-1.5"
                   >
                     <Square className="w-3.5 h-3.5" />
                     Detener
@@ -518,7 +518,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 <button
                   type="button"
                   onClick={() => { void startRecording(); }}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 hover:bg-white/10 active:bg-white/15"
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 hover:bg-fg/10 active:bg-fg/15"
                 >
                   <Mic className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Tocá para grabar</span>
@@ -534,7 +534,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 onChange={(e) => setText(e.target.value)}
                 rows={3}
                 placeholder={filePreview ? "Transcripción editable" : "Descripción opcional"}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
               />
               {filePreview && !text.trim() && (
                 <p className="text-[10px] text-orange-400/80">
@@ -548,12 +548,12 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-fg/10 p-3">
           <button
             type="button"
             onClick={() => { void handleSave(); }}
             disabled={saving || recording || videoRecording || compressing}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar avance"}
           </button>

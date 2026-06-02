@@ -101,7 +101,7 @@ function CertStatusBadge({ status }: { status: string }) {
   return <span className="inline-block text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("cert.status.valid")}</span>;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
 // ─── Crew Modal ──────────────────────────────────────────────────────────────
@@ -234,18 +234,18 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("crew.singular")}</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? t("crew.new") : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? t("crew.new") : `${crew!.crewCode} — ${crew!.firstName} ${crew!.lastName}`}</h2>
             </div>
-            {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10">{t("crew.status.signedOff")}</span>}
+            {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("crew.status.signedOff")}</span>}
             {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6">
@@ -321,7 +321,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             {!isNew && crew?.status === "ONBOARD" && (
               <button onClick={() => { void onSignOff(); }} disabled={saving}
@@ -337,7 +337,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {(isNew || tab === "details") && !isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
@@ -420,7 +420,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
       </div>
 
       {adding && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className={labelCls}>{t("cert.type")}</label>
@@ -455,7 +455,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
           </div>
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2">
-            <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
+            <button onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
             <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-1.5 rounded-lg bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
             </button>
@@ -466,12 +466,12 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
       {crew.certifications.length === 0 && !adding ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">{t("cert.empty")}</div>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-fg/5">
           {crew.certifications.map(c => (
             <div key={c.id} className="py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                  <span className="text-sm font-medium text-white">{t(CERT_TYPE_TKEY[c.type] ?? "cert.type.other")}</span>
+                  <span className="text-sm font-medium text-fg">{t(CERT_TYPE_TKEY[c.type] ?? "cert.type.other")}</span>
                   <CertStatusBadge status={c.status} />
                   {c.certificateNumber && <span className="text-[10px] font-mono text-text-industrial/40">#{c.certificateNumber}</span>}
                 </div>
@@ -482,7 +482,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-white/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
+                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-fg/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
                 {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">{t("common.edit")}</button>}
                 {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-400 hover:underline ml-2">{t("common.delete")}</button>}
               </div>
@@ -523,7 +523,7 @@ export const CrewPage: React.FC = () => {
         {([["ONBOARD", t("crew.filter.onboard")], ["SIGNED_OFF", t("crew.filter.signedOff")], ["", t("crew.filter.all")]] as const).map(([v, l]) => (
           <button key={v || "all"} onClick={() => setStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-              status === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              status === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}
           >{l}</button>
         ))}
@@ -534,18 +534,18 @@ export const CrewPage: React.FC = () => {
       ) : !data?.items?.length ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">{t("crew.empty")}</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {data.items.map(c => {
             const expiringCount = c.certifications.filter(x => x.status === "EXPIRING_SOON" || x.status === "EXPIRED").length;
             return (
               <button key={c.id} onClick={() => setEditing(c)}
-                className="w-full text-left px-4 py-2 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+                className="w-full text-left px-4 py-2 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
                 <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40 shrink-0">{c.crewCode}</span>
                   {c.status === "ONBOARD"
                     ? <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-400 border-green-500/20 shrink-0">{t("crew.status.onboard")}</span>
-                    : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-white/5 text-text-industrial/50 border-white/10 shrink-0">{t("crew.status.signedOff")}</span>}
-                  <p className="text-sm font-bold text-white truncate">{c.firstName} {c.lastName}</p>
+                    : <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10 shrink-0">{t("crew.status.signedOff")}</span>}
+                  <p className="text-sm font-bold text-fg truncate">{c.firstName} {c.lastName}</p>
                   <p className="text-xs text-text-industrial/50 truncate">{c.rankDefinition?.name ?? "—"}</p>
                   <VesselLabel code={c.vesselCode} className="text-[10px]" showCode />
                   {expiringCount > 0 && (
@@ -556,7 +556,7 @@ export const CrewPage: React.FC = () => {
                 </div>
                 <div className="text-right shrink-0 hidden sm:block">
                   <p className="text-[10px] text-text-industrial/40 leading-tight">{t("crew.embarked")}</p>
-                  <p className="text-xs text-white font-mono leading-tight">{fmtDate(c.signOnDate)}</p>
+                  <p className="text-xs text-fg font-mono leading-tight">{fmtDate(c.signOnDate)}</p>
                 </div>
                 {c.status === "ONBOARD" && expiringCount === 0 && <CheckCircle className="w-4 h-4 text-success-sea shrink-0" />}
               </button>

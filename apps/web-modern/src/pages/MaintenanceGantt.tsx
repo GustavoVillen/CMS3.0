@@ -128,7 +128,7 @@ function StatusChip({
         inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all
         ${active
           ? `${colors.bg} ${colors.text} border-current/30`
-          : "bg-white/5 text-text-industrial/40 border-white/10 hover:bg-white/10"
+          : "bg-fg/5 text-text-industrial/40 border-fg/10 hover:bg-fg/10"
         }
       `}
     >
@@ -159,17 +159,17 @@ const CustomTaskListHeader: React.FC<{
   fontSize: string;
 }> = ({ headerHeight }) => (
   <div
-    className="flex items-center border-b border-white/10 bg-[#0a0f1e]"
+    className="flex items-center border-b border-fg/10 bg-[#0a0f1e]"
     style={{ height: headerHeight }}
   >
     <div
-      className="flex items-center px-3 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 border-r border-white/10 shrink-0"
+      className="flex items-center px-3 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 border-r border-fg/10 shrink-0"
       style={{ width: NAME_COL_W, minWidth: NAME_COL_W }}
     >
       Tarea
     </div>
     <div
-      className="flex items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 border-r border-white/10 shrink-0"
+      className="flex items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 border-r border-fg/10 shrink-0"
       style={{ width: DATE_COL_W, minWidth: DATE_COL_W }}
     >
       Desde
@@ -205,19 +205,19 @@ const CustomTaskListTable: React.FC<{
       return (
         <div
           key={task.id}
-          className={`flex items-center border-b border-white/[0.04] cursor-pointer transition-colors
-            ${isSelected ? "bg-accent/10" : isProject ? "bg-white/[0.02] hover:bg-white/[0.04]" : "hover:bg-white/[0.03]"}`}
+          className={`flex items-center border-b border-fg/[0.04] cursor-pointer transition-colors
+            ${isSelected ? "bg-accent/10" : isProject ? "bg-fg/[0.02] hover:bg-fg/[0.04]" : "hover:bg-fg/[0.03]"}`}
           style={{ height: rowHeight }}
           onClick={() => setSelectedTask(task.id)}
         >
           {/* Name cell */}
           <div
-            className="flex items-center gap-1 px-2 border-r border-white/10 overflow-hidden shrink-0"
+            className="flex items-center gap-1 px-2 border-r border-fg/10 overflow-hidden shrink-0"
             style={{ width: NAME_COL_W, minWidth: NAME_COL_W, paddingLeft: 8 + depth * 12 }}
           >
             {isProject && (
               <button
-                className="text-text-industrial/40 hover:text-white transition-colors shrink-0"
+                className="text-text-industrial/40 hover:text-fg transition-colors shrink-0"
                 onClick={(e) => { e.stopPropagation(); onExpanderClick(task); }}
               >
                 {task.hideChildren
@@ -229,7 +229,7 @@ const CustomTaskListTable: React.FC<{
             <span
               className={`truncate leading-tight ${
                 isProject
-                  ? "text-[10px] font-semibold text-white/70"
+                  ? "text-[10px] font-semibold text-fg/70"
                   : "text-[10px] text-text-industrial/60"
               }`}
               title={task.name}
@@ -240,7 +240,7 @@ const CustomTaskListTable: React.FC<{
 
           {/* From cell */}
           <div
-            className="px-2 border-r border-white/10 text-[10px] tabular-nums text-text-industrial/50 shrink-0"
+            className="px-2 border-r border-fg/10 text-[10px] tabular-nums text-text-industrial/50 shrink-0"
             style={{ width: DATE_COL_W, minWidth: DATE_COL_W }}
           >
             {isProject ? "" : fmtDMY(task.start)}
@@ -428,7 +428,7 @@ export function MaintenanceGanttPage() {
           <select
             value={selectedVessel}
             onChange={(e) => setSelectedVessel(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
+            className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
           >
             <option value="ALL">Todos los buques</option>
             {vessels.map((v) => (
@@ -441,7 +441,7 @@ export function MaintenanceGanttPage() {
         <select
           value={selectedYear}
           onChange={(e) => setSelectedYear(Number(e.target.value))}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
         >
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -452,7 +452,7 @@ export function MaintenanceGanttPage() {
         <select
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
         >
           <option value="ALL">Mant. + Inspecciones</option>
           <option value="MAINTENANCE">Solo Mantenimiento</option>
@@ -460,7 +460,7 @@ export function MaintenanceGanttPage() {
         </select>
 
         {/* View mode */}
-        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+        <div className="flex items-center gap-1 bg-fg/5 border border-fg/10 rounded-lg p-0.5">
           {(
             [
               { mode: ViewMode.Week,  label: "Semana" },
@@ -474,7 +474,7 @@ export function MaintenanceGanttPage() {
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
                 viewMode === mode
                   ? "bg-accent/20 text-accent border border-accent/30"
-                  : "text-text-industrial/50 hover:text-white"
+                  : "text-text-industrial/50 hover:text-fg"
               }`}
             >
               {label}
@@ -502,7 +502,7 @@ export function MaintenanceGanttPage() {
       <GanttLegend />
 
       {/* Content */}
-      <div className="flex-1 min-h-0 rounded-xl border border-white/10 overflow-hidden bg-[#0a0f1e]">
+      <div className="flex-1 min-h-0 rounded-xl border border-fg/10 overflow-hidden bg-[#0a0f1e]">
         {loading ? (
           <div className="flex items-center justify-center h-full gap-3 text-text-industrial/40">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -545,7 +545,7 @@ export function MaintenanceGanttPage() {
 
       {/* Summary bar */}
       {!loading && !error && plans.length > 0 && (
-        <div className="flex items-center gap-6 px-4 py-2.5 rounded-xl bg-white/3 border border-white/8 text-[11px] text-text-industrial/50 flex-wrap">
+        <div className="flex items-center gap-6 px-4 py-2.5 rounded-xl bg-fg/3 border border-fg/8 text-[11px] text-text-industrial/50 flex-wrap">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>{plans.filter(p => p.executionStatus === "COMPLETED").length} completados</span>

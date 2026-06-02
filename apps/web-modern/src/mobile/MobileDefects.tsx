@@ -51,7 +51,7 @@ const SEV_COLOR: Record<string, string> = {
   LOW:      "bg-blue-500/10 text-blue-400 border-blue-500/20",
 };
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "text-xs font-bold uppercase tracking-wider text-text-industrial/40";
 
 type View = "list" | "create" | "create-nm" | "detail";
@@ -291,11 +291,11 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
   if (view === "create") {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white">Nuevo Defecto</span>
+          <span className="font-bold text-sm text-fg">Nuevo Defecto</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-1.5">
@@ -369,7 +369,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
             {photos.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((p, i) => (
-                  <div key={i} className={`relative aspect-square bg-white/5 border rounded-lg overflow-hidden ${p.analyzed ? "border-accent/40" : "border-white/10"}`}>
+                  <div key={i} className={`relative aspect-square bg-fg/5 border rounded-lg overflow-hidden ${p.analyzed ? "border-accent/40" : "border-fg/10"}`}>
                     <img src={p.preview} alt="" className="w-full h-full object-cover" />
                     {p.analyzed && (
                       <span className="absolute top-1 left-1 px-1 py-0.5 rounded bg-accent text-primary-bg text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
@@ -379,7 +379,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
                     <button
                       type="button"
                       onClick={() => removePhoto(i)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-fg"
                       aria-label="Quitar foto"
                     >
                       <X className="w-3 h-3" />
@@ -388,7 +388,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
                 ))}
               </div>
             )}
-            <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
+            <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 active:bg-fg/15 transition-colors">
               <Camera className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wider">
                 {photos.length === 0 ? "Tomar foto" : "Agregar otra"}
@@ -409,7 +409,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
             type="button"
             onClick={handleCreate}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Registrar defecto"}
           </button>
@@ -422,11 +422,11 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
   if (view === "create-nm") {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={() => setView("list")} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white">Nuevo Near Miss</span>
+          <span className="font-bold text-sm text-fg">Nuevo Near Miss</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -486,7 +486,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
             type="button"
             onClick={handleCreateNearMiss}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Reportar near miss"}
           </button>
@@ -499,33 +499,33 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
   if (view === "detail" && selected) {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
           <button
             type="button"
             onClick={() => { setView("list"); setSelected(null); }}
-            className="p-2 -ml-2 text-text-industrial/40 hover:text-white"
+            className="p-2 -ml-2 text-text-industrial/40 hover:text-fg"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white truncate flex-1">{selected.defectCode}</span>
-          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${SEV_COLOR[selected.severity] ?? "bg-white/5 text-white border-white/10"}`}>
+          <span className="font-bold text-sm text-fg truncate flex-1">{selected.defectCode}</span>
+          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${SEV_COLOR[selected.severity] ?? "bg-fg/5 text-fg border-fg/10"}`}>
             {selected.severity}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Estado operac.</p>
-              <p className="text-sm font-bold text-white">{selected.operationalState}</p>
+              <p className="text-sm font-bold text-fg">{selected.operationalState}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Clasificación</p>
-              <p className="text-sm font-bold text-white">{selected.classification}</p>
+              <p className="text-sm font-bold text-fg">{selected.classification}</p>
             </div>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Descripción</p>
-            <p className="text-sm text-white/80 leading-relaxed">{selected.description}</p>
+            <p className="text-sm text-fg/80 leading-relaxed">{selected.description}</p>
           </div>
           <p className="text-[10px] text-text-industrial/30">
             Reportado: {new Date(selected.reportedAt).toLocaleDateString("es-AR")}
@@ -538,12 +538,12 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
   // ── List ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full relative">
-      <div className="shrink-0 px-4 py-3 border-b border-white/10">
+      <div className="shrink-0 px-4 py-3 border-b border-fg/10">
         <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
           {openDefects.length} defecto{openDefects.length !== 1 ? "s" : ""} activo{openDefects.length !== 1 ? "s" : ""}
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+      <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-accent" />
@@ -556,15 +556,15 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               key={d.id}
               type="button"
               onClick={() => { setSelected(d); setView("detail"); }}
-              className="w-full text-left px-4 py-3.5 hover:bg-white/5 active:bg-white/10 transition-colors"
+              className="w-full text-left px-4 py-3.5 hover:bg-fg/5 active:bg-fg/10 transition-colors"
             >
               <div className="flex items-start gap-3">
-                <span className={`mt-0.5 shrink-0 text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${SEV_COLOR[d.severity] ?? "bg-white/5 text-white border-white/10"}`}>
+                <span className={`mt-0.5 shrink-0 text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${SEV_COLOR[d.severity] ?? "bg-fg/5 text-fg border-fg/10"}`}>
                   {d.severity[0]}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-mono text-text-industrial/40 mb-0.5">{d.defectCode}</p>
-                  <p className="text-sm text-white line-clamp-2">{d.description}</p>
+                  <p className="text-sm text-fg line-clamp-2">{d.description}</p>
                   <p className="text-xs text-text-industrial/30 mt-0.5">{d.classification} · {d.operationalState}</p>
                 </div>
               </div>
@@ -575,7 +575,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
       <button
         type="button"
         onClick={() => setVoiceOpen(true)}
-        className="absolute bottom-5 right-24 w-14 h-14 rounded-full bg-white/10 border border-accent/40 text-accent flex items-center justify-center shadow-xl backdrop-blur-sm hover:bg-white/15 active:scale-95 transition-all"
+        className="absolute bottom-5 right-24 w-14 h-14 rounded-full bg-fg/10 border border-accent/40 text-accent flex items-center justify-center shadow-xl backdrop-blur-sm hover:bg-fg/15 active:scale-95 transition-all"
         aria-label="Reportar defecto por voz"
         title="Reportar defecto por voz"
       >
@@ -584,7 +584,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
       <button
         type="button"
         onClick={() => openCreate()}
-        className="absolute bottom-5 right-5 w-14 h-14 rounded-full bg-accent text-white flex items-center justify-center shadow-xl shadow-accent/20"
+        className="absolute bottom-5 right-5 w-14 h-14 rounded-full bg-accent text-fg flex items-center justify-center shadow-xl shadow-accent/20"
         aria-label="Nuevo defecto"
       >
         <Plus className="w-6 h-6" />

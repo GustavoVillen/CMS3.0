@@ -59,7 +59,7 @@ const STATUS_TKEY: Record<string, "drill.status.scheduled" | "drill.status.compl
 const STATUS_COLOR: Record<string, string> = {
   SCHEDULED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  CANCELLED: "bg-white/5 text-text-industrial/50 border-white/10",
+  CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
 function fmtDate(value: string | null): string {
@@ -67,7 +67,7 @@ function fmtDate(value: string | null): string {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
 // ─── Drill Modal ─────────────────────────────────────────────────────────────
@@ -236,17 +236,17 @@ const DrillModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <CalendarCheck className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("drill.title")}</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? t("drill.newTitle") : drill!.drillCode}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? t("drill.newTitle") : drill!.drillCode}</h2>
             </div>
             {drill && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[drill.status]}`}>{t(STATUS_TKEY[drill.status])}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -298,7 +298,7 @@ const DrillModal: React.FC<{
               <label
                 onClick={!isLocked ? handleScenarioClick : undefined}
                 title={!isLocked ? t("drill.scenarioAiTitle") : undefined}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${!isLocked ? `hover:text-white cursor-pointer ${loadingScenario ? "opacity-60 animate-pulse" : ""}` : ""}`}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${!isLocked ? `hover:text-fg cursor-pointer ${loadingScenario ? "opacity-60 animate-pulse" : ""}` : ""}`}
               >
                 {loadingScenario ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("drill.scenario")}
@@ -316,17 +316,17 @@ const DrillModal: React.FC<{
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("drill.participants")} ({participants.length})</label>
-              <div className="max-h-40 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
+              <div className="max-h-40 overflow-y-auto bg-fg/5 border border-fg/10 rounded-xl p-2 space-y-1">
                 {availableCrew.length === 0 ? (
                   <p className="text-xs text-text-industrial/40 p-2">{t("drill.noCrewOnboard")}</p>
                 ) : availableCrew.map(c => (
-                  <label key={c.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer">
+                  <label key={c.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-fg/5 cursor-pointer">
                     <input type="checkbox"
                       checked={participants.includes(c.id)}
                       onChange={() => toggleParticipant(c.id)}
                       disabled={isLocked}
                       className="rounded" />
-                    <span className="text-xs text-white">{c.firstName} {c.lastName}</span>
+                    <span className="text-xs text-fg">{c.firstName} {c.lastName}</span>
                     <span className="text-[10px] text-text-industrial/40">{c.rank}</span>
                   </label>
                 ))}
@@ -336,11 +336,11 @@ const DrillModal: React.FC<{
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             {!isNew && (
               <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
                 {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />}
                 {t("common.savePdf")}
               </button>
@@ -359,7 +359,7 @@ const DrillModal: React.FC<{
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
             {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
@@ -394,7 +394,7 @@ interface MatrixCell {
 const STATUS_CELL_CLS: Record<MatrixStatus, string> = {
   OVERDUE: "bg-red-500/15 text-red-300 border-red-500/30 hover:bg-red-500/25",
   DUE_SOON: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25",
-  NEVER: "bg-white/5 text-text-industrial/60 border-white/10 hover:bg-white/10",
+  NEVER: "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10",
   OK: "bg-success-sea/10 text-success-sea/80 border-success-sea/20 hover:bg-success-sea/15",
 };
 
@@ -437,11 +437,11 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
   const dueSoonCount = cells.filter(c => c.status === "DUE_SOON").length;
 
   return (
-    <section className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden">
+    <section className="bg-fg/[0.03] border border-fg/10 rounded-xl overflow-hidden">
       <button onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.04] transition-colors text-left">
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-fg/[0.04] transition-colors text-left">
         {expanded ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
-        <span className="text-xs font-bold uppercase tracking-wider text-white">{t("drill.complianceMatrix")}</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-fg">{t("drill.complianceMatrix")}</span>
         <span className="text-[10px] text-text-industrial/40">— SOLAS / ISPS / MARPOL</span>
         <div className="ml-auto flex items-center gap-2">
           {overdueCount > 0 && (
@@ -453,7 +453,7 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
         </div>
       </button>
       {expanded && (
-        <div className="border-t border-white/10 overflow-x-auto">
+        <div className="border-t border-fg/10 overflow-x-auto">
           {loading && cells.length === 0 ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
           ) : requirements.length === 0 || vessels.length === 0 ? (
@@ -461,7 +461,7 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
           ) : (
             <table className="w-full text-[11px]">
               <thead>
-                <tr className="border-b border-white/10">
+                <tr className="border-b border-fg/10">
                   <th className="text-left px-3 py-2 font-bold text-text-industrial/60 uppercase tracking-wider sticky left-0 bg-[#0D1B2A] z-10">{t("drill.colTypeFrequency")}</th>
                   {vessels.map(v => (
                     <th key={v} className="text-center px-3 py-2 font-mono font-bold text-accent">{v}</th>
@@ -470,9 +470,9 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
               </thead>
               <tbody>
                 {requirements.map(r => (
-                  <tr key={r.id} className="border-b border-white/5 last:border-b-0">
+                  <tr key={r.id} className="border-b border-fg/5 last:border-b-0">
                     <td className="px-3 py-2 sticky left-0 bg-[#0D1B2A] z-10">
-                      <div className="font-bold text-white">{r.title}</div>
+                      <div className="font-bold text-fg">{r.title}</div>
                       <div className="text-[9px] text-text-industrial/40">{r.intervalLabel ?? t("drill.everyXdays").replace("{n}", String(r.frequencyDays))}</div>
                     </td>
                     {vessels.map(v => {
@@ -502,14 +502,14 @@ const DrillsMatrix: React.FC<{ cells: MatrixCell[]; loading: boolean; onPlan: (v
               </tbody>
             </table>
           )}
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 text-[10px] text-text-industrial/40">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-fg/5 text-[10px] text-text-industrial/40">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/40" />{t("drill.legendOverdue")}</span>
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/40" />{t("drill.legendDueSoon")}</span>
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-success-sea/40" />{t("drill.legendOk")}</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/20" />{t("drill.legendNone")}</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-fg/20" />{t("drill.legendNone")}</span>
             </div>
-            <button onClick={onReload} className="hover:text-white">{t("common.refresh")}</button>
+            <button onClick={onReload} className="hover:text-fg">{t("common.refresh")}</button>
           </div>
         </div>
       )}
@@ -620,16 +620,16 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <Settings className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("common.config")}</p>
-              <h2 className="text-sm font-bold text-white">{t("drill.catalogTitle")}</h2>
+              <h2 className="text-sm font-bold text-fg">{t("drill.catalogTitle")}</h2>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -652,7 +652,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
               ) : (
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-text-industrial/50">
+                    <tr className="border-b border-fg/10 text-text-industrial/50">
                       <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colType")}</th>
                       <th className="text-left py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colNorm")}</th>
                       <th className="text-center py-2 px-2 font-bold uppercase tracking-wider">{t("drill.colEvery")}</th>
@@ -663,8 +663,8 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                   </thead>
                   <tbody>
                     {items.map(r => (
-                      <tr key={r.id} onClick={() => setEditing(toDraft(r))} className="border-b border-white/5 hover:bg-white/[0.04] cursor-pointer">
-                        <td className="py-2 px-2 text-white font-medium">{r.title}</td>
+                      <tr key={r.id} onClick={() => setEditing(toDraft(r))} className="border-b border-fg/5 hover:bg-fg/[0.04] cursor-pointer">
+                        <td className="py-2 px-2 text-fg font-medium">{r.title}</td>
                         <td className="py-2 px-2 text-text-industrial/60">{r.solasRegulation ?? "—"}</td>
                         <td className="py-2 px-2 text-center text-text-industrial/80">{r.intervalLabel ?? `${r.frequencyDays}d`}</td>
                         <td className="py-2 px-2 text-text-industrial/60">
@@ -715,16 +715,16 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("drill.appliesToHint")}</label>
-                  <div className="max-h-40 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
+                  <div className="max-h-40 overflow-y-auto bg-fg/5 border border-fg/10 rounded-xl p-2 space-y-1">
                     {vessels.length === 0 ? (
                       <p className="text-xs text-text-industrial/40 p-2">{t("drill.noVesselsInTenant")}</p>
                     ) : vessels.map(v => (
-                      <label key={v.code} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer">
+                      <label key={v.code} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-fg/5 cursor-pointer">
                         <input type="checkbox"
                           checked={editing.applicableVesselCodes.includes(v.code)}
                           onChange={() => toggleVesselApplicable(v.code)}
                           className="rounded" />
-                        <span className="text-xs text-white font-mono">{v.code}</span>
+                        <span className="text-xs text-fg font-mono">{v.code}</span>
                         <span className="text-[10px] text-text-industrial/40">{v.name}</span>
                       </label>
                     ))}
@@ -740,12 +740,12 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                   <input id="req-enabled" type="checkbox" checked={editing.enabled}
                     onChange={e => setEditing(d => d ? { ...d, enabled: e.target.checked } : d)}
                     className="rounded" />
-                  <label htmlFor="req-enabled" className="text-xs text-white">{t("common.active")}</label>
+                  <label htmlFor="req-enabled" className="text-xs text-fg">{t("common.active")}</label>
                 </div>
               </div>
               {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
               <div className="flex justify-end gap-2">
-                <button onClick={() => { setEditing(null); setErr(null); }} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.cancel")}</button>
+                <button onClick={() => { setEditing(null); setErr(null); }} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
                 <button onClick={() => { void onSaveRow(); }} disabled={saving}
                   className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
@@ -757,8 +757,8 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
           {!editing && err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">{t("common.close")}</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
         </div>
       </div>
     </div>
@@ -826,7 +826,7 @@ export const DrillsPage: React.FC = () => {
       <PageHeader icon={CalendarCheck} title={t("nav.drills")} total={data?.total} onReload={reload}>
         <ExportExcelButton module="drills" />
         {canConfigure && (
-          <button onClick={() => setShowRequirements(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+          <button onClick={() => setShowRequirements(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
             <Settings className="w-3.5 h-3.5 text-accent" /> {t("drill.catalog")}
           </button>
         )}
@@ -841,7 +841,7 @@ export const DrillsPage: React.FC = () => {
         {([["upcoming", t("drill.filterUpcoming")], ["completed", t("drill.filterCompleted")], ["all", t("drill.filterAll")]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-              filter === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              filter === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}
           >{l}</button>
         ))}
@@ -852,22 +852,22 @@ export const DrillsPage: React.FC = () => {
       ) : !data?.items?.length ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">{t("drill.empty")}</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {data.items.map(d => (
             <button key={d.id} onClick={() => setEditing(d)}
-              className="w-full text-left p-4 hover:bg-white/5 active:bg-white/10 transition-colors flex items-center gap-3">
+              className="w-full text-left p-4 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{d.drillCode}</span>
                   <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[d.status]}`}>{t(STATUS_TKEY[d.status])}</span>
                   <VesselLabel code={d.vesselCode} className="text-[10px]" showCode />
                 </div>
-                <p className="text-sm font-bold text-white">{d.requirement?.title ?? "—"}</p>
+                <p className="text-sm font-bold text-fg">{d.requirement?.title ?? "—"}</p>
                 {d.scenario && <p className="text-xs text-text-industrial/50 truncate">{d.scenario}</p>}
               </div>
               <div className="text-right shrink-0">
                 <p className="text-[10px] text-text-industrial/40">{d.status === "COMPLETED" ? t("drill.status.completed") : t("drill.status.scheduled")}</p>
-                <p className="text-xs text-white font-mono">{fmtDate(d.status === "COMPLETED" ? d.completedDate : d.scheduledDate)}</p>
+                <p className="text-xs text-fg font-mono">{fmtDate(d.status === "COMPLETED" ? d.completedDate : d.scheduledDate)}</p>
                 <p className="text-[10px] text-text-industrial/40">{t("drill.participantsCount").replace("{n}", String((d.participantCrewIds ?? []).length))}</p>
               </div>
             </button>

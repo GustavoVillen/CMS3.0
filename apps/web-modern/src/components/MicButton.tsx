@@ -48,7 +48,7 @@ export const MicButton: React.FC<MicButtonProps> = ({ onAppend, lang, className,
       className={`p-1.5 rounded-md transition-colors ${
         listening
           ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse"
-          : "text-text-industrial/50 hover:text-accent hover:bg-white/5 border border-transparent"
+          : "text-text-industrial/50 hover:text-accent hover:bg-fg/5 border border-transparent"
       }`}
     >
       {listening ? <Loader2 className={`${className ?? "w-3.5 h-3.5"} animate-spin`} /> : <Mic className={className ?? "w-3.5 h-3.5"} />}

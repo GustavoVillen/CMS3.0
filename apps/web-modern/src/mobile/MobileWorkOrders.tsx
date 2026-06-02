@@ -70,7 +70,7 @@ const STATUS_COLOR: Record<string, string> = {
   IN_PROGRESS: "bg-accent/10 text-accent border-accent/20",
   ON_HOLD:     "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   DONE:        "bg-success-sea/10 text-success-sea border-success-sea/20",
-  CLOSED:      "bg-white/5 text-text-industrial/40 border-white/10",
+  CLOSED:      "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
 const CRIT_COLOR: Record<string, string> = {
@@ -111,10 +111,10 @@ const InfoAccordion: React.FC<{
               disabled={!hasContent}
               className={`py-2 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-colors ${
                 !hasContent
-                  ? "bg-white/5 border-white/5 text-text-industrial/20 cursor-not-allowed"
+                  ? "bg-fg/5 border-fg/5 text-text-industrial/20 cursor-not-allowed"
                   : isActive
                   ? "bg-accent/15 text-accent border-accent/40"
-                  : "bg-white/5 text-text-industrial/60 border-white/10 hover:bg-white/10 active:bg-white/15"
+                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10 active:bg-fg/15"
               }`}
             >
               {label}
@@ -125,19 +125,19 @@ const InfoAccordion: React.FC<{
 
       {active === "tarea" && wo.description && (
         <InfoPanel label="Tarea a ejecutar">
-          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.description}</p>
+          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.description}</p>
         </InfoPanel>
       )}
 
       {active === "criteria" && wo.acceptanceCriteria && (
         <InfoPanel label="Criterios de aceptación">
-          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.acceptanceCriteria}</p>
+          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.acceptanceCriteria}</p>
         </InfoPanel>
       )}
 
       {active === "loto" && wo.loto && (
         <InfoPanel label="LOTO (Lockout / Tagout)">
-          <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.loto}</p>
+          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.loto}</p>
         </InfoPanel>
       )}
 
@@ -146,7 +146,7 @@ const InfoAccordion: React.FC<{
           {wo.riskLevel && (
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] uppercase tracking-wider text-text-industrial/40">Nivel</span>
-              <span className={`text-sm font-bold ${RISK_COLOR[wo.riskLevel] ?? "text-white"}`}>
+              <span className={`text-sm font-bold ${RISK_COLOR[wo.riskLevel] ?? "text-fg"}`}>
                 {RISK_LABEL[wo.riskLevel] ?? wo.riskLevel}
               </span>
             </div>
@@ -154,7 +154,7 @@ const InfoAccordion: React.FC<{
           {wo.riskAnalysisResult && (
             <MarkdownText
               text={wo.riskAnalysisResult}
-              className="text-xs text-white/85 leading-relaxed"
+              className="text-xs text-fg/85 leading-relaxed"
             />
           )}
         </InfoPanel>
@@ -171,7 +171,7 @@ const InfoAccordion: React.FC<{
             </div>
           )}
           {wo.consequenceRationale && (
-            <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{wo.consequenceRationale}</p>
+            <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.consequenceRationale}</p>
           )}
         </InfoPanel>
       )}
@@ -180,7 +180,7 @@ const InfoAccordion: React.FC<{
 };
 
 const InfoPanel: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div className="bg-white/5 border border-accent/20 rounded-xl p-3 space-y-1.5">
+  <div className="bg-fg/5 border border-accent/20 rounded-xl p-3 space-y-1.5">
     <p className="text-[10px] uppercase tracking-wider text-accent/70 font-bold">{label}</p>
     {children}
   </div>
@@ -240,7 +240,7 @@ const ProgressNotesPanel: React.FC<{
           <button
             type="button"
             onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:brightness-110"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-fg text-xs font-bold hover:brightness-110"
           >
             <Plus className="w-3.5 h-3.5" />
             Registrar avance
@@ -291,7 +291,7 @@ const NoteCard: React.FC<{
 }> = ({ note, fmtTime, onDelete }) => {
   const Icon = KIND_ICON[note.kind] ?? Type;
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+    <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
       <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
         <Icon className="w-3 h-3" />
         <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
@@ -319,7 +319,7 @@ const NoteCard: React.FC<{
         <AuthedAudio src={note.fileUrl} controls className="w-full" />
       )}
       {note.text && (
-        <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{note.text}</p>
+        <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{note.text}</p>
       )}
     </div>
   );
@@ -387,7 +387,7 @@ const HoursPanel: React.FC<{
   };
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-3">
+    <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-3">
       <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Horas de la tarea</p>
 
       {editing ? (
@@ -410,7 +410,7 @@ const HoursPanel: React.FC<{
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="0"
-            className="w-full bg-white/5 border-2 border-accent/40 rounded-xl px-4 py-3 text-3xl font-bold text-white text-center tabular-nums focus:outline-none focus:border-accent"
+            className="w-full bg-fg/5 border-2 border-accent/40 rounded-xl px-4 py-3 text-3xl font-bold text-fg text-center tabular-nums focus:outline-none focus:border-accent"
             disabled={saving}
           />
 
@@ -424,7 +424,7 @@ const HoursPanel: React.FC<{
                 disabled={saving}
                 className={`py-2.5 rounded-lg text-sm font-bold tabular-nums active:scale-95 transition-all ${
                   d < 0
-                    ? "bg-white/5 border border-white/10 text-text-industrial hover:bg-white/10"
+                    ? "bg-fg/5 border border-fg/10 text-text-industrial hover:bg-fg/10"
                     : "bg-accent/15 border border-accent/30 text-accent hover:bg-accent/20"
                 }`}
               >
@@ -439,7 +439,7 @@ const HoursPanel: React.FC<{
               type="button"
               onClick={cancelEdit}
               disabled={saving}
-              className="py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-text-industrial disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="py-3 rounded-xl bg-fg/5 border border-fg/10 text-sm font-bold text-text-industrial disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               <X className="w-4 h-4" /> Cancelar
             </button>
@@ -447,7 +447,7 @@ const HoursPanel: React.FC<{
               type="button"
               onClick={saveEdit}
               disabled={saving}
-              className="py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Guardar</>}
             </button>
@@ -459,14 +459,14 @@ const HoursPanel: React.FC<{
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-[10px] text-text-industrial/40">Estimadas</p>
-              <p className="text-xl font-bold text-white tabular-nums mt-0.5">{estimated != null ? `${estimated} h` : "—"}</p>
+              <p className="text-xl font-bold text-fg tabular-nums mt-0.5">{estimated != null ? `${estimated} h` : "—"}</p>
             </div>
             <button
               type="button"
               onClick={isEditable ? startEdit : undefined}
               disabled={!isEditable}
               className={`text-left rounded-lg p-2 -m-2 transition-colors ${
-                isEditable ? "hover:bg-white/5 active:bg-white/10 cursor-pointer" : "cursor-default"
+                isEditable ? "hover:bg-fg/5 active:bg-fg/10 cursor-pointer" : "cursor-default"
               }`}
               aria-label={isEditable ? "Editar horas reales" : undefined}
             >
@@ -474,13 +474,13 @@ const HoursPanel: React.FC<{
                 <p className="text-[10px] text-text-industrial/40">Reales</p>
                 {isEditable && <Pencil className="w-3.5 h-3.5 text-accent/60" />}
               </div>
-              <p className={`text-xl font-bold tabular-nums mt-0.5 ${actual != null ? "text-white" : "text-text-industrial/40"}`}>
+              <p className={`text-xl font-bold tabular-nums mt-0.5 ${actual != null ? "text-fg" : "text-text-industrial/40"}`}>
                 {actual != null ? `${actual} h` : "Tocá para cargar"}
               </p>
             </button>
           </div>
           {deviation && (
-            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+            <div className="flex items-center justify-between pt-2 border-t border-fg/10">
               <span className="text-[10px] text-text-industrial/50 uppercase tracking-wider">Desvío</span>
               <span className={`text-sm font-bold tabular-nums ${deviation.color}`}>{deviation.label}</span>
             </div>
@@ -612,11 +612,11 @@ export const MobileWorkOrders: React.FC = () => {
   if (view === "close" && selected) {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={() => setView("detail")} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={() => setView("detail")} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white truncate">Cerrar {selected.workOrderCode}</span>
+          <span className="font-bold text-sm text-fg truncate">Cerrar {selected.workOrderCode}</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
@@ -632,7 +632,7 @@ export const MobileWorkOrders: React.FC = () => {
                       ? r === "SATISFACTORY"
                         ? "bg-success-sea/15 text-success-sea border-success-sea/30"
                         : "bg-orange-500/15 text-orange-400 border-orange-500/30"
-                      : "bg-white/5 text-text-industrial/50 border-white/10"
+                      : "bg-fg/5 text-text-industrial/50 border-fg/10"
                   }`}
                 >
                   {r === "SATISFACTORY" ? "Satisfactorio" : "Con deficiencias"}
@@ -649,7 +649,7 @@ export const MobileWorkOrders: React.FC = () => {
                 value={executedByName}
                 onChange={e => setExecutedByName(e.target.value)}
                 placeholder="Nombre"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -658,7 +658,7 @@ export const MobileWorkOrders: React.FC = () => {
                 type="date"
                 value={executionDate}
                 onChange={e => setExecutionDate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-accent/50"
               />
             </div>
           </div>
@@ -682,7 +682,7 @@ export const MobileWorkOrders: React.FC = () => {
                 value={actualHours}
                 onChange={e => setActualHours(e.target.value)}
                 placeholder={selected.estimatedHours != null ? String(selected.estimatedHours) : "ej. 2.5"}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
             {selected.maintenancePlanId && (
@@ -696,7 +696,7 @@ export const MobileWorkOrders: React.FC = () => {
                   value={runningHours}
                   onChange={e => setRunningHours(e.target.value)}
                   placeholder="ej. 3500"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
                 />
               </div>
             )}
@@ -709,7 +709,7 @@ export const MobileWorkOrders: React.FC = () => {
               onChange={e => setObs(e.target.value)}
               rows={4}
               placeholder="Notas de cierre..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+              className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
             />
           </div>
 
@@ -718,18 +718,18 @@ export const MobileWorkOrders: React.FC = () => {
             <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Foto (opcional)</p>
             {photoPreview ? (
               <div className="relative">
-                <img src={photoPreview} alt="Vista previa" className="w-full rounded-xl border border-white/10 object-cover max-h-72" />
+                <img src={photoPreview} alt="Vista previa" className="w-full rounded-xl border border-fg/10 object-cover max-h-72" />
                 <button
                   type="button"
                   onClick={clearPhoto}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white"
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-fg"
                   aria-label="Quitar foto"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/15 bg-white/5 text-text-industrial/60 cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors">
+              <label className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 active:bg-fg/15 transition-colors">
                 <Camera className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase tracking-wider">Tomar foto</span>
                 <input
@@ -748,7 +748,7 @@ export const MobileWorkOrders: React.FC = () => {
             type="button"
             onClick={handleClose}
             disabled={saving}
-            className="w-full py-3 rounded-xl bg-accent text-white text-sm font-bold disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent text-fg text-sm font-bold disabled:opacity-40"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmar cierre"}
           </button>
@@ -761,28 +761,28 @@ export const MobileWorkOrders: React.FC = () => {
   if (view === "detail" && selected) {
     return (
       <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-white/10">
-          <button type="button" onClick={back} className="p-2 -ml-2 text-text-industrial/40 hover:text-white">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={back} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-sm text-white truncate flex-1">{selected.workOrderCode}</span>
-          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${STATUS_COLOR[selected.status] ?? "bg-white/5 text-white/40 border-white/10"}`}>
+          <span className="font-bold text-sm text-fg truncate flex-1">{selected.workOrderCode}</span>
+          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${STATUS_COLOR[selected.status] ?? "bg-fg/5 text-fg/40 border-fg/10"}`}>
             {STATUS_LABEL[selected.status] ?? selected.status}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
-            <p className="text-base font-bold text-white">{selected.title ?? "(Sin título)"}</p>
+            <p className="text-base font-bold text-fg">{selected.title ?? "(Sin título)"}</p>
             {selected.assetName && <p className="text-xs text-text-industrial/50 mt-0.5">{selected.assetName}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Criticidad</p>
-              <p className={`text-lg font-bold ${CRIT_COLOR[selected.criticality] ?? "text-white"}`}>{selected.criticality}</p>
+              <p className={`text-lg font-bold ${CRIT_COLOR[selected.criticality] ?? "text-fg"}`}>{selected.criticality}</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Vencimiento</p>
-              <p className={`text-sm font-bold ${isOverdue(selected) ? "text-red-400" : "text-white"}`}>
+              <p className={`text-sm font-bold ${isOverdue(selected) ? "text-red-400" : "text-fg"}`}>
                 {selected.dueDate ? selected.dueDate.slice(0, 10) : "—"}
               </p>
             </div>
@@ -800,7 +800,7 @@ export const MobileWorkOrders: React.FC = () => {
                   generado por IA
                 </span>
               </div>
-              <p className="text-xs text-white/85 whitespace-pre-line leading-relaxed">{selected.observations}</p>
+              <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{selected.observations}</p>
             </div>
           )}
 
@@ -838,24 +838,24 @@ export const MobileWorkOrders: React.FC = () => {
 
           {/* Datos de ejecución cuando ya está cerrada */}
           {selected.status === "CLOSED" && (selected.executedByName || selected.completedDate || selected.runningHoursAtExecution != null) && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Ejecución</p>
               {selected.executedByName && (
                 <div className="flex justify-between text-xs">
                   <span className="text-text-industrial/50">Ejecutado por</span>
-                  <span className="text-white">{selected.executedByName}</span>
+                  <span className="text-fg">{selected.executedByName}</span>
                 </div>
               )}
               {selected.completedDate && (
                 <div className="flex justify-between text-xs">
                   <span className="text-text-industrial/50">Fecha</span>
-                  <span className="text-white">{selected.completedDate.slice(0, 10)}</span>
+                  <span className="text-fg">{selected.completedDate.slice(0, 10)}</span>
                 </div>
               )}
               {selected.runningHoursAtExecution != null && (
                 <div className="flex justify-between text-xs">
                   <span className="text-text-industrial/50">Horas motor</span>
-                  <span className="text-white tabular-nums">{selected.runningHoursAtExecution} h</span>
+                  <span className="text-fg tabular-nums">{selected.runningHoursAtExecution} h</span>
                 </div>
               )}
             </div>
@@ -867,7 +867,7 @@ export const MobileWorkOrders: React.FC = () => {
               <button
                 type="button"
                 onClick={openClose}
-                className="w-full py-3 rounded-xl bg-success-sea text-white text-sm font-bold"
+                className="w-full py-3 rounded-xl bg-success-sea text-fg text-sm font-bold"
               >
                 Cerrar OT
               </button>
@@ -903,12 +903,12 @@ export const MobileWorkOrders: React.FC = () => {
   // ── List ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
-      <div className="shrink-0 px-4 py-3 border-b border-white/10">
+      <div className="shrink-0 px-4 py-3 border-b border-fg/10">
         <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
           {openWOs.length} orden{openWOs.length !== 1 ? "es" : ""} activa{openWOs.length !== 1 ? "s" : ""}
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+      <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-accent" />
@@ -921,10 +921,10 @@ export const MobileWorkOrders: React.FC = () => {
               key={wo.id}
               type="button"
               onClick={() => selectWO(wo)}
-              className="w-full text-left px-4 py-3.5 hover:bg-white/5 active:bg-white/10 transition-colors"
+              className="w-full text-left px-4 py-3.5 hover:bg-fg/5 active:bg-fg/10 transition-colors"
             >
               <div className="flex items-start gap-3">
-                <div className={`mt-0.5 text-xs font-bold w-4 text-center shrink-0 ${CRIT_COLOR[wo.criticality] ?? "text-white"}`}>
+                <div className={`mt-0.5 text-xs font-bold w-4 text-center shrink-0 ${CRIT_COLOR[wo.criticality] ?? "text-fg"}`}>
                   {wo.criticality}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -934,7 +934,7 @@ export const MobileWorkOrders: React.FC = () => {
                       {STATUS_LABEL[wo.status] ?? wo.status}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-white truncate">{wo.title ?? "(Sin título)"}</p>
+                  <p className="text-sm font-medium text-fg truncate">{wo.title ?? "(Sin título)"}</p>
                   {wo.assetName && (
                     <p className="text-xs text-text-industrial/40 truncate mt-0.5">{wo.assetName}</p>
                   )}

@@ -22,11 +22,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- No-flash theme: aplica la clase .dark y el fondo correcto ANTES del primer
+         paint, leyendo gpms_theme. Default light. Debe ir antes del CSS/JS. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("gpms_theme");
+          var dark = t === "dark";
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.backgroundColor = dark ? "#080D1D" : "#F4F5F7";
+        } catch (e) {
+          document.documentElement.style.backgroundColor = "#F4F5F7";
+        }
+      })();
+    </script>
     <style>
-      body {
-        margin: 0;
-        background-color: #0B132B;
-      }
+      body { margin: 0; }
     </style>
   </head>
   <body>

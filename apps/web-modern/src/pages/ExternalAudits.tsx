@@ -34,7 +34,7 @@ const FINDING_STATUS_COLOR: Record<string, string> = {
   OPEN:                "bg-red-500/10 text-red-400 border-red-500/30",
   IN_PROGRESS:         "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
   CLOSED:              "bg-success-sea/10 text-success-sea border-success-sea/30",
-  REJECTED_BY_AUDITOR: "bg-white/5 text-text-industrial/60 border-white/10",
+  REJECTED_BY_AUDITOR: "bg-fg/5 text-text-industrial/60 border-fg/10",
 };
 
 interface Finding {
@@ -70,7 +70,7 @@ interface Audit {
   findingsOpen?: number;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 // ─── Audit modal ────────────────────────────────────────────────────────────
@@ -150,16 +150,16 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ClipboardCheck className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Auditoría externa</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nueva auditoría" : audit!.auditCode}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? "Nueva auditoría" : audit!.auditCode}</h2>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -204,7 +204,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
           </div>
 
           {!isNew && (
-            <div className="border-t border-white/10 pt-4 space-y-2">
+            <div className="border-t border-fg/10 pt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-text-industrial/70">Findings ({findings.length})</h3>
                 <button onClick={() => setShowAddFinding(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20">
@@ -229,7 +229,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div>
             {!isNew && isAdmin && (
               <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20">
@@ -238,7 +238,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
             <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </button>
@@ -252,11 +252,11 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => void }> = ({ auditId, finding, onChange }) => {
   const [editing, setEditing] = useState(false);
   return (
-    <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-1.5">
+    <div className="bg-fg/[0.03] border border-fg/10 rounded-xl p-3 space-y-1.5">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
           {finding.findingCode && <span className="text-[10px] font-mono text-accent">{finding.findingCode}</span>}
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-text-industrial/80 font-bold uppercase tracking-wider">
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-fg/10 bg-fg/5 text-text-industrial/80 font-bold uppercase tracking-wider">
             {FINDING_TYPE_LABEL[finding.findingType] ?? finding.findingType}
           </span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wider ${FINDING_STATUS_COLOR[finding.status]}`}>
@@ -271,7 +271,7 @@ const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => 
         </div>
         <button onClick={() => setEditing(v => !v)} className="text-[10px] text-accent hover:underline">{editing ? "Cerrar" : "Editar"}</button>
       </div>
-      <p className="text-xs text-white">{finding.description}</p>
+      <p className="text-xs text-fg">{finding.description}</p>
       {finding.clearingDate && (
         <p className="text-[10px] text-success-sea flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3" /> Cerrado el {fmtDate(finding.clearingDate)}{finding.evidenceNotes ? ` — ${finding.evidenceNotes}` : ""}
@@ -324,7 +324,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
         <div><label className={labelCls}>Severidad</label><input value={severity} onChange={e => setSeverity(e.target.value)} placeholder="MAJOR / MINOR / CRITICAL" className={inputCls + " text-xs"} /></div>
         <div><label className={labelCls}>Plazo rectificación</label><input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls + " text-xs"} /></div>
         <div className="flex items-end gap-2">
-          <label className="flex items-center gap-2 text-xs text-white"><input type="checkbox" checked={detentionRelated} onChange={e => setDetention(e.target.checked)} /> Detention-related</label>
+          <label className="flex items-center gap-2 text-xs text-fg"><input type="checkbox" checked={detentionRelated} onChange={e => setDetention(e.target.checked)} /> Detention-related</label>
         </div>
       </div>
       <div><label className={labelCls}>Descripción *</label><textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} /></div>
@@ -368,7 +368,7 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
   };
 
   return (
-    <div className="bg-white/[0.04] border border-white/10 rounded-lg p-2 space-y-2 mt-1">
+    <div className="bg-fg/[0.04] border border-fg/10 rounded-lg p-2 space-y-2 mt-1">
       <div className="grid grid-cols-2 gap-2">
         <div><label className={labelCls}>Estado</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className={inputCls + " text-xs"}>
@@ -427,7 +427,7 @@ export const ExternalAuditsPage: React.FC = () => {
         {([["all", "Todas"], ["open", "Con findings abiertos"]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-              filter === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              filter === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}
           >{l}</button>
         ))}
@@ -438,13 +438,13 @@ export const ExternalAuditsPage: React.FC = () => {
       ) : items.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin auditorías registradas.</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {items.map(a => (
-            <button key={a.id} onClick={() => setEditing(a)} className="w-full text-left p-4 hover:bg-white/5 transition-colors flex items-center gap-3">
+            <button key={a.id} onClick={() => setEditing(a)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{a.auditCode}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-white/5 text-white border-white/10">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-fg/5 text-fg border-fg/10">
                     {AUDIT_TYPE_LABEL[a.auditType] ?? a.auditType}
                   </span>
                   <VesselLabel code={a.vesselCode} className="text-[10px]" showCode />
@@ -454,11 +454,11 @@ export const ExternalAuditsPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-bold text-white">{a.agencyOrAuthority ?? "—"} {a.port ? `· ${a.port}` : ""}{a.country ? `, ${a.country}` : ""}</p>
+                <p className="text-sm font-bold text-fg">{a.agencyOrAuthority ?? "—"} {a.port ? `· ${a.port}` : ""}{a.country ? `, ${a.country}` : ""}</p>
                 {a.summary && <p className="text-xs text-text-industrial/50 line-clamp-1">{a.summary}</p>}
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-white font-mono">{fmtDate(a.auditDate)}</p>
+                <p className="text-xs text-fg font-mono">{fmtDate(a.auditDate)}</p>
                 <p className="text-[10px] text-text-industrial/40">{a.findingsTotal ?? 0} findings</p>
                 {a.overallResult && <p className="text-[10px] text-accent">{a.overallResult}</p>}
               </div>

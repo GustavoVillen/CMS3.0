@@ -470,7 +470,7 @@ const renderMarkdownLite = (
         key={`${keyPrefix}-l-${linkIndex}`}
         type="button"
         onClick={() => onInternalLinkClick(match[2]!)}
-        className="underline underline-offset-2 text-accent hover:text-white transition-colors"
+        className="underline underline-offset-2 text-accent hover:text-fg transition-colors"
       >
         {renderBoldMarkdown(match[1]!, `${keyPrefix}-ll-${linkIndex}`)}
       </button>,
@@ -494,12 +494,12 @@ function SuggestionCard({ s }: { s: Suggestion }) {
   const isMed  = s.priority === "MEDIUM";
   return (
     <div className={`px-2.5 py-2 rounded-lg border text-[10px] leading-relaxed ${
-      isHigh ? "bg-red-500/10 border-red-500/20" :
-      isMed  ? "bg-yellow-500/10 border-yellow-500/20" :
-               "bg-white/4 border-white/10"
+      isHigh ? "bg-danger/10 border-danger/25" :
+      isMed  ? "bg-warning/10 border-warning/25" :
+               "bg-fg/5 border-border"
     }`}>
       <p className={`font-bold flex items-center gap-1 ${
-        isHigh ? "text-red-400" : isMed ? "text-yellow-400" : "text-text-industrial/60"
+        isHigh ? "text-danger" : isMed ? "text-warning" : "text-text-industrial/60"
       }`}>
         {(isHigh || isMed) ? <AlertTriangle className="w-2.5 h-2.5 shrink-0" /> : <Info className="w-2.5 h-2.5 shrink-0" />}
         {s.title}
@@ -885,24 +885,24 @@ export const CopilotoPanel: React.FC = () => {
 
   if (!expanded) {
     return (
-      <aside className="relative z-55 flex flex-col items-center h-screen w-10 border-l border-white/10 bg-[#080D1D] shrink-0 pt-3 pb-3 gap-3">
+      <aside className="relative z-55 flex flex-col items-center h-screen w-10 border-l border-border bg-surface dark:bg-[#080D1D] shrink-0 pt-3 pb-3 gap-3">
         {/* Resize handle — left edge */}
         <div
           className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 group"
           onMouseDown={(e) => startResize(e, "left")}
         >
-          <div className="absolute left-0 top-0 h-full w-px bg-white/10 group-hover:bg-accent/50 transition-colors duration-150" />
+          <div className="absolute left-0 top-0 h-full w-px bg-fg/10 group-hover:bg-accent/50 transition-colors duration-150" />
         </div>
 
         <button
           onClick={() => setExpanded(true)}
           title="Abrir Copiloto IA"
-          className="text-accent hover:text-white transition-colors"
+          className="text-accent hover:text-fg transition-colors"
         >
           <Bot className="w-5 h-5" />
         </button>
         {hasSuggestions && (
-          <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title={`${suggestions.length} sugerencia(s) activa(s)`} />
+          <span className="w-2 h-2 rounded-full bg-warning animate-pulse" title={`${suggestions.length} sugerencia(s) activa(s)`} />
         )}
         {screenContext && (
           <span className="text-[8px] font-bold text-accent/40 uppercase tracking-widest [writing-mode:vertical-rl] rotate-180 select-none">
@@ -913,7 +913,7 @@ export const CopilotoPanel: React.FC = () => {
         <button
           onClick={() => setExpanded(true)}
           title="Expandir"
-          className="text-text-industrial/20 hover:text-white transition-colors"
+          className="text-text-industrial/20 hover:text-fg transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -927,7 +927,7 @@ export const CopilotoPanel: React.FC = () => {
 
   return (
     <aside
-      className={`relative flex flex-col border-l border-white/10 bg-[#080D1D] shrink-0 ${
+      className={`relative flex flex-col border-l border-border bg-surface dark:bg-[#080D1D] shrink-0 ${
         fullscreen
           ? "fixed inset-0 z-100"
           : "z-55 h-screen"
@@ -940,15 +940,15 @@ export const CopilotoPanel: React.FC = () => {
           className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 group"
           onMouseDown={(e) => startResize(e, "left")}
         >
-          <div className="absolute left-0 top-0 h-full w-px bg-white/10 group-hover:bg-accent/50 transition-colors duration-150" />
+          <div className="absolute left-0 top-0 h-full w-px bg-fg/10 group-hover:bg-accent/50 transition-colors duration-150" />
         </div>
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10 shrink-0 bg-white/2">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0 bg-fg/[0.03]">
         <div className="flex items-center gap-2 min-w-0">
           <Bot className="w-3.5 h-3.5 text-accent shrink-0" />
-          <span className="text-[11px] font-bold text-white">Copiloto CMS</span>
+          <span className="text-[11px] font-bold text-fg">Copiloto CMS</span>
           {screenContext && (
             <span className="text-[9px] text-accent/50 font-mono uppercase tracking-wider truncate">
               {screenContext.module.replace("_", " ")}
@@ -957,15 +957,15 @@ export const CopilotoPanel: React.FC = () => {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {messages.length > 0 && (
-            <button onClick={clearConversation} title="Limpiar conversación" className="text-text-industrial/30 hover:text-red-400 transition-colors">
+            <button onClick={clearConversation} title="Limpiar conversación" className="text-text-industrial/30 hover:text-danger transition-colors">
               <Trash2 className="w-3 h-3" />
             </button>
           )}
-          <button onClick={() => setFullscreen(f => !f)} title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"} className="text-text-industrial/30 hover:text-white transition-colors">
+          <button onClick={() => setFullscreen(f => !f)} title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"} className="text-text-industrial/30 hover:text-fg transition-colors">
             {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
           {!fullscreen && (
-            <button onClick={() => setExpanded(false)} title="Colapsar" className="text-text-industrial/30 hover:text-white transition-colors">
+            <button onClick={() => setExpanded(false)} title="Colapsar" className="text-text-industrial/30 hover:text-fg transition-colors">
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -973,11 +973,11 @@ export const CopilotoPanel: React.FC = () => {
       </div>
 
       {/* ── Capability selector ── */}
-      <div className="px-2 py-1.5 border-b border-white/5 shrink-0">
+      <div className="px-2 py-1.5 border-b border-border shrink-0">
         <select
           value={capability}
           onChange={e => setCapability(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-text-industrial/60 focus:outline-none focus:border-accent/30 appearance-none"
+          className="w-full bg-fg/5 border border-border rounded-lg px-2 py-1 text-[10px] text-text-industrial/60 focus:outline-none focus:border-accent/30 appearance-none"
         >
           {CAPABILITIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
@@ -985,13 +985,13 @@ export const CopilotoPanel: React.FC = () => {
 
       {/* ── Context strip (only when a page/modal emits context) ── */}
       {screenContext && (
-        <div className="px-3 py-2 border-b border-white/5 shrink-0 bg-accent/3">
+        <div className="px-3 py-2 border-b border-border shrink-0 bg-accent/3">
           <div className="flex items-center gap-2 flex-wrap">
             {screenContext.entityCode && (
-              <span className="text-[10px] font-mono font-bold text-white/80">{screenContext.entityCode}</span>
+              <span className="text-[10px] font-mono font-bold text-fg/80">{screenContext.entityCode}</span>
             )}
             {screenContext.workflowStage && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/10 text-text-industrial/50 font-mono">
+              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-fg/10 text-text-industrial/50 font-mono">
                 {screenContext.workflowStage}
               </span>
             )}
@@ -1007,7 +1007,7 @@ export const CopilotoPanel: React.FC = () => {
 
       {/* ── Single pending-items action ── */}
       {screenContext && hasSuggestions && (
-        <div className="px-2 py-2 border-b border-white/5 shrink-0">
+        <div className="px-2 py-2 border-b border-border shrink-0">
           <button
             onClick={() => void sendMessage(buildPendingItemsPrompt(screenContext, suggestions))}
             disabled={streaming}
@@ -1021,11 +1021,11 @@ export const CopilotoPanel: React.FC = () => {
 
       {/* ── DEFERRALS quick-action ── */}
       {screenContext?.module === "DEFERRALS" && (
-        <div className="px-2 py-2 border-b border-white/5 shrink-0">
+        <div className="px-2 py-2 border-b border-border shrink-0">
           <button
             onClick={() => void sendMessage(buildDeferralAnalysisPrompt(screenContext))}
             disabled={streaming}
-            className="w-full text-[10px] px-2.5 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 font-semibold hover:bg-purple-500/20 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5"
+            className="w-full text-[10px] px-2.5 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-semibold hover:bg-purple-500/20 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5"
           >
             <BarChart2 className="w-2.5 h-2.5 shrink-0" />
             Analizar diferimiento
@@ -1035,7 +1035,7 @@ export const CopilotoPanel: React.FC = () => {
 
       {/* ── Apply AI-proposed fields ── */}
       {pendingFields && hasApplyFieldsCallback && (
-        <div className="px-2 py-2 border-b border-white/5 shrink-0">
+        <div className="px-2 py-2 border-b border-border shrink-0">
           <button
             onClick={() => {
               applyFields(pendingFields);
@@ -1069,8 +1069,8 @@ export const CopilotoPanel: React.FC = () => {
           <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
             <div className={`max-w-[92%] rounded-xl px-2.5 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap ${
               msg.role === "user"
-                ? "bg-accent/20 border border-accent/20 text-white"
-                : "bg-white/4 border border-white/5 text-text-industrial/80"
+                ? "bg-accent/20 border border-accent/20 text-fg"
+                : "bg-fg/5 border border-border text-text-industrial/80"
             }`}>
               {msg.content
                 ? renderMarkdownLite(msg.content, `msg-${i}`, handleInternalLinkClick)
@@ -1094,14 +1094,14 @@ export const CopilotoPanel: React.FC = () => {
                       {action.label ?? `Aplicar ${action.type} en ${action.target}`}
                       {action.state === "applied" && <span className="ml-1 text-success-sea">✓ aplicado</span>}
                       {action.state === "failed" && action.errorMsg && (
-                        <span className="ml-1 text-red-400 text-[10px]">— {action.errorMsg}</span>
+                        <span className="ml-1 text-danger text-[10px]">— {action.errorMsg}</span>
                       )}
                     </span>
                     <button
                       type="button"
                       onClick={() => { void applyAction(i, ai); }}
                       disabled={action.state === "applying" || action.state === "applied"}
-                      className="px-2 py-1 rounded-md bg-accent text-primary-bg text-[10px] font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
+                      className="px-2 py-1 rounded-md bg-accent text-accent-fg text-[10px] font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
                     >
                       {action.state === "applying" ? "Aplicando…" : action.state === "applied" ? "Aplicado" : "Aplicar"}
                     </button>
@@ -1129,7 +1129,7 @@ export const CopilotoPanel: React.FC = () => {
         ))}
 
         {error && (
-          <div className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
+          <div className="text-[10px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-2.5 py-1.5">
             {error}
           </div>
         )}
@@ -1137,13 +1137,13 @@ export const CopilotoPanel: React.FC = () => {
       </div>
 
       {/* ── Input ── */}
-      <div className="px-2 py-2 border-t border-white/10 shrink-0">
+      <div className="px-2 py-2 border-t border-border shrink-0">
         {/* Attachment chip */}
         {pendingFile && (
           <div className="flex items-center gap-1.5 mb-1.5 px-2 py-1 rounded-lg bg-accent/10 border border-accent/20">
             <Paperclip className="w-2.5 h-2.5 text-accent shrink-0" />
             <span className="text-[10px] text-accent truncate flex-1">{pendingFile.fileName}</span>
-            <button onClick={() => setPendingFile(null)} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0">
+            <button onClick={() => setPendingFile(null)} className="text-text-industrial/40 hover:text-danger transition-colors shrink-0">
               <X className="w-2.5 h-2.5" />
             </button>
           </div>
@@ -1165,7 +1165,7 @@ export const CopilotoPanel: React.FC = () => {
             className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all disabled:opacity-30 ${
               pendingFile
                 ? "bg-accent/20 border-accent/40 text-accent"
-                : "bg-white/5 border-white/10 text-text-industrial/40 hover:text-accent hover:border-accent/30"
+                : "bg-fg/5 border-border text-text-industrial/40 hover:text-accent hover:border-accent/30"
             }`}
           >
             {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
@@ -1176,8 +1176,8 @@ export const CopilotoPanel: React.FC = () => {
             title={listening ? "Detener grabación" : "Hablar"}
             className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all disabled:opacity-30 ${
               listening
-                ? "bg-red-500/20 border-red-500/40 text-red-400 animate-pulse"
-                : "bg-white/5 border-white/10 text-text-industrial/40 hover:text-accent hover:border-accent/30"
+                ? "bg-danger/20 border-danger/40 text-danger animate-pulse"
+                : "bg-fg/5 border-border text-text-industrial/40 hover:text-accent hover:border-accent/30"
             }`}
           >
             {listening ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
@@ -1192,7 +1192,7 @@ export const CopilotoPanel: React.FC = () => {
             placeholder="Escribe tu pregunta… (Enter para enviar)"
             rows={2}
             style={{ resize: "vertical" }}
-            className="flex-1 resize-y min-h-[52px] max-h-[40vh] overflow-y-auto bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-text-industrial placeholder-text-industrial/20 focus:outline-none focus:border-accent/40 disabled:opacity-50 transition-colors"
+            className="flex-1 resize-y min-h-[52px] max-h-[40vh] overflow-y-auto bg-fg/5 border border-border rounded-xl px-2.5 py-2 text-[11px] text-text-industrial placeholder-text-industrial/20 focus:outline-none focus:border-accent/40 disabled:opacity-50 transition-colors"
           />
           <button
             onClick={() => { void sendMessage(); }}

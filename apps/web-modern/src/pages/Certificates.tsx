@@ -53,7 +53,7 @@ const CERT_STATUS_STYLES: Record<string, string> = {
   EXPIRING_SOON: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   EXPIRED: "bg-red-500/10 text-red-400 border-red-500/20",
   SUSPENDED: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  CLOSED: "bg-white/5 text-text-industrial/40 border-white/10",
+  CLOSED: "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
 
@@ -126,7 +126,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
     },
   });
 
-  const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+  const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 
   const handleSelectOriginalFile = useCallback(() => {
     setSourceError(null);
@@ -202,15 +202,15 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="w-full max-w-2xl bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-3">
             <FileText className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-bold text-white">
+            <h2 className="text-sm font-bold text-fg">
               {isEdit ? "Editar Certificado" : "Nuevo Certificado"}
             </h2>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -265,7 +265,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.status")}</label>
             <div className="min-h-[42px] flex items-center">
-              <span className={`inline-block text-xs px-3 py-1 rounded-full border font-bold ${CERT_STATUS_STYLES[derivedStatus] ?? "bg-white/5 text-text-industrial/40 border-white/10"}`}>
+              <span className={`inline-block text-xs px-3 py-1 rounded-full border font-bold ${CERT_STATUS_STYLES[derivedStatus] ?? "bg-fg/5 text-text-industrial/40 border-fg/10"}`}>
                 {derivedStatus}
               </span>
             </div>
@@ -277,7 +277,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
                 type="button"
                 onClick={handleSelectOriginalFile}
                 disabled={uploading}
-                className="shrink-0 w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-50"
+                className="shrink-0 w-10 h-10 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-50"
                 title="Seleccionar archivo"
               >
                 {uploading
@@ -289,7 +289,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
                 type="button"
                 onClick={handleOpenOriginalSource}
                 disabled={!hasLink}
-                className="shrink-0 w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                className="shrink-0 w-10 h-10 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Abrir archivo"
               >
                 <ExternalLink className="w-4 h-4 text-accent" />
@@ -309,7 +309,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           </div>
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">{t("common.cancel")}</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : isEdit ? t("common.saveChanges") : t("common.create")}
             </button>
@@ -340,15 +340,15 @@ const DeleteConfirm: React.FC<{ cert: Certificate; onClose: () => void; onDelete
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-sm bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <h2 className="text-sm font-bold text-white">¿Eliminar certificado?</h2>
+      <div className="relative w-full max-w-sm bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <h2 className="text-sm font-bold text-fg">¿Eliminar certificado?</h2>
         <p className="text-xs text-text-industrial/60">
-          <span className="text-white font-bold">{cert.certificateCode} — {cert.name}</span>
+          <span className="text-fg font-bold">{cert.certificateCode} — {cert.name}</span>
         </p>
         {error && <p className="text-xs text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-white hover:bg-white/5 transition-all">{t("common.cancel")}</button>
-          <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-white font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
+          <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.delete")}
           </button>
         </div>
@@ -411,8 +411,8 @@ export const CertificatesPage: React.FC = () => {
   }, []);
 
   const columns: Column<Certificate>[] = useMemo(() => [
-    { key: "certificateCode", header: t("col.code"),      render: r => <span className="font-mono font-bold text-white text-xs">{r.certificateCode}</span> },
-    { key: "name",            header: t("col.name"),      render: r => <span className="font-medium text-white line-clamp-1">{r.name}</span> },
+    { key: "certificateCode", header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg text-xs">{r.certificateCode}</span> },
+    { key: "name",            header: t("col.name"),      render: r => <span className="font-medium text-fg line-clamp-1">{r.name}</span> },
     { key: "vesselCode",      header: t("col.vessel"),    render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "issuingAuthority",header: t("col.authority"), render: r => <span className="text-text-industrial/80">{r.issuingAuthority}</span> },
     { key: "expiryDate",      header: t("col.expiry"),    render: r => <ExpiryCell date={r.expiryDate} /> },
@@ -455,7 +455,7 @@ export const CertificatesPage: React.FC = () => {
             <Plus className="w-3.5 h-3.5" /> {t("common.new")}
           </button>
         )}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
       </PageHeader>

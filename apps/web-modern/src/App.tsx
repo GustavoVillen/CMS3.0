@@ -84,7 +84,7 @@ function RequireRole({ roles, children }: { roles: string[]; children: React.Rea
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-3 text-text-industrial/40">
-      <h2 className="text-2xl font-bold text-white">Acceso denegado</h2>
+      <h2 className="text-2xl font-bold text-fg">Acceso denegado</h2>
       <p className="text-sm">No tenés permiso para ver esta página.</p>
       <a href="/" className="text-xs text-accent hover:underline">Volver al inicio</a>
     </div>

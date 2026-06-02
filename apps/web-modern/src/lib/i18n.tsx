@@ -91,6 +91,8 @@ const dict = {
   "header.logout":          { es: "Cerrar sesión",             en: "Sign out",                pt: "Sair" },
   "header.expandMenu":      { es: "Expandir menú",             en: "Expand menu",             pt: "Expandir menu" },
   "header.collapseMenu":    { es: "Colapsar menú",             en: "Collapse menu",           pt: "Recolher menu" },
+  "header.themeLight":      { es: "Modo claro",                en: "Light mode",              pt: "Modo claro" },
+  "header.themeDark":       { es: "Modo oscuro",               en: "Dark mode",               pt: "Modo escuro" },
 
   // Notificaciones (campana + banner CRITICAL)
   "notifications.title":           { es: "Notificaciones",                 en: "Notifications",                pt: "Notificações" },

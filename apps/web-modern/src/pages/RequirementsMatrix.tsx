@@ -41,7 +41,7 @@ interface MatrixData {
 }
 
 const LEVEL_CLS: Record<string, string> = {
-  "":            "bg-white/[0.02] text-text-industrial/30 border-white/5",
+  "":            "bg-fg/[0.02] text-text-industrial/30 border-fg/5",
   "OBRIGATORIO": "bg-red-500/15 text-red-300 border-red-500/40",
   "VALIDO":      "bg-success-sea/15 text-success-sea border-success-sea/40",
   "DESEJAVEL":   "bg-yellow-500/15 text-yellow-300 border-yellow-500/40",
@@ -210,7 +210,7 @@ export const RequirementsMatrixPage: React.FC = () => {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select value={category} onChange={e => setCategory(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white">
+        <select value={category} onChange={e => setCategory(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
           <option value="">{t("rm.allCategories")}</option>
           {(data?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -254,10 +254,10 @@ export const RequirementsMatrixPage: React.FC = () => {
           {category && <span className="block mt-1">{t("rm.tryRemoveFilter")}</span>}
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white/[0.03] border border-white/10 rounded-xl">
+        <div className="overflow-x-auto bg-fg/[0.03] border border-fg/10 rounded-xl">
           <table className="text-[10px] min-w-full">
             <thead>
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-fg/10">
                 <th className="sticky left-0 z-10 bg-[#0D1B2A] text-left px-3 py-2 font-bold uppercase tracking-widest text-text-industrial/60 min-w-[200px]">{t("rm.colRank")}</th>
                 {data.trainingItems.map(it => (
                   <th key={it.id} className="group relative px-2 py-2 text-center font-bold uppercase tracking-wider text-text-industrial/50 min-w-[80px] whitespace-nowrap">
@@ -277,9 +277,9 @@ export const RequirementsMatrixPage: React.FC = () => {
             </thead>
             <tbody>
               {data.ranks.map(r => (
-                <tr key={r.id} className="group border-b border-white/5 last:border-b-0">
+                <tr key={r.id} className="group border-b border-fg/5 last:border-b-0">
                   <td className="sticky left-0 z-10 bg-[#0D1B2A] px-3 py-2 relative">
-                    <div className="text-xs font-bold text-white">{r.name}</div>
+                    <div className="text-xs font-bold text-fg">{r.name}</div>
                     <div className="text-[9px] text-text-industrial/40 uppercase tracking-wider">{r.code}</div>
                     <button
                       type="button"
@@ -307,7 +307,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                           className={`w-full h-7 rounded border text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${cls} ${isSaving ? "opacity-50" : ""}`}
                         >
                           {LEVEL_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value} className="bg-[#0D1B2A] text-white">{o.label}</option>
+                            <option key={o.value} value={o.value} className="bg-[#0D1B2A] text-fg">{o.label}</option>
                           ))}
                         </select>
                       </td>
@@ -325,9 +325,9 @@ export const RequirementsMatrixPage: React.FC = () => {
           <form
             onSubmit={onCreateItem}
             onClick={e => e.stopPropagation()}
-            className="bg-[#0D1B2A] border border-white/10 rounded-xl p-6 w-full max-w-md space-y-3"
+            className="bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
-            <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{t("rm.createItemTitle")}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createItemTitle")}</h2>
 
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemCode")} *</label>
@@ -336,7 +336,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 required
                 value={newItem.code}
                 onChange={e => setNewItem({ ...newItem, code: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
                 placeholder="STCW_VI_3"
               />
             </div>
@@ -348,7 +348,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 required
                 value={newItem.name}
                 onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
             </div>
 
@@ -358,7 +358,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 type="text"
                 value={newItem.regulation}
                 onChange={e => setNewItem({ ...newItem, regulation: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
             </div>
 
@@ -369,7 +369,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 list="rm-categories"
                 value={newItem.category}
                 onChange={e => setNewItem({ ...newItem, category: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
               <datalist id="rm-categories">
                 {(data?.categories ?? []).map(c => <option key={c} value={c} />)}
@@ -383,7 +383,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 min="0"
                 value={newItem.validityYears}
                 onChange={e => setNewItem({ ...newItem, validityYears: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
             </div>
 
@@ -392,7 +392,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowNewItem(false)}
                 disabled={savingNew}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-text-industrial/70 hover:bg-white/10"
+                className="px-3 py-1.5 rounded-lg text-xs bg-fg/5 border border-fg/10 text-text-industrial/70 hover:bg-fg/10"
               >
                 {t("common.cancel")}
               </button>
@@ -414,9 +414,9 @@ export const RequirementsMatrixPage: React.FC = () => {
           <form
             onSubmit={onCreateRank}
             onClick={e => e.stopPropagation()}
-            className="bg-[#0D1B2A] border border-white/10 rounded-xl p-6 w-full max-w-md space-y-3"
+            className="bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
-            <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{t("rm.createRankTitle")}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createRankTitle")}</h2>
 
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.rankCode")} *</label>
@@ -425,7 +425,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 required
                 value={newRank.code}
                 onChange={e => setNewRank({ ...newRank, code: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
                 placeholder="OS_2"
               />
             </div>
@@ -437,7 +437,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 required
                 value={newRank.name}
                 onChange={e => setNewRank({ ...newRank, name: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
             </div>
 
@@ -448,7 +448,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 min="0"
                 value={newRank.sortOrder}
                 onChange={e => setNewRank({ ...newRank, sortOrder: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white"
+                className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg"
               />
             </div>
 
@@ -457,7 +457,7 @@ export const RequirementsMatrixPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowNewRank(false)}
                 disabled={savingNewRank}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-text-industrial/70 hover:bg-white/10"
+                className="px-3 py-1.5 rounded-lg text-xs bg-fg/5 border border-fg/10 text-text-industrial/70 hover:bg-fg/10"
               >
                 {t("common.cancel")}
               </button>

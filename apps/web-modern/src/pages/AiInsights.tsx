@@ -51,7 +51,7 @@ export const AiInsightsPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={Sparkles} title={t("page.aiInsights")} total={sorted.length} onReload={reload}>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value="OPEN">{t("aiInsights.active")}</option>
           <option value="DISMISSED">{t("aiInsights.dismissed")}</option>
           <option value="RESOLVED">{t("aiInsights.resolved")}</option>
@@ -108,7 +108,7 @@ function InsightCard({ insight, onStatusChange }: { insight: AiInsight; onStatus
           <p className="text-[10px] uppercase tracking-widest text-text-industrial/30 font-bold mb-1">
             {insight.insightType.replace(/_/g, " ")} · {insight.targetType}
           </p>
-          <h3 className="text-sm font-bold text-white leading-snug">{insight.title}</h3>
+          <h3 className="text-sm font-bold text-fg leading-snug">{insight.title}</h3>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <PriorityBadge priority={insight.priority} />
@@ -120,7 +120,7 @@ function InsightCard({ insight, onStatusChange }: { insight: AiInsight; onStatus
         <p className="text-[10px] uppercase tracking-wider text-accent font-bold mb-1">{t("aiInsights.recommendation")}</p>
         <MarkdownText text={insight.recommendation} className="text-xs text-text-industrial/70" />
       </div>
-      <div className="flex items-center justify-between text-[10px] text-text-industrial/30 pt-1 border-t border-white/5">
+      <div className="flex items-center justify-between text-[10px] text-text-industrial/30 pt-1 border-t border-fg/5">
         <span>{t("aiInsights.vessel")} {targetLabel}</span>
         <span>{t("aiInsights.detected")} {fmtDate(insight.detectedAt)}</span>
       </div>
@@ -129,7 +129,7 @@ function InsightCard({ insight, onStatusChange }: { insight: AiInsight; onStatus
           <button onClick={() => handleStatus("RESOLVED")} disabled={acting} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-sea/10 border border-success-sea/20 text-success-sea text-xs font-bold hover:bg-success-sea/20 disabled:opacity-40 transition-all">
             <CheckCircle2 className="w-3 h-3" /> {t("aiInsights.resolve")}
           </button>
-          <button onClick={() => handleStatus("DISMISSED")} disabled={acting} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-text-industrial/40 text-xs font-bold hover:bg-white/10 disabled:opacity-40 transition-all">
+          <button onClick={() => handleStatus("DISMISSED")} disabled={acting} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial/40 text-xs font-bold hover:bg-fg/10 disabled:opacity-40 transition-all">
             <XCircle className="w-3 h-3" /> {t("aiInsights.dismiss")}
           </button>
         </div>

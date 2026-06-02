@@ -215,10 +215,10 @@ function UnsavedChangesDialog({ saving, error, canSave, onSave, onDiscard, onCan
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div
-        className="bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
+        className="bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-base font-bold text-white">Cambios sin guardar</h2>
+        <h2 className="text-base font-bold text-fg">Cambios sin guardar</h2>
         <p className="text-sm text-text-industrial/70 leading-relaxed">
           Tenés cambios sin guardar. ¿Qué querés hacer?
         </p>
@@ -232,7 +232,7 @@ function UnsavedChangesDialog({ saving, error, canSave, onSave, onDiscard, onCan
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-white/5 text-white text-sm font-bold border border-white/10 hover:bg-white/10 disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl bg-fg/5 text-fg text-sm font-bold border border-fg/10 hover:bg-fg/10 disabled:opacity-40"
           >
             Cancelar
           </button>
@@ -240,7 +240,7 @@ function UnsavedChangesDialog({ saving, error, canSave, onSave, onDiscard, onCan
             type="button"
             onClick={onDiscard}
             disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-white/5 text-text-industrial/60 text-sm font-bold border border-white/10 hover:bg-white/10 disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl bg-fg/5 text-text-industrial/60 text-sm font-bold border border-fg/10 hover:bg-fg/10 disabled:opacity-40"
           >
             Descartar
           </button>
@@ -249,7 +249,7 @@ function UnsavedChangesDialog({ saving, error, canSave, onSave, onDiscard, onCan
               type="button"
               onClick={onSave}
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:bg-accent/80 disabled:opacity-40"
+              className="flex-1 py-2.5 rounded-xl bg-accent text-fg text-sm font-bold hover:bg-accent/80 disabled:opacity-40"
             >
               {saving ? "Guardando…" : "Guardar"}
             </button>

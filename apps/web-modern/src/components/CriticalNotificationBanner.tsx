@@ -48,7 +48,7 @@ export const CriticalNotificationBanner: React.FC = () => {
       </div>
       <button
         onClick={handleView}
-        className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-colors shrink-0"
+        className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-fg text-xs font-bold transition-colors shrink-0"
       >
         {t("notifications.view")}
       </button>

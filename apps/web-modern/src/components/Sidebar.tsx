@@ -12,6 +12,7 @@ import { useAuth } from "../lib/auth";
 import { useResizable } from "../lib/hooks";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
+import { useTheme } from "../lib/theme";
 
 interface SidebarCounts {
   // Fase 1
@@ -149,7 +150,7 @@ function navItemCls(isActive: boolean, collapsed: boolean) {
     collapsed ? "justify-center px-0 py-2 mx-1" : "px-3 py-2",
     isActive
       ? "bg-accent/10 text-accent border border-accent/20"
-      : "text-white/50 hover:text-white hover:bg-white/5 border border-transparent",
+      : "text-fg/50 hover:text-fg hover:bg-fg/5 border border-transparent",
   ].join(" ");
 }
 
@@ -162,6 +163,7 @@ const COLLAPSED_W = 56;
 export const Sidebar: React.FC = () => {
   const { tenant, user } = useAuth();
   const t = useT();
+  const { theme } = useTheme();
   const { selectedVesselCode } = useVesselContext();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
   const [collapsed, setCollapsed] = useState(
@@ -230,11 +232,11 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className="relative z-70 h-screen border-r border-white/10 flex flex-col bg-primary-bg/50 backdrop-blur-xl shrink-0 overflow-hidden"
+      className="relative z-70 h-screen border-r border-border flex flex-col bg-surface dark:bg-[#0B132B]/50 dark:backdrop-blur-xl shrink-0 overflow-hidden"
       style={{ width: effectiveWidth, transition: "width 200ms ease" }}
     >
       {/* ── Logo ─────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center border-b border-white/10 shrink-0 ${collapsed ? "flex-col gap-2 py-3 px-0" : "justify-between px-4 py-4"}`}>
+      <div className={`flex items-center border-b border-border shrink-0 ${collapsed ? "flex-col gap-2 py-3 px-0" : "justify-between px-4 py-4"}`}>
         <div className={`flex flex-col gap-2 min-w-0 ${collapsed ? "items-center" : "flex-1"}`}>
           {/* Tenant — arriba */}
           {tenant && !collapsed && (
@@ -246,7 +248,7 @@ export const Sidebar: React.FC = () => {
                   className="w-16 h-16 object-contain shrink-0"
                 />
               )}
-              <p className="text-sm font-bold text-white leading-tight truncate">{tenant.name}</p>
+              <p className="text-sm font-bold text-fg leading-tight truncate">{tenant.name}</p>
             </div>
           )}
           {tenant && collapsed && (tenant.logoUrlLight || tenant.logoUrl) && (
@@ -259,14 +261,14 @@ export const Sidebar: React.FC = () => {
           {/* Sistema — abajo */}
           <div className="flex items-center gap-2 min-w-0">
             <img
-              src="/logo-white.png"
+              src={theme === "dark" ? "/logo-white.png" : "/logo.png"}
               alt="CMS"
               className="shrink-0 object-contain"
               style={{ width: 16, height: 16 }}
             />
             {!collapsed && (
               <div className="min-w-0">
-                <p className="font-bold text-[8px] tracking-widest text-teal-400 leading-tight uppercase">CMS · Copilot Management System</p>
+                <p className="font-bold text-[8px] tracking-widest text-teal-600 dark:text-teal-400 leading-tight uppercase">CMS · Copilot Management System</p>
               </div>
             )}
           </div>
@@ -276,7 +278,7 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={toggle}
           title={collapsed ? t("header.expandMenu") : t("header.collapseMenu")}
-          className="w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-all shrink-0"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-fg/30 hover:text-fg hover:bg-fg/10 transition-all shrink-0"
         >
           {collapsed
             ? <ChevronRight className="w-3.5 h-3.5" />
@@ -306,11 +308,11 @@ export const Sidebar: React.FC = () => {
             <div key={section.titleKey}>
               {/* Section header (clickeable cuando el sidebar está expandido) */}
               {collapsed ? (
-                <div className="mx-3 border-t border-white/10 mb-2" />
+                <div className="mx-3 border-t border-border mb-2" />
               ) : (
                 <button
                   onClick={() => toggleSection(section.titleKey)}
-                  className="w-full px-4 mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/25 hover:text-white/60 transition-colors select-none"
+                  className="w-full px-4 mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-fg/25 hover:text-fg/60 transition-colors select-none"
                 >
                   <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   <span>{t(section.titleKey)}</span>
@@ -362,7 +364,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <div className={`border-t border-white/10 shrink-0 ${collapsed ? "py-3 px-0" : "p-2"}`}>
+      <div className={`border-t border-border shrink-0 ${collapsed ? "py-3 px-0" : "p-2"}`}>
         <NavLink
           to="/profile"
           title={collapsed ? t("nav.profile") : undefined}
@@ -376,9 +378,9 @@ export const Sidebar: React.FC = () => {
           <div className="mt-2 px-3 py-2 rounded-xl bg-linear-to-br from-accent/10 to-transparent border border-accent/10">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse shrink-0" />
-              <span className="text-[11px] text-white/40">{t("nav.statusOk")}</span>
+              <span className="text-[11px] text-fg/40">{t("nav.statusOk")}</span>
               {aiBadgeText && user?.role === "TENANT_ADMIN" && (
-                <span className="text-[10px] text-white/30 ml-auto" title={aiBadgeTitle}>
+                <span className="text-[10px] text-fg/30 ml-auto" title={aiBadgeTitle}>
                   {aiBadgeText}
                 </span>
               )}
@@ -398,7 +400,7 @@ export const Sidebar: React.FC = () => {
           className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize z-10 group"
           onMouseDown={e => startResize(e, "right")}
         >
-          <div className="absolute right-0 top-0 h-full w-px bg-white/10 group-hover:bg-accent/50 transition-colors duration-150" />
+          <div className="absolute right-0 top-0 h-full w-px bg-border group-hover:bg-accent/50 transition-colors duration-150" />
         </div>
       )}
     </aside>

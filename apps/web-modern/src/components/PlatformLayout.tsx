@@ -28,7 +28,7 @@ export const PlatformLayout: React.FC = () => {
               <ShieldCheck className="text-red-400 w-4 h-4" />
             </div>
             <div>
-              <p className="text-xs font-bold text-white">Super Admin</p>
+              <p className="text-xs font-bold text-fg">Super Admin</p>
               <p className="text-[10px] text-text-industrial/40">GPMS Platform</p>
             </div>
           </div>
@@ -39,7 +39,7 @@ export const PlatformLayout: React.FC = () => {
             <NavLink key={item.path} to={item.path}
               className={({ isActive }) =>
                 `flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-150 group text-xs font-medium ${
-                  isActive ? "bg-red-500/10 text-red-400 border border-red-500/20" : "text-text-industrial/60 hover:text-white hover:bg-white/5"
+                  isActive ? "bg-red-500/10 text-red-400 border border-red-500/20" : "text-text-industrial/60 hover:text-fg hover:bg-fg/5"
                 }`
               }
             >

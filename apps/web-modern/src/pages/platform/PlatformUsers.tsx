@@ -39,10 +39,10 @@ function usePlatformList<T>(path: string) {
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0D1526] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <h2 className="text-sm font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+      <div className="bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
+          <h2 className="text-sm font-bold text-fg">{title}</h2>
+          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-6 py-5 space-y-4">{children}</div>
       </div>
@@ -59,7 +59,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inp = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
@@ -68,7 +68,7 @@ function ErrMsg({ msg }: { msg: string }) {
 
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
   return (
-    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-white font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
       {l ? <><Loader2 className="w-4 h-4 animate-spin" />{label}...</> : label}
     </button>
   );
@@ -171,7 +171,7 @@ export const PlatformUsersPage: React.FC = () => {
   const [editing, setEditing]   = useState<PlatformUser | null>(null);
 
   const COLUMNS: Column<PlatformUser>[] = [
-    { key: "email",     header: "Email",   render: r => <span className="font-mono text-white text-xs">{r.email}</span> },
+    { key: "email",     header: "Email",   render: r => <span className="font-mono text-fg text-xs">{r.email}</span> },
     { key: "firstName", header: "Nombre",  render: r => [r.firstName, r.lastName].filter(Boolean).join(" ") || "—" },
     { key: "role",      header: "Rol",     render: r => <span className="text-xs font-bold text-red-400">{r.role}</span> },
     { key: "status",    header: "Estado",  render: r => <StatusBadge status={r.status} /> },

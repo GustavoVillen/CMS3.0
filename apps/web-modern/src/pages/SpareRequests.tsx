@@ -39,7 +39,7 @@ function CritBadge({ crit }: { crit: string }) {
   const cls =
     crit === "A" ? "bg-red-500/10 text-red-400 border-red-500/20"
     : crit === "B" ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-    : "bg-white/5 text-white/40 border-white/10";
+    : "bg-fg/5 text-fg/40 border-fg/10";
   return (
     <span className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold border shrink-0 ${cls}`}>
       {crit || "?"}
@@ -57,16 +57,16 @@ const STATUS_LABELS: Record<string, string> = {
   FULFILLED: "Atendida", CANCELLED: "Cancelada",
 };
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-white/5 text-white/50 border-white/10",
+  DRAFT: "bg-fg/5 text-fg/50 border-fg/10",
   SUBMITTED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   APPROVED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   REJECTED: "bg-red-500/10 text-red-400 border-red-500/20",
   PARTIALLY_FULFILLED: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  FULFILLED: "bg-white/5 text-white/40 border-white/10",
-  CANCELLED: "bg-white/5 text-white/30 border-white/10",
+  FULFILLED: "bg-fg/5 text-fg/40 border-fg/10",
+  CANCELLED: "bg-fg/5 text-fg/30 border-fg/10",
 };
 const PRIORITY_COLORS: Record<string, string> = {
-  LOW: "text-white/40", MEDIUM: "text-blue-400", HIGH: "text-yellow-400", CRITICAL: "text-red-400",
+  LOW: "text-fg/40", MEDIUM: "text-blue-400", HIGH: "text-yellow-400", CRITICAL: "text-red-400",
 };
 
 function ReqStatusBadge({ status }: { status: string }) {
@@ -81,8 +81,8 @@ function ReqStatusBadge({ status }: { status: string }) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-accent/50";
-const labelCls = "block text-[10px] font-semibold text-white/50 uppercase tracking-wider mb-1";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-fg/20 focus:outline-none focus:border-accent/50";
+const labelCls = "block text-[10px] font-semibold text-fg/50 uppercase tracking-wider mb-1";
 
 // ---------------------------------------------------------------------------
 // ItemsTab
@@ -202,18 +202,18 @@ const ItemsTab: React.FC<ItemsTabProps> = ({ request, items, loadingItems, onIte
     } catch { /* ignore */ }
   };
 
-if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{t("sr.loadingItems")}</p>;
+if (loadingItems) return <p className="text-xs text-fg/30 py-4 text-center">{t("sr.loadingItems")}</p>;
 
   return (
     <div className="space-y-4">
       {/* Item list */}
       {items.length === 0
-        ? <p className="text-xs text-white/20 py-4 text-center">{t("sr.noItemsHint")}</p>
+        ? <p className="text-xs text-fg/20 py-4 text-center">{t("sr.noItemsHint")}</p>
         : (
-          <div className="border border-white/10 rounded-xl overflow-hidden">
+          <div className="border border-fg/10 rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-white/30 uppercase tracking-wider">
+                <tr className="border-b border-fg/10 text-[10px] text-fg/30 uppercase tracking-wider">
                   <th className="px-3 py-2 text-left">{t("sr.colDescSku")}</th>
                   <th className="px-3 py-2 text-right">{t("sr.colQty")}</th>
                   <th className="px-3 py-2 text-left">Ud.</th>
@@ -224,13 +224,13 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
               </thead>
               <tbody>
                 {items.map(item => (
-                  <tr key={item.id} className="border-b border-white/5 last:border-0">
+                  <tr key={item.id} className="border-b border-fg/5 last:border-0">
                     <td className="px-3 py-2">
-                      <span className="text-white">{item.description}</span>
+                      <span className="text-fg">{item.description}</span>
                       {item.spareSku && <span className="ml-2 font-mono text-accent text-[10px]">{item.spareSku}</span>}
                     </td>
-                    <td className="px-3 py-2 text-right text-white/70">{item.quantity}</td>
-                    <td className="px-3 py-2 text-white/40">{item.unit}</td>
+                    <td className="px-3 py-2 text-right text-fg/70">{item.quantity}</td>
+                    <td className="px-3 py-2 text-fg/40">{item.unit}</td>
                     <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                     <td className="px-3 py-2 text-right text-emerald-400">{item.quantityFulfilled > 0 ? item.quantityFulfilled : "—"}</td>
                     <td className="px-2 py-2">
@@ -244,7 +244,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
                           </button>
                         )}
                         {canEdit && (
-                          <button onClick={() => void handleDelete(item.id)} className="text-white/20 hover:text-red-400 transition-colors">
+                          <button onClick={() => void handleDelete(item.id)} className="text-fg/20 hover:text-red-400 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -279,7 +279,7 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
               <PackageCheck className="w-3.5 h-3.5" />
               {delivering ? "Registrando…" : "Confirmar recepción"}
             </button>
-            <button onClick={() => setReceiving(null)} className="px-3 py-1.5 text-xs text-white/30 hover:text-white border border-white/10 rounded-lg transition-colors">
+            <button onClick={() => setReceiving(null)} className="px-3 py-1.5 text-xs text-fg/30 hover:text-fg border border-fg/10 rounded-lg transition-colors">
               Cancelar
             </button>
           </div>
@@ -288,9 +288,9 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
 
       {/* Add form (DRAFT only) */}
       {canEdit && (
-        <div className="border border-white/10 rounded-xl p-4 space-y-3 bg-white/[0.02]">
+        <div className="border border-fg/10 rounded-xl p-4 space-y-3 bg-fg/[0.02]">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">{t("sr.addItem")}</p>
+            <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">{t("sr.addItem")}</p>
             {vesselCode && (
               <button type="button" onClick={() => setShowNewSpare(v => !v)}
                 className="text-[10px] text-accent/70 hover:text-accent underline">
@@ -346,14 +346,14 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
                 className={inputCls}
               />
               {dropdown && (
-                <div className="absolute z-20 w-full mt-1 bg-[#0D1B2A] border border-white/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                <div className="absolute z-20 w-full mt-1 bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
                   {(() => {
                     const q = search.toLowerCase();
                     const filtered = q
                       ? spares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
                       : spares.slice(0, 30);
                     if (filtered.length === 0)
-                      return <p className="px-3 py-2 text-xs text-white/30">{t("sr.noResults")}{!vesselCode ? ` — ${t("sr.selectVesselFirst")}` : ""}</p>;
+                      return <p className="px-3 py-2 text-xs text-fg/30">{t("sr.noResults")}{!vesselCode ? ` — ${t("sr.selectVesselFirst")}` : ""}</p>;
                     return filtered.map(s => (
                       <button key={s.id} type="button"
                         onMouseDown={() => {
@@ -363,12 +363,12 @@ if (loadingItems) return <p className="text-xs text-white/30 py-4 text-center">{
                           setSearch(`${s.sku} — ${s.name}`);
                           setDropdown(false);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5 text-left">
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-fg/5 text-left">
                         <CritBadge crit={s.criticality} />
-                        <span className="flex-1 text-white">{s.sku} — {s.name}</span>
+                        <span className="flex-1 text-fg">{s.sku} — {s.name}</span>
                         {s.available <= 0
                           ? <span className="text-red-400 text-[10px] font-semibold shrink-0">{t("sr.noStock")}</span>
-                          : <span className="text-white/30 text-[10px] shrink-0">disp: {s.available} {s.unit}</span>
+                          : <span className="text-fg/30 text-[10px] shrink-0">disp: {s.available} {s.unit}</span>
                         }
                       </button>
                     ));
@@ -476,32 +476,32 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-[#0D1B2A] border border-white/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+      <div className={`w-full bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ClipboardList className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nueva Solicitud" : request.requestCode}</h2>
-              {!isNew && <p className="text-[10px] text-white/40 mt-0.5">{fmtDate(request.requestedAt)}{request.requestedForVesselCode ? ` · Vessel: ${request.requestedForVesselCode}` : ""}</p>}
+              <h2 className="text-sm font-bold text-fg">{isNew ? "Nueva Solicitud" : request.requestCode}</h2>
+              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{fmtDate(request.requestedAt)}{request.requestedForVesselCode ? ` · Vessel: ${request.requestedForVesselCode}` : ""}</p>}
             </div>
             {!isNew && <ReqStatusBadge status={status} />}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-white/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-fg/40 hover:text-fg" /></button>
           </div>
         </div>
 
         {/* Tabs (only when editing) */}
         {!isNew && (
-          <div className="flex border-b border-white/10 shrink-0">
+          <div className="flex border-b border-fg/10 shrink-0">
             {(["data", "items"] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-5 py-2.5 text-xs font-semibold transition-colors ${tab === t ? "text-accent border-b-2 border-accent" : "text-white/40 hover:text-white/70"}`}>
+                className={`px-5 py-2.5 text-xs font-semibold transition-colors ${tab === t ? "text-accent border-b-2 border-accent" : "text-fg/40 hover:text-fg/70"}`}>
                 {t === "data" ? "Datos" : `Ítems (${items.length})`}
               </button>
             ))}
@@ -538,7 +538,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
                 </div>
               )}
               {!isNew && request.approvedAt && (
-                <p className="text-[10px] text-white/20">Aprobado: {fmtDate(request.approvedAt)}</p>
+                <p className="text-[10px] text-fg/20">Aprobado: {fmtDate(request.approvedAt)}</p>
               )}
             </div>
           )}
@@ -566,7 +566,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
                 <button onClick={() => void doReject()} disabled={saving} className="px-3 py-1.5 text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 disabled:opacity-40">
                   {t("confirm.confirmRejection")}
                 </button>
-                <button onClick={() => setRejecting(false)} className="px-3 py-1.5 text-xs text-white/40 hover:text-white border border-white/10 rounded-lg">
+                <button onClick={() => setRejecting(false)} className="px-3 py-1.5 text-xs text-fg/40 hover:text-fg border border-fg/10 rounded-lg">
                   Cancelar
                 </button>
               </div>
@@ -575,7 +575,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 shrink-0 space-y-2">
+        <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             {/* Left — PDF */}
@@ -595,13 +595,13 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
                       setTimeout(() => URL.revokeObjectURL(url), 60_000);
                     });
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white/5 border border-white/10 text-white/50 rounded-lg hover:bg-white/10 hover:text-white transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-fg/5 border border-fg/10 text-fg/50 rounded-lg hover:bg-fg/10 hover:text-fg transition-all"
                 >
                   <FileDown className="w-3.5 h-3.5" /> Generar PDF
                 </button>
               )}
               {!isNew && ["DRAFT","SUBMITTED","APPROVED"].includes(status) && (
-                <button onClick={() => void doAction("cancel")} disabled={saving} className="px-3 py-1.5 text-xs text-white/30 hover:text-white/60 border border-white/10 rounded-lg transition-colors disabled:opacity-40">
+                <button onClick={() => void doAction("cancel")} disabled={saving} className="px-3 py-1.5 text-xs text-fg/30 hover:text-fg/60 border border-fg/10 rounded-lg transition-colors disabled:opacity-40">
                   Cancelar solicitud
                 </button>
               )}
@@ -609,7 +609,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
 
             {/* Right — workflow + save/close */}
             <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-1.5 text-xs text-white/50 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-colors">Cerrar</button>
+              <button onClick={onClose} className="px-4 py-1.5 text-xs text-fg/50 hover:text-fg rounded-lg border border-fg/10 hover:border-fg/20 transition-colors">Cerrar</button>
               {(isNew || status === "DRAFT") && (
                 <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
                   {saving ? "Guardando…" : (isNew ? "Crear solicitud" : "Guardar")}
@@ -663,12 +663,12 @@ export const SpareRequestsPage: React.FC = () => {
   const handleSaved = (r: SpareRequest) => { reload(); setSelected(r); };
 
   const COLUMNS: Column<SpareRequest>[] = [
-    { key: "requestCode", header: t("col.code"), render: r => <span className="font-mono font-bold text-white text-xs">{r.requestCode}</span> },
+    { key: "requestCode", header: t("col.code"), render: r => <span className="font-mono font-bold text-fg text-xs">{r.requestCode}</span> },
     { key: "status",      header: t("col.status"), render: r => <ReqStatusBadge status={r.status} /> },
     { key: "priority",    header: t("col.priority"), render: r => <span className={`text-xs font-semibold ${PRIORITY_COLORS[r.priority] ?? ""}`}>{r.priority}</span> },
     { key: "requestedForVesselCode", header: t("col.vessel"), render: r => <span className="font-mono text-accent text-xs">{r.requestedForVesselCode ?? "—"}</span> },
-    { key: "items",       header: "Ítems", render: r => <span className="text-xs text-white/50">{r.items?.length ?? 0}</span> },
-    { key: "notes",       header: t("col.description"), render: r => <span className="text-xs text-white/40 truncate max-w-[180px] block">{r.notes ?? "—"}</span> },
+    { key: "items",       header: "Ítems", render: r => <span className="text-xs text-fg/50">{r.items?.length ?? 0}</span> },
+    { key: "notes",       header: t("col.description"), render: r => <span className="text-xs text-fg/40 truncate max-w-[180px] block">{r.notes ?? "—"}</span> },
     { key: "requestedAt", header: t("col.requested"), render: r => fmtDate(r.requestedAt) },
   ];
 
@@ -684,13 +684,13 @@ export const SpareRequestsPage: React.FC = () => {
 
       <PageHeader icon={ClipboardList} title="Solicitudes de Repuestos" total={data?.total} onReload={reload}>
         <ExportExcelButton module="spare_requests" />
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
           <option value="PENDING">Pendientes de recepción</option>
           {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
 
-        <select value={toFilterSelectValue(priorityFilter)} onChange={e => setPriorityFilter(fromFilterSelectValue(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+        <select value={toFilterSelectValue(priorityFilter)} onChange={e => setPriorityFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
           <option value={FILTER_ALL_VALUE}>Toda prioridad</option>
           <option value="LOW">Baja</option>
           <option value="MEDIUM">Media</option>

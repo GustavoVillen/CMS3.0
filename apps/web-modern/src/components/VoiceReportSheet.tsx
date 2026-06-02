@@ -138,9 +138,9 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
   if (!supported) {
     return (
       <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={close}>
-        <div className="w-full max-w-md bg-[#0D1B2A] border-t border-white/10 rounded-t-3xl p-5 pb-8 space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Reporte por voz</h2>
+            <h2 className="text-sm font-bold text-fg">Reporte por voz</h2>
             <button onClick={close}><X className="w-5 h-5 text-text-industrial/40" /></button>
           </div>
           <div className="flex flex-col items-center gap-3 py-6">
@@ -154,7 +154,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={close}>
-      <div className="w-full max-w-md bg-[#0D1B2A] border-t border-white/10 rounded-t-3xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
@@ -164,7 +164,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                  : forcedType === "near_miss" ? "Near miss · por voz"
                  : "Reporte por voz"}
               </p>
-              <h2 className="text-sm font-bold text-white">
+              <h2 className="text-sm font-bold text-fg">
                 {stage === "recording-initial" && "Contame qué pasó"}
                 {stage === "processing"        && "Procesando…"}
                 {stage === "awaiting-answer"   && (parsed?.nextQuestion ? "Pregunta de la IA" : "Detalles adicionales")}
@@ -173,7 +173,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
               </h2>
             </div>
           </div>
-          <button onClick={close} aria-label="Cerrar"><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={close} aria-label="Cerrar"><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         {/* ── ETAPA 1: grabación inicial ─────────────────────────────── */}
@@ -185,7 +185,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                 onClick={() => listening ? stop() : start()}
                 className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all ${
                   listening
-                    ? "bg-red-500 text-white animate-pulse"
+                    ? "bg-red-500 text-fg animate-pulse"
                     : "bg-accent text-primary-bg"
                 }`}
               >
@@ -197,9 +197,9 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
             </div>
 
             {transcript && (
-              <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3">
+              <div className="rounded-xl bg-fg/[0.04] border border-fg/10 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Transcripción</p>
-                <p className="text-xs text-white whitespace-pre-wrap">{transcript}
+                <p className="text-xs text-fg whitespace-pre-wrap">{transcript}
                   {interim && <span className="text-text-industrial/40 italic"> {interim}</span>}
                 </p>
               </div>
@@ -208,7 +208,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
             {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
 
             <div className="flex gap-2">
-              <button onClick={close} className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial">Cancelar</button>
+              <button onClick={close} className="flex-1 px-4 py-3 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial">Cancelar</button>
               <button
                 onClick={() => { void submitInitial(); }}
                 disabled={!transcript.trim() || listening}
@@ -235,11 +235,11 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
             <div className="rounded-xl bg-accent/[0.06] border border-accent/30 p-3 space-y-1.5">
               <p className="text-[10px] uppercase tracking-wider text-accent font-bold">Detectado hasta ahora</p>
               <div className="flex flex-wrap gap-1.5 text-[10px]">
-                <span className="px-2 py-0.5 rounded bg-white/10 text-white font-bold uppercase">{parsed.type === "near_miss" ? "Near miss" : parsed.type === "defect" ? "Defecto" : "?"}</span>
-                {parsed.fields.classification && <span className="px-2 py-0.5 rounded bg-white/10 text-white">{parsed.fields.classification}</span>}
-                {parsed.fields.severity && <span className="px-2 py-0.5 rounded bg-white/10 text-white">{parsed.fields.severity}</span>}
+                <span className="px-2 py-0.5 rounded bg-fg/10 text-fg font-bold uppercase">{parsed.type === "near_miss" ? "Near miss" : parsed.type === "defect" ? "Defecto" : "?"}</span>
+                {parsed.fields.classification && <span className="px-2 py-0.5 rounded bg-fg/10 text-fg">{parsed.fields.classification}</span>}
+                {parsed.fields.severity && <span className="px-2 py-0.5 rounded bg-fg/10 text-fg">{parsed.fields.severity}</span>}
                 {parsed.fields.assetId && parsed.assetSnapshot && (
-                  <span className="px-2 py-0.5 rounded bg-white/10 text-white">
+                  <span className="px-2 py-0.5 rounded bg-fg/10 text-fg">
                     📍 {parsed.assetSnapshot.find(a => a.id === parsed.fields.assetId)?.name ?? "asset"}
                   </span>
                 )}
@@ -251,9 +251,9 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
 
             {/* Pregunta de la IA */}
             {parsed.nextQuestion && (
-              <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3">
+              <div className="rounded-xl bg-fg/[0.04] border border-fg/10 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">IA pregunta</p>
-                <p className="text-sm text-white">{parsed.nextQuestion}</p>
+                <p className="text-sm text-fg">{parsed.nextQuestion}</p>
               </div>
             )}
 
@@ -265,13 +265,13 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
                   onChange={e => setAnswerText(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") void submitAnswer(answerText); }}
                   placeholder="Respondé acá…"
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                  className="flex-1 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
                 />
                 <button
                   type="button"
                   onClick={() => ansListening ? ansStop() : ansStart()}
                   className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
-                    ansListening ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse" : "bg-white/5 border border-white/10 text-accent"
+                    ansListening ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse" : "bg-fg/5 border border-fg/10 text-accent"
                   }`}
                 >
                   {ansListening ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -281,7 +281,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
               <div className="flex gap-2">
                 <button
                   onClick={() => onComplete({ type: parsed.type === "near_miss" ? "near_miss" : "defect", fields: parsed.fields, reasoning: parsed.reasoning })}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial"
                 >
                   Saltar y editar manualmente
                 </button>
@@ -302,7 +302,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
           <div className="space-y-2">
             <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>
             <div className="flex gap-2">
-              <button onClick={close} className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial">Cancelar</button>
+              <button onClick={close} className="flex-1 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial">Cancelar</button>
               <button onClick={() => setStage("awaiting-answer")} className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-primary-bg font-bold text-xs">Reintentar</button>
             </div>
           </div>

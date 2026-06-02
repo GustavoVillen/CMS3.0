@@ -1,5 +1,93 @@
 HISTORY.txt
 
+[2026-06-02] ESTETICA: theming light/dark — light por defecto (infra + shell + piloto WO)
+Agent: Claude Opus 4.8
+
+  El frontend (apps/web-modern, Vite 8 + React 19 + Tailwind v4) era dark-first SIN
+  capa de theming: ~3000 referencias de color cableadas a navy en ~78 archivos. Se
+  construyó el sistema de theming con LIGHT por defecto + DARK opcional (el navy +
+  glassmorphism original se conserva como dark).
+
+  ACENTO: cambiado de naranja a CELESTE (a pedido). Es per-modo para contraste:
+  light --accent #0284C7 (sky-600, legible sobre blanco), dark --accent #38BDF8
+  (sky-400, brilla sobre navy). Se agregó token --accent-fg (texto SOBRE el acento):
+  light #FFFFFF, dark #0B132B → los botones de acento usan `text-accent-fg` y nunca
+  quedan letra/fondo del mismo tono. Highlight del <select> (option:checked/hover):
+  bg #0284C7 + texto blanco (era el caso que marcó el usuario). Botones rojos sólidos
+  (bg-red-500/700) → text-white; verde/amarillo brillantes mantienen texto navy.
+
+  INFRA (base reutilizable):
+    - index.css: tokens semánticos con patrón Tailwind v4 (@custom-variant dark +
+      :root light / .dark navy + @theme inline). Utilidades theme-aware: bg-bg,
+      bg-surface, bg-surface-2, text-fg, border-border, text-accent/success/warning/
+      danger/info. ALIASES de compat: --color-primary-bg→bg, --color-text-industrial
+      →fg, --color-success-sea→success (los tokens nombrados viejos ahora flipean
+      solos, sin tocarlos). .glass/.bento-card/.input-field/select reescritos a vars
+      (blur solo en .dark).
+    - lib/theme.tsx (NUEVO): ThemeProvider/useTheme, persiste localStorage["gpms_theme"]
+      (default light), togglea clase .dark en <html>.
+    - main.tsx: wrap <ThemeProvider>.
+    - index.html: script no-flash (setea .dark + bg antes del primer paint).
+    - Header.tsx: toggle sol/luna + claves i18n header.themeLight/themeDark.
+
+  RECETA DE MIGRACIÓN (mecánica, aplicada a shell + piloto; repetible para el resto):
+    - white/N  →  fg/N   (overlay/borde que auto-invierte: oscuro sobre claro y
+      viceversa, porque --fg es oscuro en light y claro en dark).
+    - text-white  →  text-fg ; bg-[#0D1B2A]/[#080D1D]  →  bg-surface dark:bg-[#hex].
+    - text-primary-bg (texto sobre acento)  →  text-[#0B132B] (siempre oscuro, el
+      naranja es claro). Si no, en light quedaba texto claro sobre naranja.
+    - badges con tonos fijos: text-{color}-400/300  →  text-{color}-700 dark:text-
+      {color}-400/300 (el 700 es legible en claro; el 400 se conserva en oscuro).
+      bg-{color}-500/10 + border-{color}-500/20 quedan igual (translúcidos sirven en
+      ambos). StatusBadge/PriorityBadge (DataTable) reescritos a success/warning/
+      danger/info/accent semánticos.
+
+  ARCHIVOS MIGRADOS: Layout, Sidebar (+logo light/dark), Header, CopilotoPanel,
+    DataTable (+badges), PageHeader, WorkOrders.tsx, CreateWorkOrderModal.tsx.
+
+  VERIFICACIÓN:
+    - tsc: 58 errores en HEAD = 58 con mis cambios (0 regresiones; todos
+      pre-existentes y ajenos a colores). vite build OK (CSS 134KB, tokens .dark
+      emitidos).
+    - Playwright (demo/admin@demo.local) sobre /work-orders: light OK (fondo gris,
+      cards/sidebar/header blancos, texto casi negro, badges legibles), dark OK
+      (navy idéntico), toggle funciona, modal Nueva OT correcto en light, y
+      persistencia/no-flash confirmados (reload → gpms_theme=dark, html bg #080D1D
+      pre-paint).
+
+  DASHBOARD migrado (patrón bento/glass + recharts, distinto al CRUD):
+    - Dashboard.tsx + MyDayPanel.tsx + ComplianceDashboard.tsx a tokens.
+    - recharts theme-aware vía useTheme: tooltips (navy/claro en dark, blanco/oscuro
+      en light), CartesianGrid stroke y ejes (blanco translúcido → negro translúcido
+      en light, si no eran invisibles sobre la card blanca). Los `fill` de los donuts
+      (hex saturados) se dejan: sirven en ambos fondos.
+    - Verificado claro/oscuro con Playwright. NOTA: los donuts mostraban "An internal
+      error occurred" porque varios endpoints del dashboard del tenant demo devuelven
+      500 (problema de datos/backend, AJENO al theming); el styling de error sí quedó
+      legible en ambos modos.
+
+  BARRIDO GLOBAL (texto invisible en light): las páginas no migradas usaban
+    `text-white` para el texto principal (FECHA, código, nombre de buque vía el
+    componente compartido VesselLabel/EntityLabels) → invisible sobre fondo claro.
+    Fix de raíz: sed en los 72 .tsx de web-modern/src → `white/`→`fg/` y
+    `text-white`→`text-fg`. 0 ocurrencias restantes. vite build OK. Verificado en
+    Reportes Diarios, Defectos y Kanban de WO (light): código/fecha/buque legibles.
+    OJO: el barrido SOLO arregla texto invisible; el polish por página (badges a dos
+    tonos text-{color}-700 dark:-400, modales bg-[#0D1B2A]→bg-surface, texto sobre
+    acento → text-accent-fg) sigue pendiente salvo en las páginas ya migradas full
+    (shell, WorkOrders, Dashboard, MyDayPanel, ComplianceDashboard).
+
+  INFRA LOCAL: el 500 del dashboard era Docker Desktop apagado → contenedor
+    pms-saas-postgres (5434) caído. Fix: arrancar Docker + `docker compose -f
+    infra/docker-compose.yml up -d`. No es bug de código; en prod la DB corre como
+    servicio siempre-on (no depende de Docker en la PC del cliente).
+
+  PENDIENTE (follow-up):
+    - Polish por página del resto (~65): badges dos tonos, modales a bg-surface,
+      botones de acento a text-accent-fg.
+    - Opcional: default de tema por tenant (requiere campo en AuthTenant).
+    - git commit de estos cambios FE.
+
 [2026-06-02] INFRA: subdominios por tenant ACTIVADOS en VPS (*.shipcms.cloud)
 Agent: Claude Opus 4.8
 

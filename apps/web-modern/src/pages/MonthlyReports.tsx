@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, Sparkles, X } from "lucide-react";
 
 const KpiPill: React.FC<{ label: string; value: number; alert?: boolean }> = ({ label, value, alert }) => (
-  <div className={`rounded-md border px-2 py-1.5 ${alert ? "bg-red-500/10 border-red-500/30" : "bg-white/5 border-white/10"}`}>
+  <div className={`rounded-md border px-2 py-1.5 ${alert ? "bg-red-500/10 border-red-500/30" : "bg-fg/5 border-fg/10"}`}>
     <p className="text-[8px] uppercase tracking-wider text-text-industrial/40 truncate">{label}</p>
-    <p className={`text-sm font-bold ${alert ? "text-red-300" : "text-white"}`}>{value}</p>
+    <p className={`text-sm font-bold ${alert ? "text-red-300" : "text-fg"}`}>{value}</p>
   </div>
 );
 import { useFetch } from "../lib/hooks";
@@ -72,8 +72,8 @@ const MONTH_NAMES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-const inputCls  = "w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
-const selectCls = "w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-accent/50";
+const inputCls  = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-fg focus:outline-none focus:border-accent/50";
 const labelCls  = "block text-[10px] font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -132,26 +132,26 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-3 text-xs">
-        <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("col.vessel")}</div>
-          <div className="text-white font-semibold">{vesselCode || "—"}</div>
+        <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
+          <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">{t("col.vessel")}</div>
+          <div className="text-fg font-semibold">{vesselCode || "—"}</div>
         </div>
-        <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("mr.totalItems")}</div>
-          <div className="text-white text-xl font-bold">{summary.totalItems}</div>
+        <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
+          <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">{t("mr.totalItems")}</div>
+          <div className="text-fg text-xl font-bold">{summary.totalItems}</div>
         </div>
-        <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">{t("mr.belowReorder")}</div>
-          <div className={`text-xl font-bold ${summary.belowReorderCount > 0 ? "text-red-400" : "text-white"}`}>{summary.belowReorderCount}</div>
+        <div className="bg-fg/5 border border-fg/10 rounded-lg p-3">
+          <div className="text-[10px] uppercase tracking-wider text-fg/40 mb-1">{t("mr.belowReorder")}</div>
+          <div className={`text-xl font-bold ${summary.belowReorderCount > 0 ? "text-red-400" : "text-fg"}`}>{summary.belowReorderCount}</div>
         </div>
       </div>
 
-      <p className="text-[10px] text-white/40">{sourceLabel}</p>
+      <p className="text-[10px] text-fg/40">{sourceLabel}</p>
 
-      <div className="bg-white/5 border border-white/10 rounded-lg overflow-x-auto">
+      <div className="bg-fg/5 border border-fg/10 rounded-lg overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="border-b border-white/10">
-            <tr className="text-[10px] uppercase tracking-wider text-white/40">
+          <thead className="border-b border-fg/10">
+            <tr className="text-[10px] uppercase tracking-wider text-fg/40">
               <th className="px-3 py-2 text-left">SKU</th>
               <th className="px-3 py-2 text-left">{t("mr.colName")}</th>
               <th className="px-3 py-2 text-left">SFI</th>
@@ -162,19 +162,19 @@ const InventoryTab: React.FC<{ vesselCode: string; snapshot: InventorySnapshot |
               <th className="px-3 py-2 text-left">{t("mr.colLastMov")}</th>
             </tr>
           </thead>
-          <tbody className="text-white/80">
+          <tbody className="text-fg/80">
             {!snapshot && live.loading && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />{t("mr.loadingInventory")}</td></tr>
+              <tr><td colSpan={8} className="px-3 py-6 text-center text-fg/30"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />{t("mr.loadingInventory")}</td></tr>
             )}
             {items.length === 0 && (!snapshot ? !live.loading : true) && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-white/30">{t("mr.noItemsShow")}</td></tr>
+              <tr><td colSpan={8} className="px-3 py-6 text-center text-fg/30">{t("mr.noItemsShow")}</td></tr>
             )}
             {items.map(it => {
               const sfi = (it as InventorySnapshotItem).sfiName
                 ? `${(it as InventorySnapshotItem).sfiName} (${it.sfiCode})`
                 : (it.sfiCode ?? "—");
               return (
-                <tr key={it.id} className="border-b border-white/5 hover:bg-white/5">
+                <tr key={it.id} className="border-b border-fg/5 hover:bg-fg/5">
                   <td className="px-3 py-2 font-mono text-[11px]">{it.sku}</td>
                   <td className="px-3 py-2">{it.name}</td>
                   <td className="px-3 py-2 text-[10px]">{sfi}</td>
@@ -360,30 +360,30 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
   return (
     <div className="fixed inset-0 z-300 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-5xl max-h-[90vh] bg-surface border border-white/10 rounded-2xl shadow-2xl flex flex-col">
+      <div className="relative w-full max-w-5xl max-h-[90vh] bg-surface border border-fg/10 rounded-2xl shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div>
-            <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo Reporte Mensual" : `Reporte ${fmtMonth(liveReport!.reportYear, liveReport!.reportMonth)} — ${liveReport!.vesselCode}`}</h2>
-            {!isNew && <p className="text-[10px] text-white/40">{t("mr.statusLabel")}: {liveReport!.status}{liveReport!.submittedAt ? ` · ${t("mr.sentOn")} ${fmtDate(liveReport!.submittedAt)}` : ""}</p>}
+            <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo Reporte Mensual" : `Reporte ${fmtMonth(liveReport!.reportYear, liveReport!.reportMonth)} — ${liveReport!.vesselCode}`}</h2>
+            {!isNew && <p className="text-[10px] text-fg/40">{t("mr.statusLabel")}: {liveReport!.status}{liveReport!.submittedAt ? ` · ${t("mr.sentOn")} ${fmtDate(liveReport!.submittedAt)}` : ""}</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5">
-            <X className="w-4 h-4 text-white/60" />
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5">
+            <X className="w-4 h-4 text-fg/60" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-white/10 px-6 shrink-0">
+        <div className="flex gap-2 border-b border-fg/10 px-6 shrink-0">
           <button
             onClick={() => setActiveTab("info")}
-            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${activeTab === "info" ? "border-accent text-accent" : "border-transparent text-white/40 hover:text-white/70"}`}
+            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${activeTab === "info" ? "border-accent text-accent" : "border-transparent text-fg/40 hover:text-fg/70"}`}
           >
             Info
           </button>
           <button
             onClick={() => setActiveTab("inventory")}
             disabled={isNew}
-            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px disabled:opacity-30 disabled:cursor-not-allowed ${activeTab === "inventory" ? "border-accent text-accent" : "border-transparent text-white/40 hover:text-white/70"}`}
+            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px disabled:opacity-30 disabled:cursor-not-allowed ${activeTab === "inventory" ? "border-accent text-accent" : "border-transparent text-fg/40 hover:text-fg/70"}`}
           >
             Inventario
           </button>
@@ -483,7 +483,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 {geoError && <p className="text-[10px] text-red-400">{geoError}</p>}
 
                 {mapCoords ? (
-                  <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ height: 180 }}>
+                  <div className="relative rounded-xl overflow-hidden border border-fg/10" style={{ height: 180 }}>
                     <iframe
                       key={`${mapCoords.lat},${mapCoords.lon}`}
                       title={t("mr.currentPos")}
@@ -493,18 +493,18 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                       loading="lazy"
                     />
                     <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 pointer-events-none">
-                      <span className="font-mono text-[10px] text-white/80">
+                      <span className="font-mono text-[10px] text-fg/80">
                         {mapCoords.lat.toFixed(5)}, {mapCoords.lon.toFixed(5)}
                       </span>
                     </div>
                   </div>
                 ) : geolocating ? (
-                  <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 text-text-industrial/30" style={{ height: 180 }}>
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-fg/10 bg-fg/3 text-text-industrial/30" style={{ height: 180 }}>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-xs">{t("mr.gettingLocation")}</span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/2 text-text-industrial/20" style={{ height: 180 }}>
+                  <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-fg/8 bg-fg/2 text-text-industrial/20" style={{ height: 180 }}>
                     <Locate className="w-5 h-5" />
                     <span className="text-[10px]">{t("mr.noPosition")}</span>
                   </div>
@@ -590,7 +590,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
         </div>
 
         {/* Footer with three buttons */}
-        <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-white/10 shrink-0">
+        <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-fg/10 shrink-0">
           <button
             onClick={() => { void handleSubmit(); }}
             disabled={submitting || saving || isClosed}
@@ -610,7 +610,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
           <button
             onClick={() => { void generatePdf(); }}
             disabled={generatingPdf || isNew}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg font-bold text-xs hover:bg-fg/10 disabled:opacity-40"
           >
             {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
             Generar PDF
@@ -642,12 +642,12 @@ export const MonthlyReportsPage: React.FC = () => {
   const items = data?.items ?? [];
 
   const COLUMNS: Column<MonthlyReport>[] = [
-    { key: "period", header: "Período",   render: r => <span className="font-bold text-xs text-white">{fmtMonth(r.reportYear, r.reportMonth)}</span> },
+    { key: "period", header: "Período",   render: r => <span className="font-bold text-xs text-fg">{fmtMonth(r.reportYear, r.reportMonth)}</span> },
     { key: "vesselCode", header: "Vessel", render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "status",     header: "Estado", render: r => <StatusBadge status={r.status} /> },
     { key: "currentPort",header: "Puerto", render: r => <span className="text-xs">{r.currentPort ?? "—"}</span> },
     { key: "submittedAt",header: "Enviado", render: r => <span className="text-[11px] text-emerald-400">{fmtDate(r.submittedAt)}</span> },
-    { key: "createdAt",  header: "Creado", render: r => <span className="text-[11px] text-white/40">{fmtDate(r.createdAt)}</span> },
+    { key: "createdAt",  header: "Creado", render: r => <span className="text-[11px] text-fg/40">{fmtDate(r.createdAt)}</span> },
   ];
 
   return (

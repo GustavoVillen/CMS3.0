@@ -31,7 +31,7 @@ const STATUS_TKEY: Record<string, TranslationKey> = {
 const STATUS_COLOR: Record<string, string> = {
   IN_PROGRESS: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
   COMPLETED:   "bg-success-sea/10 text-success-sea border-success-sea/30",
-  CANCELLED:   "bg-white/5 text-text-industrial/50 border-white/10",
+  CANCELLED:   "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
 
 const RESPONSE_TKEY: Record<string, TranslationKey> = {
@@ -83,7 +83,7 @@ interface Execution {
   template?: Template;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 // ─── Execution modal (con responses inline) ──────────────────────────────────
@@ -207,13 +207,13 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-4xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ListChecks className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Checklist</p>
-              <h2 className="text-sm font-bold text-white">{isCreating ? "Nuevo checklist" : exec?.executionCode}</h2>
+              <h2 className="text-sm font-bold text-fg">{isCreating ? "Nuevo checklist" : exec?.executionCode}</h2>
             </div>
             {exec && (
               <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[exec.status]}`}>
@@ -221,7 +221,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
               </span>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -258,19 +258,19 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
           ) : exec ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Tipo</p>
-                  <p className="text-xs font-bold text-white">{TYPE_TKEY[exec.type] ? t(TYPE_TKEY[exec.type]) : exec.type}</p>
+                  <p className="text-xs font-bold text-fg">{TYPE_TKEY[exec.type] ? t(TYPE_TKEY[exec.type]) : exec.type}</p>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Fecha</p>
-                  <p className="text-xs font-bold text-white">{new Date(exec.eventDateTime).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</p>
+                  <p className="text-xs font-bold text-fg">{new Date(exec.eventDateTime).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</p>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Puerto</p>
-                  <p className="text-xs font-bold text-white">{exec.port ?? "—"}</p>
+                  <p className="text-xs font-bold text-fg">{exec.port ?? "—"}</p>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Vessel</p>
                   <VesselLabel code={exec.vesselCode} className="text-xs" showCode />
                 </div>
@@ -313,24 +313,24 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             {!isCreating && exec?.status === "IN_PROGRESS" && (
               <button onClick={() => { void cancel(); }} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20">Cancelar checklist</button>
             )}
             {!isCreating && isAdmin && (
-              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-text-industrial/60 text-xs hover:text-red-400">Eliminar</button>
+              <button onClick={() => { void onDelete(); }} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 text-xs hover:text-red-400">Eliminar</button>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
             {isCreating ? (
               <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Crear"}
               </button>
             ) : exec?.status === "IN_PROGRESS" && (
               <>
-                <button onClick={() => { void saveMeta(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white disabled:opacity-50">
+                <button onClick={() => { void saveMeta(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-fg disabled:opacity-50">
                   Guardar
                 </button>
                 <button onClick={() => { void complete(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-success-sea text-primary-bg font-bold text-xs disabled:opacity-50">
@@ -355,14 +355,14 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
       disabled={disabled}
       onClick={() => onSet(status, response.notes ?? undefined)}
       title={title}
-      className={`p-1.5 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${response.status === status ? color : "bg-white/5 text-text-industrial/40 border-white/10 hover:text-white"}`}
+      className={`p-1.5 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${response.status === status ? color : "bg-fg/5 text-text-industrial/40 border-fg/10 hover:text-fg"}`}
     >
       <Icon className="w-3.5 h-3.5" />
     </button>
   );
 
   return (
-    <div className={`bg-white/[0.03] border rounded-lg p-2 ${response.status === "NOT_CONFORMING" ? "border-red-500/30 bg-red-500/[0.04]" : "border-white/10"}`}>
+    <div className={`bg-fg/[0.03] border rounded-lg p-2 ${response.status === "NOT_CONFORMING" ? "border-red-500/30 bg-red-500/[0.04]" : "border-fg/10"}`}>
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -370,7 +370,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
             {isMandatory && <span className="text-[9px] font-bold text-red-400 uppercase">*</span>}
             {category && <span className="text-[9px] text-text-industrial/40 uppercase">{category}</span>}
           </div>
-          <p className="text-xs text-white">{response.itemText}</p>
+          <p className="text-xs text-fg">{response.itemText}</p>
           {response.notes && !editingNotes && (
             <p className="text-[10px] text-text-industrial/60 mt-0.5">📝 {response.notes}</p>
           )}
@@ -378,7 +378,7 @@ const ResponseRow: React.FC<{ response: Response; isMandatory: boolean; category
         <div className="flex items-center gap-1 shrink-0">
           {statusBtn("CONFORMING", CheckCircle2, "bg-success-sea/15 text-success-sea border-success-sea/40", "Conforme")}
           {statusBtn("NOT_CONFORMING", XCircle, "bg-red-500/15 text-red-400 border-red-500/40", "No conforme")}
-          {statusBtn("NOT_APPLICABLE", MinusCircle, "bg-white/10 text-text-industrial/60 border-white/20", "N/A")}
+          {statusBtn("NOT_APPLICABLE", MinusCircle, "bg-fg/10 text-text-industrial/60 border-fg/20", "N/A")}
         </div>
       </div>
       {!disabled && (
@@ -418,15 +418,15 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <div className="flex items-center gap-2">
             <Settings className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-bold text-white">{t("cl.templatesTitle")}</h2>
+            <h2 className="text-sm font-bold text-fg">{t("cl.templatesTitle")}</h2>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
           </div>
         </div>
         <div className="overflow-y-auto flex-1 p-6">
@@ -435,10 +435,10 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
             : (
               <div className="space-y-2">
                 {data!.items.map(tpl => (
-                  <button key={tpl.id} onClick={() => setEditing(tpl)} className="w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-2 hover:bg-white/10 transition-colors">
+                  <button key={tpl.id} onClick={() => setEditing(tpl)} className="w-full text-left bg-fg/5 border border-fg/10 rounded-xl px-4 py-2 hover:bg-fg/10 transition-colors">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] font-bold uppercase tracking-wider text-accent">{t(TYPE_TKEY[tpl.type])}</span>
-                      <span className="text-xs font-bold text-white">{tpl.name}</span>
+                      <span className="text-xs font-bold text-fg">{tpl.name}</span>
                       {tpl.approvedAt && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-success-sea/10 text-success-sea border-success-sea/30 inline-flex items-center gap-1">
                           <CheckCircle2 className="w-2.5 h-2.5" /> {t("cl.status.completed")}
@@ -539,10 +539,10 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-sm font-bold text-white">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <h2 className="text-sm font-bold text-fg">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
           {!isNew && (
@@ -565,7 +565,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
                 disabled={approving}
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border disabled:opacity-50 ${
                   isApproved
-                    ? "bg-white/5 border-white/10 text-text-industrial/70 hover:bg-white/10"
+                    ? "bg-fg/5 border-fg/10 text-text-industrial/70 hover:bg-fg/10"
                     : "bg-success-sea/10 border-success-sea/30 text-success-sea hover:bg-success-sea/20"
                 }`}
               >
@@ -593,18 +593,18 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
               <button onClick={addItem} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"><Plus className="w-3 h-3" /> Agregar</button>
             </div>
             {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 gap-1.5 items-start bg-white/[0.03] border border-white/10 rounded-lg p-2">
+              <div key={i} className="grid grid-cols-12 gap-1.5 items-start bg-fg/[0.03] border border-fg/10 rounded-lg p-2">
                 <input value={it.code} onChange={e => updateItem(i, { code: e.target.value })} placeholder={t("cl.itemCode")} className={inputCls + " col-span-2 text-xs"} />
                 <input value={it.text} onChange={e => updateItem(i, { text: e.target.value })} placeholder={t("cl.itemText")} className={inputCls + " col-span-6 text-xs"} />
                 <input value={it.category ?? ""} onChange={e => updateItem(i, { category: e.target.value })} placeholder={t("cl.itemCategory")} className={inputCls + " col-span-2 text-xs"} />
-                <label className="col-span-1 flex items-center gap-1 text-[10px] text-white"><input type="checkbox" checked={!!it.isMandatory} onChange={e => updateItem(i, { isMandatory: e.target.checked })} /> Obl.</label>
+                <label className="col-span-1 flex items-center gap-1 text-[10px] text-fg"><input type="checkbox" checked={!!it.isMandatory} onChange={e => updateItem(i, { isMandatory: e.target.checked })} /> Obl.</label>
                 <button onClick={() => removeItem(i)} className="col-span-1 p-1 text-text-industrial/40 hover:text-red-400"><X className="w-4 h-4" /></button>
               </div>
             ))}
           </div>
           {err && <p className="text-xs text-red-400">{err}</p>}
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial">Cancelar</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
@@ -634,7 +634,7 @@ export const ChecklistsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-4">
       <PageHeader icon={ListChecks} title={t("cl.title")} total={items.length} onReload={reload}>
-        <button onClick={() => setShowTemplates(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-industrial hover:border-accent/30">
+        <button onClick={() => setShowTemplates(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
           <Settings className="w-3.5 h-3.5 text-accent" /> Templates
         </button>
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110">
@@ -646,7 +646,7 @@ export const ChecklistsPage: React.FC = () => {
         {([["open", t("cl.status.inProgress")], ["all", t("common.all")]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilterStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
-              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}>{l}</button>
         ))}
       </div>
@@ -656,13 +656,13 @@ export const ChecklistsPage: React.FC = () => {
       ) : items.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">{t("cl.empty")}</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {items.map(e => (
-            <button key={e.id} onClick={() => setOpenId(e.id)} className="w-full text-left p-4 hover:bg-white/5 transition-colors flex items-center gap-3">
+            <button key={e.id} onClick={() => setOpenId(e.id)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{e.executionCode}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-white/5 text-white border-white/10">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-fg/5 text-fg border-fg/10">
                     {TYPE_TKEY[e.type] ? t(TYPE_TKEY[e.type]) : e.type}
                   </span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${STATUS_COLOR[e.status]}`}>
@@ -670,11 +670,11 @@ export const ChecklistsPage: React.FC = () => {
                   </span>
                   <VesselLabel code={e.vesselCode} className="text-[10px]" showCode />
                 </div>
-                <p className="text-sm font-bold text-white">{e.templateName ?? "—"}{e.port ? ` · ${e.port}` : ""}</p>
+                <p className="text-sm font-bold text-fg">{e.templateName ?? "—"}{e.port ? ` · ${e.port}` : ""}</p>
                 <p className="text-[10px] text-text-industrial/40">{e.performedByName ?? "—"}{e.notConformingItems > 0 ? ` · ${e.notConformingItems} no conformes` : ""}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-white font-mono">{fmtDate(e.eventDateTime)}</p>
+                <p className="text-xs text-fg font-mono">{fmtDate(e.eventDateTime)}</p>
                 <p className="text-[10px] text-text-industrial/40">{e.conformingItems}/{e.totalItems} OK</p>
               </div>
             </button>

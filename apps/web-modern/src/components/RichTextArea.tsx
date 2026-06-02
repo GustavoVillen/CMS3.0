@@ -5,7 +5,7 @@ function renderBold(text: string): React.ReactNode {
   return lines.map((line, li) => {
     const parts = line.split(/\*\*([^*]+)\*\*/g);
     const nodes = parts.map((p, pi) =>
-      pi % 2 === 1 ? <strong key={pi} className="font-semibold text-white">{p}</strong> : p,
+      pi % 2 === 1 ? <strong key={pi} className="font-semibold text-fg">{p}</strong> : p,
     );
     return (
       <React.Fragment key={li}>

@@ -35,15 +35,15 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
       {open && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setOpen(false)}>
           <div
-            className="w-full max-w-md bg-[#0D1B2A] border-t border-white/10 rounded-t-3xl p-5 pb-8 space-y-3 animate-in slide-in-from-bottom duration-200"
+            className="w-full max-w-md bg-[#0D1B2A] border-t border-fg/10 rounded-t-3xl p-5 pb-8 space-y-3 animate-in slide-in-from-bottom duration-200"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-accent font-bold">Acción rápida</p>
-                <h2 className="text-sm font-bold text-white">¿Qué necesitás reportar?</h2>
+                <h2 className="text-sm font-bold text-fg">¿Qué necesitás reportar?</h2>
               </div>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-text-industrial/40 hover:text-white">
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-text-industrial/40 hover:text-fg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -116,7 +116,7 @@ const ActionTile: React.FC<{
       className="block w-full text-left active:scale-95 transition-transform"
     >
       <Icon className="w-7 h-7 mb-2" strokeWidth={1.8} />
-      <p className="text-xs font-bold text-white leading-tight">{label}</p>
+      <p className="text-xs font-bold text-fg leading-tight">{label}</p>
       <p className="text-[10px] text-text-industrial/60 mt-0.5 leading-tight">{hint}</p>
     </button>
     {onMicClick && (
@@ -125,7 +125,7 @@ const ActionTile: React.FC<{
         onClick={(e) => { e.stopPropagation(); onMicClick(); }}
         aria-label={micAriaLabel ?? "Reportar por voz"}
         title={micAriaLabel ?? "Reportar por voz"}
-        className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/40 border border-white/20 text-white flex items-center justify-center active:scale-90 hover:bg-black/60 transition-all"
+        className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/40 border border-fg/20 text-fg flex items-center justify-center active:scale-90 hover:bg-black/60 transition-all"
       >
         <Mic className="w-4 h-4" />
       </button>

@@ -59,7 +59,7 @@ interface NearMiss {
   reportedByName: string | null;
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
 const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; onSaved: () => void }> = ({ record, onClose, onSaved }) => {
@@ -107,16 +107,16 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-white/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-accent" />
             <div>
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Near Miss / Riesgo</p>
-              <h2 className="text-sm font-bold text-white">{isNew ? "Nuevo reporte" : record!.nearMissCode}</h2>
+              <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo reporte" : record!.nearMissCode}</h2>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
@@ -169,8 +169,8 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-white">Cerrar</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
           <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
           </button>
@@ -205,7 +205,7 @@ export const NearMissPage: React.FC = () => {
         {([["open", "Abiertos"], ["all", "Todos"]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilterStatus(v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-white/5 text-text-industrial/60 border-white/10"
+              filterStatus === v ? "bg-accent/15 text-accent border-accent/40" : "bg-fg/5 text-text-industrial/60 border-fg/10"
             }`}
           >{l}</button>
         ))}
@@ -216,13 +216,13 @@ export const NearMissPage: React.FC = () => {
       ) : items.length === 0 ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin reportes.</div>
       ) : (
-        <div className="bg-white/5 border border-white/10 rounded-xl divide-y divide-white/5">
+        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {items.map(n => (
-            <button key={n.id} onClick={() => setEditing(n)} className="w-full text-left p-4 hover:bg-white/5 transition-colors flex items-center gap-3">
+            <button key={n.id} onClick={() => setEditing(n)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{n.nearMissCode}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-white/5 text-white border-white/10">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-fg/5 text-fg border-fg/10">
                     {CATEGORY_LABEL[n.category] ?? n.category}
                   </span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${SEVERITY_COLOR[n.severity]}`}>
@@ -233,11 +233,11 @@ export const NearMissPage: React.FC = () => {
                   </span>
                   <VesselLabel code={n.vesselCode} className="text-[10px]" showCode />
                 </div>
-                <p className="text-sm text-white line-clamp-2">{n.description}</p>
+                <p className="text-sm text-fg line-clamp-2">{n.description}</p>
                 {n.location && <p className="text-[10px] text-text-industrial/50 mt-0.5">📍 {n.location}</p>}
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-white font-mono">{fmtDate(n.occurredAt)}</p>
+                <p className="text-xs text-fg font-mono">{fmtDate(n.occurredAt)}</p>
                 {n.reportedByName && <p className="text-[10px] text-text-industrial/40">{n.reportedByName}</p>}
               </div>
             </button>

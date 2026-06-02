@@ -119,28 +119,28 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
   );
 
   if (error) return (
-    <div className="flex items-center gap-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+    <div className="flex items-center gap-3 text-danger text-sm p-4 bg-danger/10 rounded-xl border border-danger/25">
       <AlertCircle className="w-5 h-5 shrink-0" />
       {error}
     </div>
   );
 
   if (!sortedData || sortedData.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-20 text-text-industrial/20 gap-3">
+    <div className="flex flex-col items-center justify-center py-20 text-fg/20 gap-3">
       <SearchX className="w-8 h-8" />
       <p className="text-sm">{emptyText}</p>
     </div>
   );
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
+    <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-white/10 bg-white/2">
+          <tr className="border-b border-border bg-fg/[0.03]">
             {columns.map(col => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${col.sortable === false || !col.header.trim() ? "text-text-industrial/50" : "text-text-industrial/60 hover:text-white cursor-pointer select-none"} ${col.className ?? ""}`}
+                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
                 onClick={() => onHeaderClick(col)}
                 aria-sort={sortKey === col.key ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
@@ -154,15 +154,15 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-border">
           {sortedData.map(row => (
             <tr
               key={keyFn(row)}
-              className={`hover:bg-white/2 transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
+              className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
               onClick={() => onRowClick?.(row)}
             >
               {columns.map(col => (
-                <td key={col.key} className={`px-4 py-3 text-text-industrial/80 ${col.className ?? ""}`}>
+                <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
                   {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
                 </td>
               ))}
@@ -178,41 +178,49 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
 // Shared badge helpers
 // ---------------------------------------------------------------------------
 
+// Paletas semánticas theme-aware (legibles en claro y oscuro).
+const BADGE_SUCCESS = "bg-success/10 text-success border-success/25";
+const BADGE_INFO    = "bg-info/10 text-info border-info/25";
+const BADGE_ACCENT  = "bg-accent/10 text-accent border-accent/25";
+const BADGE_WARNING = "bg-warning/10 text-warning border-warning/25";
+const BADGE_DANGER  = "bg-danger/10 text-danger border-danger/25";
+const BADGE_NEUTRAL = "bg-fg/5 text-fg/40 border-border";
+
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    ACTIVE:      "bg-success-sea/10 text-success-sea border-success-sea/20",
-    INACTIVE:    "bg-white/5 text-text-industrial/40 border-white/10",
-    PLANNED:     "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    SCHEDULED:   "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    IN_PROGRESS: "bg-accent/10 text-accent border-accent/20",
-    ON_HOLD:     "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    COMPLETED:   "bg-success-sea/10 text-success-sea border-success-sea/20",
-    CANCELLED:   "bg-red-500/10 text-red-400 border-red-500/20",
-    OPEN:        "bg-accent/10 text-accent border-accent/20",
-    REQUESTED:   "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    UNDER_REVIEW:"bg-blue-500/10 text-blue-400 border-blue-500/20",
-    APPROVED:    "bg-success-sea/10 text-success-sea border-success-sea/20",
-    RESOLVED:    "bg-success-sea/10 text-success-sea border-success-sea/20",
-    REJECTED:    "bg-red-500/10 text-red-400 border-red-500/20",
-    DEFERRED:    "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    UNDER_ANALYSIS: "bg-accent/10 text-accent border-accent/20",
-    PENDING_VERIFICATION: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    CLOSED:      "bg-white/5 text-text-industrial/30 border-white/10",
-    DISMISSED:   "bg-white/5 text-text-industrial/30 border-white/10",
-    VALID:       "bg-success-sea/10 text-success-sea border-success-sea/20",
-    EXPIRED:     "bg-red-500/10 text-red-400 border-red-500/20",
-    EXPIRING:      "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    EXPIRING_SOON: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    SUSPENDED:     "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    PASS:        "bg-success-sea/10 text-success-sea border-success-sea/20",
-    FAIL:        "bg-red-500/10 text-red-400 border-red-500/20",
-    CONDITIONAL: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    PENDING:     "bg-white/5 text-text-industrial/40 border-white/10",
-    DRAFT:       "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    SUBMITTED:   "bg-success-sea/10 text-success-sea border-success-sea/20",
-    REVIEWED:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    ACTIVE:      BADGE_SUCCESS,
+    INACTIVE:    BADGE_NEUTRAL,
+    PLANNED:     BADGE_INFO,
+    SCHEDULED:   BADGE_INFO,
+    IN_PROGRESS: BADGE_ACCENT,
+    ON_HOLD:     BADGE_WARNING,
+    COMPLETED:   BADGE_SUCCESS,
+    CANCELLED:   BADGE_DANGER,
+    OPEN:        BADGE_ACCENT,
+    REQUESTED:   BADGE_INFO,
+    UNDER_REVIEW:BADGE_INFO,
+    APPROVED:    BADGE_SUCCESS,
+    RESOLVED:    BADGE_SUCCESS,
+    REJECTED:    BADGE_DANGER,
+    DEFERRED:    BADGE_WARNING,
+    UNDER_ANALYSIS: BADGE_ACCENT,
+    PENDING_VERIFICATION: BADGE_WARNING,
+    CLOSED:      BADGE_NEUTRAL,
+    DISMISSED:   BADGE_NEUTRAL,
+    VALID:       BADGE_SUCCESS,
+    EXPIRED:     BADGE_DANGER,
+    EXPIRING:      BADGE_WARNING,
+    EXPIRING_SOON: BADGE_WARNING,
+    SUSPENDED:     BADGE_WARNING,
+    PASS:        BADGE_SUCCESS,
+    FAIL:        BADGE_DANGER,
+    CONDITIONAL: BADGE_WARNING,
+    PENDING:     BADGE_NEUTRAL,
+    DRAFT:       BADGE_WARNING,
+    SUBMITTED:   BADGE_SUCCESS,
+    REVIEWED:    BADGE_INFO,
   };
-  const cls = map[status] ?? "bg-white/5 text-text-industrial/40 border-white/10";
+  const cls = map[status] ?? BADGE_NEUTRAL;
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
       {status}
@@ -222,12 +230,12 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function PriorityBadge({ priority }: { priority: string }) {
   const map: Record<string, string> = {
-    CRITICAL: "bg-red-500/10 text-red-400 border-red-500/20",
-    HIGH:     "bg-accent/10 text-accent border-accent/20",
-    MEDIUM:   "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    LOW:      "bg-white/5 text-text-industrial/40 border-white/10",
+    CRITICAL: BADGE_DANGER,
+    HIGH:     BADGE_ACCENT,
+    MEDIUM:   BADGE_WARNING,
+    LOW:      BADGE_NEUTRAL,
   };
-  const cls = map[priority] ?? "bg-white/5 text-text-industrial/40 border-white/10";
+  const cls = map[priority] ?? BADGE_NEUTRAL;
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
       {priority}

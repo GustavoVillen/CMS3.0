@@ -110,7 +110,7 @@ export function PlatformVesselMapPage() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-lg font-bold text-white">Posición de Embarcaciones</h1>
+          <h1 className="text-lg font-bold text-fg">Posición de Embarcaciones</h1>
           <p className="text-xs text-text-industrial/50 mt-0.5">
             Última actualización: {lastRefresh.toLocaleTimeString()} · Actualiza cada 60 s · Solo usuarios Técnico/Operador a bordo
           </p>
@@ -122,13 +122,13 @@ export function PlatformVesselMapPage() {
           {error && (
             <span className="text-xs text-red-400">{error}</span>
           )}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10">
             <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            <span className="text-xs text-white font-medium">{positions.length} embarcación{positions.length !== 1 ? "es" : ""}</span>
+            <span className="text-xs text-fg font-medium">{positions.length} embarcación{positions.length !== 1 ? "es" : ""}</span>
           </div>
           <button
             onClick={fetchPositions}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-text-industrial/70 hover:text-white hover:bg-white/10 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-fg/5 border border-fg/10 text-text-industrial/70 hover:text-fg hover:bg-fg/10 transition-all"
           >
             Actualizar
           </button>
@@ -136,16 +136,16 @@ export function PlatformVesselMapPage() {
       </div>
 
       {/* Map */}
-      <div className="flex-1 rounded-xl overflow-hidden border border-white/10 min-h-0">
+      <div className="flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-0">
         <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
       </div>
 
       {/* Table */}
       {positions.length > 0 && (
-        <div className="shrink-0 rounded-xl border border-white/10 overflow-hidden">
+        <div className="shrink-0 rounded-xl border border-fg/10 overflow-hidden">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/10 bg-white/5">
+              <tr className="border-b border-fg/10 bg-fg/5">
                 <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Buque</th>
                 <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Tenant</th>
                 <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Usuario</th>
@@ -155,8 +155,8 @@ export function PlatformVesselMapPage() {
             </thead>
             <tbody>
               {positions.map((p, i) => (
-                <tr key={i} className="border-b border-white/5 hover:bg-white/3 transition-colors">
-                  <td className="px-4 py-2 font-mono font-bold text-white">{p.vesselCode}</td>
+                <tr key={i} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
+                  <td className="px-4 py-2 font-mono font-bold text-fg">{p.vesselCode}</td>
                   <td className="px-4 py-2 text-text-industrial/60">{p.tenantSlug}</td>
                   <td className="px-4 py-2 text-text-industrial/60">{p.userEmail}</td>
                   <td className="px-4 py-2 font-mono text-text-industrial/50">
@@ -171,7 +171,7 @@ export function PlatformVesselMapPage() {
       )}
 
       {!loading && positions.length === 0 && (
-        <div className="shrink-0 rounded-xl border border-white/10 bg-white/3 p-8 text-center">
+        <div className="shrink-0 rounded-xl border border-fg/10 bg-fg/3 p-8 text-center">
           <p className="text-sm text-text-industrial/40">Sin posiciones registradas aún.</p>
           <p className="text-xs text-text-industrial/25 mt-1">
             Los usuarios Técnico/Operador deben permitir el acceso a la ubicación en su navegador.
