@@ -7,15 +7,39 @@ import { PasswordInput } from "../components/PasswordInput";
 const LAST_TENANT_KEY = "gpms_last_tenant";
 const LAST_IDENTIFIER_KEY = "gpms_last_identifier";
 
+// Subdominios que NO representan un tenant (panel plataforma, landing, etc.).
+const RESERVED_SUBDOMAINS = new Set(["www", "admin", "app", "api"]);
+
+/**
+ * Deriva el slug del tenant a partir del hostname cuando el deploy usa
+ * subdominios por tenant (ej: mercurio.shipcms.cloud → "mercurio").
+ * Devuelve null en localhost, IPs, apex o subdominios reservados — ahí el
+ * usuario elige el tenant manualmente (modo dev / single-domain).
+ */
+function deriveTenantSlugFromHost(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return null;
+  const labels = host.split(".");
+  if (labels.length < 3) return null; // apex (shipcms.cloud) — sin subdominio
+  const sub = labels[0];
+  if (!sub || RESERVED_SUBDOMAINS.has(sub)) return null;
+  const slug = sub.replace(/[^a-z0-9-]/g, "");
+  return slug || null;
+}
+
 export const Login: React.FC = () => {
   const { login, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // Si el host trae el tenant (subdominio), queda fijo y se oculta el campo.
+  const hostTenant = deriveTenantSlugFromHost();
 
   const [form, setForm] = useState(() => {
     let tenantSlug = "demo";
     let identifier = "";
     try {
-      tenantSlug = localStorage.getItem(LAST_TENANT_KEY) || "demo";
+      tenantSlug = hostTenant || localStorage.getItem(LAST_TENANT_KEY) || "demo";
       identifier = localStorage.getItem(LAST_IDENTIFIER_KEY) || "";
     } catch {}
     return { tenantSlug, identifier, password: "" };
@@ -27,11 +51,13 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const tenantSlug = hostTenant || form.tenantSlug.trim();
     try {
-      localStorage.setItem(LAST_TENANT_KEY, form.tenantSlug.trim());
+      // En modo subdominio el tenant lo fija la URL — no se persiste como "último".
+      if (!hostTenant) localStorage.setItem(LAST_TENANT_KEY, tenantSlug);
       localStorage.setItem(LAST_IDENTIFIER_KEY, form.identifier.trim());
     } catch {}
-    await login(form.tenantSlug, form.identifier, form.password);
+    await login(tenantSlug, form.identifier, form.password);
   };
 
   return (
@@ -59,17 +85,27 @@ export const Login: React.FC = () => {
           <p className="text-sm text-text-industrial/50 mb-8">Accede a tu espacio de gestión naval</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Empresa / Tenant</label>
-              <input
-                type="text"
-                value={form.tenantSlug}
-                onChange={e => setForm(f => ({ ...f, tenantSlug: e.target.value }))}
-                required
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
-                placeholder="demo"
-              />
-            </div>
+            {hostTenant ? (
+              <div>
+                <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Empresa / Tenant</label>
+                <div className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 flex items-center justify-between">
+                  <span className="font-semibold">{hostTenant}</span>
+                  <span className="text-[10px] text-text-industrial/40 uppercase tracking-wider">{window.location.hostname}</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Empresa / Tenant</label>
+                <input
+                  type="text"
+                  value={form.tenantSlug}
+                  onChange={e => setForm(f => ({ ...f, tenantSlug: e.target.value }))}
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                  placeholder="demo"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Email / Usuario</label>
               <input

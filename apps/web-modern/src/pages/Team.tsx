@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, Mail, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -266,54 +266,17 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
 // ─── Fleet Assignment Panel ───────────────────────────────────────────────────
 
 interface FleetAssignmentPanelProps {
-  member: Member;
-  onChanged: () => void;
+  selected: Set<string>;
+  onToggle: (code: string) => void;
 }
 
-const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onChanged }) => {
+const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ selected, onToggle }) => {
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels } = useVesselContext();
-  const [selected, setSelected] = useState<Set<string>>(new Set(member.assignedVesselCodes));
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const toggle = (code: string) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code); else next.add(code);
-      return next;
-    });
-    setSaved(false);
-  };
-
-  const handleSave = async () => {
-    setSaving(true); setError(null);
-    try {
-      await api.put(`/app/team/members/${member.userId}/vessels`, { vesselCodes: [...selected] });
-      setSaved(true);
-      onChanged();
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className={labelCls + " flex items-center gap-1.5"}><Anchor className="w-3 h-3 text-accent" />Asignación de Flota</p>
-        <button
-          onClick={() => { void handleSave(); }}
-          disabled={saving}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent text-primary-bg text-[10px] font-bold hover:brightness-110 disabled:opacity-50 transition-all"
-        >
-          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
-          {saved ? "Guardado" : "Guardar"}
-        </button>
-      </div>
+      <p className={labelCls + " flex items-center gap-1.5"}><Anchor className="w-3 h-3 text-accent" />Asignación de Flota</p>
       {vessels.length === 0 ? (
         <p className="text-xs text-text-industrial/30">
           No hay buques configurados. Agregue buques en{" "}
@@ -329,7 +292,7 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onC
             return (
               <button
                 key={v.code}
-                onClick={() => toggle(v.code)}
+                onClick={() => onToggle(v.code)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
                   active
                     ? "bg-accent/15 border-accent/40 text-accent"
@@ -348,62 +311,27 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onC
           })}
         </div>
       )}
-      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
 };
 
 // ─── Member Credentials Section ───────────────────────────────────────────────
 
-const MemberCredentialsSection: React.FC<{ member: Member; onChanged: () => void }> = ({ member, onChanged }) => {
-  const username = member.legacyUserId || member.email;
-  // Si el user no tiene legacyUserId, inicia sesión con su email → al cambiarlo cambia su login.
-  const emailIsLogin = !member.legacyUserId;
-  const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd]   = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
-  const [copied, setCopied]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+interface MemberCredentialsSectionProps {
+  username: string;
+  emailIsLogin: boolean;
+  email: string;
+  setEmail: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  showPwd: boolean;
+  setShowPwd: (v: boolean) => void;
+}
 
-  // Email — vacío si es un email interno autogenerado (sin email real cargado).
-  const [email, setEmail]           = useState(isInternalEmail(member.email) ? "" : member.email);
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [savedEmail, setSavedEmail]   = useState(false);
-  const [emailError, setEmailError]   = useState<string | null>(null);
-
-  const emailChanged = email.trim().toLowerCase() !== (isInternalEmail(member.email) ? "" : member.email.toLowerCase());
-
-  const handleSaveEmail = async () => {
-    const value = email.trim();
-    if (!value || !value.includes("@")) { setEmailError("Email inválido."); return; }
-    setSavingEmail(true); setEmailError(null);
-    try {
-      await api.patch(`/app/team/members/${member.userId}/email`, { email: value });
-      setSavedEmail(true);
-      onChanged();
-      setTimeout(() => setSavedEmail(false), 2500);
-    } catch (err) {
-      setEmailError(err instanceof ApiError ? err.message : "Error al guardar");
-    } finally {
-      setSavingEmail(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!password) return;
-    setSaving(true); setError(null);
-    try {
-      await api.put(`/app/team/members/${member.userId}/password`, { password });
-      setSaved(true);
-      setPassword("");
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
-  };
+const MemberCredentialsSection: React.FC<MemberCredentialsSectionProps> = ({
+  username, emailIsLogin, email, setEmail, password, setPassword, showPwd, setShowPwd,
+}) => {
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(username);
@@ -427,28 +355,16 @@ const MemberCredentialsSection: React.FC<{ member: Member; onChanged: () => void
       </div>
       <div>
         <label className={labelCls + " mb-1"}>Email</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={e => { setEmail(e.target.value); setSavedEmail(false); setEmailError(null); }}
-            placeholder="nombre@empresa.com"
-            className={`${inputCls} flex-1`}
-          />
-          <button
-            type="button"
-            onClick={() => { void handleSaveEmail(); }}
-            disabled={savingEmail || !emailChanged}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-primary-bg text-xs font-bold hover:brightness-110 disabled:opacity-40 transition-all"
-          >
-            {savingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedEmail ? <Check className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
-            {savedEmail ? "Guardado" : "Guardar"}
-          </button>
-        </div>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="nombre@empresa.com"
+          className={inputCls}
+        />
         {emailIsLogin && (
           <p className="text-[10px] text-amber-400/80 mt-1">Este usuario inicia sesión con su email; al cambiarlo cambia su login.</p>
         )}
-        {emailError && <p className="text-xs text-red-400 mt-1">{emailError}</p>}
       </div>
       <div>
         <label className={labelCls + " mb-1"}>Establecer contraseña</label>
@@ -456,25 +372,15 @@ const MemberCredentialsSection: React.FC<{ member: Member; onChanged: () => void
           <input
             type={showPwd ? "text" : "password"}
             value={password}
-            onChange={e => { setPassword(e.target.value); setSaved(false); }}
+            onChange={e => setPassword(e.target.value)}
             placeholder="Nueva contraseña…"
             className={`${inputCls} pr-10`}
           />
-          <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-white transition-colors">
+          <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-white transition-colors">
             {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <button
-        type="button"
-        onClick={() => { void handleSave(); }}
-        disabled={saving || !password}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-primary-bg text-xs font-bold hover:brightness-110 disabled:opacity-40 transition-all"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <KeyRound className="w-3.5 h-3.5" />}
-        {saved ? "Guardado" : "Guardar contraseña"}
-      </button>
     </div>
   );
 };
@@ -508,11 +414,56 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   const needsFleetAssignment = member.role !== "TENANT_ADMIN";
   const hasNoVesselsAssigned = needsFleetAssignment && member.assignedVesselCodes.length === 0;
 
-  const handleRoleChange = async () => {
-    if (newRole === member.role) return;
+  // Edición consolidada: credenciales (email/password), flota y rol viven en un
+  // solo formulario con un único "Guardar" que persiste sólo lo que cambió.
+  const username = member.legacyUserId || member.email;
+  const emailIsLogin = !member.legacyUserId;
+  const emailInitial = isInternalEmail(member.email) ? "" : member.email.toLowerCase();
+
+  const [email, setEmail]       = useState(isInternalEmail(member.email) ? "" : member.email);
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd]   = useState(false);
+  const [selectedVessels, setSelectedVessels] = useState<Set<string>>(new Set(member.assignedVesselCodes));
+
+  const toggleVessel = (code: string) => {
+    setSelectedVessels(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  };
+
+  // ── Dirty detection — qué cambió respecto del estado original ──────────────
+  const emailChanged = email.trim().toLowerCase() !== emailInitial;
+  const passwordSet  = password.trim().length > 0;
+  const roleChanged  = newRole !== member.role;
+  const vesselsChanged =
+    selectedVessels.size !== member.assignedVesselCodes.length ||
+    member.assignedVesselCodes.some(c => !selectedVessels.has(c));
+  const canEdit = !isSelf && !isRevoked;
+  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged);
+
+  const handleSaveAll = async () => {
+    if (emailChanged) {
+      const value = email.trim();
+      if (!value.includes("@") || value.length < 5) { setError("Email inválido."); return; }
+    }
     setSaving(true); setError(null);
     try {
-      await api.patch(`/app/team/members/${member.userId}/role`, { role: newRole });
+      // Orden: vessels antes que role — cambiar a TECHNICIAN_OPERATOR valida en
+      // el backend que la membership ya tenga al menos una embarcación asignada.
+      if (vesselsChanged) {
+        await api.put(`/app/team/members/${member.userId}/vessels`, { vesselCodes: [...selectedVessels] });
+      }
+      if (roleChanged) {
+        await api.patch(`/app/team/members/${member.userId}/role`, { role: newRole });
+      }
+      if (emailChanged) {
+        await api.patch(`/app/team/members/${member.userId}/email`, { email: email.trim() });
+      }
+      if (passwordSet) {
+        await api.put(`/app/team/members/${member.userId}/password`, { password: password.trim() });
+      }
       onChanged();
       onClose();
     } catch (err) {
@@ -568,14 +519,23 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
           </div>
 
           {/* Credentials */}
-          {!isRevoked && !isSelf && (
-            <MemberCredentialsSection member={member} onChanged={onChanged} />
+          {canEdit && (
+            <MemberCredentialsSection
+              username={username}
+              emailIsLogin={emailIsLogin}
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              showPwd={showPwd}
+              setShowPwd={setShowPwd}
+            />
           )}
 
           {/* Fleet assignment for roles that need vessel scoping */}
           {needsFleetAssignment && !isRevoked && (
             <div className="border border-accent/15 rounded-xl p-4 bg-accent/3">
-              <FleetAssignmentPanel member={member} onChanged={onChanged} />
+              <FleetAssignmentPanel selected={selectedVessels} onToggle={toggleVessel} />
               {hasNoVesselsAssigned && (
                 <p className="text-[10px] text-amber-400 mt-2">
                   ⚠ Este rol necesita al menos una embarcación asignada para ver datos del sistema.
@@ -585,53 +545,56 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
           )}
 
           {/* Role change */}
-          {!isSelf && !isRevoked && (
+          {canEdit && (
             <div className="space-y-2">
               <label className={labelCls}>{t("team.changeRole")}</label>
-              <div className="flex items-center gap-2">
-                <select value={newRole} onChange={e => setNewRole(e.target.value)} className={`flex-1 ${selectCls}`}>
-                  {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
-                </select>
-                <button
-                  onClick={() => { void handleRoleChange(); }}
-                  disabled={saving || newRole === member.role}
-                  className="shrink-0 px-3 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40 flex items-center gap-1.5"
-                >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
-                </button>
-              </div>
+              <select value={newRole} onChange={e => setNewRole(e.target.value)} className={selectCls}>
+                {ALL_ROLES.map(r => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
+              </select>
             </div>
           )}
 
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+        </div>
 
-          {/* Delete */}
-          {!isSelf && (
-            <div className="border-t border-white/10 pt-4">
-              {!confirmDeactivate ? (
+        {/* Footer — un solo Guardar + Eliminar */}
+        {!isSelf && (
+          <div className="px-6 py-4 border-t border-white/10 shrink-0">
+            {confirmDeactivate ? (
+              <div className="space-y-3">
+                <p className="text-xs text-text-industrial/60">{t("confirm.deleteTeamMember").replace("{name}", fullName(member))}</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setConfirmDeactivate(false)} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
+                  <button
+                    onClick={() => { void handleDelete(); }}
+                    disabled={deactivating}
+                    className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {deactivating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
                 <button onClick={() => setConfirmDeactivate(true)} className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
                   <UserMinus className="w-3.5 h-3.5" />
-                  Eliminar miembro
+                  Eliminar
                 </button>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-xs text-text-industrial/60">{t("confirm.deleteTeamMember").replace("{name}", fullName(member))}</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setConfirmDeactivate(false)} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-white transition-colors">{t("common.cancel")}</button>
-                    <button
-                      onClick={() => { void handleDelete(); }}
-                      disabled={deactivating}
-                      className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs hover:bg-red-500/30 disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {deactivating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                {canEdit && (
+                  <button
+                    onClick={() => { void handleSaveAll(); }}
+                    disabled={saving || !dirty}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-primary-bg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Guardar
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

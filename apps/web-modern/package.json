@@ -15,6 +15,7 @@
     "gantt-task-react": "^0.3.9",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.8.0",
+    "modern-screenshot": "^4.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.1",

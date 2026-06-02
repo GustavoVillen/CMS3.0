@@ -1,5 +1,86 @@
 HISTORY.txt
 
+[2026-06-02] FEAT Login: tenant por subdominio (deriva slug del hostname)
+Agent: Claude Opus 4.8
+
+  CONTEXTO:
+  Preparacion para subdominios por tenant (mercurio.shipcms.cloud, etc.). El
+  backend YA resuelve el tenant por subdominio (tenant-resolution.ts); faltaba
+  que el frontend dejara de pedir el slug a mano cuando viene en el host.
+
+  CAMBIOS (apps/web-modern/src/pages/Login.tsx):
+  - deriveTenantSlugFromHost(): saca el slug del primer label del hostname si hay
+    subdominio (>=3 labels, no localhost/IP/apex, no reservados www/admin/app/api).
+    Devuelve null en dev/single-domain.
+  - Si hay hostTenant: el campo "Empresa/Tenant" se muestra fijo (chip read-only
+    con el hostname) y el login usa ese slug. No se persiste como "ultimo tenant".
+  - Si no (localhost/single-domain): se mantiene el input manual como hasta ahora
+    -> 100% backward-compatible, seguro para deployar ya.
+
+  PENDIENTE (infra, no codigo): DNS wildcard *.shipcms.cloud, cert TLS wildcard
+  (certbot DNS-01), nginx server_name *.shipcms.cloud con proxy_set_header Host
+  $host, y en el .env del VPS: APP_ROOT_DOMAIN=shipcms.cloud + apagar
+  APP_ALLOW_TENANT_HEADER_FALLBACK y NODE_ENV=production cuando los subdominios
+  esten activos. Ver memory project_vps_env_state.
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. Solo frontend.
+
+
+[2026-06-02] FEAT Dashboard: "Exportar HTML" ahora captura la pantalla tal cual
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Que el export HTML del dashboard salga igual a lo que se ve en pantalla.
+
+  DIAGNOSTICO:
+  El boton llamaba a /app/dashboard/html (dashboard-html-service.ts), que arma
+  un HTML totalmente distinto: fondo blanco, sin graficos, solo una grilla de
+  KPIs de sidebar-counts. No se parecia al dashboard real (donuts Recharts,
+  tarjetas, grafico de combustible, tema oscuro).
+
+  DECISION (consultada al usuario): captura visual fiel.
+  - Tailwind v4 usa colores oklch -> html2canvas falla. Se uso modern-screenshot
+    (foreignObject, soporta oklch + SVG de Recharts).
+
+  CAMBIOS (apps/web-modern):
+  - pnpm add modern-screenshot (^4.7.0).
+  - pages/Dashboard.tsx: exportDashboardHtml ahora captura el nodo del dashboard
+    (ref) a PNG con domToPng (scale 2, backgroundColor = bg del body) y lo baja
+    embebido en un HTML (<img> base64). La barra del boton se excluye del snapshot
+    via data-export-exclude="true". Boton con estado "exporting" + spinner.
+    Se quito el uso de downloadAuthedFile / endpoint backend para el dashboard.
+  - lib/i18n.tsx: + dashboard.exportHtmlError (es/en/pt).
+  - El endpoint backend /app/dashboard/html y buildDashboardHtml quedan (los usa
+    aun el export de Maintenance Workload via buildWorkloadHtml); no se tocaron.
+
+  VERIFICACION:
+  tsc --noEmit = exit 0, vite build = OK (bundle +~24KB gzip por la lib).
+  PENDIENTE: validar el render runtime del PNG con una sesion real (local/VPS).
+
+
+[2026-06-02] UX Team: un solo "Guardar" en el drawer de miembro
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  El drawer de edicion de miembro tenia 4 botones "Guardar" separados (email,
+  contrasena, flota, rol). El usuario pidio un unico "Guardar" + "Eliminar".
+
+  CAMBIOS (apps/web-modern/src/pages/Team.tsx):
+  - FleetAssignmentPanel y MemberCredentialsSection pasan a ser presentacionales
+    (sin estado ni boton de guardado propios). Reciben value/onChange del padre.
+  - MemberDrawer levanta todo el estado (email, password, showPwd, selectedVessels,
+    newRole) y agrega handleSaveAll: persiste SOLO lo que cambio (dirty detection),
+    en orden vessels -> role -> email -> password (vessels antes que role para que
+    el cambio a TECHNICIAN_OPERATOR pase la validacion backend de embarcacion).
+  - Footer unico: un boton "Guardar" (disabled si no hay cambios) + "Eliminar"
+    (con confirmacion inline). Se quitaron los botones por-seccion.
+  - Endpoints sin cambios (PUT vessels, PATCH role, PATCH email, PUT password).
+
+  VERIFICACION:
+  tsc --noEmit web-modern = exit 0. Solo frontend, sin backend ni schema.
+
+
 [2026-06-01] FEAT Team: editar email de un miembro
 Agent: Claude Opus 4.8
 

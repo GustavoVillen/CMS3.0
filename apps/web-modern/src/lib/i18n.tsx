@@ -1840,6 +1840,7 @@ const dict = {
   // ─── Dashboard — Export, Crew, Permits ──────────────────────────────────────
   "dashboard.exportHtml":         { es: "Exportar HTML",        en: "Export HTML",         pt: "Exportar HTML" },
   "dashboard.exportHtmlTitle":    { es: "Descargar snapshot HTML del dashboard (imprimible)", en: "Download dashboard HTML snapshot (printable)", pt: "Baixar snapshot HTML do painel (imprimível)" },
+  "dashboard.exportHtmlError":    { es: "No se pudo exportar el dashboard.", en: "Could not export the dashboard.", pt: "Não foi possível exportar o painel." },
   "dashboard.crewTitle":          { es: "Tripulación y Simulacros",       en: "Crew & Drills",                   pt: "Tripulação e Simulados" },
   "dashboard.crewSubtitle":       { es: "Onboard, certificados, simulacros", en: "Onboard, certificates, drills", pt: "A bordo, certificados, simulados" },
   "dashboard.crewOnboard":        { es: "A bordo",              en: "Onboard",             pt: "A bordo" },
