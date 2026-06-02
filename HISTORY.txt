@@ -1,5 +1,30 @@
 HISTORY.txt
 
+[2026-06-01] FEAT Team: editar email de un miembro
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  En el drawer de edicion de miembro (Team) se podia cambiar contrasena,
+  flota y rol, pero no el email. Poder actualizarlo.
+
+  CAMBIOS:
+  - apps/api/src/tenant/team/team-service.ts
+    + updateMemberEmail(session, userId, email): espejo de setMemberPassword.
+      Valida formato, chequea email @unique global (409 EMAIL_TAKEN si pertenece
+      a otro user), update scopeado por membership del tenant, audit EMAIL_CHANGED.
+      Soporta dev mode (sin Prisma) via dev-tenant-user-store.
+  - apps/api/src/tenant/team/team-router.ts
+    + PATCH /app/team/members/:userId/email  { email }.
+  - apps/web-modern/src/pages/Team.tsx
+    MemberCredentialsSection ahora recibe onChanged y muestra un campo Email
+    editable (vacio si el email es interno autogenerado) con boton Guardar.
+    Aviso ambar cuando el user inicia sesion con el email (sin legacyUserId):
+    cambiar el email cambia su login. Tras guardar dispara reload de la lista.
+
+  VERIFICACION:
+  tsc --noEmit api = exit 0, tsc --noEmit web-modern = exit 0. Sin cambios de schema.
+
+
 [2026-06-01] FIX Permisos de Trabajo: pantalla vacia al abrir el modulo
 Agent: Claude Opus 4.8
 

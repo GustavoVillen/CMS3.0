@@ -13,6 +13,7 @@ import {
   listTeamMembers,
   setMemberPassword,
   syncMemberVessels,
+  updateMemberEmail,
   updateMemberRole,
 } from "./team-service";
 
@@ -72,6 +73,14 @@ export async function handleTeamRoutes(
     const userId = url.pathname.split("/")[4];
     const { password } = await readJsonBody(request) as { password: string };
     sendJson(response, 200, await setMemberPassword(session, userId, password));
+    return true;
+  }
+
+  // PATCH /app/team/members/:userId/email
+  if (method === "PATCH" && /^\/app\/team\/members\/[^/]+\/email$/.test(url.pathname)) {
+    const userId = url.pathname.split("/")[4];
+    const { email } = await readJsonBody(request) as { email: string };
+    sendJson(response, 200, await updateMemberEmail(session, userId, email));
     return true;
   }
 

@@ -595,3 +595,60 @@ export async function setMemberPassword(session: TenantAccessSession, userId: st
 
   return { ok: true };
 }
+
+// ─── Update Member Email ──────────────────────────────────────────────────────
+
+export async function updateMemberEmail(session: TenantAccessSession, userId: string, emailRaw: string) {
+  ensureAdmin(session);
+
+  const email = (emailRaw ?? "").trim().toLowerCase();
+  if (!email || !email.includes("@") || email.length < 5) {
+    throw new RouteError(400, "INVALID_EMAIL", "Email inválido.");
+  }
+
+  const prisma = getPrismaClient();
+
+  if (!prisma) {
+    const { updateDevTenantUser, getDevTenantUserById, getDevTenantUserByEmail } =
+      await import("../../platform/data/dev-tenant-user-store");
+    const user = getDevTenantUserById(userId);
+    if (!user || user.tenantSlug !== session.tenantSlug) {
+      throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+    }
+    const taken = getDevTenantUserByEmail(email);
+    if (taken && taken.id !== userId) {
+      throw new RouteError(409, "EMAIL_TAKEN", `El email "${email}" pertenece a otro usuario.`);
+    }
+    updateDevTenantUser(userId, { email });
+    return { userId, email };
+  }
+
+  const tenantId = await getTenantId(prisma, session.tenantSlug);
+
+  // email es @unique global en User — rechazar si ya pertenece a otro user.
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && existing.id !== userId) {
+    throw new RouteError(409, "EMAIL_TAKEN", `El email "${email}" pertenece a otro usuario.`);
+  }
+
+  // updateMany scopeado por membership: solo actualiza si el user pertenece a
+  // este tenant — un admin de otro tenant no puede cambiar el email de un user ajeno.
+  const result = await prisma.user.updateMany({
+    where: { id: userId, memberships: { some: { tenantId } } },
+    data: { email },
+  });
+  if (result.count === 0) {
+    throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  }
+
+  await publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "EMAIL_CHANGED",
+    entityType: "User",
+    entityId: userId,
+    metadata: { tenantSlug: session.tenantSlug, newEmail: email, byAdmin: true },
+  });
+
+  return { userId, email };
+}

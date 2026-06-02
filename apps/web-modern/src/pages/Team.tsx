@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, Mail, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -355,14 +355,40 @@ const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ member, onC
 
 // ─── Member Credentials Section ───────────────────────────────────────────────
 
-const MemberCredentialsSection: React.FC<{ member: Member }> = ({ member }) => {
+const MemberCredentialsSection: React.FC<{ member: Member; onChanged: () => void }> = ({ member, onChanged }) => {
   const username = member.legacyUserId || member.email;
+  // Si el user no tiene legacyUserId, inicia sesión con su email → al cambiarlo cambia su login.
+  const emailIsLogin = !member.legacyUserId;
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [copied, setCopied]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
+
+  // Email — vacío si es un email interno autogenerado (sin email real cargado).
+  const [email, setEmail]           = useState(isInternalEmail(member.email) ? "" : member.email);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [savedEmail, setSavedEmail]   = useState(false);
+  const [emailError, setEmailError]   = useState<string | null>(null);
+
+  const emailChanged = email.trim().toLowerCase() !== (isInternalEmail(member.email) ? "" : member.email.toLowerCase());
+
+  const handleSaveEmail = async () => {
+    const value = email.trim();
+    if (!value || !value.includes("@")) { setEmailError("Email inválido."); return; }
+    setSavingEmail(true); setEmailError(null);
+    try {
+      await api.patch(`/app/team/members/${member.userId}/email`, { email: value });
+      setSavedEmail(true);
+      onChanged();
+      setTimeout(() => setSavedEmail(false), 2500);
+    } catch (err) {
+      setEmailError(err instanceof ApiError ? err.message : "Error al guardar");
+    } finally {
+      setSavingEmail(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!password) return;
@@ -398,6 +424,31 @@ const MemberCredentialsSection: React.FC<{ member: Member }> = ({ member }) => {
             {copied ? <Check className="w-3.5 h-3.5 text-success-sea" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
         </div>
+      </div>
+      <div>
+        <label className={labelCls + " mb-1"}>Email</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setSavedEmail(false); setEmailError(null); }}
+            placeholder="nombre@empresa.com"
+            className={`${inputCls} flex-1`}
+          />
+          <button
+            type="button"
+            onClick={() => { void handleSaveEmail(); }}
+            disabled={savingEmail || !emailChanged}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-primary-bg text-xs font-bold hover:brightness-110 disabled:opacity-40 transition-all"
+          >
+            {savingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedEmail ? <Check className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+            {savedEmail ? "Guardado" : "Guardar"}
+          </button>
+        </div>
+        {emailIsLogin && (
+          <p className="text-[10px] text-amber-400/80 mt-1">Este usuario inicia sesión con su email; al cambiarlo cambia su login.</p>
+        )}
+        {emailError && <p className="text-xs text-red-400 mt-1">{emailError}</p>}
       </div>
       <div>
         <label className={labelCls + " mb-1"}>Establecer contraseña</label>
@@ -518,7 +569,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
           {/* Credentials */}
           {!isRevoked && !isSelf && (
-            <MemberCredentialsSection member={member} />
+            <MemberCredentialsSection member={member} onChanged={onChanged} />
           )}
 
           {/* Fleet assignment for roles that need vessel scoping */}
