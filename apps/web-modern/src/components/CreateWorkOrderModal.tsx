@@ -7,13 +7,16 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WoPrefill {
-  source: "plan" | "defect";
+  source: "plan" | "defect" | "audit-finding";
   sourceId: string;
   sourceCode: string;
   sourceLabel: string;
   vesselCode: string;
   assetId: string;
   assetName?: string | null;
+  // Cuando el origen no trae un activo (ej. finding de auditoría externa), el usuario
+  // debe elegirlo: se renderiza un selector de activo dentro del modo prefill.
+  assetSelectable?: boolean;
   type: string;
   priority?: string;
   criticality?: string;
@@ -238,9 +241,19 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     return () => clearTimeout(debounceRef.current);
   }, [vesselCode, prefill]);
 
+  // Asset list for prefill mode when the source has no asset (audit findings): user picks one.
+  useEffect(() => {
+    if (!prefill?.assetSelectable || !prefill.vesselCode) return;
+    setLoadingAssets(true);
+    api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(prefill.vesselCode)}&limit=200`)
+      .then(res => setAssets(res.items ?? []))
+      .catch(() => setAssets([]))
+      .finally(() => setLoadingAssets(false));
+  }, [prefill]);
+
   // Resolve asset name from API when prefill has assetId but no assetName
   useEffect(() => {
-    if (!prefill || prefill.assetName || !prefill.assetId || !prefill.vesselCode) return;
+    if (!prefill || prefill.assetSelectable || prefill.assetName || !prefill.assetId || !prefill.vesselCode) return;
     api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(prefill.vesselCode)}&limit=200`)
       .then(res => {
         const found = res.items?.find(a => a.id === prefill.assetId);
@@ -254,6 +267,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     if (!prefill) {
       if (!vesselCode.trim()) { setErr(t("wo.modal.vesselRequired")); return; }
       if (!assetId)           { setErr(t("wo.modal.equipmentRequired")); return; }
+    } else if (prefill.assetSelectable && !assetId) {
+      setErr(t("wo.modal.equipmentRequired")); return;
     }
     setSaving(true);
     try {
@@ -277,7 +292,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       } else {
         const created = await api.post<{ id: string }>("/app/pms/work-orders", {
           vesselCode:         (prefill?.vesselCode ?? vesselCode).trim().toUpperCase(),
-          assetId:            prefill?.assetId ?? assetId,
+          assetId:            prefill?.assetSelectable ? assetId : (prefill?.assetId ?? assetId),
           type:               prefill?.type    ?? type,
           priority:           prefill?.priority ?? priority,
           criticality:        prefill?.criticality ?? criticality,
@@ -352,22 +367,41 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">{t("wo.modal.section.info")}</p>
 
             {prefill ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {([
-                  [t("wo.modal.vessel"),    prefill.vesselCode,                   "font-mono text-accent"],
-                  [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-fg"],
-                  [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
-                  [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-fg"],
-                  [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
-                  prefill.dueDate
-                    ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
-                    : null,
-                ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
-                  <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
-                    {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
+              <div className="space-y-3">
+                {prefill.assetSelectable && (
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>{t("wo.modal.equipment")} *</label>
+                    {loadingAssets
+                      ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
+                      : assets.length > 0
+                        ? <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls}>
+                            <option value="">{t("wo.modal.selectEquipment")}</option>
+                            {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode} — {a.name}</option>)}
+                          </select>
+                        : <input value={assetId} onChange={e => setAssetId(e.target.value)}
+                            placeholder={t("wo.modal.noEquipmentEnterId")} className={inputCls} />
+                    }
                   </div>
-                ))}
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {([
+                    [t("wo.modal.vessel"),    prefill.vesselCode,                   "font-mono text-accent"],
+                    prefill.assetSelectable
+                      ? null
+                      : [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-fg"],
+                    [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
+                    [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-fg"],
+                    [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
+                    prefill.dueDate
+                      ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
+                      : null,
+                  ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
+                    <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
+                      {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-4">

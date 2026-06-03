@@ -2,7 +2,8 @@
 // Registro histórico de inspecciones externas con findings.
 
 import React, { useCallback, useMemo, useState } from "react";
-import { ClipboardCheck, Plus, Loader2, X, ExternalLink, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ClipboardCheck, Plus, Loader2, X, ExternalLink, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -10,8 +11,22 @@ import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
+import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
+
+// "Conditional" o "Fail" habilitan el registro de findings (case-insensitive,
+// tolera datos legados en texto libre).
+const resultEnablesFindings = (r: string | null | undefined) => /conditional|fail/i.test(r ?? "");
+
+// Mapea severidad del finding (texto libre MINOR/MAJOR/CRITICAL) a prioridad de OT.
+function severityToPriority(severity: string | null | undefined): string {
+  const s = (severity ?? "").toUpperCase();
+  if (s.includes("CRITICAL")) return "CRITICAL";
+  if (s.includes("MAJOR")) return "HIGH";
+  if (s.includes("MINOR")) return "LOW";
+  return "MEDIUM";
+}
 
 const AUDIT_TYPE_LABEL: Record<string, string> = {
   PSC: "Port State Control",
@@ -50,6 +65,8 @@ interface Finding {
   clearingDate: string | null;
   evidenceNotes: string | null;
   evidenceDocUrl: string | null;
+  workOrderId: string | null;
+  workOrderCode?: string | null;
 }
 
 interface Audit {
@@ -99,6 +116,10 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showAddFinding, setShowAddFinding] = useState(false);
+  // Finding para el que se está abriendo una OT (dispara CreateWorkOrderModal).
+  const [woFinding, setWoFinding] = useState<Finding | null>(null);
+
+  const findingsEnabled = resultEnablesFindings(overallResult);
 
   React.useEffect(() => {
     if (!audit) return;
@@ -149,14 +170,15 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
   }, [audit]);
 
   return (
+   <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-4xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
           <div className="flex items-center gap-3">
             <ClipboardCheck className="w-4 h-4 text-accent" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Auditoría externa</p>
-              <h2 className="text-sm font-bold text-fg">{isNew ? "Nueva auditoría" : audit!.auditCode}</h2>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("nav.externalAudits")}</p>
+              <h2 className="text-sm font-bold text-fg">{isNew ? t("ea.modal.newTitle") : audit!.auditCode}</h2>
             </div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
@@ -178,7 +200,16 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
               <input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className={inputCls} />
             </div>
             <div><label className={labelCls}>Resultado general</label>
-              <input value={overallResult} onChange={e => setResult(e.target.value)} placeholder="Pass / Conditional / Fail" className={inputCls} />
+              <select value={overallResult} onChange={e => setResult(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                <option value="Pass">Pass</option>
+                <option value="Conditional">Conditional</option>
+                <option value="Fail">Fail</option>
+                {/* Valor legado no contemplado en las opciones: lo preservamos para no perderlo */}
+                {overallResult && !["Pass", "Conditional", "Fail"].includes(overallResult) && (
+                  <option value={overallResult}>{overallResult}</option>
+                )}
+              </select>
             </div>
             <div><label className={labelCls}>Puerto</label>
               <input value={port} onChange={e => setPort(e.target.value)} className={inputCls} />
@@ -203,19 +234,29 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
             </div>
           </div>
 
-          {!isNew && (
+          {isNew ? (
+            findingsEnabled && (
+              <div className="border-t border-fg/10 pt-4">
+                <p className="text-xs text-text-industrial/50 italic">{t("ea.findings.saveFirst")}</p>
+              </div>
+            )
+          ) : (
             <div className="border-t border-fg/10 pt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-text-industrial/70">Findings ({findings.length})</h3>
-                <button onClick={() => setShowAddFinding(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20">
-                  <Plus className="w-3 h-3" /> Agregar
-                </button>
+                {findingsEnabled && (
+                  <button onClick={() => setShowAddFinding(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20">
+                    <Plus className="w-3 h-3" /> Agregar
+                  </button>
+                )}
               </div>
-              {loadingFindings ? <Loader2 className="w-4 h-4 animate-spin text-accent mx-auto" />
+              {!findingsEnabled && findings.length === 0
+                ? <p className="text-xs text-text-industrial/40 italic text-center py-2">{t("ea.findings.gatedHint")}</p>
+                : loadingFindings ? <Loader2 className="w-4 h-4 animate-spin text-accent mx-auto" />
                 : findings.length === 0 ? <p className="text-xs text-text-industrial/40 italic text-center py-2">Sin findings registrados.</p>
                 : (
                   <div className="space-y-2">
-                    {findings.map(f => <FindingRow key={f.id} auditId={audit!.id} finding={f} onChange={reloadFindings} />)}
+                    {findings.map(f => <FindingRow key={f.id} auditId={audit!.id} finding={f} onChange={reloadFindings} onOpenWo={setWoFinding} />)}
                   </div>
                 )
               }
@@ -223,7 +264,15 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
           )}
 
           {showAddFinding && audit && (
-            <FindingAddForm auditId={audit.id} onClose={() => setShowAddFinding(false)} onSaved={() => { setShowAddFinding(false); void reloadFindings(); }} />
+            <FindingAddForm
+              auditId={audit.id}
+              onClose={() => setShowAddFinding(false)}
+              onSaved={(created) => {
+                setShowAddFinding(false);
+                void reloadFindings();
+                if (window.confirm(t("ea.finding.openWoConfirm"))) setWoFinding(created);
+              }}
+            />
           )}
 
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
@@ -246,10 +295,37 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
         </div>
       </div>
     </div>
+
+    {woFinding && audit && (
+      <CreateWorkOrderModal
+        prefill={{
+          source: "audit-finding",
+          sourceId: woFinding.id,
+          sourceCode: woFinding.findingCode ?? audit.auditCode,
+          sourceLabel: t("ea.finding.woSourceLabel"),
+          vesselCode: audit.vesselCode,
+          assetId: "",
+          assetSelectable: true,
+          type: "CORRECTIVE",
+          priority: severityToPriority(woFinding.severity),
+          description: woFinding.description,
+          dueDate: woFinding.rectificationDeadline,
+        }}
+        onClose={() => setWoFinding(null)}
+        onSaved={async (woId) => {
+          await api.patch(`/app/external-audits/${audit.id}/findings/${woFinding.id}`, { workOrderId: woId });
+          setWoFinding(null);
+          void reloadFindings();
+        }}
+      />
+    )}
+   </>
   );
 };
 
-const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => void }> = ({ auditId, finding, onChange }) => {
+const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => void; onOpenWo: (f: Finding) => void }> = ({ auditId, finding, onChange, onOpenWo }) => {
+  const t = useT();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   return (
     <div className="bg-fg/[0.03] border border-fg/10 rounded-xl p-3 space-y-1.5">
@@ -268,8 +344,25 @@ const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => 
             </span>
           )}
           {finding.severity && <span className="text-[10px] text-text-industrial/60">{finding.severity}</span>}
+          {finding.workOrderId && finding.workOrderCode && (
+            <button
+              type="button"
+              onClick={() => navigate(`/work-orders?autoCode=${finding.workOrderCode}`)}
+              title={t("ea.finding.openLinkedWo")}
+              className="text-[10px] px-1.5 py-0.5 rounded border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-400 font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-orange-500/20"
+            >
+              <Wrench className="w-3 h-3" /> {finding.workOrderCode}
+            </button>
+          )}
         </div>
-        <button onClick={() => setEditing(v => !v)} className="text-[10px] text-accent hover:underline">{editing ? "Cerrar" : "Editar"}</button>
+        <div className="flex items-center gap-2 shrink-0">
+          {!finding.workOrderId && (
+            <button onClick={() => onOpenWo(finding)} className="text-[10px] text-accent hover:underline flex items-center gap-1">
+              <Wrench className="w-3 h-3" /> {t("ea.finding.openWo")}
+            </button>
+          )}
+          <button onClick={() => setEditing(v => !v)} className="text-[10px] text-accent hover:underline">{editing ? "Cerrar" : "Editar"}</button>
+        </div>
       </div>
       <p className="text-xs text-fg">{finding.description}</p>
       {finding.clearingDate && (
@@ -282,7 +375,7 @@ const FindingRow: React.FC<{ auditId: string; finding: Finding; onChange: () => 
   );
 };
 
-const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: () => void }> = ({ auditId, onClose, onSaved }) => {
+const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: (created: Finding) => void }> = ({ auditId, onClose, onSaved }) => {
   const [findingCode, setFindingCode] = useState("");
   const [findingType, setFindingType] = useState("DEFICIENCY");
   const [description, setDescription] = useState("");
@@ -297,7 +390,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
     if (!description.trim()) { setErr("Descripción requerida."); return; }
     setSaving(true); setErr(null);
     try {
-      await api.post(`/app/external-audits/${auditId}/findings`, {
+      const created = await api.post<Finding>(`/app/external-audits/${auditId}/findings`, {
         findingCode: findingCode.trim() || null,
         findingType,
         category: category.trim() || null,
@@ -306,7 +399,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
         detentionRelated,
         rectificationDeadline: deadline || null,
       });
-      onSaved();
+      onSaved(created);
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
     finally { setSaving(false); }
   };
@@ -402,6 +495,7 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export const ExternalAuditsPage: React.FC = () => {
+  const t = useT();
   const [filter, setFilter] = useState<"all" | "open">("all");
   const path = useMemo(() => filter === "open" ? "/app/external-audits" : "/app/external-audits", [filter]);
   const { data, loading, reload } = useFetch<{ items: Audit[]; total: number }>(path, [path]);
@@ -416,10 +510,10 @@ export const ExternalAuditsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={ClipboardCheck} title="Auditorías Externas" total={items.length} onReload={reload}>
+      <PageHeader icon={ClipboardCheck} title={t("nav.externalAudits")} total={items.length} onReload={reload}>
         <ExportExcelButton module="external_audits" />
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
-          <Plus className="w-3.5 h-3.5" /> Nueva auditoría
+          <Plus className="w-3.5 h-3.5" /> {t("ea.newButton")}
         </button>
       </PageHeader>
 

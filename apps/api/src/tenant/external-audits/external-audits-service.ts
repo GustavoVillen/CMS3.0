@@ -49,6 +49,7 @@ export interface UpdateFindingInput extends Partial<CreateFindingInput> {
   clearingDate?: string | Date | null;
   evidenceNotes?: string | null;
   evidenceDocUrl?: string | null;
+  workOrderId?: string | null;
 }
 
 function canWrite(session: TenantAccessSession): boolean {
@@ -183,7 +184,28 @@ export async function getExternalAudit(session: TenantAccessSession, id: string)
   const findings = await findingDelegate(prisma).findMany({
     where: { auditId: id }, orderBy: { createdAt: "asc" },
   });
-  return { ...audit, findings };
+  const enriched = await attachWorkOrderCodes(prisma, tenantId, findings as Array<{ workOrderId: string | null }>);
+  return { ...audit, findings: enriched };
+}
+
+// Resuelve workOrderCode para findings que tienen workOrderId, de forma que el
+// frontend pueda mostrar un badge legible (ej. WO-ACEDEF-26-0010) y navegar a la OT.
+async function attachWorkOrderCodes<T extends { workOrderId: string | null }>(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  findings: T[],
+): Promise<Array<T & { workOrderCode: string | null }>> {
+  const ids = [...new Set(findings.map(f => f.workOrderId).filter((v): v is string => !!v))];
+  if (ids.length === 0) return findings.map(f => ({ ...f, workOrderCode: null }));
+  try {
+    const wos = await (prisma as unknown as {
+      workOrder: { findMany(a: unknown): Promise<Array<{ id: string; workOrderCode: string }>> };
+    }).workOrder.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, workOrderCode: true } });
+    const codeMap = new Map(wos.map(w => [w.id, w.workOrderCode]));
+    return findings.map(f => ({ ...f, workOrderCode: f.workOrderId ? codeMap.get(f.workOrderId) ?? null : null }));
+  } catch {
+    return findings.map(f => ({ ...f, workOrderCode: null }));
+  }
 }
 
 async function generateAuditCode(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, tenantId: string, vesselCode: string): Promise<string> {
@@ -308,9 +330,19 @@ export async function updateFinding(session: TenantAccessSession, auditId: strin
   ensureCanWrite(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "DB no disponible.");
-  // Verifica acceso al audit
-  await getExternalAudit(session, auditId);
+  // Verifica acceso al audit (y obtiene tenantId para validar ownership de la OT)
+  const audit = await getExternalAudit(session, auditId) as unknown as { tenantId: string };
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
+  if (input.workOrderId !== undefined) {
+    const workOrderId = normOpt(input.workOrderId);
+    if (workOrderId) {
+      const woCount = await (prisma as unknown as {
+        workOrder: { count(a: unknown): Promise<number> };
+      }).workOrder.count({ where: { id: workOrderId, tenantId: audit.tenantId, deletedAt: null } });
+      if (woCount === 0) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "OT no encontrada o no pertenece a este tenant.");
+    }
+    data.workOrderId = workOrderId;
+  }
   if (input.findingCode !== undefined) data.findingCode = normOpt(input.findingCode);
   if (input.findingType !== undefined) data.findingType = parseEnum(input.findingType, FINDING_TYPES, "findingType");
   if (input.category !== undefined) data.category = normOpt(input.category);

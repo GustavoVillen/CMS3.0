@@ -2925,6 +2925,8 @@ model ExternalAuditFinding {
   clearingDate      DateTime?
   evidenceNotes     String?                    // qué evidencia se aportó al cerrar
   evidenceDocUrl    String?
+  // OT correctiva abierta a partir del finding (opcional). Campo plano como Defect.workOrderId.
+  workOrderId       String?
   createdAt         DateTime                   @default(now())
   createdByUserId   String
   updatedAt         DateTime                   @updatedAt

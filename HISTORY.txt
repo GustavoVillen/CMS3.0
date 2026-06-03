@@ -1,6 +1,63 @@
 HISTORY.txt
 
-[2026-06-03] Review indexing core PMS: fix indice WorkOrder.assetId
+[2026-06-03] FEAT: Auditoría/Inspección externa — findings condicionados + OT desde finding
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  Renombrar el módulo a "Auditoría / Inspección externa". Habilitar el registro de
+  findings solo cuando el resultado de la auditoría/inspección es Conditional o Fail.
+  Tras registrar cada finding, ofrecer abrir una OT correctiva y, si se acepta,
+  disparar el proceso de creación de OT y vincularla al finding.
+
+  CAMBIOS (schema):
+  - prisma/schema.prisma: ExternalAuditFinding += workOrderId String? (campo plano,
+    mismo patrón que Defect.workOrderId). Migración 20260603_external_audit_finding_work_order.
+    PENDIENTE: correr `prisma db push` cuando la DB esté arriba (Docker estaba caído).
+
+  CAMBIOS (backend):
+  - external-audits-service.ts: updateFinding acepta workOrderId (valida ownership de
+    la OT por tenant). getExternalAudit adjunta workOrderCode a cada finding
+    (attachWorkOrderCodes), para badge legible y navegación.
+
+  CAMBIOS (frontend):
+  - CreateWorkOrderModal: nueva variante prefill source "audit-finding" con
+    assetSelectable (los findings no traen activo → el usuario lo elige).
+  - ExternalAudits.tsx: Resultado general → dropdown Pass/Conditional/Fail (preserva
+    valores legados). Findings habilitados solo si resultado ∈ {Conditional, Fail}.
+    Al registrar un finding se pregunta si abrir OT; si sí, abre CreateWorkOrderModal
+    (CORRECTIVE, prioridad mapeada de la severidad) y al guardar vincula workOrderId
+    al finding. Badge de OT navegable + botón "Abrir OT" para findings sin OT.
+  - i18n: rename nav.externalAudits a "Auditoría / Inspección externa" (es/en/pt) +
+    claves ea.* nuevas.
+
+[2026-06-03] PERF: cache de datos en el cliente (useFetch stale-while-revalidate)
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  Mejorar la velocidad percibida sin tocar el backend ni arriesgar consistencia.
+  Antes useFetch re-fetcheaba en cada navegacion.
+
+  CAMBIOS (frontend):
+  - apps/web-modern/src/lib/fetch-cache.ts (NUEVO): cache en memoria (Map) +
+    dedupe de requests en vuelo + TTL (FETCH_STALE_MS=30s). Modulo sin React para
+    romper el ciclo de imports auth<->hooks<->vessel-context. Key prefijada con el
+    tenant slug (aislamiento multitenant). clearFetchCache() para logout.
+  - apps/web-modern/src/lib/hooks.ts: useFetch ahora es stale-while-revalidate:
+    muestra el cache AL INSTANTE al revisitar; si esta vencido revalida en
+    background; reload() siempre trae fresco (post-mutacion correcto). Errores en
+    revalidacion silenciosa no pisan el dato cacheado.
+  - apps/web-modern/src/lib/auth.tsx: logout llama clearFetchCache() para no
+    exponer datos cacheados al siguiente login.
+
+  SEGURIDAD MULTITENANT: key = "{tenantSlug}::{path}"; nunca mezcla tenants.
+  Logout limpia todo. El scope por buque ya esta en el path (vesselCode).
+
+  NO se agrego Redis ni react-query (overkill para el stage). Beneficia a las ~30
+  paginas que usan useFetch sin tocar cada una.
+
+  VERIFICACION: tsc --noEmit web-modern = exit 0. Solo frontend -> deploy con vite
+  build. A validar en runtime: revisitar pantallas (instantaneo), guardar/eliminar
+  (reload trae fresco), logout/login distinto usuario (sin datos viejos).
 Agent: Claude Opus 4.8
 
   REVISION de queries vs indices en tablas core (planes, OTs, defectos, repuestos,
