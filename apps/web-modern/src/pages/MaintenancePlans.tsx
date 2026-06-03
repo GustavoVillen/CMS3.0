@@ -102,7 +102,6 @@ function computeStatus(plan: MaintenancePlan): string {
   // Vencido tiene prioridad sobre "nunca ejecutado": NEVER_EXECUTED queda solo
   // para planes que aún no vencieron y nunca corrieron. (Igual que el dashboard.)
   const neverExecuted = plan.lastExecutionDate == null && plan.lastExecutionHours == null;
-  const now = Date.now();
   if (plan.nextDueHours != null) {
     const hours = plan.assetCurrentHours ?? 0;
     const diff = plan.nextDueHours - hours;
@@ -113,7 +112,12 @@ function computeStatus(plan: MaintenancePlan): string {
     return "FUTURE";
   }
   if (plan.nextDueDate) {
-    const daysLeft = (parseLocalDate(plan.nextDueDate).getTime() - now) / 86_400_000;
+    // Diferencia en DÍAS CALENDARIO (sin hora) para que la ventana sea
+    // determinística: "faltan N días" no debe depender de la hora del día
+    // (antes, a ~7.1 días por la tarde, una tarea a 7 días no entraba).
+    const due = parseLocalDate(plan.nextDueDate);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const daysLeft = Math.round((due.getTime() - today.getTime()) / 86_400_000);
     if (daysLeft < 0)   return "OVERDUE";
     // Ventana de PLANIFICACIÓN según la frecuencia de la tarea (aplica aunque
     // nunca se haya ejecutado, igual que OVERDUE):

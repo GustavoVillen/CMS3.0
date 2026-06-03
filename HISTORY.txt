@@ -1,6 +1,24 @@
 HISTORY.txt
 
-[2026-06-02] DATA (VPS): resolver drift Crew.rank (dropear columna huerfana)
+[2026-06-03] Fix PLANIFICAR: ventana por dias CALENDARIO (no fraccional por hora)
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  Las tareas mensuales que vencen el 10/06 (hoy 03/06 = 7 dias) no mostraban
+  PLANIFICAR; seguian en SIN EJECUTAR.
+
+  CAUSA:
+  computeStatus calculaba daysLeft = (fecha - Date.now())/dia, con HORA incluida.
+  A 7 dias exactos, por la tarde/noche daba ~7.1 (apenas > 7) y no entraba en la
+  ventana de 7 dias -> borde fragil dependiente de la hora.
+
+  FIX (apps/web-modern/src/pages/MaintenancePlans.tsx, computeStatus):
+  daysLeft ahora se calcula por DIAS CALENDARIO: round((due_midnight -
+  today_midnight)/dia). Determinístico: una tarea a 7 dias entra en la ventana
+  todo el dia. Se quito el "const now". Mensual <=7, anual (>=12 meses) <=30.
+
+  VERIFICACION: tsc --noEmit web-modern = exit 0. Con hoy=03/06 y due=10/06 ->
+  7 dias -> PLANIFICAR. Solo frontend -> deploy con vite build.
 Agent: Claude Opus 4.8
 
   QUE ERA:
