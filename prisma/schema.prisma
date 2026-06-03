@@ -1224,6 +1224,8 @@ model WorkOrder {
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([tenantId, openDate])
+  // Historial de OTs por equipo (modal/PDF del asset): listTenantWorkOrders({ assetId }).
+  @@index([tenantId, assetId])
 }
 
 enum WorkOrderProgressKind {

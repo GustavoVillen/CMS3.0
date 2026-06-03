@@ -1,6 +1,23 @@
 HISTORY.txt
 
-[2026-06-03] Review CopilotQuestion: queries + indexing (fix indice tenantSlug)
+[2026-06-03] Review indexing core PMS: fix indice WorkOrder.assetId
+Agent: Claude Opus 4.8
+
+  REVISION de queries vs indices en tablas core (planes, OTs, defectos, repuestos,
+  movimientos, etc.).
+
+  RESULTADO:
+  - Tablas core bien indexadas: cubren tenantId + vesselCode + status + fecha
+    (ej. MaintenancePlan [tenantId,deletedAt,nextDueDate]; WorkOrder
+    [tenantId,openDate]/[tenantId,status]; Defect [tenantId,reportedAt]).
+  - HALLAZGO: WorkOrder no tenia indice por assetId, pero esta sesion agrego el
+    filtro listTenantWorkOrders({ assetId }) (historial de OTs en modal/PDF del
+    asset). FIX: @@index([tenantId, assetId]) en schema + creado en VPS
+    (CREATE INDEX CONCURRENTLY, sin lock) + local.
+  - Recordatorio (sin accion): busquedas contains/ILIKE no usan btree; ok al
+    volumen actual, GIN pg_trgm si crece.
+
+  Solo cambio de indice. Indice ya en VPS; no requiere rebuild/restart.
 Agent: Claude Opus 4.8
 
   REVISION pedida ("queries y meta indexing") sobre el feature de preguntas al
