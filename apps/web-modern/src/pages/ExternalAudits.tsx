@@ -555,6 +555,11 @@ export const ExternalAuditsPage: React.FC = () => {
                       {a.findingsOpen} abiertos
                     </span>
                   )}
+                  {(a.findingsTotal ?? 0) > 0 && (a.findingsOpen ?? 0) === 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-success-sea/10 text-success-sea border-success-sea/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> {t("status.closed")}
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm font-bold text-fg">{a.agencyOrAuthority ?? "—"} {a.port ? `· ${a.port}` : ""}{a.country ? `, ${a.country}` : ""}</p>
                 {a.summary && <p className="text-xs text-text-industrial/50 line-clamp-1">{a.summary}</p>}

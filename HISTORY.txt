@@ -32,6 +32,11 @@ Agent: Claude Opus 4.8
     edición in situ (título muestra el código + aparece la sección de findings),
     recargando la lista de fondo. Cerrar es explícito vía "Cerrar". Borrar cierra.
 
+  CAMBIOS (frontend, badge):
+  - ExternalAudits.tsx: la fila del listado muestra un badge verde "Cerrado"
+    (status.closed) cuando la auditoría tiene findings y todos están cerrados
+    (findingsTotal>0 && findingsOpen===0). Complementa el badge rojo "X abiertos".
+
   CAMBIOS (backend, hook cross-módulo):
   - work-orders-service.ts closeWorkOrder: al cerrar una OT, los findings de
     auditoría/inspección externa vinculados (ExternalAuditFinding.workOrderId = woId)
