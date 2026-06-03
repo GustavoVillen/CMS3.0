@@ -27,6 +27,10 @@ Agent: Claude Opus 4.8
     Al registrar un finding se pregunta si abrir OT; si sí, abre CreateWorkOrderModal
     (CORRECTIVE, prioridad mapeada de la severidad) y al guardar vincula workOrderId
     al finding. Badge de OT navegable + botón "Abrir OT" para findings sin OT.
+  - ExternalAudits.tsx (ajuste): al presionar "Guardar" la ventana ya NO se cierra.
+    `audit` pasó a estado interno del modal; al crear uno nuevo transiciona a modo
+    edición in situ (título muestra el código + aparece la sección de findings),
+    recargando la lista de fondo. Cerrar es explícito vía "Cerrar". Borrar cierra.
   - i18n: rename nav.externalAudits a "Auditoría / Inspección externa" (es/en/pt) +
     claves ea.* nuevas.
 

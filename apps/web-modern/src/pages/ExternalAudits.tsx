@@ -92,11 +92,14 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 
 // ─── Audit modal ────────────────────────────────────────────────────────────
 
-const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: () => void }> = ({ audit, onClose, onSaved }) => {
+const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: () => void }> = ({ audit: auditProp, onClose, onSaved }) => {
   const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
+  // `audit` es estado interno: al guardar uno nuevo transicionamos a modo edición
+  // sin cerrar la ventana, para registrar las deficiencias en el acto.
+  const [audit, setAudit] = useState<Audit | null>(auditProp);
   const isNew = !audit;
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loadingFindings, setLoadingFindings] = useState(false);
@@ -145,9 +148,14 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
         scoreOrRating: score.trim() || null,
         reportUrl: reportUrl.trim() || null,
       };
-      if (isNew) await api.post("/app/external-audits", payload);
-      else await api.patch(`/app/external-audits/${audit!.id}`, payload);
-      onSaved();
+      if (isNew) {
+        // Crear y NO cerrar: pasamos a modo edición para registrar findings al instante.
+        const created = await api.post<Audit>("/app/external-audits", payload);
+        setAudit(created);
+      } else {
+        await api.patch(`/app/external-audits/${audit!.id}`, payload);
+      }
+      onSaved(); // recarga la lista de fondo; la ventana permanece abierta
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
     finally { setSaving(false); }
   }, [isNew, audit, vesselCode, auditType, auditDate, port, country, agency, inspectorName, overallResult, summary, score, reportUrl, onSaved]);
@@ -157,9 +165,9 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
     if (!window.confirm(t("confirm.deleteAudit").replace("{code}", audit.auditCode))) return;
     try {
       await api.delete(`/app/external-audits/${audit.id}`);
-      onSaved();
+      onClose(); // tras borrar, cerrar la ventana (onClose también recarga la lista)
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al eliminar."); }
-  }, [audit, isAdmin, onSaved]);
+  }, [audit, isAdmin, onClose, t]);
 
   const reloadFindings = useCallback(async () => {
     if (!audit) return;
@@ -569,8 +577,8 @@ export const ExternalAuditsPage: React.FC = () => {
       {(showCreate || editing) && (
         <AuditModal
           audit={editing}
-          onClose={() => { setShowCreate(false); setEditing(null); }}
-          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          onClose={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          onSaved={() => { void reload(); }}
         />
       )}
     </div>
