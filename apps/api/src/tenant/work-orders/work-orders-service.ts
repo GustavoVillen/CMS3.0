@@ -887,6 +887,49 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to auto-close associated deferrals:", err);
   }
 
+  // Cerrar findings (deficiencias) de auditoría/inspección externa vinculados a esta OT.
+  // Cuando se abre una OT correctiva desde un finding y esa OT se cierra, la deficiencia
+  // queda resuelta: se marca CLOSED con la fecha de cierre de la OT. Solo afecta findings
+  // en estado OPEN/IN_PROGRESS (no toca CLOSED ni REJECTED_BY_AUDITOR).
+  try {
+    const findingDelegateLocal = (prismaRaw as unknown as {
+      externalAuditFinding: {
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; findingCode: string | null; status: string; evidenceNotes: string | null }[]>;
+        update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      };
+    }).externalAuditFinding;
+    const openFindings = await findingDelegateLocal.findMany({
+      where: {
+        tenantId: current.tenantId,
+        workOrderId: current.id,
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+      },
+      select: { id: true, findingCode: true, status: true, evidenceNotes: true },
+    });
+    for (const f of openFindings) {
+      const autoNote = `Cerrado automáticamente al cerrar la OT ${current.workOrderCode}.`;
+      await findingDelegateLocal.update({
+        where: { id: f.id },
+        data: {
+          status: "CLOSED",
+          clearingDate: completedDate,
+          evidenceNotes: f.evidenceNotes ? `${f.evidenceNotes}\n${autoNote}` : autoNote,
+          updatedByUserId: session.user.id,
+        },
+      });
+      void publishAudit(prismaRaw, {
+        tenantId: current.tenantId,
+        actorUserId: session.user.id,
+        action: "ExternalAuditFinding.closed",
+        entityType: "ExternalAuditFinding",
+        entityId: f.id,
+        metadata: { findingCode: f.findingCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CLOSED", previousStatus: f.status, workOrderCode: current.workOrderCode },
+      });
+    }
+  } catch (err) {
+    log.error("[closeWorkOrder] failed to auto-close linked external-audit findings:", err);
+  }
+
   // Auto-create Sample DRAFT si el plan era un plan de muestreo (cualquier kind).
   let createdFluidSampleId: string | null = null;
   if (samplingKind) {

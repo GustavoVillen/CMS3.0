@@ -31,6 +31,13 @@ Agent: Claude Opus 4.8
     `audit` pasó a estado interno del modal; al crear uno nuevo transiciona a modo
     edición in situ (título muestra el código + aparece la sección de findings),
     recargando la lista de fondo. Cerrar es explícito vía "Cerrar". Borrar cierra.
+
+  CAMBIOS (backend, hook cross-módulo):
+  - work-orders-service.ts closeWorkOrder: al cerrar una OT, los findings de
+    auditoría/inspección externa vinculados (ExternalAuditFinding.workOrderId = woId)
+    en estado OPEN/IN_PROGRESS pasan a CLOSED con clearingDate = fecha de cierre de la
+    OT y nota de auto-cierre. Mismo patrón (try/catch no bloqueante) que el auto-cierre
+    de deferrals ya existente. Audit log ExternalAuditFinding.closed (autoClosedBy=WORK_ORDER_CLOSED).
   - i18n: rename nav.externalAudits a "Auditoría / Inspección externa" (es/en/pt) +
     claves ea.* nuevas.
 
