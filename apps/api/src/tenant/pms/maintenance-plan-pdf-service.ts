@@ -334,6 +334,37 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       y += 6;
     }
 
+    // Renderiza una línea con markdown inline:
+    //  - "# titulo" / "## titulo" → negrita, sin el prefijo "#".
+    //  - tramos "**negrita**" dentro del texto → en negrita.
+    // Devuelve la altura renderizada para avanzar el cursor con precisión.
+    function renderRichLine(rawLine: string, x: number, width: number, startY: number): number {
+      const heading = rawLine.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (heading) {
+        const txt = sanitizePdfText(heading[2]) || " ";
+        const fs  = heading[1].length <= 1 ? 11 : 10;
+        doc.fontSize(fs).font(FONT_BOLD).fillColor(black).text(txt, x, startY, { width, lineGap: 1 });
+        return doc.y - startY;
+      }
+      // keepMarkdown preserva los ** para poder partir en tramos negrita/normal.
+      const kept = sanitizePdfText(rawLine, { keepMarkdown: true });
+      const parts = kept.split(/(\*\*[^*\n]+?\*\*)/g).filter(p => p.length > 0);
+      doc.fontSize(9.5).fillColor(black);
+      if (parts.length === 0) {
+        doc.font(FONT_REGULAR).text(" ", x, startY, { width, lineGap: 1 });
+        return doc.y - startY;
+      }
+      parts.forEach((part, idx) => {
+        const isBold = part.length > 4 && part.startsWith("**") && part.endsWith("**");
+        const txt    = isBold ? part.slice(2, -2) : part;
+        const isLast = idx === parts.length - 1;
+        doc.font(isBold ? FONT_BOLD : FONT_REGULAR);
+        if (idx === 0) doc.text(txt, x, startY, { width, continued: !isLast, lineGap: 1 });
+        else           doc.text(txt,            { width, continued: !isLast, lineGap: 1 });
+      });
+      return doc.y - startY;
+    }
+
     function renderDescription(label: string, text: string, useBlueHeader = false) {
       if (!text || text === "—") { textBox(label, "—", 3, 3); return; }
 
@@ -389,20 +420,23 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
           for (const line of seg.content.split("\n")) {
             // Only treat actual checkbox/square symbols as checkboxes — not comparison operators like ≥
             const hasCheckbox = /^[☐☑☒□■✓✔✘ð]/u.test(line.trim());
-            const cleanLine = sanitizePdfText(hasCheckbox ? line.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : line);
-            const lineH = doc.fontSize(9.5).font(FONT_REGULAR).heightOfString(cleanLine || " ", { width: innerW - (hasCheckbox ? 14 : 0), lineGap: 1 });
-            ensureSpace(lineH + 4);
+            const lineForRender = hasCheckbox ? line.replace(/^[☐☑☒□■✓✔✘ð]+\s*/, "") : line;
+            // Estimación de altura (texto sin markdown, fuente regular) para el page-break.
+            const measureText = sanitizePdfText(lineForRender);
+            const lineH = doc.fontSize(9.5).font(FONT_REGULAR).heightOfString(measureText || " ", { width: innerW - (hasCheckbox ? 14 : 0), lineGap: 1 });
+            ensureSpace(lineH + 6);
             let textX = ML;
             if (hasCheckbox) {
               const cbSize = 7;
               doc.rect(textX, y + 2, cbSize, cbSize).strokeColor("#555").lineWidth(0.6).stroke();
               textX += cbSize + 4;
             }
-            if (cleanLine.trim()) {
-              doc.fontSize(9.5).font(FONT_REGULAR).fillColor(black)
-                .text(cleanLine, textX, y, { width: innerW - (textX - ML), lineGap: 1 });
+            if (measureText.trim()) {
+              const renderedH = renderRichLine(lineForRender, textX, innerW - (textX - ML), y);
+              y += renderedH + 2;
+            } else {
+              y += lineH + 2;
             }
-            y += lineH + 2;
           }
           y += 4;
         } else {

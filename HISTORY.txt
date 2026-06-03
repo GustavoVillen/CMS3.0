@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-06-02] Fix PDF plan: renderizar markdown (negrita ** y titulos #) en campos de texto
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  En el PDF de Plan de Mantenimiento, los titulos entre **doble asterisco** no
+  salian en negrita y los "#"/"##" aparecian literales.
+
+  CAUSA RAIZ:
+  renderDescription (maintenance-plan-pdf-service) renderizaba cada linea con
+  sanitizePdfText() en fuente regular. sanitizePdfText (default) BORRA los ** (no
+  los aplica como negrita) y NO toca los # (por eso se ven crudos).
+
+  FIX (apps/api/src/tenant/pms/maintenance-plan-pdf-service.ts):
+  Nuevo helper renderRichLine(): "# titulo"/"## titulo" -> negrita sin el #;
+  tramos **negrita** inline via sanitizePdfText(..., {keepMarkdown:true}) + split
+  + font Bold/Regular con doc.text continued (patron de template-standard). El
+  render de lineas de texto ahora usa renderRichLine y avanza por la altura real.
+
+  VERIFICACION:
+  typecheck api = exit 0. Smoke test con el texto de la captura (# / ## / **):
+  PDF valido, 4 titulos detectados y renderizados en negrita. Solo backend (tsx).
+
+
 [2026-06-02] Fix IA: sugerencias del plan (LOTO/criterios/riesgo) tardaban/fallaban
 Agent: Claude Opus 4.8
 
