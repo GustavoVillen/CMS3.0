@@ -1609,6 +1609,7 @@ const dict = {
 
   // MaintenancePlans — StatusBadgeInline
   "mp.statusBadge.overdue":    { es: "VENCIDA",                en: "OVERDUE",               pt: "VENCIDA" },
+  "mp.statusBadge.planificar": { es: "PLANIFICAR",             en: "PLAN AHEAD",            pt: "PLANEJAR" },
   "mp.statusBadge.due":        { es: "POR VENCER",             en: "DUE",                   pt: "A VENCER" },
   "mp.statusBadge.inWindow":   { es: "EN PROCESO",             en: "IN WINDOW",             pt: "EM ANDAMENTO" },
   "mp.statusBadge.neverExecuted":{ es: "SIN EJECUTAR",         en: "NOT EXECUTED",          pt: "SEM EXECUTAR" },
