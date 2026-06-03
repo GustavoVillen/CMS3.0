@@ -89,6 +89,28 @@ EJEMPLO de respuesta para nivel LOW (sin jsaMatrix):
 
 Respondé ÚNICAMENTE con el JSON válido, sin texto adicional fuera del JSON, sin code fence.`;
 
+const PROMPT_ASSET = `Sos experto en mantenimiento de máquinas navales. Te doy la descripción de una deficiencia/tarea (típicamente un hallazgo de auditoría o inspección externa) y una lista de equipos del buque, cada uno con su id, código y nombre.
+
+Tu tarea: elegir el ÚNICO equipo de la lista que MEJOR corresponde a esa deficiencia, para abrir una orden de trabajo correctiva.
+
+REGLAS:
+- Razoná por el tipo de equipo, sistema y función implícita en la deficiencia (ej. "manómetro de la tubería de carga" → equipo del sistema de carga / línea de carga; "fuga en bomba de sentina" → bomba de sentina).
+- Respondé SOLO con JSON válido: {"assetId":"<id exacto del equipo elegido>"}.
+- El id debe ser EXACTAMENTE uno de los ids de la lista. NUNCA inventes un id.
+- Si ningún equipo corresponde con razonabilidad, respondé {"assetId":null}.
+- Sin texto fuera del JSON, sin code fence, sin explicación.`;
+
+interface AssetCandidate {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+}
+
+interface AssetSuggestionInput {
+  taskDesc?: string | null;
+  assets?: AssetCandidate[];
+}
+
 interface BaseInput {
   assetLabel?: string | null;
   taskDesc?: string | null;
@@ -289,4 +311,36 @@ export async function suggestRisk(
   }
 
   return { level: level as RiskResult["level"], analysis };
+}
+
+// Sugiere el activo que mejor corresponde a una deficiencia/tarea, eligiendo entre
+// la lista de equipos del buque que envía el frontend. Devuelve un id validado contra
+// esa lista (nunca uno inventado por la IA), o null si ninguno encaja.
+export async function suggestAsset(
+  session: TenantAccessSession,
+  input: AssetSuggestionInput,
+): Promise<{ assetId: string | null }> {
+  const assets = Array.isArray(input.assets) ? input.assets.filter(a => a && a.id) : [];
+  const taskDesc = (input.taskDesc ?? "").trim();
+  if (!taskDesc || assets.length === 0) return { assetId: null };
+
+  const list = assets
+    .map(a => `- id=${a.id} | ${(a.code ?? "").trim()} — ${(a.name ?? "").trim()}`)
+    .join("\n");
+  const userContent = `Deficiencia/tarea: ${taskDesc}\n\nEquipos disponibles:\n${list}`;
+
+  const raw = await callClaude(session, "wo_asset_suggestion", PROMPT_ASSET, userContent, 200);
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(stripCodeFence(raw));
+  } catch {
+    const m = raw.match(/"assetId"\s*:\s*"([^"]+)"/);
+    parsed = m ? { assetId: m[1] } : { assetId: null };
+  }
+
+  const id = parsed?.assetId == null ? null : String(parsed.assetId).trim();
+  // Validación anti-alucinación: solo aceptamos un id que estaba en la lista.
+  const valid = id && assets.some(a => a.id === id) ? id : null;
+  return { assetId: valid };
 }

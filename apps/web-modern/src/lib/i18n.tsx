@@ -1332,6 +1332,8 @@ const dict = {
   "wo.ai.riskTooltip":         { es: "Click para que la IA analice el nivel de riesgo", en: "Click to have AI analyze the risk level", pt: "Clique para que a IA analise o nível de risco" },
   "wo.ai.noText":              { es: "La IA no devolvió texto.", en: "AI returned no text.", pt: "A IA não retornou texto." },
   "wo.ai.suggestFailed":       { es: "No se pudo obtener la sugerencia.", en: "Could not get suggestion.", pt: "Não foi possível obter a sugestão." },
+  "wo.ai.suggestAssetTooltip": { es: "Sugerir equipo con IA según la deficiencia", en: "Suggest equipment with AI from the finding", pt: "Sugerir equipamento com IA a partir do achado" },
+  "wo.ai.assetSuggested":      { es: "Sugerido por IA — verificá", en: "AI-suggested — please verify", pt: "Sugerido pela IA — verifique" },
   "wo.ai.criteriaPrefix":      { es: "Criterios IA",           en: "AI Criteria",          pt: "Critérios IA" },
   "wo.ai.lotoPrefix":          { es: "LOTO IA",                en: "AI LOTO",              pt: "LOTO IA" },
   "wo.ai.riskPrefix":          { es: "Riesgo IA",              en: "AI Risk",              pt: "Risco IA" },

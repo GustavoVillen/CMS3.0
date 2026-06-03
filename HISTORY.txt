@@ -32,6 +32,16 @@ Agent: Claude Opus 4.8
     edición in situ (título muestra el código + aparece la sección de findings),
     recargando la lista de fondo. Cerrar es explícito vía "Cerrar". Borrar cierra.
 
+  CAMBIOS (IA, detección de activo al abrir OT desde finding):
+  - work-orders-ai-suggestions.ts: nueva suggestAsset(taskDesc, assets[]) → elige con
+    Claude (Haiku) el activo que mejor corresponde a la deficiencia, validando el id
+    contra la lista enviada (anti-alucinación). Ruta POST /app/pms/work-orders/suggest-asset
+    (rate-limited 30/min).
+  - CreateWorkOrderModal: en modo audit-finding (activo seleccionable) auto-sugiere el
+    equipo al abrir (una vez, tras cargar los equipos del buque), preseleccionándolo.
+    Label "Equipo" con sparkle para re-sugerir manualmente + hint "Sugerido por IA".
+    i18n wo.ai.suggestAssetTooltip / wo.ai.assetSuggested.
+
   CAMBIOS (frontend, badge):
   - ExternalAudits.tsx: la fila del listado muestra un badge verde "Cerrado"
     (status.closed) cuando la auditoría tiene findings y todos están cerrados

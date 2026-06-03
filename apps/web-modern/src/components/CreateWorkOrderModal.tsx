@@ -115,6 +115,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [loadingLoto,        setLoadingLoto]        = useState(false);
   const [loadingRisk,        setLoadingRisk]        = useState(false);
   const [loadingConsequence, setLoadingConsequence] = useState(false);
+  // IA: detección del activo que mejor corresponde a la deficiencia (modo audit-finding).
+  const [suggestingAsset, setSuggestingAsset] = useState(false);
+  const [assetSuggested,  setAssetSuggested]  = useState(false);
+  const autoSuggestedAssetRef = useRef(false);
 
   // Etiqueta del activo a partir del prefill o de la lista cargada
   const aiAssetLabel = prefill?.sourceLabel
@@ -213,6 +217,36 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     }
     finally { setLoadingConsequence(false); }
   }, [loadingConsequence, aiAssetLabel, aiTaskDesc, title, description, t]);
+
+  // IA: detecta el activo que mejor corresponde a la deficiencia (solo modo audit-finding,
+  // donde el origen no trae activo). Elige entre los equipos ya cargados del buque.
+  const handleSuggestAsset = useCallback(async () => {
+    if (!prefill?.assetSelectable || suggestingAsset || assets.length === 0) return;
+    const taskDesc = (prefill.description ?? description).trim();
+    if (!taskDesc) return;
+    setSuggestingAsset(true);
+    try {
+      const res = await api.post<{ assetId: string | null }>("/app/pms/work-orders/suggest-asset", {
+        taskDesc,
+        assets: assets.map(a => ({ id: a.id, code: a.assetCode, name: a.name })),
+      });
+      if (res.assetId && assets.some(a => a.id === res.assetId)) {
+        setAssetId(res.assetId);
+        setAssetSuggested(true);
+      }
+    } catch (e) {
+      console.error("[suggest-asset] failed:", e);
+    } finally { setSuggestingAsset(false); }
+  }, [prefill, suggestingAsset, assets, description]);
+
+  // Auto-sugerir el activo una vez al abrir, cuando ya cargaron los equipos y no hay uno elegido.
+  useEffect(() => {
+    if (!prefill?.assetSelectable || autoSuggestedAssetRef.current) return;
+    if (assets.length === 0 || assetId) return;
+    if (!(prefill.description ?? "").trim()) return;
+    autoSuggestedAssetRef.current = true;
+    void handleSuggestAsset();
+  }, [prefill, assets, assetId, handleSuggestAsset]);
 
   // Vessel list for standalone mode
   useEffect(() => {
@@ -370,17 +404,29 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <div className="space-y-3">
                 {prefill.assetSelectable && (
                   <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.equipment")} *</label>
+                    <label
+                      onClick={() => { void handleSuggestAsset(); }}
+                      title={t("wo.ai.suggestAssetTooltip")}
+                      className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${assets.length > 0 ? `hover:text-fg cursor-pointer ${suggestingAsset ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+                    >
+                      {suggestingAsset ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      {t("wo.modal.equipment")} *
+                    </label>
                     {loadingAssets
                       ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
                       : assets.length > 0
-                        ? <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls}>
+                        ? <select value={assetId} onChange={e => { setAssetId(e.target.value); setAssetSuggested(false); }} className={inputCls}>
                             <option value="">{t("wo.modal.selectEquipment")}</option>
                             {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode} — {a.name}</option>)}
                           </select>
-                        : <input value={assetId} onChange={e => setAssetId(e.target.value)}
+                        : <input value={assetId} onChange={e => { setAssetId(e.target.value); setAssetSuggested(false); }}
                             placeholder={t("wo.modal.noEquipmentEnterId")} className={inputCls} />
                     }
+                    {assetSuggested && assetId && (
+                      <p className="text-[10px] text-accent flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> {t("wo.ai.assetSuggested")}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

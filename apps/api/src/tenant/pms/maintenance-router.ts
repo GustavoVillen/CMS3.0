@@ -44,6 +44,7 @@ import {
   suggestAcceptanceCriteria,
   suggestLoto,
   suggestRisk,
+  suggestAsset,
 } from "../work-orders/work-orders-ai-suggestions";
 import {
   suggestPlanAcceptanceCriteria,
@@ -274,6 +275,13 @@ export async function handleMaintenanceRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string; loto?: string }>(request);
     sendJson(response, 200, await suggestRisk(session, body));
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-asset") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<{ taskDesc?: string; assets?: Array<{ id: string; code?: string; name?: string }> }>(request);
+    sendJson(response, 200, await suggestAsset(session, body));
     return true;
   }
 
