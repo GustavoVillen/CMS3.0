@@ -134,6 +134,7 @@ async function callClaude(
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
   // Timeout explícito 30s — sin esto el SDK puede colgar 10 min (default 600s).
+  // Los max_tokens acotados (1024-1500) hacen que Haiku responda en ~10-15s.
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);

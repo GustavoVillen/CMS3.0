@@ -1,5 +1,30 @@
 HISTORY.txt
 
+[2026-06-02] Fix IA: sugerencias del plan (LOTO/criterios/riesgo) tardaban/fallaban
+Agent: Claude Opus 4.8
+
+  SINTOMA:
+  Al presionar "LOTO" en el modal de Plan de Mantenimiento quedaba "Analizando..."
+  y no generaba nada ("no funciona").
+
+  CAUSA RAIZ (confirmada en gpms-error.log):
+  [plan_loto_suggestion] Anthropic call failed: Error: Request timed out.
+  Las sugerencias del PLAN pedian max_tokens=4096 (vs 1024/1500 de las de Work
+  Order, que SI funcionaban). Con 4096 Haiku generaba ~35-50s y se cortaba por el
+  timeout de 30s. No era falta de timeout: era exceso de tokens.
+
+  FIX (no subir el timeout — acotar la generacion):
+  - apps/api/src/tenant/maintenance-plans/maintenance-plans-ai-suggestions.ts
+    max_tokens 4096 -> 1024 (criterios), 1024 (LOTO), 1500 (riesgo) — alineado a
+    las sugerencias de WO. Timeout queda en 30s.
+  - apps/api/src/tenant/work-orders/work-orders-ai-suggestions.ts
+    timeout queda en 30s (revert de un intento previo de 60s; sus tokens ya eran
+    1024/1500).
+
+  VERIFICACION: typecheck api = exit 0. Test real en VPS: LOTO con max_tokens=1024
+  responde en 8.8s (antes 30s+). Solo backend (tsx) -> deploy sin vite build.
+
+
 [2026-06-02] Fix UX: cerrar el modal del plan tras eliminar la tarea
 Agent: Claude Opus 4.8
 

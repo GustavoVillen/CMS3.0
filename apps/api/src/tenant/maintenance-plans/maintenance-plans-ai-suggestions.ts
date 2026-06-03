@@ -90,6 +90,8 @@ async function callClaude(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
+  // Timeout 30s. Los max_tokens se mantienen acotados (1024-1500, igual que las
+  // sugerencias de Work Order) para que Haiku responda en ~10-15s y no se corte.
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
@@ -146,7 +148,7 @@ export async function suggestPlanAcceptanceCriteria(
     "plan_acceptance_criteria_suggestion",
     PROMPT_ACCEPTANCE,
     buildContext(input),
-    4096,
+    1024,
   );
   return { text };
 }
@@ -160,7 +162,7 @@ export async function suggestPlanLoto(
     "plan_loto_suggestion",
     PROMPT_LOTO,
     buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }),
-    4096,
+    1024,
   );
   return { text };
 }
@@ -177,7 +179,7 @@ export async function suggestPlanRisk(
       "Criterios de aceptación": input.acceptanceCriteria,
       "LOTO": input.loto,
     }),
-    4096,
+    1500,
   );
 
   const levelMatch = raw.match(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)/im);
