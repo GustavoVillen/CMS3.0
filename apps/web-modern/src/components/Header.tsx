@@ -14,6 +14,12 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
   const navigate = useNavigate();
   const t = useT();
   const { theme, toggleTheme } = useTheme();
+  // Logo del tenant según el tema: light → logo oscuro (logoUrl), dark → claro (logoUrlLight).
+  const tenantLogo = tenant
+    ? (theme === "dark"
+        ? (tenant.logoUrlLight || tenant.logoUrl)
+        : (tenant.logoUrl || tenant.logoUrlLight))
+    : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const showSelector = vessels.length > 1;
 
@@ -27,9 +33,9 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
       <div className="flex items-center gap-4">
         {tenant && (
           <span className="flex items-center gap-2 text-sm font-semibold text-fg/80 border border-border rounded-full px-3 py-1.5">
-            {(tenant.logoUrlLight || tenant.logoUrl) && (
+            {tenantLogo && (
               <img
-                src={(tenant.logoUrlLight || tenant.logoUrl)!}
+                src={tenantLogo}
                 alt=""
                 className="w-5 h-5 object-contain shrink-0"
               />

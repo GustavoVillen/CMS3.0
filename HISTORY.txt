@@ -1,6 +1,27 @@
 HISTORY.txt
 
-[2026-06-02] Fix PDF plan: renderizar markdown (negrita ** y titulos #) en campos de texto
+[2026-06-02] UX theming: logo del tenant segun tema + texto del menu mas oscuro en light
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  1. Logo de la empresa segun el tema: light -> logo oscuro, dark -> logo claro.
+  2. Letras del menu izquierdo mas oscuras (en light se veian muy tenues).
+
+  CONTEXTO:
+  TenantSetting tiene logoUrl (="Version oscura, fondo blanco") y logoUrlLight
+  (="Version clara, fondo oscuro") — confirmado en DualLogoPicker (PlatformTenants).
+  El Sidebar/Header usaban siempre (logoUrlLight || logoUrl).
+
+  CAMBIOS (frontend):
+  - apps/web-modern/src/components/Sidebar.tsx
+    + tenantLogo = theme==='dark' ? (logoUrlLight||logoUrl) : (logoUrl||logoUrlLight).
+    + etiquetas de seccion: text-fg/25 -> text-fg/55 dark:text-fg/25 (+ hover).
+    + items nav: text-fg/50 -> text-fg/70 dark:text-fg/50.
+  - apps/web-modern/src/components/Header.tsx
+    + mismo tenantLogo segun tema en el chip del tenant.
+  El modo dark queda igual (variante dark: preserva los valores originales).
+
+  VERIFICACION: tsc --noEmit web-modern = exit 0. Solo frontend -> deploy con vite build.
 Agent: Claude Opus 4.8
 
   SINTOMA:

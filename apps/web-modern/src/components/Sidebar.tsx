@@ -150,7 +150,7 @@ function navItemCls(isActive: boolean, collapsed: boolean) {
     collapsed ? "justify-center px-0 py-2 mx-1" : "px-3 py-2",
     isActive
       ? "bg-accent/10 text-accent border border-accent/20"
-      : "text-fg/50 hover:text-fg hover:bg-fg/5 border border-transparent",
+      : "text-fg/70 hover:text-fg hover:bg-fg/5 border border-transparent dark:text-fg/50",
   ].join(" ");
 }
 
@@ -164,6 +164,13 @@ export const Sidebar: React.FC = () => {
   const { tenant, user } = useAuth();
   const t = useT();
   const { theme } = useTheme();
+  // Logo del tenant según el tema: en light el logo oscuro (logoUrl, "versión oscura
+  // para fondo blanco"); en dark el claro (logoUrlLight). Fallback al que exista.
+  const tenantLogo = tenant
+    ? (theme === "dark"
+        ? (tenant.logoUrlLight || tenant.logoUrl)
+        : (tenant.logoUrl || tenant.logoUrlLight))
+    : null;
   const { selectedVesselCode } = useVesselContext();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
   const [collapsed, setCollapsed] = useState(
@@ -241,9 +248,9 @@ export const Sidebar: React.FC = () => {
           {/* Tenant — arriba */}
           {tenant && !collapsed && (
             <div className="flex items-center gap-2 min-w-0">
-              {(tenant.logoUrlLight || tenant.logoUrl) && (
+              {tenantLogo && (
                 <img
-                  src={(tenant.logoUrlLight || tenant.logoUrl)!}
+                  src={tenantLogo}
                   alt=""
                   className="w-16 h-16 object-contain shrink-0"
                 />
@@ -251,9 +258,9 @@ export const Sidebar: React.FC = () => {
               <p className="text-sm font-bold text-fg leading-tight truncate">{tenant.name}</p>
             </div>
           )}
-          {tenant && collapsed && (tenant.logoUrlLight || tenant.logoUrl) && (
+          {tenant && collapsed && tenantLogo && (
             <img
-              src={(tenant.logoUrlLight || tenant.logoUrl)!}
+              src={tenantLogo}
               alt=""
               className="w-16 h-16 object-contain shrink-0"
             />
@@ -312,7 +319,7 @@ export const Sidebar: React.FC = () => {
               ) : (
                 <button
                   onClick={() => toggleSection(section.titleKey)}
-                  className="w-full px-4 mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-fg/25 hover:text-fg/60 transition-colors select-none"
+                  className="w-full px-4 mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-fg/55 hover:text-fg/80 dark:text-fg/25 dark:hover:text-fg/60 transition-colors select-none"
                 >
                   <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   <span>{t(section.titleKey)}</span>
