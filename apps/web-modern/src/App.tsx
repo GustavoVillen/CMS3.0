@@ -40,6 +40,7 @@ import { PlatformTenantsPage } from "./pages/platform/PlatformTenants";
 import { PlatformUsersPage } from "./pages/platform/PlatformUsers";
 import { PlatformAuditPage } from "./pages/platform/PlatformAudit";
 import { PlatformUsagePage } from "./pages/platform/PlatformUsage";
+import { PlatformCopilotQuestionsPage } from "./pages/platform/PlatformCopilotQuestions";
 import { PlatformPromptsPage } from "./pages/platform/PlatformPrompts";
 import { PlatformVesselMapPage } from "./pages/platform/PlatformVesselMap";
 import { VesselMapPage } from "./pages/VesselMap";
@@ -116,6 +117,7 @@ export default function App() {
               <Route path="users"   element={<PlatformUsersPage />} />
               <Route path="audit"   element={<PlatformAuditPage />} />
               <Route path="usage"      element={<PlatformUsagePage />} />
+              <Route path="copilot-questions" element={<PlatformCopilotQuestionsPage />} />
               <Route path="vessel-map" element={<PlatformVesselMapPage />} />
               <Route path="prompts"    element={<PlatformPromptsPage />} />
             </Route>

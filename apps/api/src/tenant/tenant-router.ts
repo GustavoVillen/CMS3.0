@@ -49,6 +49,7 @@ import {
   dismissNotification,
 } from "./notifications/notifications-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
+import { recordCopilotQuestion } from "./copiloto/copilot-questions-log";
 import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
@@ -1215,6 +1216,29 @@ export async function handleTenantRoutes(
     // Validar capability contra whitelist — antes pasaba cualquier string
     // y el get del prompt podía cargar capabilities no autorizadas.
     const capability = ensureCapability(body.capability ?? "knowledge_assistant");
+
+    // Registrar la pregunta del usuario (fire-and-forget, no bloquea el stream).
+    // Sólo el SUPERADMIN de plataforma lo lee, para detectar qué necesitan los
+    // usuarios y mejorar el sistema.
+    const lastUserMessage = (body.messages ?? []).filter(m => m.role === "user").pop();
+    if (lastUserMessage?.content) {
+      const sc = body.screenContext as Record<string, unknown> | null;
+      const screen = sc
+        ? [sc.module, sc.screen].filter(v => typeof v === "string" && v).join(" / ") || null
+        : null;
+      recordCopilotQuestion({
+        tenantId:      tenant.id,
+        tenantSlug:    slug,
+        userId:        session.user.id,
+        userEmail:     session.user.email,
+        userRole:      session.user.role,
+        capability,
+        vesselCode:    body.vesselCode ?? null,
+        screen,
+        question:      lastUserMessage.content,
+        hasAttachment: !!body.fileAttachment,
+      });
+    }
 
     // Si el cliente cierra la conexión (cerrar pestaña, navegar fuera),
     // cancelamos la llamada a Claude vía AbortSignal. Antes el stream

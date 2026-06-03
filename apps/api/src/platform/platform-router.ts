@@ -28,6 +28,7 @@ import {
 import {
   createPlatformUser, getPlatformUser, listPlatformUsers, updatePlatformUser,
 } from "./users/platform-users-service";
+import { listCopilotQuestions } from "./copilot-questions/platform-copilot-questions-service";
 
 export async function handlePlatformRoutes(
   method: string,
@@ -268,6 +269,27 @@ export async function handlePlatformRoutes(
       "Content-Length": String(buffer.length),
     });
     response.end(buffer);
+    return true;
+  }
+
+  // ── Copilot questions (registro de preguntas al copiloto) ─────────────────
+  if (method === "GET" && url.pathname === "/platform/copilot-questions") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const fromRaw = url.searchParams.get("from");
+    const toRaw = url.searchParams.get("to");
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    const { items, total } = await listCopilotQuestions({
+      tenantSlug: url.searchParams.get("tenantSlug"),
+      userEmail:  url.searchParams.get("userEmail"),
+      search:     url.searchParams.get("search"),
+      from: from && !isNaN(from.getTime()) ? from : null,
+      to:   to   && !isNaN(to.getTime())   ? to   : null,
+      limit:  Number(url.searchParams.get("limit")  ?? 200),
+      offset: Number(url.searchParams.get("offset") ?? 0),
+    });
+    sendJson(response, 200, { items, total });
     return true;
   }
 

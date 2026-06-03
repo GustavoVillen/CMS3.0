@@ -1,6 +1,87 @@
 HISTORY.txt
 
-[2026-06-02] UX theming: logo del tenant segun tema + texto del menu mas oscuro en light
+[2026-06-02] DATA (VPS): resolver drift Crew.rank (dropear columna huerfana)
+Agent: Claude Opus 4.8
+
+  QUE ERA:
+  El schema migro el rango de tripulacion de la columna simple Crew.rank
+  (texto/enum) a una relacion rankId -> RankDefinition (rangos por tenant). Los
+  datos se migraron pero la columna vieja "rank" nunca se borro. Como el schema
+  ya no la declara, "prisma db push" la queria dropear (destructivo) y se frenaba
+  pidiendo --accept-data-loss.
+
+  VERIFICACION (VPS): 22/22 tripulantes con rankId seteado; el valor de rank
+  coincide EXACTAMENTE con RankDefinition.code en las 22 -> columna 100%
+  redundante, dropearla no pierde nada.
+
+  ACCION (SQL en VPS, no codigo):
+  BEGIN;
+   CREATE TABLE "_crew_rank_backup_20260602" AS SELECT id, rank FROM "Crew"; (22 filas)
+   ALTER TABLE "Crew" DROP COLUMN "rank";
+  COMMIT;
+  Health 200 post-drop; el codigo ya usaba rankDefinition. Backup queda como red
+  de seguridad (se puede borrar la tabla cuando se confirme todo ok).
+
+  REVERTIR (si hiciera falta):
+  ALTER TABLE "Crew" ADD COLUMN "rank" TEXT;
+  UPDATE "Crew" c SET rank = b.rank FROM "_crew_rank_backup_20260602" b WHERE b.id = c.id;
+
+  PENDIENTE: el DB local (dev) esta muy atrasado (sin tabla RankDefinition); se
+  dejo como esta (no se usa). Solo se resolvio produccion.
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Que todas las preguntas al copiloto queden registradas en la base y solo las
+  lea el superadmin, con un boton en el menu de plataforma. Objetivo: detectar
+  que necesita el usuario para mejorar el sistema. Se guarda SOLO la pregunta.
+
+  CAMBIOS:
+  - prisma/schema.prisma: nuevo modelo CopilotQuestion (tenantId/slug, userId/
+    email/role, capability, vesselCode, screen, question @db.Text, hasAttachment,
+    createdAt; indices createdAt y tenantId+createdAt).
+  - apps/api/src/tenant/copiloto/copilot-questions-log.ts (NUEVO):
+    recordCopilotQuestion() fire-and-forget (no bloquea el stream).
+  - apps/api/src/tenant/tenant-router.ts: en POST /app/copiloto/chat registra la
+    ultima pregunta del usuario + screen (de screenContext).
+  - apps/api/src/platform/copilot-questions/platform-copilot-questions-service.ts
+    (NUEVO): listCopilotQuestions(filtros tenantSlug/userEmail/search/from/to).
+  - apps/api/src/platform/platform-router.ts: GET /platform/copilot-questions
+    con requirePlatformSuperadmin (solo SUPERADMIN, cross-tenant).
+  - apps/web-modern: PlatformCopilotQuestions.tsx (tabla + buscador), ruta en
+    App.tsx (/platform/copilot-questions) y boton en PlatformLayout NAV.
+
+  SCHEMA SYNC (local):
+  prisma db push FALLA por drift PRE-EXISTENTE no relacionado (quiere dropear
+  Crew.rank, columna ya migrada a rankDefinition con 1 valor). NO se uso
+  --accept-data-loss. En su lugar se creo SOLO la tabla CopilotQuestion via SQL
+  explicito (prisma db execute --file, aditivo) + prisma generate. EN EL VPS hay
+  que hacer lo mismo (crear la tabla por SQL, NO prisma db push).
+
+  VERIFICACION: typecheck api = exit 0, tsc --noEmit web-modern = exit 0. Tabla
+  creada en DB local. Falta validar end-to-end (hacer una pregunta -> ver fila ->
+  verla en /platform/copilot-questions como superadmin).
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  - Frecuencia mensual o mayor + vence en <= 1 semana -> "PLANIFICAR" (naranja).
+  - Frecuencia anual o mayor + vence en <= 1 mes -> "PLANIFICAR" (naranja).
+  - "VENCIDA" en rojo (ya estaba rojo).
+  - "EN PROCESO" en verde (estaba naranja).
+
+  CAMBIOS (frontend, apps/web-modern/src/pages/MaintenancePlans.tsx):
+  - computeStatus (planes date-based): nuevo estado PLANIFICAR con ventana segun
+    frequencyMonths: >=12 -> 30 dias; <12 -> 7 dias. Tiene prioridad sobre
+    NEVER_EXECUTED (aplica aunque nunca se ejecuto). Reemplaza DUE/UPCOMING para
+    planes por fecha (los hours-based mantienen DUE/UPCOMING).
+  - StatusBadgeInline: badge PLANIFICAR naranja; IN_WINDOW ("EN PROCESO") pasa de
+    naranja a verde; OVERDUE ("VENCIDA") sigue rojo.
+  - Toggle "VENCIDOS/PROX" y urgentCount: incluyen PLANIFICAR.
+  - i18n: mp.statusBadge.planificar (es/en/pt).
+
+  NOTA: el donut del dashboard usa deriveDashboardStatus (backend) aparte; no se
+  toco. La lista ahora muestra PLANIFICAR donde el dashboard dice "Proximas".
+
+  VERIFICACION: tsc --noEmit web-modern = exit 0. Solo frontend -> deploy con vite build.
 Agent: Claude Opus 4.8
 
   PEDIDO:

@@ -764,6 +764,27 @@ model PlatformUser {
   auditEvents   AuditEvent[]      @relation("AuditPlatformUser")
 }
 
+// Registro de cada pregunta que un usuario le hace al copiloto. Solo se guarda
+// la pregunta (no la respuesta de la IA). Lo lee únicamente el SUPERADMIN de
+// plataforma para detectar qué necesitan los usuarios y mejorar el sistema.
+model CopilotQuestion {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenantSlug    String
+  userId        String
+  userEmail     String
+  userRole      String
+  capability    String
+  vesselCode    String?
+  screen        String?
+  question      String   @db.Text
+  hasAttachment Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([tenantId, createdAt])
+}
+
 model PlatformSession {
   id               String       @id @default(cuid())
   platformUserId   String
