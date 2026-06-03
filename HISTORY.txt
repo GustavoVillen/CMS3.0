@@ -1,6 +1,27 @@
 HISTORY.txt
 
-[2026-06-03] Fix PLANIFICAR: ventana por dias CALENDARIO (no fraccional por hora)
+[2026-06-03] Review CopilotQuestion: queries + indexing (fix indice tenantSlug)
+Agent: Claude Opus 4.8
+
+  REVISION pedida ("queries y meta indexing") sobre el feature de preguntas al
+  copiloto recien agregado.
+
+  RESULTADOS:
+  1. La tabla CopilotQuestion creada por SQL manual coincide EXACTAMENTE con el
+     schema Prisma (tipos text/boolean/timestamp(3), defaults CURRENT_TIMESTAMP/
+     false, nombres de indice segun convencion Prisma). Sin drift -> db push la ve
+     en sync.
+  2. Desalineo indice<->query: el listado del superadmin filtra por tenantSlug +
+     ordena por createdAt, pero el indice estaba en (tenantId, createdAt) ->
+     ninguna query usa tenantId. CORREGIDO: indice cambiado a (tenantSlug,
+     createdAt) en schema + VPS + local (drop viejo, create nuevo). createdAt
+     suelto se mantiene para el listado sin filtro.
+  3. Busquedas userEmail/question usan contains (ILIKE '%x%') -> no aprovechan
+     btree (wildcard inicial). Aceptable para volumen analitico (cap 1000 filas);
+     si crece, evaluar GIN pg_trgm. NO se agrego (evitar sobreingenieria).
+
+  Solo cambio de indice (schema + DB). El indice ya esta aplicado en el VPS; no
+  requiere rebuild/restart (el cliente generado no cambia por indices).
 Agent: Claude Opus 4.8
 
   SINTOMA:

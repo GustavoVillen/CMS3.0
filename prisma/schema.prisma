@@ -781,8 +781,11 @@ model CopilotQuestion {
   hasAttachment Boolean  @default(false)
   createdAt     DateTime @default(now())
 
+  // El listado del superadmin filtra por tenantSlug (no tenantId) y ordena por
+  // fecha; el indice acompaña ese patron. createdAt suelto cubre el listado sin
+  // filtro de tenant.
   @@index([createdAt])
-  @@index([tenantId, createdAt])
+  @@index([tenantSlug, createdAt])
 }
 
 model PlatformSession {
