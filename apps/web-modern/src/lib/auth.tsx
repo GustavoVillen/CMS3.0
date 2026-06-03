@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { api, ApiError, setUnauthorizedHandler } from "./api";
+import { clearFetchCache } from "./fetch-cache";
 
 export interface AuthUser {
   id: string;
@@ -147,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setState({ token: null, user: null, tenant: null, isAuthenticated: false });
     clearAuthLocalStorage();
+    clearFetchCache(); // evita exponer datos cacheados al siguiente login
   }, []);
 
   // Auto-logout on 401 only after refresh attempt has failed (api.ts handles refresh)

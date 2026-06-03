@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { api, ApiError } from "./api";
 import { useVesselContext } from "./vessel-context";
+import { fetchCache, inFlight, FETCH_STALE_MS, fetchCacheKey } from "./fetch-cache";
 
 // Paths where vessel-code injection must be skipped (the vessel list itself,
 // auth endpoints, and any tenant-level resources that are not vessel-scoped).
@@ -28,7 +29,10 @@ function injectVesselCode(path: string, vesselCode: string): string {
   return `${base}?${params.toString()}`;
 }
 
-// useFetch — wrapper de api.get con scoping automático por vessel.
+// useFetch — wrapper de api.get con scoping automático por vessel + cache SWR.
+// El cache (stale-while-revalidate) vive en ./fetch-cache: al revisitar una
+// pantalla muestra el dato cacheado al instante y revalida en background si está
+// vencido. `reload()` siempre trae fresco (post-mutación correcto).
 //
 // path puede ser null/empty para "no fetchear" — varios callers usan eso para
 // hooks condicionales (ej. `initial?.id ? "/x" : null`). En ese caso el hook
@@ -46,29 +50,56 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
   const [loading, setLoading] = useState<boolean>(!!effectivePath);
   const [error, setError]     = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     if (!effectivePath) {
       setData(null);
       setError(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    const key = fetchCacheKey(effectivePath);
+    const cached = fetchCache.get(key);
+    const showFromCache = !!cached && !force;
+
+    if (showFromCache) {
+      setData(cached!.data as T);
+      setError(null);
+      setLoading(false);
+      // Fresco → no revalidamos. Vencido → seguimos y revalidamos en background.
+      if (Date.now() - cached!.ts < FETCH_STALE_MS) return;
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+
+    // Dedupe de requests idénticas en vuelo (salvo force, que siempre re-pide).
+    let promise = force ? undefined : inFlight.get(key);
+    if (!promise) {
+      const p: Promise<unknown> = api.get<T>(effectivePath)
+        .then((res) => { fetchCache.set(key, { data: res, ts: Date.now() }); return res as unknown; })
+        .finally(() => { if (inFlight.get(key) === p) inFlight.delete(key); });
+      promise = p;
+      inFlight.set(key, p);
+    }
+
     try {
-      const res = await api.get<T>(effectivePath);
+      const res = await promise as T;
       setData(res);
+      setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error de carga");
+      // Si ya mostramos cache, no pisamos con error (revalidación silenciosa).
+      if (!showFromCache) setError(err instanceof ApiError ? err.message : "Error de carga");
     } finally {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectivePath, ...deps]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(false); }, [load]);
 
-  return { data, loading, error, reload: load };
+  const reload = useCallback(() => load(true), [load]);
+
+  return { data, loading, error, reload };
 }
 
 // ---------------------------------------------------------------------------
