@@ -27,6 +27,11 @@ interface Defect {
   assetId: string;
   workOrderId: string | null;
   workOrderCode: string | null;
+  // Origen auditoría/inspección externa (cuando classification=EXTERNAL_AUDIT_FINDING).
+  sourceType?: string | null;
+  sourceId?: string | null;
+  auditId?: string | null;
+  auditCode?: string | null;
   defectCode: string;
   status: string;
   severity: string;
@@ -106,13 +111,14 @@ async function downloadDefectPdf(defect: Defect) {
 // indican que el defecto nació de una OT / inspección / análisis. Cualquier otra
 // clasificación es un registro cargado manualmente.
 
-type DefectOriginKey = "wo" | "inspection" | "fluid" | "manual";
+type DefectOriginKey = "wo" | "inspection" | "fluid" | "audit" | "manual";
 
 function defectOriginKey(classification: string): DefectOriginKey {
   switch (classification) {
     case "WORK_ORDER_FINDING":        return "wo";
     case "INSPECTION_FINDING":        return "inspection";
     case "PREDICTIVE_FLUID_ANALYSIS": return "fluid";
+    case "EXTERNAL_AUDIT_FINDING":    return "audit";
     default:                          return "manual";
   }
 }
@@ -121,6 +127,7 @@ const ORIGIN_STYLES: Record<DefectOriginKey, string> = {
   wo:         "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
   inspection: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
   fluid:      "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+  audit:      "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
   manual:     "bg-fg/5 text-text-industrial/60 border-fg/10",
 };
 
@@ -1188,6 +1195,17 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                     <OriginBadge classification={defect.classification} />
                     <span className="font-mono text-[10px] text-blue-700 dark:text-blue-400 group-hover:underline">{defect.workOrderCode}</span>
                     <ExternalLink className="w-3 h-3 text-blue-700 dark:text-blue-400/60 group-hover:text-blue-400 shrink-0" />
+                  </button>
+                ) : defectOriginKey(defect.classification) === "audit" && defect.auditId ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/external-audits?auditId=${defect.auditId}`)}
+                    title={t("def.origin.openAudit")}
+                    className="inline-flex items-center gap-1.5 group"
+                  >
+                    <OriginBadge classification={defect.classification} />
+                    {defect.auditCode && <span className="font-mono text-[10px] text-amber-700 dark:text-amber-400 group-hover:underline">{defect.auditCode}</span>}
+                    <ExternalLink className="w-3 h-3 text-amber-700 dark:text-amber-400/60 group-hover:text-amber-400 shrink-0" />
                   </button>
                 ) : (
                   <OriginBadge classification={defect.classification} />

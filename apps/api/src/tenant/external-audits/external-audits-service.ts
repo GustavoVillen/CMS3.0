@@ -5,6 +5,12 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { createDefect } from "../pms/defects-service";
+
+// Severidad del finding (texto libre MINOR/MAJOR/CRITICAL) → DefectSeverity.
+const FINDING_SEVERITY_TO_DEFECT: Record<string, "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"> = {
+  MINOR: "LOW", MAJOR: "HIGH", CRITICAL: "CRITICAL",
+};
 
 const AUDIT_TYPES = ["PSC", "FLAG", "CLASS", "VETTING_OIL_MAJOR", "CDI", "RIGHTSHIP", "OTHER"] as const;
 const FINDING_TYPES = ["DEFICIENCY", "OBSERVATION", "RECOMMENDATION", "POSITIVE_OBSERVATION"] as const;
@@ -184,27 +190,38 @@ export async function getExternalAudit(session: TenantAccessSession, id: string)
   const findings = await findingDelegate(prisma).findMany({
     where: { auditId: id }, orderBy: { createdAt: "asc" },
   });
-  const enriched = await attachWorkOrderCodes(prisma, tenantId, findings as Array<{ workOrderId: string | null }>);
+  const enriched = await attachLinkedDefects(prisma, tenantId, findings as Array<{ id: string }>);
   return { ...audit, findings: enriched };
 }
 
-// Resuelve workOrderCode para findings que tienen workOrderId, de forma que el
-// frontend pueda mostrar un badge legible (ej. WO-ACEDEF-26-0010) y navegar a la OT.
-async function attachWorkOrderCodes<T extends { workOrderId: string | null }>(
+// Para cada finding, resuelve el Defecto vinculado (Defect.sourceType="EXTERNAL_AUDIT_FINDING",
+// sourceId=finding.id), de modo que el frontend muestre el badge "DEF-xxx · {status}" navegable.
+async function attachLinkedDefects<T extends { id: string }>(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
   findings: T[],
-): Promise<Array<T & { workOrderCode: string | null }>> {
-  const ids = [...new Set(findings.map(f => f.workOrderId).filter((v): v is string => !!v))];
-  if (ids.length === 0) return findings.map(f => ({ ...f, workOrderCode: null }));
+): Promise<Array<T & { defectId: string | null; defectCode: string | null; defectStatus: string | null }>> {
+  const ids = findings.map(f => f.id);
+  if (ids.length === 0) return findings.map(f => ({ ...f, defectId: null, defectCode: null, defectStatus: null }));
   try {
-    const wos = await (prisma as unknown as {
-      workOrder: { findMany(a: unknown): Promise<Array<{ id: string; workOrderCode: string }>> };
-    }).workOrder.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, workOrderCode: true } });
-    const codeMap = new Map(wos.map(w => [w.id, w.workOrderCode]));
-    return findings.map(f => ({ ...f, workOrderCode: f.workOrderId ? codeMap.get(f.workOrderId) ?? null : null }));
+    const defects = await (prisma as unknown as {
+      defect: { findMany(a: unknown): Promise<Array<{ id: string; defectCode: string; status: string; sourceId: string | null }>> };
+    }).defect.findMany({
+      where: { tenantId, sourceType: "EXTERNAL_AUDIT_FINDING", sourceId: { in: ids }, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, defectCode: true, status: true, sourceId: true },
+    });
+    // Si un finding tuviera varios defectos (re-promovido), nos quedamos con el más reciente.
+    const byFinding = new Map<string, { id: string; defectCode: string; status: string }>();
+    for (const d of defects) {
+      if (d.sourceId && !byFinding.has(d.sourceId)) byFinding.set(d.sourceId, d);
+    }
+    return findings.map(f => {
+      const d = byFinding.get(f.id);
+      return { ...f, defectId: d?.id ?? null, defectCode: d?.defectCode ?? null, defectStatus: d?.status ?? null };
+    });
   } catch {
-    return findings.map(f => ({ ...f, workOrderCode: null }));
+    return findings.map(f => ({ ...f, defectId: null, defectCode: null, defectStatus: null }));
   }
 }
 
@@ -364,4 +381,60 @@ export async function deleteFinding(session: TenantAccessSession, auditId: strin
   await getExternalAudit(session, auditId);
   await (prisma as unknown as { externalAuditFinding: { delete(a: unknown): Promise<unknown> } })
     .externalAuditFinding.delete({ where: { id: findingId } });
+}
+
+// Promueve un finding (deficiencia) a un Defecto gestionado en el módulo Defects.
+// El defecto queda vinculado (sourceType=EXTERNAL_AUDIT_FINDING, sourceId=findingId) y maneja
+// el ciclo correctivo (OT, RCA, CAPA, cierre). Reutiliza createDefect (código, notif, audit).
+export async function promoteFindingToDefect(
+  session: TenantAccessSession,
+  auditId: string,
+  findingId: string,
+  input: { assetId?: string | null; severity?: string | null },
+) {
+  ensureCanWrite(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "DB no disponible.");
+
+  // getExternalAudit valida scope tenant/vessel y trae los findings.
+  const audit = await getExternalAudit(session, auditId) as unknown as {
+    vesselCode: string;
+    auditCode: string;
+    findings: Array<{
+      id: string; description: string; findingCode: string | null; findingType: string;
+      severity: string | null; detentionRelated: boolean; rectificationDeadline: string | Date | null;
+      defectId: string | null;
+    }>;
+  };
+  const finding = audit.findings.find(f => f.id === findingId);
+  if (!finding) throw new RouteError(404, "NOT_FOUND", "Finding no encontrado en esta auditoría.");
+  if (finding.defectId) throw new RouteError(409, "ALREADY_PROMOTED", "Este finding ya está gestionado como defecto.");
+
+  const assetId = normOpt(input.assetId);
+  if (!assetId) throw new RouteError(400, "VALIDATION_ERROR", "Debe seleccionar un activo para el defecto.");
+
+  // Descripción: código PSC (si hay) + descripción + datos de auditoría como contexto.
+  const head = finding.findingCode ? `[${finding.findingCode}] ${finding.description}` : finding.description;
+  const extra: string[] = [];
+  if (finding.detentionRelated) extra.push("Detención: SÍ.");
+  if (finding.rectificationDeadline) extra.push(`Plazo de rectificación: ${new Date(finding.rectificationDeadline).toISOString().slice(0, 10)}.`);
+  extra.push(`Origen: auditoría/inspección externa ${audit.auditCode}.`);
+  const description = [head, extra.join(" ")].filter(Boolean).join("\n");
+
+  // Severidad: la del modal (ya DefectSeverity) o mapeada desde la del finding.
+  const reqSev = String(input.severity ?? "").toUpperCase();
+  const severity = (["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const).includes(reqSev as never)
+    ? (reqSev as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL")
+    : (FINDING_SEVERITY_TO_DEFECT[String(finding.severity ?? "").toUpperCase()] ?? "MEDIUM");
+
+  // createDefect valida ownership del asset y genera código/notif/audit.
+  return createDefect(session, {
+    vesselCode:     audit.vesselCode,
+    assetId,
+    classification: "EXTERNAL_AUDIT_FINDING",
+    sourceType:     "EXTERNAL_AUDIT_FINDING",
+    sourceId:       finding.id,
+    severity,
+    description,
+  });
 }

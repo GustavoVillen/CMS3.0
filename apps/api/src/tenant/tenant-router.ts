@@ -14,7 +14,7 @@ import { applyCopilotAction } from "./copiloto/copilot-actions-service";
 import { generateInsightsForTenant } from "./ai-insights/insight-generator";
 import {
   listExternalAudits, getExternalAudit, createExternalAudit, updateExternalAudit, softDeleteExternalAudit,
-  createFinding, updateFinding, deleteFinding,
+  createFinding, updateFinding, deleteFinding, promoteFindingToDefect,
 } from "./external-audits/external-audits-service";
 import {
   listNearMisses, getNearMiss, createNearMiss, updateNearMiss, deleteNearMiss,
@@ -1760,6 +1760,17 @@ export async function handleTenantRoutes(
     if (method === "POST") {
       const body = await readJsonBody(request) as Parameters<typeof createFinding>[2];
       sendJson(response, 201, await createFinding(session, id, body));
+      return true;
+    }
+  }
+  if (/^\/app\/external-audits\/[^/]+\/findings\/[^/]+\/promote-to-defect$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    const auditId = parts[3]!;
+    const findingId = parts[5]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof promoteFindingToDefect>[3];
+      sendJson(response, 201, await promoteFindingToDefect(session, auditId, findingId, body));
       return true;
     }
   }

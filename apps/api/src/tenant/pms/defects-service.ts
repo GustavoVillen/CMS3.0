@@ -20,6 +20,9 @@ export interface CreateDefectInput {
   vesselCode: string;
   assetId: string;
   workOrderId?: string | null;
+  // Vínculo genérico al origen (ej. sourceType="EXTERNAL_AUDIT_FINDING", sourceId=findingId).
+  sourceType?: string | null;
+  sourceId?: string | null;
   status?: "OPEN" | "UNDER_REVIEW" | "IN_PROGRESS" | "DEFERRED" | "RESOLVED" | "CLOSED";
   severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   operationalState?: "NORMAL" | "DEGRADED" | "RESTRICTED" | "NO_GO";
@@ -70,6 +73,8 @@ interface DefectRecord {
   vesselCode: string;
   assetId: string;
   workOrderId: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
   defectCode: string;
   status: string;
   severity: string;
@@ -240,6 +245,91 @@ async function attachWorkOrderCodes<T extends { workOrderId: string | null }>(
   }
 }
 
+/**
+ * Para defectos originados en una auditoría/inspección externa
+ * (classification="EXTERNAL_AUDIT_FINDING", sourceId=ExternalAuditFinding.id), resuelve el
+ * código y el id de la auditoría de origen, para mostrar un badge "Origen: EXT-xxx" navegable.
+ */
+async function attachAuditOrigin<T extends { classification: string; sourceType: string | null; sourceId: string | null }>(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  defects: T[],
+): Promise<Array<T & { auditId: string | null; auditCode: string | null }>> {
+  const findingIds = [...new Set(
+    defects
+      .filter(d => d.classification === "EXTERNAL_AUDIT_FINDING" && d.sourceId)
+      .map(d => d.sourceId as string),
+  )];
+  if (findingIds.length === 0) return defects.map(d => ({ ...d, auditId: null, auditCode: null }));
+  try {
+    const findingDel = (prismaRaw as unknown as {
+      externalAuditFinding: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean> }): Promise<Array<{ id: string; auditId: string }>> };
+    }).externalAuditFinding;
+    const auditDel = (prismaRaw as unknown as {
+      externalAudit: { findMany(a: { where: Record<string, unknown>; select: Record<string, boolean> }): Promise<Array<{ id: string; auditCode: string }>> };
+    }).externalAudit;
+    const findings = await findingDel.findMany({ where: { id: { in: findingIds }, tenantId }, select: { id: true, auditId: true } });
+    const findingToAudit = new Map(findings.map(f => [f.id, f.auditId]));
+    const auditIds = [...new Set(findings.map(f => f.auditId))];
+    const audits = auditIds.length > 0
+      ? await auditDel.findMany({ where: { id: { in: auditIds }, tenantId }, select: { id: true, auditCode: true } })
+      : [];
+    const auditCodeById = new Map(audits.map(a => [a.id, a.auditCode]));
+    return defects.map(d => {
+      const aId = d.classification === "EXTERNAL_AUDIT_FINDING" && d.sourceId ? findingToAudit.get(d.sourceId) ?? null : null;
+      return { ...d, auditId: aId, auditCode: aId ? auditCodeById.get(aId) ?? null : null };
+    });
+  } catch {
+    return defects.map(d => ({ ...d, auditId: null, auditCode: null }));
+  }
+}
+
+/**
+ * Cascade de cierre: si el defecto proviene de un finding de auditoría externa, al
+ * resolver/cerrar el defecto se marca CLOSED el ExternalAuditFinding de origen. Idempotente
+ * (solo toca findings OPEN/IN_PROGRESS) y no bloqueante. Reutilizado por work-orders-service.
+ */
+export async function closeLinkedAuditFinding(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  defect: { classification: string; sourceType: string | null; sourceId: string | null; defectCode: string; tenantId: string; vesselCode: string },
+  actorUserId: string,
+): Promise<void> {
+  if (defect.classification !== "EXTERNAL_AUDIT_FINDING" || !defect.sourceId) return;
+  try {
+    const findingDel = (prismaRaw as unknown as {
+      externalAuditFinding: {
+        findFirst(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; status: string; evidenceNotes: string | null } | null>;
+        update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      };
+    }).externalAuditFinding;
+    const finding = await findingDel.findFirst({
+      where: { id: defect.sourceId, tenantId: defect.tenantId, status: { in: ["OPEN", "IN_PROGRESS"] } },
+      select: { id: true, status: true, evidenceNotes: true },
+    });
+    if (!finding) return;
+    const autoNote = `Cerrado automáticamente al resolver el defecto ${defect.defectCode}.`;
+    await findingDel.update({
+      where: { id: finding.id },
+      data: {
+        status: "CLOSED",
+        clearingDate: new Date(),
+        evidenceNotes: finding.evidenceNotes ? `${finding.evidenceNotes}\n${autoNote}` : autoNote,
+        updatedByUserId: actorUserId,
+      },
+    });
+    void publishAudit(prismaRaw, {
+      tenantId: defect.tenantId,
+      actorUserId,
+      action: "ExternalAuditFinding.closed",
+      entityType: "ExternalAuditFinding",
+      entityId: finding.id,
+      metadata: { vesselCode: defect.vesselCode, autoClosedBy: "DEFECT_RESOLVED", defectCode: defect.defectCode, previousStatus: finding.status },
+    });
+  } catch (err) {
+    log.error("[closeLinkedAuditFinding] failed:", err);
+  }
+}
+
 export async function listDefects(session: TenantAccessSession, filters: DefectListFilters = {}) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) return [];
@@ -256,7 +346,8 @@ export async function listDefects(session: TenantAccessSession, filters: DefectL
   if (filters.assetId) where.assetId = filters.assetId;
 
   const items = await defect.findMany({ where, orderBy: { reportedAt: "desc" } });
-  return attachWorkOrderCodes(prismaRaw, tenantId, items as Array<{ workOrderId: string | null }>);
+  const withWo = await attachWorkOrderCodes(prismaRaw, tenantId, items as Array<{ workOrderId: string | null }>);
+  return attachAuditOrigin(prismaRaw, tenantId, withWo as Array<{ classification: string; sourceType: string | null; sourceId: string | null } & Record<string, unknown>>);
 }
 
 export async function getDefect(session: TenantAccessSession, id: string) {
@@ -271,7 +362,8 @@ export async function getDefect(session: TenantAccessSession, id: string) {
   const record = await defect.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Defect no encontrado.");
   const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record as { workOrderId: string | null } & Record<string, any>]);
-  return enriched[0] as typeof record & { workOrderCode: string | null };
+  const withOrigin = await attachAuditOrigin(prismaRaw, tenantId, enriched as Array<{ classification: string; sourceType: string | null; sourceId: string | null } & Record<string, unknown>>);
+  return withOrigin[0] as typeof record & { workOrderCode: string | null; auditId: string | null; auditCode: string | null };
 }
 
 export async function createDefect(session: TenantAccessSession, payload: CreateDefectInput) {
@@ -319,6 +411,8 @@ export async function createDefect(session: TenantAccessSession, payload: Create
         vesselCode,
         assetId,
         workOrderId,
+        sourceType: normalizeOptionalText(payload.sourceType),
+        sourceId:   normalizeOptionalText(payload.sourceId),
         defectCode,
         status: payload.status ?? "OPEN",
         severity: payload.severity ?? "MEDIUM",
@@ -413,6 +507,11 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
     entityId: current.id,
     metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode },
   });
+
+  // Cascade: si el defecto pasó a RESOLVED/CLOSED, cerrar el finding de auditoría de origen.
+  if (payload.status === "RESOLVED" || payload.status === "CLOSED") {
+    void closeLinkedAuditFinding(prismaRaw, current, session.user.id);
+  }
 
   // Notif: si la severity pasó a CRITICAL en esta edición (de algo distinto),
   // encolar alerta. La unique constraint hace el resto si ya existía.
@@ -517,6 +616,8 @@ export async function closeDefect(session: TenantAccessSession, id: string, payl
     entityId: current.id,
     metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode },
   });
+  // Cascade: cerrar el finding de auditoría externa de origen, si lo hubiera.
+  void closeLinkedAuditFinding(prismaRaw, current, session.user.id);
   return closed;
 }
 

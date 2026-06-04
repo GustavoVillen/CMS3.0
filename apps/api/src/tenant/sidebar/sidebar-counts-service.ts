@@ -153,7 +153,10 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     safe(() => p.certificate.count({ where: { ...base, deletedAt: null, status: { in: ["EXPIRED", "EXPIRING_SOON"] } } })),
     safe(() => p.nearMissReport.count({ where: { ...base, deletedAt: null, status: { notIn: ["CLOSED"] } } })),
     safe(() => p.crewRestHours.count({ where: { ...base, hasViolation: true } })),
-    safe(() => p.externalAuditFinding.count({ where: { ...base, status: { in: ["OPEN", "IN_PROGRESS"] } } })),
+    // audit.deletedAt:null — los findings no tienen soft-delete propio; al borrar (soft)
+    // una auditoría sus findings quedan, así que filtramos por el padre para no contar
+    // findings de auditorías eliminadas (la lista ya los oculta).
+    safe(() => p.externalAuditFinding.count({ where: { ...base, status: { in: ["OPEN", "IN_PROGRESS"] }, audit: { deletedAt: null } } })),
     safe(() => p.mocRecord.count({ where: { ...base, deletedAt: null, status: { notIn: ["REVIEWED", "REJECTED", "CANCELLED"] } } })),
     // MaintenancePlan: solo OVERDUE; el resto se considera al día.
     safe(() => p.maintenancePlan.count({ where: { ...base, deletedAt: null, status: "OVERDUE" } })),

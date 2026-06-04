@@ -1275,6 +1275,10 @@ model Defect {
   vesselCode             String
   assetId                String
   workOrderId            String?
+  // Vínculo genérico al origen (mismo patrón que Deferral/CapaRecord). Hoy se usa para
+  // EXTERNAL_AUDIT_FINDING (sourceId = ExternalAuditFinding.id); extensible a otros orígenes.
+  sourceType             String?
+  sourceId               String?
   defectCode             String
   status                 DefectStatus           @default(OPEN)
   severity               DefectSeverity         @default(MEDIUM)
@@ -1314,6 +1318,7 @@ model Defect {
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([tenantId, reportedAt])
+  @@index([tenantId, sourceType, sourceId])
 }
 
 model Deferral {

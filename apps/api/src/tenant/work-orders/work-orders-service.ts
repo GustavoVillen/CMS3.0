@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
+import { closeLinkedAuditFinding } from "../pms/defects-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 import { log } from "../../common/logger";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
@@ -887,47 +888,45 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to auto-close associated deferrals:", err);
   }
 
-  // Cerrar findings (deficiencias) de auditoría/inspección externa vinculados a esta OT.
-  // Cuando se abre una OT correctiva desde un finding y esa OT se cierra, la deficiencia
-  // queda resuelta: se marca CLOSED con la fecha de cierre de la OT. Solo afecta findings
-  // en estado OPEN/IN_PROGRESS (no toca CLOSED ni REJECTED_BY_AUDITOR).
+  // Resolver el Defecto de auditoría/inspección externa vinculado a esta OT (la deficiencia
+  // se gestiona como Defect). Al cerrar la OT correctiva, el defecto pasa a RESOLVED y, en
+  // cascada, se cierra el finding de origen (closeLinkedAuditFinding). Solo defectos
+  // EXTERNAL_AUDIT_FINDING en estado no terminal. No bloqueante.
   try {
-    const findingDelegateLocal = (prismaRaw as unknown as {
-      externalAuditFinding: {
-        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{ id: string; findingCode: string | null; status: string; evidenceNotes: string | null }[]>;
+    const defectDel = (prismaRaw as unknown as {
+      defect: {
+        findMany(a: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<Array<{ id: string; defectCode: string; status: string; classification: string; sourceType: string | null; sourceId: string | null; tenantId: string; vesselCode: string }>>;
         update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
       };
-    }).externalAuditFinding;
-    const openFindings = await findingDelegateLocal.findMany({
+    }).defect;
+    const linkedDefects = await defectDel.findMany({
       where: {
         tenantId: current.tenantId,
         workOrderId: current.id,
-        status: { in: ["OPEN", "IN_PROGRESS"] },
+        classification: "EXTERNAL_AUDIT_FINDING",
+        status: { notIn: ["RESOLVED", "CLOSED"] },
+        deletedAt: null,
       },
-      select: { id: true, findingCode: true, status: true, evidenceNotes: true },
+      select: { id: true, defectCode: true, status: true, classification: true, sourceType: true, sourceId: true, tenantId: true, vesselCode: true },
     });
-    for (const f of openFindings) {
-      const autoNote = `Cerrado automáticamente al cerrar la OT ${current.workOrderCode}.`;
-      await findingDelegateLocal.update({
-        where: { id: f.id },
-        data: {
-          status: "CLOSED",
-          clearingDate: completedDate,
-          evidenceNotes: f.evidenceNotes ? `${f.evidenceNotes}\n${autoNote}` : autoNote,
-          updatedByUserId: session.user.id,
-        },
+    for (const d of linkedDefects) {
+      await defectDel.update({
+        where: { id: d.id },
+        data: { status: "RESOLVED", updatedByUserId: session.user.id },
       });
       void publishAudit(prismaRaw, {
         tenantId: current.tenantId,
         actorUserId: session.user.id,
-        action: "ExternalAuditFinding.closed",
-        entityType: "ExternalAuditFinding",
-        entityId: f.id,
-        metadata: { findingCode: f.findingCode, vesselCode: current.vesselCode, autoClosedBy: "WORK_ORDER_CLOSED", previousStatus: f.status, workOrderCode: current.workOrderCode },
+        action: "Defect.resolved",
+        entityType: "Defect",
+        entityId: d.id,
+        metadata: { defectCode: d.defectCode, vesselCode: current.vesselCode, autoResolvedBy: "WORK_ORDER_CLOSED", previousStatus: d.status, workOrderCode: current.workOrderCode },
       });
+      // Cascade: cerrar el finding de auditoría de origen.
+      void closeLinkedAuditFinding(prismaRaw, d, session.user.id);
     }
   } catch (err) {
-    log.error("[closeWorkOrder] failed to auto-close linked external-audit findings:", err);
+    log.error("[closeWorkOrder] failed to auto-resolve linked external-audit defects:", err);
   }
 
   // Auto-create Sample DRAFT si el plan era un plan de muestreo (cualquier kind).
