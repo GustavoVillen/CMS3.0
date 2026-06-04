@@ -53,7 +53,7 @@ const MIN_HOLD_MS = 400;
 // body and the backend appends the appropriate system prompt instruction.
 
 export const MobileCopilot: React.FC = () => {
-  const screenContext = useCopilotScreenContext();
+  const { screenContext } = useCopilotScreenContext();
   const { selectedVesselCode, selectedVessel } = useVesselContext();
   // Construye un contexto efectivo que SIEMPRE incluya el buque seleccionado
   // en mobile (que es el contexto principal del técnico). Si una pantalla ya
@@ -90,7 +90,7 @@ export const MobileCopilot: React.FC = () => {
   const recordTimerRef = useRef<number | null>(null);
   const cancelledRef = useRef<boolean>(false);
   const micBtnRef = useRef<HTMLButtonElement>(null);
-  const sendMessageRef = useRef<(text: string, fromVoice: boolean) => Promise<void>>();
+  const sendMessageRef = useRef<(text: string, fromVoice: boolean) => Promise<void>>(undefined);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

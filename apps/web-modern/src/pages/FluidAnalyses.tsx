@@ -865,6 +865,7 @@ function ResultFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [file, setFile]             = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [reportUrl, setReportUrl]   = useState<string | null>(sample.result?.reportUrl ?? null);

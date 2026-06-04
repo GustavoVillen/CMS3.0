@@ -2691,7 +2691,6 @@ export const MaintenancePlansPage: React.FC = () => {
           <button
             onClick={() => {
               setOverdueOnly(false);
-              setSfiTextFilter("");
               setSfiTab("ALL");
               setSearchText("");
             }}

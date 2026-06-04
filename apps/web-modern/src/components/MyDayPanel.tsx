@@ -128,12 +128,14 @@ const MyWorkOrdersTile: React.FC = () => {
     if (!user) return [];
     const myId = user.id;
     const myEmail = user.email;
+    // AuthUser expone `name` (no firstName); derivamos el nombre de pila para el match laxo.
+    const firstName = (user.name ?? "").split(" ")[0] ?? "";
     return (data?.items ?? []).filter(w => {
       const open = w.status === "PLANNED" || w.status === "IN_PROGRESS";
       if (!open) return false;
       const a = w.assignedToUserId ?? "";
       const n = w.assignedToUserName ?? "";
-      return a === myId || a === myEmail || (n && (n === myEmail || (user.firstName && n.toLowerCase().includes(user.firstName.toLowerCase()))));
+      return a === myId || a === myEmail || (n && (n === myEmail || (firstName && n.toLowerCase().includes(firstName.toLowerCase()))));
     });
   }, [data, user]);
 

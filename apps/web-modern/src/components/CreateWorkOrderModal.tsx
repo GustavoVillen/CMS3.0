@@ -91,7 +91,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [priority, setPriority]       = useState(prefill?.priority ?? "MEDIUM");
   const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
   const [openDate, setOpenDate]       = useState(today);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── PLAN fields ───────────────────────────────────────────────────────────
   const [title, setTitle]                       = useState(prefill?.title ?? "");

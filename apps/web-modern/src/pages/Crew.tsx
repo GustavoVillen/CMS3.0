@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 // Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
 // Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
@@ -338,7 +338,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
-            {(isNew || tab === "details") && !isLocked && (
+            {!isLocked && (
               <button onClick={() => { void onSave(); }} disabled={saving}
                 className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
@@ -471,7 +471,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
             <div key={c.id} className="py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                  <span className="text-sm font-medium text-fg">{t(CERT_TYPE_TKEY[c.type] ?? "cert.type.other")}</span>
+                  <span className="text-sm font-medium text-fg">{t((CERT_TYPE_TKEY[c.type] ?? "cert.type.other") as TranslationKey)}</span>
                   <CertStatusBadge status={c.status} />
                   {c.certificateNumber && <span className="text-[10px] font-mono text-text-industrial/40">#{c.certificateNumber}</span>}
                 </div>

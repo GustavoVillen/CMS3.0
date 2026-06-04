@@ -1,5 +1,72 @@
 HISTORY.txt
 
+[2026-06-03] CHORE/FIX: limpieza de errores TS preexistentes del frontend (59 → 11)
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  Bajar el ruido de tsc (web) y, de paso, corregir bugs reales latentes escondidos entre los
+  errores de tipo. Fase A (type-only, sin cambio de runtime) + Fase B (bugs reales). Fase C
+  (tipos incompletos de bajo riesgo) queda diferida. Resultado: 59 → 11 errores; vite build OK.
+
+  FASE A (type-only):
+  - i18n.tsx: removidas 23 claves duplicadas (TS1117). Se borró la ocurrencia ANTERIOR de cada
+    par (en JS gana la última) → runtime idéntico, valores activos preservados.
+  - src/types/speech.d.ts (NUEVO): tipos ambiente de Web Speech API (SpeechRecognition*),
+    que el navegador provee pero no están en el lib DOM → arregla ~12 errores en CopilotoPanel/MobileCopilot.
+  - lib/api.ts: post/put/patch con body opcional (request ya lo toleraba) → arregla llamadas sin body.
+  - CreateWorkOrderModal.tsx / MobileCopilot.tsx: useRef<T>() → useRef<T>(undefined).
+
+  FASE B (bugs reales latentes):
+  - Crew.tsx:341: condición usaba `tab` inexistente (leftover) → crasheaba el footer al editar un
+    tripulante. Ahora `!isLocked`. + clave i18n crew.selectRank agregada + cast TranslationKey en 474.
+  - MaintenancePlans.tsx:2694: `setSfiTextFilter` inexistente → crasheaba "limpiar filtros". Línea
+    removida (setSearchText ya limpia).
+  - FluidAnalyses.tsx ResultFormModal: faltaba `const t = useT()` → crasheaba al abrir el modal.
+  - MyDayPanel.tsx: usaba user.firstName (AuthUser sólo tiene name) → deriva firstName de name.
+  - MobileLayout.tsx: tenant.displayName → tenant.name.
+  - MobileCopilot.tsx: useCopilotScreenContext() devuelve el value completo; se destructura
+    `{ screenContext }` (antes spufeaba el objeto de contexto entero, con funciones, al backend).
+
+  DIFERIDO (Fase C, 11 errores): AiDocuments(content), Platform*(SetStateAction.id),
+  copilot-context:191, DailyReports:951, MaintenancePlans(criticality/1819), MobileWorkOrders(824-825 TS2367).
+
+[2026-06-03] FEAT: deficiencias de auditoría/inspección externa gestionadas en módulo Defects
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  Que las deficiencias (findings DEFICIENCY) de auditorías/inspecciones externas se gestionen
+  con el módulo Defects (OT correctiva, RCA, CAPA, cierre) en vez de un ciclo paralelo sobre
+  los findings. Modelo "promover deficiencia → Defecto vinculado". La auditoría sigue siendo el
+  acta (lista todos los findings, incl. observaciones/recomendaciones).
+
+  CAMBIOS (schema):
+  - prisma/schema.prisma: Defect += sourceType/sourceId (genérico, patrón Deferral/CapaRecord)
+    + índice [tenantId, sourceType, sourceId]. Migración 20260603_defect_source_link.
+    PENDIENTE en VPS: db push bloqueado por drift Crew.rank → aplicar ALTER aditivo con psql.
+  - ExternalAuditFinding.workOrderId queda DEPRECADO (ya no se usa; no se dropea).
+
+  CAMBIOS (backend):
+  - defects-service.ts: createDefect persiste sourceType/sourceId. Helper exportado
+    closeLinkedAuditFinding (cascade defect→finding, idempotente). closeDefect/updateDefect
+    (→RESOLVED/CLOSED) cierran el finding de origen. listDefects/getDefect adjuntan auditId/
+    auditCode (attachAuditOrigin) para el badge de origen navegable.
+  - external-audits-service.ts: promoteFindingToDefect(auditId, findingId, {assetId, severity})
+    → createDefect(classification=EXTERNAL_AUDIT_FINDING, sourceType/sourceId=findingId).
+    getExternalAudit usa attachLinkedDefects (defectId/defectCode/defectStatus por finding).
+    Ruta POST /app/external-audits/:auditId/findings/:findingId/promote-to-defect.
+  - work-orders-service.ts closeWorkOrder: al cerrar la OT, resuelve el Defect EXTERNAL_AUDIT_FINDING
+    vinculado (workOrderId) → RESOLVED + cascade a finding CLOSED (reemplaza el auto-cierre directo
+    de findings anterior).
+
+  CAMBIOS (frontend):
+  - ExternalAudits.tsx: FindingRow muestra "Gestionar como defecto" (solo DEFICIENCY sin defecto) o
+    badge "DEF-xxx · status" navegable a /defects?defectId=. Nuevo PromoteToDefectModal (activo con
+    sugerencia IA reusando suggest-asset + severidad), crea el defecto y navega a /defects. Soporta
+    apertura por ?auditId=. Quitado el flujo "Abrir OT" desde el finding.
+  - Defects.tsx: origen "audit" (classification EXTERNAL_AUDIT_FINDING) con badge ámbar y navegación
+    a /external-audits?auditId=. Defect interface += sourceType/sourceId/auditId/auditCode.
+  - i18n: def.origin.audit, def.class.audit, def.origin.openAudit, ea.finding.promote* / createDefect.
+
 [2026-06-03] FEAT: Auditoría/Inspección externa — findings condicionados + OT desde finding
 Agent: Claude Opus 4.8
 
@@ -31,6 +98,13 @@ Agent: Claude Opus 4.8
     `audit` pasó a estado interno del modal; al crear uno nuevo transiciona a modo
     edición in situ (título muestra el código + aparece la sección de findings),
     recargando la lista de fondo. Cerrar es explícito vía "Cerrar". Borrar cierra.
+
+  FIX (badge sidebar):
+  - sidebar-counts-service.ts: externalAuditsFindingsOpen contaba findings de
+    auditorías borradas (soft-delete). Los findings no tienen deletedAt propio y no se
+    borran en cascada al soft-delete del audit, así que el badge mostraba más items que
+    la lista. Se agregó el filtro de relación audit:{deletedAt:null}. Verificado en DB:
+    total_open=2 vs visible_open=1 → ahora coinciden.
 
   CAMBIOS (IA, detección de activo al abrir OT desde finding):
   - work-orders-ai-suggestions.ts: nueva suggestAsset(taskDesc, assets[]) → elige con
