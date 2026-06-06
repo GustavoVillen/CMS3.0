@@ -1342,6 +1342,15 @@ export interface MaintenanceWorkloadProjection {
   unscheduledDatePlans: number;
   /** Cantidad de planes proyectados que no tienen estimatedHours definido. Indica cuánto de la curva de horas no está siendo contado. */
   plansWithoutEstimate: number;
+  /**
+   * Planes vencidos (backlog): por fecha cuya próxima ocurrencia natural quedó
+   * antes de la semana actual, o por horas cuyas horas de marcha ya superaron
+   * nextDueHours. NO se vuelcan a la semana 1 — se reportan como métrica aparte
+   * para no inflar la proyección semanal con trabajo atrasado.
+   */
+  overduePlans: number;
+  /** Horas-hombre estimadas acumuladas de los planes vencidos. */
+  overdueHours: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -1436,6 +1445,8 @@ export async function getMaintenanceWorkloadProjection(
     unscheduledHoursPlans: 0,
     unscheduledDatePlans: 0,
     plansWithoutEstimate: 0,
+    overduePlans: 0,
+    overdueHours: 0,
   };
 
   const prismaRaw = getPrismaClient();
@@ -1545,6 +1556,8 @@ export async function getMaintenanceWorkloadProjection(
   let unscheduledHoursPlans = 0;
   let unscheduledDatePlans = 0;
   let plansWithoutEstimate = 0;
+  let overduePlans = 0;
+  let overdueHours = 0;
 
   // Tope defensivo: máximo de ocurrencias proyectadas por plan dentro de la ventana.
   // Aún para planes semanales con ventana de 104 semanas, 200 alcanza con margen.
@@ -1565,6 +1578,13 @@ export async function getMaintenanceWorkloadProjection(
       if (!cursor) {
         unscheduledDatePlans++;
         continue;
+      }
+      // Vencido (backlog): la próxima ocurrencia natural quedó antes de la semana
+      // actual. Se cuenta como métrica aparte y NO se vuelca a la semana 1 — el
+      // cursor se rueda hacia adelante para proyectar solo ocurrencias futuras.
+      if (cursor.getTime() < firstWeek.getTime()) {
+        overduePlans++;
+        overdueHours += estHours;
       }
       // Adelantar el cursor hasta entrar en la ventana
       while (cursor.getTime() < firstWeek.getTime()) {
@@ -1604,13 +1624,22 @@ export async function getMaintenanceWorkloadProjection(
       }
       const currentHrs = currentHoursMap.get(plan.assetId) ?? 0;
       const hoursToNext = plan.nextDueHours - currentHrs;
-      const daysToNext = hoursToNext > 0 ? hoursToNext / avgPerDay : 0;
       const daysBetween = plan.frequencyHours / avgPerDay;
       if (!isFinite(daysBetween) || daysBetween <= 0) {
         unscheduledHoursPlans++;
         continue;
       }
-      let occurrence = addUtcDays(today, Math.max(0, daysToNext));
+      // Vencido por horas (backlog): las horas de marcha ya superaron nextDueHours.
+      // Antes esto se aplastaba en "hoy" (daysToNext=0) y apilaba TODOS los planes
+      // vencidos en la semana 1 → pico artificial. Ahora se cuenta aparte y la
+      // proyección arranca en la siguiente ocurrencia futura (today + un intervalo).
+      const overdue = hoursToNext <= 0;
+      if (overdue) {
+        overduePlans++;
+        overdueHours += estHours;
+      }
+      const daysToNext = overdue ? daysBetween : hoursToNext / avgPerDay;
+      let occurrence = addUtcDays(today, daysToNext);
       let scheduledThisPlan = false;
       let count = 0;
       while (occurrence.getTime() < projectionEnd.getTime() && count < MAX_OCCURRENCES_PER_PLAN) {
@@ -1643,5 +1672,7 @@ export async function getMaintenanceWorkloadProjection(
     unscheduledHoursPlans,
     unscheduledDatePlans,
     plansWithoutEstimate,
+    overduePlans,
+    overdueHours,
   };
 }

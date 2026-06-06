@@ -1790,6 +1790,9 @@ const dict = {
   "mwl.warnNoHoursSched.many":{ es: "planes por horas sin proyectar — falta historial de horas de motor o frecuencia inválida.", en: "hour-based plans not projected — missing engine hours history or invalid frequency.", pt: "planos por horas sem projeção — falta histórico de horas do motor ou frequência inválida." },
   "mwl.warnNoDateSched.one":  { es: "plan por fecha sin proyectar — falta próxima ejecución o frecuencia.", en: "date-based plan not projected — missing next execution or frequency.", pt: "plano por data sem projeção — falta próxima execução ou frequência." },
   "mwl.warnNoDateSched.many":{ es: "planes por fecha sin proyectar — falta próxima ejecución o frecuencia.", en: "date-based plans not projected — missing next execution or frequency.", pt: "planos por data sem projeção — falta próxima execução ou frequência." },
+  "mwl.overdueBanner.one":    { es: "plan vencido — trabajo atrasado, no incluido en la proyección semanal.", en: "overdue plan — backlog work, excluded from the weekly projection.", pt: "plano vencido — trabalho atrasado, não incluído na projeção semanal." },
+  "mwl.overdueBanner.many":   { es: "planes vencidos — trabajo atrasado, no incluidos en la proyección semanal.", en: "overdue plans — backlog work, excluded from the weekly projection.", pt: "planos vencidos — trabalho atrasado, não incluídos na projeção semanal." },
+  "mwl.overdueHoursSuffix":   { es: "h estimadas atrasadas", en: "est. backlog hours", pt: "h estimadas atrasadas" },
 
   // ─── Work Orders — kanban columns + filter chips ───────────────────────────
   "wo.kanban.planned":        { es: "Planificadas",      en: "Planned",         pt: "Planejadas" },

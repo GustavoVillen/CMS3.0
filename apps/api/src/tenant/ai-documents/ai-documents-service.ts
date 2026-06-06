@@ -324,10 +324,38 @@ export async function getActiveTenantAiDocumentsContent(tenantId: string): Promi
   const prisma = getPrismaClient();
   if (!prisma) return "";
 
+  // Presupuesto total de caracteres para no inflar el system prompt / contexto.
+  // ~500k chars ≈ 125k tokens: deja margen sobre la ventana del modelo y permite
+  // incluir un manual grande (p. ej. ~270k chars) junto al resto de procedimientos.
+  const MAX_TOTAL_CHARS = 500_000;
+
+  // Antes había un `take: 5` sin orden → con más de 5 documentos ACTIVE se
+  // incluían 5 arbitrarios y el resto (típicamente los recién activados) quedaba
+  // invisible para la IA. Ahora traemos TODOS los activos, priorizando los
+  // activados más recientemente, y cortamos por presupuesto de tamaño.
   const versions = await prisma.aiDocumentVersion.findMany({
     where: { tenantId, status: "ACTIVE" },
-    select: { content: true },
-    take: 5,
+    orderBy: [{ activatedAt: "desc" }, { createdAt: "desc" }],
+    select: { content: true, document: { select: { name: true } } },
   });
-  return versions.map(v => v.content).join("\n\n---\n\n");
+
+  const parts: string[] = [];
+  let used = 0;
+  for (const v of versions) {
+    if (used >= MAX_TOTAL_CHARS) break;
+    const title = v.document?.name?.trim() || "Documento";
+    const remaining = MAX_TOTAL_CHARS - used;
+    let body = v.content ?? "";
+    let truncated = false;
+    if (body.length > remaining) {
+      body = body.slice(0, remaining);
+      truncated = true;
+    }
+    // Encabezar cada doc con su nombre para que la IA pueda citar la fuente.
+    const block = `### ${title}\n${body}${truncated ? "\n\n[Documento truncado por límite de contexto.]" : ""}`;
+    parts.push(block);
+    used += block.length;
+  }
+
+  return parts.join("\n\n---\n\n");
 }

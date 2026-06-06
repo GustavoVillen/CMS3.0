@@ -1,5 +1,65 @@
 HISTORY.txt
 
+[2026-06-06] FIX: el copiloto no "veía" documentos ACTIVE de la base documental (take:5)
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  Con el manual "VOLVO PENTA D16C" cargado y ACTIVE en AI Documents, el copiloto respondía
+  "el manual de Volvo Penta no está cargado en la base documental". Mencionaba los demás
+  procedimientos (PROC-MAN-*) pero no el manual.
+
+  CAUSA RAÍZ (ai-documents-service.ts, getActiveTenantAiDocumentsContent):
+  La función que inyecta los documentos al contexto de IA hacía `take: 5` SIN orderBy. Con
+  más de 5 documentos ACTIVE, traía 5 arbitrarios (orden de DB) y descartaba el resto — el
+  manual de Volvo, recién activado, quedaba afuera. Descartado que fuera problema de contenido:
+  AiDocuments sube el texto desde un textarea (no PDF/base64), así que el contenido era válido.
+
+  FIX:
+  - getActiveTenantAiDocumentsContent: se quita el tope arbitrario de 5; ahora trae TODOS los
+    documentos ACTIVE ordenados por activatedAt desc (más recientes primero), con presupuesto
+    de tamaño (MAX_TOTAL_CHARS=500k ≈ 125k tokens) para no reventar el contexto. Cada documento
+    se encabeza con su nombre (### {name}) para que la IA pueda citar la fuente.
+
+  EFECTO: el copiloto ve todos los documentos activos del tenant; el manual de Volvo entra al
+  contexto. Sin cambios de schema ni deps. Backend-only (tsx) → deploy necesita limpiar cache
+  de tsx + restart.
+
+  VERIFICACIÓN:
+  - tsc api: 0 errores nuevos (3 preexistentes en defects-service.ts). En vivo local bloqueado
+    (Postgres/Docker apagado).
+
+[2026-06-06] FIX: pico artificial en "Carga de Mantenimiento" (semana 1 inflada por vencidos)
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  El gráfico "Tareas por semana — próximos 12 meses" mostraba un pico enorme en la primera
+  semana (~420) y luego caía a ~20-40. No era carga real: era backlog de planes vencidos
+  aplastado contra la semana 1.
+
+  CAUSA RAÍZ (maintenance-plans-service.ts, getMaintenanceWorkloadProjection):
+  Para planes por HORAS vencidos (las horas de marcha ya superaron nextDueHours), hoursToNext
+  <= 0 → daysToNext se forzaba a 0 → la primera ocurrencia se plantaba en "hoy" (semana 1).
+  Resultado: TODOS los planes por horas atrasados se apilaban en la semana 1. Los planes por
+  fecha vencidos ya "rodaban hacia adelante" (no apilaban), pero no se reportaban como backlog.
+
+  FIX (opción A — separar el backlog de la proyección):
+  - maintenance-plans-service: nuevos campos overduePlans + overdueHours en la proyección.
+    · Horas: si hoursToNext <= 0 → se cuenta como vencido y la proyección arranca en la
+      siguiente ocurrencia futura (today + un intervalo), NO en la semana 1.
+    · Fecha: si la próxima ocurrencia quedó antes de la semana actual → se cuenta como vencido
+      (la proyección futura no cambia, solo se agrega la métrica).
+  - web-modern/MaintenanceWorkload: nuevo banner rojo de "planes vencidos (h estimadas
+    atrasadas) — no incluidos en la proyección semanal".
+  - i18n: mwl.overdueBanner.one/.many + mwl.overdueHoursSuffix (es/en/pt).
+  - dashboard-html-service: KPI "Vencidos (backlog)" en el snapshot HTML.
+
+  EFECTO: la curva semanal refleja la carga futura real; los vencidos se ven aparte como lo
+  que son (trabajo atrasado a regularizar). Sin cambios de schema ni deps.
+
+  VERIFICACIÓN:
+  - tsc web-modern: 0 errores. tsc api: 0 errores nuevos (3 restantes preexistentes en
+    defects-service.ts). Verificación en vivo local bloqueada (Postgres/Docker apagado).
+
 [2026-06-06] FIX: el copiloto preguntaba "¿de qué buque?" teniendo uno seleccionado en el header
 Agent: Claude Opus 4.8
 

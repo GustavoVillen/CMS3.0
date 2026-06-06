@@ -26,6 +26,8 @@ interface WorkloadProjection {
   unscheduledHoursPlans: number;
   unscheduledDatePlans: number;
   plansWithoutEstimate: number;
+  overduePlans: number;
+  overdueHours: number;
 }
 
 type Mode = "count" | "hours";
@@ -181,6 +183,24 @@ export const MaintenanceWorkloadPage: React.FC = () => {
           hint={stats.maxWeek ? formatWeekTooltip(stats.maxWeek, t) : undefined}
         />
       </div>
+
+      {/* Backlog: planes vencidos — excluidos de la proyección semanal */}
+      {data && data.overduePlans > 0 && (
+        <div className="bento-card p-3! flex items-start gap-3 border-red-500/30 bg-red-500/5">
+          <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-text-industrial/70">
+            <span className="font-bold text-red-700 dark:text-red-300">{data.overduePlans}</span>{" "}
+            {t(data.overduePlans === 1 ? "mwl.overdueBanner.one" : "mwl.overdueBanner.many")}
+            {data.overdueHours > 0 && (
+              <>
+                {" · "}
+                <span className="font-semibold text-red-700 dark:text-red-300">{Math.round(data.overdueHours)}</span>{" "}
+                {t("mwl.overdueHoursSuffix")}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Aviso de planes sin estimación (solo en modo horas) */}
       {isHours && data && data.plansWithoutEstimate > 0 && (

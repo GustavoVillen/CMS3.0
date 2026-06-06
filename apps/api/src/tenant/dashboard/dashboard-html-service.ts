@@ -150,6 +150,8 @@ export async function buildWorkloadHtml(
     unscheduledHoursPlans: number;
     unscheduledDatePlans: number;
     plansWithoutEstimate: number;
+    overduePlans: number;
+    overdueHours: number;
   };
 
   const totalTasks = proj.weeks.reduce((s, w) => s + w.taskCount, 0);
@@ -174,6 +176,7 @@ export async function buildWorkloadHtml(
 <div class="kpi-grid">
   <div class="kpi"><div class="label">Planes totales</div><div class="value">${proj.totalPlans}</div></div>
   <div class="kpi"><div class="label">Proyectados</div><div class="value">${proj.projectedPlans}</div></div>
+  <div class="kpi"><div class="label">Vencidos (backlog)</div><div class="value">${proj.overduePlans}</div></div>
   <div class="kpi"><div class="label">Sin horas pico</div><div class="value">${proj.unscheduledHoursPlans}</div></div>
   <div class="kpi"><div class="label">Sin fecha</div><div class="value">${proj.unscheduledDatePlans}</div></div>
   <div class="kpi"><div class="label">Sin estimación</div><div class="value">${proj.plansWithoutEstimate}</div></div>
