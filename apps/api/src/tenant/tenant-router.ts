@@ -1182,7 +1182,7 @@ export async function handleTenantRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as {
       capability?: string; locale?: string;
-      messages: ChatMessage[]; vesselCode?: string | null;
+      messages: ChatMessage[]; vesselCode?: string | null; vesselName?: string | null;
       screenContext?: Record<string, unknown> | null;
       fileAttachment?: Record<string, unknown> | null;
       mode?: "voice" | null;
@@ -1256,6 +1256,7 @@ export async function handleTenantRoutes(
           locale:         body.locale        ?? "es",
           messages:       body.messages      ?? [],
           vesselCode:     body.vesselCode    ?? null,
+          vesselName:     body.vesselName    ?? null,
           tenantId:       tenant.id,
           tenantSlug:     slug,
           userId:         session.user.id,

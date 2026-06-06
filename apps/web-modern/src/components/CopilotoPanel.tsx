@@ -76,6 +76,7 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
 }
 import { api, ApiError } from "../lib/api";
 import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
+import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
 
 // ---------------------------------------------------------------------------
@@ -516,6 +517,9 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 export const CopilotoPanel: React.FC = () => {
   const navigate = useNavigate();
   const { screenContext, requestMessage, setRequestMessage, hasApplyFieldsCallback, applyFields } = useCopilotScreenContext();
+  // Buque seleccionado en el header — el copiloto lo usa como contexto de trabajo
+  // por defecto para no preguntar "¿de qué buque?" cuando ya hay uno elegido.
+  const { selectedVessel } = useVesselContext();
 
   // Resizable width (only applies when expanded)
   const { width: panelWidth, startResize } = useResizable("gpms_copilot_width", 320, 240, 520);
@@ -743,6 +747,9 @@ export const CopilotoPanel: React.FC = () => {
         messages: buildApiMessages(nextMessages),
         screenContext: screenContext ?? undefined,
         fileAttachment: fileSnapshot ?? undefined,
+        // Buque activo del header — contexto de trabajo por defecto del copiloto.
+        vesselCode: selectedVessel?.code ?? undefined,
+        vesselName: selectedVessel?.name ?? undefined,
       });
 
       let assistantContent = "";
@@ -812,7 +819,7 @@ export const CopilotoPanel: React.FC = () => {
       setStreaming(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [buildApiMessages, capability, input, messages, screenContext, streaming]);
+  }, [buildApiMessages, capability, input, messages, screenContext, streaming, selectedVessel, pendingFile]);
 
   // Aplica una acción sugerida por la IA. Muta el state del action a
   // applying → applied/failed. POST /app/copiloto/apply-action.

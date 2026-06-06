@@ -1,5 +1,35 @@
 HISTORY.txt
 
+[2026-06-06] FIX: el copiloto preguntaba "¿de qué buque?" teniendo uno seleccionado en el header
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  Con un buque elegido en el selector del header (VesselContext), al preguntarle al copiloto
+  "¿cuáles son los repuestos sin stock?" respondía pidiendo que se aclarara el buque y listaba
+  toda la flota. El copiloto nunca veía el buque seleccionado.
+
+  CAUSA RAÍZ:
+  Dos contextos desacoplados. CopilotoPanel solo enviaba `screenContext` (emitido por la página
+  via useCopilotEmitter) y NUNCA el buque seleccionado del header (vessel-context). En páginas de
+  lista como Repuestos no se emite vesselCode, así que el backend recibía la consulta sin ningún
+  buque y la IA, sin contexto, preguntaba. El backend ya aceptaba `req.vesselCode` pero solo lo
+  usaba para insights/usage logging, nunca se lo declaraba a la IA.
+
+  FIX (mínima superficie, sin romper arquitectura):
+  - web-modern/CopilotoPanel.tsx: lee `selectedVessel` de useVesselContext() y lo envía en el body
+    del POST /app/copiloto/chat como vesselCode + vesselName.
+  - api/copiloto-service.ts: nuevo campo opcional `vesselName` en CopilotoRequest + bloque de
+    sistema volátil "SELECTED VESSEL — DEFAULT WORKING CONTEXT" que instruye a la IA a usar ese
+    buque como default para las query_* y NO preguntar mientras haya uno seleccionado. No es límite
+    duro: un ACTIVE RECORD más específico o un pedido explícito de otro buque/flota tienen prioridad.
+    Se dirige al buque por nombre, no por código (regla UI names-over-codes).
+  - api/tenant-router.ts: lee body.vesselName y lo reenvía a streamCopilotoChat.
+
+  VERIFICACIÓN:
+  - tsc web-modern: OK (0 errores). tsc api: 0 errores nuevos (los 3 restantes son preexistentes
+    en defects-service.ts, ver entrada 2026-06-03).
+  - Bloque añadido como volatile system block → no invalida el prefix cacheado.
+
 [2026-06-03] CHORE/FIX: limpieza de errores TS preexistentes del frontend (59 → 11)
 Agent: Claude Opus 4.8
 

@@ -202,6 +202,12 @@ export interface CopilotoRequest {
   locale: string;
   messages: ChatMessage[];
   vesselCode?: string | null;
+  /**
+   * Nombre legible del buque seleccionado en el header (UI). Se declara a la IA
+   * para que lo use como contexto de trabajo por defecto y se dirija a él por
+   * nombre, no por código.
+   */
+  vesselName?: string | null;
   tenantId: string;
   tenantSlug: string;
   /**
@@ -941,6 +947,26 @@ export async function streamCopilotoChat(
         `- If a tool returns \`error: "ACCESS_DENIED"\`, do not retry with the same vessel.\n` +
         `- If the user asks about a specific vessel that is NOT in the accessible list, respond ONLY with: "No tenés acceso al buque [X]. Tus buques asignados son: ${vesselsText}." Do not provide any data, summary, or hint about the requested vessel.\n` +
         `- Never reference fleet-wide totals, counts, or comparisons that include vessels outside the accessible list.`,
+    });
+  }
+
+  // ── Currently selected vessel (UI header) ──
+  // El usuario tiene un buque elegido en el selector del header. Es el contexto
+  // de trabajo por defecto: la IA debe usarlo para las query_* y NO preguntar
+  // "¿de qué buque?" cuando ya hay uno seleccionado. No es un límite duro (un
+  // ACTIVE RECORD más específico, o un pedido explícito de otro buque / de toda
+  // la flota, tienen prioridad).
+  if (req.vesselCode) {
+    const vesselLabel = req.vesselName ? `"${req.vesselName}" (código ${req.vesselCode})` : `código ${req.vesselCode}`;
+    volatileSystemBlocks.push({
+      type: "text",
+      text:
+        `## SELECTED VESSEL — DEFAULT WORKING CONTEXT\n` +
+        `The user has the vessel ${vesselLabel} selected in the app header.\n` +
+        `- Treat it as the DEFAULT vessel for any question that does not explicitly name another vessel or ask about the whole fleet.\n` +
+        `- When calling query_* tools, use vesselCode "${req.vesselCode}" unless the user clearly refers to a different vessel or to all vessels.\n` +
+        `- NEVER ask the user which vessel they mean while a vessel is selected here — use this one and answer directly.\n` +
+        (req.vesselName ? `- Refer to the vessel by its name ("${req.vesselName}"), not its code.\n` : ""),
     });
   }
 
