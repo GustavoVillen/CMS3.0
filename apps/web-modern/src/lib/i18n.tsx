@@ -1595,7 +1595,7 @@ const dict = {
   "spares.page.searchPlaceholder": { es: "Buscar por código, nombre, buque, SFI…", en: "Search by code, name, vessel, SFI…", pt: "Buscar por código, nome, embarcação, SFI…" },
   "mp.page.allVessels":        { es: "Todos los buques",       en: "All vessels",           pt: "Todas as embarcações" },
   "mp.page.loadingDetail":     { es: "Cargando detalle del plan…", en: "Loading plan detail…", pt: "Carregando detalhes do plano…" },
-  "mp.page.weekFilter":        { es: "Tareas que vencen la semana del {date}", en: "Tasks due the week of {date}", pt: "Tarefas que vencem na semana de {date}" },
+  "mp.page.weekFilter":        { es: "Tareas proyectadas la semana del {date}", en: "Tasks projected for the week of {date}", pt: "Tarefas projetadas na semana de {date}" },
   "mp.page.weekFilterClear":   { es: "Quitar filtro de semana", en: "Clear week filter", pt: "Remover filtro de semana" },
   "mp.page.detailLoadError":   { es: "No se pudo cargar el detalle del plan.", en: "Could not load plan detail.", pt: "Não foi possível carregar os detalhes do plano." },
 

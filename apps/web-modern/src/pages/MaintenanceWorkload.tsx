@@ -58,17 +58,10 @@ function formatWeekTooltip(iso: string, t: (k: "mwl.weekOf") => string): string 
   return t("mwl.weekOf").replace("{date}", `${day}/${month}/${year}`);
 }
 
-// Lunes (exclusivo) de la semana siguiente — fin del rango [weekStart, weekEnd).
-function weekEndExclusive(weekStart: string): string {
-  const d = new Date(weekStart + "T00:00:00Z");
-  if (isNaN(d.getTime())) return weekStart;
-  d.setUTCDate(d.getUTCDate() + 7);
-  return d.toISOString().slice(0, 10);
-}
-
-// Abre la lista de planes filtrada a las tareas que vencen esa semana (pestaña nueva).
-function openWeekInPlans(weekStart: string): void {
-  const params = new URLSearchParams({ dueFrom: weekStart, dueTo: weekEndExclusive(weekStart) });
+// Abre la lista de planes con TODAS las tareas proyectadas en esa semana (pestaña nueva).
+// Pasa la misma ventana `weeks` que el gráfico para que la proyección coincida 1:1.
+function openWeekInPlans(weekStart: string, weeks: number): void {
+  const params = new URLSearchParams({ weekStart, weeks: String(weeks) });
   window.open(`/maintenance-plans?${params.toString()}`, "_blank");
 }
 
@@ -283,7 +276,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                   const idx = typeof raw === "number" ? raw : Number(raw);
                   if (Number.isInteger(idx) && idx >= 0) {
                     const ws = chartData[idx]?.weekStart;
-                    if (ws) openWeekInPlans(ws);
+                    if (ws) openWeekInPlans(ws, weeks);
                   }
                 }}
               >

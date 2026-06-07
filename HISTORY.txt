@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-06-06] FEAT v2: clic en semana -> match EXACTO del gráfico (recurrencias + horas)
+Agent: Claude Opus 4.8
+
+  Problema con la v1: el filtro "próximo vencimiento" (nextDueDate en la semana) mostraba 1 sola
+  tarea en un pico de 325hs, porque los picos los arman RECURRENCIAS (ocurrencia N de un plan que
+  vence otra semana) y planes por HORAS, no el próximo vencimiento. Inservible para el objetivo
+  real: detectar picos y replanificar para descongestionar la semana.
+
+  Solución: reusar la MISMA lógica de proyección del gráfico para devolver los IDs de planes con
+  ocurrencia en la semana clickeada.
+  - maintenance-plans-service.ts: getMaintenanceWorkloadProjection acepta detailWeekStart; cuando
+    una ocurrencia (fecha u horas) cae en esa semana, junta plan.id en un Set; devuelve weekPlanIds.
+    Mismo loop que la curva -> coincidencia 1:1 garantizada.
+  - tenant-router.ts: /app/dashboard/maintenance-workload acepta ?detailWeek=YYYY-MM-DD.
+  - MaintenanceWorkload.tsx: el clic navega a /maintenance-plans?weekStart=<lunes>&weeks=<ventana>
+    (pestaña nueva), pasando la misma ventana que el gráfico.
+  - MaintenancePlans.tsx: con weekStart, fetchea weekPlanIds del backend y filtra la lista por ese
+    Set (en vez de por nextDueDate). Chip + spinner mientras carga + botón limpiar.
+  Universo idéntico (ambos: tenantId+deletedAt:null, sin filtro de status por defecto) -> los IDs
+  aparecen en la lista. Validado vs VPS: semana 2027-02-08 -> 104 planes por fecha + horas (antes: 1).
+  Typecheck OK. Deploy: pull + build web + restart (backend tsx).
+
+
 [2026-06-06] FEAT: clic en una semana del gráfico de carga -> abre planes filtrados por semana
 Agent: Claude Opus 4.8
 

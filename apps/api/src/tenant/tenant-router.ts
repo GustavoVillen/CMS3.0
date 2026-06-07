@@ -616,6 +616,7 @@ export async function handleTenantRoutes(
     const projection = await getMaintenanceWorkloadProjection(session, {
       vesselCode: url.searchParams.get("vesselCode"),
       weeks: isNaN(weeksParam) ? 52 : weeksParam,
+      detailWeekStart: url.searchParams.get("detailWeek"),
     });
     sendJson(response, 200, projection);
     return true;

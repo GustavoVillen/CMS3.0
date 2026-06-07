@@ -1323,6 +1323,13 @@ export async function restorePlanAfterWoCancellation(
 export interface MaintenanceWorkloadFilters {
   vesselCode?: string | null;
   weeks?: number;
+  /**
+   * Si se especifica (YYYY-MM-DD del lunes UTC de una semana del rango), además de la
+   * curva se devuelve `weekPlanIds`: los planes con ≥1 ocurrencia proyectada en ESA
+   * semana. Permite que al clickear un pico se abra el listado con exactamente esas tareas
+   * (incluye recurrencias y planes por horas — coincide 1:1 con la curva).
+   */
+  detailWeekStart?: string | null;
 }
 
 export interface WorkloadWeek {
@@ -1351,6 +1358,8 @@ export interface MaintenanceWorkloadProjection {
   overduePlans: number;
   /** Horas-hombre estimadas acumuladas de los planes vencidos. */
   overdueHours: number;
+  /** IDs de planes con ≥1 ocurrencia en filters.detailWeekStart (solo si se pidió). */
+  weekPlanIds?: string[];
 }
 
 const DAY_MS = 86_400_000;
@@ -1562,6 +1571,9 @@ export async function getMaintenanceWorkloadProjection(
   let plansWithoutEstimate = 0;
   let overduePlans = 0;
   let overdueHours = 0;
+  // Detalle de una semana: IDs de planes con ocurrencia en filters.detailWeekStart.
+  const detailWeekStart = filters.detailWeekStart || null;
+  const weekPlanIdSet = new Set<string>();
 
   // Tope defensivo: máximo de ocurrencias proyectadas por plan dentro de la ventana.
   // Aún para planes semanales con ventana de 104 semanas, 200 alcanza con margen.
@@ -1605,6 +1617,7 @@ export async function getMaintenanceWorkloadProjection(
           bucket.dateBased++;
           bucket.laborHours += estHours;
           scheduledThisPlan = true;
+          if (detailWeekStart && bucket.weekStart === detailWeekStart) weekPlanIdSet.add(plan.id);
         }
         const next = advanceDateOccurrence(trigger, plan.frequencyMonths, cursor);
         if (!next || next.getTime() === cursor.getTime()) break;
@@ -1653,6 +1666,7 @@ export async function getMaintenanceWorkloadProjection(
           bucket.hoursBased++;
           bucket.laborHours += estHours;
           scheduledThisPlan = true;
+          if (detailWeekStart && bucket.weekStart === detailWeekStart) weekPlanIdSet.add(plan.id);
         }
         occurrence = addUtcDays(occurrence, daysBetween);
         count++;
@@ -1678,5 +1692,6 @@ export async function getMaintenanceWorkloadProjection(
     plansWithoutEstimate,
     overduePlans,
     overdueHours,
+    ...(detailWeekStart ? { weekPlanIds: [...weekPlanIdSet] } : {}),
   };
 }

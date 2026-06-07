@@ -2383,9 +2383,11 @@ export const MaintenancePlansPage: React.FC = () => {
   const statusFilter        = (searchParams.get("status")          ?? "").trim();
   const vesselFilter        = (searchParams.get("vesselCode")      ?? "").trim();
   const executionFilter     = (searchParams.get("executionStatus") ?? "").trim();
-  // Filtro por semana (desde el gráfico de carga): [dueFrom, dueTo) en fechas YYYY-MM-DD UTC.
-  const dueFromFilter       = (searchParams.get("dueFrom")         ?? "").trim();
-  const dueToFilter         = (searchParams.get("dueTo")           ?? "").trim();
+  // Filtro por semana (desde el gráfico de carga): weekStart = lunes UTC de la semana clickeada;
+  // weeks = misma ventana del gráfico. Trae del backend los IDs de planes con ocurrencia en esa
+  // semana (incluye recurrencias y planes por horas) para que coincida 1:1 con la curva.
+  const weekStartFilter     = (searchParams.get("weekStart")       ?? "").trim();
+  const weeksParamFilter    = (searchParams.get("weeks")           ?? "52").trim();
 
   const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
   const [overdueOnly,   setOverdueOnly]   = useState(false);
@@ -2414,10 +2416,26 @@ export const MaintenancePlansPage: React.FC = () => {
 
   const clearWeekFilter = () => {
     const params = new URLSearchParams(searchParams);
-    params.delete("dueFrom");
-    params.delete("dueTo");
+    params.delete("weekStart");
+    params.delete("weeks");
     setSearchParams(params, { replace: true });
   };
+
+  // IDs de planes con ocurrencia en la semana seleccionada (proyección del backend).
+  const [weekPlanIds, setWeekPlanIds] = useState<Set<string> | null>(null);
+  const [weekPlanIdsLoading, setWeekPlanIdsLoading] = useState(false);
+  useEffect(() => {
+    if (!weekStartFilter) { setWeekPlanIds(null); return; }
+    let cancelled = false;
+    setWeekPlanIdsLoading(true);
+    api.get<{ weekPlanIds?: string[] }>(
+      `/app/dashboard/maintenance-workload?weeks=${encodeURIComponent(weeksParamFilter)}&detailWeek=${encodeURIComponent(weekStartFilter)}`,
+    )
+      .then(res => { if (!cancelled) setWeekPlanIds(new Set(res.weekPlanIds ?? [])); })
+      .catch(() => { if (!cancelled) setWeekPlanIds(new Set()); })
+      .finally(() => { if (!cancelled) setWeekPlanIdsLoading(false); });
+    return () => { cancelled = true; };
+  }, [weekStartFilter, weeksParamFilter]);
 
   const path = useMemo(() => {
     const params = new URLSearchParams();
@@ -2458,17 +2476,13 @@ export const MaintenancePlansPage: React.FC = () => {
         (p.assetName ?? "").toLowerCase().includes(q)
       );
     }
-    // Filtro por semana: planes cuyo próximo vencimiento (nextDueDate) cae en [dueFrom, dueTo).
-    // Comparación lexicográfica de YYYY-MM-DD == cronológica (ambos en UTC, igual que el gráfico).
-    if (dueFromFilter && dueToFilter) {
-      items = items.filter(p => {
-        if (!p.nextDueDate) return false;
-        const day = p.nextDueDate.slice(0, 10);
-        return day >= dueFromFilter && day < dueToFilter;
-      });
+    // Filtro por semana: planes con ocurrencia proyectada esa semana (IDs del backend).
+    // Mientras carga (weekPlanIds == null), no mostramos nada para evitar un flash de todos.
+    if (weekStartFilter) {
+      items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
     return { items, total: items.length };
-  }, [rawData, sfiTab, overdueOnly, searchText, dueFromFilter, dueToFilter]);
+  }, [rawData, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -2747,13 +2761,15 @@ export const MaintenancePlansPage: React.FC = () => {
       </div>
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
-      {dueFromFilter && dueToFilter && (
+      {weekStartFilter && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 w-fit">
           <Filter className="w-3.5 h-3.5 text-accent shrink-0" />
           <span className="text-xs font-semibold text-fg">
-            {t("mp.page.weekFilter").replace("{date}", fmtDate(dueFromFilter) ?? dueFromFilter)}
+            {t("mp.page.weekFilter").replace("{date}", fmtDate(weekStartFilter) ?? weekStartFilter)}
           </span>
-          <span className="text-[10px] text-text-industrial/50">({data?.total ?? 0})</span>
+          {weekPlanIdsLoading
+            ? <Loader2 className="w-3 h-3 animate-spin text-accent" />
+            : <span className="text-[10px] text-text-industrial/50">({data?.total ?? 0})</span>}
           <button
             onClick={clearWeekFilter}
             title={t("mp.page.weekFilterClear")}
