@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, Plus, X, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
@@ -137,6 +138,10 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
   const existingIds = new Set((tmplData?.items ?? []).map(t => t.taskMasterId));
   const availableTasks = (allTasksData?.items ?? []).filter(t => !existingIds.has(t.id));
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ code, name, description, defaultSfiCode, defaultCriticality, status });
+  useEscapeGuard({ isDirty, onSave: save, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">

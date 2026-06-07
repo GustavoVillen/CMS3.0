@@ -8,6 +8,7 @@ const KpiPill: React.FC<{ label: string; value: number; alert?: boolean }> = ({ 
   </div>
 );
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
@@ -356,6 +357,10 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
   }, []);
 
   const effectiveVesselCode = liveReport?.vesselCode ?? newVesselCode.trim().toUpperCase();
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ newVesselCode, reportYear, reportMonth, status, operationalStatus, currentPort, posLat, posLon, summary, nextPort, etaNextPort, notes });
+  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   return (
     <div className="fixed inset-0 z-300 flex items-center justify-center p-4">

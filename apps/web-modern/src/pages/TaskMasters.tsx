@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ClipboardList, Loader2, Plus, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
@@ -127,6 +128,10 @@ const TaskDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
   const usesDays  = ["MONTHS", "CALENDAR"].includes(triggerType);
   const usesHours = ["HOURS", "RUNNING_HOURS"].includes(triggerType);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ code, title, taskType, triggerType, resultMode, frequencyDays, frequencyHours, estimatedHours, procedure, procedureRef, acceptance, evidence, status });
+  useEscapeGuard({ isDirty, onSave: save, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">

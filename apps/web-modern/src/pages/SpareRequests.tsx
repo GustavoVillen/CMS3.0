@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ClipboardList, Plus, X, Trash2, CheckCheck, XCircle, Send, Maximize2, Minimize2, FileDown, PackageCheck } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -473,6 +474,10 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
   };
 
   const status = request?.status ?? "DRAFT";
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ priority, notes, vesselCode });
+  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

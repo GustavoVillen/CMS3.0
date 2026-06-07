@@ -3,6 +3,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Loader2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
@@ -104,6 +105,10 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
     finally { setSaving(false); }
   }, [isNew, record, vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName, onSaved]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
