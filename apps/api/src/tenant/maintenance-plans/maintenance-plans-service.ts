@@ -1355,6 +1355,10 @@ export interface MaintenanceWorkloadProjection {
 
 const DAY_MS = 86_400_000;
 const HOURS_HISTORY_WINDOW_DAYS = 90;
+// Un horómetro no puede acumular más de 24 h de marcha por día calendario. Si el
+// historial arroja un promedio mayor, es dato corrupto (saltos de runningHoursTotal)
+// → se acota a 24 para no producir intervalos absurdamente cortos en la proyección.
+const MAX_RUNNING_HOURS_PER_DAY = 24;
 
 function startOfWeekUtcMonday(d: Date): Date {
   const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -1365,9 +1369,9 @@ function startOfWeekUtcMonday(d: Date): Date {
 }
 
 function addUtcDays(d: Date, days: number): Date {
-  const out = new Date(d.getTime());
-  out.setUTCDate(out.getUTCDate() + days);
-  return out;
+  // Aritmética por milisegundos: setUTCDate(x + 0.16) trunca la fracción y NO avanza
+  // el cursor, lo que apilaba ocurrencias en la misma fecha cuando daysBetween < 1.
+  return new Date(d.getTime() + days * DAY_MS);
 }
 
 function addUtcMonths(d: Date, months: number): Date {
@@ -1547,7 +1551,7 @@ export async function getMaintenanceWorkloadProjection(
       if (dayDiff <= 0) continue;
       const hoursDiff = Number(r.maxHours) - Number(r.minHours);
       if (hoursDiff <= 0) continue;
-      avgHoursPerDayMap.set(r.assetId, hoursDiff / dayDiff);
+      avgHoursPerDayMap.set(r.assetId, Math.min(hoursDiff / dayDiff, MAX_RUNNING_HOURS_PER_DAY));
     }
   }
 

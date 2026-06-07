@@ -1,5 +1,62 @@
 HISTORY.txt
 
+[2026-06-06] FIX REAL (código): el pico de 400 en semana 1 era apilado de planes por HORAS
+Agent: Claude Opus 4.8
+
+  CORRECCIÓN del diagnóstico anterior: el escalonamiento del cluster mensual (entrada de abajo)
+  aplanó un cluster REAL pero SECUNDARIO (vencía el 08/06 = bucket1, segundo punto). El pico de
+  400 que se veía está en el bucket0 (01/06, semana actual) y NO lo tocó. Causa distinta.
+
+  CAUSA RAÍZ (maintenance-plans-service.ts, rama de horas):
+  2 planes "Inspección Cada 100h" (Propulsión Babor/Estribor) tenían avgHoursPerDay = 637 h/día
+  (imposible: máx 24) por historial de runningHoursTotal corrupto. Eso daba
+  daysBetween = 100/637 = 0.157 días. Y addUtcDays() hacía out.setUTCDate(getUTCDate() + 0.157),
+  que TRUNCA la fracción → el cursor no avanzaba → el loop de ocurrencias giraba hasta el tope
+  MAX_OCCURRENCES_PER_PLAN=200 apilando 200 ocurrencias en la misma fecha (hoy = bucket0).
+  2 planes × 200 = 400 en la semana 1.
+
+  FIX (2 cambios mínimos de raíz):
+  1. addUtcDays: aritmética por ms (d.getTime() + days*DAY_MS) para que fracciones de día
+     avancen el cursor. Los callers con días enteros dan el mismo resultado (UTC, sin DST).
+  2. MAX_RUNNING_HOURS_PER_DAY=24: se acota avgHoursPerDay con Math.min(.., 24). Un horómetro
+     no puede sumar >24 h de marcha por día calendario; >24 es dato corrupto.
+  Validado contra datos del VPS: bucket0 de horas pasa de 400 -> 6; curva total ~50-70/sem sin pico.
+  Typecheck OK (0 errores nuevos; los 3 TS restantes son preexistentes en defects-service.ts).
+  Backend-only (tsx) -> el deploy necesita limpiar cache de tsx + pm2 restart.
+
+
+[2026-06-06] FIX DE DATOS (VPS): cluster mensual sincronizado en "Carga de Mantenimiento"
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  El gráfico de proyección de carga (MaintenanceWorkload) arrancaba con un pico de ~400 en
+  la primera semana y caía a ~20-30. Sospecha inicial: bug de la lógica de proyección.
+
+  DIAGNÓSTICO (datos reales del VPS, no del entorno local que tiene solo 2 planes):
+  NO es bug de código. Es artefacto de onboarding. Toda la flota de planes se cargó el
+  2026-05-10 con lastExecutionDate NULL; el sistema calculó nextDueDate = alta + frecuencia,
+  así que TODOS los planes de la misma frecuencia quedaron sincronizados en el mismo día:
+    - Mensuales (1mo)   -> 2026-06-10 -> 215  (el pico de la semana 1)
+    - Trimestrales (3mo)-> 2026-08-10 ->  47
+    - Semestrales (6mo) -> 2026-11-10 -> 101
+    - Anuales (12mo)    -> 2027-05-10 -> 1303
+  Los 573 planes por horas casi no aportan (549 no proyectan por falta de historial).
+  La proyección era correcta: 215 planes realmente vencían la misma semana.
+
+  FIX (solo datos, sin tocar código de proyección — la lógica no estaba mal):
+  Escalonamiento conservador del cluster mensual (decisión del usuario: solo los 214 mensuales).
+  UPDATE en VPS empujando nextDueDate un offset determinístico dentro de 1 período:
+    nextDueDate += (hashtext(id) mod 30) días   [solo MONTHS/CALENDAR, freq=1, alta 2026-05-10,
+                                                  lastExec NULL, nextDueDate intacto = 2026-06-10]
+  Resultado: 214 planes repartidos 08/06->06/07 (42/48/51/45/28 por semana). 0 vencidos creados.
+  Backup de recuperación en VPS: /root/gpms_workload_stagger_20260606_223823.csv (valor original
+  recuperable siempre = alta + frecuencia). Clusters trimestral/semestral/anual quedaron SIN tocar
+  (el anual 2027-05-10 sigue siendo un pico latente cerca del borde derecho del gráfico de 12m).
+
+  PENDIENTE/OPCIONAL: si se quiere curva plana en 12 meses, escalonar también los demás clusters
+  (con el costo de retrasar mantenimientos anuales hasta ~1 año desde su fecha sintética).
+
+
 [2026-06-06] FIX: el copiloto no "veía" documentos ACTIVE de la base documental (take:5)
 Agent: Claude Opus 4.8
 
