@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
@@ -233,6 +234,10 @@ const DrillModal: React.FC<{
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al re-abrir."); }
     finally { setSaving(false); }
   }, [drill, onSaved]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ vesselCode, requirementId, scheduledDate, scenario, observations, lessonsLearned, participants });
+  useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -553,6 +558,9 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
   const [editing, setEditing] = useState<RequirementDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // ESC: cerrar el catálogo (los ítems se guardan individualmente)
+  useEscapeGuard({ isDirty: !!editing, onClose });
 
   const items = data?.items ?? [];
 

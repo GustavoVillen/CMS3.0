@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -159,6 +160,10 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ displayName, email, role });
+  useEscapeGuard({ isDirty, onSave: handleCreate, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -492,6 +497,10 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
     REVOKED: t("team.statusRevoked"),
     SUSPENDED: t("team.statusSuspended"),
   };
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const drawerDirty = useDirtyTracker({ newRole, email, password });
+  useEscapeGuard({ isDirty: drawerDirty, onSave: handleSaveAll, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

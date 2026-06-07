@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ListChecks, Plus, Loader2, X, CheckCircle2, XCircle, MinusCircle, Settings } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -204,6 +205,10 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   const isCreating = !executionId;
   const isLocked = exec?.status !== "IN_PROGRESS";
+
+  // ESC: en creación pregunta guardar; en ejecución (respuestas autosave) solo cierra
+  const isDirty = useDirtyTracker({ templateId, vesselCode, eventDateTime, port, voyageRef, performedBy, signedByName, notes });
+  useEscapeGuard({ isDirty: isCreating && isDirty, onSave: isCreating ? handleCreate : undefined, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -416,6 +421,9 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
 
+  // ESC: cerrar el listado de templates
+  useEscapeGuard({ isDirty: false, onClose });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
@@ -536,6 +544,10 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al cambiar estado de aprobación."); }
     finally { setApproving(false); }
   };
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const editorDirty = useDirtyTracker({ type, name, description, items });
+  useEscapeGuard({ isDirty: editorDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">

@@ -3,6 +3,7 @@ import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -378,6 +379,10 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       setSaving(false);
     }
   }, [permit]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride });
+  useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? onSave : undefined, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

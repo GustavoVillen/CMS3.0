@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { Users, Plus, X, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -231,6 +232,10 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("crew.error.reopen")); }
     finally { setSaving(false); }
   }, [t, crew, onSaved]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ vesselCode, firstName, lastName, rankId, nationality, passportNumber, signOnDate, notes });
+  useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
