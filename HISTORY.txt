@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-06-06] FEAT: clic en una semana del gráfico de carga -> abre planes filtrados por semana
+Agent: Claude Opus 4.8
+
+  Pedido: al presionar una semana en "Carga de Mantenimiento", abrir la lista de planes
+  mostrando solo las tareas a realizar esa semana.
+
+  Decisiones (con el usuario):
+  - Semántica: "próximo vencimiento" -> planes cuyo nextDueDate cae en [lunes, lunes+7).
+    Client-side, sin tocar backend. Operativamente accionable; coincide con el gráfico en
+    semanas cercanas (en lejanas puede mostrar menos: no repite recurrencias ni horas).
+  - Navegación: pestaña nueva.
+
+  Cambios (frontend-only):
+  - MaintenanceWorkload.tsx: onClick en el LineChart -> window.open(/maintenance-plans?
+    dueFrom=<lunes>&dueTo=<lunes+7>, _blank). Helpers weekEndExclusive/openWeekInPlans
+    (fechas UTC, igual base que el bucketing del gráfico). Hint + cursor pointer.
+  - MaintenancePlans.tsx: lee dueFrom/dueTo de la URL; filtro client-side por
+    nextDueDate.slice(0,10) en [dueFrom,dueTo) (comparación lexicográfica YYYY-MM-DD = cronológica,
+    misma base UTC que el gráfico). Chip visible con contador y botón X para limpiar (clearWeekFilter).
+  - i18n: mwl.clickWeekHint, mp.page.weekFilter, mp.page.weekFilterClear (es/en/pt).
+  Typecheck web-modern OK (0 errores). Frontend-only -> deploy: pull + build web + restart.
+
+
 [2026-06-06] FIX REAL (código): el pico de 400 en semana 1 era apilado de planes por HORAS
 Agent: Claude Opus 4.8
 

@@ -2383,6 +2383,9 @@ export const MaintenancePlansPage: React.FC = () => {
   const statusFilter        = (searchParams.get("status")          ?? "").trim();
   const vesselFilter        = (searchParams.get("vesselCode")      ?? "").trim();
   const executionFilter     = (searchParams.get("executionStatus") ?? "").trim();
+  // Filtro por semana (desde el gráfico de carga): [dueFrom, dueTo) en fechas YYYY-MM-DD UTC.
+  const dueFromFilter       = (searchParams.get("dueFrom")         ?? "").trim();
+  const dueToFilter         = (searchParams.get("dueTo")           ?? "").trim();
 
   const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
   const [overdueOnly,   setOverdueOnly]   = useState(false);
@@ -2406,6 +2409,13 @@ export const MaintenancePlansPage: React.FC = () => {
     if (ns) params.set("status", ns); else params.delete("status");
     if (nv) params.set("vesselCode", nv); else params.delete("vesselCode");
     if (ne) params.set("executionStatus", ne); else params.delete("executionStatus");
+    setSearchParams(params, { replace: true });
+  };
+
+  const clearWeekFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("dueFrom");
+    params.delete("dueTo");
     setSearchParams(params, { replace: true });
   };
 
@@ -2448,8 +2458,17 @@ export const MaintenancePlansPage: React.FC = () => {
         (p.assetName ?? "").toLowerCase().includes(q)
       );
     }
+    // Filtro por semana: planes cuyo próximo vencimiento (nextDueDate) cae en [dueFrom, dueTo).
+    // Comparación lexicográfica de YYYY-MM-DD == cronológica (ambos en UTC, igual que el gráfico).
+    if (dueFromFilter && dueToFilter) {
+      items = items.filter(p => {
+        if (!p.nextDueDate) return false;
+        const day = p.nextDueDate.slice(0, 10);
+        return day >= dueFromFilter && day < dueToFilter;
+      });
+    }
     return { items, total: items.length };
-  }, [rawData, sfiTab, overdueOnly, searchText]);
+  }, [rawData, sfiTab, overdueOnly, searchText, dueFromFilter, dueToFilter]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -2726,6 +2745,24 @@ export const MaintenancePlansPage: React.FC = () => {
           );
         })}
       </div>
+
+      {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
+      {dueFromFilter && dueToFilter && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 w-fit">
+          <Filter className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="text-xs font-semibold text-fg">
+            {t("mp.page.weekFilter").replace("{date}", fmtDate(dueFromFilter) ?? dueFromFilter)}
+          </span>
+          <span className="text-[10px] text-text-industrial/50">({data?.total ?? 0})</span>
+          <button
+            onClick={clearWeekFilter}
+            title={t("mp.page.weekFilterClear")}
+            className="text-text-industrial/50 hover:text-fg transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {pageError && (
         <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pageError}</p>

@@ -58,6 +58,20 @@ function formatWeekTooltip(iso: string, t: (k: "mwl.weekOf") => string): string 
   return t("mwl.weekOf").replace("{date}", `${day}/${month}/${year}`);
 }
 
+// Lunes (exclusivo) de la semana siguiente — fin del rango [weekStart, weekEnd).
+function weekEndExclusive(weekStart: string): string {
+  const d = new Date(weekStart + "T00:00:00Z");
+  if (isNaN(d.getTime())) return weekStart;
+  d.setUTCDate(d.getUTCDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
+// Abre la lista de planes filtrada a las tareas que vencen esa semana (pestaña nueva).
+function openWeekInPlans(weekStart: string): void {
+  const params = new URLSearchParams({ dueFrom: weekStart, dueTo: weekEndExclusive(weekStart) });
+  window.open(`/maintenance-plans?${params.toString()}`, "_blank");
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export const MaintenanceWorkloadPage: React.FC = () => {
@@ -245,6 +259,7 @@ export const MaintenanceWorkloadPage: React.FC = () => {
             <p className="text-[11px] text-text-industrial/40">
               {t(isHours ? "mwl.chartHelpHours" : "mwl.chartHelpCount")}
             </p>
+            <p className="text-[11px] text-accent/70">{t("mwl.clickWeekHint")}</p>
           </div>
           {loading && <Loader2 className="w-4 h-4 text-accent animate-spin" />}
         </div>
@@ -257,7 +272,15 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         ) : (
           <div className="h-[420px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+              <LineChart
+                data={chartData}
+                margin={{ top: 12, right: 16, left: 0, bottom: 8 }}
+                style={{ cursor: "pointer" }}
+                onClick={(e: { activePayload?: { payload?: { weekStart?: string } }[] }) => {
+                  const ws = e?.activePayload?.[0]?.payload?.weekStart;
+                  if (ws) openWeekInPlans(ws);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis
                   dataKey="label"

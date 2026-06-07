@@ -1595,6 +1595,8 @@ const dict = {
   "spares.page.searchPlaceholder": { es: "Buscar por código, nombre, buque, SFI…", en: "Search by code, name, vessel, SFI…", pt: "Buscar por código, nome, embarcação, SFI…" },
   "mp.page.allVessels":        { es: "Todos los buques",       en: "All vessels",           pt: "Todas as embarcações" },
   "mp.page.loadingDetail":     { es: "Cargando detalle del plan…", en: "Loading plan detail…", pt: "Carregando detalhes do plano…" },
+  "mp.page.weekFilter":        { es: "Tareas que vencen la semana del {date}", en: "Tasks due the week of {date}", pt: "Tarefas que vencem na semana de {date}" },
+  "mp.page.weekFilterClear":   { es: "Quitar filtro de semana", en: "Clear week filter", pt: "Remover filtro de semana" },
   "mp.page.detailLoadError":   { es: "No se pudo cargar el detalle del plan.", en: "Could not load plan detail.", pt: "Não foi possível carregar os detalhes do plano." },
 
   // MaintenancePlans — StatusBadgeInline
@@ -1769,6 +1771,7 @@ const dict = {
   "mwl.months18":             { es: "18 meses",                         en: "18 months",                      pt: "18 meses" },
   "mwl.months24":             { es: "24 meses",                         en: "24 months",                      pt: "24 meses" },
   "mwl.weekOf":               { es: "Semana del {date}",                en: "Week of {date}",                 pt: "Semana de {date}" },
+  "mwl.clickWeekHint":        { es: "Hacé clic en una semana para ver sus tareas.", en: "Click a week to see its tasks.", pt: "Clique em uma semana para ver suas tarefas." },
   "mwl.activePlans":          { es: "Planes activos",                   en: "Active plans",                   pt: "Planos ativos" },
   "mwl.projected":            { es: "Proyectados",                      en: "Projected",                      pt: "Projetados" },
   "mwl.weeklyAvg":            { es: "Promedio semanal",                 en: "Weekly average",                 pt: "Média semanal" },
