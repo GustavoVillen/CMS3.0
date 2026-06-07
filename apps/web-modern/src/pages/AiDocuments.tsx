@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, X, Eye, Save } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { fmtDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -345,6 +346,8 @@ function ViewEditVersionModal({
     }
   };
 
+  useEscapeGuard({ isDirty: !!canEdit && dirty, onSave: handleSave, onClose });
+
   return (
     <ModalShell title={version ? `v${version.version} · ${version.status}` : "Cargando…"} onClose={onClose}>
       {loading ? (
@@ -425,6 +428,8 @@ function CreateDocumentModal({
     }
   };
 
+  useEscapeGuard({ isDirty: !!(name || description || content), onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
+
   return (
     <ModalShell title="Nuevo documento de IA" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -491,6 +496,8 @@ function CreateVersionModal({
       setSaving(false);
     }
   };
+
+  useEscapeGuard({ isDirty: !!content, onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
 
   return (
     <ModalShell title={`Nueva versión · ${document.name}`} onClose={onClose}>

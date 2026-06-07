@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AlertCircle, Bell, CalendarCheck, CalendarClock, Clock, Loader2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { DataTable, type Column } from "../components/DataTable";
@@ -91,6 +92,10 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
       setSaving(false);
     }
   };
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ notes });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

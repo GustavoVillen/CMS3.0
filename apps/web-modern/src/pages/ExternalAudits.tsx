@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheck, Plus, Loader2, X, ExternalLink, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -187,6 +188,10 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
       setFindings(r.findings ?? []);
     } catch { /* noop */ }
   }, [audit]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ vesselCode, auditType, auditDate, port, country, agency, inspectorName, overallResult, summary, score, reportUrl });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
    <>
