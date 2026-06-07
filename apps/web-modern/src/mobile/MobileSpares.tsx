@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, Search, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 
@@ -17,6 +17,9 @@ interface Spare {
 
 type View = "list" | "detail";
 
+/** Filtro de la lista de repuestos. "all" = todos; "low" = stock <= punto de reorden. */
+export type SparesFilter = "all" | "low";
+
 function stockStatus(s: Spare): "critical" | "warning" | "ok" {
   if (s.currentStock < s.minStock)      return "critical";
   if (s.currentStock <= s.reorderPoint) return "warning";
@@ -30,20 +33,39 @@ function StockBadge({ spare }: { spare: Spare }) {
   return <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-success-sea/10 text-success-sea border border-success-sea/20 shrink-0">OK</span>;
 }
 
-export const MobileSpares: React.FC = () => {
+interface MobileSparesProps {
+  /** Filtro inicial al montar — el dashboard navega aquí con foco (todos vs bajo reorden). */
+  initialFilter?: SparesFilter;
+}
+
+export const MobileSpares: React.FC<MobileSparesProps> = ({ initialFilter }) => {
   const { data, loading } = useFetch<{ items: Spare[] }>("/app/pms/spares");
   const [query, setQuery]         = useState("");
+  const [filter, setFilter]       = useState<SparesFilter>(initialFilter ?? "all");
+  // Si el dashboard navega con un foco distinto, sincronizamos el filtro local.
+  useEffect(() => {
+    if (initialFilter && initialFilter !== filter) setFilter(initialFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilter]);
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<Spare | null>(null);
 
+  const lowCount = useMemo(
+    () => (data?.items ?? []).filter(s => s.currentStock <= s.reorderPoint).length,
+    [data],
+  );
+  const allCount = data?.items?.length ?? 0;
+
   const filtered = useMemo(() => {
+    let items = data?.items ?? [];
+    if (filter === "low") items = items.filter(s => s.currentStock <= s.reorderPoint);
     const q = query.toLowerCase().trim();
-    if (!q) return data?.items ?? [];
-    return (data?.items ?? []).filter(s =>
+    if (q) items = items.filter(s =>
       (s.name ?? "").toLowerCase().includes(q) ||
       (s.sku  ?? "").toLowerCase().includes(q),
     );
-  }, [data, query]);
+    return items;
+  }, [data, query, filter]);
 
   // ── Detail ──────────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
@@ -119,7 +141,7 @@ export const MobileSpares: React.FC = () => {
   // ── List ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
-      <div className="shrink-0 p-3 border-b border-fg/10">
+      <div className="shrink-0 p-3 border-b border-fg/10 space-y-2.5">
         <div className="flex items-center gap-2 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
           <Search className="w-4 h-4 text-text-industrial/30 shrink-0" />
           <input
@@ -130,6 +152,27 @@ export const MobileSpares: React.FC = () => {
             className="flex-1 bg-transparent text-sm text-fg placeholder-text-industrial/30 focus:outline-none"
           />
         </div>
+        {/* Filter chips */}
+        <div className="flex gap-1.5 overflow-x-auto">
+          {([
+            ["all", "Todos",        allCount, "text-text-industrial/60"],
+            ["low", "Bajo reorden", lowCount, "text-yellow-700 dark:text-yellow-400"],
+          ] as [SparesFilter, string, number, string][]).map(([f, label, count, color]) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                filter === f
+                  ? "bg-accent/15 text-accent border-accent/40"
+                  : "bg-fg/5 text-text-industrial/60 border-fg/10"
+              }`}
+            >
+              {label}
+              <span className={`text-[10px] tabular-nums ${filter === f ? "text-accent" : color}`}>({count})</span>
+            </button>
+          ))}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
@@ -138,7 +181,7 @@ export const MobileSpares: React.FC = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-10 text-text-industrial/30 text-sm">
-            {query ? "Sin resultados" : "Sin repuestos"}
+            {query ? "Sin resultados" : filter === "low" ? "Sin repuestos bajo reorden" : "Sin repuestos"}
           </div>
         ) : (
           filtered.map(s => {

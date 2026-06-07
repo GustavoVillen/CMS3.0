@@ -82,6 +82,9 @@ const CRIT_COLOR: Record<string, string> = {
 
 type View = "list" | "detail" | "close";
 
+/** Filtro de la lista de OTs. "open" = todas las activas; "overdue" = solo vencidas. */
+export type WoFilter = "open" | "overdue";
+
 // Acordeón con 5 chips de info del plan/OT.
 // Solo se puede tener un panel abierto a la vez. Si el campo correspondiente
 // está vacío, el chip queda deshabilitado y atenuado.
@@ -491,8 +494,19 @@ const HoursPanel: React.FC<{
   );
 };
 
-export const MobileWorkOrders: React.FC = () => {
+interface MobileWorkOrdersProps {
+  /** Filtro inicial al montar — el dashboard navega aquí con foco (activas vs vencidas). */
+  initialFilter?: WoFilter;
+}
+
+export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilter }) => {
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
+  const [filter, setFilter]       = useState<WoFilter>(initialFilter ?? "open");
+  // Si el dashboard navega con un foco distinto, sincronizamos el filtro local.
+  React.useEffect(() => {
+    if (initialFilter && initialFilter !== filter) setFilter(initialFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilter]);
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<WO | null>(null);
   const [infoTab, setInfoTab]     = useState<InfoTab | null>(null);
@@ -528,6 +542,8 @@ export const MobileWorkOrders: React.FC = () => {
   const openWOs = (data?.items ?? []).filter(
     w => w.status === "PLANNED" || w.status === "IN_PROGRESS" || w.status === "ON_HOLD",
   );
+  const overdueWOs = openWOs.filter(isOverdue);
+  const visibleWOs = filter === "overdue" ? overdueWOs : openWOs;
 
   const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setInfoTab(null); setErr(null); };
   const back      = ()       => { setView("list"); setSelected(null); setInfoTab(null); setErr(null); };
@@ -903,20 +919,38 @@ export const MobileWorkOrders: React.FC = () => {
   // ── List ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
-      <div className="shrink-0 px-4 py-3 border-b border-fg/10">
-        <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
-          {openWOs.length} orden{openWOs.length !== 1 ? "es" : ""} activa{openWOs.length !== 1 ? "s" : ""}
-        </p>
+      {/* Filter chips */}
+      <div className="shrink-0 px-3 py-2.5 border-b border-fg/10 flex gap-1.5 overflow-x-auto">
+        {([
+          ["open",    "Activas",  openWOs.length,    "text-text-industrial/60"],
+          ["overdue", "Vencidas", overdueWOs.length, "text-red-700 dark:text-red-400"],
+        ] as [WoFilter, string, number, string][]).map(([f, label, count, color]) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              filter === f
+                ? "bg-accent/15 text-accent border-accent/40"
+                : "bg-fg/5 text-text-industrial/60 border-fg/10"
+            }`}
+          >
+            {label}
+            <span className={`text-[10px] tabular-nums ${filter === f ? "text-accent" : color}`}>({count})</span>
+          </button>
+        ))}
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-fg/5">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-accent" />
           </div>
-        ) : openWOs.length === 0 ? (
-          <div className="text-center py-10 text-text-industrial/30 text-sm">Sin órdenes activas</div>
+        ) : visibleWOs.length === 0 ? (
+          <div className="text-center py-10 text-text-industrial/30 text-sm">
+            {filter === "overdue" ? "Sin OTs vencidas" : "Sin órdenes activas"}
+          </div>
         ) : (
-          openWOs.map(wo => (
+          visibleWOs.map(wo => (
             <button
               key={wo.id}
               type="button"

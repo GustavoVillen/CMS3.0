@@ -6,10 +6,10 @@ import { CopilotContextProvider } from "../lib/copilot-context";
 import { MobileCopilot } from "./MobileCopilot";
 import { CmsLogo } from "./CmsLogo";
 import { MobileDashboard } from "../mobile/MobileDashboard";
-import { MobileWorkOrders } from "../mobile/MobileWorkOrders";
+import { MobileWorkOrders, type WoFilter } from "../mobile/MobileWorkOrders";
 import { MobileDefects, type DefectsVoicePrefill } from "../mobile/MobileDefects";
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
-import { MobileSpares } from "../mobile/MobileSpares";
+import { MobileSpares, type SparesFilter } from "../mobile/MobileSpares";
 import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
 import { VoiceReportSheet } from "./VoiceReportSheet";
@@ -41,9 +41,11 @@ export const MobileLayout: React.FC = () => {
   const { tenant, logout }   = useAuth();
   const { vessels, selectedVesselCode, setSelectedVesselCode, selectedVessel } = useVesselContext();
   const [tab, setTab]        = useState<Tab>("dashboard");
-  // Filtro inicial para el tab Planes — lo seta el dashboard cuando navega
-  // con foco específico (ej. tocar "Vencidos" → filter "due")
-  const [plansFilter, setPlansFilter] = useState<PlansFilter | undefined>(undefined);
+  // Filtro inicial para los tabs — lo seta el dashboard cuando navega con foco
+  // específico (ej. tocar "Vencidos" → filter "due", "OTs vencidas" → "overdue").
+  const [plansFilter, setPlansFilter]     = useState<PlansFilter | undefined>(undefined);
+  const [woFilter, setWoFilter]           = useState<WoFilter | undefined>(undefined);
+  const [sparesFilter, setSparesFilter]   = useState<SparesFilter | undefined>(undefined);
 
   // Voice report state — vive en el layout para que cualquier acción (FAB o
   // dentro de Defectos) pueda abrir el mismo sheet.
@@ -51,8 +53,13 @@ export const MobileLayout: React.FC = () => {
   // Prefill que MobileDefects consume al recibirlo (luego notifica consumed).
   const [defectsPrefill, setDefectsPrefill] = useState<DefectsVoicePrefill | null>(null);
 
-  const navigateFromDashboard = (target: DashboardTabTarget, opts?: { plansFilter?: PlansFilter }) => {
-    if (opts?.plansFilter) setPlansFilter(opts.plansFilter);
+  const navigateFromDashboard = (
+    target: DashboardTabTarget,
+    opts?: { plansFilter?: PlansFilter; woFilter?: WoFilter; sparesFilter?: SparesFilter },
+  ) => {
+    if (opts?.plansFilter)   setPlansFilter(opts.plansFilter);
+    if (opts?.woFilter)      setWoFilter(opts.woFilter);
+    if (opts?.sparesFilter)  setSparesFilter(opts.sparesFilter);
     if (target === "panel") setTab("dashboard");
     else setTab(target);
   };
@@ -123,10 +130,10 @@ export const MobileLayout: React.FC = () => {
         <main className="flex-1 overflow-hidden">
           {tab === "dashboard"  && <div className="h-full overflow-y-auto"><MobileDashboard onNavigate={navigateFromDashboard} /></div>}
           {tab === "planes"     && <div className="h-full overflow-hidden flex flex-col"><MobilePlans initialFilter={plansFilter} /></div>}
-          {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders /></div>}
+          {tab === "ots"        && <div className="h-full overflow-hidden flex flex-col"><MobileWorkOrders initialFilter={woFilter} /></div>}
           {tab === "defectos"   && <div className="h-full overflow-hidden flex flex-col"><MobileDefects prefill={defectsPrefill} onPrefillConsumed={() => setDefectsPrefill(null)} /></div>}
           {tab === "diario"     && <div className="h-full overflow-hidden flex flex-col"><MobileDailyReport /></div>}
-          {tab === "repuestos"  && <div className="h-full overflow-hidden flex flex-col"><MobileSpares /></div>}
+          {tab === "repuestos"  && <div className="h-full overflow-hidden flex flex-col"><MobileSpares initialFilter={sparesFilter} /></div>}
           {tab === "copiloto"   && <MobileCopilot />}
         </main>
 

@@ -1,5 +1,54 @@
 HISTORY.txt
 
+[2026-06-06] MOBILE: KPIs del dashboard filtran el tab destino
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Al tocar "OTs vencidas" en el dashboard mobile, ver SOLO las vencidas.
+  Idem con los demás KPIs.
+
+  ESTADO PREVIO:
+  Solo "Planes vencidos" pasaba filtro (plansFilter). Los demás KPIs abrían
+  el tab sin filtrar (OTs mostraba todas las activas; Repuestos, todos).
+  Defectos ya mostraba solo activos (coincidía con el KPI).
+
+  CAMBIOS (mirror del patrón de MobilePlans: chips + initialFilter):
+  - MobileWorkOrders: type WoFilter "open"|"overdue", prop initialFilter,
+    chips Activas/Vencidas, renderiza la lista filtrada.
+  - MobileSpares: type SparesFilter "all"|"low", prop initialFilter,
+    chips Todos/Bajo reorden (combina con el buscador existente).
+  - MobileLayout: estado woFilter/sparesFilter, threading en
+    navigateFromDashboard y paso de initialFilter a cada tab.
+  - MobileDashboard: NavigateOpts +woFilter +sparesFilter; "OTs abiertas"
+    → open, "OTs vencidas" → overdue, "Bajo reorden" → low.
+  Los chips quedan visibles → el usuario puede alternar el filtro.
+  Verificado: tsc --noEmit en verde.
+
+
+[2026-06-06] FIX: timeout de sugerencias IA de planes (LOTO/criterios) muy justo
+Agent: Claude Opus 4.8
+
+  SÍNTOMA:
+  En logs del VPS, "[plan_loto_suggestion] Anthropic call failed: Request
+  timed out." (2 ocurrencias).
+
+  DIAGNÓSTICO (telemetría real en UsageEvent):
+  - plan_loto_suggestion: avg 13.6s, MAX 27.2s (9 ok + 2 fallos = ~18% fallo)
+  - plan_acceptance_criteria: avg 12.6s, MAX 26.8s
+  - plan_risk_suggestion: avg 10.3s, max 19.4s
+  Las llamadas exitosas ya rozaban el techo de 30s generando ~1024 tokens en
+  Haiku. Sin margen: el tail legítimo cruzaba 30s y moría. No era la red.
+  Agravante: maxRetries=1 reintenta timeouts → el usuario esperaba ~60s.
+
+  FIX (maintenance-plans-ai-suggestions.ts):
+  Subir el timeout del cliente Anthropic de 30s → 45s (cubre el p95 de 27s
+  con holgura). Sin tocar prompts, max_tokens ni lógica.
+  Backend-only servido por tsx → al deployar usar el workaround de cache tsx
+  (rm -rf /tmp/tsx-*) para que el cambio tome efecto.
+  Nota: tsc del paquete api reporta errores PREEXISTENTES en defects-service.ts
+  (sin relación con este cambio; el API corre con tsx, no tsc).
+
+
 [2026-06-06] MOBILE: FAB "+" se superponía con el micrófono en el Copiloto
 Agent: Claude Opus 4.8
 

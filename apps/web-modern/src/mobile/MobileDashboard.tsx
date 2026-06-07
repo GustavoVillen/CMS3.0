@@ -1,6 +1,8 @@
 import React from "react";
 import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import type { WoFilter } from "./MobileWorkOrders";
+import type { SparesFilter } from "./MobileSpares";
 
 interface WO { status: string; dueDate: string | null; }
 interface Defect { status: string; }
@@ -40,6 +42,10 @@ export type DashboardPlansFilter = "due" | "upcoming" | "all";
 interface NavigateOpts {
   /** Filtro inicial al ir al tab Planes (due | upcoming | all). */
   plansFilter?: DashboardPlansFilter;
+  /** Filtro inicial al ir al tab OTs (open | overdue). */
+  woFilter?: WoFilter;
+  /** Filtro inicial al ir al tab Repuestos (all | low). */
+  sparesFilter?: SparesFilter;
 }
 
 interface Props {
@@ -84,11 +90,11 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
-          <KpiCard label="OTs abiertas"   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots")} />
-          <KpiCard label="OTs vencidas"   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots")} />
+          <KpiCard label="OTs abiertas"   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots", { woFilter: "open" })} />
+          <KpiCard label="OTs vencidas"   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots", { woFilter: "overdue" })} />
           <KpiCard label="Planes vencidos" icon={CalendarClock} value={planAlert}        warn={planAlert > 0}        onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
           <KpiCard label="Defectos"       icon={AlertTriangle} value={openDefs.length}  warn={openDefs.length > 0}  onClick={() => onNavigate?.("defectos")} />
-          <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos")} />
+          <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos", { sparesFilter: "low" })} />
           <KpiCard label="Certif. atención" icon={FileCheck}   value={certWarn.length}  warn={certWarn.length > 0} />
         </div>
       )}
