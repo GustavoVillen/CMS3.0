@@ -1,5 +1,50 @@
 HISTORY.txt
 
+[2026-06-07] MOBILE: 3 pantallas nuevas desde el dashboard (Tripulación / Simulacros / Cert. tripulantes)
+Agent: Claude Opus 4.8
+
+  PEDIDO:
+  Hacer clickeables los chips "A bordo", "Simulacros" y "Cert. tripulantes"
+  del dashboard mobile, con acciones (no solo consulta).
+
+  CONTEXTO/ARQUITECTURA:
+  El mobile NO tenía pantallas de tripulación/simulacros/certificados (solo
+  desktop). La barra inferior ya tiene 7 tabs. Solución: 3 sub-vistas
+  accesibles SOLO desde el dashboard (estados de tab "crew"|"drills"|
+  "crewcerts", fuera de la barra), con botón de volver al Panel en la lista.
+  Todos los endpoints ya existían en el backend (no se tocó API).
+
+  PANTALLAS NUEVAS (web-modern/src/mobile/):
+  - MobileCrew: lista ONBOARD (GET /app/crew?status=ONBOARD), detalle +
+    acción Desembarcar (POST /app/crew/:id/sign-off). Mapea rankId→nombre
+    (/app/crew/ranks) y vesselCode→nombre.
+  - MobileDrills: chips Vencidos/Programados/Completados (entra en Vencidos),
+    detalle + Marcar completado (POST /app/drills/:id/complete, solo SCHEDULED).
+  - MobileCrewCerts: documentos personales de tripulantes (CrewCertification
+    aplanado desde /app/crew) vencidos/por vencer + Renovar (PATCH expiryDate).
+
+  PERMISOS (gateo en UI espejo del backend canManage):
+  - Crew sign-off: TENANT_ADMIN, FLEET_SUPERINTENDENT, MAINTENANCE_MANAGER,
+    TECHNICIAN_OPERATOR, INSPECTOR_COMPLIANCE.
+  - Drills completar y Cert renovar: TENANT_ADMIN, FLEET_SUPERINTENDENT,
+    MAINTENANCE_MANAGER (más angosto).
+
+  WIRING:
+  - MobileLayout: Tab += crew|drills|crewcerts; render con onBack→Panel; FAB
+    oculto en las 3 sub-vistas.
+  - MobileDashboard: DashboardTab += crew|drills|crewcerts; los 3 chips de la
+    tira de tripulación ahora navegan.
+
+  LIMITACIÓN CONOCIDA (acordada con el usuario):
+  El chip "Cert. atención" del dashboard cuenta CrewCertification (documentos)
+  + CrewTrainingRecord (cursos STCW). La pantalla nueva muestra SOLO los
+  documentos personales (la matriz de entrenamientos vive en otro modelo
+  agregado del desktop). Por eso el número de la pantalla puede ser menor que
+  el del chip. Folow-up posible: sumar entrenamientos.
+
+  Verificado: tsc --noEmit en verde + vite build OK (2395 módulos).
+
+
 [2026-06-06] MOBILE: KPIs del dashboard filtran el tab destino
 Agent: Claude Opus 4.8
 

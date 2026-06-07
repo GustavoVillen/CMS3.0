@@ -36,7 +36,8 @@ function KpiCard({ label, value, icon: Icon, warn, onClick }: KpiProps) {
   );
 }
 
-export type DashboardTab = "panel" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
+export type DashboardTab = "panel" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto"
+  | "crew" | "drills" | "crewcerts";
 export type DashboardPlansFilter = "due" | "upcoming" | "all";
 
 interface NavigateOpts {
@@ -128,17 +129,25 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         )}
       </button>
 
-      {/* Tripulación & Simulacros — mini chip strip */}
+      {/* Tripulación & Simulacros — mini chip strip (cada chip navega filtrado) */}
       {crewData && (crewData.onboard > 0 || crewData.certsExpired > 0 || crewData.certsExpiringSoon > 0 || crewData.drillsScheduled > 0) && (
         <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 grid grid-cols-3 gap-2">
-          <div className="text-center">
+          <button
+            type="button"
+            onClick={() => onNavigate?.("crew")}
+            className="text-center rounded-lg hover:bg-fg/5 active:bg-fg/10 transition-colors py-1"
+          >
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <Users className="w-3 h-3 text-text-industrial/40" />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">A bordo</span>
             </div>
             <p className="text-lg font-bold text-fg tabular-nums">{crewData.onboard}</p>
-          </div>
-          <div className="text-center">
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("crewcerts")}
+            className="text-center rounded-lg hover:bg-fg/5 active:bg-fg/10 transition-colors py-1"
+          >
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <AlertTriangle className={`w-3 h-3 ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Cert. atención</span>
@@ -146,14 +155,18 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
             <p className={`text-lg font-bold tabular-nums ${crewData.certsExpired + crewData.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>
               {crewData.certsExpired + crewData.certsExpiringSoon}
             </p>
-          </div>
-          <div className="text-center">
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("drills")}
+            className="text-center rounded-lg hover:bg-fg/5 active:bg-fg/10 transition-colors py-1"
+          >
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
               <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">Simulacros mes</span>
             </div>
             <p className="text-lg font-bold text-fg tabular-nums">{crewData.drillsScheduled}</p>
-          </div>
+          </button>
         </div>
       )}
 

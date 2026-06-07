@@ -11,11 +11,16 @@ import { MobileDefects, type DefectsVoicePrefill } from "../mobile/MobileDefects
 import { MobileDailyReport } from "../mobile/MobileDailyReport";
 import { MobileSpares, type SparesFilter } from "../mobile/MobileSpares";
 import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
+import { MobileCrew } from "../mobile/MobileCrew";
+import { MobileDrills } from "../mobile/MobileDrills";
+import { MobileCrewCerts } from "../mobile/MobileCrewCerts";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
 import { VoiceReportSheet } from "./VoiceReportSheet";
 import { useEscapeGuard } from "../lib/escape-guard";
 
-type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto";
+type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto"
+  // Sub-vistas accesibles solo desde el dashboard (no van a la barra inferior).
+  | "crew" | "drills" | "crewcerts";
 
 // Alias para los tabs accesibles desde dashboard (omite "dashboard" — no
 // tiene sentido navegar a sí mismo)
@@ -135,12 +140,17 @@ export const MobileLayout: React.FC = () => {
           {tab === "diario"     && <div className="h-full overflow-hidden flex flex-col"><MobileDailyReport /></div>}
           {tab === "repuestos"  && <div className="h-full overflow-hidden flex flex-col"><MobileSpares initialFilter={sparesFilter} /></div>}
           {tab === "copiloto"   && <MobileCopilot />}
+          {tab === "crew"       && <div className="h-full overflow-hidden flex flex-col"><MobileCrew onBack={() => setTab("dashboard")} /></div>}
+          {tab === "drills"     && <div className="h-full overflow-hidden flex flex-col"><MobileDrills initialFilter="overdue" onBack={() => setTab("dashboard")} /></div>}
+          {tab === "crewcerts"  && <div className="h-full overflow-hidden flex flex-col"><MobileCrewCerts initialFilter="expired" onBack={() => setTab("dashboard")} /></div>}
         </main>
 
         {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
         {/* Lo ocultamos en tabs que ya tienen su propio "+"/input flotante para
-            no superponer: Defectos (FAB propio) y Copiloto (mic de la barra). */}
-        {tab !== "defectos" && tab !== "copiloto" && <QuickActionFab onAction={handleQuickAction} />}
+            no superponer (Defectos, Copiloto) y en las sub-vistas de foco. */}
+        {tab !== "defectos" && tab !== "copiloto" && tab !== "crew" && tab !== "drills" && tab !== "crewcerts" && (
+          <QuickActionFab onAction={handleQuickAction} />
+        )}
 
         {/* ── Voice report sheet (compartido layout-wide) ──────────────────── */}
         {voiceType && (
