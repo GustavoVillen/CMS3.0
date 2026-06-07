@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles, Download } from "lucide-react";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -361,6 +362,10 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
     try { await api.delete(`/app/mocs/${moc.id}`); onSaved(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
   };
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas });
+  useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

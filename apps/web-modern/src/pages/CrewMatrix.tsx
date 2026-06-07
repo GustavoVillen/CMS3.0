@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Grid3x3, Loader2, X, AlertCircle, FileText } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
@@ -127,6 +128,10 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
   };
 
   const isMandatory = requirementLevel === "OBRIGATORIO";
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ completedAt, expiryDate, docUrl, notes });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

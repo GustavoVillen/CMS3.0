@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Loader2, X, ChevronLeft, ChevronRight, AlertTriangle, Check } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
@@ -109,6 +110,10 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [vesselCode, crew.id, date, hours, notes, onSaved]);
+
+  // ESC: cerrar / preguntar guardar si hay cambios
+  const isDirty = useDirtyTracker({ hours, notes });
+  useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

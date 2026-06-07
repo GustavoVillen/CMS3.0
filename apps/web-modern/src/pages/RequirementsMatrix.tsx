@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, Loader2, Plus, X } from "lucide-react";
 import { api } from "../lib/api";
+import { useEscapeGuard } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -177,6 +178,20 @@ export const RequirementsMatrixPage: React.FC = () => {
       setSavingNewRank(false);
     }
   }
+
+  // ESC: cerrar / preguntar guardar en los modales de nuevo ítem / nuevo rango
+  useEscapeGuard({
+    enabled: showNewItem,
+    isDirty: !!(newItem.code || newItem.name || newItem.regulation || newItem.category || newItem.validityYears),
+    onSave: () => onCreateItem({ preventDefault: () => {} } as React.FormEvent),
+    onClose: () => setShowNewItem(false),
+  });
+  useEscapeGuard({
+    enabled: showNewRank,
+    isDirty: !!(newRank.code || newRank.name || newRank.sortOrder),
+    onSave: () => onCreateRank({ preventDefault: () => {} } as React.FormEvent),
+    onClose: () => setShowNewRank(false),
+  });
 
   async function onDeleteRank(rankId: string, code: string) {
     if (!isAdmin) return;

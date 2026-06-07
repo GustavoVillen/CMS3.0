@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2, UserMinus, UserPlus, Users } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useEscapeGuard } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
@@ -276,6 +277,9 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
       setDemoting(false);
     }
   };
+
+  // ESC: cerrar el diálogo (confirmación, sin guardado de registro)
+  useEscapeGuard({ isDirty: false, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
