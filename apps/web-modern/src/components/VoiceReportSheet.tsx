@@ -69,8 +69,9 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
 
   // ─── Submit del reporte inicial al backend ─────────────────────────────
   const submitInitial = async () => {
-    if (listening) stop();
-    const text = transcriptRef.current.trim();
+    // Si seguía grabando, stop() emite y devuelve el texto de la sesión actual.
+    const tail = listening ? stop() : "";
+    const text = [transcriptRef.current.trim(), tail].filter(Boolean).join(" ").trim();
     if (!text) { setError("No se detectó voz. Tocá el micrófono y volvé a intentar."); return; }
     if (!selectedVesselCode) { setError("Seleccioná un buque en el header antes de reportar."); return; }
     setStage("processing");
@@ -91,9 +92,10 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
 
   // ─── Submit de la respuesta a una pregunta ────────────────────────────
   const submitAnswer = async (answer: string) => {
-    const ans = answer.trim();
+    // Si la respuesta se estaba dictando, ansStop() emite y devuelve el texto.
+    const tail = ansListening ? ansStop() : "";
+    const ans = [answer.trim(), tail].filter(Boolean).join(" ").trim();
     if (!ans) return;
-    if (listening) stop();
     setStage("processing");
     setError(null);
     try {
@@ -196,11 +198,12 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
               </p>
             </div>
 
-            {transcript && (
+            {(transcript || interim) && (
               <div className="rounded-xl bg-fg/[0.04] border border-fg/10 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">Transcripción</p>
-                <p className="text-xs text-fg whitespace-pre-wrap">{transcript}
-                  {interim && <span className="text-text-industrial/40 italic"> {interim}</span>}
+                <p className="text-xs text-fg whitespace-pre-wrap">
+                  {transcript}
+                  {interim && <span className="text-text-industrial/40 italic">{transcript ? " " : ""}{interim}</span>}
                 </p>
               </div>
             )}

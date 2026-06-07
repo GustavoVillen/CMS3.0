@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-06-07] FIX: dictado por voz repetía en cascada (Android Chrome)
+Agent: Claude Opus 4.8
+
+  SÍNTOMA:
+  En el reporte por voz (VoiceReportSheet) la transcripción salía repetida en
+  cascada: "detecté detecté que el detecté que el manómetro detecté que el
+  manómetro de la bomba...". También afectaba al MicButton (dictado en
+  formularios de defectos).
+
+  CAUSA RAÍZ (use-speech-to-text.ts):
+  En Android Chrome el SpeechRecognition en modo continuous reemite resultados
+  isFinal como prefijos crecientes en el MISMO índice. El hook despachaba cada
+  final como chunk y el padre los concatenaba → cascada. El loop iteraba desde
+  resultIndex y hacía onTranscript() por cada final.
+
+  FIX:
+  Reescrito el hook para guardar el último valor final POR ÍNDICE de resultado
+  (reemplazo, no acumulación). `interim` ahora expone el texto EN VIVO de la
+  sesión (finales + parcial) sin duplicar. onTranscript se invoca UNA vez por
+  sesión, al detener (stop/onend), con el texto completo; stop() además lo
+  devuelve sincrónicamente. Consumidores (VoiceReportSheet ×2, MicButton)
+  ajustados: el render muestra el preview en vivo vía interim y los submit usan
+  el valor devuelto por stop()/ansStop().
+
+  Verificado: tsc --noEmit en verde + vite build OK. Frontend-only.
+
+
 [2026-06-07] UX: tecla ESC global — volver atrás + preguntar guardar
 Agent: Claude Opus 4.8
 
