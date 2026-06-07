@@ -276,9 +276,15 @@ export const MaintenanceWorkloadPage: React.FC = () => {
                 data={chartData}
                 margin={{ top: 12, right: 16, left: 0, bottom: 8 }}
                 style={{ cursor: "pointer" }}
-                onClick={(e: { activePayload?: { payload?: { weekStart?: string } }[] }) => {
-                  const ws = e?.activePayload?.[0]?.payload?.weekStart;
-                  if (ws) openWeekInPlans(ws);
+                onClick={(state: { activeTooltipIndex?: number | string | null }) => {
+                  // recharts v3: el handler recibe MouseHandlerDataParam (sin activePayload);
+                  // usamos activeTooltipIndex para mapear a la semana en chartData.
+                  const raw = state?.activeTooltipIndex;
+                  const idx = typeof raw === "number" ? raw : Number(raw);
+                  if (Number.isInteger(idx) && idx >= 0) {
+                    const ws = chartData[idx]?.weekStart;
+                    if (ws) openWeekInPlans(ws);
+                  }
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
