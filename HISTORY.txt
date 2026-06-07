@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-06-06] MOBILE: FAB "+" se superponía con el micrófono en el Copiloto
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  En el tab Copiloto (/m → IA), el FAB flotante de acción rápida ("+",
+  bottom-20 right-4) quedaba encima del micrófono de la barra de input del
+  chat → se superponían visualmente.
+
+  FIX (MobileLayout.tsx):
+  Ocultar el QuickActionFab también en el tab "copiloto" (ya estaba oculto
+  en "defectos" por la misma razón). Los atajos del FAB no aplican mientras
+  se chatea con el copiloto y la barra ya tiene su propio input/mic.
+  Verificado: tsc --noEmit en verde.
+
+
 [2026-06-06] FEAT v2: clic en semana -> match EXACTO del gráfico (recurrencias + horas)
 Agent: Claude Opus 4.8
 

@@ -131,8 +131,9 @@ export const MobileLayout: React.FC = () => {
         </main>
 
         {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
-        {/* Lo ocultamos en tabs que ya tienen su propio "+" para no superponer. */}
-        {tab !== "defectos" && <QuickActionFab onAction={handleQuickAction} />}
+        {/* Lo ocultamos en tabs que ya tienen su propio "+"/input flotante para
+            no superponer: Defectos (FAB propio) y Copiloto (mic de la barra). */}
+        {tab !== "defectos" && tab !== "copiloto" && <QuickActionFab onAction={handleQuickAction} />}
 
         {/* ── Voice report sheet (compartido layout-wide) ──────────────────── */}
         {voiceType && (
