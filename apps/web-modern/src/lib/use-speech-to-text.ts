@@ -51,11 +51,31 @@ export function useSpeechToText({ onTranscript, lang }: UseSpeechToTextOptions) 
     !!(window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
   );
 
-  const sessionFinal = () => collapseSpaces(finalsRef.current.filter(Boolean).join(" "));
+  // Fusiona segmentos colapsando prefijos crecientes. Android Chrome emite el
+  // texto como prefijos que crecen ("detecté" → "detecté que el" → ...), a veces
+  // en índices distintos; si un segmento EXTIENDE al acumulado lo reemplaza, si
+  // es un prefijo viejo se ignora, y solo concatena cuando es una frase nueva
+  // (caso desktop: segmentos distintos). Comparación case-insensitive por si la
+  // capitalización del prefijo cambia entre emisiones.
+  const mergeSegments = (segs: string[]): string => {
+    let acc = "";
+    for (const raw of segs) {
+      const s = collapseSpaces(raw ?? "");
+      if (!s) continue;
+      if (!acc) { acc = s; continue; }
+      const accL = acc.toLowerCase(), sL = s.toLowerCase();
+      if (sL.startsWith(accL)) acc = s;          // s extiende lo acumulado → reemplaza
+      else if (accL.startsWith(sL)) { /* s es prefijo viejo → ignorar */ }
+      else acc = `${acc} ${s}`;                  // frase distinta → concatenar
+    }
+    return acc;
+  };
+
+  const sessionFinal = () => mergeSegments(finalsRef.current);
 
   // Emite el texto final de la sesión una sola vez. Devuelve el texto emitido.
   const flush = useCallback((): string => {
-    const text = collapseSpaces([sessionFinal(), interimRef.current].filter(Boolean).join(" "));
+    const text = mergeSegments([...finalsRef.current, interimRef.current]);
     if (flushedRef.current) return text;
     flushedRef.current = true;
     if (text) onTranscriptRef.current(text);
@@ -112,8 +132,8 @@ export function useSpeechToText({ onTranscript, lang }: UseSpeechToTextOptions) 
         if (!ev.results[i].isFinal) interimText += ev.results[i][0].transcript;
       }
       interimRef.current = collapseSpaces(interimText);
-      // Preview en vivo: finales + parcial (sin cascada porque finales se reemplazan).
-      setInterim(collapseSpaces([sessionFinal(), interimRef.current].filter(Boolean).join(" ")));
+      // Preview en vivo: fusión de finales + parcial (sin cascada).
+      setInterim(mergeSegments([...finalsRef.current, interimRef.current]));
     };
 
     rec.onend = () => {
