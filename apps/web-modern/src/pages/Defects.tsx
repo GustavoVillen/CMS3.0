@@ -8,6 +8,7 @@ import { DataTable, PriorityBadge, StatusBadge, type Column } from "../component
 import { VesselLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
+import { AuthedImage } from "../lib/authed-media";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -1290,7 +1291,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                     <div key={p.id} className="relative aspect-square bg-fg/5 border border-fg/10 rounded-lg overflow-hidden group">
                       {p.description && (
                         <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
-                          <img src={p.description} alt={p.filename} className="w-full h-full object-cover" />
+                          <AuthedImage src={p.description} alt={p.filename} className="w-full h-full object-cover" />
                         </button>
                       )}
                       {!isClosed && (
@@ -1522,7 +1523,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
             <X className="w-5 h-5" />
           </button>
           <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
-            <img src={lightboxPhoto.description} alt={lightboxPhoto.filename} className="max-h-[85vh] rounded-lg object-contain" />
+            <AuthedImage src={lightboxPhoto.description} alt={lightboxPhoto.filename} className="max-h-[85vh] rounded-lg object-contain" />
             <p className="text-[10px] text-fg/40">{lightboxPhoto.filename}  ·  {fmtDate(lightboxPhoto.uploadedAt)}</p>
           </div>
         </div>

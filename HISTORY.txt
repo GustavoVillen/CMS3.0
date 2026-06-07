@@ -1,5 +1,30 @@
 HISTORY.txt
 
+[2026-06-07] FIX: fotos de defectos rotas en el detalle (desktop)
+Agent: Claude Opus 4.8
+
+  SÍNTOMA:
+  Una foto subida desde la app mobile se veía ROTA en el detalle del defecto
+  en la PC (ícono de imagen rota + nombre de archivo como alt).
+
+  CAUSA RAÍZ (Defects.tsx, desktop):
+  El detalle renderizaba <img src={p.description}> PLANO. p.description guarda
+  la URL cruda /uploads/attachments/... (así la deja listTenantAttachments).
+  Pero /uploads/* está deprecado → 410 Gone (server.ts); los archivos solo se
+  sirven por /app/files/* CON Bearer token. Un <img> normal no manda token y
+  /uploads da 410 → imagen rota. No era problema del upload (el archivo se
+  guardó OK; el registro aparece en la lista) ni específico de mobile: cualquier
+  foto se rompía en ese render.
+
+  FIX:
+  Usar <AuthedImage> en vez de <img> en los dos renders de fotos guardadas
+  (mosaico + lightbox). AuthedImage convierte /uploads→/app/files
+  (toAuthedFilePath) y hace fetch con Bearer a blob URL. Drop-in (src/alt/
+  className). Verificado: no hay otros <img> planos con URLs de adjuntos.
+
+  Verificado: tsc --noEmit en verde + vite build OK. Frontend-only.
+
+
 [2026-06-07] FIX: dictado por voz repetía en cascada (Android Chrome)
 Agent: Claude Opus 4.8
 
