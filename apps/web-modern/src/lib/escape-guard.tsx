@@ -131,10 +131,12 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
         return;
       }
 
-      // No guards: go back to dashboard if not already there
+      // No guards: volver a la ventana anterior (history back). Si no hay
+      // historial (entrada directa / deep link), caer al Dashboard.
       if (locationRef.current !== "/" && locationRef.current !== "/m") {
         e.preventDefault();
-        navigate("/");
+        if (window.history.length > 1) navigate(-1);
+        else navigate("/");
       }
     };
 
