@@ -1,5 +1,36 @@
 HISTORY.txt
 
+[2026-06-07] UX: tecla ESC global — volver atrás + preguntar guardar
+Agent: Claude Opus 4.8
+
+  Pedido: ESC siempre vuelve a la ventana anterior; si hay un registro sin guardar,
+  preguntar si guardar. Ya existía el sistema (EscapeGuardProvider + useEscapeGuard +
+  useDirtyTracker, dialog Guardar/Descartar/Cancelar) cubriendo 17 formularios.
+
+  CAMBIOS:
+  1. Navegación: el fallback sin-guard de ESC ahora hace history back (navigate(-1))
+     en vez de forzar "/". Fallback a Dashboard si no hay historial (deep link).
+     (apps/web-modern/src/lib/escape-guard.tsx). Commit d9e1f29.
+  2. Cobertura: cableé useEscapeGuard en ~20 formularios que faltaban, en 4 tandas:
+     - T1 (b27f6a4): Drills, Permits, Crew, Team, Checklists
+     - T2 (525da50): MonthlyReports, NearMiss, SpareRequests, TaskMasters, EquipmentClasses
+     - T3 (1dc601f): Moc, CrewMatrix, RequirementsMatrix, RestHours, VesselSuperintendents
+     - T4 (4d997b3): AiDocuments (3 modales), ExternalAudits (AuditModal), DueItems
+     Patrón: dentro del componente del modal,
+       const isDirty = useDirtyTracker({ ...campos });
+       useEscapeGuard({ isDirty: !readonly && isDirty, onSave, onClose });
+     Diálogos de confirmación (VesselSuperintendents demote) registran isDirty:false
+     (ESC cierra sin prompt). RequirementsMatrix usa `enabled` por flag (modales inline).
+     Moc ya tenía un `isDirty` propio → usé `escDirty` para no colisionar.
+
+  VERIFICADO: Crew con Playwright (escribir + ESC → aparece "Cambios sin guardar").
+  vite build OK en cada tanda.
+
+  PENDIENTE: 3 pantallas de /platform (Prompts/Tenants/Users) NO cableadas: sus rutas
+  están fuera del EscapeGuardProvider (área super-admin). Para cubrirlas habría que
+  envolver el árbol platform con el provider. No desplegado a VPS aún.
+
+
 [2026-06-07] COPILOTO: tools de tripulación, simulacros y certificaciones
 Agent: Claude Opus 4.8
 
