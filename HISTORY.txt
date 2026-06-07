@@ -1,5 +1,46 @@
 HISTORY.txt
 
+[2026-06-07] COPILOTO: tools de tripulación, simulacros y certificaciones
+Agent: Claude Opus 4.8
+
+  SÍNTOMA:
+  Al preguntarle al copiloto "¿Quién es el capitán del DON CHICUETO?" respondía
+  que "no tiene acceso a un registro centralizado de tripulación", cuando el
+  sistema SÍ tiene los datos (modelo Crew + RankDefinition).
+
+  CAUSA RAÍZ:
+  El copiloto es agéntico con tools de consulta a la DB, pero solo tenía tools
+  para planes, OTs, defectos, CAPA, fluidos, repuestos y reportes diarios.
+  NO existía tool de tripulación → no tenía forma de traer el dato.
+
+  FIX (copiloto-service.ts):
+  Agregado tool query_crew (definición + executor). Filtra por vesselCode,
+  status (ONBOARD/SIGNED_OFF), rank (nombre o código, partial) y textSearch
+  (nombre/código). Devuelve nombre, rango, vesselCode + vesselName, estado,
+  nacionalidad y fechas. Respeta el vessel scope (applyVesselWhereScope) y
+  envuelve free-text con wrapUntrusted. Incluye vesselName en la salida para
+  que el modelo resuelva referencias por nombre ("DON CHICUETO" → DONCHI),
+  ya que el prompt solo expone códigos de buque.
+
+  TOOLS ADICIONALES (mismo patrón, misma sesión):
+  - query_drills: simulacros SOLAS/ISPS. Filtra vesselCode, status, overdue
+    (SCHEDULED con fecha pasada) y textSearch (título del requirement).
+    Devuelve título, drillCode, vessel, status, fechas, flag overdue y
+    regulación SOLAS.
+  - query_crew_certs: certificaciones Y entrenamientos de tripulación.
+    Combina CrewCertification (documentos: pasaporte, médico, visa...) +
+    CrewTrainingRecord (cursos STCW/NR/GMDSS...). Devuelve crewName, vessel,
+    nombre del cert/curso, source (document|training), expiryDate y status
+    computado (EXPIRED/EXPIRING_SOON/VALID). Scope por relación crew→vesselCode
+    (estos modelos no tienen vesselCode propio). A diferencia de la pantalla
+    mobile (solo documentos), el copiloto SÍ incluye entrenamientos → matchea
+    el chip "Cert. atención" del dashboard.
+
+  Verificado: tsc del API sin errores nuevos (los 3 de defects-service.ts son
+  preexistentes y ajenos). Backend servido por tsx → al deployar usar el
+  workaround de cache (rm -rf /tmp/tsx-*).
+
+
 [2026-06-07] MOBILE: 3 pantallas nuevas desde el dashboard (Tripulación / Simulacros / Cert. tripulantes)
 Agent: Claude Opus 4.8
 

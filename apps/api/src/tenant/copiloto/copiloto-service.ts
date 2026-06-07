@@ -413,6 +413,50 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "query_crew",
+    description:
+      "Query the crew roster (tripulación) for the current tenant/vessel. Use this when the user asks WHO holds a role on a vessel — captain/master, chief engineer, officers — who is onboard, crew by rank or nationality, sign-on/sign-off dates, or to find a crew member by name. Each result includes the crew member's name, rank name, vessel code AND vessel name, status (ONBOARD/SIGNED_OFF), nationality and dates. To answer 'who is the captain of <vessel>', filter by rank (e.g. 'capitán' / 'master') or omit rank and inspect the `rank` field of the returned crew; match the vessel by `vesselName` when the user refers to a vessel by name rather than code. Pass status='ONBOARD' for current crew (default behaviour for 'who is...' questions).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Filter by vessel CODE (not name; optional — omit to include all accessible vessels and match by vesselName in results)" },
+        status:     { type: "string", description: "Filter by status: ONBOARD | SIGNED_OFF (optional). Use ONBOARD for current crew." },
+        rank:       { type: "string", description: "Filter by rank name or code, partial match (e.g. 'capitán', 'master', 'jefe de máquinas') (optional)" },
+        textSearch: { type: "string", description: "Search by first/last name or crew code (optional)" },
+        limit:      { type: "number", description: "Max results to return (default 20, max 50)" },
+      },
+    },
+  },
+  {
+    name: "query_drills",
+    description:
+      "Query drills / simulacros (SOLAS/ISPS/MARPOL safety exercises) for the current tenant/vessel. Use this when the user asks which drills are overdue ('simulacros vencidos'), scheduled, or completed, when a drill was last performed, or drill history. Each result includes the drill title (from its requirement), drillCode, vesselCode + vesselName, status (SCHEDULED/COMPLETED/CANCELLED), scheduledDate, completedDate, an `overdue` flag (SCHEDULED with scheduledDate in the past) and the SOLAS regulation. For 'vencidos' pass overdue=true.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string",  description: "Filter by vessel CODE (optional — omit to include all accessible vessels)" },
+        status:     { type: "string",  description: "Filter by status: SCHEDULED | COMPLETED | CANCELLED (optional)" },
+        overdue:    { type: "boolean", description: "If true, return only overdue drills (SCHEDULED with scheduledDate before today)" },
+        textSearch: { type: "string",  description: "Search by drill requirement title, e.g. 'abandono', 'incendio', 'hombre al agua' (optional)" },
+        limit:      { type: "number",  description: "Max results to return (default 20, max 50)" },
+      },
+    },
+  },
+  {
+    name: "query_crew_certs",
+    description:
+      "Query crew certifications and trainings for the current tenant/vessel — both personal documents (CrewCertification: passport, seaman's book, visa, medical, etc.) AND regulatory training courses (CrewTrainingRecord: STCW, NR, GMDSS, ECDIS, etc.). Use this when the user asks which crew certificates/trainings are expired or about to expire, or for a specific crew member's certs. Each result includes the crew member name, vesselCode + vesselName, the cert/training name, source ('document' or 'training'), expiryDate and computed status (EXPIRED / EXPIRING_SOON / VALID). Filter status='EXPIRED' or 'EXPIRING_SOON' for items needing attention.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Filter by vessel CODE (optional — omit to include all accessible vessels)" },
+        status:     { type: "string", description: "Filter by computed status: EXPIRED | EXPIRING_SOON | VALID (optional). EXPIRING_SOON = expires within 30 days." },
+        textSearch: { type: "string", description: "Search by crew first/last name (optional)" },
+        limit:      { type: "number", description: "Max results to return (default 20, max 50)" },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -823,6 +867,184 @@ async function executeCopilotTool(
 
       return wrapUntrusted(JSON.stringify(
         enriched.length > 0 ? enriched : { message: "No daily reports found matching the criteria." },
+      ));
+    }
+
+    if (name === "query_crew") {
+      const crewLimit = Math.min(Number(input.limit ?? 20), 50);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
+      if (input.status) where.status = input.status;
+      if (input.textSearch) {
+        const q = input.textSearch as string;
+        where.OR = [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName:  { contains: q, mode: "insensitive" } },
+          { crewCode:  { contains: q, mode: "insensitive" } },
+        ];
+      }
+      if (input.rank) {
+        const r = input.rank as string;
+        where.rankDefinition = {
+          OR: [
+            { name: { contains: r, mode: "insensitive" } },
+            { code: { contains: r, mode: "insensitive" } },
+          ],
+        };
+      }
+
+      const rows = await (prisma as any).crew.findMany({
+        where,
+        take: crewLimit,
+        orderBy: [{ vesselCode: "asc" }, { lastName: "asc" }],
+        select: {
+          crewCode: true, firstName: true, lastName: true, vesselCode: true,
+          status: true, nationality: true, signOnDate: true, signOffDate: true,
+          rankDefinition: { select: { name: true, code: true } },
+          vessel: { select: { name: true } },
+        },
+      });
+
+      const result = rows.map((c: any) => ({
+        crewCode: c.crewCode,
+        name: `${c.firstName} ${c.lastName}`.trim(),
+        rank: c.rankDefinition?.name ?? null,
+        vesselCode: c.vesselCode,
+        vesselName: c.vessel?.name ?? null,
+        status: c.status,
+        nationality: c.nationality,
+        signOnDate: c.signOnDate,
+        signOffDate: c.signOffDate,
+      }));
+
+      return wrapUntrusted(JSON.stringify(
+        result.length > 0 ? result : { message: "No crew found matching the criteria." },
+      ));
+    }
+
+    if (name === "query_drills") {
+      const drillsLimit = Math.min(Number(input.limit ?? 20), 50);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
+      if (input.status) where.status = input.status;
+      if (input.overdue) {
+        where.status = "SCHEDULED";
+        where.scheduledDate = { lt: new Date() };
+      }
+      if (input.textSearch) {
+        where.requirement = { title: { contains: input.textSearch as string, mode: "insensitive" } };
+      }
+
+      const rows = await (prisma as any).drill.findMany({
+        where,
+        take: drillsLimit,
+        orderBy: [{ scheduledDate: "desc" }],
+        select: {
+          drillCode: true, vesselCode: true, status: true,
+          scheduledDate: true, completedDate: true,
+          requirement: { select: { title: true, solasRegulation: true } },
+          vessel: { select: { name: true } },
+        },
+      });
+
+      const now = Date.now();
+      const result = rows.map((d: any) => ({
+        drillCode: d.drillCode,
+        title: d.requirement?.title ?? null,
+        solasRegulation: d.requirement?.solasRegulation ?? null,
+        vesselCode: d.vesselCode,
+        vesselName: d.vessel?.name ?? null,
+        status: d.status,
+        scheduledDate: d.scheduledDate,
+        completedDate: d.completedDate,
+        overdue: d.status === "SCHEDULED" && !!d.scheduledDate && new Date(d.scheduledDate).getTime() < now,
+      }));
+
+      return wrapUntrusted(JSON.stringify(
+        result.length > 0 ? result : { message: "No drills found matching the criteria." },
+      ));
+    }
+
+    if (name === "query_crew_certs") {
+      const certsLimit = Math.min(Number(input.limit ?? 20), 50);
+
+      // CrewCertification y CrewTrainingRecord no tienen vesselCode propio: se
+      // scopean por la relación crew → vesselCode. Reusamos applyVesselWhereScope
+      // sobre un filtro de crew que luego anidamos.
+      const crewWhere: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scopeResult = applyVesselWhereScope(crewWhere, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
+      if (input.textSearch) {
+        const q = input.textSearch as string;
+        crewWhere.OR = [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName:  { contains: q, mode: "insensitive" } },
+        ];
+      }
+
+      const [docs, trainings] = await Promise.all([
+        (prisma as any).crewCertification.findMany({
+          where: { tenantId, deletedAt: null, expiryDate: { not: null }, crew: crewWhere },
+          take: 200,
+          orderBy: { expiryDate: "asc" },
+          select: {
+            type: true, expiryDate: true,
+            crew: { select: { firstName: true, lastName: true, vesselCode: true, vessel: { select: { name: true } } } },
+          },
+        }),
+        (prisma as any).crewTrainingRecord.findMany({
+          where: { tenantId, expiryDate: { not: null }, crew: crewWhere },
+          take: 200,
+          orderBy: { expiryDate: "asc" },
+          select: {
+            expiryDate: true,
+            trainingItem: { select: { name: true, regulation: true } },
+            crew: { select: { firstName: true, lastName: true, vesselCode: true, vessel: { select: { name: true } } } },
+          },
+        }),
+      ]);
+
+      const now = Date.now();
+      const computeStatus = (expiry: Date | string | null): "EXPIRED" | "EXPIRING_SOON" | "VALID" => {
+        if (!expiry) return "VALID";
+        const diffDays = Math.floor((new Date(expiry).getTime() - now) / 86_400_000);
+        if (diffDays < 0) return "EXPIRED";
+        if (diffDays <= 30) return "EXPIRING_SOON";
+        return "VALID";
+      };
+      const crewLabel = (c: any) => `${c?.firstName ?? ""} ${c?.lastName ?? ""}`.trim();
+
+      let merged = [
+        ...docs.map((d: any) => ({
+          crewName: crewLabel(d.crew),
+          vesselCode: d.crew?.vesselCode ?? null,
+          vesselName: d.crew?.vessel?.name ?? null,
+          source: "document" as const,
+          name: d.type,
+          regulation: null as string | null,
+          expiryDate: d.expiryDate,
+          status: computeStatus(d.expiryDate),
+        })),
+        ...trainings.map((t: any) => ({
+          crewName: crewLabel(t.crew),
+          vesselCode: t.crew?.vesselCode ?? null,
+          vesselName: t.crew?.vessel?.name ?? null,
+          source: "training" as const,
+          name: t.trainingItem?.name ?? "(curso)",
+          regulation: t.trainingItem?.regulation ?? null,
+          expiryDate: t.expiryDate,
+          status: computeStatus(t.expiryDate),
+        })),
+      ];
+
+      if (input.status) merged = merged.filter(m => m.status === input.status);
+      merged.sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)));
+      merged = merged.slice(0, certsLimit);
+
+      return wrapUntrusted(JSON.stringify(
+        merged.length > 0 ? merged : { message: "No crew certifications or trainings found matching the criteria." },
       ));
     }
 
