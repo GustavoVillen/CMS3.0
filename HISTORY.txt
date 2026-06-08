@@ -1,5 +1,61 @@
 HISTORY.txt
 
+[2026-06-08] FEAT: módulo de Confiabilidad (MTBF / MTTR / Disponibilidad)
+Agent: Claude Opus 4.8
+
+  Nuevo módulo de KPIs que MIDE el mantenimiento (antes solo se gestionaba). Deriva métricas de
+  datos existentes, SIN cambios de schema. Decisiones con el usuario: falla = Defect; página dedicada.
+
+  Definiciones:
+  - Fallas = Defect (reportedAt en período, severidad >= umbral, default MEDIUM+).
+  - Horas operación = delta runningHoursTotal (DailyEquipmentHours) en el período; si no hay
+    historial -> fallback horas calendario (marcado en la UI con badge "Marcha"/"Calendario").
+  - MTBF = horas / nº fallas. MTTR = avg(completedDate-openDate) de OT CORRECTIVE/CLOSED del activo.
+    OJO: MTTR se toma de las OT correctivas del activo DIRECTAMENTE (no vía Defect.workOrderId, que
+    es ambiguo: OT de origen de finding vs resolutora -> ver project_defect_workorder_dual).
+  - Disponibilidad = MTBF/(MTBF+MTTR). Agregación por SFI/buque/criticidad re-suma crudos (no promedia MTBF).
+
+  Archivos:
+  - apps/api/src/tenant/dashboard/reliability-service.ts (getReliabilityKpis + tipos).
+  - tenant-router.ts: GET /app/dashboard/reliability (?vesselCode,from,to,groupBy,minSeverity,sfiPrefix,criticality).
+  - apps/web-modern/src/pages/Reliability.tsx (tabla DataTable, filtros período/groupBy/severidad, banner
+    de definiciones + caveat, aviso de activos sin horas). Ruta /reliability, Sidebar (HeartPulse), i18n rel.* + nav.reliability.
+  - useFetch inyecta el vesselCode del header automáticamente -> respeta el selector de buque.
+
+  Validado vs VPS (SQL de control): MTBF/MTTR/base coinciden con el cálculo del servicio.
+  CAVEAT DE DATOS: hoy hay muy poca data (6 defectos, 1 OT correctiva cerrada en 12m) -> la página se
+  ve casi vacía / 100% disponible hasta que se cargue operación real. Es estado de datos, no del módulo.
+  Typecheck OK (web 0; api 3 preexistentes ajenos). Deploy pendiente: pull + build web + restart.
+
+
+[2026-06-07] PERF: "Analizar con IA" del RCA tardaba demasiado (regresión de la base documental)
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  El botón "Analizar con IA" del RCA (Defects.tsx analyzeRca → POST /app/copiloto/chat)
+  tardaba demasiado.
+
+  CAUSA:
+  El fix del 2026-06-06 (getActiveTenantAiDocumentsContent: incluir TODOS los docs ACTIVE)
+  hizo que cada llamada al copiloto inyecte la base documental completa en el system prompt,
+  incluido un manual de ~266 KB (~68k tokens). El RCA fuerza tool-use (query_defects +
+  query_work_orders) → flujo de DOS llamadas a Claude, y el prompt gigante viaja en ambas.
+  El RCA no usa los manuales (se basa en los datos de las queries), así que era peso muerto x2.
+
+  FIX (opción A — prompt liviano para one-shot):
+  - copiloto-service: nuevo flag includeKnowledgeDocs (default true). Si es false, no se llama
+    a getActiveTenantAiDocumentsContent → no se inyecta la base documental.
+  - tenant-router: lee body.includeKnowledgeDocs y lo reenvía a streamCopilotoChat.
+  - Defects.tsx (analyzeRca): pasa includeKnowledgeDocs=false. El chat normal del copiloto
+    sigue incluyendo los docs (no se toca).
+
+  EFECTO: el RCA deja de procesar ~68k tokens x2 → respuesta notablemente más rápida. El resto
+  del copiloto conserva acceso a los manuales. Sin cambios de schema ni deps.
+
+  VERIFICACIÓN:
+  - tsc web: 0 errores. tsc api: 0 errores nuevos (3 preexistentes en defects-service.ts).
+    En vivo local bloqueado (Postgres/Docker apagado).
+
 [2026-06-07] FIX: fotos de defectos rotas en el detalle (desktop)
 Agent: Claude Opus 4.8
 

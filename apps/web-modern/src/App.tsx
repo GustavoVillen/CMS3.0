@@ -25,6 +25,7 @@ import { FluidAnalysesPage } from "./pages/FluidAnalyses";
 import { MaintenancePlansPage } from "./pages/MaintenancePlans";
 import { MaintenanceGanttPage } from "./pages/MaintenanceGantt";
 import { MaintenanceWorkloadPage } from "./pages/MaintenanceWorkload";
+import { ReliabilityPage } from "./pages/Reliability";
 import { VesselSuperintendentsPage } from "./pages/VesselSuperintendents";
 import { TeamPage } from "./pages/Team";
 import { DailyReportsPage } from "./pages/DailyReports";
@@ -137,6 +138,7 @@ export default function App() {
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} />
+              <Route path="/reliability"       element={<ReliabilityPage />} />
               <Route path="/work-orders"       element={<WorkOrdersPage />} />
               <Route path="/daily-reports"     element={<DailyReportsPage />} />
               <Route path="/defects"           element={<DefectsPage />} />

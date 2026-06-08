@@ -73,6 +73,7 @@ import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
 import { listTenantMaintenancePlans, getTenantMaintenancePlansSummary, getMaintenanceWorkloadProjection } from "./maintenance-plans/maintenance-plans-service";
+import { getReliabilityKpis, type ReliabilityGroupBy } from "./dashboard/reliability-service";
 import { listTenantInspectionLogs } from "./inspection-logs/inspection-logs-service";
 import { listTenantInspections } from "./inspections/inspections-service";
 import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
@@ -619,6 +620,22 @@ export async function handleTenantRoutes(
       detailWeekStart: url.searchParams.get("detailWeek"),
     });
     sendJson(response, 200, projection);
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/dashboard/reliability") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const kpis = await getReliabilityKpis(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      assetId: url.searchParams.get("assetId"),
+      sfiPrefix: url.searchParams.get("sfiPrefix"),
+      criticality: url.searchParams.get("criticality"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
+      minSeverity: url.searchParams.get("minSeverity"),
+      groupBy: (url.searchParams.get("groupBy") as ReliabilityGroupBy | null) ?? undefined,
+    });
+    sendJson(response, 200, kpis);
     return true;
   }
   // Export HTML standalone — para imprimir / archivar / compartir.
@@ -1187,6 +1204,7 @@ export async function handleTenantRoutes(
       screenContext?: Record<string, unknown> | null;
       fileAttachment?: Record<string, unknown> | null;
       mode?: "voice" | null;
+      includeKnowledgeDocs?: boolean;
     };
     const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
     if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -1267,6 +1285,7 @@ export async function handleTenantRoutes(
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
           mode:           body.mode ?? null,
+          includeKnowledgeDocs: body.includeKnowledgeDocs,
           abortSignal:    abortController.signal,
         },
         (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
