@@ -1124,7 +1124,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
-              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /> · <AssetLabel id={defect.assetId} className="text-[11px] text-fg" /></p>
+              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /> · <AssetLabel id={defect.assetId} className="text-sm font-bold text-accent" /></p>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>

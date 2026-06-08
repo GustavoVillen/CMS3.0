@@ -63,6 +63,21 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
     }
   }
 
+  // Resolve asset name (the defect carries assetId; the PDF should show the equipment)
+  let assetName: string | null = null;
+  if (defect.assetId) {
+    const prismaRaw = getPrismaClient();
+    if (prismaRaw) {
+      try {
+        const asset = await (prismaRaw as any).asset.findUnique({
+          where: { id: defect.assetId },
+          select: { name: true, assetCode: true },
+        });
+        assetName = asset?.name ?? asset?.assetCode ?? null;
+      } catch { /* non-blocking */ }
+    }
+  }
+
   // Get tenant logo
   let tenant: { name?: string; logoUrl?: string | null; logoUrlLight?: string | null } | null = null;
   let tenantLogoBuffer: Buffer | null = null;
@@ -204,6 +219,10 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
         y += boxH + SECTION_GAP;
       }
     }
+
+    // ── Equipo (Asset) — identificador primario del defecto, full-width ───────
+    labeledBox(ML, y, W, 44, "Equipo", assetName ?? "—", "#0369a1");
+    y += 58;
 
     // ── Row 1: Fecha + Clasificación ──────────────────────────────────────────
     const half = (W - 8) / 2;

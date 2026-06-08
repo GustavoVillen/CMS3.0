@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-06-08] UI: Asset más grande en el modal de Defecto + Asset en el PDF
+Agent: Claude Opus 4.8
+
+  - Modal: el AssetLabel de la cabecera pasó de text-[11px] gris a text-sm font-bold text-accent
+    (se lee fácil, resalta junto al buque).
+  - PDF (defect-pdf-service.ts): se agrega caja "EQUIPO" full-width al inicio del cuerpo (mismo
+    estilo labeledBox que Fecha/Severidad/Estado). Resuelve assetName desde defect.assetId con
+    asset.findUnique (patrón del fetch de la OT). Se puso en el cuerpo y no en la cabecera para
+    evitar overflow de texto (header con espacio fijo). Typecheck OK.
+
+
 [2026-06-08] UI: mostrar el Asset en el modal de detalle de Defecto
 Agent: Claude Opus 4.8
 
