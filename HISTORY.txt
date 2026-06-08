@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-06-08] UI: mostrar el Asset en el modal de detalle de Defecto
+Agent: Claude Opus 4.8
+
+  El modal de Defectos mostraba el buque pero no el equipo (Asset), aunque el defecto tiene assetId
+  (clave para el MTBF de Confiabilidad). Se agrega <AssetLabel id={defect.assetId}> en el subtítulo
+  de la cabecera, junto al VesselLabel (mismo patrón, reusa el cache de assets de EntityLabels).
+  Frontend-only, 2 líneas en Defects.tsx (import + cabecera). Typecheck OK.
+
+  NOTA: este commit de Defects.tsx incluye también la optimización pre-existente sin commitear del
+  RCA (includeKnowledgeDocs, ver entrada 2026-06-07) porque estaba en el mismo archivo; el usuario
+  confirmó subirla junto.
+
+
 [2026-06-08] FEAT: módulo de Confiabilidad (MTBF / MTTR / Disponibilidad)
 Agent: Claude Opus 4.8
 

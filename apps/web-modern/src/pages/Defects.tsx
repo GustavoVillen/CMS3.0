@@ -5,7 +5,7 @@ import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
-import { VesselLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
+import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
 import { AuthedImage } from "../lib/authed-media";
@@ -905,6 +905,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         capability: "defect_assistant",
         locale: navigator.language?.split("-")[0] ?? "es",
         messages: [{ role: "user", content: prompt }],
+        // El RCA se apoya en las query_* (defectos/OTs), no en los manuales del
+        // tenant. Saltear la base documental aligera el prompt y acelera bastante.
+        includeKnowledgeDocs: false,
         screenContext: {
           module: "DEFECTS",
           screen: "DEFECT_EDIT",
@@ -1121,7 +1124,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
               <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
-              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /></p>
+              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /> · <AssetLabel id={defect.assetId} className="text-[11px] text-fg" /></p>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
