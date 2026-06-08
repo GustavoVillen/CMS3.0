@@ -247,6 +247,13 @@ export interface CopilotoRequest {
    */
   mode?: "voice" | null;
   /**
+   * Si es false, NO se inyecta la base documental del tenant (AiDocuments) en el
+   * system prompt. Lo usan las acciones one-shot que no necesitan los manuales y
+   * se benefician de un prompt liviano (p. ej. "Analizar con IA" del RCA, que se
+   * apoya en los datos de las query_* tools). Default: true.
+   */
+  includeKnowledgeDocs?: boolean;
+  /**
    * AbortSignal opcional. Si el cliente HTTP desconecta (cerrar tab,
    * navegación), el router puede abortar la llamada a Claude para no
    * facturar tokens de respuesta que nadie va a leer.
@@ -1123,10 +1130,13 @@ export async function streamCopilotoChat(
     throw new RouteError(400, "INVALID_REQUEST", "messages array must not be empty.");
   }
 
-  // Build context in parallel
+  // Build context in parallel. La base documental puede ser muy pesada (manuales
+  // de cientos de KB); las acciones one-shot que no la necesitan la saltean con
+  // includeKnowledgeDocs=false para acelerar la respuesta (menos tokens de entrada).
+  const includeDocs = req.includeKnowledgeDocs !== false;
   const [publishedPrompt, docsContent] = await Promise.all([
     getPublishedPrompt(req.capability, req.locale),
-    getActiveTenantAiDocumentsContent(req.tenantId),
+    includeDocs ? getActiveTenantAiDocumentsContent(req.tenantId) : Promise.resolve(""),
   ]);
 
   // ── Stable system blocks (cacheable) ──
