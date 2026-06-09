@@ -246,7 +246,18 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       // monopolice. Después se aplica un piso mínimo de 30pt y se rebalancea
       // el resto.
       const minColW = 30;
-      const weights = headers.map(h => Math.max(8, h.trim().length));
+      // Peso por columna según el CONTENIDO real (header + celda más larga),
+      // no solo el largo del header. Así una columna corta (ej. "Item": "1 [ ]")
+      // no se lleva el mismo ancho que una de texto largo (Tarea / Criterios).
+      // Se mide el texto sin el checkbox y se topea a 60 para que una celda
+      // excepcionalmente larga no monopolice (igual wrappea).
+      const measureLen = (s: string) =>
+        sanitizePdfText((s ?? "").trim().replace(/^[☐☑☒□■✓✔✘ð]+\s*/u, "")).length;
+      const weights = headers.map((h, i) => {
+        const headerLen = h.trim().length;
+        const cellMax = dataRows.reduce((m, r) => Math.max(m, measureLen(r[i] ?? "")), 0);
+        return Math.max(6, Math.min(Math.max(headerLen, cellMax), 60));
+      });
       if (nCols >= 6) {
         // Cap primera columna a 1.5× el promedio del resto.
         const avgRest = weights.slice(1).reduce((s, x) => s + x, 0) / Math.max(1, nCols - 1);

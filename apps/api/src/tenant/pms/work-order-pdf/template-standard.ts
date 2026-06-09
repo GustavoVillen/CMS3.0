@@ -108,6 +108,18 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       }
       return blocks;
     }
+    // Anchos de columna proporcionales al contenido (header + celda más larga),
+    // no a partes iguales. Evita que columnas cortas (ej. "Item": "1 [ ]") se
+    // lleven el mismo ancho que columnas de texto largo (Tarea / Criterios).
+    function colWidthsFor(rows: string[][], totalW: number) {
+      const nCols = rows[0]?.length ?? 1;
+      const ws = Array.from({ length: nCols }, (_, ci) =>
+        Math.max(6, Math.min(60, rows.reduce((m, r) => Math.max(m, stripBold(r[ci] ?? "").trim().length), 0))));
+      const tw = ws.reduce((a, b) => a + b, 0) || 1;
+      const w = ws.map(x => (x / tw) * totalW);
+      const x = (ci: number) => w.slice(0, ci).reduce((a, b) => a + b, 0);
+      return { w, x };
+    }
     function renderContentAt(text: string, cx: number, cy: number, width: number): number {
       const ROW_H = 16;
       const lines = text.split("\n");
@@ -121,8 +133,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
           }
           const rows = parseMarkdownTable(block);
           if (!rows.length) continue;
-          const colCount = rows[0].length;
-          const colW2 = width / colCount;
+          const cwx = colWidthsFor(rows, width);
           rows.forEach((row, ri) => {
             const isHeader = ri === 0;
             const rowBg = isHeader ? "#e2e8f0" : (ri % 2 === 0 ? "#f8fafc" : "#ffffff");
@@ -130,7 +141,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
             doc.rect(cx, ry, width, ROW_H).strokeColor(border).lineWidth(0.4).stroke();
             row.forEach((cellVal, ci) => {
               doc.fontSize(8).font(isHeader ? "Helvetica-Bold" : "Helvetica").fillColor(black)
-                .text(stripBold(cellVal), cx + ci * colW2 + 4, ry + 4, { width: colW2 - 8, lineBreak: false });
+                .text(stripBold(cellVal), cx + cwx.x(ci) + 4, ry + 4, { width: cwx.w[ci] - 8, lineBreak: false });
             });
             ry += ROW_H;
           });
@@ -240,8 +251,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
         let ry = y + LABEL_H + TOP_PAD;
         for (const block of seg.blocks) {
           if (block.kind === "table") {
-            const colCount = block.rows[0]?.length ?? 1;
-            const colW2 = innerW / colCount;
+            const cwx = colWidthsFor(block.rows, innerW);
             const ROW_H = 16;
             block.rows.forEach((row, ri) => {
               const isHeader = ri === 0;
@@ -250,7 +260,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
               doc.rect(ML + 10, ry, innerW, ROW_H).strokeColor(border).lineWidth(0.4).stroke();
               row.forEach((cellVal, ci) => {
                 doc.fontSize(8).font(isHeader ? "Helvetica-Bold" : "Helvetica").fillColor(black)
-                  .text(stripBold(cellVal), ML + 10 + ci * colW2 + 4, ry + 4, { width: colW2 - 8, lineBreak: false });
+                  .text(stripBold(cellVal), ML + 10 + cwx.x(ci) + 4, ry + 4, { width: cwx.w[ci] - 8, lineBreak: false });
               });
               ry += ROW_H;
             });
