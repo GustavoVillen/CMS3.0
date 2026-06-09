@@ -1,5 +1,39 @@
 HISTORY.txt
 
+[2026-06-07] PERF: copiloto lento por la base documental — ahora es una herramienta on-demand
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  El copiloto tardaba demasiado (y a veces se colgaba sin responder) en CUALQUIER pregunta,
+  no solo el RCA.
+
+  CAUSA:
+  El fix del 2026-06-06 inyectaba TODOS los docs ACTIVE en el system prompt de cada llamada,
+  incluido un manual de ~266 KB (~68k tokens). Con tool-use (la mayoría de las preguntas) ese
+  prompt gigante se procesaba x2 (fase 1 + fase 2) → latencia alta y timeouts. Encima, preguntas
+  que no necesitan manuales (p. ej. "cada cuánto se inspecciona el cojinete") igual lo arrastraban.
+
+  FIX (opción A — base documental como herramienta):
+  - ai-documents-service: se reemplaza getActiveTenantAiDocumentsContent por
+    getActiveTenantAiDocs (name+content, para búsqueda) y getActiveTenantAiDocumentsIndex (nombres).
+  - copiloto-service:
+    · El system prompt ya NO lleva el contenido de los docs: solo un índice liviano de nombres
+      ("## Base documental del tenant (índice)").
+    · Nueva tool search_knowledge_docs(query, documentName?, limit): busca por palabras clave
+      sobre el contenido de los docs ACTIVE y devuelve extractos (ventanas ~600 chars, tope 16 KB)
+      con el nombre del documento. Sólo se invoca cuando la pregunta es sobre un manual/procedimiento.
+    · GUARDRAILS: instrucción de usar search_knowledge_docs para contenido de manuales y de no
+      inventar datos de fabricante si no está en la base.
+    · includeKnowledgeDocs=false (RCA) omite también el índice.
+
+  EFECTO: el system prompt vuelve a ser chico → respuestas rápidas en la mayoría de las preguntas;
+  el contenido de los manuales se trae on-demand sólo cuando hace falta (y acotado). Resuelve
+  velocidad Y acceso a los manuales. Sin cambios de schema ni deps.
+
+  VERIFICACIÓN:
+  - tsc api: 0 errores nuevos (3 preexistentes en defects-service.ts). En vivo local bloqueado
+    (Postgres/Docker apagado).
+
 [2026-06-08] UI: Asset más grande en el modal de Defecto + Asset en el PDF
 Agent: Claude Opus 4.8
 

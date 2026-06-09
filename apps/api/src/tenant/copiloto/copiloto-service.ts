@@ -18,7 +18,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-service";
-import { getActiveTenantAiDocumentsContent } from "../ai-documents/ai-documents-service";
+import { getActiveTenantAiDocs, getActiveTenantAiDocumentsIndex } from "../ai-documents/ai-documents-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { recordAiUsage } from "../usage/usage-service";
@@ -45,6 +45,7 @@ Immutable rules:
 - When referencing a specific maintenance plan from query results, always include a direct link using its taskCode: [TASKCODE](/maintenance-plans?openId=PLAN_ID). Use the "id" field as PLAN_ID and "taskCode" as the display text.
 - When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
 - IMPORTANT: Before asking the user a question that can be answered by querying the system (e.g. "Does a maintenance plan exist?", "Are there open work orders?"), ALWAYS use the available query tools to look it up yourself first.
+- KNOWLEDGE BASE: The tenant's uploaded manuals, procedures, datasheets and technical documents are NOT included in this prompt — only their names appear under "## Base documental del tenant (índice)". When the user asks about the CONTENT of a manual/procedure/specification (recommended oil/fluid, part number, torque, interval, step of a procedure, etc.), call the search_knowledge_docs tool with relevant keywords (optionally documentName to target a specific manual). Cite the document name in your answer. If the index section is absent or the search returns nothing, say the document/info is not in the knowledge base — do NOT invent manufacturer data.
 - RCA / DEFECT PROACTIVE SEARCH: When you are in DEFECTS or RCA module and you are about to ask the user ANY question about maintenance history, previous work orders, last service date, last fluid/filter/component change, inspection records, or any operational record related to the asset — STOP before asking. First call query_maintenance_plans and query_work_orders using the assetId and vesselCode from the screen context (relatedEntities.assetId). Then in your response: (1) explicitly state what you found — plan name, last execution date/hours, or work orders — or state "No encontré registros de [X] para este activo en el sistema"; (2) only ask the user for additional context if the records were insufficient or absent. Never ask "¿Cuándo fue el último cambio de X?" without first querying the system yourself.
 - "ALREADY DONE?" CHECKS: When the user asks "¿se hizo X?", "¿cambiaron Y?", "¿cuándo fue el último cambio de Z?" or similar — call query_work_orders WITHOUT a status filter (to include PLANNED, IN_PROGRESS, ON_HOLD, CLOSED). Then for each row inspect the fields "observations" (AI-consolidated technician progress notes), "description" and "title" — these contain the actual work performed even on OTs that are still open. Only conclude "no se hizo" if no match is found in any of those fields across all statuses. When citing evidence, mention the OT code and whether it is CLOSED or still in progress.
 - RCA USER HYPOTHESIS FIRST: When you are about to start or guide an RCA (root cause analysis) — triggered by the user asking to "analizar la causa", "hacer el RCA", "iniciar RCA", "investigar el defecto", or any similar phrase — ALWAYS start with ONE single question before any analysis: "¿Ya tenés alguna hipótesis sobre la posible causa de este defecto?" Wait for the user's answer before proceeding. If the user already provided a hypothesis in their message, do NOT ask again — instead, critically evaluate it before incorporating it: check if it (1) identifies a specific, actionable cause (not just a symptom), (2) is technically plausible given the defect description and any maintenance records found, (3) is falsifiable — i.e., there is a way to confirm or rule it out. If the hypothesis is vague, symptom-level, or incomplete, point it out respectfully and help the user refine it to a proper root cause before proceeding with the full RCA. If the hypothesis is well-formed, confirm it explicitly and build the analysis from there.
@@ -464,6 +465,20 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "search_knowledge_docs",
+    description:
+      "Search the tenant's knowledge base — the uploaded manuals, procedures, technical documents and datasheets in 'Base documental' (AI Documents). Use this WHENEVER the user asks about the content of a manual, procedure, specification, recommended part/fluid, torque, interval or any uploaded document — e.g. 'qué dice el manual sobre el aceite', 'según el procedimiento de parada anual', 'par de apriete de la culata'. The list of available documents is in the '## Base documental del tenant (índice)' section of the system prompt; if that section is absent, there are no documents loaded. Returns the most relevant excerpts with the document name so you can cite the source.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query:        { type: "string", description: "Keywords or phrase to search for across the knowledge base (e.g. 'aceite recomendado viscosidad', 'par de apriete culata')." },
+        documentName: { type: "string", description: "Optional: restrict the search to a specific document by (part of) its name, e.g. 'Volvo Penta'." },
+        limit:        { type: "number", description: "Max excerpts to return (default 5, max 10)." },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -511,6 +526,85 @@ function applyVesselWhereScope(
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge base search — used by the search_knowledge_docs tool.
+// Búsqueda por palabras clave sobre el contenido de los docs ACTIVE, devolviendo
+// extractos (ventanas de texto) alrededor de las coincidencias. Mantiene el
+// contenido FUERA del system prompt: se trae sólo lo relevante, on-demand.
+// ---------------------------------------------------------------------------
+
+const KB_WINDOW          = 600;    // chars de contexto alrededor de cada match
+const KB_MAX_TOTAL_CHARS = 16_000; // tope total devuelto al modelo
+
+function searchKnowledgeDocs(
+  docs: { name: string; content: string }[],
+  query: string,
+  documentName: string | undefined,
+  limit: number,
+): string {
+  const q = (query || "").trim();
+  if (!q) return JSON.stringify({ message: "Empty query." });
+
+  const terms = q.toLowerCase().split(/\s+/)
+    .map(t => t.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(t => t.length >= 3);
+  if (terms.length === 0) terms.push(q.toLowerCase());
+
+  const pool = documentName
+    ? docs.filter(d => d.name.toLowerCase().includes(documentName.toLowerCase()))
+    : docs;
+
+  type Hit = { name: string; score: number; excerpt: string };
+  const hits: Hit[] = [];
+
+  for (const d of pool) {
+    const lc = d.content.toLowerCase();
+    const positions: number[] = [];
+    let score = 0;
+    for (const term of terms) {
+      let idx = lc.indexOf(term);
+      let count = 0;
+      while (idx !== -1 && count < 6) {
+        positions.push(idx);
+        score++;
+        idx = lc.indexOf(term, idx + term.length);
+        count++;
+      }
+    }
+    if (score === 0) continue;
+
+    positions.sort((a, b) => a - b);
+    const windows: string[] = [];
+    let lastEnd = -1;
+    for (const p of positions) {
+      const start = Math.max(0, p - Math.floor(KB_WINDOW / 2));
+      if (start <= lastEnd) continue; // saltear ventanas solapadas
+      const end = Math.min(d.content.length, p + Math.floor(KB_WINDOW / 2));
+      windows.push(d.content.slice(start, end).trim());
+      lastEnd = end;
+      if (windows.length >= 3) break;
+    }
+    hits.push({ name: d.name, score, excerpt: windows.join("\n…\n") });
+  }
+
+  hits.sort((a, b) => b.score - a.score);
+  const top = hits.slice(0, Math.min(Math.max(1, limit), 10));
+  if (top.length === 0) {
+    return JSON.stringify({ message: "No matching content found in the knowledge base for that query." });
+  }
+
+  const out: { document: string; excerpt: string }[] = [];
+  let total = 0;
+  for (const h of top) {
+    if (total >= KB_MAX_TOTAL_CHARS) break;
+    let ex = h.excerpt;
+    if (total + ex.length > KB_MAX_TOTAL_CHARS) ex = ex.slice(0, KB_MAX_TOTAL_CHARS - total) + "…";
+    out.push({ document: h.name, excerpt: ex });
+    total += ex.length;
+  }
+  return wrapUntrusted(JSON.stringify(out));
+}
+
 async function executeCopilotTool(
   name: string,
   input: Record<string, unknown>,
@@ -523,6 +617,16 @@ async function executeCopilotTool(
   const limit = Math.min(Number(input.limit ?? 10), 20);
 
   try {
+    if (name === "search_knowledge_docs") {
+      const docs = await getActiveTenantAiDocs(tenantId);
+      return searchKnowledgeDocs(
+        docs,
+        String(input.query ?? ""),
+        typeof input.documentName === "string" ? input.documentName : undefined,
+        Number(input.limit ?? 5),
+      );
+    }
+
     if (name === "query_maintenance_plans") {
       const where: Record<string, unknown> = {
         tenantId,
@@ -1130,13 +1234,15 @@ export async function streamCopilotoChat(
     throw new RouteError(400, "INVALID_REQUEST", "messages array must not be empty.");
   }
 
-  // Build context in parallel. La base documental puede ser muy pesada (manuales
-  // de cientos de KB); las acciones one-shot que no la necesitan la saltean con
-  // includeKnowledgeDocs=false para acelerar la respuesta (menos tokens de entrada).
+  // Build context in parallel. La base documental NO se inyecta entera (los manuales
+  // pueden pesar cientos de KB y disparaban la latencia en cada turno): se inyecta
+  // sólo un índice liviano de nombres y la IA consulta el contenido on-demand con la
+  // tool search_knowledge_docs. includeKnowledgeDocs=false omite incluso el índice
+  // (acciones one-shot como el RCA, que se apoyan en las query_* y no en manuales).
   const includeDocs = req.includeKnowledgeDocs !== false;
-  const [publishedPrompt, docsContent] = await Promise.all([
+  const [publishedPrompt, docIndex] = await Promise.all([
     getPublishedPrompt(req.capability, req.locale),
-    includeDocs ? getActiveTenantAiDocumentsContent(req.tenantId) : Promise.resolve(""),
+    includeDocs ? getActiveTenantAiDocumentsIndex(req.tenantId) : Promise.resolve<string[]>([]),
   ]);
 
   // ── Stable system blocks (cacheable) ──
@@ -1149,8 +1255,16 @@ export async function streamCopilotoChat(
   if (publishedPrompt) {
     stableSystemBlocks.push({ type: "text", text: `## Capability Instructions\n${publishedPrompt}` });
   }
-  if (docsContent) {
-    stableSystemBlocks.push({ type: "text", text: `## Tenant Knowledge Documents\n${docsContent}` });
+  if (docIndex.length > 0) {
+    stableSystemBlocks.push({
+      type: "text",
+      text:
+        `## Base documental del tenant (índice)\n` +
+        `Estos documentos (manuales, procedimientos, datasheets) están cargados en la base documental. ` +
+        `Su contenido NO está acá: para leerlo usá la herramienta search_knowledge_docs con palabras clave ` +
+        `(opcionalmente acotando por documentName). Citá el documento por su nombre al responder.\n` +
+        docIndex.map(n => `- ${n}`).join("\n"),
+    });
   }
   stableSystemBlocks[stableSystemBlocks.length - 1]!.cache_control = { type: "ephemeral" };
 
