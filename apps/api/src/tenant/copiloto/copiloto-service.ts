@@ -3,14 +3,16 @@
  * Builds the prompt context (guardrails + published template + tenant docs + operational insights)
  * and streams the response via Claude's streaming API.
  *
- * Agentic tool-use loop (1 round):
- *   Phase 1 — stream with tools enabled; collect tool_use blocks.
- *   Phase 2 — if tools were called, execute Prisma queries, inject results, stream final answer.
+ * Agentic tool-use loop (up to MAX_TOOL_ROUNDS rounds):
+ *   - Each round streams with tools enabled; if the model emits tool_use, the tools
+ *     (Prisma queries / knowledge-base search) run and their results are fed back.
+ *   - The model can search again (e.g. broaden a query) across rounds.
+ *   - The final round disables tools to force a textual answer (no infinite loops).
  *
  * Prompt composition order:
  *   1. Immutable guardrails (system prompt)
  *   2. Published global prompt template for capability + locale
- *   3. Tenant knowledge documents (active versions)
+ *   3. Tenant knowledge base INDEX (names only; content fetched on-demand via search_knowledge_docs)
  *   4. Current screen context (when provided by the frontend)
  *   5. Operational insights (last 5 open insights)
  *   6. User messages
@@ -1434,94 +1436,43 @@ export async function streamCopilotoChat(
     return { role: m.role, content: m.content };
   });
 
-  // Acumulamos el texto total de ambas phases para parsear [ACCIONES] al final.
+  // Acumulamos el texto total de todas las rondas para parsear [ACCIONES] al final.
   // Sigue streameando chunk por chunk al cliente como antes.
   let accumulatedText = "";
 
-  // ── Phase 1: stream with tools enabled ──────────────────────────────────────
-  const phase1Model = "claude-haiku-4-5-20251001";
-  const phase1Started = Date.now();
-  const phase1Stream = client.messages.stream({
-    model: phase1Model,
-    max_tokens: 2048,
-    system: systemBlocks,
-    tools: COPILOT_TOOLS,
-    messages: baseMessages,
-    metadata: { user_id: req.userId },
-  }, { signal: req.abortSignal });
+  // ── Agentic loop ────────────────────────────────────────────────────────────
+  // Antes era una única ronda (fase 1 con tools → fase 2 SIN tools). Si en la
+  // fase 2 el modelo todavía quería llamar una tool (p. ej. "ampliemos la
+  // búsqueda" cuando la primera query no devolvió nada), no podía y terminaba la
+  // respuesta vacía ("no me responde"). Ahora iteramos hasta MAX_TOOL_ROUNDS
+  // rondas CON tools; en la ronda final las desactivamos para forzar una
+  // respuesta textual (y evitar loops infinitos).
+  const MODEL = "claude-haiku-4-5-20251001";
+  const MAX_TOOL_ROUNDS = 3;
 
-  // Emit text chunks from phase 1 in real time
-  for await (const chunk of phase1Stream) {
-    if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-      accumulatedText += chunk.delta.text;
-      onChunk(chunk.delta.text);
-    }
-  }
+  let loopMessages: Anthropic.MessageParam[] = baseMessages;
+  let round = 0;
 
-  const phase1Msg = await phase1Stream.finalMessage();
-
-  recordAiUsage({
-    tenantId:            req.tenantId,
-    tenantSlug:          req.tenantSlug,
-    userId:              req.userId,
-    userEmail:           req.userEmail ?? "",
-    vesselCode:          req.vesselCode ?? null,
-    feature:             "copiloto",
-    model:               phase1Model,
-    inputTokens:         phase1Msg.usage.input_tokens,
-    outputTokens:        phase1Msg.usage.output_tokens,
-    cacheReadTokens:     phase1Msg.usage.cache_read_input_tokens ?? 0,
-    cacheCreationTokens: phase1Msg.usage.cache_creation_input_tokens ?? 0,
-    latencyMs:           Date.now() - phase1Started,
-  });
-
-  // If the model ended with tool_use, execute tools and do a second streaming pass
-  if (phase1Msg.stop_reason === "tool_use") {
-    const toolUseBlocks = phase1Msg.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-    );
-
-    // Execute all requested tools (in parallel)
-    const toolResults = await Promise.all(
-      toolUseBlocks.map(async (block) => ({
-        type: "tool_result" as const,
-        tool_use_id: block.id,
-        content: await executeCopilotTool(
-          block.name,
-          block.input as Record<string, unknown>,
-          req.tenantId,
-          scope,
-        ),
-      })),
-    );
-
-    // Build updated message list: original + assistant turn + tool results
-    const phase2Messages: Anthropic.MessageParam[] = [
-      ...baseMessages,
-      { role: "assistant", content: phase1Msg.content },
-      { role: "user", content: toolResults },
-    ];
-
-    // ── Phase 2: stream final answer with tool results ─────────────────────────
-    const phase2Model = "claude-haiku-4-5-20251001";
-    const phase2Started = Date.now();
-    const phase2Stream = client.messages.stream({
-      model: phase2Model,
+  while (true) {
+    const allowTools = round < MAX_TOOL_ROUNDS;
+    const roundStarted = Date.now();
+    const stream = client.messages.stream({
+      model: MODEL,
       max_tokens: 2048,
       system: systemBlocks,
-      // No tools in phase 2 — prevent infinite looping
-      messages: phase2Messages,
+      ...(allowTools ? { tools: COPILOT_TOOLS } : {}),
+      messages: loopMessages,
       metadata: { user_id: req.userId },
     }, { signal: req.abortSignal });
 
-    for await (const chunk of phase2Stream) {
+    for await (const chunk of stream) {
       if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
         accumulatedText += chunk.delta.text;
         onChunk(chunk.delta.text);
       }
     }
 
-    const phase2Msg = await phase2Stream.finalMessage();
+    const msg = await stream.finalMessage();
 
     recordAiUsage({
       tenantId:            req.tenantId,
@@ -1530,13 +1481,50 @@ export async function streamCopilotoChat(
       userEmail:           req.userEmail ?? "",
       vesselCode:          req.vesselCode ?? null,
       feature:             "copiloto",
-      model:               phase2Model,
-      inputTokens:         phase2Msg.usage.input_tokens,
-      outputTokens:        phase2Msg.usage.output_tokens,
-      cacheReadTokens:     phase2Msg.usage.cache_read_input_tokens ?? 0,
-      cacheCreationTokens: phase2Msg.usage.cache_creation_input_tokens ?? 0,
-      latencyMs:           Date.now() - phase2Started,
+      model:               MODEL,
+      inputTokens:         msg.usage.input_tokens,
+      outputTokens:        msg.usage.output_tokens,
+      cacheReadTokens:     msg.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0,
+      latencyMs:           Date.now() - roundStarted,
     });
+
+    // Si quedan rondas y el modelo pidió tools, las ejecutamos y seguimos.
+    if (allowTools && msg.stop_reason === "tool_use") {
+      const toolUseBlocks = msg.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+      );
+      const toolResults = await Promise.all(
+        toolUseBlocks.map(async (block) => ({
+          type: "tool_result" as const,
+          tool_use_id: block.id,
+          content: await executeCopilotTool(
+            block.name,
+            block.input as Record<string, unknown>,
+            req.tenantId,
+            scope,
+          ),
+        })),
+      );
+      loopMessages = [
+        ...loopMessages,
+        { role: "assistant", content: msg.content },
+        { role: "user", content: toolResults },
+      ];
+      round++;
+      continue;
+    }
+
+    break;
+  }
+
+  // Red de seguridad: si el modelo no produjo NINGÚN texto (caso raro en que
+  // termina la ronda final sin contenido), emitimos un mensaje claro en lugar de
+  // dejar al usuario con una respuesta vacía.
+  if (accumulatedText.trim().length === 0) {
+    const fallback = "No pude completar la respuesta. Reformulá la pregunta o intentá de nuevo.";
+    accumulatedText = fallback;
+    onChunk(fallback);
   }
 
   // Después de todas las phases, parseamos [ACCIONES]...[/ACCIONES] en el

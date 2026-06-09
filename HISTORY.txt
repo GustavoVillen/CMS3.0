@@ -1,5 +1,33 @@
 HISTORY.txt
 
+[2026-06-07] FIX: copiloto se quedaba sin responder cuando quería ampliar la búsqueda
+Agent: Claude Opus 4.8
+
+  PROBLEMA:
+  El copiloto streameaba un preámbulo ("voy a buscar… probemos con una búsqueda más amplia:")
+  y después no respondía nada.
+
+  CAUSA:
+  streamCopilotoChat hacía UNA sola ronda de tools: fase 1 con tools → fase 2 SIN tools. Si en
+  la fase 2 el modelo todavía quería llamar una tool (típico cuando la primera query no devolvió
+  nada y quería ampliar el textSearch), no podía y terminaba la respuesta vacía.
+
+  FIX:
+  - Se reemplaza el esquema fase1/fase2 por un bucle agéntico acotado (MAX_TOOL_ROUNDS=3): cada
+    ronda streamea con tools habilitadas; si hay tool_use se ejecutan y se realimentan los
+    resultados, permitiendo al modelo refinar/ampliar la búsqueda. En la ronda final se desactivan
+    las tools para forzar una respuesta textual (sin loops infinitos).
+  - Red de seguridad: si tras el bucle no se generó ningún texto, se emite un mensaje claro en
+    vez de dejar la respuesta vacía.
+  - recordAiUsage se registra por ronda.
+
+  EFECTO: las preguntas que requieren más de una búsqueda (ampliar términos, sinónimos navales)
+  ahora se completan y responden. Backend-only (tsx). Sin schema ni deps.
+
+  VERIFICACIÓN:
+  - tsc api: 0 errores nuevos (3 preexistentes en defects-service.ts). En vivo local bloqueado
+    (Postgres/Docker apagado).
+
 [2026-06-07] PERF: copiloto lento por la base documental — ahora es una herramienta on-demand
 Agent: Claude Opus 4.8
 
