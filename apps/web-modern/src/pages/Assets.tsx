@@ -13,6 +13,7 @@ import { useAuth } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
+import { MaintenancePlanModal, type MaintenancePlan } from "./MaintenancePlans";
 
 interface Asset {
   id: string;
@@ -257,6 +258,147 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+};
+
+// Tareas del plan de mantenimiento del asset. Son los MISMOS registros que el
+// módulo "Plan de Mantenimiento" (fuente de verdad única): al hacer click se
+// abre el editor real reutilizado, por lo que cualquier cambio acá se refleja
+// en el plan y viceversa, sin duplicar datos.
+function fmtPlanFreq(plan: MaintenancePlan): string {
+  const tt = plan.triggerType;
+  if ((tt === "HOURS" || tt === "RUNNING_HOURS") && plan.frequencyHours) return `${plan.frequencyHours.toLocaleString()} h`;
+  if ((tt === "MONTHS" || tt === "CALENDAR") && plan.frequencyMonths) return `${plan.frequencyMonths} m`;
+  if (tt === "DAY" && plan.frequencyMonths) return `${plan.frequencyMonths} d`;
+  if (tt === "WEEK" && plan.frequencyMonths) return `${plan.frequencyMonths} sem`;
+  return tt;
+}
+
+function fmtPlanNextDue(plan: MaintenancePlan): string {
+  if (plan.nextDueHours != null) return `${plan.nextDueHours.toLocaleString()} h`;
+  if (plan.nextDueDate) return fmtHistoryDate(plan.nextDueDate);
+  return "—";
+}
+
+const PlanTaskTypeBadge: React.FC<{ type: string }> = ({ type }) => {
+  const t = useT();
+  const isInsp = type === "INSPECTION";
+  return (
+    <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${isInsp ? "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20" : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20"}`}>
+      {t(`mp.taskType.${isInsp ? "INSPECTION" : "MAINTENANCE"}` as Parameters<typeof t>[0])}
+    </span>
+  );
+};
+
+const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
+  const t = useT();
+  const { user } = useAuth();
+  const role = user?.role;
+  const canManage = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
+  const canDelete = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT";
+
+  const { data, loading, error, reload } = useFetch<{ items: MaintenancePlan[] }>(
+    `/app/pms/maintenance-plans?assetId=${encodeURIComponent(asset.id)}`,
+    [asset.id],
+  );
+  const items = data?.items ?? [];
+
+  // undefined = cerrado | null = nueva tarea | objeto = edición
+  const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null | undefined>(undefined);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+
+  const sfiGroupNumber = useMemo(() => {
+    const first = asset.sfiCode?.trim()?.[0];
+    const n = first ? parseInt(first, 10) : NaN;
+    return Number.isNaN(n) ? null : n;
+  }, [asset.sfiCode]);
+
+  const openPlan = useCallback(async (row: MaintenancePlan) => {
+    setLoadingDetailId(row.id);
+    try {
+      const detail = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
+      setEditingPlan(detail);
+    } catch {
+      setEditingPlan(row);
+    } finally {
+      setLoadingDetailId(null);
+    }
+  }, []);
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-fg/10">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.plans.title")}</h3>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setEditingPlan(null)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-[11px] font-bold text-accent hover:bg-accent/20 transition-all"
+          >
+            <Plus className="w-3 h-3" /> {t("asset.plans.new")}
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
+      ) : error ? (
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.plans.loadError")}</p>
+      ) : items.length === 0 ? (
+        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-3">{t("asset.plans.empty")}</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-fg/10">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-fg/5 text-text-industrial/50">
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskCode")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskType")}</th>
+                <th className="text-left font-semibold px-3 py-2">{t("col.name")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.freq")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.nextDue")}</th>
+                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("col.status")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(plan => (
+                <tr
+                  key={plan.id}
+                  onClick={() => { void openPlan(plan); }}
+                  className="border-t border-fg/5 cursor-pointer hover:bg-fg/5 transition-colors"
+                  title={t("asset.plans.openTask")}
+                >
+                  <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">
+                    {loadingDetailId === plan.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : plan.taskCode}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap"><PlanTaskTypeBadge type={plan.taskType} /></td>
+                  <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{plan.title}</span></td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanFreq(plan)}</td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanNextDue(plan)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={plan.executionStatus} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {editingPlan !== undefined && (
+        <MaintenancePlanModal
+          plan={editingPlan}
+          userId={user?.id ?? null}
+          userName={user?.name ?? user?.email ?? ""}
+          isAdmin={canManage}
+          canDelete={canDelete}
+          overlayZClass="z-[60]"
+          defaultVesselCode={asset.vesselCode}
+          defaultAssetId={asset.id}
+          defaultSfiGroupNumber={sfiGroupNumber}
+          defaultSfiSubgroupCode={asset.sfiCode}
+          lockAsset
+          onClose={() => setEditingPlan(undefined)}
+          onSaved={async () => { await reload(); }}
+        />
       )}
     </div>
   );
@@ -880,6 +1022,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               />
             </div>
           </div>
+          {isEdit && initial?.id && <AssetMaintenancePlans asset={initial} />}
           {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>

@@ -10,6 +10,7 @@ export interface MaintenancePlanListFilters {
   triggerType?: string | null;
   executionStatus?: string | null;
   taskMasterId?: string | null;
+  assetId?: string | null;
 }
 
 export interface CreateMaintenancePlanInput {
@@ -456,6 +457,7 @@ export async function listTenantMaintenancePlans(
         const taskMasterId = "taskMasterId" in item ? (item as unknown as { taskMasterId?: string | null }).taskMasterId : undefined;
         if (filters.executionStatus && item.executionStatus !== filters.executionStatus) return false;
         if (filters.taskMasterId && taskMasterId !== filters.taskMasterId) return false;
+        if (filters.assetId && (item as unknown as { assetId?: string }).assetId !== filters.assetId) return false;
         return true;
       });
   }
@@ -470,6 +472,7 @@ export async function listTenantMaintenancePlans(
   if (filters.triggerType) where.triggerType = filters.triggerType;
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
   if (filters.taskMasterId) where.taskMasterId = filters.taskMasterId;
+  if (filters.assetId) where.assetId = filters.assetId;
 
   // Omit heavy AI-generated text fields from the list response — they are
   // refetched on demand via getTenantMaintenancePlan when the user opens a row.

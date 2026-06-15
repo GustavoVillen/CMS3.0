@@ -693,6 +693,13 @@ const dict = {
   "asset.history.col.completedDate": { es: "F. Realización",                                  en: "Completed date",                                     pt: "Data conclusão" },
   "asset.history.col.status":   { es: "Estado",                                               en: "Status",                                             pt: "Estado" },
   "asset.history.openWo":       { es: "Abrir esta orden de trabajo",                          en: "Open this work order",                               pt: "Abrir esta ordem de trabalho" },
+  "asset.plans.title":          { es: "Plan de mantenimiento",                                en: "Maintenance plan",                                   pt: "Plano de manutenção" },
+  "asset.plans.empty":          { es: "Este equipo aún no tiene tareas de mantenimiento.",     en: "This asset has no maintenance tasks yet.",           pt: "Este equipamento ainda não tem tarefas de manutenção." },
+  "asset.plans.loadError":      { es: "No se pudieron cargar las tareas de mantenimiento.",    en: "Could not load the maintenance tasks.",              pt: "Não foi possível carregar as tarefas de manutenção." },
+  "asset.plans.new":            { es: "Nueva tarea",                                          en: "New task",                                           pt: "Nova tarefa" },
+  "asset.plans.openTask":       { es: "Abrir esta tarea del plan",                            en: "Open this plan task",                                pt: "Abrir esta tarefa do plano" },
+  "asset.plans.col.freq":       { es: "Frecuencia",                                           en: "Frequency",                                          pt: "Frequência" },
+  "asset.plans.col.nextDue":    { es: "Próximo",                                              en: "Next due",                                           pt: "Próximo" },
   "asset.downloadPdf":          { es: "Descargar PDF",                                        en: "Download PDF",                                       pt: "Baixar PDF" },
   "asset.pdfError":             { es: "No se pudo generar el PDF.",                           en: "Could not generate the PDF.",                        pt: "Não foi possível gerar o PDF." },
 

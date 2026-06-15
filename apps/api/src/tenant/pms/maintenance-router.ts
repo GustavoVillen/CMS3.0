@@ -98,6 +98,7 @@ export async function handleMaintenanceRoutes(
       triggerType: url.searchParams.get("triggerType"),
       executionStatus: url.searchParams.get("executionStatus"),
       taskMasterId: url.searchParams.get("taskMasterId"),
+      assetId: url.searchParams.get("assetId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;

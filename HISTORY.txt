@@ -1,5 +1,33 @@
 HISTORY.txt
 
+[2026-06-15] FEAT: tareas del plan de mantenimiento dentro del modal de Asset (sync bidireccional)
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  En el modal "Editar Asset" mostrar las tareas de mantenimiento del equipo y poder editarlas;
+  lo que se cambia ahí se refleja en el módulo Plan de Mantenimiento y viceversa.
+
+  ENFOQUE (sin duplicar datos):
+  Las "tareas del asset" YA son los registros de MaintenancePlan (tienen assetId) — fuente de
+  verdad única. La sincronización bidireccional es automática porque el Asset lee/escribe los
+  mismos registros vía la misma API, reutilizando el editor real de planes.
+
+  CAMBIOS:
+  - Backend: filtro assetId en listTenantMaintenancePlans (ruta Prisma + dev-store) y en el
+    query param del router (espeja el filtro assetId que ya existía en work-orders).
+    Archivos: maintenance-plans-service.ts, maintenance-router.ts.
+  - Frontend MaintenancePlans.tsx: se exporta MaintenancePlanModal + tipo MaintenancePlan; se
+    agregan props opcionales para "nueva tarea desde asset" (defaultVesselCode/defaultAssetId/
+    defaultSfi*, lockAsset) y overlayZClass para anidar el modal sobre el de Asset.
+  - Frontend Assets.tsx: nueva sección "Plan de mantenimiento" (AssetMaintenancePlans) que lista
+    las tareas del asset (?assetId=), abre el editor real al click (edición + sync), y botón
+    "Nueva tarea" precargando vessel/asset/SFI del equipo. Permisos = ensureCanManagePlans
+    (ADMIN / FLEET_SUPERINTENDENT / MAINTENANCE_MANAGER editan; resto solo lectura).
+  - i18n: claves asset.plans.* (es/en/pt).
+
+  VERIFICACIÓN: tsc web-modern OK (exit 0); tsc api sin errores nuevos en los archivos tocados
+  (los errores preexistentes de defects-service.ts no fueron introducidos por este cambio).
+
 [2026-06-07] FIX: copiloto se quedaba sin responder cuando quería ampliar la búsqueda
 Agent: Claude Opus 4.8
 

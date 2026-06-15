@@ -41,7 +41,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface MaintenancePlan {
+export interface MaintenancePlan {
   id: string;
   tenantId: string;
   vesselCode: string;
@@ -1006,7 +1006,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
 
 // ─── Plan detail modal ────────────────────────────────────────────────────────
 
-interface MaintenancePlanModalProps {
+export interface MaintenancePlanModalProps {
   plan: MaintenancePlan | null;
   userId: string | null;
   userName: string;
@@ -1015,19 +1015,27 @@ interface MaintenancePlanModalProps {
   onClose: () => void;
   onSaved: (savedId?: string) => Promise<void>;
   setRequestMessage?: (msg: string | null) => void;
+  /** Pre-fill + lock vessel/asset when creating a plan from a fixed asset context (e.g. Asset modal). */
+  defaultVesselCode?: string;
+  defaultAssetId?: string;
+  defaultSfiGroupNumber?: number | null;
+  defaultSfiSubgroupCode?: string | null;
+  lockAsset?: boolean;
+  /** Overlay z-index class; raise it when nesting this modal over another (default z-50). */
+  overlayZClass?: string;
 }
 
-const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, defaultSfiSubgroupCode, lockAsset, overlayZClass }) => {
   const t = useT();
   const navigate = useNavigate();
   const isNew = plan === null;
   const readOnly = !isNew && !isAdmin;
 
-  const [vesselCode, setVesselCode] = useState("");
+  const [vesselCode, setVesselCode] = useState(defaultVesselCode ?? "");
   const [taskCode, setTaskCode] = useState("");
   const [taskCodeAuto, setTaskCodeAuto] = useState(true);
   const [loadingCode, setLoadingCode] = useState(false);
-  const [assetId, setAssetId] = useState("");
+  const [assetId, setAssetId] = useState(defaultAssetId ?? "");
   const [assets, setAssets] = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [vessels, setVessels] = useState<{ code: string; name: string }[]>([]);
@@ -1040,8 +1048,8 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   const [responsible, setResponsible] = useState(plan?.responsible ?? "");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
-  const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? null);
-  const [sfiSubgroupCode, setSfiSubgroupCode] = useState(plan?.sfiSubgroupCode ?? "");
+  const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? defaultSfiGroupNumber ?? null);
+  const [sfiSubgroupCode, setSfiSubgroupCode] = useState(plan?.sfiSubgroupCode ?? defaultSfiSubgroupCode ?? "");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(plan?.riskAnalysisResult ?? "");
   const [consequenceCategory, setConsequenceCategory] = useState<"" | "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL">(
@@ -1125,7 +1133,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
   useEffect(() => {
     const vc = isNew ? vesselCode : plan?.vesselCode;
     if (!vc) return;
-    if (isNew) { setAssetId(""); setAssets([]); }
+    if (isNew && !lockAsset) { setAssetId(""); setAssets([]); }
     if (vesselDebounce.current) clearTimeout(vesselDebounce.current);
     vesselDebounce.current = setTimeout(async () => {
       setLoadingAssets(true);
@@ -1630,7 +1638,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className={`fixed inset-0 ${overlayZClass ?? "z-50"} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
         <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
             <div>
@@ -1711,7 +1719,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                     <label className={labelCls}>{t("mp.vesselCode")}</label>
                     {loadingVessels
                       ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</div>
-                      : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={selectCls}>
+                      : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockAsset} className={`${selectCls} disabled:opacity-60`}>
                           <option value="">{t("mp.modal.selectVessel")}</option>
                           {vessels.map(v => <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>)}
                         </select>
@@ -1745,7 +1753,7 @@ const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userI
                         assets={assets}
                         value={assetId}
                         onChange={setAssetId}
-                        disabled={!vesselCode || assets.length === 0}
+                        disabled={lockAsset || !vesselCode || assets.length === 0}
                         placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
                       />
                   }
