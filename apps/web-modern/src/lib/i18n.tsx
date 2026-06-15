@@ -794,6 +794,8 @@ const dict = {
   "drill.observations":             { es: "Observaciones",                       en: "Observations",                        pt: "Observações" },
   "drill.lessonsLearned":           { es: "Lecciones aprendidas",                en: "Lessons learned",                     pt: "Lições aprendidas" },
   "drill.participants":             { es: "Participantes",                       en: "Participants",                        pt: "Participantes" },
+  "drill.selectAll":                { es: "Marcar todos",                        en: "Select all",                          pt: "Marcar todos" },
+  "drill.deselectAll":              { es: "Desmarcar todos",                     en: "Deselect all",                        pt: "Desmarcar todos" },
   "drill.noCrewOnboard":            { es: "Sin tripulantes a bordo en este vessel", en: "No crew onboard on this vessel",   pt: "Sem tripulantes a bordo nesta embarcação" },
   "drill.markCompleted":            { es: "Marcar realizado",                    en: "Mark completed",                      pt: "Marcar realizado" },
   "drill.reopen":                   { es: "Re-abrir",                            en: "Re-open",                             pt: "Reabrir" },

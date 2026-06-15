@@ -187,6 +187,11 @@ const DrillModal: React.FC<{
     setParticipants(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   };
 
+  const allParticipantsSelected = availableCrew.length > 0 && availableCrew.every(c => participants.includes(c.id));
+  const toggleAllParticipants = () => {
+    setParticipants(allParticipantsSelected ? [] : availableCrew.map(c => c.id));
+  };
+
   const onSave = useCallback(async () => {
     if (!vesselCode || !requirementId || !scheduledDate) {
       setErr("Completá vessel, tipo y fecha."); return;
@@ -320,7 +325,19 @@ const DrillModal: React.FC<{
               <textarea rows={3} value={lessonsLearned} onChange={e => setLessons(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2">
-              <label className={labelCls}>{t("drill.participants")} ({participants.length})</label>
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>{t("drill.participants")} ({participants.length})</label>
+                {availableCrew.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={toggleAllParticipants}
+                    disabled={isLocked}
+                    className="text-[11px] font-semibold text-accent hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {allParticipantsSelected ? t("drill.deselectAll") : t("drill.selectAll")}
+                  </button>
+                )}
+              </div>
               <div className="max-h-40 overflow-y-auto bg-fg/5 border border-fg/10 rounded-xl p-2 space-y-1">
                 {availableCrew.length === 0 ? (
                   <p className="text-xs text-text-industrial/40 p-2">{t("drill.noCrewOnboard")}</p>
