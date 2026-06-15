@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-06-15] FEAT: sección "Plan de mantenimiento" en el PDF de Ficha de Equipo
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  El PDF del Asset (Ficha de Equipo) no mostraba las tareas del plan de mantenimiento que sí
+  aparecen en el modal. Agregarlas para que el PDF refleje toda la info del equipo.
+
+  CAMBIOS (backend-only, asset-pdf-service.ts):
+  - Nueva tabla "PLAN DE MANTENIMIENTO" antes del historial de OTs, espejando el modal:
+    columnas Código · Tipo · Nombre · Frecuencia · Próximo · Estado.
+  - Fetch con listTenantMaintenancePlans({ assetId }) (misma fuente de verdad que el modal).
+  - Etiquetas/colores en español para executionStatus (Vencido, Por vencer, Próximo, etc.).
+  - Se generalizó la tabla del PDF a un helper reutilizable (renderTable); el historial usa el
+    mismo helper, comportamiento idéntico (re-header en cambio de página, filas alternadas,
+    celdas de una línea con ellipsis — cumple la regla de la skill pms-pdf-generation).
+
+  VERIFICACIÓN: tsc api sin errores nuevos en asset-pdf-service.ts (los de defects-service.ts
+  son preexistentes).
+
 [2026-06-15] FEAT: tareas del plan de mantenimiento dentro del modal de Asset (sync bidireccional)
 Agent: Claude Opus 4.8
 

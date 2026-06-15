@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getTenantAsset } from "../assets/assets-service";
 import { listTenantWorkOrders } from "../work-orders/work-orders-service";
+import { listTenantMaintenancePlans } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, renderLabeledTextBox, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 
@@ -34,6 +35,35 @@ const WO_STATUS_COLOR: Record<string, string> = {
   PLANNED: "#0369a1", IN_PROGRESS: "#b45309", ON_HOLD: "#6d28d9",
   DEFERRED: "#475569", CLOSED: "#166534", CANCELLED: "#b91c1c",
 };
+const PLAN_TYPE_LABEL: Record<string, string> = {
+  MAINTENANCE: "Mantenimiento", INSPECTION: "Inspección",
+};
+// Etiquetas/colores de executionStatus (mismo cálculo que la lista de planes).
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  FUTURE: "Futuro", UPCOMING: "Próximo", IN_WINDOW: "En ventana",
+  DUE: "Por vencer", OVERDUE: "Vencido", COMPLETED: "Completado",
+  NEVER_EXECUTED: "Sin ejecutar",
+};
+const PLAN_STATUS_COLOR: Record<string, string> = {
+  FUTURE: "#475569", UPCOMING: "#0369a1", IN_WINDOW: "#6d28d9",
+  DUE: "#b45309", OVERDUE: "#b91c1c", COMPLETED: "#166534",
+  NEVER_EXECUTED: "#475569",
+};
+
+function fmtPlanFreq(p: PlanRow): string {
+  const tt = p.triggerType;
+  if ((tt === "HOURS" || tt === "RUNNING_HOURS") && p.frequencyHours) return `${Number(p.frequencyHours).toLocaleString("es-AR")} h`;
+  if ((tt === "MONTHS" || tt === "CALENDAR") && p.frequencyMonths) return `${p.frequencyMonths} m`;
+  if (tt === "DAY" && p.frequencyMonths) return `${p.frequencyMonths} d`;
+  if (tt === "WEEK" && p.frequencyMonths) return `${p.frequencyMonths} sem`;
+  return tt;
+}
+
+function fmtPlanNextDue(p: PlanRow): string {
+  if (p.nextDueHours != null) return `${Number(p.nextDueHours).toLocaleString("es-AR")} h`;
+  if (p.nextDueDate) return fmt(p.nextDueDate);
+  return "—";
+}
 
 const PAGE_H      = 841.89;            // A4 height pts
 const PAGE_W      = 595.28;            // A4 width pts
@@ -72,11 +102,27 @@ interface HistoryRow {
   completedDate: string | Date | null;
 }
 
+interface PlanRow {
+  taskCode: string;
+  taskType: string;
+  title: string;
+  triggerType: string;
+  frequencyHours: number | null;
+  frequencyMonths: number | null;
+  nextDueDate: string | Date | null;
+  nextDueHours: number | null;
+  executionStatus?: string | null;
+}
+
 export async function buildAssetPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   const asset = (await getTenantAsset(session, id)) as unknown as AssetForPdf;
 
   // Historial de mantenimientos/inspecciones (órdenes de trabajo del asset).
   const history = (await listTenantWorkOrders(session, { assetId: asset.id })) as unknown as HistoryRow[];
+
+  // Tareas del plan de mantenimiento del asset (mismos registros que el módulo
+  // Plan de Mantenimiento y que la sección del modal de Asset).
+  const plans = (await listTenantMaintenancePlans(session, { assetId: asset.id })) as unknown as PlanRow[];
 
   // Nombre del buque (mostrar nombre, no solo código).
   let vesselName: string | null = null;
@@ -208,77 +254,102 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
       onPageAdd: () => { y = MARGIN_V; },
     });
 
-    // ── Historial de mantenimientos e inspecciones (table) ────────────────────
-    ensureSpace(40);
-    doc.fontSize(11).font("Helvetica-Bold").fillColor(black)
-      .text("HISTORIAL DE MANTENIMIENTOS E INSPECCIONES", ML, y, { width: W });
-    y += 20;
-
-    // Column layout
-    const cols = [
-      { key: "code",      label: "OT",            w: 92 },
-      { key: "type",      label: "Tipo",          w: 70 },
-      { key: "title",     label: "Descripción",   w: W - 92 - 70 - 62 - 66 - 76 },
-      { key: "open",      label: "F. Apertura",   w: 62 },
-      { key: "completed", label: "F. Realización", w: 66 },
-      { key: "status",    label: "Estado",        w: 76 },
-    ];
-    const ROW_H    = 20;
+    // ── Generic table renderer (single-line cells) ────────────────────────────
+    interface TableCol { label: string; w: number }
+    type TableCell = { text: string; color: string; bold?: boolean };
+    const ROW_H     = 20;
     const HEADER_RH = 22;
     const CELL_PAD  = 6;
 
-    function colX(index: number): number {
+    function colX(cols: TableCol[], index: number): number {
       let x = ML;
       for (let i = 0; i < index; i++) x += cols[i].w;
       return x;
     }
 
-    function drawTableHeader() {
+    function drawTableHeader(cols: TableCol[]) {
       doc.roundedRect(ML, y, W, HEADER_RH, 3).fillColor("#f1f5f9").fill();
       doc.roundedRect(ML, y, W, HEADER_RH, 3).strokeColor(border).lineWidth(1).stroke();
       cols.forEach((c, i) => {
         doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-          .text(c.label.toUpperCase(), colX(i) + CELL_PAD, y + 7, { width: c.w - CELL_PAD * 2, characterSpacing: 0.3, lineBreak: false, ellipsis: true });
+          .text(c.label.toUpperCase(), colX(cols, i) + CELL_PAD, y + 7, { width: c.w - CELL_PAD * 2, characterSpacing: 0.3, lineBreak: false, ellipsis: true });
       });
       y += HEADER_RH;
     }
 
-    if (history.length === 0) {
+    function renderTable(title: string, cols: TableCol[], rows: TableCell[][], emptyText: string) {
+      ensureSpace(40);
+      doc.fontSize(11).font("Helvetica-Bold").fillColor(black)
+        .text(title, ML, y, { width: W });
+      y += 20;
+
       ensureSpace(HEADER_RH + ROW_H);
-      drawTableHeader();
-      doc.roundedRect(ML, y, W, ROW_H, 3).strokeColor(border).lineWidth(1).stroke();
-      doc.fontSize(9).font("Helvetica").fillColor(gray)
-        .text("Este equipo aún no tiene órdenes de trabajo registradas.", ML + CELL_PAD, y + 6, { width: W - CELL_PAD * 2, ellipsis: true });
-      y += ROW_H;
-    } else {
-      ensureSpace(HEADER_RH + ROW_H);
-      drawTableHeader();
-      history.forEach((row, idx) => {
+      drawTableHeader(cols);
+
+      if (rows.length === 0) {
+        doc.roundedRect(ML, y, W, ROW_H, 3).strokeColor(border).lineWidth(1).stroke();
+        doc.fontSize(9).font("Helvetica").fillColor(gray)
+          .text(emptyText, ML + CELL_PAD, y + 6, { width: W - CELL_PAD * 2, ellipsis: true });
+        y += ROW_H;
+        return;
+      }
+
+      rows.forEach((cells, idx) => {
         if (y + ROW_H > CONTENT_BOTTOM) {
           doc.addPage();
           y = MARGIN_V;
-          drawTableHeader();
+          drawTableHeader(cols);
         }
         if (idx % 2 === 1) {
           doc.rect(ML, y, W, ROW_H).fillColor("#f8fafc").fill();
         }
         doc.rect(ML, y, W, ROW_H).strokeColor(border).lineWidth(0.5).stroke();
-
-        const cells: { text: string; color: string; bold?: boolean }[] = [
-          { text: row.workOrderCode, color: black, bold: true },
-          { text: WO_TYPE_LABEL[row.type] ?? row.type, color: black },
-          { text: val(row.title), color: "#334155" },
-          { text: fmt(row.openDate), color: gray },
-          { text: fmt(row.completedDate), color: gray },
-          { text: WO_STATUS_LABEL[row.status] ?? row.status, color: WO_STATUS_COLOR[row.status] ?? black, bold: true },
-        ];
         cells.forEach((cell, i) => {
           doc.fontSize(8).font(cell.bold ? "Helvetica-Bold" : "Helvetica").fillColor(cell.color)
-            .text(sanitizePdfText(cell.text), colX(i) + CELL_PAD, y + 6, { width: cols[i].w - CELL_PAD * 2, lineBreak: false, ellipsis: true });
+            .text(sanitizePdfText(cell.text), colX(cols, i) + CELL_PAD, y + 6, { width: cols[i].w - CELL_PAD * 2, lineBreak: false, ellipsis: true });
         });
         y += ROW_H;
       });
     }
+
+    // ── Plan de mantenimiento (table) ─────────────────────────────────────────
+    const planCols: TableCol[] = [
+      { label: "Código",      w: 96 },
+      { label: "Tipo",        w: 70 },
+      { label: "Nombre",      w: W - 96 - 70 - 64 - 70 - 70 },
+      { label: "Frecuencia",  w: 64 },
+      { label: "Próximo",     w: 70 },
+      { label: "Estado",      w: 70 },
+    ];
+    const planRows: TableCell[][] = plans.map(p => [
+      { text: p.taskCode, color: black, bold: true },
+      { text: PLAN_TYPE_LABEL[p.taskType] ?? p.taskType, color: black },
+      { text: val(p.title), color: "#334155" },
+      { text: fmtPlanFreq(p), color: gray },
+      { text: fmtPlanNextDue(p), color: "#0369a1" },
+      { text: PLAN_STATUS_LABEL[p.executionStatus ?? ""] ?? (p.executionStatus ?? "—"), color: PLAN_STATUS_COLOR[p.executionStatus ?? ""] ?? black, bold: true },
+    ]);
+    renderTable("PLAN DE MANTENIMIENTO", planCols, planRows, "Este equipo aún no tiene tareas de mantenimiento.");
+    y += 14;
+
+    // ── Historial de mantenimientos e inspecciones (table) ────────────────────
+    const histCols: TableCol[] = [
+      { label: "OT",            w: 92 },
+      { label: "Tipo",          w: 70 },
+      { label: "Descripción",   w: W - 92 - 70 - 62 - 66 - 76 },
+      { label: "F. Apertura",   w: 62 },
+      { label: "F. Realización", w: 66 },
+      { label: "Estado",        w: 76 },
+    ];
+    const histRows: TableCell[][] = history.map(row => [
+      { text: row.workOrderCode, color: black, bold: true },
+      { text: WO_TYPE_LABEL[row.type] ?? row.type, color: black },
+      { text: val(row.title), color: "#334155" },
+      { text: fmt(row.openDate), color: gray },
+      { text: fmt(row.completedDate), color: gray },
+      { text: WO_STATUS_LABEL[row.status] ?? row.status, color: WO_STATUS_COLOR[row.status] ?? black, bold: true },
+    ]);
+    renderTable("HISTORIAL DE MANTENIMIENTOS E INSPECCIONES", histCols, histRows, "Este equipo aún no tiene órdenes de trabajo registradas.");
 
     // ── Footer (last page) ────────────────────────────────────────────────────
     const footerY = PAGE_H - FOOTER_SIZE;
