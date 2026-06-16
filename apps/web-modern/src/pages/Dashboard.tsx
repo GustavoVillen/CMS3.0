@@ -53,7 +53,9 @@ export const Dashboard: React.FC = () => {
   const certificates      = useFetch<ListResponse<Certificate>>("/app/certificates");
   const deferrals         = useFetch<ListResponse<Deferral>>("/app/pms/deferrals");
   const insights          = useFetch<ListResponse<AiInsight>>(insightsPath, [insightsPath]);
-  const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares?criticality=A");
+  // Todos los repuestos (no solo criticidad A): el widget muestra el estado de
+  // stock global — sin stock / bajo reorden / OK — para seguimiento completo.
+  const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   const crewSummary       = useFetch<{ onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number }>("/app/dashboard/crew-summary");
@@ -443,7 +445,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               </div>
               <div className="w-[130px] space-y-2">
                 {critSparesCounts.map(s => (
-                  <button key={s.key} type="button" onClick={() => navigate(`/spares?criticality=A&stockStatus=${s.key}`)}
+                  <button key={s.key} type="button" onClick={() => navigate(`/spares?stockStatus=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
                     <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
