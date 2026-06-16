@@ -1,3 +1,5 @@
+name: cms3
+
 services:
   postgres:
     image: postgres:16-alpine
