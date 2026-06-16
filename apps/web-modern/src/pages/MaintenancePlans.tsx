@@ -1557,7 +1557,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 <table class="page-wrap">
   <thead><tr><td>
     <div class="ph">
-      <span class="ph-l" style="display:flex;align-items:center;gap:7px"><img src="/logo.png" style="width:16px;height:16px;object-fit:contain" />PLAN DE MANTENIMIENTO — CMS</span>
+      <span class="ph-l" style="display:flex;align-items:center;gap:7px"><img src="/logo.png" style="width:16px;height:16px;object-fit:contain" />PLAN DE MANTENIMIENTO — CMS3.0</span>
       <span class="ph-r">${v(plan.taskCode)} · ${v(plan.vesselCode)}</span>
     </div>
   </td></tr></thead>

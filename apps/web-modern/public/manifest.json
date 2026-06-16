@@ -1,7 +1,7 @@
 {
   "name": "Copilot Management System",
-  "short_name": "CMS",
-  "description": "GPMS — Plan de Mantenimiento marítimo móvil",
+  "short_name": "CMS3.0",
+  "description": "CMS3.0 — Plan de Mantenimiento marítimo móvil",
   "start_url": "/m",
   "scope": "/",
   "display": "standalone",

@@ -270,13 +270,13 @@ export const Sidebar: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <img
               src={theme === "dark" ? "/logo-white.png" : "/logo.png"}
-              alt="CMS"
+              alt="CMS3.0"
               className="shrink-0 object-contain"
               style={{ width: 16, height: 16 }}
             />
             {!collapsed && (
               <div className="min-w-0">
-                <p className="font-bold text-[8px] tracking-widest text-teal-600 dark:text-teal-400 leading-tight uppercase">CMS · Copilot Management System</p>
+                <p className="font-bold text-[8px] tracking-widest text-teal-600 dark:text-teal-400 leading-tight uppercase">CMS3.0 · Copilot Management System</p>
               </div>
             )}
           </div>

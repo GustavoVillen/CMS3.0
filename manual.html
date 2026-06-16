@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMS · Copilot Management System — Manual de Uso</title>
+<title>CMS3.0 · Copilot Management System — Manual de Uso</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
@@ -86,7 +86,7 @@
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-500/15 border border-cyan-500/30 text-base">⚓</div>
         <div>
-          <p class="text-sm font-bold leading-tight">CMS</p>
+          <p class="text-sm font-bold leading-tight">CMS3.0</p>
           <p class="text-[10px] muted">Copilot Management System</p>
         </div>
       </div>
@@ -96,7 +96,7 @@
     <nav class="py-3">
       <div class="nav-section">Introducción</div>
       <a href="#portada" class="nav-link">Resumen ejecutivo</a>
-      <a href="#por-que-cms" class="nav-link">Por qué CMS</a>
+      <a href="#por-que-cms" class="nav-link">Por qué CMS3.0</a>
       <a href="#arquitectura" class="nav-link">Arquitectura</a>
       <a href="#roles" class="nav-link">Roles y permisos</a>
       <a href="#onboarding" class="nav-link">Onboarding</a>
@@ -175,7 +175,7 @@
 <section id="portada" class="mb-20">
   <p class="label mb-4">Manual de uso · 2026</p>
   <h1 class="text-5xl font-extrabold leading-tight mb-4 tracking-tight">
-    <span class="accent">CMS</span><br>
+    <span class="accent">CMS3.0</span><br>
     <span class="text-3xl font-bold muted">Copilot Management System</span>
   </h1>
   <p class="text-xl muted leading-relaxed mb-8">
@@ -187,8 +187,8 @@
   <div class="card p-6 mb-6">
     <p class="label mb-2">Resumen ejecutivo</p>
     <p class="text-base muted leading-relaxed">
-      CMS es un PMS (Planned Maintenance System) marítimo de nueva generación. A
-      diferencia de los PMS tradicionales (ABS NS, AMOS, ShipManager), CMS pone
+      CMS3.0 es un PMS (Planned Maintenance System) marítimo de nueva generación. A
+      diferencia de los PMS tradicionales (ABS NS, AMOS, ShipManager), CMS3.0 pone
       <strong class="text-white">la IA como copiloto operativo</strong>: ayuda a
       la tripulación a redactar reportes, sugiere análisis de riesgo JSA, detecta
       anomalías en fluidos, propone causa raíz de defectos, prepara auditorías
@@ -223,16 +223,16 @@
 
 
 <!-- ╔══════════════════════════════════════════════════════════════╗ -->
-<!-- ║                       POR QUÉ CMS                            ║ -->
+<!-- ║                       POR QUÉ CMS3.0                            ║ -->
 <!-- ╚══════════════════════════════════════════════════════════════╝ -->
 
 <section id="por-que-cms" class="mb-20">
-  <h1 class="section-title">Por qué CMS</h1>
+  <h1 class="section-title">Por qué CMS3.0</h1>
   <p class="muted">
     Los PMS marítimos tradicionales se diseñaron en los años 90 y 2000. Son
     sistemas pesados, instalados a bordo, sincronizados por satélite con la
     oficina, sin colaboración en tiempo real, sin IA, y con UX heredado de Windows
-    98. CMS es un PMS moderno construido desde cero para 2026+:
+    98. CMS3.0 es un PMS moderno construido desde cero para 2026+:
   </p>
 
   <h3 class="subsection-title">Diferenciadores clave</h3>
@@ -252,7 +252,7 @@
       <p class="text-sm muted">
         Cuando ocurre un cambio que ISM exige documentar (uso de repuesto
         equivalente en equipo crítico, edición de plantilla aprobada, cambio
-        de rol clave en tripulación, override de alarma), CMS detecta el caso
+        de rol clave en tripulación, override de alarma), CMS3.0 detecta el caso
         y propone abrir un MOC pre-cargado. Cero olvidos en auditoría.
       </p>
     </div>
@@ -298,7 +298,7 @@
       <thead>
         <tr>
           <th>Capacidad</th>
-          <th class="text-center">CMS</th>
+          <th class="text-center">CMS3.0</th>
           <th class="text-center muted">PMS tradicional</th>
         </tr>
       </thead>
@@ -325,7 +325,7 @@
 <section id="arquitectura" class="mb-20">
   <h1 class="section-title">Arquitectura</h1>
   <p class="muted">
-    CMS está construido como un monorepo TypeScript con tres componentes
+    CMS3.0 está construido como un monorepo TypeScript con tres componentes
     principales: API HTTP (backend), web-modern (frontend React), y panel
     superadmin. Comparte un único esquema Prisma sobre PostgreSQL.
   </p>
@@ -379,7 +379,7 @@ graph TB
 <section id="roles" class="mb-20">
   <h1 class="section-title">Roles y permisos</h1>
   <p class="muted">
-    CMS define 7 roles dentro del tenant + 1 superadmin de plataforma. Las
+    CMS3.0 define 7 roles dentro del tenant + 1 superadmin de plataforma. Las
     capacidades de cada uno están alineadas con la estructura ISM típica de
     una naviera.
   </p>
@@ -431,7 +431,7 @@ graph TB
         </tr>
         <tr>
           <td><strong class="text-white">SUPERADMIN</strong> <span class="pill accent-bg ml-2">platform</span></td>
-          <td>Equipo CMS</td>
+          <td>Equipo CMS3.0</td>
           <td>Multi-tenant: crea tenants, admins, ve usage IA cross-tenant.</td>
         </tr>
       </tbody>
@@ -501,7 +501,7 @@ graph LR
   <div class="tip">
     <strong>Tip de presentación:</strong> el onboarding de los primeros buques
     de una naviera suele tardar 1-2 días si se importa el plan de mantenimiento
-    desde Excel. CMS soporta importación desde Excel directamente en cada
+    desde Excel. CMS3.0 soporta importación desde Excel directamente en cada
     módulo maestro (botón "Excel" en la cabecera).
   </div>
 </section>
@@ -742,7 +742,7 @@ graph TB
 
   <h3 class="subsection-title">Estados del plan</h3>
   <p class="muted">
-    <code>ACTIVE → DUE_SOON → OVERDUE → INACTIVE</code>. CMS recalcula
+    <code>ACTIVE → DUE_SOON → OVERDUE → INACTIVE</code>. CMS3.0 recalcula
     automáticamente según el contador (horas/meses) y el último cumplimiento.
   </p>
 
@@ -886,7 +886,7 @@ graph LR
   <div class="tip">
     El KPI clave de CAPA en TMSA es el <strong class="text-white">lead time
     promedio de cierre</strong> (objetivo &lt; 30 días) y el
-    <strong class="text-white">% verificadas efectivas</strong>. CMS calcula
+    <strong class="text-white">% verificadas efectivas</strong>. CMS3.0 calcula
     ambos automáticamente para el dashboard ejecutivo.
   </div>
 </section>
@@ -952,7 +952,7 @@ graph LR
 
   <h3 class="subsection-title">Triggers automáticos (Fase 1)</h3>
   <p class="muted">
-    CMS detecta automáticamente 4 situaciones que típicamente requieren MOC y
+    CMS3.0 detecta automáticamente 4 situaciones que típicamente requieren MOC y
     sugiere abrirlo al guardar:
   </p>
   <ol>
@@ -1066,7 +1066,7 @@ graph LR
   <h3 class="subsection-title">Permits relacionados</h3>
   <p class="muted">
     Los checklists tipo HOT_WORK o ENCLOSED_SPACE_ENTRY suelen acompañar a
-    un Permit-to-Work del mismo tipo. CMS permite vincularlos para que
+    un Permit-to-Work del mismo tipo. CMS3.0 permite vincularlos para que
     aparezcan juntos en una auditoría.
   </p>
 </section>
@@ -1192,7 +1192,7 @@ graph LR
 
   <div class="warn">
     Violaciones de horas de descanso son finding crítico en cualquier
-    inspección PSC o vetting. CMS las detecta proactivamente para que el
+    inspección PSC o vetting. CMS3.0 las detecta proactivamente para que el
     capitán pueda redistribuir guardias antes de auditorías.
   </div>
 </section>
@@ -1393,7 +1393,7 @@ graph LR
   <p class="muted">
     Motor de inteligencia operativa que escanea los datos del tenant
     periódicamente y detecta patrones, anomalías y riesgos no obvios. Es lo
-    que distingue a CMS de un PMS tradicional con dashboards estáticos.
+    que distingue a CMS3.0 de un PMS tradicional con dashboards estáticos.
   </p>
 
   <h3 class="subsection-title">Tipos de insight</h3>
@@ -1487,7 +1487,7 @@ graph LR
   <p class="muted">
     El modelo de User es global a la plataforma: una misma persona puede
     pertenecer a varios tenants (típico de superintendentes que asesoran a
-    varias navieras). Al agregar un miembro con USER ya existente, CMS lo
+    varias navieras). Al agregar un miembro con USER ya existente, CMS3.0 lo
     reutiliza y le crea la membership al tenant actual sin duplicar la
     cuenta.
   </p>
@@ -1497,7 +1497,7 @@ graph LR
 <section id="superadmin" class="mb-20">
   <h1 class="section-title">Panel Superadmin (Platform)</h1>
   <p class="muted">
-    Panel multi-tenant para el equipo de CMS. Permite crear nuevos tenants
+    Panel multi-tenant para el equipo de CMS3.0. Permite crear nuevos tenants
     (navieras), administrar sus admins, ver consumo de IA cross-tenant,
     auditar la plataforma.
   </p>
@@ -1537,7 +1537,7 @@ graph LR
   <div class="mermaid">
 sequenceDiagram
   participant Admin
-  participant System as CMS
+  participant System as CMS3.0
   participant Capitán
   participant Compras
   Admin->>System: ✨ Define plan PM<br/>(criterios, LOTO, JSA, consecuencia<br/>asistidos por IA)
@@ -1571,7 +1571,7 @@ sequenceDiagram
 <section id="flow-defecto" class="mb-20">
   <h1 class="section-title">Flujo: Defecto Crítico → Reparación</h1>
   <p class="muted">
-    Cómo CMS maneja un defecto crítico desde su detección hasta el cierre
+    Cómo CMS3.0 maneja un defecto crítico desde su detección hasta el cierre
     con verificación de efectividad. Cumple ISM 9 (Reports & Analysis of
     Non-Conformities, Accidents & Hazardous Occurrences).
   </p>
@@ -1616,37 +1616,37 @@ graph TB
   <h1 class="section-title">Flujo: MOC Automático</h1>
   <p class="muted">
     Ejemplo del trigger más frecuente: uso de repuesto equivalente / no-OEM
-    en un equipo crítico. Sin CMS, este caso queda undocumented el 80% de
+    en un equipo crítico. Sin CMS3.0, este caso queda undocumented el 80% de
     las veces — es un finding típico en TMSA Element 10.
   </p>
 
   <div class="mermaid">
 sequenceDiagram
   participant Capitán
-  participant CMS
+  participant CMS3.0
   participant Sup as Superintendente
-  Capitán->>CMS: Edita Spare<br/>marca isEquivalent=true,<br/>criticality=A
-  Capitán->>CMS: Guarda
-  CMS->>CMS: Detecta combinación crítica
-  CMS-->>Capitán: Popup: "¿Crear MOC para este cambio?"<br/>+ motivo<br/>+ datos pre-cargados
-  Capitán->>CMS: Confirma "Crear MOC"
-  CMS->>CMS: Abre MocModal<br/>category=EQUIPMENT_CHANGE
-  CMS->>CMS: title, reasonForChange,<br/>proposedChange ya cargados
-  Capitán->>CMS: ✨ Ajusta + click "Asistir con IA"
-  CMS->>CMS: ✨ Genera análisis riesgo<br/>+ medidas de mitigación
-  Capitán->>CMS: Guarda MOC REQUESTED
-  CMS->>Sup: Notifica MOC nuevo
-  Sup->>CMS: Aprueba MOC
-  CMS->>CMS: APPROVED → IN_PROGRESS
-  Note over CMS: Cambio queda<br/>auditoría-ready
+  Capitán->>CMS3.0: Edita Spare<br/>marca isEquivalent=true,<br/>criticality=A
+  Capitán->>CMS3.0: Guarda
+  CMS3.0->>CMS3.0: Detecta combinación crítica
+  CMS3.0-->>Capitán: Popup: "¿Crear MOC para este cambio?"<br/>+ motivo<br/>+ datos pre-cargados
+  Capitán->>CMS3.0: Confirma "Crear MOC"
+  CMS3.0->>CMS3.0: Abre MocModal<br/>category=EQUIPMENT_CHANGE
+  CMS3.0->>CMS3.0: title, reasonForChange,<br/>proposedChange ya cargados
+  Capitán->>CMS3.0: ✨ Ajusta + click "Asistir con IA"
+  CMS3.0->>CMS3.0: ✨ Genera análisis riesgo<br/>+ medidas de mitigación
+  Capitán->>CMS3.0: Guarda MOC REQUESTED
+  CMS3.0->>Sup: Notifica MOC nuevo
+  Sup->>CMS3.0: Aprueba MOC
+  CMS3.0->>CMS3.0: APPROVED → IN_PROGRESS
+  Note over CMS3.0: Cambio queda<br/>auditoría-ready
   </div>
   <p class="text-[11px] muted-2 -mt-3 mb-3">✨ = paso asistido por IA. Un solo click genera el análisis de riesgo y las medidas de mitigación a partir del contexto (categoría MOC, equipo, vessel, razón del cambio). El capitán revisa y edita; la IA acelera el bloque más tedioso del MOC.</p>
 
   <h3 class="subsection-title">Por qué importa</h3>
   <p class="muted">
     En una auditoría TMSA real, el inspector le pregunta al DPA: "¿cómo
-    gestionan los cambios significativos?". Hoy sin CMS la respuesta es
-    "tenemos un procedimiento en el SMS". Con CMS la respuesta es "abramos
+    gestionan los cambios significativos?". Hoy sin CMS3.0 la respuesta es
+    "tenemos un procedimiento en el SMS". Con CMS3.0 la respuesta es "abramos
     el dashboard, mirá: 8 MOC en proceso, todos con trigger automático,
     todos con análisis de riesgo IA, todos PDF firmados". Diferencia
     sustancial.
@@ -1657,7 +1657,7 @@ sequenceDiagram
 <section id="flow-certs" class="mb-20">
   <h1 class="section-title">Flujo: Certificados por Vencer</h1>
   <p class="muted">
-    Cómo CMS evita el escenario clásico: "el certificado de seguro de casco
+    Cómo CMS3.0 evita el escenario clásico: "el certificado de seguro de casco
     se venció hace 3 días y nadie se dio cuenta hasta que el puerto bloqueó
     la salida".
   </p>
@@ -1681,7 +1681,7 @@ graph LR
   <h3 class="subsection-title">Mejora vs PMS tradicional</h3>
   <p class="muted">
     Los PMS clásicos requieren que alguien revise el listado de certificados
-    manualmente cada semana. CMS empuja la información al usuario: aparece
+    manualmente cada semana. CMS3.0 empuja la información al usuario: aparece
     en el sidebar, en el dashboard, en el copiloto. La carga cognitiva del
     DPA baja drásticamente.
   </p>
@@ -1691,7 +1691,7 @@ graph LR
 <section id="flow-vetting" class="mb-20">
   <h1 class="section-title">Flujo: Preparación de Vetting (SIRE 2.0)</h1>
   <p class="muted">
-    Cómo CMS asiste al armador en la preparación de una inspección vetting
+    Cómo CMS3.0 asiste al armador en la preparación de una inspección vetting
     de un puerto petrolero (OCIMF SIRE 2.0).
   </p>
 
@@ -1788,7 +1788,7 @@ graph LR
 
   <h3 class="subsection-title">Adjuntos</h3>
   <p class="muted">
-    Soporta adjuntar PDF / imagen / Excel a un mensaje del chat. CMS parsea
+    Soporta adjuntar PDF / imagen / Excel a un mensaje del chat. CMS3.0 parsea
     el contenido (texto, números, tablas) y se lo pasa al copiloto como
     contexto adicional. Útil para "interpretá este reporte del taller".
   </p>
@@ -1818,7 +1818,7 @@ graph LR
 <section id="multi-tenant" class="mb-20">
   <h1 class="section-title">Multi-tenant</h1>
   <p class="muted">
-    CMS está construido como verdadero SaaS multi-tenant desde la primera
+    CMS3.0 está construido como verdadero SaaS multi-tenant desde la primera
     línea. No es una versión "single-tenant duplicada N veces" — un solo
     deploy atiende N navieras con aislamiento garantizado.
   </p>
@@ -1937,7 +1937,7 @@ graph LR
 <section id="extensibilidad" class="mb-20">
   <h1 class="section-title">Extensibilidad</h1>
   <p class="muted">
-    CMS está diseñado para crecer con el cliente. Tres dimensiones de
+    CMS3.0 está diseñado para crecer con el cliente. Tres dimensiones de
     extensión:
   </p>
 
@@ -1960,7 +1960,7 @@ graph LR
 
   <h3 class="subsection-title">3. Por desarrollo custom</h3>
   <p class="muted">
-    Para clientes grandes (4+ buques o necesidades específicas), CMS soporta:
+    Para clientes grandes (4+ buques o necesidades específicas), CMS3.0 soporta:
   </p>
   <ul>
     <li>Endpoint custom (ej. integración con MarineTraffic, Lloyd's).</li>
@@ -1988,7 +1988,7 @@ graph LR
 <section class="mb-20">
   <h1 class="section-title">En síntesis</h1>
   <p class="muted">
-    CMS es un PMS marítimo moderno construido para 2026+: cloud-native,
+    CMS3.0 es un PMS marítimo moderno construido para 2026+: cloud-native,
     multi-tenant, con IA contextual, compliance built-in, y UX que respeta
     el tiempo de la tripulación y la oficina. Cubre los 28 módulos
     operativos típicos de la industria, con foco diferencial en:
@@ -2004,14 +2004,14 @@ graph LR
   <div class="card p-6 mt-8">
     <p class="label mb-2">Para una demo personalizada</p>
     <p class="text-base muted">
-      Contactar al equipo de CMS para coordinar una sesión de 30 min sobre
+      Contactar al equipo de CMS3.0 para coordinar una sesión de 30 min sobre
       un dataset de demo o sobre datos reales de tu flota (bajo NDA).
       Setup en menos de 1 hora.
     </p>
   </div>
 
   <div class="mt-12 pt-8 border-t border-white/5 text-center">
-    <p class="text-xs muted-2">CMS · Copilot Management System</p>
+    <p class="text-xs muted-2">CMS3.0 · Copilot Management System</p>
     <p class="text-[10px] muted-2 mt-1">Manual de uso v1.0 · 2026</p>
   </div>
 </section>

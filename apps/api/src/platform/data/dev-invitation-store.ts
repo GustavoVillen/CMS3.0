@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { LocaleCode, TenantRole } from "@pms-saas/shared-types";
+import type { LocaleCode, TenantRole } from "@cms3/shared-types";
 
 export type DevInvitationStatus = "INVITED" | "ACCEPTED" | "EXPIRED" | "REVOKED";
 

@@ -1,4 +1,4 @@
-import type { TenantRole } from "@pms-saas/shared-types";
+import type { TenantRole } from "@cms3/shared-types";
 
 export interface DevTenantUserRecord {
   tenantSlug: string;

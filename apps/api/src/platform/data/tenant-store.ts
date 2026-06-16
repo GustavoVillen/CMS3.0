@@ -1,4 +1,4 @@
-import type { TenantBootstrapSource } from "@pms-saas/shared-types";
+import type { TenantBootstrapSource } from "@cms3/shared-types";
 import { getPrismaClient } from "./prisma-client";
 
 export async function findTenantBootstrapSourceBySlug(

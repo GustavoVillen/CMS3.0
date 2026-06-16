@@ -1,4 +1,4 @@
-// STANDARD template — generic CMS work-order PDF.
+// STANDARD template — generic CMS3.0 work-order PDF.
 // Modern layout with navy headers, badge inline rows, signature boxes.
 // Pure renderer — receives WorkOrderPdfContext, returns Buffer.
 

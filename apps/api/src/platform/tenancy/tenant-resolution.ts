@@ -1,4 +1,4 @@
-import type { TenantResolutionInput, TenantResolutionResult } from "@pms-saas/shared-types";
+import type { TenantResolutionInput, TenantResolutionResult } from "@cms3/shared-types";
 
 export interface TenantResolutionConfig {
   rootDomain: string;

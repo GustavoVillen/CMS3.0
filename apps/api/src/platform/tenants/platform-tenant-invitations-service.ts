@@ -1,4 +1,4 @@
-import type { LocaleCode, TenantRole } from "@pms-saas/shared-types";
+import type { LocaleCode, TenantRole } from "@cms3/shared-types";
 import { RouteError } from "../../http/route-error";
 import { hashOpaqueToken } from "../auth/passwords";
 import { getPrismaClient } from "../data/prisma-client";

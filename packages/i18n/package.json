@@ -1,5 +1,5 @@
 {
-  "name": "@pms-saas/i18n",
+  "name": "@cms3/i18n",
   "private": true,
   "version": "0.1.0",
   "main": "dist/index.js",

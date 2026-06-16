@@ -1,5 +1,5 @@
-import type { TenantBootstrapPayload, TenantBootstrapSource } from "@pms-saas/shared-types";
-import { PRODUCT_CONFIG } from "@pms-saas/config";
+import type { TenantBootstrapPayload, TenantBootstrapSource } from "@cms3/shared-types";
+import { PRODUCT_CONFIG } from "@cms3/config";
 import { resolveActiveSessionLocale } from "../i18n/locale-resolution";
 
 export interface BuildTenantBootstrapOptions {

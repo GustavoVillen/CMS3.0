@@ -602,7 +602,7 @@ function toExcelValue(val: unknown): string | number | null {
 
 async function buildWorkbook(module: ExcelModule, records: Record<string, unknown>[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "GPMS";
+  workbook.creator = "CMS3.0";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet(module);

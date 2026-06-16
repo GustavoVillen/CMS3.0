@@ -10,7 +10,7 @@ export async function exportUsageEventsXlsx(filters: ListUsageFilters): Promise<
   const { items } = await listUsageEvents(filters);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "GPMS";
+  wb.creator = "CMS3.0";
   wb.created = new Date();
 
   const ws = wb.addWorksheet("Usage Log");

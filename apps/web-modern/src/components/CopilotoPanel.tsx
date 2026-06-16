@@ -402,7 +402,7 @@ function printReport(content: string) {
   const html = markdownToHtml(content);
   const ts = new Date().toLocaleString("es-AR");
   win.document.write(`<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><title>Reporte GPMS</title>
+<html lang="es"><head><meta charset="utf-8"><title>Reporte CMS3.0</title>
 <style>
   body{font-family:Arial,sans-serif;font-size:12px;margin:36px;color:#111;line-height:1.6}
   .hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;padding-bottom:10px;border-bottom:3px solid #1d4ed8}
@@ -422,7 +422,7 @@ function printReport(content: string) {
   p{margin:3px 0}
   @media print{body{margin:20px}.no-print{display:none}}
 </style></head><body>
-<div class="hdr"><span class="hdr-brand">CMS — Copiloto IA</span><span class="hdr-ts">Generado: ${ts}</span></div>
+<div class="hdr"><span class="hdr-brand">CMS3.0 — Copiloto IA</span><span class="hdr-ts">Generado: ${ts}</span></div>
 ${html}
 <script>window.onload=function(){window.print();}</script>
 </body></html>`);
@@ -955,7 +955,7 @@ export const CopilotoPanel: React.FC = () => {
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0 bg-fg/[0.03]">
         <div className="flex items-center gap-2 min-w-0">
           <Bot className="w-3.5 h-3.5 text-accent shrink-0" />
-          <span className="text-[11px] font-bold text-fg">Copiloto CMS</span>
+          <span className="text-[11px] font-bold text-fg">Copiloto CMS3.0</span>
           {screenContext && (
             <span className="text-[9px] text-accent/50 font-mono uppercase tracking-wider truncate">
               {screenContext.module.replace("_", " ")}

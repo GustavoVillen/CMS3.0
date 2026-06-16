@@ -1,4 +1,4 @@
-import type { LocaleCode, TenantBootstrapPayload, TenantRole } from "@pms-saas/shared-types";
+import type { LocaleCode, TenantBootstrapPayload, TenantRole } from "@cms3/shared-types";
 
 export interface TenantLoginRequest {
   identifier: string;

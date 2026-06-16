@@ -36,7 +36,7 @@ export const Layout: React.FC = () => {
   const location = useLocation();
   const t = useT();
   const titleKey = TITLE_KEYS[location.pathname];
-  const title = titleKey ? t(titleKey) : "CMS";
+  const title = titleKey ? t(titleKey) : "CMS3.0";
 
   return (
     <CopilotContextProvider>

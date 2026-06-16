@@ -1,5 +1,5 @@
-import type { LoginMode } from "@pms-saas/shared-types";
-import { PRODUCT_CONFIG } from "@pms-saas/config";
+import type { LoginMode } from "@cms3/shared-types";
+import { PRODUCT_CONFIG } from "@cms3/config";
 
 export interface TenantAuthPolicy {
   loginMode: LoginMode;

@@ -72,9 +72,9 @@ export const Login: React.FC = () => {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
-          <img src="/logo-white.png" alt="CMS" className="w-14 h-14 object-contain" />
+          <img src="/logo-white.png" alt="CMS3.0" className="w-14 h-14 object-contain" />
           <div>
-            <h1 className="text-2xl font-bold text-fg tracking-widest uppercase">CMS</h1>
+            <h1 className="text-2xl font-bold text-fg tracking-widest uppercase">CMS3.0</h1>
             <p className="text-xs font-bold text-teal-700 dark:text-teal-400 tracking-widest uppercase">Copilot Management System</p>
           </div>
         </div>
@@ -145,7 +145,7 @@ export const Login: React.FC = () => {
         </div>
 
         <p className="text-center text-xs text-text-industrial/20 mt-6">
-          Copilot Management System (CMS)
+          Copilot Management System (CMS3.0)
         </p>
       </div>
     </div>

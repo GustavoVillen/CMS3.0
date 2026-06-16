@@ -139,7 +139,7 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
       doc.text(stripMarkdown(sample.result.aiAnalysis), { align: "left" });
     }
 
-    // ── Footer con sello CMS ────────────────────────────────────────────────
+    // ── Footer con sello CMS3.0 ────────────────────────────────────────────────
     const PAGE_W = 595.28;
     const PAGE_H = 841.89;
     const ML = 50;

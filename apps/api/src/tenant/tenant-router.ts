@@ -142,7 +142,7 @@ import ExcelJS from "exceljs";
 
 async function buildAuditExcel(items: AuditLogItem[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "GPMS";
+  workbook.creator = "CMS3.0";
   const sheet = workbook.addWorksheet("Bitácora");
 
   sheet.columns = [

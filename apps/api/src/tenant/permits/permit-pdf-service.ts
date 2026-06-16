@@ -118,7 +118,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     if (tenantLogoBuffer) {
       try { doc.image(tenantLogoBuffer, 40, 32, { width: 50 }); } catch { /* non-blocking */ }
     }
-    doc.fontSize(9).fillColor("#475569").text(tenantName ?? "GPMS", 100, 38);
+    doc.fontSize(9).fillColor("#475569").text(tenantName ?? "CMS3.0", 100, 38);
     doc.fontSize(16).fillColor("#0f172a").font("Helvetica-Bold")
       .text("PERMISO DE TRABAJO", 0, 35, { align: "center" });
     doc.fontSize(11).fillColor("#475569").font("Helvetica")

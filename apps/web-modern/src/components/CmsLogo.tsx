@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * Logo del CMS: imagen oficial (mitad engranaje + mitad circuito).
+ * Logo del CMS3.0: imagen oficial (mitad engranaje + mitad circuito).
  *
  * Archivo: /logo-white.png (en public/)
  * Reusable en mobile, login, sidebar, etc.
@@ -10,7 +10,7 @@ import React from "react";
  */
 export const CmsLogo: React.FC<{ className?: string; title?: string }> = ({
   className = "w-5 h-5",
-  title = "CMS",
+  title = "CMS3.0",
 }) => (
   <img
     src="/logo-white.png"

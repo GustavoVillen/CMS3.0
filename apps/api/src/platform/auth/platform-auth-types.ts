@@ -1,4 +1,4 @@
-import type { TenantResolutionKind } from "@pms-saas/shared-types";
+import type { TenantResolutionKind } from "@cms3/shared-types";
 
 export interface PlatformLoginRequest {
   email: string;

@@ -102,7 +102,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="shrink-0 px-4 py-2.5 border-b border-fg/10 flex items-center gap-3 bg-surface dark:bg-[#0D1B2A]">
-          <CmsLogo className="w-7 h-7 shrink-0" title={tenant?.name ?? "CMS"} />
+          <CmsLogo className="w-7 h-7 shrink-0" title={tenant?.name ?? "CMS3.0"} />
 
           {vessels.length > 1 ? (
             <select

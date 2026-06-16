@@ -1,5 +1,5 @@
 {
-  "name": "@pms-saas/shared-types",
+  "name": "@cms3/shared-types",
   "private": true,
   "version": "0.1.0",
   "main": "dist/index.js",

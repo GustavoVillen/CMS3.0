@@ -1,19 +1,19 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: pms-saas-postgres
+    container_name: cms3-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: pms_saas
+      POSTGRES_DB: cms3
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5434:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d pms_saas"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cms3"]
       interval: 10s
       timeout: 5s
       retries: 10

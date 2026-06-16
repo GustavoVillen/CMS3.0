@@ -1,5 +1,5 @@
 {
-  "name": "@pms-saas/config",
+  "name": "@cms3/config",
   "private": true,
   "version": "0.1.0",
   "main": "dist/index.js",

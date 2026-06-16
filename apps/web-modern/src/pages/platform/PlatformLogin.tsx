@@ -30,7 +30,7 @@ export const PlatformLogin: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-fg tracking-tight">Super Admin</h1>
-            <p className="text-xs text-text-industrial/40 tracking-widest uppercase">GPMS Platform</p>
+            <p className="text-xs text-text-industrial/40 tracking-widest uppercase">CMS3.0 Platform</p>
           </div>
         </div>
 

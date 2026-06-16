@@ -107,7 +107,7 @@ export function serveSpaHtml(response: ServerResponse): void {
   } catch {
     response.writeHead(503, { "Content-Type": "text/plain" });
     response.end(
-      "Frontend not built.\nRun: pnpm --filter @pms-saas/web-legacy build\n" +
+      "Frontend not built.\nRun: pnpm --filter @cms3/web-legacy build\n" +
       "Then restart the API server."
     );
   }

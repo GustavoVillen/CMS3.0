@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import type { TenantBootstrapPayload } from "@pms-saas/shared-types";
+import type { TenantBootstrapPayload } from "@cms3/shared-types";
 import { buildTenantBootstrapPayload } from "./public-bootstrap";
 import { getTenantBootstrapSourceBySlug } from "./tenant-bootstrap-store";
 import { getRequestUrl } from "../../http/request-url";

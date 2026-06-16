@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@pms-saas/shared-types";
+import type { LocaleCode } from "@cms3/shared-types";
 import { RouteError } from "../../http/route-error";
 import { getPrismaClient } from "../data/prisma-client";
 import {

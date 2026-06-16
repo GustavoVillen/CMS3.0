@@ -1,4 +1,4 @@
-import type { LocaleCode, TenantBootstrapSource } from "@pms-saas/shared-types";
+import type { LocaleCode, TenantBootstrapSource } from "@cms3/shared-types";
 
 export type DevTenantStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 

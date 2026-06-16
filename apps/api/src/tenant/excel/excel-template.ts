@@ -390,7 +390,7 @@ export function getModuleColumns(module: ExcelModule): ColumnDef[] {
 
 export async function generateTemplate(module: ExcelModule): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "GPMS";
+  workbook.creator = "CMS3.0";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet(module);

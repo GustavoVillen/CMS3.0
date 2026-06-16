@@ -1,5 +1,5 @@
-import type { LocaleCode, SessionLocalePreferenceInput } from "@pms-saas/shared-types";
-import { PRODUCT_CONFIG } from "@pms-saas/config";
+import type { LocaleCode, SessionLocalePreferenceInput } from "@cms3/shared-types";
+import { PRODUCT_CONFIG } from "@cms3/config";
 
 function isEnabledLocale(value: string | null | undefined, enabledLocales: LocaleCode[]): value is LocaleCode {
   if (!value) return false;

@@ -1,4 +1,4 @@
-import type { TenantBootstrapSource } from "@pms-saas/shared-types";
+import type { TenantBootstrapSource } from "@cms3/shared-types";
 import { findTenantBootstrapSourceBySlug } from "../../platform/data/tenant-store";
 import { getDevTenantBootstrapSourceBySlug } from "../../platform/data/dev-tenant-store";
 

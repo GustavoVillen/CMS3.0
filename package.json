@@ -1,5 +1,5 @@
 {
-  "name": "pms-saas-workspace",
+  "name": "cms3-workspace",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@9.15.0",
@@ -21,13 +21,13 @@
     "db:migrate": "pnpm exec prisma migrate dev --schema prisma/schema.prisma",
     "db:push": "pnpm exec prisma db push --schema prisma/schema.prisma",
     "db:seed": "pnpm exec tsx --env-file .env prisma/seed.ts",
-    "dev:api": "pnpm --filter @pms-saas/api dev",
-    "start:api": "pnpm --filter @pms-saas/api start",
-    "build:api": "pnpm --filter @pms-saas/api build",
-    "dev:web-legacy": "pnpm --filter @pms-saas/web-legacy dev",
+    "dev:api": "pnpm --filter @cms3/api dev",
+    "start:api": "pnpm --filter @cms3/api start",
+    "build:api": "pnpm --filter @cms3/api build",
+    "dev:web-legacy": "pnpm --filter @cms3/web-legacy dev",
     "dev:web-modern": "pnpm --filter web-modern dev",
-    "dev:desktop": "pnpm --filter @pms-saas/desktop dev",
-    "start:desktop": "pnpm --filter @pms-saas/desktop start"
+    "dev:desktop": "pnpm --filter @cms3/desktop dev",
+    "start:desktop": "pnpm --filter @cms3/desktop start"
   },
   "dependencies": {
     "@prisma/client": "7.7.0"

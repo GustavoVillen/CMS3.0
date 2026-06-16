@@ -77,7 +77,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
           });
       });
 
-      // ── Info line: CMS logo + app name (left) | page info (right) ──
+      // ── Info line: CMS3.0 logo + app name (left) | page info (right) ──
       const ify = fy + APPROVAL_BAND_H;
       doc.moveTo(ML, ify).lineTo(ML + W, ify).strokeColor(BORDER).lineWidth(0.5).stroke();
 
@@ -351,7 +351,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(38);
     y += textArea(ML, y, W, sanitizePdfText((wo as any).riskAnalysisResult ?? ""), 38);
 
-    // CMS extras: plan inline (Responsable / Horas / Prioridad — riesgo ya tiene su propia sección)
+    // CMS3.0 extras: plan inline (Responsable / Horas / Prioridad — riesgo ya tiene su propia sección)
     if ((wo as any).estimatedHours || assignedName || (wo as any).priority) {
       const PLAN_ROW_H = 22;
       ensureSpace(PLAN_ROW_H * 2);
@@ -398,7 +398,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(38);
     y += textArea(ML, y, W, val((wo as any).observations), 38);
 
-    // CMS extras: resultado
+    // CMS3.0 extras: resultado
     if ((wo as any).woResult) {
       ensureSpace(44);
       const RES_ROW = 22;

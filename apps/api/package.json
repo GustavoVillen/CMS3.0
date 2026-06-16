@@ -1,5 +1,5 @@
 {
-  "name": "@pms-saas/api",
+  "name": "@cms3/api",
   "private": true,
   "version": "0.1.0",
   "scripts": {

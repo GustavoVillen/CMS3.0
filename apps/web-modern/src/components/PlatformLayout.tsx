@@ -30,7 +30,7 @@ export const PlatformLayout: React.FC = () => {
             </div>
             <div>
               <p className="text-xs font-bold text-fg">Super Admin</p>
-              <p className="text-[10px] text-text-industrial/40">GPMS Platform</p>
+              <p className="text-[10px] text-text-industrial/40">CMS3.0 Platform</p>
             </div>
           </div>
         </div>

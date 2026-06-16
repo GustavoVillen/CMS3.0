@@ -1,4 +1,4 @@
-import type { LocaleCode, TenantRole } from "@pms-saas/shared-types";
+import type { LocaleCode, TenantRole } from "@cms3/shared-types";
 
 export type DevTenantUserStatus = "INVITED" | "ACTIVE" | "SUSPENDED" | "DISABLED";
 export type DevMembershipStatus = "INVITED" | "ACTIVE" | "SUSPENDED" | "REVOKED";
