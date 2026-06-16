@@ -21,6 +21,9 @@ export interface DrillWriteInput {
   drillCode?: string;
   requirementId?: string;
   scheduledDate?: string;
+  scheduledTime?: string | null;
+  completedDate?: string | null;
+  completedTime?: string | null;
   scenario?: string | null;
   observations?: string | null;
   lessonsLearned?: string | null;
@@ -29,6 +32,7 @@ export interface DrillWriteInput {
 
 export interface CompleteDrillInput {
   completedDate?: string;
+  completedTime?: string | null;
   observations?: string | null;
   lessonsLearned?: string | null;
   participantCrewIds?: string[];
@@ -88,6 +92,17 @@ function parseDate(value: unknown, field: string): Date {
   const d = new Date(String(value));
   if (Number.isNaN(d.getTime())) throw new RouteError(400, "VALIDATION_ERROR", `${field} no es una fecha válida.`);
   return d;
+}
+
+// Hora "HH:mm" (24h). Devuelve null si viene vacía; valida formato.
+function normalizeTime(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) {
+    throw new RouteError(400, "VALIDATION_ERROR", "scheduledTime debe tener formato HH:mm (00:00–23:59).");
+  }
+  return text;
 }
 
 function parseStringArray(value: unknown): string[] {
@@ -408,14 +423,21 @@ export async function createDrill(session: TenantAccessSession, input: DrillWrit
   });
   if (existing) throw new RouteError(409, "DUPLICATE_CODE", `Ya existe un simulacro con código ${code}.`);
 
+  // Si viene fecha de realización al crear, el simulacro se registra como ya
+  // realizado (COMPLETED); si no, queda programado (SCHEDULED).
+  const completedDate = input.completedDate ? parseDate(input.completedDate, "completedDate") : null;
+
   const created = await drillClient(prisma).drill.create({
     data: {
       tenantId: tenant.id,
       vesselCode,
       drillCode: code,
       requirementId,
-      status: "SCHEDULED",
+      status: completedDate ? "COMPLETED" : "SCHEDULED",
       scheduledDate,
+      scheduledTime: normalizeTime(input.scheduledTime),
+      completedDate,
+      completedTime: normalizeTime(input.completedTime),
       scenario: normalizeOptional(input.scenario),
       observations: normalizeOptional(input.observations),
       lessonsLearned: normalizeOptional(input.lessonsLearned),
@@ -457,6 +479,14 @@ export async function updateDrill(session: TenantAccessSession, id: string, inpu
     data.requirementId = requirementId;
   }
   if (input.scheduledDate !== undefined) data.scheduledDate = parseDate(input.scheduledDate, "scheduledDate");
+  if (input.scheduledTime !== undefined) data.scheduledTime = normalizeTime(input.scheduledTime);
+  // Cargar fecha de realización en un simulacro programado lo marca como realizado.
+  if (input.completedDate !== undefined) {
+    const cd = input.completedDate ? parseDate(input.completedDate, "completedDate") : null;
+    data.completedDate = cd;
+    if (cd) data.status = "COMPLETED";
+  }
+  if (input.completedTime !== undefined) data.completedTime = normalizeTime(input.completedTime);
   if (input.scenario !== undefined) data.scenario = normalizeOptional(input.scenario);
   if (input.observations !== undefined) data.observations = normalizeOptional(input.observations);
   if (input.lessonsLearned !== undefined) data.lessonsLearned = normalizeOptional(input.lessonsLearned);
@@ -492,6 +522,7 @@ export async function completeDrill(session: TenantAccessSession, id: string, in
   const data: Record<string, unknown> = {
     status: "COMPLETED",
     completedDate,
+    completedTime: normalizeTime(input.completedTime),
     updatedByUserId: session.user.id,
   };
   if (input.observations !== undefined) data.observations = normalizeOptional(input.observations);

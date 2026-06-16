@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Loader2, X, ChevronLeft, ChevronRight, AlertTriangle, Check } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -37,6 +38,22 @@ interface MonthlyData {
   rows: RestHoursRow[];
 }
 
+// Simulacro (drill) traído para detectar el cruce con horas de descanso.
+interface DrillForConflict {
+  id: string;
+  drillCode: string;
+  status: string;
+  scheduledDate: string;
+  completedDate: string | null;
+  scheduledTime: string | null;
+  completedTime: string | null;
+  participantCrewIds: string[];
+  requirement?: { title: string | null } | null;
+}
+
+// Bloque horario ocupado por un simulacro para un crew+día concreto.
+interface DrillBlock { hour: number; code: string; title: string }
+
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 
 function daysInMonth(year: number, month: number): number {
@@ -55,11 +72,12 @@ interface DayEditorProps {
   vesselCode: string;
   initialHours: boolean[];
   initialNotes: string;
+  drillBlocks: DrillBlock[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHours, initialNotes, onClose, onSaved }) => {
+const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHours, initialNotes, drillBlocks, onClose, onSaved }) => {
   const t = useT();
   const [hours, setHours] = useState<boolean[]>(() => initialHours.slice());
   const [notes, setNotes] = useState(initialNotes);
@@ -68,6 +86,24 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
   const [paintMode, setPaintMode] = useState<"rest" | "work" | null>(null);
 
   const totalRest = useMemo(() => hours.filter(Boolean).length, [hours]);
+
+  // Simulacros por hora (un tripulante presente en un simulacro no puede estar
+  // descansando en ese bloque). Si una hora marcada como descanso coincide con
+  // un simulacro del tripulante, es un conflicto que bloquea el guardado.
+  const drillByHour = useMemo(() => {
+    const m = new Map<number, DrillBlock[]>();
+    for (const b of drillBlocks) {
+      const arr = m.get(b.hour) ?? [];
+      arr.push(b);
+      m.set(b.hour, arr);
+    }
+    return m;
+  }, [drillBlocks]);
+
+  const conflicts = useMemo(
+    () => drillBlocks.filter(b => hours[b.hour]),
+    [drillBlocks, hours],
+  );
 
   const toggleHour = (h: number) => {
     setHours(prev => {
@@ -99,6 +135,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
   const fillAll = (rest: boolean) => setHours(new Array(24).fill(rest));
 
   const onSave = useCallback(async () => {
+    if (conflicts.length > 0) { setErr(t("rh.drillConflictBlock")); return; }
     setSaving(true); setErr(null);
     try {
       await api.post("/app/rest-hours", {
@@ -109,7 +146,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [vesselCode, crew.id, date, hours, notes, onSaved]);
+  }, [vesselCode, crew.id, date, hours, notes, conflicts, onSaved, t]);
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ hours, notes });
@@ -153,22 +190,35 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
               </div>
             </div>
             <div className="grid grid-cols-12 gap-0.5 select-none">
-              {hours.map((isRest, h) => (
-                <button
-                  key={h}
-                  onMouseDown={() => onMouseDown(h)}
-                  onMouseEnter={() => onMouseEnter(h)}
-                  className={`aspect-square text-[9px] font-mono rounded border transition-colors ${
-                    isRest ? "bg-success-sea/30 text-success-sea border-success-sea/40 hover:bg-success-sea/40" : "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30 hover:bg-red-500/30"
-                  }`}
-                  title={t("rh.cellTitle")
-                    .replace("{from}", `${String(h).padStart(2, "0")}:00`)
-                    .replace("{to}", `${String((h + 1) % 24).padStart(2, "0")}:00`)
-                    .replace("{state}", isRest ? t("rh.rest") : t("rh.work"))}
-                >
-                  {String(h).padStart(2, "0")}
-                </button>
-              ))}
+              {hours.map((isRest, h) => {
+                const drillsHere = drillByHour.get(h);
+                const isDrillHour = !!drillsHere;
+                const isConflict = isDrillHour && isRest;
+                const stateCls = isConflict
+                  ? "bg-amber-500/40 text-amber-900 dark:text-amber-200 border-amber-500/70 ring-2 ring-amber-500/60"
+                  : isRest
+                    ? "bg-success-sea/30 text-success-sea border-success-sea/40 hover:bg-success-sea/40"
+                    : "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30 hover:bg-red-500/30";
+                const baseTitle = t("rh.cellTitle")
+                  .replace("{from}", `${String(h).padStart(2, "0")}:00`)
+                  .replace("{to}", `${String((h + 1) % 24).padStart(2, "0")}:00`)
+                  .replace("{state}", isRest ? t("rh.rest") : t("rh.work"));
+                const drillTitle = isDrillHour
+                  ? "\n" + drillsHere!.map(d => `⚠ ${d.code} — ${d.title}`).join("\n")
+                  : "";
+                return (
+                  <button
+                    key={h}
+                    onMouseDown={() => onMouseDown(h)}
+                    onMouseEnter={() => onMouseEnter(h)}
+                    className={`relative aspect-square text-[9px] font-mono rounded border transition-colors ${stateCls} ${isDrillHour && !isConflict ? "ring-1 ring-accent/40" : ""}`}
+                    title={baseTitle + drillTitle}
+                  >
+                    {String(h).padStart(2, "0")}
+                    {isDrillHour && <span className="absolute top-0 right-0.5 text-[7px] leading-none">{isConflict ? "⚠" : "•"}</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -176,6 +226,22 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
             <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{t("rh.notes")}</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} placeholder={t("rh.notesPh")} />
           </div>
+
+          {conflicts.length > 0 && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/40 px-3 py-2 space-y-1">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" /> {t("rh.drillConflictTitle")}
+              </p>
+              {conflicts.map((c, i) => (
+                <p key={i} className="text-[11px] text-amber-800 dark:text-amber-200">
+                  {t("rh.drillConflictItem")
+                    .replace("{hour}", `${String(c.hour).padStart(2, "0")}:00`)
+                    .replace("{code}", c.code)
+                    .replace("{title}", c.title)}
+                </p>
+              ))}
+            </div>
+          )}
 
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
 
@@ -189,7 +255,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
-          <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+          <button onClick={() => { void onSave(); }} disabled={saving || conflicts.length > 0} title={conflicts.length > 0 ? t("rh.drillConflictBlock") : undefined} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
           </button>
         </div>
@@ -210,7 +276,38 @@ export const RestHoursPage: React.FC = () => {
 
   const [data, setData] = useState<MonthlyData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState<{ crew: CrewMember; date: string; hours: boolean[]; notes: string } | null>(null);
+  const [editing, setEditing] = useState<{ crew: CrewMember; date: string; hours: boolean[]; notes: string; drillBlocks: DrillBlock[] } | null>(null);
+
+  // Simulacros del buque (para cruzar con horas de descanso). Liviano: se filtra
+  // por buque y se mapea en cliente por crew+día.
+  const { data: drillsData } = useFetch<{ items: DrillForConflict[] }>(
+    vesselCode ? `/app/drills?vesselCode=${encodeURIComponent(vesselCode)}` : null,
+    [vesselCode],
+  );
+
+  // crewId|YYYY-MM-DD → bloques horarios ocupados por simulacros del tripulante.
+  const drillBlockMap = useMemo(() => {
+    const map = new Map<string, DrillBlock[]>();
+    for (const d of drillsData?.items ?? []) {
+      if (d.status === "CANCELLED") continue;
+      // Si el simulacro se realizó, usar día+hora reales; si no, los programados.
+      const realized = d.status === "COMPLETED";
+      const timeStr = (realized && d.completedTime) ? d.completedTime : d.scheduledTime;
+      if (!timeStr) continue;
+      const hour = parseInt(timeStr.slice(0, 2), 10);
+      if (Number.isNaN(hour)) continue;
+      const effectiveDate = ((realized && d.completedDate) ? d.completedDate : d.scheduledDate).slice(0, 10);
+      const title = d.requirement?.title ?? d.drillCode;
+      const ids = Array.isArray(d.participantCrewIds) ? d.participantCrewIds : [];
+      for (const crewId of ids) {
+        const key = `${crewId}|${effectiveDate}`;
+        const arr = map.get(key) ?? [];
+        arr.push({ hour, code: d.drillCode, title });
+        map.set(key, arr);
+      }
+    }
+    return map;
+  }, [drillsData]);
 
   const reload = useCallback(async () => {
     if (!vesselCode) { setData(null); return; }
@@ -250,11 +347,13 @@ export const RestHoursPage: React.FC = () => {
   function openDay(crew: CrewMember, day: number) {
     const key = `${crew.id}|${day}`;
     const existing = byCrewDay.get(key);
+    const dateStr = ymdLocal(year, month, day);
     setEditing({
       crew,
-      date: ymdLocal(year, month, day),
+      date: dateStr,
       hours: existing?.hoursData?.slice() ?? new Array(24).fill(false),
       notes: existing?.notes ?? "",
+      drillBlocks: drillBlockMap.get(`${crew.id}|${dateStr}`) ?? [],
     });
   }
 
@@ -353,6 +452,7 @@ export const RestHoursPage: React.FC = () => {
           vesselCode={vesselCode}
           initialHours={editing.hours}
           initialNotes={editing.notes}
+          drillBlocks={editing.drillBlocks}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void reload(); }}
         />

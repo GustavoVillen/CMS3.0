@@ -2714,7 +2714,14 @@ model Drill {
   requirementId      String
   status             DrillStatus     @default(SCHEDULED)
   scheduledDate      DateTime
+  // Hora de inicio del simulacro ("HH:mm", 24h). Usada para cruzar con las
+  // horas de descanso (STCW): un tripulante presente en el simulacro no puede
+  // figurar descansando en ese bloque horario.
+  scheduledTime      String?
   completedDate      DateTime?
+  // Hora real de realización ("HH:mm", 24h). Junto con completedDate registra
+  // cuándo se ejecutó efectivamente el simulacro.
+  completedTime      String?
   scenario           String?
   observations       String?
   lessonsLearned     String?

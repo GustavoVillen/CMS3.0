@@ -34,7 +34,9 @@ interface Drill {
   requirement?: { id: string; title: string; solasRegulation: string | null } | null;
   status: "SCHEDULED" | "COMPLETED" | "CANCELLED";
   scheduledDate: string;
+  scheduledTime: string | null;
   completedDate: string | null;
+  completedTime: string | null;
   scenario: string | null;
   observations: string | null;
   lessonsLearned: string | null;
@@ -97,10 +99,15 @@ const DrillModal: React.FC<{
     "";
   const [requirementId, setRequirementId] = useState(initialReqId);
   const [scheduledDate, setScheduled] = useState((drill?.scheduledDate ?? "").slice(0, 10) || prefill?.scheduledDate || new Date().toISOString().slice(0, 10));
+  const [scheduledTime, setScheduledTime] = useState(drill?.scheduledTime ?? "");
   const [scenario, setScenario] = useState(drill?.scenario ?? "");
   const [observations, setObservations] = useState(drill?.observations ?? "");
   const [lessonsLearned, setLessons] = useState(drill?.lessonsLearned ?? "");
   const [participants, setParticipants] = useState<string[]>(drill?.participantCrewIds ?? []);
+  // Día y hora reales de realización. Vacío = aún no realizado (queda programado).
+  // Si se cargan, el simulacro se registra como realizado al guardar.
+  const [completedDate, setCompletedDate] = useState((drill?.completedDate ?? "").slice(0, 10));
+  const [completedTime, setCompletedTime] = useState(drill?.completedTime ?? "");
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -200,6 +207,9 @@ const DrillModal: React.FC<{
     try {
       const payload = {
         vesselCode, requirementId, scheduledDate,
+        scheduledTime: scheduledTime || null,
+        completedDate: completedDate || null,
+        completedTime: completedTime || null,
         scenario: scenario.trim() || null,
         observations: observations.trim() || null,
         lessonsLearned: lessonsLearned.trim() || null,
@@ -210,7 +220,7 @@ const DrillModal: React.FC<{
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al guardar."); }
     finally { setSaving(false); }
-  }, [isNew, drill, vesselCode, requirementId, scheduledDate, scenario, observations, lessonsLearned, participants, onSaved]);
+  }, [isNew, drill, vesselCode, requirementId, scheduledDate, scheduledTime, completedDate, completedTime, scenario, observations, lessonsLearned, participants, onSaved]);
 
   const onComplete = useCallback(async () => {
     if (!drill) return;
@@ -218,7 +228,8 @@ const DrillModal: React.FC<{
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/drills/${drill.id}/complete`, {
-        completedDate: new Date().toISOString().slice(0, 10),
+        completedDate: completedDate || new Date().toISOString().slice(0, 10),
+        completedTime: completedTime || null,
         observations: observations.trim() || null,
         lessonsLearned: lessonsLearned.trim() || null,
         participantCrewIds: participants,
@@ -226,7 +237,7 @@ const DrillModal: React.FC<{
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al completar."); }
     finally { setSaving(false); }
-  }, [drill, observations, lessonsLearned, participants, onSaved]);
+  }, [drill, completedDate, completedTime, observations, lessonsLearned, participants, onSaved, t]);
 
   const onReopen = useCallback(async () => {
     if (!drill) return;
@@ -241,7 +252,7 @@ const DrillModal: React.FC<{
   }, [drill, onSaved]);
 
   // ESC: cerrar / preguntar guardar si hay cambios
-  const isDirty = useDirtyTracker({ vesselCode, requirementId, scheduledDate, scenario, observations, lessonsLearned, participants });
+  const isDirty = useDirtyTracker({ vesselCode, requirementId, scheduledDate, scheduledTime, completedDate, completedTime, scenario, observations, lessonsLearned, participants });
   useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
@@ -298,11 +309,36 @@ const DrillModal: React.FC<{
               <label className={labelCls}>{t("drill.scheduledDate")}</label>
               <input type="date" value={scheduledDate} onChange={e => setScheduled(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
-            {drill?.completedDate && (
-              <div>
-                <label className={labelCls}>{t("drill.completedDate")}</label>
-                <input type="date" value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
-              </div>
+            <div>
+              <label className={labelCls}>{t("drill.scheduledTime")}</label>
+              <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} disabled={isLocked} className={inputCls} />
+              <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.scheduledTimeHelp")}</p>
+            </div>
+            {isLocked ? (
+              drill?.completedDate ? (
+                <>
+                  <div>
+                    <label className={labelCls}>{t("drill.completedDate")}</label>
+                    <input type="date" value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t("drill.completedTime")}</label>
+                    <input type="time" value={drill.completedTime ?? ""} disabled className={inputCls} />
+                  </div>
+                </>
+              ) : null
+            ) : (
+              <>
+                <div>
+                  <label className={labelCls}>{t("drill.completedDate")}</label>
+                  <input type="date" value={completedDate} onChange={e => setCompletedDate(e.target.value)} className={inputCls} />
+                  <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.completedHelp")}</p>
+                </div>
+                <div>
+                  <label className={labelCls}>{t("drill.completedTime")}</label>
+                  <input type="time" value={completedTime} onChange={e => setCompletedTime(e.target.value)} className={inputCls} />
+                </div>
+              </>
             )}
             <div className="col-span-2 space-y-1">
               <label

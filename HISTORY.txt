@@ -1,5 +1,55 @@
 HISTORY.txt
 
+[2026-06-16] FEAT: día + hora de REALIZACIÓN del simulacro (además de la hora programada)
+Agent: Claude Opus 4.8
+
+  CONTEXTO: el trabajo previo de "hora del simulacro" (scheduledTime + cruce con descanso +
+  fecha de realización editable) había quedado COMMITEADO-NO: estaba en el working tree sin subir,
+  por eso no aparecía en producción. Este commit lo sube TODO junto + agrega la hora de realización.
+
+  CAMBIOS:
+  - SCHEMA: Drill.scheduledTime (hora programada) + Drill.completedTime (hora de realización).
+    Ambas String? nullable, aditivas. DEPLOY debe correr prisma db push.
+  - Backend drills-service.ts: createDrill acepta completedDate/completedTime → si viene fecha de
+    realización, el simulacro se crea como COMPLETED (registrar uno ya hecho). updateDrill: cargar
+    fecha de realización en un programado lo marca realizado. completeDrill suma completedTime.
+  - Frontend /drills (Drills.tsx): campos "Fecha de realización" + "Hora de realización" editables
+    al crear y al editar (vacío = sigue programado); solo lectura cuando está bloqueado. Se mantiene
+    "Hora programada". onComplete usa hoy si la fecha está vacía.
+  - Frontend /rest-hours: el cruce con horas de descanso usa día+hora REALES (completedDate/Time)
+    cuando el simulacro está realizado; si no, los programados.
+  - i18n: drill.completedDate (relabel "Fecha de realización"), drill.completedTime, drill.completedHelp.
+
+  DECISIONES (usuario): realización cargable al crear y al editar/completar; mantener hora programada.
+  VERIFICACIÓN: tsc web exit 0; tsc api sin errores nuevos.
+
+[2026-06-15] FEAT: hora del simulacro + cruce de conflicto con horas de descanso (STCW)
+Agent: Claude Opus 4.8
+
+  OBJETIVO:
+  (1) Poder cargar la HORA del simulacro en /drills. (2) Al cargar horas de descanso, si un
+  tripulante marca descanso en una hora en que participó de un simulacro, avisar y bloquear el
+  guardado (esa hora es contradictoria: estuvo presente en el simulacro).
+
+  CAMBIOS:
+  - SCHEMA: Drill.scheduledTime String? ("HH:mm"). Columna nullable, no destructiva.
+    (db push se aplica en el deploy; localmente solo prisma generate porque la DB local estaba
+    apagada.)
+  - Backend drills-service.ts: scheduledTime en DrillWriteInput, validación HH:mm (normalizeTime),
+    persistencia en createDrill + updateDrill. listDrills ya devuelve el campo.
+  - Frontend /drills (Drills.tsx): input de hora "Hora programada" junto a la fecha, en payload
+    y dirty tracker.
+  - Frontend /rest-hours (RestHours.tsx): fetch de drills del buque, mapa crewId|fecha → bloques
+    horarios de simulacro (hora de scheduledTime, fecha efectiva = completedDate si COMPLETED).
+    En el DayEditor: las horas con simulacro se marcan; si además están como descanso es conflicto
+    (resaltado ámbar + banner nombrando el simulacro) y se BLOQUEA el guardado.
+  - i18n: drill.scheduledTime(+Help), rh.drillConflictTitle/Item/Block (es/en/pt).
+
+  DECISIONES (confirmadas por el usuario): hora de inicio fija (1 bloque horario) y bloquear el
+  guardado ante conflicto (no solo avisar).
+
+  VERIFICACIÓN: tsc web exit 0; tsc api sin errores nuevos. DEPLOY debe incluir prisma db push.
+
 [2026-06-15] FEAT: sección "Plan de mantenimiento" en el PDF de Ficha de Equipo
 Agent: Claude Opus 4.8
 
