@@ -12,18 +12,19 @@
  *   - lastExecution* / nextDue* tomados del snapshot de mayo 2026
  *     (horas → meter de servicio; fechas → última verificación / próximo recorrido).
  *
- * Esquema SFI (grupo · subgrupo) usado:
- *   6 Componentes Principales:  601 Motor Principal · 603 Caja reductora ·
- *                               605 Línea de eje · 611 Motor Auxiliar · 612 Motor lancha
- *   7 Sistemas:                 701 Combustible · 720 Refrig/Achique/Agua de mar ·
- *                               740 Aire comprimido · 750 Hidráulico gobierno/maniobra ·
- *                               760 Ventilación
- *   8 Instalaciones Eléctricas: 801 Alternadores · 802 Tablero principal ·
- *                               803 Baterías/iluminación emergencia · 804 Aislaciones
- *   4 Equipo de Barco:          440 Contraincendio · 450 Lucha contra derrames
- *   5 Tripulación:              551 Agua potable · 552 Sewage · 553 Termotanque · 554 Cocina
- *   3 Manipulación de carga:    310 Elementos elevación · 311 Malacate pluma lancha
- *   9 Automatización/Nav/Com:   901 Navegación · 902 Comunicación · 910 Alarmas y seguridades
+ * Esquema SFI (grupo · subgrupo) — usa los códigos OFICIALES del catálogo i18n (X10..X90):
+ *   6 Componentes Principales:  610 Motores ppales · 620 Reductores · 630 Líneas de eje ·
+ *                               650 Generadores (motores auxiliares)
+ *   7 Sistemas:                 710 Combustible · 730 Agua de enfriamiento · 740 Aire ·
+ *                               750 Achique y lastre · 760 Contraincendio · 770 Aire comprimido ·
+ *                               780 Gobierno · 790 Otros sistemas (ventilación)
+ *   8 Instalaciones Eléctricas: 810 Generadores/cuadros (alternadores) · 820 Distribución (tablero) ·
+ *                               830 Iluminación · 860 Baterías · 890 Otras (aislaciones)
+ *   4 Equipo de Barco:          410 Náuticos · 420 Comunicación · 430 Navegación ·
+ *                               450 Contraincendio (equipos) · 490 Otros (motor lancha)
+ *   5 Tripulación:              530 Cocina · 550 Sanitarios (agua potable, sewage, termotanque)
+ *   3 Manipulación de carga:    310 Grúas/pescantes (malacate) · 320 Aparejos/polipastos (elevación)
+ *   9 Automatización:           920 Alarma y monitoreo (alarmas de tanques/sentina)
  *
  * Uso:
  *   DATABASE_URL=<url> npx tsx scripts/seed-mao01-maintenance.ts
@@ -108,7 +109,7 @@ const ENGINE_MA = "Cummins 4BTA3-G1";
 const ASSETS: AssetDef[] = [
   // ── SISTEMA DE PROPULSIÓN ──────────────────────────────────────────────────
   {
-    code: "M01-MP-ER", name: "Motor Principal Estribor", group: 6, sub: "601", crit: "A", safety: true,
+    code: "M01-MP-ER", name: "Motor Principal Estribor", group: 6, sub: "610", crit: "A", safety: true,
     mfr: "Volvo Penta", model: ENGINE_MP,
     tasks: [
       ["Control correas de transmisión", "500h", 23565, 24065],
@@ -137,7 +138,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-MP-BR", name: "Motor Principal Babor", group: 6, sub: "601", crit: "A", safety: true,
+    code: "M01-MP-BR", name: "Motor Principal Babor", group: 6, sub: "610", crit: "A", safety: true,
     mfr: "Volvo Penta", model: ENGINE_MP,
     tasks: [
       ["Control correas de transmisión", "500h", 23635, 24135],
@@ -165,7 +166,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-CR-ER", name: "Caja reductora Estribor", group: 6, sub: "603", crit: "A",
+    code: "M01-CR-ER", name: "Caja reductora Estribor", group: 6, sub: "620", crit: "A",
     mfr: "Twin Disc", model: "5170",
     tasks: [
       ["Control de estado y limpieza de venteo respirador", "1mo", null, null],
@@ -176,7 +177,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-CR-BR", name: "Caja reductora Babor", group: 6, sub: "603", crit: "A",
+    code: "M01-CR-BR", name: "Caja reductora Babor", group: 6, sub: "620", crit: "A",
     mfr: "Twin Disc", model: "5170",
     tasks: [
       ["Control de estado y limpieza de venteo respirador", "1mo", null, null],
@@ -187,7 +188,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EJE-ER", name: "Línea de eje Estribor", group: 6, sub: "605", crit: "A",
+    code: "M01-EJE-ER", name: "Línea de eje Estribor", group: 6, sub: "630", crit: "A",
     tasks: [
       ["Controlar, reapriete de prensa estopa", "3mo", "2026-01-02", "2026-04-02"],
       ["Cambio de empaquetadura", "12mo", "2026-01-02", "2027-01-02"],
@@ -195,7 +196,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EJE-BR", name: "Línea de eje Babor", group: 6, sub: "605", crit: "A",
+    code: "M01-EJE-BR", name: "Línea de eje Babor", group: 6, sub: "630", crit: "A",
     tasks: [
       ["Controlar, reapriete de prensa estopa", "3mo", "2026-01-02", "2026-04-02"],
       ["Cambio de empaquetadura", "12mo", "2026-01-02", "2027-01-02"],
@@ -204,7 +205,7 @@ const ASSETS: AssetDef[] = [
   },
   // ── PLANTA ELÉCTRICA MOTORES AUXILIARES ────────────────────────────────────
   {
-    code: "M01-MA-ER", name: "Motor Auxiliar Estribor", group: 6, sub: "611", crit: "A", safety: true,
+    code: "M01-MA-ER", name: "Motor Auxiliar Estribor", group: 6, sub: "650", crit: "A", safety: true,
     mfr: "Cummins", model: ENGINE_MA, serial: "SO83879",
     tasks: [
       ["Cambio de aceite", "250h", 62323, 62573],
@@ -231,7 +232,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-MA-BR", name: "Motor Auxiliar Babor", group: 6, sub: "611", crit: "A", safety: true,
+    code: "M01-MA-BR", name: "Motor Auxiliar Babor", group: 6, sub: "650", crit: "A", safety: true,
     mfr: "Cummins", model: ENGINE_MA, serial: "SO83879",
     tasks: [
       ["Cambio de aceite", "250h", 62172, 62422],
@@ -258,7 +259,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-ALT-ER", name: "Alternador Estribor", group: 8, sub: "801", crit: "A",
+    code: "M01-ALT-ER", name: "Alternador Estribor", group: 8, sub: "810", crit: "A",
     mfr: "DBT Cramaco", model: "G2R 200 SD/4", desc: "Transformador 380/220",
     tasks: [
       ["Control aislación", "12mo", "2024-10-24", "2025-10-24"],
@@ -267,7 +268,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-ALT-BR", name: "Alternador Babor", group: 8, sub: "801", crit: "A",
+    code: "M01-ALT-BR", name: "Alternador Babor", group: 8, sub: "810", crit: "A",
     mfr: "DBT Cramaco", model: "G2R 200 SD/4", desc: "Transformador 380/220",
     tasks: [
       ["Control aislación", "12mo", "2024-05-20", "2025-05-20"],
@@ -276,7 +277,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-TEP", name: "Tablero Eléctrico Principal", group: 8, sub: "802", crit: "A",
+    code: "M01-TEP", name: "Tablero Eléctrico Principal", group: 8, sub: "820", crit: "A",
     tasks: [
       ["Limpieza interior", "6mo", "2024-10-24", "2025-04-22"],
       ["Control y ajuste de contactores y protecciones", "12mo", "2024-02-24", "2025-02-23"],
@@ -286,14 +287,14 @@ const ASSETS: AssetDef[] = [
   },
   // ── CIRCUITO DE COMBUSTIBLE ────────────────────────────────────────────────
   {
-    code: "M01-COMB-CAL", name: "Calidad del Combustible", group: 7, sub: "701", crit: "B",
+    code: "M01-COMB-CAL", name: "Calidad del Combustible", group: 7, sub: "710", crit: "B",
     tasks: [
       ["Toma de muestra para analizar", "12mo", "2025-12-30", "2026-12-30"],
       ["Prueba de funcionamiento", "1mo", "2026-01-28", "2026-02-27"],
     ],
   },
   {
-    code: "M01-PURIF", name: "Purificadora de combustible", group: 7, sub: "701", crit: "B", status: "OUT_OF_SERVICE",
+    code: "M01-PURIF", name: "Purificadora de combustible", group: 7, sub: "710", crit: "B", status: "OUT_OF_SERVICE",
     mfr: "Alfa Laval", model: "MAB 102 B-25", desc: "Fuera de servicio (F/S)",
     tasks: [
       ["Limpieza y cambio de aceite", "1mo", null, null],
@@ -305,7 +306,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-TRASV", name: "ElectroBomba Trasvase de Combustible", group: 7, sub: "701", crit: "B",
+    code: "M01-EB-TRASV", name: "ElectroBomba Trasvase de Combustible", group: 7, sub: "710", crit: "B",
     desc: "1390 rpm · Rodamientos 6204 ZZ",
     tasks: [
       ["Prueba de funcionamiento", "1mo", "2026-01-28", "2026-02-27"],
@@ -316,7 +317,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-TUB-COMB", name: "Tubería embarque de combustible", group: 7, sub: "701", crit: "B",
+    code: "M01-TUB-COMB", name: "Tubería embarque de combustible", group: 7, sub: "710", crit: "B",
     tasks: [
       ["Prueba hidráulica de tuberías. Certificado", "12mo", "2024-02-20", "2025-02-19"],
       ["Verificar estado de BCU: brida ciega con bulonería, identificación, bandeja derrame limpia y con tapón", "6mo", "2025-10-15", "2026-04-13"],
@@ -325,7 +326,7 @@ const ASSETS: AssetDef[] = [
   },
   // ── BOMBAS ELÉCTRICAS ──────────────────────────────────────────────────────
   {
-    code: "M01-EB-AP1", name: "ElectroBomba Agua Potable N°1", group: 5, sub: "551", crit: "B",
+    code: "M01-EB-AP1", name: "ElectroBomba Agua Potable N°1", group: 5, sub: "550", crit: "B",
     mfr: "Rowa", model: "RP270",
     tasks: [
       ["Prueba de funcionamiento", "1mo", "2026-01-28", "2026-02-27"],
@@ -336,7 +337,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-AP2", name: "ElectroBomba Agua Potable N°2", group: 5, sub: "551", crit: "B",
+    code: "M01-EB-AP2", name: "ElectroBomba Agua Potable N°2", group: 5, sub: "550", crit: "B",
     mfr: "Rowa", model: "RP270",
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", "2023-03-17", "2028-03-15"],
@@ -347,7 +348,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-INC-P", name: "ElectroBomba de Incendio Principal", group: 4, sub: "440", crit: "A", safety: true,
+    code: "M01-EB-INC-P", name: "ElectroBomba de Incendio Principal", group: 7, sub: "760", crit: "A", safety: true,
     mfr: "Grundfos", model: "32-4-22",
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", null, null],
@@ -359,7 +360,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-BBA-INC-EM", name: "Bomba de Incendio de Emergencia (acoplada a MP)", group: 4, sub: "440", crit: "A", safety: true, status: "OUT_OF_SERVICE",
+    code: "M01-BBA-INC-EM", name: "Bomba de Incendio de Emergencia (acoplada a MP)", group: 7, sub: "760", crit: "A", safety: true, status: "OUT_OF_SERVICE",
     mfr: "KSB", model: "Multitec", desc: "Fuera de servicio",
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", null, null],
@@ -369,7 +370,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-REF1", name: "ElectroBomba Agua Refrigeración MMAA, Achique y Serv. Grales N°1", group: 7, sub: "720", crit: "B",
+    code: "M01-EB-REF1", name: "ElectroBomba Agua Refrigeración MMAA, Achique y Serv. Grales N°1", group: 7, sub: "730", crit: "B",
     mfr: "Grundfos", model: "32-4-22",
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", "2024-10-17", "2029-10-16"],
@@ -380,7 +381,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-REF2", name: "ElectroBomba Agua Refrigeración MMAA, Achique y Serv. Grales N°2", group: 7, sub: "720", crit: "B",
+    code: "M01-EB-REF2", name: "ElectroBomba Agua Refrigeración MMAA, Achique y Serv. Grales N°2", group: 7, sub: "730", crit: "B",
     mfr: "Grundfos", model: "32-4-22",
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", null, null],
@@ -391,7 +392,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-EB-ACH-SENT", name: "ElectroBomba Achique de Sentina", group: 7, sub: "720", crit: "B",
+    code: "M01-EB-ACH-SENT", name: "ElectroBomba Achique de Sentina", group: 7, sub: "750", crit: "B",
     tasks: [
       ["Recorrido de bomba: control de estator de goma, eje sin fin y retén", "60mo", "2024-02-20", "2029-02-18"],
       ["Recorrido motor eléctrico: limpieza, barnizado, cambio rodamientos", "60mo", null, "2030-12-29"],
@@ -400,26 +401,26 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-ACH-TIMON", name: "Achique de Cuarto de Timón", group: 7, sub: "720", crit: "B",
+    code: "M01-ACH-TIMON", name: "Achique de Cuarto de Timón", group: 7, sub: "750", crit: "B",
     tasks: [
       ["Verificar apertura y cierre de todas las válvulas del sistema", "6mo", "2025-12-27", "2026-06-25"],
     ],
   },
   {
-    code: "M01-FILT-ACH", name: "Filtros de Achique Sentina", group: 7, sub: "720", crit: "B",
+    code: "M01-FILT-ACH", name: "Filtros de Achique Sentina", group: 7, sub: "750", crit: "B",
     tasks: [
       ["Limpiar y controlar estado de filtro general y rejillas de aspiración de sentina", "3mo", "2026-02-26", "2026-05-27"],
     ],
   },
   {
-    code: "M01-FILT-MAR", name: "Filtros tomas de mar", group: 7, sub: "720", crit: "B",
+    code: "M01-FILT-MAR", name: "Filtros tomas de mar", group: 7, sub: "730", crit: "B",
     tasks: [
       ["Desarme y limpieza", "1mo", "2026-03-28", "2026-04-27"],
     ],
   },
   // ── COMPRESORES ────────────────────────────────────────────────────────────
   {
-    code: "M01-COMP-NK40", name: "Electrocompresor a tornillo NK40", group: 7, sub: "740", crit: "B",
+    code: "M01-COMP-NK40", name: "Electrocompresor a tornillo NK40", group: 7, sub: "770", crit: "B",
     mfr: "Cetec", model: "NK40-7.5",
     tasks: [
       ["Verificar funcionamiento", "1mo", "2026-04-28", "2026-05-28"],
@@ -438,7 +439,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-COMP-PITO", name: "Compresor Aire Pito", group: 7, sub: "740", crit: "C",
+    code: "M01-COMP-PITO", name: "Compresor Aire Pito", group: 7, sub: "770", crit: "C",
     tasks: [
       ["Prueba de funcionamiento, control de aceite y estado general", "1mo", "2026-03-28", "2026-04-27"],
       ["Cambio de aceite", "6mo", "2026-01-28", "2026-07-27"],
@@ -448,7 +449,7 @@ const ASSETS: AssetDef[] = [
   },
   // ── SISTEMA HIDRÁULICO DE GOBIERNO Y MANIOBRA ──────────────────────────────
   {
-    code: "M01-HID-GOB", name: "Sistema Hidráulico de Gobierno y Maniobra", group: 7, sub: "750", crit: "A", safety: true,
+    code: "M01-HID-GOB", name: "Sistema Hidráulico de Gobierno y Maniobra", group: 7, sub: "780", crit: "A", safety: true,
     tasks: [
       ["Sistema de transmisión antagónico de timones: engrase y control de flexibles/conexiones", "1mo", "2026-04-15", "2026-05-15"],
       ["Sistema hidráulico: tomar muestra L.O. para analizar", "6mo", "2025-12-18", "2026-06-16"],
@@ -465,7 +466,7 @@ const ASSETS: AssetDef[] = [
   },
   // ── VENTILADORES Y EXTRACTORES ─────────────────────────────────────────────
   {
-    code: "M01-VENT", name: "Ventiladores y Extractores", group: 7, sub: "760", crit: "B",
+    code: "M01-VENT", name: "Ventiladores y Extractores", group: 7, sub: "790", crit: "B",
     tasks: [
       ["Ventilador N°1 CTRO ER: puesta en marcha e inspección visual", "1mo", "2026-04-17", "2026-05-17"],
       ["Ventilador N°2 CTRO BR: puesta en marcha e inspección visual", "1mo", "2026-04-17", "2026-05-17"],
@@ -483,13 +484,13 @@ const ASSETS: AssetDef[] = [
   },
   // ── OTROS ──────────────────────────────────────────────────────────────────
   {
-    code: "M01-AJUSTES", name: "Control de Ajustes Generales (instalación eléctrica)", group: 8, sub: "804", crit: "C",
+    code: "M01-AJUSTES", name: "Control de Ajustes Generales (instalación eléctrica)", group: 8, sub: "830", crit: "C",
     tasks: [
       ["Control de cajas exteriores/interiores, artefactos eléctricos de iluminación, tulipas y prensas", "1mo", "2026-01-25", "2026-02-24"],
     ],
   },
   {
-    code: "M01-MALACATE", name: "Malacate eléctrico de pluma de lancha", group: 3, sub: "311", crit: "B",
+    code: "M01-MALACATE", name: "Malacate eléctrico de pluma de lancha", group: 3, sub: "310", crit: "B",
     tasks: [
       ["Prueba de funcionamiento", "1mo", "2026-01-25", "2026-02-24"],
       ["Toma de aislación a motor eléctrico", "12mo", "2024-11-12", "2025-04-25"],
@@ -497,13 +498,13 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-LIBRO-AISL", name: "Libro de Aislaciones", group: 8, sub: "804", crit: "C",
+    code: "M01-LIBRO-AISL", name: "Libro de Aislaciones", group: 8, sub: "890", crit: "C",
     tasks: [
       ["Toma de aislaciones", "12mo", "2024-11-12", "2025-11-12"],
     ],
   },
   {
-    code: "M01-MOTOR-LANCHA", name: "Motor de Lancha", group: 6, sub: "612", crit: "B",
+    code: "M01-MOTOR-LANCHA", name: "Motor de Lancha", group: 4, sub: "490", crit: "B",
     tasks: [
       ["Puesta en marcha del motor e inspección visual", "1mo", "2026-04-15", "2026-05-15"],
       ["Control de estado y carga de batería", "1mo", "2026-04-15", "2026-05-15"],
@@ -513,21 +514,21 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-TERMOTQ", name: "Termotanque", group: 5, sub: "553", crit: "C",
+    code: "M01-TERMOTQ", name: "Termotanque", group: 5, sub: "550", crit: "C",
     tasks: [
       ["Inspección visual, extracción de fondo", "1mo", "2026-04-15", "2026-05-15"],
       ["Toma de aislación", "12mo", "2026-11-12", "2027-11-12"],
     ],
   },
   {
-    code: "M01-SEWAGE", name: "Planta de Tratamiento Sewage", group: 5, sub: "552", crit: "C",
+    code: "M01-SEWAGE", name: "Planta de Tratamiento Sewage", group: 5, sub: "550", crit: "C",
     tasks: [
       ["Prueba de funcionamiento", "1mo", "2026-04-15", "2026-05-15"],
       ["Prueba de parada de emergencia", "1mo", "2026-04-15", "2026-05-15"],
     ],
   },
   {
-    code: "M01-COCINA", name: "Cocina", group: 5, sub: "554", crit: "C",
+    code: "M01-COCINA", name: "Cocina", group: 5, sub: "530", crit: "C",
     tasks: [
       ["Inspección visual. Control de conexiones", "1mo", "2026-04-15", "2026-05-15"],
       ["Limpieza de filtros y campana (coordinar con cubierta)", "1mo", "2026-04-15", "2026-05-15"],
@@ -535,7 +536,7 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-ELEV", name: "Elementos de Elevación de Pesos", group: 3, sub: "310", crit: "B",
+    code: "M01-ELEV", name: "Elementos de Elevación de Pesos", group: 3, sub: "320", crit: "B",
     tasks: [
       ["Control visual de monorrieles, aparejos, fajas y eslingas", "12mo", "2026-05-21", "2027-05-21"],
       ["Certificación de SWL de monorrieles, aparejos, fajas y eslingas", "12mo", "2026-01-20", "2027-01-20"],
@@ -543,70 +544,70 @@ const ASSETS: AssetDef[] = [
   },
   // ── NAVEGACIÓN, ELECTRÓNICOS Y COMUNICACIÓN ────────────────────────────────
   {
-    code: "M01-AIS", name: "AIS", group: 9, sub: "901", crit: "B", mfr: "Samyung", model: "SI-30",
+    code: "M01-AIS", name: "AIS", group: 4, sub: "430", crit: "B", mfr: "Samyung", model: "SI-30",
     tasks: [
       ["Prueba de transmisión y recepción (TX/RX). Verificación de datos de configuración estáticos y con VTS / sistema internacional de AIS", "12mo", "2026-02-14", "2027-02-14", "I"],
     ],
   },
   {
-    code: "M01-BAROM", name: "Barómetro", group: 9, sub: "901", crit: "C", mfr: "Western Germany",
+    code: "M01-BAROM", name: "Barómetro", group: 4, sub: "410", crit: "C", mfr: "Western Germany",
     tasks: [
       ["Verificación de parámetros. Desarme, lubricación y calibración de resorte de compensación. Certificación", "12mo", "2026-02-15", "2027-02-15", "I"],
     ],
   },
   {
-    code: "M01-COMPAS", name: "Compás Magnético", group: 9, sub: "901", crit: "B", mfr: "Danforth",
+    code: "M01-COMPAS", name: "Compás Magnético", group: 4, sub: "410", crit: "B", mfr: "Danforth",
     tasks: [
       ["Verificación de curvas de desvíos de compás patrón. Certificación", "12mo", "2026-02-17", "2027-02-17", "I"],
     ],
   },
   {
-    code: "M01-RADAR-BR", name: "Radar de Babor", group: 9, sub: "901", crit: "B", mfr: "Furuno", model: "1715",
+    code: "M01-RADAR-BR", name: "Radar de Babor", group: 4, sub: "430", crit: "B", mfr: "Furuno", model: "1715",
     tasks: [
       ["Verificación de conexiones, limpieza interior de procesador y LED, regulación de sintonía y verificación de antena", "6mo", "2025-12-18", "2026-06-18", "I"],
       ["Cambio de magnetrón 2KW", "9000h", null, 9000],
     ],
   },
   {
-    code: "M01-RADAR-ER", name: "Radar de Estribor", group: 9, sub: "901", crit: "B", mfr: "Furuno", model: "M1934 BB",
+    code: "M01-RADAR-ER", name: "Radar de Estribor", group: 4, sub: "430", crit: "B", mfr: "Furuno", model: "M1934 BB",
     tasks: [
       ["Verificación de conexiones, limpieza interior de procesador y LED, regulación de sintonía y verificación de antena", "6mo", "2026-04-15", "2026-10-14", "I"],
       ["Cambio de magnetrón 6KW", "9000h", null, 9000],
     ],
   },
   {
-    code: "M01-ECO-BR", name: "Ecosonda Babor", group: 9, sub: "901", crit: "B", mfr: "Furuno",
+    code: "M01-ECO-BR", name: "Ecosonda Babor", group: 4, sub: "430", crit: "B", mfr: "Furuno",
     tasks: [
       ["Limpieza del panel, revisión de conectores, test de patrones y control de fuente de alimentación", "12mo", "2026-02-20", "2027-02-20", "I"],
     ],
   },
   {
-    code: "M01-ECO-ER", name: "Ecosonda Estribor", group: 9, sub: "901", crit: "B", mfr: "Garmin", model: "Striker 4",
+    code: "M01-ECO-ER", name: "Ecosonda Estribor", group: 4, sub: "430", crit: "B", mfr: "Garmin", model: "Striker 4",
     tasks: [
       ["Limpieza del panel, revisión de conectores, test de patrones y control de fuente de alimentación", "12mo", "2026-02-20", "2027-02-20", "I"],
     ],
   },
   {
-    code: "M01-ECO-REMOL", name: "Ecosonda del Remolcador", group: 9, sub: "901", crit: "B", mfr: "Furuno", model: "LS-4100",
+    code: "M01-ECO-REMOL", name: "Ecosonda del Remolcador", group: 4, sub: "430", crit: "B", mfr: "Furuno", model: "LS-4100",
     tasks: [
       ["Limpieza del panel, revisión de conectores, test de patrones y control de fuente de alimentación", "12mo", "2026-02-20", "2027-02-20", "I"],
     ],
   },
   {
-    code: "M01-VHF-BR", name: "Radio VHF Babor", group: 9, sub: "902", crit: "A", safety: true, mfr: "Icom", model: "IC-M412",
+    code: "M01-VHF-BR", name: "Radio VHF Babor", group: 4, sub: "420", crit: "A", safety: true, mfr: "Icom", model: "IC-M412",
     tasks: [
       ["Prueba de transmisión y recepción. Verificar display, conexiones, fuente de alimentación y potencia de salida", "12mo", "2025-07-28", "2026-07-28", "I"],
     ],
   },
   {
-    code: "M01-VHF-ER", name: "Radio VHF Estribor", group: 9, sub: "902", crit: "A", safety: true, mfr: "Icom", model: "IC-M412",
+    code: "M01-VHF-ER", name: "Radio VHF Estribor", group: 4, sub: "420", crit: "A", safety: true, mfr: "Icom", model: "IC-M412",
     tasks: [
       ["Prueba de transmisión y recepción. Verificar display, conexiones, fuente de alimentación y potencia de salida", "12mo", "2026-04-21", "2027-04-21", "I"],
     ],
   },
   // ── EQUIPOS CRÍTICOS (registro de pruebas) — activos dedicados ──────────────
   {
-    code: "M01-BAT-EGA", name: "Baterías y Sistemas de Emergencia EGA", group: 8, sub: "803", crit: "A", safety: true,
+    code: "M01-BAT-EGA", name: "Baterías y Sistemas de Emergencia EGA", group: 8, sub: "860", crit: "A", safety: true,
     desc: "Baterías de iluminación, navegación y radio EGA; iluminación y tablero de emergencia (24V CC)",
     tasks: [
       ["Baterías de iluminación EGA: verificar estado de carga y condición general, limpieza de bornes", "7d", "2026-05-26", null, "I"],
@@ -618,26 +619,26 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-MBBA-PORT", name: "Motobomba de Incendio EGA Portátil", group: 4, sub: "440", crit: "A", safety: true,
+    code: "M01-MBBA-PORT", name: "Motobomba de Incendio EGA Portátil", group: 4, sub: "450", crit: "A", safety: true,
     tasks: [
       ["Prueba de funcionamiento (en conjunto con Cubierta)", "7d", "2026-05-26", null, "I"],
       ["Cambiar aceite, combustible y filtros", "6mo", "2025-12-13", null],
     ],
   },
   {
-    code: "M01-CO2", name: "Sistema Fijo de CO2", group: 4, sub: "440", crit: "A", safety: true,
+    code: "M01-CO2", name: "Sistema Fijo de CO2", group: 4, sub: "450", crit: "A", safety: true,
     tasks: [
       ["Prueba de funcionamiento de alarma visual y sonora de disparo", "1mo", "2026-05-15", null, "I"],
     ],
   },
   {
-    code: "M01-DET-HUMO", name: "Detectores de Humo / Calor", group: 4, sub: "440", crit: "A", safety: true,
+    code: "M01-DET-HUMO", name: "Detectores de Humo / Calor", group: 4, sub: "450", crit: "A", safety: true,
     tasks: [
       ["Inspección y prueba mensual de detectores de humo/calor", "30d", "2026-05-27", null, "I"],
     ],
   },
   {
-    code: "M01-CORTES", name: "Cortes y Cierres de Emergencia (ventilación / combustible)", group: 4, sub: "441", crit: "A", safety: true,
+    code: "M01-CORTES", name: "Cortes y Cierres de Emergencia (ventilación / combustible)", group: 4, sub: "450", crit: "A", safety: true,
     tasks: [
       ["Cortes de ventilación y bomba G.O.: prueba de funcionamiento a distancia eléctrico", "7d", "2026-05-26", null, "I"],
       ["Cierre de grampas de ventilación: prueba e inspección visual", "7d", "2026-05-26", null, "I"],
@@ -645,13 +646,13 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-VGA", name: "Válvulas de Gran Achique (PLANACON)", group: 4, sub: "450", crit: "A", safety: true,
+    code: "M01-VGA", name: "Válvulas de Gran Achique (PLANACON)", group: 7, sub: "750", crit: "A", safety: true,
     tasks: [
       ["Verificar estado de precintos", "1mo", "2026-05-15", null, "I"],
     ],
   },
   {
-    code: "M01-ALARM-TK", name: "Alarmas de Tanques de Consumo G.O.", group: 9, sub: "910", crit: "A", safety: true,
+    code: "M01-ALARM-TK", name: "Alarmas de Tanques de Consumo G.O.", group: 9, sub: "920", crit: "A", safety: true,
     tasks: [
       ["Tanques carboneras G.O.: prueba de funcionamiento de alarma sonora/visual", "7d", "2026-05-26", null, "I"],
       ["Tanque diario G.O.: prueba de alarma de bajo nivel sonora/visual", "7d", "2026-05-26", null, "I"],
@@ -660,25 +661,25 @@ const ASSETS: AssetDef[] = [
     ],
   },
   {
-    code: "M01-ALARM-SENT", name: "Alarma de Sentina de Máquinas", group: 9, sub: "910", crit: "A", safety: true,
+    code: "M01-ALARM-SENT", name: "Alarma de Sentina de Máquinas", group: 9, sub: "920", crit: "A", safety: true,
     tasks: [
       ["Prueba de función de alarma Estribor, Babor y Timón", "7d", "2026-05-26", null, "I"],
     ],
   },
   {
-    code: "M01-TORRE", name: "Torre de Señales Lumínicas", group: 9, sub: "902", crit: "B",
+    code: "M01-TORRE", name: "Torre de Señales Lumínicas", group: 4, sub: "420", crit: "B",
     tasks: [
       ["Prueba de funcionamiento de luces, llamada telefónica, alarma general y alarmas de máquinas", "7d", "2026-05-26", null, "I"],
     ],
   },
   {
-    code: "M01-TEL", name: "Teléfono de Consola Máquinas / Puente", group: 9, sub: "902", crit: "B",
+    code: "M01-TEL", name: "Teléfono de Consola Máquinas / Puente", group: 4, sub: "420", crit: "B",
     tasks: [
       ["Prueba de funcionamiento entre consola de máquinas y puente", "7d", "2026-05-26", null, "I"],
     ],
   },
   {
-    code: "M01-INTERCOM", name: "Intercomunicador de Alta Voz", group: 9, sub: "902", crit: "B",
+    code: "M01-INTERCOM", name: "Intercomunicador de Alta Voz", group: 4, sub: "420", crit: "B",
     tasks: [
       ["Prueba de funcionamiento entre puente, timón y cubierta proa/popa", "7d", "2026-05-26", null, "I"],
     ],
