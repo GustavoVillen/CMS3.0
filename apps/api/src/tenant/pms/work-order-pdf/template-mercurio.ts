@@ -289,6 +289,19 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, fecha, { fontSize: 8, align: "center" });
       canvas.y += TR_RH;
     }
+    // Rechazo: si la OT fue rechazada en tramitación, fila destacada + motivo.
+    if ((wo as any).rechazadoAt) {
+      ensureSpace(TR_RH);
+      cell(ML, canvas.y, trPasoW, TR_RH, "Rechaza", { bold: true, fontSize: 8, color: "#b91c1c" });
+      cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, sanitizePdfText((wo as any).rechazadoByName ?? "—"), { fontSize: 9, color: "#b91c1c" });
+      cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, fmt((wo as any).rechazadoAt), { fontSize: 8, align: "center", color: "#b91c1c" });
+      canvas.y += TR_RH;
+      if ((wo as any).rechazoReason) {
+        sectionHeader("MOTIVO DEL RECHAZO");
+        ensureSpace(30);
+        canvas.y += textArea(ML, canvas.y, W, sanitizePdfText((wo as any).rechazoReason), 30);
+      }
+    }
 
     // ── FIRMAS ──────────────────────────────────────────────────────────────
     ensureSpace(68);
