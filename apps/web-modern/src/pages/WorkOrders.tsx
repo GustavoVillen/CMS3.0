@@ -808,7 +808,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [deficienciasText, observations, workOrder, navigate]);
 
   const [saving,          setSaving]         = useState(false);
-  const [starting,        setStarting]       = useState(false);
   const [resuming,        setResuming]       = useState(false);
   const [closing,         setClosing]        = useState(false);
   const [err,             setErr]            = useState<string | null>(null);
@@ -1092,16 +1091,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     onSave,
     onClose,
   });
-
-  const handleStart = useCallback(async () => {
-    setStarting(true); setErr(null);
-    try {
-      await api.post(`/app/pms/work-orders/${workOrder.id}/start`, {});
-      onSaved();
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("common.unknownError"));
-    } finally { setStarting(false); }
-  }, [workOrder.id, onSaved, t]);
 
   const handleResume = useCallback(async () => {
     setResuming(true); setErr(null);
@@ -1924,13 +1913,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 {generatingSr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequest")}
               </button>
             )}
-            {workOrder.status === "PLANNED" && (
-              <button onClick={() => { void handleStart(); }} disabled={starting}
-                className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
-                {starting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
-                Iniciar OT
-              </button>
-            )}
             {workOrder.status === "ON_HOLD" && (
               <button onClick={() => { void handleResume(); }} disabled={resuming}
                 className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">
@@ -1938,10 +1920,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 {t("wo.resume")}
               </button>
             )}
-            <button onClick={() => canPostpone && onOpenAction(workOrder, "hold")} disabled={!canPostpone}
-              className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
-              {t("wo.modal.postpone")}
-            </button>
             <button onClick={() => { void onClose_WO(); }} disabled={!canClose || closing}
               title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
               className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -1949,6 +1927,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </button>
           </div>
           <div className="flex gap-2">
+            <button onClick={() => canPostpone && onOpenAction(workOrder, "hold")} disabled={!canPostpone}
+              className="px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
+              {t("wo.modal.postpone")}
+            </button>
             <button onClick={() => canCancel && onOpenAction(workOrder, "cancel")} disabled={!canCancel}
               className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed">
               {t("wo.modal.cancelWO")}

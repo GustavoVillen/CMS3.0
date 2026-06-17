@@ -1,5 +1,11 @@
 HISTORY.txt
 
+[2026-06-17] TUNE: footer del modal de OT — quitar "Iniciar OT", "Diferir" → "Diferir OT" a la derecha
+Agent: Claude Opus 4.8
+- Se elimina el botón "Iniciar OT" (+ handleStart/starting, ya sin uso). El botón de diferir se mueve
+  al grupo derecho del footer y se renombra a "Diferir OT" (i18n wo.modal.postpone es/en/pt).
+- VERIFICACIÓN: tsc web exit 0. Frontend-only → deploy: pull + build web + restart.
+
 [2026-06-17] FEAT: tramitación de OT — botones aprobar/autorizar/rechazar en el modal + gate de avances/resultado
 Agent: Claude Opus 4.8
 - Schema: WorkOrder += rechazadoByName/At + rechazoReason (nullable). Migración 20260617_wo_approval_reject.
