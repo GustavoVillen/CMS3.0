@@ -7,7 +7,7 @@
 
 import PDFDocument from "pdfkit";
 import {
-  fmt, val, motivoFromType, statusLabel, priorityLabel, riskLabel, woResultLabel,
+  fmt, val, statusLabel, priorityLabel, riskLabel, woResultLabel,
   STATUS_COLOR, PRIORITY_COLOR, sanitizePdfText, PAGE_H,
   type WorkOrderPdfContext,
 } from "./shared";
@@ -28,13 +28,11 @@ const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
   const { wo, assetLabel, assetIsSafetyCritical, assignedName, createdByName, tenant, formLogoBuffer, formMeta, spareUsages, tenantSlug } = ctx;
 
+  // Checkboxes ahora interactivos (AcroForm): se tildan desde el visor PDF, sin
+  // pre-marcado del sistema. Solo se usan las etiquetas de cada grupo.
   const motivos = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"] as const;
-  const motivoActivo = motivoFromType((wo as any).type ?? "");
-  const department: string | null = (wo as any).department ?? null;
   const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const;
-  const commMethods: string[] = (wo as any).communicationMethod ?? [];
   const COMM_OPTS = ["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const;
-  const distList: string[] = (wo as any).distribution ?? [];
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
@@ -50,7 +48,25 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       ml: ML, w: W, marginT: MARGIN_T, contentBottom: CONTENT_BOTTOM,
       drawFooter: (page) => drawControlledDocFooter(doc, { meta: formMeta, rightInfo: rightInfo(page), x: ML, w: W }),
     });
-    const { sectionHeader, cell, checkbox, textArea, ensureSpace } = canvas;
+    const { sectionHeader, cell, textArea, ensureSpace } = canvas;
+
+    // ── Campos de formulario interactivos (AcroForm) ──
+    // Permiten tildar checkboxes y completar nombre/firma desde el visor PDF.
+    (doc as any).initForm();
+    let _fid = 0;
+    const fcheck = (cx: number, cy: number, label: string, box = 9) => {
+      (doc as any).formCheckbox(`chk_${_fid++}`, cx, cy, box, box, { borderColor: BORDER, borderWidth: 0.8 });
+      if (label) {
+        doc.fontSize(8).font("Helvetica").fillColor(BLACK)
+          .text(label, cx + box + 4, cy + 0.5, { lineBreak: false });
+      }
+    };
+    const ftext = (cx: number, cy: number, cw: number, ch: number, value: string,
+      o: { fontSize?: number; align?: "left" | "center" | "right" } = {}) => {
+      (doc as any).formText(`txt_${_fid++}`, cx, cy, cw, ch, {
+        value: value || "", fontSize: o.fontSize ?? 9, align: o.align ?? "left",
+      });
+    };
 
     // ── HEADER (documento controlado) ───────────────────────────────────────
     const hdrH = drawControlledDocHeader(doc, {
@@ -83,7 +99,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     doc.rect(ML, canvas.y, W - FECHA_W, DEPT_ROW_H).fillColor(WHITE).fill();
     doc.rect(ML, canvas.y, W - FECHA_W, DEPT_ROW_H).strokeColor(BORDER).lineWidth(0.4).stroke();
     const deptW = Math.floor((W - FECHA_W) / DEPTS.length);
-    DEPTS.forEach((d, i) => { checkbox(ML + i * deptW + 6, canvas.y + 7, d, department === d); });
+    DEPTS.forEach((d, i) => { fcheck(ML + i * deptW + 6, canvas.y + 6, d); });
     cell(ML + W - FECHA_W, canvas.y, FECHA_W, DEPT_ROW_H, fmt(wo.openDate), { fontSize: 9, align: "center" });
     canvas.y += DEPT_ROW_H;
 
@@ -103,7 +119,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     doc.rect(ML, canvas.y, W, MOTIVO_H).fillColor(WHITE).fill();
     doc.rect(ML, canvas.y, W, MOTIVO_H).strokeColor(BORDER).lineWidth(0.4).stroke();
     const motivoW = Math.floor(W / motivos.length);
-    motivos.forEach((m, i) => { checkbox(ML + i * motivoW + 6, canvas.y + 7, m, m === motivoActivo); });
+    motivos.forEach((m, i) => { fcheck(ML + i * motivoW + 6, canvas.y + 6, m); });
     canvas.y += MOTIVO_H;
 
     // ── DESCRIPCION ─────────────────────────────────────────────────────────
@@ -250,7 +266,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       doc.rect(cx, canvas.y, commW, COMM_H).strokeColor(BORDER).lineWidth(0.3).stroke();
       doc.fontSize(8).font("Helvetica-Bold").fillColor(GRAY)
         .text(opt, cx + 4, canvas.y + 3, { width: commW - 8, align: "center", lineBreak: false });
-      checkbox(cx + commW / 2 - 4, canvas.y + 13, "", commMethods.includes(opt));
+      fcheck(cx + commW / 2 - 4.5, canvas.y + 12, "");
     });
     canvas.y += COMM_H;
 
@@ -263,8 +279,8 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     const distHalf = Math.floor(W / 2);
     doc.rect(ML, canvas.y, distHalf, DIST_H).strokeColor(BORDER).lineWidth(0.3).stroke();
     doc.rect(ML + distHalf, canvas.y, W - distHalf, DIST_H).strokeColor(BORDER).lineWidth(0.3).stroke();
-    checkbox(ML + 8, canvas.y + 7, "Original: Recursos Humanos", distList.includes("ORIGINAL"));
-    checkbox(ML + distHalf + 8, canvas.y + 7, "Copia: Destinatarios", distList.includes("COPIA"));
+    fcheck(ML + 8, canvas.y + 6, "Original: Recursos Humanos");
+    fcheck(ML + distHalf + 8, canvas.y + 6, "Copia: Destinatarios");
     canvas.y += DIST_H;
 
     // ── TRAMITACIÓN (cadena de aprobación: Solicita / Aprueba / Autoriza) ─────
@@ -316,11 +332,11 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       doc.rect(bx, canvas.y, sigW2, SIG_H).strokeColor(BORDER).lineWidth(0.5).stroke();
       doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
         .text(label.toUpperCase(), bx + 6, canvas.y + 6, { width: sigW2 - 12, align: "center", lineBreak: false, characterSpacing: 0.3 });
-      doc.moveTo(bx + 10, canvas.y + 44).lineTo(bx + sigW2 - 10, canvas.y + 44).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
-      if (i === 0 && assignedName) {
-        doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-          .text(sanitizePdfText(assignedName), bx + 6, canvas.y + 46, { width: sigW2 - 12, align: "center", lineBreak: false });
-      }
+      // Zona para firmar (a mano / Adobe Fill&Sign) y campo de texto para el nombre.
+      doc.moveTo(bx + 10, canvas.y + 34).lineTo(bx + sigW2 - 10, canvas.y + 34).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
+      doc.fontSize(6).font("Helvetica").fillColor(GRAY)
+        .text("Firma", bx + 6, canvas.y + 36, { width: sigW2 - 12, align: "center", lineBreak: false });
+      ftext(bx + 8, canvas.y + 44, sigW2 - 16, 12, i === 0 ? (assignedName ?? "") : "", { fontSize: 8, align: "center" });
     });
     canvas.y += SIG_H;
 
