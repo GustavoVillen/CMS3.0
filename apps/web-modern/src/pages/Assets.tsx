@@ -205,7 +205,8 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
     `/app/pms/work-orders?assetId=${encodeURIComponent(assetId)}`,
     [assetId],
   );
-  const items = data?.items ?? [];
+  const rawItems = data?.items ?? [];
+  const items = [...rawItems].sort((a, b) => b.workOrderCode.localeCompare(a.workOrderCode));
 
   return (
     <div className="space-y-2 pt-2 border-t border-fg/10">
@@ -293,7 +294,18 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
     `/app/pms/maintenance-plans?assetId=${encodeURIComponent(asset.id)}`,
     [asset.id],
   );
-  const items = data?.items ?? [];
+  const items = useMemo(() => {
+    const raw = data?.items ?? [];
+    const freqKey = (p: MaintenancePlan): number => {
+      const tt = p.triggerType;
+      if ((tt === "HOURS" || tt === "RUNNING_HOURS") && p.frequencyHours) return p.frequencyHours;
+      if ((tt === "MONTHS" || tt === "CALENDAR") && p.frequencyMonths) return p.frequencyMonths * 730;
+      if (tt === "DAY" && p.frequencyMonths) return p.frequencyMonths * 24;
+      if (tt === "WEEK" && p.frequencyMonths) return p.frequencyMonths * 168;
+      return Infinity;
+    };
+    return [...raw].sort((a, b) => freqKey(a) - freqKey(b));
+  }, [data]);
 
   // undefined = cerrado | null = nueva tarea | objeto = edición
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null | undefined>(undefined);
