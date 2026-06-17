@@ -1289,13 +1289,22 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     if (readOnly || loadingRisk) return;
     setLoadingRisk(true);
     try {
-      const res = await api.post<{ level: string; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
+      const res = await api.post<{ level: string; probability: string | null; consequence: string | null; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
         assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
       });
-      if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) {
+      // Si la IA devolvió los dos ejes de la matriz, los cargamos y derivamos el
+      // nivel desde la celda (misma fuente de verdad que el click manual). Si no,
+      // caemos al nivel suelto que devuelve la IA.
+      const aiProb = toUiRiskProbability(res.probability);
+      const aiCons = toUiRiskConsequence(res.consequence);
+      if (aiProb && aiCons) {
+        setRiskProbability(aiProb);
+        setRiskConsequence(aiCons);
+        setRiskLevel(deriveRiskLevelFromMatrix(aiProb, aiCons));
+      } else if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) {
         setRiskLevel(res.level as RiskLevel);
       }
       if (res.analysis) setRiskAnalysisResult(res.analysis);

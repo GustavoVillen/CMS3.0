@@ -1,5 +1,27 @@
 HISTORY.txt
 
+[2026-06-17] FIX: la IA cortaba criterios de aceptación / LOTO a media frase
+Agent: Claude Opus 4.8
+- Causa: max_tokens=1024 en suggestPlanAcceptanceCriteria y suggestPlanLoto. Son listas largas;
+  Claude llegaba al tope (stop_reason=max_tokens) y cortaba el contenido.
+- Fix: max_tokens 1024 → 3000 en ambas; timeout del cliente 45s → 60s para cubrir el tail de
+  generaciones largas (Haiku 4.5).
+- VERIFICACIÓN: llamada real (motor auxiliar / cambio de inyectores) → 5062 chars (~1266 tokens)
+  en 19s, termina completo (antes cortaba en ~1024). Backend-only (tsx) → deploy: pull + cache tsx + restart.
+
+[2026-06-17] FEAT: la IA carga los dos ejes de la matriz de riesgo (probabilidad × consecuencia)
+Agent: Claude Opus 4.8
+- suggestPlanRisk (maintenance-plans-ai-suggestions): el prompt ahora pide PROBABILIDAD
+  (LIKELY/PROBABLE/UNLIKELY/RARE) y CONSECUENCIA (FATALITY/MAJOR/MINOR/NEGLIGIBLE) además del
+  NIVEL. Parseo tolerante (ejes opcionales → null si la IA los omite). RiskResult += probability,
+  consequence.
+- handleRiskClick (MaintenancePlans): si la IA devuelve ambos ejes, setea riskProbability/
+  riskConsequence y DERIVA riskLevel desde la matriz (resalta la celda, misma fuente que el click
+  manual); si no, cae al level suelto (comportamiento previo).
+- VERIFICACIÓN: llamada real a Claude → level=HIGH, probability=PROBABLE, consequence=MAJOR
+  (coherente con la matriz). tsc api+web en verde; vite build OK.
+- Front + backend (tsx) → deploy: pull + build web + limpiar cache tsx + pm2 restart (sin db push).
+
 [2026-06-17] FIX: PDF Plan (Mercurio) — huecos entre títulos + matriz que no aparecía
 Agent: Claude Opus 4.8
 - pdf-form-chrome.textArea: devolvía solo el alto del último segmento; con page-break el

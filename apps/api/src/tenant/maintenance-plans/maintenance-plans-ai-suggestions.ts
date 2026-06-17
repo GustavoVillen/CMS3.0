@@ -40,9 +40,25 @@ Niveles de riesgo (operacional):
 - HIGH: requiere permisos especiales (espacio confinado, hot work), standby, atmósfera medida.
 - CRITICAL: combina varios riesgos altos o trabajo en altura/sobre el agua/buceo.
 
+Además, clasificá los DOS ejes de la matriz de riesgo (la lesión al operario durante la ejecución):
+
+PROBABILIDAD — qué tan probable es que ocurra una lesión al ejecutar la tarea:
+- LIKELY: muy probable
+- PROBABLE: probable
+- UNLIKELY: improbable
+- RARE: altamente improbable
+
+CONSECUENCIA — severidad de la lesión más grave razonablemente plausible al operario:
+- FATALITY: fatalidad
+- MAJOR: lesiones importantes (incapacitantes / hospitalización)
+- MINOR: lesiones leves (primeros auxilios)
+- NEGLIGIBLE: lesiones insignificantes
+
 Respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
 
 NIVEL: LOW|MEDIUM|HIGH|CRITICAL
+PROBABILIDAD: LIKELY|PROBABLE|UNLIKELY|RARE
+CONSECUENCIA: FATALITY|MAJOR|MINOR|NEGLIGIBLE
 
 [peligros identificados durante la ejecución, consecuencias para el operario y medidas de control]
 
@@ -66,6 +82,8 @@ interface RiskInput extends BaseInput {
 
 export interface RiskResult {
   level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  probability: "LIKELY" | "PROBABLE" | "UNLIKELY" | "RARE" | null;
+  consequence: "FATALITY" | "MAJOR" | "MINOR" | "NEGLIGIBLE" | null;
   analysis: string;
 }
 
@@ -90,11 +108,12 @@ async function callClaude(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
 
-  // Timeout 45s. Telemetría real (UsageEvent): LOTO y criterios de aceptación
-  // promedian ~13s pero el tail legítimo llega a ~27s generando ~1024 tokens en
-  // Haiku. Con el techo previo de 30s no había margen y ~18% de las llamadas LOTO
-  // morían por timeout justo antes de completar. 45s cubre el p95 con holgura.
-  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  // Timeout 60s. LOTO y criterios de aceptación son listas largas: el techo de
+  // 1024 tokens cortaba el contenido a media frase (stop_reason=max_tokens). Al
+  // subir los topes (3000) las generaciones largas necesitan más margen; Haiku
+  // 4.5 es rápido, pero el tail con cache_creation del prompt puede acercarse a
+  // los 45s previos, así que se amplía a 60s.
+  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 
@@ -150,7 +169,7 @@ export async function suggestPlanAcceptanceCriteria(
     "plan_acceptance_criteria_suggestion",
     PROMPT_ACCEPTANCE,
     buildContext(input),
-    1024,
+    3000,
   );
   return { text };
 }
@@ -164,7 +183,7 @@ export async function suggestPlanLoto(
     "plan_loto_suggestion",
     PROMPT_LOTO,
     buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }),
-    1024,
+    3000,
   );
   return { text };
 }
@@ -189,10 +208,23 @@ export async function suggestPlanRisk(
   if (!["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(level)) {
     throw new RouteError(502, "AI_PARSE_ERROR", `Nivel de riesgo inválido o ausente.`);
   }
-  const analysis = raw.replace(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)\s*/im, "").trim();
+
+  // Ejes de la matriz: opcionales (si la IA los omite, se devuelven null y el
+  // frontend cae al `level`). No bloquean la respuesta.
+  const probMatch = raw.match(/^PROBABILIDAD:\s*(LIKELY|PROBABLE|UNLIKELY|RARE)/im);
+  const consMatch = raw.match(/^CONSECUENCIA:\s*(FATALITY|MAJOR|MINOR|NEGLIGIBLE)/im);
+  const probability = (probMatch?.[1]?.toUpperCase() ?? null) as RiskResult["probability"];
+  const consequence = (consMatch?.[1]?.toUpperCase() ?? null) as RiskResult["consequence"];
+
+  // El análisis es el texto sin las tres líneas de cabecera (en cualquier orden).
+  const analysis = raw
+    .replace(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL).*$/im, "")
+    .replace(/^PROBABILIDAD:\s*(LIKELY|PROBABLE|UNLIKELY|RARE).*$/im, "")
+    .replace(/^CONSECUENCIA:\s*(FATALITY|MAJOR|MINOR|NEGLIGIBLE).*$/im, "")
+    .trim();
   if (!analysis) {
     throw new RouteError(502, "AI_PARSE_ERROR", "Falta el análisis.");
   }
 
-  return { level, analysis };
+  return { level, probability, consequence, analysis };
 }
