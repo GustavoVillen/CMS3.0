@@ -7,6 +7,7 @@ import type { TenantAccessSession } from "../../auth/session-store";
 import { getTenantWorkOrder } from "../../work-orders/work-orders-service";
 import { getPrismaClient } from "../../../platform/data/prisma-client";
 import { resolveTenantLogo, sanitizePdfText, type WorkOrderPdfContext, type WorkOrderSpareUsage, type WorkOrderProgressPhoto } from "./shared";
+import { resolveTenantForm, type TenantFormType } from "../tenant-forms-service";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "attachments");
 
@@ -21,9 +22,14 @@ function fileUrlToPath(url: string | null): string | null {
 export async function loadWorkOrderPdfContext(
   session: TenantAccessSession,
   id: string,
+  formType: TenantFormType = "WORK_ORDER",
 ): Promise<WorkOrderPdfContext> {
   const wo = await getTenantWorkOrder(session, id);
   const prismaRaw = getPrismaClient();
+
+  // ── Definicion del formulario para este tenant (numero, revision, footer,
+  //    secciones, opciones, logo) — fuente de verdad: tabla TenantForm. ──
+  const resolvedForm = await resolveTenantForm(session.tenantSlug, formType);
 
   // ── Assigned user ──
   let assignedName: string | null = null;
@@ -166,7 +172,11 @@ export async function loadWorkOrderPdfContext(
     tenantLogoBuffer,
     spareUsages,
     progressPhotos,
-    templateKey,
+    // El estilo del formulario manda sobre el enum legacy (mismo valor cuando hay back-compat).
+    templateKey: resolvedForm.meta.style ?? templateKey,
     tenantSlug: session.tenantSlug,
+    formMeta: resolvedForm.meta,
+    formConfig: resolvedForm.config,
+    formLogoBuffer: resolvedForm.logoBuffer ?? tenantLogoBuffer,
   };
 }

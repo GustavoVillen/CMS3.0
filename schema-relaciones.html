@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CMS3.0 — Esquema de relaciones de la base de datos</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#27364d; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#a78bfa;
+    --pk:#fbbf24; --fk:#34d399; --soft:#f472b6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
+  header{padding:16px 22px;background:linear-gradient(90deg,#0f172a,#1e293b);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 22px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:64px;z-index:9}
+  .toolbar label{font-size:13px;color:var(--muted)}
+  select,input{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px}
+  input{min-width:220px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-left:auto}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .tabs{display:flex;gap:4px;padding:10px 22px 0}
+  .tab{padding:7px 16px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--panel);color:var(--muted);cursor:pointer;font-size:13px}
+  .tab.active{background:var(--panel2);color:var(--accent);font-weight:600}
+  .view{display:none;padding:18px 22px 60px}
+  .view.active{display:block}
+  #diagram{background:#fff;border-radius:10px;padding:16px;overflow:auto;border:1px solid var(--border)}
+  .hint{font-size:12px;color:var(--muted);margin:8px 0}
+  /* cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .card h3{margin:0;padding:10px 12px;background:var(--panel2);font-size:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+  .card h3 .grp{font-size:10px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 7px;border-radius:10px}
+  .card .body{padding:10px 12px;font-size:12.5px}
+  .keys{margin:0 0 8px;padding:0;list-style:none}
+  .keys li{padding:2px 0;font-family:ui-monospace,Consolas,monospace}
+  .badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-right:6px;vertical-align:middle}
+  .b-pk{background:var(--pk);color:#1f2937}
+  .b-fk{background:var(--fk);color:#063b2c}
+  .b-uk{background:#60a5fa;color:#06243f}
+  .rel-h{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:8px 0 3px}
+  .rel{padding:2px 0;line-height:1.5}
+  .rel a{color:var(--accent);text-decoration:none;cursor:pointer}
+  .rel a:hover{text-decoration:underline}
+  .rel .fld{color:var(--fk);font-family:ui-monospace,monospace}
+  .rel.soft .fld{color:var(--soft)}
+  .arrow{color:var(--muted)}
+  .card.dim{opacity:.25}
+  .card.hl{outline:2px solid var(--accent);outline-offset:-1px}
+  .count{font-size:12px;color:var(--muted);margin:0 0 12px}
+  footer{padding:14px 22px;color:var(--muted);font-size:12px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<header>
+  <h1>CMS3.0 · Esquema de relaciones de la base de datos</h1>
+  <p>PostgreSQL / Prisma — ~70 tablas. Las flechas muestran cómo las claves (ID / FK) conectan cada tabla con las demás.</p>
+</header>
+
+<div class="toolbar">
+  <label>Vista por bloque:</label>
+  <select id="groupSel"></select>
+  <input id="search" type="text" placeholder="Buscar tabla… (ej: WorkOrder)" />
+  <div class="legend">
+    <span><i class="dot" style="background:var(--pk)"></i>PK</span>
+    <span><i class="dot" style="background:var(--fk)"></i>FK (constraint en DB)</span>
+    <span><i class="dot" style="background:var(--soft)"></i>Relación lógica (sin FK física)</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-view="cards">📇 Referencia de claves</div>
+  <div class="tab" data-view="diagram">🗺️ Diagrama ER</div>
+</div>
+
+<div id="cards" class="view active">
+  <p class="count" id="cardCount"></p>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div id="diagram" class="view">
+  <p class="hint">El diagrama se genera por bloque para mantenerlo legible. Elegí un bloque arriba (o "Todas") y se redibuja. Líneas sólidas = FK real; líneas punteadas = relación lógica por convención (sourceId/assetId/etc. sin constraint).</p>
+  <div id="diagramHost"></div>
+</div>
+
+<footer>
+  Generado desde <code>prisma/schema.prisma</code>. <code>tenantId+vesselCode</code> es la FK compuesta hacia <b>Vessel</b> (todas las tablas operativas están aisladas por tenant y alcance por buque). Relaciones polimórficas: <code>Deferral.sourceId</code> → Defect/WorkOrder/MaintenancePlan según <code>sourceType</code>; <code>CapaRecord.sourceId</code> → Defect/WorkOrder/Inspection; <code>Attachment.targetId</code> → entidad según <code>targetType</code>.
+</footer>
+
+<script>
+// ─── Datos del schema (extraídos de prisma/schema.prisma) ────────────────────
+const GROUPS = [
+  "Plataforma / Auth","Flota / Activos","Mantenimiento","Defectos / Diferimientos / CAPA",
+  "Inspecciones / Certificados","Reportes","Compras / Stock","Adjuntos","IA",
+  "Catálogos PMS","Fluidos / CBM","Tripulación / Vetting"
+];
+
+// tabla: { n:nombre, g:grupo, keys:[{k:campo, t:'PK'|'FK'|'UK'}] }
+const T = [
+  // Plataforma / Auth
+  {n:"Tenant",g:0,keys:[["id","PK"],["slug","UK"]]},
+  {n:"TenantDomain",g:0,keys:[["id","PK"],["tenantId","FK"],["host","UK"]]},
+  {n:"TenantSetting",g:0,keys:[["tenantId","PK"]]},
+  {n:"PlatformUser",g:0,keys:[["id","PK"],["email","UK"]]},
+  {n:"PlatformSession",g:0,keys:[["id","PK"],["platformUserId","FK"]]},
+  {n:"User",g:0,keys:[["id","PK"],["email","UK"]]},
+  {n:"TenantMembership",g:0,keys:[["id","PK"],["tenantId","FK"],["userId","FK"]]},
+  {n:"UserInvitation",g:0,keys:[["id","PK"],["tenantId","FK"],["acceptedByUserId","FK"]]},
+  {n:"RefreshToken",g:0,keys:[["id","PK"],["userId","FK"],["tenantId","FK"]]},
+  {n:"VesselSuperintendentAssignment",g:0,keys:[["id","PK"],["userId","FK"],["tenantId+vesselCode","FK"]]},
+  {n:"AuditEvent",g:0,keys:[["id","PK"],["tenantId","FK"],["actorUserId","FK"],["actorPlatformUserId","FK"]]},
+  {n:"UsageEvent",g:0,keys:[["id","PK"],["tenantId",""],["userId",""]]},
+  {n:"DomainEvent",g:0,keys:[["id","PK"],["tenantId",""],["entityId",""]]},
+  {n:"CopilotQuestion",g:0,keys:[["id","PK"],["tenantId",""],["userId",""]]},
+  // Flota / Activos
+  {n:"Vessel",g:1,keys:[["id","PK"],["tenantId+code","UK"]]},
+  {n:"Asset",g:1,keys:[["id","PK"],["tenantId+vesselCode","FK"],["equipmentClassId","FK"],["parentAssetId","FK"]]},
+  // Mantenimiento
+  {n:"MaintenancePlan",g:2,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["taskMasterId","FK"]]},
+  {n:"WorkOrder",g:2,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["maintenancePlanId","FK"]]},
+  {n:"WorkOrderProgressNote",g:2,keys:[["id","PK"],["workOrderId","FK"]]},
+  {n:"WorkLog",g:2,keys:[["id","PK"],["workOrderId","FK"],["maintenancePlanId","FK"],["assetId","FK"]]},
+  // Defectos / CAPA
+  {n:"Defect",g:3,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["workOrderId","FK"]]},
+  {n:"Deferral",g:3,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["sourceId","FK"]]},
+  {n:"CapaRecord",g:3,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["sourceId","FK"]]},
+  // Inspecciones / Certificados
+  {n:"Inspection",g:4,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["providerId","FK"]]},
+  {n:"InspectionLog",g:4,keys:[["id","PK"],["tenantId+vesselCode","FK"],["inspectionId","FK"]]},
+  {n:"Certificate",g:4,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"]]},
+  // Reportes
+  {n:"DailyReport",g:5,keys:[["id","PK"],["tenantId+vesselCode","FK"]]},
+  {n:"DailyEquipmentHours",g:5,keys:[["id","PK"],["dailyReportId","FK"],["assetId","FK"]]},
+  {n:"DailyMaintenanceEntry",g:5,keys:[["id","PK"],["dailyReportId","FK"],["assetId","FK"],["maintenancePlanId","FK"],["workOrderId","FK"]]},
+  {n:"DailySpareUsage",g:5,keys:[["id","PK"],["dailyReportId","FK"],["spareId","FK"]]},
+  {n:"DailyDefectEntry",g:5,keys:[["id","PK"],["dailyReportId","FK"],["defectId","FK"]]},
+  {n:"MonthlyReport",g:5,keys:[["id","PK"],["tenantId+vesselCode","FK"]]},
+  // Compras / Stock
+  {n:"StockLocation",g:6,keys:[["id","PK"],["tenantId+code","UK"]]},
+  {n:"Provider",g:6,keys:[["id","PK"],["tenantId+vesselCode","FK"]]},
+  {n:"Spare",g:6,keys:[["id","PK"],["tenantId+vesselCode","FK"],["defaultLocationId","FK"]]},
+  {n:"StockMovement",g:6,keys:[["id","PK"],["tenantId+vesselCode","FK"],["spareId","FK"],["locationId","FK"]]},
+  {n:"SpareRequest",g:6,keys:[["id","PK"],["tenantId",""]]},
+  {n:"SpareRequestItem",g:6,keys:[["id","PK"],["spareRequestId","FK"],["spareId","FK"]]},
+  {n:"StockReservation",g:6,keys:[["id","PK"],["spareId","FK"],["requestItemId","FK"],["locationId","FK"]]},
+  {n:"ProviderEvaluation",g:6,keys:[["id","PK"],["tenantId+vesselCode","FK"],["providerId","FK"]]},
+  {n:"ProviderNonconformity",g:6,keys:[["id","PK"],["tenantId+vesselCode","FK"],["providerId","FK"]]},
+  // Adjuntos
+  {n:"Attachment",g:7,keys:[["id","PK"],["tenantId+vesselCode","FK"],["targetId","FK"]]},
+  // IA
+  {n:"PromptTemplate",g:8,keys:[["id","PK"]]},
+  {n:"AiDocument",g:8,keys:[["id","PK"],["tenantId","FK"]]},
+  {n:"AiDocumentVersion",g:8,keys:[["id","PK"],["documentId","FK"]]},
+  {n:"AiInsight",g:8,keys:[["id","PK"],["tenantId",""],["targetId",""]]},
+  {n:"Notification",g:8,keys:[["id","PK"],["sourceId",""]]},
+  // Catálogos PMS
+  {n:"SfiNode",g:9,keys:[["id","PK"]]},
+  {n:"EquipmentClass",g:9,keys:[["id","PK"]]},
+  {n:"TaskMaster",g:9,keys:[["id","PK"]]},
+  {n:"ClassTaskTemplate",g:9,keys:[["id","PK"],["equipmentClassId","FK"],["taskMasterId","FK"]]},
+  {n:"InspectionTemplate",g:9,keys:[["id","PK"],["equipmentClassId","FK"]]},
+  {n:"InspectionChecklistItem",g:9,keys:[["id","PK"],["templateId","FK"]]},
+  {n:"InspectionExecution",g:9,keys:[["id","PK"],["tenantId+vesselCode",""],["templateId","FK"],["assetId","FK"]]},
+  {n:"InspectionItemResult",g:9,keys:[["id","PK"],["executionId","FK"],["checklistItemId","FK"],["instrumentId","FK"]]},
+  {n:"Instrument",g:9,keys:[["id","PK"],["tenantId+code","UK"]]},
+  {n:"SpareLink",g:9,keys:[["id","PK"],["equipmentClassId","FK"],["taskMasterId","FK"]]},
+  // Fluidos / CBM
+  {n:"FluidSample",g:10,keys:[["id","PK"],["tenantId+vesselCode",""],["assetId","FK"],["sourceWorkOrderId","FK"],["sourcePlanId","FK"]]},
+  {n:"FluidAnalysisResult",g:10,keys:[["id","PK"],["sampleId","FK"],["defectId","FK"]]},
+  {n:"FluidParameterThreshold",g:10,keys:[["id","PK"]]},
+  // Tripulación / Vetting
+  {n:"RankDefinition",g:11,keys:[["id","PK"],["tenantId","FK"]]},
+  {n:"TrainingItem",g:11,keys:[["id","PK"],["tenantId","FK"]]},
+  {n:"RankTrainingRequirement",g:11,keys:[["id","PK"],["rankDefinitionId","FK"],["trainingItemId","FK"]]},
+  {n:"CrewTrainingRecord",g:11,keys:[["id","PK"],["crewId","FK"],["trainingItemId","FK"]]},
+  {n:"Crew",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"],["rankId","FK"]]},
+  {n:"CrewCertification",g:11,keys:[["id","PK"],["crewId","FK"]]},
+  {n:"CrewCapability",g:11,keys:[["id","PK"],["crewId","FK"],["certificationId","FK"]]},
+  {n:"CrewRestHours",g:11,keys:[["id","PK"],["crewId","FK"]]},
+  {n:"DrillRequirement",g:11,keys:[["id","PK"],["tenantId",""]]},
+  {n:"Drill",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"],["requirementId","FK"]]},
+  {n:"PermitToWork",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["workOrderId","FK"]]},
+  {n:"PermitGasTest",g:11,keys:[["id","PK"],["permitId","FK"]]},
+  {n:"PermitParticipant",g:11,keys:[["id","PK"],["permitId","FK"],["crewId","FK"]]},
+  {n:"ExternalAudit",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"]]},
+  {n:"ExternalAuditFinding",g:11,keys:[["id","PK"],["auditId","FK"]]},
+  {n:"NearMissReport",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"],["assetId","FK"],["reportedByCrewId","FK"]]},
+  {n:"ChecklistTemplate",g:11,keys:[["id","PK"]]},
+  {n:"ChecklistExecution",g:11,keys:[["id","PK"],["tenantId+vesselCode","FK"],["templateId","FK"],["performedByCrewId","FK"]]},
+  {n:"ChecklistItemResponse",g:11,keys:[["id","PK"],["executionId","FK"]]},
+  {n:"MocRecord",g:11,keys:[["id","PK"],["tenantId+vesselCode",""],["relatedAssetId","FK"],["relatedWorkOrderId","FK"]]},
+];
+
+// Relaciones: [parent (lado 1), child (lado N), campoFK, soft?]
+const R = [
+  // ── DB-enforced (@relation) ──
+  ["Tenant","TenantDomain","tenantId"],["Tenant","TenantSetting","tenantId"],
+  ["Tenant","TenantMembership","tenantId"],["Tenant","UserInvitation","tenantId"],
+  ["Tenant","RefreshToken","tenantId"],["Tenant","AuditEvent","tenantId"],
+  ["Tenant","AiDocument","tenantId"],["Tenant","RankDefinition","tenantId"],
+  ["Tenant","TrainingItem","tenantId"],
+  ["PlatformUser","PlatformSession","platformUserId"],["PlatformUser","AuditEvent","actorPlatformUserId"],
+  ["User","TenantMembership","userId"],["User","UserInvitation","acceptedByUserId"],
+  ["User","RefreshToken","userId"],["User","AuditEvent","actorUserId"],
+  ["User","VesselSuperintendentAssignment","userId"],
+  ["Vessel","Asset","tenantId+vesselCode"],["Vessel","MaintenancePlan","tenantId+vesselCode"],
+  ["Vessel","WorkOrder","tenantId+vesselCode"],["Vessel","Defect","tenantId+vesselCode"],
+  ["Vessel","Deferral","tenantId+vesselCode"],["Vessel","CapaRecord","tenantId+vesselCode"],
+  ["Vessel","Inspection","tenantId+vesselCode"],["Vessel","InspectionLog","tenantId+vesselCode"],
+  ["Vessel","Certificate","tenantId+vesselCode"],["Vessel","DailyReport","tenantId+vesselCode"],
+  ["Vessel","Provider","tenantId+vesselCode"],["Vessel","Spare","tenantId+vesselCode"],
+  ["Vessel","StockMovement","tenantId+vesselCode"],["Vessel","ProviderEvaluation","tenantId+vesselCode"],
+  ["Vessel","ProviderNonconformity","tenantId+vesselCode"],["Vessel","Attachment","tenantId+vesselCode"],
+  ["Vessel","Crew","tenantId+vesselCode"],["Vessel","Drill","tenantId+vesselCode"],
+  ["Vessel","PermitToWork","tenantId+vesselCode"],["Vessel","ExternalAudit","tenantId+vesselCode"],
+  ["Vessel","NearMissReport","tenantId+vesselCode"],["Vessel","ChecklistExecution","tenantId+vesselCode"],
+  ["EquipmentClass","Asset","equipmentClassId"],["Asset","Asset","parentAssetId"],
+  ["TaskMaster","MaintenancePlan","taskMasterId"],
+  ["WorkOrder","WorkOrderProgressNote","workOrderId"],
+  ["Provider","Inspection","providerId"],["Inspection","InspectionLog","inspectionId"],
+  ["DailyReport","DailyEquipmentHours","dailyReportId"],["DailyReport","DailyMaintenanceEntry","dailyReportId"],
+  ["DailyReport","DailySpareUsage","dailyReportId"],["DailyReport","DailyDefectEntry","dailyReportId"],
+  ["StockLocation","Spare","defaultLocationId"],["Spare","StockMovement","spareId"],
+  ["StockLocation","StockMovement","locationId"],["SpareRequest","SpareRequestItem","spareRequestId"],
+  ["Spare","SpareRequestItem","spareId"],["Spare","StockReservation","spareId"],
+  ["SpareRequestItem","StockReservation","requestItemId"],["StockLocation","StockReservation","locationId"],
+  ["Provider","ProviderEvaluation","providerId"],["Provider","ProviderNonconformity","providerId"],
+  ["AiDocument","AiDocumentVersion","documentId"],
+  ["EquipmentClass","ClassTaskTemplate","equipmentClassId"],["TaskMaster","ClassTaskTemplate","taskMasterId"],
+  ["EquipmentClass","InspectionTemplate","equipmentClassId"],
+  ["InspectionTemplate","InspectionChecklistItem","templateId"],
+  ["InspectionTemplate","InspectionExecution","templateId"],["Asset","InspectionExecution","assetId"],
+  ["InspectionExecution","InspectionItemResult","executionId"],
+  ["InspectionChecklistItem","InspectionItemResult","checklistItemId"],
+  ["Instrument","InspectionItemResult","instrumentId"],
+  ["WorkOrder","WorkLog","workOrderId"],["MaintenancePlan","WorkLog","maintenancePlanId"],
+  ["EquipmentClass","SpareLink","equipmentClassId"],["TaskMaster","SpareLink","taskMasterId"],
+  ["FluidSample","FluidAnalysisResult","sampleId"],
+  ["RankDefinition","RankTrainingRequirement","rankDefinitionId"],
+  ["TrainingItem","RankTrainingRequirement","trainingItemId"],
+  ["Crew","CrewTrainingRecord","crewId"],["TrainingItem","CrewTrainingRecord","trainingItemId"],
+  ["RankDefinition","Crew","rankId"],["Crew","CrewCertification","crewId"],
+  ["DrillRequirement","Drill","requirementId"],
+  ["PermitToWork","PermitGasTest","permitId"],["PermitToWork","PermitParticipant","permitId"],
+  ["ExternalAudit","ExternalAuditFinding","auditId"],
+  ["ChecklistTemplate","ChecklistExecution","templateId"],
+  ["ChecklistExecution","ChecklistItemResponse","executionId"],
+  // ── Lógicas (sin FK física en DB) ──
+  ["Asset","MaintenancePlan","assetId",1],["Asset","WorkOrder","assetId",1],
+  ["Asset","Defect","assetId",1],["Asset","Deferral","assetId",1],
+  ["Asset","CapaRecord","assetId",1],["Asset","Inspection","assetId",1],
+  ["Asset","Certificate","assetId",1],["Asset","FluidSample","assetId",1],
+  ["Asset","DailyEquipmentHours","assetId",1],["Asset","DailyMaintenanceEntry","assetId",1],
+  ["Asset","NearMissReport","assetId",1],["Asset","PermitToWork","assetId",1],
+  ["Asset","MocRecord","relatedAssetId",1],["Asset","WorkLog","assetId",1],
+  ["MaintenancePlan","WorkOrder","maintenancePlanId",1],["MaintenancePlan","FluidSample","sourcePlanId",1],
+  ["MaintenancePlan","DailyMaintenanceEntry","maintenancePlanId",1],
+  ["WorkOrder","Defect","workOrderId",1],["WorkOrder","FluidSample","sourceWorkOrderId",1],
+  ["WorkOrder","DailyMaintenanceEntry","workOrderId",1],["WorkOrder","PermitToWork","workOrderId",1],
+  ["WorkOrder","MocRecord","relatedWorkOrderId",1],
+  ["Defect","FluidAnalysisResult","defectId",1],["Defect","DailyDefectEntry","defectId",1],
+  ["Spare","DailySpareUsage","spareId",1],
+  ["Crew","PermitParticipant","crewId",1],["Crew","NearMissReport","reportedByCrewId",1],
+  ["Crew","ChecklistExecution","performedByCrewId",1],["Crew","CrewCapability","crewId",1],
+  ["Crew","CrewRestHours","crewId",1],["CrewCertification","CrewCapability","certificationId",1],
+  ["Vessel","VesselSuperintendentAssignment","tenantId+vesselCode",1],
+  ["Vessel","MonthlyReport","tenantId+vesselCode",1],["Vessel","Instrument","vesselCode",1],
+  ["Vessel","StockLocation","vesselCode",1],["Vessel","FluidSample","tenantId+vesselCode",1],
+  ["Vessel","InspectionExecution","tenantId+vesselCode",1],["Vessel","MocRecord","tenantId+vesselCode",1],
+  // polimórficas
+  ["Defect","Deferral","sourceId·poly",1],["WorkOrder","Deferral","sourceId·poly",1],["MaintenancePlan","Deferral","sourceId·poly",1],
+  ["Defect","CapaRecord","sourceId·poly",1],["WorkOrder","CapaRecord","sourceId·poly",1],["Inspection","CapaRecord","sourceId·poly",1],
+];
+
+const byName = Object.fromEntries(T.map(t=>[t.n,t]));
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.view).classList.add('active');
+    if(tab.dataset.view==='diagram') renderDiagram();
+  };
+});
+
+// ─── Selector de grupos ───────────────────────────────────────────────────────
+const groupSel=document.getElementById('groupSel');
+groupSel.innerHTML='<option value="all">Todas las tablas</option>'+
+  GROUPS.map((g,i)=>`<option value="${i}">${g}</option>`).join('');
+groupSel.onchange=()=>{renderCards();if(document.getElementById('diagram').classList.contains('active'))renderDiagram();};
+
+// ─── Cards ─────────────────────────────────────────────────────────────────────
+function relsOf(name){
+  const out=R.filter(r=>r[1]===name).map(r=>({dir:'out',other:r[0],fld:r[2],soft:!!r[3]}));
+  const inc=R.filter(r=>r[0]===name&&r[1]!==name).map(r=>({dir:'in',other:r[1],fld:r[2],soft:!!r[3]}));
+  return {out,inc};
+}
+function renderCards(){
+  const g=groupSel.value, q=document.getElementById('search').value.trim().toLowerCase();
+  const grid=document.getElementById('grid'); grid.innerHTML='';
+  let list=T.filter(t=>(g==='all'||t.g==+g)&&(!q||t.n.toLowerCase().includes(q)));
+  document.getElementById('cardCount').textContent=`${list.length} tabla(s)`;
+  list.forEach(t=>{
+    const {out,inc}=relsOf(t.n);
+    const keysHtml=t.keys.map(k=>{
+      const b=k[1]?`<span class="badge b-${k[1].toLowerCase()}">${k[1]}</span>`:'';
+      return `<li>${b}${k[0]}</li>`;
+    }).join('');
+    const outHtml=out.length?`<div class="rel-h">Referencia a (FK saliente)</div>`+out.map(r=>
+      `<div class="rel ${r.soft?'soft':''}"><span class="fld">${r.fld}</span> <span class="arrow">→</span> <a data-go="${r.other}">${r.other}</a></div>`).join(''):'';
+    const incHtml=inc.length?`<div class="rel-h">Referenciada por (FK entrante)</div>`+inc.map(r=>
+      `<div class="rel ${r.soft?'soft':''}"><a data-go="${r.other}">${r.other}</a> <span class="arrow">→</span> <span class="fld">${r.fld}</span></div>`).join(''):'';
+    const card=document.createElement('div');
+    card.className='card'; card.id='card-'+t.n;
+    card.innerHTML=`<h3>${t.n}<span class="grp">${GROUPS[t.g]}</span></h3>
+      <div class="body"><ul class="keys">${keysHtml}</ul>${outHtml}${incHtml}</div>`;
+    grid.appendChild(card);
+  });
+  grid.querySelectorAll('a[data-go]').forEach(a=>{
+    a.onclick=()=>{
+      const tgt=a.dataset.go;
+      groupSel.value='all'; document.getElementById('search').value=''; renderCards();
+      const el=document.getElementById('card-'+tgt);
+      document.querySelectorAll('.card').forEach(c=>c.classList.remove('hl'));
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('hl');}
+    };
+  });
+}
+document.getElementById('search').oninput=renderCards;
+
+// ─── Diagrama Mermaid ───────────────────────────────────────────────────────────
+mermaid.initialize({startOnLoad:false,theme:'default',er:{useMaxWidth:false}});
+function buildMermaid(){
+  const g=groupSel.value;
+  let nodes;
+  if(g==='all'){ nodes=new Set(T.map(t=>t.n)); }
+  else {
+    nodes=new Set(T.filter(t=>t.g==+g).map(t=>t.n));
+    // sumar vecinos directos
+    R.forEach(r=>{ if(nodes.has(r[0])||nodes.has(r[1])){nodes.add(r[0]);nodes.add(r[1]);} });
+  }
+  let s='erDiagram\n';
+  nodes.forEach(n=>{
+    const t=byName[n]; if(!t)return;
+    s+=`  ${n} {\n`;
+    t.keys.forEach(k=>{ s+=`    string ${k[0].replace(/\+/g,'_').replace(/·/g,'_')} ${k[1]||''}\n`; });
+    s+='  }\n';
+  });
+  R.forEach(r=>{
+    if(!nodes.has(r[0])||!nodes.has(r[1]))return;
+    const lbl=r[2].replace(/"/g,'');
+    const link=r[3]?'||..o{':'||--o{';
+    s+=`  ${r[0]} ${link} ${r[1]} : "${lbl}"\n`;
+  });
+  return s;
+}
+async function renderDiagram(){
+  const host=document.getElementById('diagramHost');
+  host.innerHTML='<p class="hint">Renderizando…</p>';
+  try{
+    const {svg}=await mermaid.render('erGraph_'+Date.now(),buildMermaid());
+    host.innerHTML=svg;
+  }catch(e){
+    host.innerHTML='<p style="color:#f87171">No se pudo renderizar el diagrama (¿sin conexión para cargar Mermaid?). La pestaña «Referencia de claves» funciona offline.<br><small>'+e.message+'</small></p>';
+  }
+}
+
+renderCards();
+</script>
+</body>
+</html>

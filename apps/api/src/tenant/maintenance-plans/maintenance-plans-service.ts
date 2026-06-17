@@ -30,6 +30,8 @@ export interface CreateMaintenancePlanInput {
   loto?: string | null;
   sfiGroupNumber?: number | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  riskProbability?: "LIKELY" | "PROBABLE" | "UNLIKELY" | "RARE" | null;
+  riskConsequence?: "FATALITY" | "MAJOR" | "MINOR" | "NEGLIGIBLE" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
@@ -66,6 +68,8 @@ export interface UpdateMaintenancePlanInput {
   loto?: string | null;
   sfiGroupNumber?: number | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  riskProbability?: "LIKELY" | "PROBABLE" | "UNLIKELY" | "RARE" | null;
+  riskConsequence?: "FATALITY" | "MAJOR" | "MINOR" | "NEGLIGIBLE" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
@@ -293,6 +297,42 @@ function normalizeRiskLevel(value: unknown): "LOW" | "MEDIUM" | "HIGH" | "CRITIC
     return riskLevel;
   }
   throw new RouteError(400, "VALIDATION_ERROR", "riskLevel inválido. Valores permitidos: LOW, MEDIUM, HIGH, CRITICAL.");
+}
+
+const RISK_PROBABILITIES = ["LIKELY", "PROBABLE", "UNLIKELY", "RARE"] as const;
+const RISK_CONSEQUENCES = ["FATALITY", "MAJOR", "MINOR", "NEGLIGIBLE"] as const;
+type RiskProbability = (typeof RISK_PROBABILITIES)[number];
+type RiskConsequence = (typeof RISK_CONSEQUENCES)[number];
+
+function normalizeRiskProbability(value: unknown): RiskProbability | null {
+  if (value === undefined || value === null || value === "") return null;
+  const v = String(value).trim().toUpperCase();
+  if ((RISK_PROBABILITIES as readonly string[]).includes(v)) return v as RiskProbability;
+  throw new RouteError(400, "VALIDATION_ERROR", `riskProbability inválido. Valores permitidos: ${RISK_PROBABILITIES.join(", ")}.`);
+}
+
+function normalizeRiskConsequence(value: unknown): RiskConsequence | null {
+  if (value === undefined || value === null || value === "") return null;
+  const v = String(value).trim().toUpperCase();
+  if ((RISK_CONSEQUENCES as readonly string[]).includes(v)) return v as RiskConsequence;
+  throw new RouteError(400, "VALIDATION_ERROR", `riskConsequence inválido. Valores permitidos: ${RISK_CONSEQUENCES.join(", ")}.`);
+}
+
+// Deriva el nivel de riesgo (LOW/MEDIUM/HIGH) desde la celda probabilidad ×
+// consecuencia. Misma matriz que la UI y el PDF (fuente única de la regla).
+// Filas = consecuencia, columnas = probabilidad. A=Alto(HIGH), M=Medio(MEDIUM), B=Bajo(LOW).
+function deriveRiskLevelFromMatrix(
+  probability: RiskProbability | null,
+  consequence: RiskConsequence | null,
+): "LOW" | "MEDIUM" | "HIGH" | null {
+  if (!probability || !consequence) return null;
+  const grid: Record<RiskConsequence, Record<RiskProbability, "LOW" | "MEDIUM" | "HIGH">> = {
+    FATALITY:   { LIKELY: "HIGH", PROBABLE: "HIGH",   UNLIKELY: "HIGH",   RARE: "MEDIUM" },
+    MAJOR:      { LIKELY: "HIGH", PROBABLE: "HIGH",   UNLIKELY: "MEDIUM", RARE: "MEDIUM" },
+    MINOR:      { LIKELY: "HIGH", PROBABLE: "MEDIUM", UNLIKELY: "MEDIUM", RARE: "LOW" },
+    NEGLIGIBLE: { LIKELY: "MEDIUM", PROBABLE: "MEDIUM", UNLIKELY: "LOW",  RARE: "LOW" },
+  };
+  return grid[consequence][probability];
 }
 
 function parseOptionalDate(value: unknown, field: string): Date | null {
@@ -814,6 +854,13 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     ? payload.taskCode.trim().toUpperCase()
     : await generateUniqueTaskCode(session, vesselCode, sfiGroupNumber);
 
+  // Riesgo: si vienen ambos ejes de la matriz, el nivel se deriva de la celda
+  // (fuente única). Si no, se respeta el riskLevel explícito (compat / manual).
+  const createRiskProbability = normalizeRiskProbability(payload.riskProbability);
+  const createRiskConsequence = normalizeRiskConsequence(payload.riskConsequence);
+  const createRiskLevel = deriveRiskLevelFromMatrix(createRiskProbability, createRiskConsequence)
+    ?? normalizeRiskLevel(payload.riskLevel);
+
   const data: Record<string, unknown> = {
     tenantId,
     vesselCode,
@@ -831,7 +878,9 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
     sfiSubgroupCode: null,
-    riskLevel: normalizeRiskLevel(payload.riskLevel),
+    riskLevel: createRiskLevel,
+    riskProbability: createRiskProbability,
+    riskConsequence: createRiskConsequence,
     riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
     consequenceCategory: payload.consequenceCategory ?? null,
     consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
@@ -914,7 +963,26 @@ export async function updateTenantMaintenancePlan(
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
   if (payload.sfiGroupNumber !== undefined) data.sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
-  if (payload.riskLevel !== undefined) data.riskLevel = normalizeRiskLevel(payload.riskLevel);
+  // Riesgo: si la actualización toca alguno de los ejes de la matriz, se
+  // recalcula el nivel desde la celda resultante (combinando lo enviado con lo
+  // ya guardado). Si no se tocó ningún eje, se respeta el riskLevel explícito.
+  const touchesMatrix = payload.riskProbability !== undefined || payload.riskConsequence !== undefined;
+  if (touchesMatrix) {
+    const finalProb = payload.riskProbability !== undefined
+      ? normalizeRiskProbability(payload.riskProbability)
+      : normalizeRiskProbability((current as any).riskProbability);
+    const finalCons = payload.riskConsequence !== undefined
+      ? normalizeRiskConsequence(payload.riskConsequence)
+      : normalizeRiskConsequence((current as any).riskConsequence);
+    data.riskProbability = finalProb;
+    data.riskConsequence = finalCons;
+    const derived = deriveRiskLevelFromMatrix(finalProb, finalCons);
+    // Solo derivamos cuando hay celda completa; si queda incompleta y vino un
+    // riskLevel explícito en el mismo payload, se respeta ese.
+    data.riskLevel = derived ?? (payload.riskLevel !== undefined ? normalizeRiskLevel(payload.riskLevel) : null);
+  } else if (payload.riskLevel !== undefined) {
+    data.riskLevel = normalizeRiskLevel(payload.riskLevel);
+  }
   if (payload.riskAnalysisResult !== undefined) data.riskAnalysisResult = normalizeOptionalText(payload.riskAnalysisResult);
   if (payload.consequenceCategory !== undefined) data.consequenceCategory = payload.consequenceCategory ?? null;
   if (payload.consequenceRationale !== undefined) data.consequenceRationale = normalizeOptionalText(payload.consequenceRationale);

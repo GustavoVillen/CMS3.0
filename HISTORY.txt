@@ -1,5 +1,52 @@
 HISTORY.txt
 
+[2026-06-17] FEAT: matriz de análisis de riesgo (probabilidad × consecuencia) en Plan de mantenimiento
+Agent: Claude Opus 4.8
+- Schema: MaintenancePlan.riskProbability + riskConsequence (TEXT, nullable). Migración 20260617_maintenance_plan_risk_matrix (db push aplicado).
+- riskLevel ahora se deriva de la celda (Bajo/Medio/Alto) cuando hay ambos ejes; fuente única en backend (deriveRiskLevelFromMatrix), UI y PDF.
+- UI: selector de matriz 4×4 clickeable en el modal de Planes (reemplaza botones L/M/H/C).
+- PDF servidor (pdfkit) y PDF legacy (HTML print): dibujan la grilla coloreada y resaltan la celda del plan. Planes sin ejes mantienen el render anterior (backward compatible).
+- i18n: claves mp.risk.* (es/en/pt).
+
+[2026-06-17] FEAT: catálogo SFI completo + localización por idioma (es/en/pt)
+Agent: Claude Opus 4.8
+
+  PROBLEMA: en producción la tabla SfiNode estaba vacía y faltaba Manual/SFI Codes.xlsx,
+  así que el desplegable de Subgrupo SFI mostraba solo 10 nodos "X00 general" (fallback).
+  SOLUCIÓN:
+  - Nuevo apps/api/src/tenant/pms/sfi-catalog.ts: catálogo canónico de los 96 subgrupos
+    estándar (grupos 0-9) con descripciones y nombres de grupo en es/en/pt.
+  - sfi-service.listSfiNodes ahora localiza por session.user.locale (catálogo como
+    fallback localizado + localiza los nodos globales por código). Reemplaza el viejo
+    fallback por Excel.
+  - scripts/seed-sfi-catalog.ts: seedea los 96 nodos globales (tenantId=null).
+  PROD: seedeados 96 nodos (descripción base en español → el código viejo ya los muestra).
+  Verificado vía API de prod (grupo 7 = 10 subgrupos en español). La multi-idioma (en/pt)
+  queda activa al desplegar el código nuevo.
+
+[2026-06-16] FEAT: arquitectura de formularios controlados por tenant (Fase 1) + Solicitud de servicios
+Agent: Claude Opus 4.8
+
+  SCHEMA: enums TenantFormType (WORK_ORDER, SERVICE_REQUEST) y FormStyle (STANDARD, MERCURIO).
+  Modelos TenantForm (definicion del formulario por tenant: numero, revision, vigencia, logo propio,
+  codePattern + codeSeq, config JSON con secciones/footer/opciones) y FormDocument (codigo emitido
+  estable por fuente, idempotente, scoped por tenant). Footer editable en TenantSetting
+  (controlledDocPreparedBy/ReviewedBy/ApprovedBy). db push OK.
+
+  CODIGO:
+  - pdf-form-chrome.ts: chrome compartido (header/footer del documento controlado + primitivas
+    sectionHeader/cell/checkbox/textArea). Centraliza el page-split de textArea (bug historico).
+  - tenant-forms-service.ts: resolveTenantForm (defaults Mercurio actuales si no hay fila → cero
+    cambio visual) + issueFormCode (idempotente y atomico por tenant; patron SS-{seq:0000}-{vesselShort}-{year}).
+  - template-mercurio.ts migrado al chrome (sin cambio visual). Nuevo template-service-request.ts
+    (REGI-LOG-01.3) que recorre config.sections. Ruta GET .../service-request.pdf. Boton en
+    el modal de OT (printServiceRequest) + i18n.
+  - Seed scripts/seed-mercurio-forms.ts (resuelve tenant por slug; TENANT_SLUG=<slug>).
+
+  VERIFICADO: render de Solicitud == muestra (_MUESTRA_solicitud_servicios.pdf), codigo
+  SS-0001-DONCHI-2026 idempotente + secuencia por tenant; WO MERCURIO migrada identica. Tenants
+  sin filas (ej STANDARD) sin cambios.
+
 [2026-06-16] FEAT: día + hora de REALIZACIÓN del simulacro (además de la hora programada)
 Agent: Claude Opus 4.8
 

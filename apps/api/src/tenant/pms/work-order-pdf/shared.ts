@@ -3,6 +3,9 @@
 // Pure helpers — no Prisma, no I/O.
 
 export { sanitizePdfText, resolveTenantLogo, LOGO_PATH } from "../pdf-helpers";
+import type { ControlledDocMeta } from "../pdf-form-chrome";
+import type { FormConfig } from "../tenant-forms-service";
+export type { ControlledDocMeta, FormConfig };
 
 // ── Format helpers ───────────────────────────────────────────────────────────
 
@@ -124,4 +127,12 @@ export interface WorkOrderPdfContext {
   templateKey: string;
   /** Tenant slug (used by some templates as fallback header text). */
   tenantSlug: string;
+  /** Metadatos del documento controlado (numero, revision, footer…) resueltos por tenant. */
+  formMeta: ControlledDocMeta;
+  /** Config de secciones/opciones/etiquetas del formulario resuelta por tenant. */
+  formConfig: FormConfig;
+  /** Logo propio del formulario (fallback al logo del tenant). */
+  formLogoBuffer: Buffer | null;
+  /** Codigo del documento emitido (ej "SS-0001-DONCHI-2026"). Solo para formularios con patron. */
+  docCode?: string;
 }

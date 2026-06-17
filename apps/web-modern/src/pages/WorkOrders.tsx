@@ -12,7 +12,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
-import { printWorkOrder, printOpenWorkOrdersReport } from "../lib/print-work-order";
+import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -996,6 +996,25 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [isEditable, workOrder, title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
 
+  const [generatingSr, setGeneratingSr] = useState(false);
+  const handleGenerateServiceRequest = useCallback(async () => {
+    setGeneratingSr(true);
+    try {
+      if (isEditable) {
+        try {
+          await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
+            title: normalizeOptionalText(title),
+            description: normalizeOptionalText(description),
+            assignedToUserId: normalizeOptionalText(assignedTo),
+          });
+        } catch { /* non-blocking — still try to print */ }
+      }
+      await printServiceRequest(workOrder);
+    } finally {
+      setGeneratingSr(false);
+    }
+  }, [isEditable, workOrder, title, description, assignedTo]);
+
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
     try {
@@ -1820,6 +1839,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
             </button>
+            {isMercurio && (
+              <button onClick={() => { void handleGenerateServiceRequest(); }} disabled={generatingSr}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
+                {generatingSr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequest")}
+              </button>
+            )}
             {workOrder.status === "PLANNED" && (
               <button onClick={() => { void handleStart(); }} disabled={starting}
                 className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -72,6 +72,8 @@ export interface MaintenancePlan {
   loto?: string | null;
   sfiGroupNumber?: number | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  riskProbability?: "LIKELY" | "PROBABLE" | "UNLIKELY" | "RARE" | null;
+  riskConsequence?: "FATALITY" | "MAJOR" | "MINOR" | "NEGLIGIBLE" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
@@ -198,12 +200,6 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
 
 const EDITABLE_STATUSES = ["ACTIVE", "INACTIVE", "DRAFT"] as const;
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-const RISK_LEVEL_OPTS: [string, string, string, string][] = [
-  ["LOW",      "L", "bg-success-sea text-accent-fg border-success-sea",  "text-success-sea border-success-sea/40"],
-  ["MEDIUM",   "M", "bg-yellow-400 text-accent-fg border-yellow-400",    "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
-  ["HIGH",     "H", "bg-red-500 text-fg border-red-500",               "text-red-700 dark:text-red-400 border-red-400/40"],
-  ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",               "text-red-600 border-red-600/40"],
-];
 
 // SFI tab filter — G0-G9 filter by first digit of sfiGroupNumber (e.g. G6 = 600-699)
 type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE";
@@ -231,6 +227,36 @@ type RiskLevel = (typeof RISK_LEVELS)[number] | "";
 function toUiRiskLevel(value: string | null | undefined): RiskLevel {
   const n = String(value ?? "").toUpperCase() as RiskLevel;
   return (RISK_LEVELS as readonly string[]).includes(n) ? n : "";
+}
+
+// ── Matriz de análisis de riesgo (probabilidad × consecuencia) ─────────────
+// Mismas reglas que el backend (deriveRiskLevelFromMatrix) y el PDF.
+const RISK_PROBS = ["LIKELY", "PROBABLE", "UNLIKELY", "RARE"] as const;
+const RISK_CONS  = ["FATALITY", "MAJOR", "MINOR", "NEGLIGIBLE"] as const;
+type RiskProbability = (typeof RISK_PROBS)[number] | "";
+type RiskConsequence = (typeof RISK_CONS)[number] | "";
+// Filas = consecuencia, columnas = probabilidad. H=Alto, M=Medio, B=Bajo.
+const RISK_GRID: Record<string, Record<string, "H" | "M" | "B">> = {
+  FATALITY:   { LIKELY: "H", PROBABLE: "H", UNLIKELY: "H", RARE: "M" },
+  MAJOR:      { LIKELY: "H", PROBABLE: "H", UNLIKELY: "M", RARE: "M" },
+  MINOR:      { LIKELY: "H", PROBABLE: "M", UNLIKELY: "M", RARE: "B" },
+  NEGLIGIBLE: { LIKELY: "M", PROBABLE: "M", UNLIKELY: "B", RARE: "B" },
+};
+const RISK_CELL_BG: Record<"H" | "M" | "B", string> = {
+  H: "bg-red-600", M: "bg-yellow-400", B: "bg-green-600",
+};
+function deriveRiskLevelFromMatrix(prob: RiskProbability, cons: RiskConsequence): RiskLevel {
+  if (!prob || !cons) return "";
+  const lvl = RISK_GRID[cons]?.[prob];
+  return lvl === "H" ? "HIGH" : lvl === "M" ? "MEDIUM" : lvl === "B" ? "LOW" : "";
+}
+function toUiRiskProbability(v: string | null | undefined): RiskProbability {
+  const n = String(v ?? "").toUpperCase() as RiskProbability;
+  return (RISK_PROBS as readonly string[]).includes(n) ? n : "";
+}
+function toUiRiskConsequence(v: string | null | undefined): RiskConsequence {
+  const n = String(v ?? "").toUpperCase() as RiskConsequence;
+  return (RISK_CONS as readonly string[]).includes(n) ? n : "";
 }
 
 function formatFrequency(plan: MaintenancePlan): string {
@@ -1042,6 +1068,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [loto, setLoto] = useState(plan?.loto ?? "");
   const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? defaultSfiGroupNumber ?? null);
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
+  const [riskProbability, setRiskProbability] = useState<RiskProbability>(toUiRiskProbability(plan?.riskProbability));
+  const [riskConsequence, setRiskConsequence] = useState<RiskConsequence>(toUiRiskConsequence(plan?.riskConsequence));
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(plan?.riskAnalysisResult ?? "");
   const [consequenceCategory, setConsequenceCategory] = useState<"" | "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL">(
     (plan?.consequenceCategory as any) ?? "",
@@ -1148,6 +1176,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
     setRiskLevel(toUiRiskLevel(plan.riskLevel));
+    setRiskProbability(toUiRiskProbability(plan.riskProbability));
+    setRiskConsequence(toUiRiskConsequence(plan.riskConsequence));
     setRiskAnalysisResult(plan.riskAnalysisResult ?? "");
     setConsequenceCategory((plan.consequenceCategory as any) ?? "");
     setConsequenceRationale(plan.consequenceRationale ?? "");
@@ -1319,6 +1349,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
           riskLevel: toUiRiskLevel(riskLevel),
+          riskProbability: riskProbability || null,
+          riskConsequence: riskConsequence || null,
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
           consequenceCategory: consequenceCategory || null,
           consequenceRationale: normalizeOptionalText(consequenceRationale),
@@ -1348,6 +1380,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
           riskLevel: toUiRiskLevel(riskLevel),
+          riskProbability: riskProbability || null,
+          riskConsequence: riskConsequence || null,
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
           consequenceCategory: consequenceCategory || null,
           consequenceRationale: normalizeOptionalText(consequenceRationale),
@@ -1383,7 +1417,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const planDirty = useDirtyTracker({
     vesselCode, taskCode, assetId, taskType, title, description, responsible,
     acceptanceCriteria, loto, sfiGroupNumber,
-    riskLevel, riskAnalysisResult, status, triggerType,
+    riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
@@ -1429,6 +1463,34 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     const taskTypeLbl = (t: string) => ({ MAINTENANCE: "Mantenimiento", INSPECTION: "Inspección" }[t] ?? t);
     const riskLbl = (r: string) => ({ LOW: "BAJO", MEDIUM: "MEDIO", HIGH: "ALTO", CRITICAL: "CRÍTICO" }[r] ?? r.toUpperCase());
     const riskColor = (r: string) => ({ LOW: "#16a34a", MEDIUM: "#d97706", HIGH: "#ea580c", CRITICAL: "#dc2626" }[r] ?? "#0f172a");
+
+    // Matriz de riesgo (probabilidad × consecuencia) como HTML, resaltando la
+    // celda del plan. Misma grilla/colores que el PDF del servidor y la UI.
+    const probLbl: Record<string, string> = { LIKELY: "Muy probable", PROBABLE: "Probable", UNLIKELY: "Improbable", RARE: "Altamente improbable" };
+    const consLbl: Record<string, string> = { FATALITY: "Fatalidad", MAJOR: "Lesiones importantes", MINOR: "Lesiones leves", NEGLIGIBLE: "Lesiones insignificantes" };
+    const cellColor: Record<"H" | "M" | "B", string> = { H: "#dc2626", M: "#f59e0b", B: "#16a34a" };
+    const cellText: Record<"H" | "M" | "B", string> = { H: "Alto", M: "Medio", B: "Bajo" };
+    function riskMatrixHtml(): string {
+      if (!riskProbability || !riskConsequence) return "";
+      const headCells = RISK_PROBS.map(pb =>
+        `<th style="background:#1e3a5f;color:#fff;font-size:7pt;padding:5px 3px;border:1px solid #fff;text-align:center">${probLbl[pb]}</th>`
+      ).join("");
+      const rows = RISK_CONS.map(cs => {
+        const cells = RISK_PROBS.map(pb => {
+          const lvl = RISK_GRID[cs][pb];
+          const sel = pb === riskProbability && cs === riskConsequence;
+          const border = sel ? "3px solid #0f172a" : "1px solid #fff";
+          return `<td style="background:${cellColor[lvl]};color:#fff;font-weight:bold;font-size:9pt;text-align:center;padding:8px 3px;border:${border}">${cellText[lvl]}</td>`;
+        }).join("");
+        return `<tr><td style="background:#e2e8f0;font-weight:bold;font-size:7pt;text-align:center;padding:6px 3px;border:1px solid #fff">${consLbl[cs]}</td>${cells}</tr>`;
+      }).join("");
+      return `
+        <div style="font-size:7pt;font-weight:bold;color:#64748b;text-transform:uppercase;text-align:center;margin:2px 0">Probabilidad</div>
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+          <tr><th style="background:#0f2744;color:#fff;font-size:7pt;padding:5px 3px;border:1px solid #fff;width:22%">Consecuencia</th>${headCells}</tr>
+          ${rows}
+        </table>`;
+    }
 
     function bold(text: string): string {
       return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
@@ -1572,8 +1634,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         <div class="cell cell-full"><div class="cell-label">${t("mp.pdf.tasksDesc")}</div><div class="cell-value" style="font-weight:normal">${renderText(description)}</div></div>
         ${acceptanceCriteria ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.acceptCriteria")}</div><div class="cell-value" style="font-weight:normal">${renderText(acceptanceCriteria)}</div></div>` : ""}
         ${loto ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.evidenceLoto")}</div><div class="cell-value" style="font-weight:normal">${renderText(loto)}</div></div>` : ""}
-        ${riskLevel ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskLevel")}</div><div class="cell-value" style="font-size:13pt;color:${riskColor(riskLevel)}">${riskLbl(riskLevel)}</div></div>
-        ${riskAnalysisResult ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskAnalysis")}</div><div class="cell-value" style="font-weight:normal">${renderText(riskAnalysisResult)}</div></div>` : ""}` : ""}
+        ${riskProbability && riskConsequence
+          ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskAnalysis")}</div>${riskMatrixHtml()}</div>`
+          : riskLevel ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskLevel")}</div><div class="cell-value" style="font-size:13pt;color:${riskColor(riskLevel)}">${riskLbl(riskLevel)}</div></div>` : ""}
+        ${riskAnalysisResult ? `<div class="cell cell-full"><div class="cell-label">${t("mp.pdf.riskAnalysis")}</div><div class="cell-value" style="font-weight:normal">${renderText(riskAnalysisResult)}</div></div>` : ""}
       </div>
 
       <div class="sig-row">
@@ -1932,18 +1996,59 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               >
                 {!readOnly && (loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
                 {t("mp.riskLevel")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
+                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("mp.risk.matrixHint")}</span>
               </label>
-              <div className="flex items-center gap-1.5">
-                {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
-                  <button key={val} type="button" disabled={readOnly || loadingRisk}
-                    onClick={() => setRiskLevel(riskLevel === val ? "" : val as RiskLevel)}
-                    aria-pressed={riskLevel === val}
-                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
-                    {label}
-                  </button>
-                ))}
+              {/* Matriz de riesgo: probabilidad (columnas) × consecuencia (filas).
+                  Al elegir una celda se deriva el nivel (Bajo/Medio/Alto). */}
+              <div className="rounded-lg border border-fg/10 overflow-hidden text-[10px]">
+                <div className="grid" style={{ gridTemplateColumns: "118px repeat(4, 1fr)" }}>
+                  {/* Header */}
+                  <div className="bg-[#0f2744] text-white/90 font-bold uppercase tracking-wide flex items-center justify-center text-center px-1 py-1.5 leading-tight">
+                    {t("mp.risk.consequence")}
+                  </div>
+                  {RISK_PROBS.map(pb => (
+                    <div key={pb} className="bg-[#1e3a5f] text-white font-bold flex items-center justify-center text-center px-1 py-1.5 leading-tight border-l border-white/20">
+                      {t(`mp.risk.prob.${pb}` as Parameters<typeof t>[0])}
+                    </div>
+                  ))}
+                  {/* Rows */}
+                  {RISK_CONS.map(cs => (
+                    <Fragment key={cs}>
+                      <div className="bg-fg/5 text-fg font-bold flex items-center justify-center text-center px-1 py-2 leading-tight border-t border-fg/10">
+                        {t(`mp.risk.cons.${cs}` as Parameters<typeof t>[0])}
+                      </div>
+                      {RISK_PROBS.map(pb => {
+                        const lvl = RISK_GRID[cs][pb];
+                        const selected = riskProbability === pb && riskConsequence === cs;
+                        return (
+                          <button
+                            key={pb} type="button" disabled={readOnly || loadingRisk}
+                            onClick={() => {
+                              if (selected) {
+                                setRiskProbability(""); setRiskConsequence(""); setRiskLevel("");
+                              } else {
+                                setRiskProbability(pb); setRiskConsequence(cs);
+                                setRiskLevel(deriveRiskLevelFromMatrix(pb, cs));
+                              }
+                            }}
+                            aria-pressed={selected}
+                            className={`${RISK_CELL_BG[lvl]} text-white font-bold flex items-center justify-center px-1 py-2 border-t border-l border-white/30 transition-all disabled:opacity-60 hover:brightness-110 ${selected ? "ring-2 ring-inset ring-fg shadow-inner" : "opacity-85"}`}>
+                            {t(`mp.risk.level.${lvl}` as Parameters<typeof t>[0])}
+                          </button>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </div>
               </div>
+              {riskLevel && (
+                <div className="text-[11px] text-text-industrial/70">
+                  {t("mp.riskLevel")}:{" "}
+                  <span className="font-bold" style={{ color: riskLevel === "HIGH" || riskLevel === "CRITICAL" ? "#dc2626" : riskLevel === "MEDIUM" ? "#d97706" : "#16a34a" }}>
+                    {t(`mp.risk.level.${riskLevel === "LOW" ? "B" : riskLevel === "MEDIUM" ? "M" : "H"}` as Parameters<typeof t>[0])}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Risk analysis */}

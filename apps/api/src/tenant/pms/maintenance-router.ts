@@ -54,7 +54,7 @@ import {
 import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
 import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
-import { buildWorkOrderPdf } from "./work-order-pdf-service";
+import { buildWorkOrderPdf, buildServiceRequestPdf } from "./work-order-pdf-service";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
 
@@ -410,6 +410,21 @@ export async function handleMaintenanceRoutes(
     const wo = await getTenantWorkOrder(session, id);
     const filename = `${wo.workOrderCode}.pdf`;
     const buffer = await buildWorkOrderPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/service-request\.pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const wo = await getTenantWorkOrder(session, id);
+    const filename = `Solicitud-Servicios-${wo.workOrderCode}.pdf`;
+    const buffer = await buildServiceRequestPdf(session, id);
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,

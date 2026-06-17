@@ -1,0 +1,97 @@
+// Provisiona un tenant COMPLETO (idempotente): Tenant + Settings + formularios
+// controlados (WORK_ORDER REGI-MAN-02.4, SERVICE_REQUEST REGI-LOG-01.3) + usuario
+// admin. Pensado para correr en produccion contra la DATABASE_URL de prod.
+//
+// Uso:
+//   DATABASE_URL=<prod> \
+//   TENANT_SLUG=mercurio TENANT_NAME="Mercurio Group Naviera" \
+//   ADMIN_EMAIL=admin@mercurio.com ADMIN_PASSWORD='CambiaEsto123' \
+//   TZ_NAME=America/Asuncion CURRENCY=PYG \
+//   npx tsx scripts/provision-tenant.ts
+import { PrismaClient } from "../generated/prisma";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createPlatformTenant, getPlatformTenant } from "../apps/api/src/platform/tenants/platform-tenants-service";
+import { createPlatformTenantUser } from "../apps/api/src/platform/tenants/platform-tenant-users-service";
+
+const prisma = new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionString: process.env.DATABASE_URL })) } as any);
+
+const SLUG     = (process.env.TENANT_SLUG || "mercurio").toLowerCase();
+const NAME     = process.env.TENANT_NAME || "Mercurio Group Naviera";
+const EMAIL    = process.env.ADMIN_EMAIL || "admin@mercurio.com";
+const PASSWORD = process.env.ADMIN_PASSWORD || "Mercurio2026";
+const TZ       = process.env.TZ_NAME || "America/Asuncion";
+const CURRENCY = process.env.CURRENCY || "PYG";
+
+const SERVICE_REQUEST_CONFIG = {
+  sections: [
+    "header", "deptDate", "equipment", "equipAssigned", "description", "causes",
+    "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
+    "comments", "generatedBy", "signatures", "communication", "distribution",
+  ],
+  footer: { preparedBy: "Barlovento Servicios Profesionales", reviewedBy: "Asesoría Jurídica", approvedBy: "Gerente General" },
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
+  distribution: ["JMA", "CAP"],
+  communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
+  purchaseRequest: ["NORMAL", "AFECTA SEGURIDAD", "AFECTA SERVICIO"],
+  labels: {},
+};
+
+async function main() {
+  // 1) Tenant + Settings
+  const existing = await getPlatformTenant(SLUG).catch(() => null);
+  if (existing) {
+    console.log(`• Tenant '${SLUG}' ya existe (${existing.id})`);
+  } else {
+    const t = await createPlatformTenant({
+      slug: SLUG, status: "ACTIVE", displayName: NAME, supportEmail: EMAIL,
+      defaultLocale: "es" as any, enabledLocales: ["es"] as any,
+      timezone: TZ, currency: CURRENCY, workOrderPdfTemplate: "MERCURIO",
+      logoUrl: null, logoUrlLight: null,
+    });
+    console.log(`✔ Tenant creado '${t.slug}' (${t.id})`);
+  }
+
+  const tenant = await (prisma as any).tenant.findUnique({ where: { slug: SLUG }, select: { id: true } });
+  const tenantId: string = tenant.id;
+
+  // 2) Formularios controlados
+  const forms = [
+    { type: "WORK_ORDER", data: { style: "MERCURIO", formCode: "REGI-MAN-02.4", title: "Orden Interna de Trabajo", revision: 2, effectiveFrom: "01.05.2025", codePattern: null } },
+    { type: "SERVICE_REQUEST", data: { style: "MERCURIO", formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png", codePattern: "SS-{seq:0000}-{vesselShort}-{year}", config: SERVICE_REQUEST_CONFIG } },
+  ];
+  for (const f of forms) {
+    const row = await (prisma as any).tenantForm.upsert({
+      where: { tenantId_type: { tenantId, type: f.type } },
+      create: { tenantId, type: f.type, enabled: true, ...f.data },
+      update: f.data,
+    });
+    console.log(`✔ Form ${f.type} → ${row.formCode}`);
+  }
+  await (prisma as any).tenantSetting.update({
+    where: { tenantId },
+    data: {
+      controlledDocPreparedBy: "Barlovento Servicios Profesionales",
+      controlledDocReviewedBy: "Asesoría Jurídica",
+      controlledDocApprovedBy: "Gerente General",
+    },
+  });
+  console.log("✔ Footer del documento controlado seteado");
+
+  // 3) Usuario admin
+  try {
+    const u = await createPlatformTenantUser(SLUG, {
+      email: EMAIL, password: PASSWORD, role: "TENANT_ADMIN" as any,
+      firstName: "Admin", lastName: "Mercurio",
+      userStatus: "ACTIVE" as any, membershipStatus: "ACTIVE" as any, assignedVesselCodes: [],
+    } as any);
+    console.log(`✔ Usuario admin creado: ${u.email}`);
+  } catch (e: any) {
+    if (String(e?.message || "").toLowerCase().includes("exist")) console.log(`• Usuario ${EMAIL} ya existe (sin cambios)`);
+    else throw e;
+  }
+
+  console.log(`\nListo. Acceso: https://${SLUG}.<TU_DOMINIO>  | usuario ${EMAIL}`);
+}
+
+main().then(() => prisma.$disconnect()).catch(async (e) => { console.error("ERROR:", e?.message ?? e); await prisma.$disconnect(); process.exit(1); });

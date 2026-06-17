@@ -457,6 +457,93 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       y += 8;
     }
 
+    // Matriz de análisis de riesgo (probabilidad × consecuencia), estilo IMO.
+    // Resalta la celda del plan y muestra el nivel derivado. Mismas reglas que
+    // la UI y el backend (deriveRiskLevelFromMatrix).
+    function renderRiskMatrix(probability: string, consequence: string) {
+      const PROBS = ["LIKELY", "PROBABLE", "UNLIKELY", "RARE"];
+      const CONS = ["FATALITY", "MAJOR", "MINOR", "NEGLIGIBLE"];
+      const probLabels: Record<string, string> = {
+        LIKELY: "Muy probable", PROBABLE: "Probable", UNLIKELY: "Improbable", RARE: "Altamente improbable",
+      };
+      const consLabels: Record<string, string> = {
+        FATALITY: "Fatalidad", MAJOR: "Lesiones importantes", MINOR: "Lesiones leves", NEGLIGIBLE: "Lesiones insignificantes",
+      };
+      // Filas = consecuencia, columnas = probabilidad. H=Alto, M=Medio, B=Bajo.
+      const grid: Record<string, Record<string, "H" | "M" | "B">> = {
+        FATALITY:   { LIKELY: "H", PROBABLE: "H", UNLIKELY: "H", RARE: "M" },
+        MAJOR:      { LIKELY: "H", PROBABLE: "H", UNLIKELY: "M", RARE: "M" },
+        MINOR:      { LIKELY: "H", PROBABLE: "M", UNLIKELY: "M", RARE: "B" },
+        NEGLIGIBLE: { LIKELY: "M", PROBABLE: "M", UNLIKELY: "B", RARE: "B" },
+      };
+      const levelColor = { H: "#dc2626", M: "#f59e0b", B: "#16a34a" } as const;
+      const levelText  = { H: "Alto", M: "Medio", B: "Bajo" } as const;
+
+      const labelColW = 96;
+      const cellW = (W - labelColW) / PROBS.length;
+      const headerH = 30;
+      const rowH = 30;
+      const totalH = headerH + rowH * CONS.length;
+
+      sectionHeader("Análisis de riesgo");
+      y += 6;
+      // Título de ejes
+      doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
+        .text("PROBABILIDAD", ML + labelColW, y, { width: W - labelColW, align: "center", characterSpacing: 0.5 });
+      y += 11;
+
+      ensureSpace(totalH + 4);
+      const top = y;
+
+      // Esquina + headers de probabilidad
+      doc.rect(ML, top, labelColW, headerH).fillColor("#0f2744").fill();
+      doc.fontSize(6.5).font(FONT_BOLD).fillColor("#ffffff")
+        .text("CONSECUENCIA", ML + 4, top + headerH / 2 - 6, { width: labelColW - 8, align: "center" });
+      PROBS.forEach((pb, ci) => {
+        const cx = ML + labelColW + ci * cellW;
+        doc.rect(cx, top, cellW, headerH).fillColor("#1e3a5f").fill();
+        doc.rect(cx, top, cellW, headerH).strokeColor("#ffffff").lineWidth(0.5).stroke();
+        doc.fontSize(6.5).font(FONT_BOLD).fillColor("#ffffff")
+          .text(probLabels[pb], cx + 3, top + 5, { width: cellW - 6, align: "center", lineGap: 0.5 });
+      });
+
+      // Filas de consecuencia
+      CONS.forEach((cs, ri) => {
+        const ry = top + headerH + ri * rowH;
+        // Label de consecuencia
+        doc.rect(ML, ry, labelColW, rowH).fillColor("#e2e8f0").fill();
+        doc.rect(ML, ry, labelColW, rowH).strokeColor("#ffffff").lineWidth(0.5).stroke();
+        doc.fontSize(6.5).font(FONT_BOLD).fillColor(black)
+          .text(consLabels[cs], ML + 4, ry + rowH / 2 - 7, { width: labelColW - 8, align: "center", lineGap: 0.5 });
+        // Celdas coloreadas
+        PROBS.forEach((pb, ci) => {
+          const cx = ML + labelColW + ci * cellW;
+          const lvl = grid[cs][pb];
+          const isSelected = pb === probability && cs === consequence;
+          doc.rect(cx, ry, cellW, rowH).fillColor(levelColor[lvl]).fill();
+          doc.fontSize(9).font(FONT_BOLD).fillColor("#ffffff")
+            .text(levelText[lvl], cx, ry + rowH / 2 - 6, { width: cellW, align: "center" });
+          if (isSelected) {
+            // Borde grueso oscuro para marcar la celda del plan
+            doc.rect(cx + 1.5, ry + 1.5, cellW - 3, rowH - 3).strokeColor("#0f172a").lineWidth(2.5).stroke();
+          } else {
+            doc.rect(cx, ry, cellW, rowH).strokeColor("#ffffff").lineWidth(0.5).stroke();
+          }
+        });
+      });
+      y = top + totalH + 8;
+
+      // Resultado derivado
+      const selLvl = grid[consequence]?.[probability];
+      if (selLvl) {
+        inlineRow([
+          { label: "Probabilidad", value: probLabels[probability] ?? probability },
+          { label: "Consecuencia", value: consLabels[consequence] ?? consequence },
+          { label: "Nivel de riesgo", value: levelText[selLvl], color: levelColor[selLvl] },
+        ]);
+      }
+    }
+
     // ── HEADER ────────────────────────────────────────────────────────────────
     const HEADER_H = 64;
     const TENANT_LOGO_MAX_W = 90;
@@ -541,9 +628,16 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     if (p["loto"]) {
       renderDescription("LOTO (Lockout/Tagout)", val(p["loto"]), true);
     }
-    if (p["riskLevel"]) {
+    const riskProb = p["riskProbability"] ? String(p["riskProbability"]) : null;
+    const riskCons = p["riskConsequence"] ? String(p["riskConsequence"]) : null;
+    if (riskProb && riskCons) {
+      // Matriz interactiva: dibuja la grilla y resalta la celda del plan.
+      renderRiskMatrix(riskProb, riskCons);
+    } else if (p["riskLevel"]) {
+      // Fallback (planes sin ejes de matriz): nivel suelto, como antes.
+      const riskLevelLabel: Record<string, string> = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto", CRITICAL: "Crítico" };
       inlineRow([
-        { label: "Nivel de riesgo", value: val(p["riskLevel"]) },
+        { label: "Nivel de riesgo", value: riskLevelLabel[String(p["riskLevel"])] ?? val(p["riskLevel"]) },
         { label: "", value: "" },
         { label: "", value: "" },
       ]);

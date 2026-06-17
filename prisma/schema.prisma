@@ -138,6 +138,22 @@ enum WorkOrderPdfTemplate {
   MERCURIO
 }
 
+// ── Tenant-configurable controlled-document forms ─────────────────────────────
+// Cada tenant define sus propios formularios (numero, revision, logo, secciones,
+// footer, opciones de listas) en `TenantForm`. El estilo visual del "chrome"
+// (header/footer del documento controlado) es `FormStyle`.
+
+enum TenantFormType {
+  WORK_ORDER
+  SERVICE_REQUEST
+  // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
+}
+
+enum FormStyle {
+  STANDARD
+  MERCURIO
+}
+
 // ── Fluid Analyses ────────────────────────────────────────────────────────────
 
 enum FluidType {
@@ -703,6 +719,8 @@ model Tenant {
   aiDocuments        AiDocument[]
   rankDefinitions    RankDefinition[] @relation("RankDefinitions")
   trainingItems      TrainingItem[] @relation("TrainingItems")
+  forms              TenantForm[]
+  formDocuments      FormDocument[]
 }
 
 model TenantDomain {
@@ -736,7 +754,14 @@ model TenantSetting {
   requireApprovalForComplianceTasks     Boolean  @default(true)
   autoConsumeNonCriticalSpares          Boolean  @default(false)
   // PDF templates per entity (extensible: defectPdfTemplate, deferralPdfTemplate, etc.)
+  // Legacy: per-entity template selection. Se mantiene como fallback; la fuente de
+  // verdad de los formularios es el modelo `TenantForm`.
   workOrderPdfTemplate WorkOrderPdfTemplate @default(STANDARD)
+  // Footer del documento controlado (default a nivel tenant; cada TenantForm puede
+  // sobreescribirlo en su `config.footer`). Editables porque pueden cambiar.
+  controlledDocPreparedBy   String?
+  controlledDocReviewedBy   String?
+  controlledDocApprovedBy   String?
   // Document revisions (printed in PDF headers — incrementable per tenant when forms change)
   spareInventoryRevision    Int @default(2)
   spareConsumptionRevision  Int @default(1)
@@ -747,6 +772,55 @@ model TenantSetting {
   updatedAt       DateTime     @updatedAt
 
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Definicion de un formulario controlado por tenant. Unica fuente de verdad de
+// TODAS las diferencias del formulario: numero, revision, vigencia, logo propio,
+// secciones incluidas, opciones de listas, footer y patron de codigo.
+model TenantForm {
+  id            String         @id @default(cuid())
+  tenantId      String
+  type          TenantFormType
+  style         FormStyle      @default(STANDARD)
+  formCode      String?        // "REGI-LOG-01.3"
+  title         String?        // "Solicitud de servicios"
+  revision      Int            @default(1)
+  effectiveFrom String?        // "01.05.2025" (texto, como en la muestra)
+  logoUrl       String?        // logo propio del formulario (fallback: logo del tenant)
+  // Codigo del documento: patron + autonumeracion (scoped al tenant)
+  codePattern   String?        // "SS-{seq:0000}-{vesselShort}-{year}"; null => usa codigo de la fuente
+  codeSeq       Int            @default(0) // ultimo correlativo asignado (por tenant/form)
+  // Resto de diferencias (override de defaults en codigo):
+  //   { sections[], footer{preparedBy,reviewedBy,approvedBy},
+  //     departments[], distribution[], communicationMethods[], purchaseRequest[],
+  //     labels{ "<sectionKey>": "TITULO" } }
+  config        Json?
+  enabled       Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type]) // un formulario por tipo y por tenant
+  @@index([tenantId])
+}
+
+// Codigo emitido para una instancia concreta de formulario (estable por fuente).
+// Garantiza que reimprimir reusa el mismo numero y no consume secuencia.
+model FormDocument {
+  id         String         @id @default(cuid())
+  tenantId   String
+  type       TenantFormType
+  sourceType String         // "WORK_ORDER"
+  sourceId   String         // WorkOrder.id
+  code       String         // "SS-0001-DONCHI-2026" ya renderizado
+  seq        Int
+  createdAt  DateTime       @default(now())
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type, sourceId]) // codigo estable por fuente (reimpresiones reusan)
+  @@index([tenantId])
 }
 
 model PlatformUser {
@@ -1107,6 +1181,10 @@ model MaintenancePlan {
   sfiGroupNumber       Int?
   sfiSubgroupCode      String?
   riskLevel            String?
+  // Ejes de la matriz de riesgo (probabilidad × consecuencia). De ellos se
+  // deriva riskLevel (Bajo/Medio/Alto). Opcionales: planes viejos no los tienen.
+  riskProbability      String?                // LIKELY | PROBABLE | UNLIKELY | RARE
+  riskConsequence      String?                // FATALITY | MAJOR | MINOR | NEGLIGIBLE
   riskAnalysisResult   String?
   taskType             TaskType               @default(MAINTENANCE)
   // RCM: clasificación de qué consecuencia mitiga este plan. Usado para

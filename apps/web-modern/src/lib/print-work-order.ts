@@ -29,6 +29,28 @@ export async function printWorkOrder(wo: { id: string; workOrderCode: string }):
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+export async function printServiceRequest(wo: { id: string; workOrderCode: string }): Promise<void> {
+  const res = await fetch(`/app/pms/work-orders/${wo.id}/service-request.pdf`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    console.error("Error generando Solicitud de servicios:", res.status, await res.text());
+    alert("No se pudo generar la Solicitud de servicios. Intente nuevamente.");
+    return;
+  }
+
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `Solicitud-Servicios-${wo.workOrderCode}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export async function printOpenWorkOrdersReport(vesselCode?: string | null): Promise<void> {
   const trimmed = vesselCode?.trim() || "";
   const qs = trimmed ? `?vesselCode=${encodeURIComponent(trimmed)}` : "";
