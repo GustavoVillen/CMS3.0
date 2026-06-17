@@ -1,5 +1,12 @@
 HISTORY.txt
 
+[2026-06-17] TUNE: ficha de equipo — sección de identificación más compacta
+Agent: Claude Opus 4.8
+- labeledBox: cajas más bajas (44→30pt), label/valor reposicionados (label 7→6.5pt @ +5, valor
+  11→10pt @ +15) y paso de fila 58→36pt (gap 14→6). ~110pt menos de alto vertical.
+- VERIFICACIÓN: ficha demo generada → identificación + fundamento + plan + historial entran
+  holgado en una página, sin recortes. Backend-only (tsx) → deploy: pull + cache tsx + restart.
+
 [2026-06-17] FIX: ficha de equipo — texto superpuesto + orden de plan por frecuencia
 Agent: Claude Opus 4.8
 - asset-pdf-service renderTable: la altura de fila era fija (20pt). Los títulos de plan traen

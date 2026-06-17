@@ -217,39 +217,43 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
 
     // ── Compact labeled box (single-line value) ───────────────────────────────
     function labeledBox(bx: number, by: number, bw: number, bh: number, label: string, value: string, valueColor = black) {
-      doc.roundedRect(bx, by, bw, bh, 4).fillColor(bgBox).fill();
-      doc.roundedRect(bx, by, bw, bh, 4).strokeColor(border).lineWidth(1).stroke();
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), bx + 10, by + 8, { width: bw - 20, characterSpacing: 0.5 });
-      doc.fontSize(11).font("Helvetica-Bold").fillColor(valueColor)
-        .text(sanitizePdfText(value), bx + 10, by + 20, { width: bw - 20, lineBreak: false, ellipsis: true });
+      doc.roundedRect(bx, by, bw, bh, 3).fillColor(bgBox).fill();
+      doc.roundedRect(bx, by, bw, bh, 3).strokeColor(border).lineWidth(1).stroke();
+      doc.fontSize(6.5).font("Helvetica-Bold").fillColor(gray)
+        .text(label.toUpperCase(), bx + 8, by + 5, { width: bw - 16, characterSpacing: 0.4 });
+      doc.fontSize(10).font("Helvetica-Bold").fillColor(valueColor)
+        .text(sanitizePdfText(value), bx + 8, by + 15, { width: bw - 16, lineBreak: false, ellipsis: true });
     }
+
+    // Identificación compacta: cajas más bajas y menos espacio entre filas.
+    const BOX_H = 30;
+    const ROW   = BOX_H + 6; // paso de fila (antes 58 con cajas de 44)
 
     // ── Asset identity ─────────────────────────────────────────────────────────
     const half = (W - 8) / 2;
-    labeledBox(ML,            y, half, 44, "Buque",  vesselName ? `${vesselName} (${asset.vesselCode})` : asset.vesselCode);
-    labeledBox(ML + half + 8, y, half, 44, "Código SFI", val(asset.sfiCode));
-    y += 58;
+    labeledBox(ML,            y, half, BOX_H, "Buque",  vesselName ? `${vesselName} (${asset.vesselCode})` : asset.vesselCode);
+    labeledBox(ML + half + 8, y, half, BOX_H, "Código SFI", val(asset.sfiCode));
+    y += ROW;
 
     const third = (W - 16) / 3;
-    labeledBox(ML,                   y, third, 44, "Criticidad", asset.criticality, CRITICALITY_COLOR[asset.criticality] ?? black);
-    labeledBox(ML + third + 8,       y, third, 44, "Estado",     asset.status,      ASSET_STATUS_COLOR[asset.status] ?? black);
-    labeledBox(ML + (third + 8) * 2, y, third, 44, "Crítico ISM 10.3", asset.isSafetyCritical ? "Sí" : "No", asset.isSafetyCritical ? "#b91c1c" : gray);
-    y += 58;
+    labeledBox(ML,                   y, third, BOX_H, "Criticidad", asset.criticality, CRITICALITY_COLOR[asset.criticality] ?? black);
+    labeledBox(ML + third + 8,       y, third, BOX_H, "Estado",     asset.status,      ASSET_STATUS_COLOR[asset.status] ?? black);
+    labeledBox(ML + (third + 8) * 2, y, third, BOX_H, "Crítico ISM 10.3", asset.isSafetyCritical ? "Sí" : "No", asset.isSafetyCritical ? "#b91c1c" : gray);
+    y += ROW;
 
-    labeledBox(ML,                   y, third, 44, "Reporte Diario",  asset.trackDailyReport ? "Sí" : "No", asset.trackDailyReport ? "#166534" : gray);
-    labeledBox(ML + third + 8,       y, third, 44, "Hs. Acumuladas",  asset.currentHours != null ? `${Number(asset.currentHours).toLocaleString("es-AR")} h` : "—");
-    labeledBox(ML + (third + 8) * 2, y, third, 44, "Fabricante",      val(asset.manufacturer));
-    y += 58;
+    labeledBox(ML,                   y, third, BOX_H, "Reporte Diario",  asset.trackDailyReport ? "Sí" : "No", asset.trackDailyReport ? "#166534" : gray);
+    labeledBox(ML + third + 8,       y, third, BOX_H, "Hs. Acumuladas",  asset.currentHours != null ? `${Number(asset.currentHours).toLocaleString("es-AR")} h` : "—");
+    labeledBox(ML + (third + 8) * 2, y, third, BOX_H, "Fabricante",      val(asset.manufacturer));
+    y += ROW;
 
-    labeledBox(ML,                   y, third, 44, "Modelo", val(asset.model));
-    labeledBox(ML + third + 8,       y, third, 44, "Serial", val(asset.serialNumber));
-    labeledBox(ML + (third + 8) * 2, y, third, 44, "Instalación", fmt(asset.installationDate));
-    y += 58;
+    labeledBox(ML,                   y, third, BOX_H, "Modelo", val(asset.model));
+    labeledBox(ML + third + 8,       y, third, BOX_H, "Serial", val(asset.serialNumber));
+    labeledBox(ML + (third + 8) * 2, y, third, BOX_H, "Instalación", fmt(asset.installationDate));
+    y += ROW;
 
-    labeledBox(ML,            y, half, 44, "Última Reparación Mayor", fmt(asset.lastOverhaulDate));
-    labeledBox(ML + half + 8, y, half, 44, "Reemplazo Previsto",      fmt(asset.replacementDate));
-    y += 58;
+    labeledBox(ML,            y, half, BOX_H, "Última Reparación Mayor", fmt(asset.lastOverhaulDate));
+    labeledBox(ML + half + 8, y, half, BOX_H, "Reemplazo Previsto",      fmt(asset.replacementDate));
+    y += ROW;
 
     // ── Fundamento de Criticidad (free text, page-aware) ──────────────────────
     y = renderLabeledTextBox(doc, {
