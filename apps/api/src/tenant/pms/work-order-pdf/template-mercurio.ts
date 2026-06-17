@@ -35,10 +35,6 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
   const commMethods: string[] = (wo as any).communicationMethod ?? [];
   const COMM_OPTS = ["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const;
   const distList: string[] = (wo as any).distribution ?? [];
-  const DIST_ROWS = [
-    ["GGE", "PDT", "JTE", "JOP", "JRH", "JVE"],
-    ["JCO", "JSE", "JUR", "ADM", "CAP", "JMA"],
-  ] as const;
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
@@ -91,16 +87,13 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     cell(ML + W - FECHA_W, canvas.y, FECHA_W, DEPT_ROW_H, fmt(wo.openDate), { fontSize: 9, align: "center" });
     canvas.y += DEPT_ROW_H;
 
-    // ── EQUIPO / UBICACION ──────────────────────────────────────────────────
+    // ── EQUIPO AFECTADO (ancho completo) ────────────────────────────────────
     const R3_H = 22;
     ensureSpace(R3_H * 2);
-    cell(ML, canvas.y, Math.floor(W * 0.4), R3_H, "EQUIPO AFECTADO", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + Math.floor(W * 0.4), canvas.y, W - Math.floor(W * 0.4), R3_H, "UBICACION", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+    cell(ML, canvas.y, W, R3_H, "EQUIPO AFECTADO", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     canvas.y += R3_H;
-    const EQ_W = Math.floor(W * 0.4);
     const assetCellText = assetIsSafetyCritical ? `${assetLabel}  [ISM 10.3]` : assetLabel;
-    cell(ML, canvas.y, EQ_W, R3_H, assetCellText, { fontSize: 9 });
-    cell(ML + EQ_W, canvas.y, W - EQ_W, R3_H, sanitizePdfText((wo as any).location ?? ""), { fontSize: 9 });
+    cell(ML, canvas.y, W, R3_H, assetCellText, { fontSize: 9 });
     canvas.y += R3_H;
 
     // ── MOTIVO ──────────────────────────────────────────────────────────────
@@ -217,16 +210,6 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     const closeNotes = val((wo as any).closeNotes) || val((wo as any).acceptanceCriteria) || val((wo as any).loto) || "";
     canvas.y += textArea(ML, canvas.y, W, closeNotes, 38);
 
-    // ── GENERADO POR ────────────────────────────────────────────────────────
-    sectionHeader("ESTE DOCUMENTO FUE GENERADO POR");
-    ensureSpace(34);
-    doc.rect(ML, canvas.y, W, 12).fillColor(LIGHT).fill();
-    doc.rect(ML, canvas.y, W, 12).strokeColor(BORDER).lineWidth(0.4).stroke();
-    doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-      .text("(Indicar nombre, posicion y si es impreso sello)", ML + 6, canvas.y + 2, { width: W - 12, align: "center" });
-    canvas.y += 12;
-    canvas.y += textArea(ML, canvas.y, W, createdByName ? sanitizePdfText(createdByName) : "", 22);
-
     // ── COMUNICACION ────────────────────────────────────────────────────────
     sectionHeader("MEDIO DE COMUNICACIÓN UTILIZADO");
     ensureSpace(24);
@@ -245,26 +228,16 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
 
     // ── DISTRIBUCION ────────────────────────────────────────────────────────
     sectionHeader("DISTRIBUCION");
-    ensureSpace(60);
-    DIST_ROWS.forEach(row => {
-      const DIST_H = 18;
-      doc.rect(ML, canvas.y, W, DIST_H).fillColor(WHITE).fill();
-      doc.rect(ML, canvas.y, W, DIST_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-      const dw = Math.floor(W / row.length);
-      (row as readonly string[]).forEach((code, i) => {
-        const cx = ML + i * dw;
-        doc.rect(cx, canvas.y, dw, DIST_H).strokeColor(BORDER).lineWidth(0.3).stroke();
-        checkbox(cx + 4, canvas.y + 5, code, distList.includes(code));
-      });
-      canvas.y += DIST_H;
-    });
-
-    const OTROS_H = 20;
-    doc.rect(ML, canvas.y, W, OTROS_H).fillColor(WHITE).fill();
-    doc.rect(ML, canvas.y, W, OTROS_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-    doc.fontSize(8).font("Helvetica-Bold").fillColor(GRAY)
-      .text("OTROS (Indicar):", ML + 4, canvas.y + 6, { width: 80, lineBreak: false });
-    canvas.y += OTROS_H;
+    const DIST_H = 22;
+    ensureSpace(DIST_H);
+    doc.rect(ML, canvas.y, W, DIST_H).fillColor(WHITE).fill();
+    doc.rect(ML, canvas.y, W, DIST_H).strokeColor(BORDER).lineWidth(0.4).stroke();
+    const distHalf = Math.floor(W / 2);
+    doc.rect(ML, canvas.y, distHalf, DIST_H).strokeColor(BORDER).lineWidth(0.3).stroke();
+    doc.rect(ML + distHalf, canvas.y, W - distHalf, DIST_H).strokeColor(BORDER).lineWidth(0.3).stroke();
+    checkbox(ML + 8, canvas.y + 7, "Original: Recursos Humanos", distList.includes("ORIGINAL"));
+    checkbox(ML + distHalf + 8, canvas.y + 7, "Copia: Destinatarios", distList.includes("COPIA"));
+    canvas.y += DIST_H;
 
     // ── TRAMITACIÓN (cadena de aprobación: Solicita / Aprueba / Autoriza) ─────
     sectionHeader("TRAMITACION DE LA ORDEN");

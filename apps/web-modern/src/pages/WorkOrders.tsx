@@ -1874,15 +1874,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <section className="space-y-3 border-t border-fg/10 pt-4">
                 <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">{t("wo.modal.distribution")}</p>
                 <div className="flex gap-2 flex-wrap">
-                  {(["GGE","PDT","JTE","JOP","JRH","JVE","JCO","JSE","JUR","ADM","CAP","JMA"] as const).map(code => (
+                  {([["ORIGINAL", "Original: Recursos Humanos"], ["COPIA", "Copia: Destinatarios"]] as const).map(([code, label]) => (
                     <button key={code} type="button" disabled={!isEditable}
                       onClick={() => toggleArr(distribution, setDistribution, code)}
-                      className={`w-12 py-1 rounded text-xs font-bold border transition-colors ${
+                      className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
                         distribution.includes(code)
                           ? "bg-accent text-accent-fg border-accent"
                           : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
                       }`}
-                    >{code}</button>
+                    >{label}</button>
                   ))}
                 </div>
               </section>

@@ -73,8 +73,8 @@ const EMPTY_CONFIG: FormConfig = {
 const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
   WORK_ORDER: {
     style: "MERCURIO",
-    formCode: "REGI-MAN-02.4",
-    title: "Orden Interna de Trabajo",
+    formCode: "REGI-LOG-01.3",
+    title: "Solicitud de Servicios",
     revision: 2,
     effectiveFrom: "01.05.2025",
     codePattern: null, // usa el workOrderCode existente
