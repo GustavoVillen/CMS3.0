@@ -2279,7 +2279,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             samplingFluidType: samplingFluidType || plan.samplingFluidType,
           }}
           onClose={() => setShowExecution(false)}
-          onSaved={_woId => { setShowExecution(false); void onSaved(); }}
+          onSaved={_woId => { setShowExecution(false); void onSaved(); onClose(); }}
         />
       )}
       {!isNew && showExecution && !needsWO && (
