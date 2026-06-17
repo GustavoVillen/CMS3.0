@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-06-17] FIX: logo Mercurio (bueno) en TODOS los formularios controlados
+Agent: Claude Opus 4.8
+- resolveTenantLogo matchea el slug del tenant contra public/ sin distinguir mayúsculas. El VPS
+  tenía Mercurio.png (4763 bytes, viejo/chico) que ganaba el match para slug "mercurio" → OT y
+  Plan mostraban ese logo pobre; solo la Solicitud usaba el bueno (logoUrl propio /LogoMercurio.png).
+- Fix: public/Mercurio.png ahora es copia del logo bueno (43314 bytes, = LogoMercurio.png). Así el
+  fallback de tenant entrega el logo correcto a TODOS los PDFs de mercurio (OT, Plan, asset, etc.).
+- VERIFICACIÓN: resolveTenantLogo("mercurio") → 43314 bytes (antes 4763 en VPS). Asset estático
+  leído por request → deploy no requiere restart; sí remover el Mercurio.png untracked del VPS
+  antes del pull.
+
 [2026-06-17] TUNE: prompts de IA más concisos (criterios / LOTO / análisis de riesgo)
 Agent: Claude Opus 4.8
 - Pedido: que la IA ponga "solo lo importante" y sea más breve en Criterios de aceptación, LOTO,
