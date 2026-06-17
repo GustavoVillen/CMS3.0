@@ -170,6 +170,50 @@ export async function listProgressNotes(
   return rows as ProgressNoteRow[];
 }
 
+export async function updateProgressNote(
+  session: TenantAccessSession,
+  workOrderId: string,
+  noteId: string,
+  input: { text: string | null },
+): Promise<ProgressNoteRow> {
+  const wo = await getWorkOrderOrThrow(session, workOrderId);
+  // Lockdown vetting: no se puede editar notas de una OT cerrada/cancelada.
+  assertNotLocked("WORK_ORDER", wo.status);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const note = await (prismaRaw as any).workOrderProgressNote.findFirst({
+    where: { id: noteId, workOrderId: wo.id, tenantId: wo.tenantId, deletedAt: null },
+  });
+  if (!note) throw new RouteError(404, "NOT_FOUND", "Nota de avance no encontrada.");
+
+  const text = (input.text ?? "").trim();
+  if (note.kind === "TEXT" && !text) {
+    throw new RouteError(400, "VALIDATION_ERROR", "El texto de la nota es requerido.");
+  }
+
+  const data: Record<string, unknown> = { text: text || null };
+  // Para notas con texto definitivo (no foto con OCR) mantenemos processedText en sync.
+  if (note.kind === "TEXT" || note.kind === "AUDIO" || note.kind === "VIDEO") {
+    data.processedText = text || null;
+  }
+
+  const updated = await (prismaRaw as any).workOrderProgressNote.update({
+    where: { id: noteId },
+    data,
+  });
+
+  // Re-generar observations con el texto editado (fire-and-forget).
+  void regenerateObservationsForWorkOrder(wo.id, {
+    tenantSlug: session.tenantSlug,
+    userId: session.user.id,
+    userEmail: session.user.email,
+  }).catch((err) => log.error("[progress-notes] regenerate after edit failed:", err));
+
+  return updated as ProgressNoteRow;
+}
+
 export async function deleteProgressNote(
   session: TenantAccessSession,
   workOrderId: string,

@@ -38,6 +38,7 @@ import {
 import {
   createProgressNote,
   listProgressNotes,
+  updateProgressNote,
   deleteProgressNote,
 } from "../work-orders/work-order-progress-notes-service";
 import { createWorkLog, listWorkLogs } from "./work-logs-service";
@@ -370,6 +371,16 @@ export async function handleMaintenanceRoutes(
 
     const note = await createProgressNote(session, id, { kind, text: caption, fileBuffer, fileName, mimeType });
     sendJson(response, 201, note);
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes\/[^/]+$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const woId = parts[4]!;
+    const noteId = parts[6]!;
+    const body = await readJsonBody(request) as { text?: string | null };
+    const note = await updateProgressNote(session, woId, noteId, { text: body.text ?? null });
+    sendJson(response, 200, note);
     return true;
   }
 
