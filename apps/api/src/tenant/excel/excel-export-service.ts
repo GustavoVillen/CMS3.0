@@ -36,7 +36,6 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
   ],
   maintenance_plans: [
     "sfiGroupNumber",
-    "sfiSubgroupCode",
     "responsible",
     "acceptanceCriteria",
     "loto",

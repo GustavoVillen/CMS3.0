@@ -29,7 +29,6 @@ export interface CreateMaintenancePlanInput {
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
-  sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
@@ -66,7 +65,6 @@ export interface UpdateMaintenancePlanInput {
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
-  sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
@@ -185,7 +183,6 @@ interface MaintenancePlanRecord {
   acceptanceCriteria: string | null;
   loto: string | null;
   sfiGroupNumber: number | null;
-  sfiSubgroupCode: string | null;
   riskLevel: string | null;
   riskAnalysisResult: string | null;
   triggerType: string;
@@ -833,7 +830,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
     loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
-    sfiSubgroupCode: normalizeOptionalText(payload.sfiSubgroupCode),
+    sfiSubgroupCode: null,
     riskLevel: normalizeRiskLevel(payload.riskLevel),
     riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
     consequenceCategory: payload.consequenceCategory ?? null,
@@ -917,7 +914,6 @@ export async function updateTenantMaintenancePlan(
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
   if (payload.sfiGroupNumber !== undefined) data.sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
-  if (payload.sfiSubgroupCode !== undefined) data.sfiSubgroupCode = normalizeOptionalText(payload.sfiSubgroupCode);
   if (payload.riskLevel !== undefined) data.riskLevel = normalizeRiskLevel(payload.riskLevel);
   if (payload.riskAnalysisResult !== undefined) data.riskAnalysisResult = normalizeOptionalText(payload.riskAnalysisResult);
   if (payload.consequenceCategory !== undefined) data.consequenceCategory = payload.consequenceCategory ?? null;

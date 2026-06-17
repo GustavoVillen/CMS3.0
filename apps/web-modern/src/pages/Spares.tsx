@@ -33,7 +33,8 @@ interface Spare {
   isEquivalent: boolean;
 }
 interface ListResponse { items: Spare[]; total: number; }
-interface SfiNode { id: string; code: string; description: string; groupNumber: number; groupName: string; }
+// SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
+const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 // ---------------------------------------------------------------------------
 // Stock level indicator (uses onHand from calculation service)
@@ -202,27 +203,13 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels } = useVesselContext();
 
-  // SFI selectors — group is derived from the first digit of the existing code on edit
-  const { data: sfiData } = useFetch<{ items: SfiNode[] }>("/app/pms/sfi");
-  const sfiNodes = sfiData?.items ?? [];
+  // SFI: solo grupo (0-9). El grupo se deriva del primer dígito del código guardado.
   const [sfiGroup, setSfiGroup] = useState<string>(() => {
     if (!spare?.sfiCode) return "";
     const digits = String(spare.sfiCode).replace(/\D/g, "");
     return digits[0] ?? "";
   });
-  const sfiGroups = useMemo(() => {
-    const seen = new Map<number, string>();
-    for (const n of sfiNodes) {
-      if (!seen.has(n.groupNumber)) seen.set(n.groupNumber, n.groupName);
-    }
-    return Array.from(seen.entries()).sort((a, b) => a[0] - b[0]).map(([num, name]) => ({ num, name }));
-  }, [sfiNodes]);
-  const filteredCodes = useMemo(() => {
-    if (!sfiGroup) return [];
-    const gn = parseInt(sfiGroup, 10);
-    return sfiNodes.filter(n => n.groupNumber === gn);
-  }, [sfiNodes, sfiGroup]);
-  const handleSfiGroupChange = (g: string) => { setSfiGroup(g); setSfiCode(""); };
+  const handleSfiGroupChange = (g: string) => { setSfiGroup(g); setSfiCode(g ? `${g}00` : ""); };
 
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -437,20 +424,11 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
               <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Rack A-3…" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>SFI Grupo</label>
+              <label className={labelCls}>{t("mp.sfiGroup")}</label>
               <select value={sfiGroup} onChange={e => handleSfiGroupChange(e.target.value)} className={inputCls}>
-                <option value="">— Grupo —</option>
-                {sfiGroups.map(g => (
-                  <option key={g.num} value={String(g.num)}>{g.num} — {g.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Código SFI</label>
-              <select value={sfiCode} onChange={e => setSfiCode(e.target.value)} className={inputCls} disabled={!sfiGroup || filteredCodes.length === 0}>
-                <option value="">— Código —</option>
-                {filteredCodes.map(n => (
-                  <option key={n.code} value={n.code}>{n.code} — {n.description}</option>
+                <option value="">{t("mp.selectSfiGroup")}</option>
+                {SFI_GROUP_NUMBERS.map(g => (
+                  <option key={g} value={String(g)}>{g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}</option>
                 ))}
               </select>
             </div>

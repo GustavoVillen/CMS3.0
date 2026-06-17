@@ -17,7 +17,6 @@ import {
   listClassTaskTemplates,
   removeClassTaskTemplate,
 } from "./class-plans-service";
-import { createSfiNode, listSfiNodes } from "./sfi-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -29,15 +28,6 @@ function enforceAuditorMutations(method: string, role: string) {
   if (role === "AUDITOR_READONLY" && method !== "GET") {
     throw new RouteError(403, "FORBIDDEN", "AUDITOR_READONLY solo puede listar.");
   }
-}
-
-function parseOptionalInteger(value: string | null, field: string): number | null {
-  if (value === null || value.trim() === "") return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) {
-    throw new RouteError(400, "VALIDATION_ERROR", `${field} debe ser entero.`);
-  }
-  return parsed;
 }
 
 function readRequiredId(value: unknown, field: string): string {
@@ -55,8 +45,7 @@ export async function handleCatalogsRoutes(
 ): Promise<boolean> {
   const isEquipmentClassesPath = url.pathname.startsWith("/app/pms/equipment-classes");
   const isClassPlansPath = url.pathname.startsWith("/app/pms/class-plans");
-  const isSfiPath = url.pathname.startsWith("/app/pms/sfi");
-  if (!isEquipmentClassesPath && !isClassPlansPath && !isSfiPath) return false;
+  if (!isEquipmentClassesPath && !isClassPlansPath) return false;
 
   const tenantSlug = requireTenantSlug(request, env);
   const session = requireTenantAccessSession(request, tenantSlug);
@@ -116,20 +105,6 @@ export async function handleCatalogsRoutes(
     const body = await readJsonBody(request) as { assetId?: unknown };
     const assetId = readRequiredId(body.assetId, "assetId");
     sendJson(response, 200, await instantiateClassPlans(session, assetId));
-    return true;
-  }
-
-  if (method === "GET" && url.pathname === "/app/pms/sfi") {
-    const items = await listSfiNodes(session, {
-      groupNumber: parseOptionalInteger(url.searchParams.get("groupNumber"), "groupNumber"),
-    });
-    sendJson(response, 200, { items, total: items.length });
-    return true;
-  }
-
-  if (method === "POST" && url.pathname === "/app/pms/sfi") {
-    const body = await readJsonBody(request) as Parameters<typeof createSfiNode>[1];
-    sendJson(response, 201, await createSfiNode(session, body));
     return true;
   }
 

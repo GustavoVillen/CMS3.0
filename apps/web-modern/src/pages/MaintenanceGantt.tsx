@@ -21,7 +21,6 @@ interface MaintenancePlan {
   lastExecutionDate: string | null;
   nextDueDate: string | null;
   sfiGroupNumber: number | null;
-  sfiSubgroupCode: string | null;
 }
 
 interface ListResponse {

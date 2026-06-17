@@ -71,7 +71,6 @@ export interface MaintenancePlan {
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
-  sfiSubgroupCode?: string | null;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
@@ -85,14 +84,6 @@ export interface MaintenancePlan {
 interface ListResponse {
   items: MaintenancePlan[];
   total: number;
-}
-
-interface SfiNode {
-  id: string;
-  code: string;
-  description: string;
-  groupNumber: number;
-  groupName: string;
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -259,6 +250,8 @@ function normalizeOptionalText(value: string): string | null {
 const TRIGGER_TYPES = ["MONTHS", "HOURS", "CALENDAR", "RUNNING_HOURS", "CONDITION", "EVENT", "DAY", "WEEK"] as const;
 type TriggerType = (typeof TRIGGER_TYPES)[number];
 const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO", "CHECKLIST"] as const;
+// SFI: solo se usa el GRUPO (0-9). Los nombres salen de i18n `sfi.g.<n>`.
+const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 function needsHours(tt: string) { return tt === "HOURS" || tt === "RUNNING_HOURS"; }
 function needsMonths(tt: string) { return tt === "MONTHS" || tt === "CALENDAR"; }
@@ -1019,13 +1012,12 @@ export interface MaintenancePlanModalProps {
   defaultVesselCode?: string;
   defaultAssetId?: string;
   defaultSfiGroupNumber?: number | null;
-  defaultSfiSubgroupCode?: string | null;
   lockAsset?: boolean;
   /** Overlay z-index class; raise it when nesting this modal over another (default z-50). */
   overlayZClass?: string;
 }
 
-export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, defaultSfiSubgroupCode, lockAsset, overlayZClass }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass }) => {
   const t = useT();
   const navigate = useNavigate();
   const isNew = plan === null;
@@ -1049,7 +1041,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
   const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? defaultSfiGroupNumber ?? null);
-  const [sfiSubgroupCode, setSfiSubgroupCode] = useState(plan?.sfiSubgroupCode ?? defaultSfiSubgroupCode ?? "");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(plan?.riskAnalysisResult ?? "");
   const [consequenceCategory, setConsequenceCategory] = useState<"" | "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL">(
@@ -1086,8 +1077,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting,    setDeleting]    = useState(false);
   const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
-  const [sfiNodes, setSfiNodes] = useState<SfiNode[]>([]);
-  const [loadingSfiNodes, setLoadingSfiNodes] = useState(false);
   const [showMoc, setShowMoc] = useState(false);
   // Popup interceptor: aparece al tocar Guardar cuando hay cambio de
   // periodicidad. El user elige Cancelar / Guardar sin MOC / Abrir MOC.
@@ -1148,20 +1137,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   }, [vesselCode, isNew, plan?.vesselCode]);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoadingSfiNodes(true);
-      try {
-        const r = await api.get<{ items: SfiNode[] }>("/app/pms/sfi");
-        if (!cancelled) setSfiNodes(r.items ?? []);
-      } catch { if (!cancelled) setSfiNodes([]); }
-      finally { if (!cancelled) setLoadingSfiNodes(false); }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
     if (!plan) return;
     setAssetId(plan.assetId ?? "");
     setTaskCode(plan.taskCode ?? "");
@@ -1172,7 +1147,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
-    setSfiSubgroupCode(plan.sfiSubgroupCode ?? "");
     setRiskLevel(toUiRiskLevel(plan.riskLevel));
     setRiskAnalysisResult(plan.riskAnalysisResult ?? "");
     setConsequenceCategory((plan.consequenceCategory as any) ?? "");
@@ -1309,7 +1283,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         "/app/pms/maintenance-plans/suggest-consequence",
         {
           assetName: resolveAssetLabel() ?? "",
-          assetSfiCode: plan?.sfiSubgroupCode ?? sfiSubgroupCode ?? null,
+          assetSfiCode: sfiGroupNumber != null ? `${sfiGroupNumber}00` : null,
           planTitle: title || null,
           planDescription: description || null,
         },
@@ -1322,20 +1296,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     finally {
       setLoadingConsequence(false);
     }
-  }, [readOnly, plan, title, description, loadingConsequence, resolveAssetLabel, sfiSubgroupCode]);
-
-  const sfiGroups = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const node of sfiNodes) {
-      if (!map.has(node.groupNumber)) map.set(node.groupNumber, node.groupName);
-    }
-    return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([groupNumber, groupName]) => ({ groupNumber, groupName }));
-  }, [sfiNodes]);
-
-  const sfiSubgroups = useMemo(() => {
-    if (sfiGroupNumber === null) return [];
-    return sfiNodes.filter(n => n.groupNumber === sfiGroupNumber).sort((a, b) => a.code.localeCompare(b.code));
-  }, [sfiGroupNumber, sfiNodes]);
+  }, [readOnly, plan, title, description, loadingConsequence, resolveAssetLabel, sfiGroupNumber]);
 
   const onSave = async () => {
     setSaving(true);
@@ -1357,7 +1318,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
-          sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
           consequenceCategory: consequenceCategory || null,
@@ -1387,7 +1347,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
-          sfiSubgroupCode: normalizeOptionalText(sfiSubgroupCode),
           riskLevel: toUiRiskLevel(riskLevel),
           riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
           consequenceCategory: consequenceCategory || null,
@@ -1423,7 +1382,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // ESC guard
   const planDirty = useDirtyTracker({
     vesselCode, taskCode, assetId, taskType, title, description, responsible,
-    acceptanceCriteria, loto, sfiGroupNumber, sfiSubgroupCode,
+    acceptanceCriteria, loto, sfiGroupNumber,
     riskLevel, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
@@ -1591,8 +1550,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         <div class="cell"><div class="cell-label">${t("mp.pdf.asset")}</div><div class="cell-value">${assetDisplay}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.status")}</div><div class="cell-value">${statusLbl(plan.status ?? "")}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.taskCode")}</div><div class="cell-value">${v(plan.taskCode)}</div></div>
-        <div class="cell"><div class="cell-label">${t("mp.pdf.sfiGroup")}</div><div class="cell-value">${plan.sfiGroupNumber != null ? `G${plan.sfiGroupNumber}` : "—"}</div></div>
-        <div class="cell"><div class="cell-label">${t("mp.pdf.sfiSubgroup")}</div><div class="cell-value">${v(plan.sfiSubgroupCode)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.pdf.sfiGroup")}</div><div class="cell-value">${plan.sfiGroupNumber != null ? `${plan.sfiGroupNumber} - ${t(`sfi.g.${plan.sfiGroupNumber}` as Parameters<typeof t>[0])}` : "—"}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.taskType")}</div><div class="cell-value">${taskTypeLbl(plan.taskType)}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.responsible")}</div><div class="cell-value">${v(responsible)}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.criticality")}</div><div class="cell-value">${v(plan.criticality)}</div></div>
@@ -1779,22 +1737,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             </div>
 
             {/* SFI */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mp.sfiGroup")}</label>
                 <select value={sfiGroupNumber === null ? "" : String(sfiGroupNumber)}
-                  onChange={e => { setSfiGroupNumber(e.target.value ? Number(e.target.value) : null); setSfiSubgroupCode(""); }}
-                  className={selectCls} disabled={loadingSfiNodes}>
-                  <option value="">{loadingSfiNodes ? t("common.loading") : t("mp.selectSfiGroup")}</option>
-                  {sfiGroups.map(g => <option key={g.groupNumber} value={g.groupNumber}>{g.groupNumber} - {t(`sfi.g.${g.groupNumber}` as Parameters<typeof t>[0]) || g.groupName}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.sfiSubgroup")}</label>
-                <select value={sfiSubgroupCode} onChange={e => setSfiSubgroupCode(e.target.value)}
-                  className={selectCls} disabled={loadingSfiNodes || sfiGroupNumber === null}>
-                  <option value="">{sfiGroupNumber === null ? t("mp.selectSfiGroupFirst") : t("mp.selectSfiSubgroup")}</option>
-                  {sfiSubgroups.map(n => <option key={n.id} value={n.code}>{n.code} - {t(`sfi.c.${n.code}` as Parameters<typeof t>[0]) || n.description}</option>)}
+                  onChange={e => setSfiGroupNumber(e.target.value ? Number(e.target.value) : null)}
+                  className={selectCls}>
+                  <option value="">{t("mp.selectSfiGroup")}</option>
+                  {SFI_GROUP_NUMBERS.map(g => <option key={g} value={g}>{g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}</option>)}
                 </select>
               </div>
             </div>
@@ -2480,7 +2430,6 @@ export const MaintenancePlansPage: React.FC = () => {
         (p.description ?? "").toLowerCase().includes(q) ||
         (p.responsible ?? "").toLowerCase().includes(q) ||
         String(p.sfiGroupNumber ?? "").includes(q) ||
-        (p.sfiSubgroupCode ?? "").toLowerCase().includes(q) ||
         (p.assetName ?? "").toLowerCase().includes(q)
       );
     }
@@ -2551,7 +2500,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <span className="text-[11px] font-bold text-fg font-mono leading-tight">{row.taskCode}</span>
           {row.sfiGroupNumber != null && (
             <span className="text-[10px] text-text-industrial/50 font-mono leading-tight">
-              SFI: {row.sfiSubgroupCode ?? row.sfiGroupNumber}
+              SFI: G{row.sfiGroupNumber}
               {row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL" ? (
                 <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 text-red-700 dark:text-red-400 text-[8px] font-bold border border-red-500/30">!</span>
               ) : null}

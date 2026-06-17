@@ -493,7 +493,6 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     inlineRow([
       { label: "Código de tarea",  value: val(p["taskCode"]) },
       { label: "Grupo SFI",        value: p["sfiGroupNumber"] != null ? `G${p["sfiGroupNumber"]}` : "—" },
-      { label: "Subgrupo SFI",     value: val(p["sfiSubgroupCode"]) },
     ]);
     inlineRow([
       { label: "Tipo de tarea",    value: val(p["taskType"]) },

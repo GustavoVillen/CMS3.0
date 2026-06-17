@@ -341,7 +341,6 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
       // assetId: only include when resolved; UPDATE preserves existing value when absent
       if ("assetId" in d) r.assetId = (d.assetId as string) ?? "";
       if ("sfiGroupNumber"    in d) r.sfiGroupNumber    = d.sfiGroupNumber ? Number(d.sfiGroupNumber) : null;
-      if ("sfiCode"           in d) r.sfiSubgroupCode   = d.sfiCode != null ? String(d.sfiCode) : null;
       if ("description"       in d) r.description       = d.description       ?? null;
       if ("responsible"       in d) r.responsible       = d.responsible       ?? null;
       if ("acceptanceCriteria" in d) r.acceptanceCriteria = d.acceptanceCriteria ?? null;

@@ -61,7 +61,6 @@ export interface DevMaintenancePlanRecord {
   acceptanceCriteria?: string;
   loto?: string;
   sfiGroupNumber?: number;
-  sfiSubgroupCode?: string;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   riskAnalysisResult?: string;
   status: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
@@ -591,7 +590,6 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     acceptanceCriteria: "No leaks, stable oil pressure, clean filter replacement confirmed.",
     loto: "Photos and service checklist",
     sfiGroupNumber: 7,
-    sfiSubgroupCode: "710",
     riskLevel: "HIGH",
     riskAnalysisResult: "Riesgo alto por impacto directo en propulsión. Ejecutar mantenimiento en la primera ventana operativa.",
     status: "DUE_SOON",
@@ -618,7 +616,6 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     acceptanceCriteria: "Engine parameters within standard operating range after maintenance.",
     loto: "Checklist, readings, and signed verification",
     sfiGroupNumber: 7,
-    sfiSubgroupCode: "720",
     riskLevel: "CRITICAL",
     riskAnalysisResult: "Riesgo crítico por condición degradada y vencimiento del plan. Prioridad inmediata con monitoreo continuo.",
     status: "OVERDUE",
@@ -645,7 +642,6 @@ const DEV_MAINTENANCE_PLANS: DevMaintenancePlanRecord[] = [
     acceptanceCriteria: "Stable load acceptance and no alarm condition during test.",
     loto: "Functional test report",
     sfiGroupNumber: 7,
-    sfiSubgroupCode: "740",
     riskLevel: "MEDIUM",
     riskAnalysisResult: "Riesgo medio; mantener la periodicidad mensual para evitar escalamiento.",
     status: "ACTIVE",

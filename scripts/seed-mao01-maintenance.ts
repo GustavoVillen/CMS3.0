@@ -5,7 +5,7 @@
  *   - Hoja "EQUIPOS CRITICOS" (registro de pruebas, snapshot mayo 2026)
  *
  * Reglas aplicadas (pedido del usuario):
- *   - Cada activo recibe Grupo SFI + Subgrupo SFI (esquema documentado abajo).
+ *   - Cada activo recibe Grupo SFI (el subgrupo fue eliminado del sistema).
  *   - Frecuencia tomada del Excel (Hs/lapso): horas, días, meses.
  *   - estimatedHours: estimada por heurística según tipo de tarea (ver estimateHours()).
  *   - triggerResultMode = "AUTO_WO"  ("Requiere OT") en TODOS los planes.
@@ -717,7 +717,7 @@ async function main() {
   const seenCodes = new Set<string>();
 
   for (const a of ASSETS) {
-    const sfiCode = a.sub;
+    const sfiCode = `${a.group}00`; // solo grupo SFI (el subgrupo fue eliminado del sistema)
     let assetId = "(dry)";
     if (!DRY) {
       const asset = await prisma.asset.upsert({
@@ -755,7 +755,7 @@ async function main() {
         title, description: a.desc ?? null,
         triggerType, frequencyHours, frequencyMonths, estimatedHours: est, taskType,
         triggerResultMode: "AUTO_WO", // "Requiere OT"
-        sfiGroupNumber: a.group, sfiSubgroupCode: sfiCode,
+        sfiGroupNumber: a.group, sfiSubgroupCode: null,
         responsible: a.group === 9 ? "Oficial Electrónico / Jefe de Máquinas" : "Jefe de Máquinas",
         status: "ACTIVE",
       };

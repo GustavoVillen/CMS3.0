@@ -50,18 +50,8 @@ interface Vessel {
   status: string;
 }
 
-interface SfiNode {
-  id: string;
-  code: string;
-  description: string;
-  groupNumber: number;
-  groupName: string;
-}
-
-interface SfiListResponse {
-  items: SfiNode[];
-  total: number;
-}
+// SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
+const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE" | "ISM";
 const SFI_TABS: { key: SfiTab; label: string }[] = [
@@ -394,7 +384,6 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
           defaultVesselCode={asset.vesselCode}
           defaultAssetId={asset.id}
           defaultSfiGroupNumber={sfiGroupNumber}
-          defaultSfiSubgroupCode={asset.sfiCode}
           lockAsset
           onClose={() => setEditingPlan(undefined)}
           onSaved={async () => { await reload(); }}
@@ -408,9 +397,6 @@ interface AssetModalProps {
   initial: Asset | null;
   defaultVesselCode?: string | null;
   vessels: Vessel[];
-  sfiNodes: SfiNode[];
-  sfiLoading: boolean;
-  sfiError: string | null;
   tenantAssets: Asset[];
   isAdmin: boolean;
   onClose: () => void;
@@ -426,9 +412,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
   initial,
   defaultVesselCode,
   vessels,
-  sfiNodes,
-  sfiLoading,
-  sfiError,
   tenantAssets,
   isAdmin,
   onClose,
@@ -446,7 +429,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? defaultVesselCode ?? "");
   const [assetCode, setAssetCode] = useState(initial?.assetCode ?? "");
   const [selectedGroup, setSelectedGroup] = useState("");
-  const [selectedSubgroup, setSelectedSubgroup] = useState("");
   const [name, setName] = useState(initial?.name ?? "");
   const [criticality, setCriticality] = useState(initial?.criticality ?? "B");
   const [criticalityRationale, setCriticalityRationale] = useState(initial?.criticalityRationale ?? "");
@@ -484,32 +466,12 @@ const AssetModal: React.FC<AssetModalProps> = ({
     },
   });
 
-  const groupOptions = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const node of sfiNodes) {
-      if (!map.has(node.groupNumber)) map.set(node.groupNumber, node.groupName);
-    }
-    return [...map.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([groupNumber, groupName]) => ({ groupNumber, groupName }));
-  }, [sfiNodes]);
-
-  const subgroupOptions = useMemo(() => {
-    if (!selectedGroup) {
-      return [...sfiNodes].sort((a, b) => a.code.localeCompare(b.code));
-    }
-    const group = Number(selectedGroup);
-    return sfiNodes
-      .filter(node => node.groupNumber === group)
-      .sort((a, b) => a.code.localeCompare(b.code));
-  }, [selectedGroup, sfiNodes]);
-
   const nameOptions = useMemo<AssetNameOption[]>(() => {
-    if (!selectedSubgroup) return [];
+    if (!selectedGroup) return [];
 
     const grouped = new Map<string, Map<string, number>>();
     for (const asset of tenantAssets) {
-      if (asset.sfiCode !== selectedSubgroup) continue;
+      if ((asset.sfiCode?.trim()?.[0] ?? "") !== selectedGroup) continue;
       const normalizedName = asset.name.trim();
       const normalizedCode = asset.assetCode.trim().toUpperCase();
       if (!normalizedName || !normalizedCode) continue;
@@ -540,7 +502,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     }
 
     return options.sort((a, b) => a.name.localeCompare(b.name));
-  }, [initial?.assetCode, initial?.name, selectedSubgroup, tenantAssets]);
+  }, [initial?.assetCode, initial?.name, selectedGroup, tenantAssets]);
 
   const selectedNameOption = useMemo(() => {
     const normalized = name.trim().toLocaleLowerCase();
@@ -581,37 +543,19 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setAssetCodeTouched(false);
     setActionError(null);
 
-    const existingSfi = initial?.sfiCode ?? "";
-    if (!existingSfi) {
-      setSelectedGroup("");
-      setSelectedSubgroup("");
-      return;
-    }
-    const node = sfiNodes.find(item => item.code === existingSfi);
-    setSelectedSubgroup(existingSfi);
-    setSelectedGroup(node ? String(node.groupNumber) : "");
-  }, [initial, sfiNodes, defaultVesselCode]);
+    const existingSfi = initial?.sfiCode?.trim() ?? "";
+    const firstDigit = existingSfi[0] ?? "";
+    setSelectedGroup(/^[0-9]$/.test(firstDigit) ? firstDigit : "");
+  }, [initial, defaultVesselCode]);
 
   const onGroupChanged = useCallback((groupValue: string) => {
     setSelectedGroup(groupValue);
-    setSelectedSubgroup("");
     if (!isEdit) {
       setName("");
       setAssetCode("");
       setAssetCodeTouched(false);
     }
   }, [isEdit]);
-
-  const onSubgroupChanged = useCallback((subgroupCode: string) => {
-    setSelectedSubgroup(subgroupCode);
-    const node = sfiNodes.find(item => item.code === subgroupCode);
-    if (node) setSelectedGroup(String(node.groupNumber));
-    if (!isEdit) {
-      setName("");
-      setAssetCode("");
-      setAssetCodeTouched(false);
-    }
-  }, [isEdit, sfiNodes]);
 
   const onNameChanged = useCallback((nextName: string) => {
     setName(nextName);
@@ -630,7 +574,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   useEffect(() => {
     if (isEdit) return;
-    if (!selectedSubgroup) return;
+    if (!selectedGroup) return;
     if (!name.trim()) return;
     if (assetCodeTouched && assetCode.trim()) return;
 
@@ -643,7 +587,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
     name,
     nameOptions,
     selectedGroup,
-    selectedSubgroup,
     vesselCode,
   ]);
 
@@ -658,10 +601,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
     }
     if (!selectedGroup) {
       setActionError(t("mp.selectSfiGroupRequired"));
-      return;
-    }
-    if (!selectedSubgroup) {
-      setActionError(t("mp.selectSfiSubgroupRequired"));
       return;
     }
     if (!name.trim()) {
@@ -688,7 +627,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
       const payload = {
         name: name.trim(),
-        sfiCode: selectedSubgroup,
+        sfiCode: `${selectedGroup}00`,
         criticality,
         criticalityRationale: normalizeOptionalText(criticalityRationale),
         status,
@@ -735,7 +674,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
     onSaved,
     replacementDate,
     selectedGroup,
-    selectedSubgroup,
     serialNumber,
     status,
     t,
@@ -756,7 +694,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
         {
           name: name.trim(),
           vesselCode: vesselCode || null,
-          sfiCode: selectedSubgroup || null,
+          sfiCode: selectedGroup ? `${selectedGroup}00` : null,
           manufacturer: manufacturer || null,
           model: model || null,
           serialNumber: serialNumber || null,
@@ -770,11 +708,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
     } finally {
       setSuggestingCriticality(false);
     }
-  }, [name, vesselCode, selectedSubgroup, manufacturer, model, serialNumber, suggestingCriticality]);
+  }, [name, vesselCode, selectedGroup, manufacturer, model, serialNumber, suggestingCriticality]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    vesselCode, assetCode, selectedGroup, selectedSubgroup, name, criticality, criticalityRationale, status,
+    vesselCode, assetCode, selectedGroup, name, criticality, criticalityRationale, status,
     manufacturer, model, serialNumber, trackDailyReport,
     installationDate, lastOverhaulDate, replacementDate,
   });
@@ -823,41 +761,17 @@ const AssetModal: React.FC<AssetModalProps> = ({
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("mp.sfiGroup")}</label>
               <select
                 value={selectedGroup}
                 onChange={e => onGroupChanged(e.target.value)}
-                disabled={sfiLoading || Boolean(sfiError)}
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
               >
-                <option value="">
-                  {sfiLoading ? t("mp.loadingSfiGroups") : t("mp.selectSfiGroup")}
-                </option>
-                {groupOptions.map(group => (
-                  <option key={group.groupNumber} value={String(group.groupNumber)}>
-                    {group.groupNumber} - {t(`sfi.g.${group.groupNumber}` as Parameters<typeof t>[0]) || group.groupName}
-                  </option>
-                ))}
-              </select>
-              {sfiError && (
-                <p className="text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
-                  {t("mp.errorLoadingSfi")}{sfiError}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("mp.sfiSubgroup")}</label>
-              <select
-                value={selectedSubgroup}
-                onChange={e => onSubgroupChanged(e.target.value)}
-                disabled={sfiLoading || Boolean(sfiError)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
-              >
-                <option value="">{t("mp.selectSfiSubgroup")}</option>
-                {subgroupOptions.map(node => (
-                  <option key={node.id} value={node.code}>
-                    {node.code} - {t(`sfi.c.${node.code}` as Parameters<typeof t>[0]) || node.description}
+                <option value="">{t("mp.selectSfiGroup")}</option>
+                {SFI_GROUP_NUMBERS.map(g => (
+                  <option key={g} value={String(g)}>
+                    {g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}
                   </option>
                 ))}
               </select>
@@ -871,7 +785,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 <select
                   value={selectedNameOption?.name ?? ""}
                   onChange={e => onNameChanged(e.target.value)}
-                  disabled={!selectedSubgroup}
+                  disabled={!selectedGroup}
                   className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
                 >
                   <option value="">{t("asset.selectExistingName")}</option>
@@ -885,7 +799,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <input
                 value={name}
                 onChange={e => onNameChanged(e.target.value)}
-                disabled={!selectedSubgroup}
+                disabled={!selectedGroup}
                 placeholder={nameOptions.length > 0 ? t("asset.namePlaceholderEdit") : t("asset.namePlaceholderNew")}
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
               />
@@ -1150,7 +1064,6 @@ export const AssetsPage: React.FC = () => {
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels: contextVessels } = useVesselContext();
-  const { data: sfiData, loading: sfiLoading, error: sfiError } = useFetch<SfiListResponse>("/app/pms/sfi", ["/app/pms/sfi"]);
   const { data: tenantAssetsData, reload: reloadTenantAssets } = useFetch<ListResponse>("/app/pms/assets", ["/app/pms/assets"]);
 
   const openEdit = useCallback(async (row: Asset) => {
@@ -1252,9 +1165,6 @@ export const AssetsPage: React.FC = () => {
           initial={editing}
           defaultVesselCode={selectedVesselCode}
           vessels={contextVessels}
-          sfiNodes={sfiData?.items ?? []}
-          sfiLoading={sfiLoading}
-          sfiError={sfiError}
           tenantAssets={tenantAssetsData?.items ?? []}
           isAdmin={isAdmin}
           onClose={() => setEditing(undefined)}
