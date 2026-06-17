@@ -2263,6 +2263,16 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const title = step === "APRUEBA" ? "Aprobar OT" : step === "AUTORIZA" ? "Autorizar OT" : "Rechazar OT";
   const verb  = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
 
+  // ESC cierra esta ventana (captura + stopImmediatePropagation para no disparar
+  // el guard global que cerraría el modal de la OT por detrás).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onClose(); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
   async function submit() {
     const trimmed = name.trim();
     if (!trimmed) { setError("Ingresá el nombre."); return; }
@@ -2285,7 +2295,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
     : "bg-accent text-accent-fg hover:brightness-110";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
         <div>
           <h2 className="text-base font-bold text-fg">{title}</h2>
