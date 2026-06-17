@@ -12,7 +12,7 @@ import {
   type WorkOrderPdfContext,
 } from "./shared";
 import {
-  FORM_COLORS, FOOTER_H, drawControlledDocHeader, drawControlledDocFooter, createFormCanvas,
+  FORM_COLORS, FOOTER_H, drawControlledDocHeader, drawControlledDocFooter, createFormCanvas, renderRiskMatrix,
 } from "../pdf-form-chrome";
 
 // ── Layout constants ─────────────────────────────────────────────────────────
@@ -133,6 +133,10 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       color: RISK_COLOR[(wo as any).riskLevel ?? ""] ?? BLACK,
     });
     canvas.y += RISK_H;
+    // Matriz de riesgo (probabilidad × consecuencia), igual que el Plan de
+    // mantenimiento. Resalta la celda si la OT viene de un plan con ejes cargados.
+    canvas.y += 2;
+    renderRiskMatrix(doc, canvas, ML, W, ctx.riskProbability, ctx.riskConsequence);
 
     // ── RESULTADO ANALISIS DE RIESGO ────────────────────────────────────────
     sectionHeader("RESULTADO DEL ANALISIS DE RIESGO");
@@ -209,6 +213,30 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(38);
     const closeNotes = val((wo as any).closeNotes) || val((wo as any).acceptanceCriteria) || val((wo as any).loto) || "";
     canvas.y += textArea(ML, canvas.y, W, closeNotes, 38);
+
+    // ── REGISTRO DE AVANCES ─────────────────────────────────────────────────
+    if (ctx.progressNotes && ctx.progressNotes.length > 0) {
+      sectionHeader("REGISTRO DE AVANCES");
+      const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio" };
+      for (const n of ctx.progressNotes) {
+        const ts = new Date(n.createdAt).toLocaleString("es-AR", {
+          day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
+        });
+        const head = `${ts}  ·  ${KIND_LBL[n.kind] ?? n.kind}`;
+        const body = n.text && n.text.trim()
+          ? n.text.trim()
+          : (n.kind === "PHOTO" ? "[Foto adjunta — ver anexo fotográfico]"
+            : n.kind === "VIDEO" ? "[Video adjunto]"
+            : n.kind === "AUDIO" ? "[Audio adjunto]" : "—");
+        ensureSpace(12 + 20);
+        doc.rect(ML, canvas.y, W, 12).fillColor(LIGHT).fill();
+        doc.rect(ML, canvas.y, W, 12).strokeColor(BORDER).lineWidth(0.4).stroke();
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
+          .text(head, ML + 4, canvas.y + 3, { width: W - 8, lineBreak: false });
+        canvas.y += 12;
+        canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(body), 18);
+      }
+    }
 
     // ── COMUNICACION ────────────────────────────────────────────────────────
     sectionHeader("MEDIO DE COMUNICACIÓN UTILIZADO");

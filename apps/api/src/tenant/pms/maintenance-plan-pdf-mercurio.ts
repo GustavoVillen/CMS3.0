@@ -10,8 +10,8 @@ import PDFDocument from "pdfkit";
 import { sanitizePdfText } from "./pdf-helpers";
 import {
   FORM_COLORS, FOOTER_H, PAGE_H,
-  drawControlledDocHeader, drawControlledDocFooter, createFormCanvas,
-  type ControlledDocMeta, type FormCanvas,
+  drawControlledDocHeader, drawControlledDocFooter, createFormCanvas, renderRiskMatrix,
+  type ControlledDocMeta,
 } from "./pdf-form-chrome";
 
 const PW       = 595.28;
@@ -166,7 +166,7 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     // La matriz es parte del formulario controlado: se dibuja siempre. La celda
     // se resalta solo si el plan tiene cargados ambos ejes (probabilidad ×
     // consecuencia); si no, se muestra la grilla de referencia sin resaltado.
-    renderRiskMatrix(doc, canvas, riskProb, riskCons);
+    renderRiskMatrix(doc, canvas, ML, W, riskProb, riskCons);
     canvas.y += 8;
 
     // ── RESULTADO DEL ANÁLISIS DE RIESGO ────────────────────────────────────
@@ -203,66 +203,3 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
   });
 }
 
-// ── Matriz de riesgo (probabilidad × consecuencia) ────────────────────────────
-// Filas = consecuencia, columnas = probabilidad. Resalta la celda del plan.
-function renderRiskMatrix(doc: PDFKit.PDFDocument, canvas: FormCanvas, probability: string | null, consequence: string | null) {
-  const PROBS = ["LIKELY", "PROBABLE", "UNLIKELY", "RARE"];
-  const CONS = ["FATALITY", "MAJOR", "MINOR", "NEGLIGIBLE"];
-  const probLabels: Record<string, string> = {
-    LIKELY: "Muy probable", PROBABLE: "Probable", UNLIKELY: "Improbable", RARE: "Altamente improbable",
-  };
-  const consLabels: Record<string, string> = {
-    FATALITY: "Fatalidad", MAJOR: "Lesiones importantes", MINOR: "Lesiones leves", NEGLIGIBLE: "Lesiones insignificantes",
-  };
-  const grid: Record<string, Record<string, "H" | "M" | "B">> = {
-    FATALITY:   { LIKELY: "H", PROBABLE: "H", UNLIKELY: "H", RARE: "M" },
-    MAJOR:      { LIKELY: "H", PROBABLE: "H", UNLIKELY: "M", RARE: "M" },
-    MINOR:      { LIKELY: "H", PROBABLE: "M", UNLIKELY: "M", RARE: "B" },
-    NEGLIGIBLE: { LIKELY: "M", PROBABLE: "M", UNLIKELY: "B", RARE: "B" },
-  };
-  const levelColor = { H: "#dc2626", M: "#f59e0b", B: "#16a34a" } as const;
-  const levelText = { H: "Alto", M: "Medio", B: "Bajo" } as const;
-
-  const labelColW = 96;
-  const cellW = (W - labelColW) / PROBS.length;
-  const headerH = 26;
-  const rowH = 24;
-  const totalH = headerH + rowH * CONS.length;
-
-  canvas.ensureSpace(totalH + 2);
-  const top = canvas.y;
-
-  // Esquina + headers de probabilidad
-  doc.rect(ML, top, labelColW, headerH).fillColor(NAVY).fill();
-  doc.fontSize(6.5).font("Helvetica-Bold").fillColor(WHITE)
-    .text("CONSECUENCIA", ML + 3, top + headerH / 2 - 4, { width: labelColW - 6, align: "center", lineBreak: false });
-  PROBS.forEach((pb, ci) => {
-    const cx = ML + labelColW + ci * cellW;
-    doc.rect(cx, top, cellW, headerH).fillColor("#1e3a5f").fill();
-    doc.rect(cx, top, cellW, headerH).strokeColor(WHITE).lineWidth(0.5).stroke();
-    doc.fontSize(6.5).font("Helvetica-Bold").fillColor(WHITE)
-      .text(probLabels[pb], cx + 2, top + 4, { width: cellW - 4, align: "center", lineGap: 0.5 });
-  });
-
-  CONS.forEach((cs, ri) => {
-    const ry = top + headerH + ri * rowH;
-    doc.rect(ML, ry, labelColW, rowH).fillColor("#e2e8f0").fill();
-    doc.rect(ML, ry, labelColW, rowH).strokeColor(WHITE).lineWidth(0.5).stroke();
-    doc.fontSize(6.5).font("Helvetica-Bold").fillColor(BLACK)
-      .text(consLabels[cs], ML + 3, ry + rowH / 2 - 6, { width: labelColW - 6, align: "center", lineGap: 0.5 });
-    PROBS.forEach((pb, ci) => {
-      const cx = ML + labelColW + ci * cellW;
-      const lvl = grid[cs][pb];
-      const isSel = pb === probability && cs === consequence;
-      doc.rect(cx, ry, cellW, rowH).fillColor(levelColor[lvl]).fill();
-      doc.fontSize(8.5).font("Helvetica-Bold").fillColor(WHITE)
-        .text(levelText[lvl], cx, ry + rowH / 2 - 5, { width: cellW, align: "center", lineBreak: false });
-      if (isSel) {
-        doc.rect(cx + 1.5, ry + 1.5, cellW - 3, rowH - 3).strokeColor("#0f172a").lineWidth(2.5).stroke();
-      } else {
-        doc.rect(cx, ry, cellW, rowH).strokeColor(WHITE).lineWidth(0.5).stroke();
-      }
-    });
-  });
-  canvas.y = top + totalH;
-}

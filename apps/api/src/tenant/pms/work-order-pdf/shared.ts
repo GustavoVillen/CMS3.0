@@ -123,6 +123,11 @@ export interface WorkOrderPdfContext {
   spareUsages: WorkOrderSpareUsage[];
   /** Fotos de avances de trabajo (progress notes con kind=PHOTO). */
   progressPhotos: WorkOrderProgressPhoto[];
+  /** Todos los avances (TEXT/PHOTO/VIDEO/AUDIO) para el listado del PDF. */
+  progressNotes: { kind: string; text: string | null; createdAt: Date }[];
+  /** Ejes de la matriz de riesgo, tomados del plan de mantenimiento vinculado. */
+  riskProbability: string | null;
+  riskConsequence: string | null;
   /** Selected template key for this tenant ("STANDARD" | "MERCURIO" | future…). */
   templateKey: string;
   /** Tenant slug (used by some templates as fallback header text). */

@@ -162,6 +162,33 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
+  // ── Todos los avances (para el listado del PDF) ──
+  const progressNotes: { kind: string; text: string | null; createdAt: Date }[] = [];
+  if (prismaRaw) {
+    try {
+      const all = await (prismaRaw as any).workOrderProgressNote.findMany({
+        where: { workOrderId: wo.id, tenantId: (wo as any).tenantId, deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: { kind: true, text: true, createdAt: true },
+      });
+      for (const n of all) progressNotes.push({ kind: n.kind, text: n.text ?? null, createdAt: n.createdAt });
+    } catch { /* non-blocking */ }
+  }
+
+  // ── Ejes de la matriz de riesgo: del plan de mantenimiento vinculado ──
+  let riskProbability: string | null = null;
+  let riskConsequence: string | null = null;
+  if (prismaRaw && (wo as any).maintenancePlanId) {
+    try {
+      const plan = await (prismaRaw as any).maintenancePlan.findUnique({
+        where: { id: (wo as any).maintenancePlanId },
+        select: { riskProbability: true, riskConsequence: true },
+      });
+      riskProbability = plan?.riskProbability ?? null;
+      riskConsequence = plan?.riskConsequence ?? null;
+    } catch { /* non-blocking */ }
+  }
+
   return {
     wo,
     assetLabel,
@@ -172,6 +199,9 @@ export async function loadWorkOrderPdfContext(
     tenantLogoBuffer,
     spareUsages,
     progressPhotos,
+    progressNotes,
+    riskProbability,
+    riskConsequence,
     // El estilo del formulario manda sobre el enum legacy (mismo valor cuando hay back-compat).
     templateKey: resolvedForm.meta.style ?? templateKey,
     tenantSlug: session.tenantSlug,
