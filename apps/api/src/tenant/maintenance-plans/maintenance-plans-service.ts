@@ -1139,8 +1139,20 @@ export async function openFormalWorkOrder(
   const plan = await getTenantMaintenancePlan(session, id);
   const woYear = new Date().getFullYear();
   const woYY = String(woYear).slice(-2);
-  const woCount = await prismaRaw.workOrder.count({ where: { tenantId: plan.tenantId, vesselCode: plan.vesselCode, createdAt: { gte: new Date(woYear, 0, 1), lt: new Date(woYear + 1, 0, 1) } } });
-  const workOrderCode = `WO-${plan.vesselCode}-${woYY}-${String(woCount + 1).padStart(4, "0")}`;
+  // Usa MAX del número de secuencia en el código (no COUNT por createdAt) para
+  // tolerar renombrados manuales y backdating sin generar códigos duplicados.
+  const codePrefix = `WO-${plan.vesselCode}-${woYY}-`;
+  const maxSeqRows = await prismaRaw.$queryRawUnsafe<{ max_seq: number | null }[]>(
+    `SELECT MAX(CAST(SUBSTRING("workOrderCode", ${codePrefix.length + 1}) AS INTEGER)) AS max_seq
+     FROM "WorkOrder"
+     WHERE "tenantId" = $1 AND "vesselCode" = $2
+       AND "workOrderCode" LIKE $3 AND "deletedAt" IS NULL`,
+    plan.tenantId,
+    plan.vesselCode,
+    codePrefix + "%",
+  );
+  const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
+  const workOrderCode = `WO-${plan.vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
 
   // Hereda del plan cuando el payload no lo provee. Si el payload manda
   // el campo (incluso vacío "", el normalizeOptionalText lo convertirá a
