@@ -5,6 +5,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getTenantMaintenancePlan } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, splitTextIntoPageSegments } from "./pdf-helpers";
+import { resolveTenantForm } from "./tenant-forms-service";
+import { renderMercurioMaintenancePlanPdf } from "./maintenance-plan-pdf-mercurio";
 
 function fmt(d: unknown): string {
   if (!d) return "—";
@@ -118,6 +120,21 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
   }
 
   let tenantLogoBuffer: Buffer | null = await resolveTenantLogo(session.tenantSlug, tenantLogoUrl, tenantLogoUrlLight);
+
+  // Estilo de documento del tenant: los tenants Mercurio reciben el formato de
+  // documento controlado; el resto mantiene el layout estándar de abajo.
+  const form = await resolveTenantForm(session.tenantSlug, "MAINTENANCE_PLAN");
+  if (form.meta.style === "MERCURIO") {
+    return renderMercurioMaintenancePlanPdf({
+      meta: form.meta,
+      logoBuffer: form.logoBuffer ?? tenantLogoBuffer,
+      tenantName: tenantName ?? session.tenantSlug.toUpperCase(),
+      plan: p,
+      assetName,
+      assetIsSafetyCritical,
+      lastLog,
+    });
+  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({

@@ -15,7 +15,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { resolveTenantLogo } from "./pdf-helpers";
 import type { ControlledDocMeta } from "./pdf-form-chrome";
 
-export type TenantFormType = "WORK_ORDER" | "SERVICE_REQUEST";
+export type TenantFormType = "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN";
 
 const PUBLIC_DIR = join(process.cwd(), "..", "web-modern", "public");
 
@@ -91,6 +91,19 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     footer: MERCURIO_FOOTER,
     config: SERVICE_REQUEST_CONFIG,
   },
+  // El Plan de mantenimiento no emite correlativo propio: el "PM No." es el
+  // taskCode del plan. Style default STANDARD → solo los tenants con estilo
+  // Mercurio (workOrderPdfTemplate=MERCURIO) reciben el documento controlado.
+  MAINTENANCE_PLAN: {
+    style: "STANDARD",
+    formCode: "",
+    title: "PLAN DE MANTENIMIENTO",
+    revision: 2,
+    effectiveFrom: "01.05.2025",
+    codePattern: null,
+    footer: MERCURIO_FOOTER,
+    config: EMPTY_CONFIG,
+  },
 };
 
 export interface ResolvedTenantForm {
@@ -163,8 +176,12 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
     }
   } catch { /* non-blocking → defaults */ }
 
-  // Estilo: fila > (legacy enum para WORK_ORDER) > default.
-  const legacyStyle = type === "WORK_ORDER" ? (settings?.workOrderPdfTemplate as string | undefined) : undefined;
+  // Estilo: fila > (legacy enum del tenant) > default.
+  // El Plan de mantenimiento sigue el estilo de documento del tenant (mismo
+  // signal que la OT): así un tenant Mercurio recibe el formato controlado.
+  const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN")
+    ? (settings?.workOrderPdfTemplate as string | undefined)
+    : undefined;
   const style = (form?.style ?? legacyStyle ?? def.style) as "STANDARD" | "MERCURIO";
 
   const cfgFooter = (form?.config?.footer && typeof form.config.footer === "object") ? form.config.footer : {};

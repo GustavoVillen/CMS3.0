@@ -146,6 +146,7 @@ enum WorkOrderPdfTemplate {
 enum TenantFormType {
   WORK_ORDER
   SERVICE_REQUEST
+  MAINTENANCE_PLAN
   // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
 }
 

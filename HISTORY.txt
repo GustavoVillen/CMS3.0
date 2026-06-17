@@ -1,5 +1,23 @@
 HISTORY.txt
 
+[2026-06-17] FEAT: PDF del Plan de mantenimiento en formato documento controlado (Mercurio)
+Agent: Claude Opus 4.8
+- Nuevo template Mercurio para el Plan de mantenimiento (apps/api/.../maintenance-plan-pdf-mercurio.ts):
+  reusa el chrome de documento controlado (header Revisión/Desde/Página/Documento Controlado + footer
+  Elaborado/Revisado/Aprobado) y el canvas con textArea autoajustable de pdf-form-chrome.
+  Secciones: Identificación (Embarcación/PM No./Equipo/SFI/Departamento/Frecuencia/Hs.Est./Responsable),
+  Descripción (título inline), Criterios, LOTO, Nivel de riesgo + matriz, Resultado análisis, Análisis RCM,
+  y Resultado de la ejecución (si hay work log).
+- Dispatch por estilo en maintenance-plan-pdf-service: tenants MERCURIO (workOrderPdfTemplate=MERCURIO)
+  reciben el documento controlado; el resto mantiene el layout pdfkit estándar (backward compatible).
+- TenantFormType += MAINTENANCE_PLAN (enum Prisma). Migración 20260617_tenant_form_maintenance_plan
+  (ALTER TYPE ADD VALUE; db push en deploy). resolveTenantForm resuelve estilo del plan con el mismo
+  signal que la OT.
+- VERIFICACIÓN: render real (buildMaintenancePlanPdf) sobre plan demo con estilo flip temporal a MERCURIO,
+  observado en visor (coincide con la maqueta); demo revertido a STANDARD. tsc api sin errores nuevos.
+  DEPLOY debe incluir prisma db push (enum). Nota: detalle pdfkit — la opción underline rompe con
+  lineBreak:false; el subrayado de labels se dibuja manual (moveTo/lineTo).
+
 [2026-06-17] FEAT: matriz de análisis de riesgo (probabilidad × consecuencia) en Plan de mantenimiento
 Agent: Claude Opus 4.8
 - Schema: MaintenancePlan.riskProbability + riskConsequence (TEXT, nullable). Migración 20260617_maintenance_plan_risk_matrix (db push aplicado).
