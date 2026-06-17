@@ -744,7 +744,7 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
 export async function setWorkOrderApproval(
   session: TenantAccessSession,
   id: string,
-  payload: { step: "APRUEBA" | "AUTORIZA"; name: string },
+  payload: { step: "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null },
 ) {
   ensureCanOperateWorkOrders(session);
 
@@ -759,13 +759,23 @@ export async function setWorkOrderApproval(
   let data: Record<string, unknown>;
   if (payload.step === "APRUEBA") {
     if (current.aprobadoAt) throw new RouteError(409, "ALREADY_APPROVED", "La OT ya fue aprobada.");
-    data = { aprobadoByName: name, aprobadoAt: now };
+    // Re-aprobar tras un rechazo: limpia el flag de rechazo (sale del rojo).
+    data = { aprobadoByName: name, aprobadoAt: now, rechazadoByName: null, rechazadoAt: null, rechazoReason: null };
   } else if (payload.step === "AUTORIZA") {
     if (!current.aprobadoAt) throw new RouteError(409, "NOT_APPROVED", "La OT debe estar aprobada antes de autorizar.");
     if (current.autorizadoAt) throw new RouteError(409, "ALREADY_AUTHORIZED", "La OT ya fue autorizada.");
     data = { autorizadoByName: name, autorizadoAt: now };
+  } else if (payload.step === "RECHAZA") {
+    // [NO APROBADA] / [NO AUTORIZADA]: devuelve la OT a Solicitada (en rojo),
+    // limpiando aprobado/autorizado y registrando quién rechazó + el motivo.
+    const reason = normalizeRequiredText(payload.reason ?? "", "reason");
+    data = {
+      aprobadoByName: null, aprobadoAt: null,
+      autorizadoByName: null, autorizadoAt: null,
+      rechazadoByName: name, rechazadoAt: now, rechazoReason: reason,
+    };
   } else {
-    throw new RouteError(400, "VALIDATION_ERROR", "Paso de tramitación inválido. Use APRUEBA o AUTORIZA.");
+    throw new RouteError(400, "VALIDATION_ERROR", "Paso de tramitación inválido. Use APRUEBA, AUTORIZA o RECHAZA.");
   }
 
   const updated = await prisma.workOrder.update({
@@ -775,7 +785,9 @@ export async function setWorkOrderApproval(
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
     actorUserId: session.user.id,
-    action: payload.step === "APRUEBA" ? "WorkOrder.approved" : "WorkOrder.authorized",
+    action: payload.step === "APRUEBA" ? "WorkOrder.approved"
+      : payload.step === "AUTORIZA" ? "WorkOrder.authorized"
+      : "WorkOrder.rejected",
     entityType: "WorkOrder",
     entityId: current.id,
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, name },

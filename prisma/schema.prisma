@@ -1299,6 +1299,11 @@ model WorkOrder {
   aprobadoAt          DateTime?
   autorizadoByName    String?
   autorizadoAt        DateTime?
+  // Rechazo de tramitación: [NO APROBADA] / [NO AUTORIZADA] devuelven la OT a
+  // Solicitada (en rojo) limpiando aprobado/autorizado y registrando quién/por qué.
+  rechazadoByName     String?
+  rechazadoAt         DateTime?
+  rechazoReason       String?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]

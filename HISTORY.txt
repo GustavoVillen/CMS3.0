@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-06-17] FEAT: tramitación de OT — botones aprobar/autorizar/rechazar en el modal + gate de avances/resultado
+Agent: Claude Opus 4.8
+- Schema: WorkOrder += rechazadoByName/At + rechazoReason (nullable). Migración 20260617_wo_approval_reject.
+- Backend: /approval suma step RECHAZA (name + reason oblig.) → limpia aprobado/autorizado (vuelve a
+  Solicitada) y registra rechazo. APRUEBA ahora limpia el flag de rechazo al re-aprobar. Audit WorkOrder.rejected.
+- Modal de OT: barra de Tramitación arriba. SOLICITADA → [APROBADA]/[NO APROBADA]; APROBADA →
+  [AUTORIZADA]/[NO AUTORIZADA]; AUTORIZADA → confirmación. [NO ...] abre ApprovalModal (nombre + motivo).
+  Mantiene el drag&drop del tablero.
+- Gate: secciones 5 (Avances) y 6 (Resultado) envueltas en <fieldset disabled> hasta que la OT esté
+  AUTORIZADA (autorizadoAt). Antes quedan deshabilitadas con nota; antes se habilitaban por status.
+- Tablero: tarjeta en rojo + "Rechazó: X · fecha — motivo" cuando rechazadoAt y no aprobada.
+- VERIFICACIÓN: tsc web (exit 0) + vite build OK; api sin errores nuevos (los 3 de defects-service.ts son
+  preexistentes/ajenos). Flujos interactivos a validar en la app. Front+backend → deploy: pull + build web
+  + db push + cache tsx + pm2 restart.
+
 [2026-06-17] FEAT: tramitación de OT (Solicita → Aprueba → Autoriza) en el tablero Kanban
 Agent: Claude Opus 4.8
 - Schema: WorkOrder += aprobadoByName/At, autorizadoByName/At (nullable). Migración

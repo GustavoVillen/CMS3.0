@@ -117,6 +117,9 @@ interface WorkOrder {
   aprobadoAt: string | null;
   autorizadoByName: string | null;
   autorizadoAt: string | null;
+  rechazadoByName: string | null;
+  rechazadoAt: string | null;
+  rechazoReason: string | null;
   // Mercurio form fields
   department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
   location: string | null;
@@ -649,6 +652,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
 
+  // Tramitación: los avances (5) y el resultado (6) recién se habilitan cuando la
+  // OT está AUTORIZADA. En Solicitada / Aprobada quedan deshabilitados.
+  const isAuthorized = !!workOrder.autorizadoAt;
+  const isResultEditable = isEditable && isAuthorized;
+  // Sub-estado de la cadena de aprobación (independiente del status operativo).
+  const tramitaPhase: "SOLICITADA" | "APROBADA" | "AUTORIZADA" =
+    workOrder.autorizadoAt ? "AUTORIZADA" : workOrder.aprobadoAt ? "APROBADA" : "SOLICITADA";
+  const isRejected = !!workOrder.rechazadoAt && !workOrder.aprobadoAt;
+  // step de tramitación pendiente (abre ApprovalModal). null = cerrado.
+  const [tramita, setTramita] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+
   // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
   interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null }
   const [deferralStatus, setDeferralStatus] = useState<string | null>(null);
@@ -1167,6 +1181,57 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
+          {/* ── 0. TRAMITACIÓN (Solicita → Aprueba → Autoriza) ── */}
+          {isEditable && (
+            <div className={`rounded-2xl border p-4 space-y-3 ${isRejected ? "border-red-500/40 bg-red-500/[0.06]" : "border-fg/10 bg-fg/[0.03]"}`}>
+              <div className="flex items-center gap-2">
+                <CheckCheck className={`w-4 h-4 ${isRejected ? "text-red-600 dark:text-red-400" : "text-accent"}`} />
+                <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70">Tramitación</span>
+              </div>
+
+              {isRejected && (
+                <p className="text-xs text-red-700 dark:text-red-300 leading-snug">
+                  <span className="font-bold">Rechazada</span>
+                  {workOrder.rechazadoByName ? ` por ${workOrder.rechazadoByName}` : ""}
+                  {workOrder.rechazadoAt ? ` · ${fmtDate(workOrder.rechazadoAt)}` : ""}
+                  {workOrder.rechazoReason ? <span className="block text-text-industrial/70 mt-0.5">Motivo: {workOrder.rechazoReason}</span> : null}
+                </p>
+              )}
+
+              {tramitaPhase === "AUTORIZADA" ? (
+                <div className="text-xs text-emerald-700 dark:text-emerald-300 space-y-0.5">
+                  {workOrder.aprobadoByName && <p><span className="font-bold">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}</p>}
+                  <p><span className="font-bold">Autorizó:</span> {workOrder.autorizadoByName}{workOrder.autorizadoAt ? ` · ${fmtDate(workOrder.autorizadoAt)}` : ""}</p>
+                  <p className="text-text-industrial/60 normal-case">OT autorizada — avances y resultado habilitados.</p>
+                </div>
+              ) : (
+                <>
+                  {tramitaPhase === "APROBADA" && (
+                    <p className="text-[11px] text-text-industrial/60">
+                      <span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
+                      className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      {tramitaPhase === "SOLICITADA" ? "APROBADA" : "AUTORIZADA"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTramita("RECHAZA")}
+                      className="flex-1 py-2 rounded-xl border text-xs font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 transition-colors"
+                    >
+                      {tramitaPhase === "SOLICITADA" ? "NO APROBADA" : "NO AUTORIZADA"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* ── 1. INFORMACIÓN ── */}
           <section>
             <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
@@ -1522,13 +1587,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </section>
 
+          {/* ── Tramitación gate: 5 (Avances) y 6 (Resultado) solo con OT AUTORIZADA ── */}
+          <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isAuthorized ? "opacity-70" : ""}`}>
+          {!isAuthorized && (
+            <p className="text-[11px] text-text-industrial/50 italic">
+              Los avances y el resultado se habilitan cuando la OT esté autorizada.
+            </p>
+          )}
+
           {/* ── 5. AVANCES ── */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
               <PhaseHeader n={5} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
-                canAdd={isEditable}
+                canAdd={isResultEditable}
                 canDelete={isEditable || isAdmin}
                 onAdd={() => setShowProgressSheet(true)}
                 reloadKey={notesReloadKey}
@@ -1788,6 +1861,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
             </div>{/* end bg-blue box */}
           </section>
+          </fieldset>
 
           {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
           {isMercurio && (
@@ -1921,6 +1995,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         onSaved={() => { setPermitModalState(null); void reloadPermits(); }}
       />
     )}
+
+    {/* Tramitación: aprobar / autorizar / rechazar desde el modal de la OT */}
+    {tramita && (
+      <ApprovalModal
+        workOrder={workOrder}
+        step={tramita}
+        onClose={() => setTramita(null)}
+        onSuccess={() => { setTramita(null); onSaved(); }}
+      />
+    )}
     </>
   );
 };
@@ -2022,6 +2106,16 @@ function KanbanCardContent({ wo, deferralMap }: {
           )}
         </div>
       )}
+      {wo.rechazadoAt && !wo.aprobadoByName && (
+        <div className="pt-1 border-t border-red-500/20 space-y-0.5">
+          <p className="text-[9px] text-red-700 dark:text-red-400">
+            <span className="font-bold">Rechazó:</span> {wo.rechazadoByName ?? "—"}{wo.rechazadoAt ? ` · ${fmtDate(wo.rechazadoAt)}` : ""}
+          </p>
+          {wo.rechazoReason && (
+            <p className="text-[9px] text-text-industrial/50 line-clamp-2">{wo.rechazoReason}</p>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2038,7 +2132,8 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
   const isDragging  = draggingId === wo.id;
   const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-fg/10";
   const deferral    = deferralMap.get(wo.id);
-  const rejected    = deferral?.status === "REJECTED";
+  // Rojo si: APL de diferimiento rechazada, o la OT fue rechazada en tramitación.
+  const rejected    = deferral?.status === "REJECTED" || (!!wo.rechazadoAt && !wo.aprobadoAt);
   const borderCls   = rejected
     ? "border-red-500/40 bg-red-500/[0.04] ring-1 ring-red-500/20"
     : "border-fg/10";
@@ -2173,29 +2268,39 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
 // ── ApprovalModal: captura el nombre del firmante al aprobar/autorizar ────────
 function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   workOrder: WorkOrder;
-  step: "APRUEBA" | "AUTORIZA";
+  step: "APRUEBA" | "AUTORIZA" | "RECHAZA";
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const { user } = useAuth();
+  const isReject = step === "RECHAZA";
   const [name, setName] = useState(user?.name ?? "");
+  const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const title = step === "APRUEBA" ? "Aprobar OT" : "Autorizar OT";
-  const verb  = step === "APRUEBA" ? "aprueba" : "autoriza";
+  const title = step === "APRUEBA" ? "Aprobar OT" : step === "AUTORIZA" ? "Autorizar OT" : "Rechazar OT";
+  const verb  = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
 
   async function submit() {
     const trimmed = name.trim();
     if (!trimmed) { setError("Ingresá el nombre."); return; }
+    const trimmedReason = reason.trim();
+    if (isReject && !trimmedReason) { setError("Ingresá el motivo del rechazo."); return; }
     setSaving(true); setError(null);
     try {
-      await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, { step, name: trimmed });
+      await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, {
+        step, name: trimmed, reason: isReject ? trimmedReason : undefined,
+      });
       onSuccess();
     } catch {
       setSaving(false);
       setError("No se pudo registrar. Intentá de nuevo.");
     }
   }
+
+  const confirmCls = isReject
+    ? "bg-red-600 text-white hover:brightness-110"
+    : "bg-accent text-accent-fg hover:brightness-110";
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -2205,6 +2310,9 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
           <p className="text-xs text-text-industrial/60 mt-0.5">
             {workOrder.workOrderCode} · {workOrder.assetName ?? workOrder.title ?? ""}
           </p>
+          {isReject && (
+            <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">La OT vuelve a Solicitada y queda marcada como rechazada.</p>
+          )}
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Nombre de quien {verb}</label>
@@ -2212,15 +2320,27 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
             autoFocus
             value={name}
             onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") void submit(); }}
+            onKeyDown={e => { if (e.key === "Enter" && !isReject) void submit(); }}
             className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
             placeholder="Nombre y apellido"
           />
-          {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
         </div>
+        {isReject && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
+            <textarea
+              rows={3}
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm resize-none focus:outline-none focus:ring-1 focus:ring-red-500/40"
+              placeholder="Por qué no se aprueba/autoriza…"
+            />
+          </div>
+        )}
+        {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">Cancelar</button>
-          <button onClick={() => void submit()} disabled={saving} className="px-4 py-1.5 rounded-lg text-sm font-bold bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={() => void submit()} disabled={saving} className={`px-4 py-1.5 rounded-lg text-sm font-bold disabled:opacity-50 flex items-center gap-1.5 ${confirmCls}`}>
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {title}
           </button>
