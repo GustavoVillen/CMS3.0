@@ -59,6 +59,17 @@ function fmtPlanFreq(p: PlanRow): string {
   return tt;
 }
 
+// Clave numérica para ordenar por frecuencia: todo a "horas equivalentes" para
+// comparar entre unidades (meses/horas/días/semanas). Planes sin frecuencia van al final.
+function planFreqSortKey(p: PlanRow): number {
+  const tt = p.triggerType;
+  if ((tt === "HOURS" || tt === "RUNNING_HOURS") && p.frequencyHours) return Number(p.frequencyHours);
+  if ((tt === "MONTHS" || tt === "CALENDAR") && p.frequencyMonths) return p.frequencyMonths * 730;
+  if (tt === "WEEK" && p.frequencyMonths) return p.frequencyMonths * 168;
+  if (tt === "DAY" && p.frequencyMonths) return p.frequencyMonths * 24;
+  return Number.POSITIVE_INFINITY;
+}
+
 function fmtPlanNextDue(p: PlanRow): string {
   if (p.nextDueHours != null) return `${Number(p.nextDueHours).toLocaleString("es-AR")} h`;
   if (p.nextDueDate) return fmt(p.nextDueDate);
@@ -295,20 +306,31 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
       }
 
       rows.forEach((cells, idx) => {
-        if (y + ROW_H > CONTENT_BOTTOM) {
+        // Texto de cada celda en una sola "cadena" (los títulos de plan pueden
+        // traer saltos de línea → se colapsan para que el wrap sea por ancho).
+        const texts = cells.map(c => sanitizePdfText(c.text).replace(/\s+/g, " ").trim());
+        // Altura de fila dinámica: la del contenido más alto (con wrap por ancho).
+        // Antes era fija (20pt) y los nombres largos se superponían a la fila siguiente.
+        const cellHeights = cells.map((cell, i) => {
+          doc.fontSize(8).font(cell.bold ? "Helvetica-Bold" : "Helvetica");
+          return doc.heightOfString(texts[i] || " ", { width: cols[i].w - CELL_PAD * 2 });
+        });
+        const rowH = Math.max(ROW_H, Math.max(...cellHeights) + 10);
+
+        if (y + rowH > CONTENT_BOTTOM) {
           doc.addPage();
           y = MARGIN_V;
           drawTableHeader(cols);
         }
         if (idx % 2 === 1) {
-          doc.rect(ML, y, W, ROW_H).fillColor("#f8fafc").fill();
+          doc.rect(ML, y, W, rowH).fillColor("#f8fafc").fill();
         }
-        doc.rect(ML, y, W, ROW_H).strokeColor(border).lineWidth(0.5).stroke();
+        doc.rect(ML, y, W, rowH).strokeColor(border).lineWidth(0.5).stroke();
         cells.forEach((cell, i) => {
           doc.fontSize(8).font(cell.bold ? "Helvetica-Bold" : "Helvetica").fillColor(cell.color)
-            .text(sanitizePdfText(cell.text), colX(cols, i) + CELL_PAD, y + 6, { width: cols[i].w - CELL_PAD * 2, lineBreak: false, ellipsis: true });
+            .text(texts[i], colX(cols, i) + CELL_PAD, y + 6, { width: cols[i].w - CELL_PAD * 2 });
         });
-        y += ROW_H;
+        y += rowH;
       });
     }
 
@@ -321,7 +343,9 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
       { label: "Próximo",     w: 70 },
       { label: "Estado",      w: 70 },
     ];
-    const planRows: TableCell[][] = plans.map(p => [
+    const planRows: TableCell[][] = [...plans]
+      .sort((a, b) => planFreqSortKey(a) - planFreqSortKey(b))
+      .map(p => [
       { text: p.taskCode, color: black, bold: true },
       { text: PLAN_TYPE_LABEL[p.taskType] ?? p.taskType, color: black },
       { text: val(p.title), color: "#334155" },

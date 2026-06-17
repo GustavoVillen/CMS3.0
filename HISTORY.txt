@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-06-17] FIX: ficha de equipo — texto superpuesto + orden de plan por frecuencia
+Agent: Claude Opus 4.8
+- asset-pdf-service renderTable: la altura de fila era fija (20pt). Los títulos de plan traen
+  saltos de línea → wrapeaban a 2-3 líneas y se superponían con la fila siguiente. Ahora la
+  altura es dinámica (mide el contenido más alto, colapsa \n del título) y el wrap es por ancho.
+- Tabla PLAN DE MANTENIMIENTO ordenada por frecuencia ascendente. Clave numérica en "horas
+  equivalentes" (meses×730, sem×168, día×24, horas directo) para comparar entre unidades.
+- VERIFICACIÓN: ficha generada con planes de prueba multilínea + frecuencias variadas (luego
+  borrados): filas sin overlap y orden 500h→1m→6m→36m→60m. Backend-only (tsx) → deploy: pull +
+  cache tsx + pm2 restart.
+
 [2026-06-17] FIX: logo Mercurio (bueno) en TODOS los formularios controlados
 Agent: Claude Opus 4.8
 - resolveTenantLogo matchea el slug del tenant contra public/ sin distinguir mayúsculas. El VPS
