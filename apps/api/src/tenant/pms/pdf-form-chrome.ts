@@ -201,6 +201,52 @@ export interface CreateFormCanvasOpts {
   drawFooter: (page: number) => void;
 }
 
+// ── Parseo de tablas Markdown (para dibujarlas como grilla en los campos) ─────
+function isTableSeparator(line: string): boolean {
+  const t = line.trim();
+  if (!t.includes("|") || !t.includes("-")) return false;
+  return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(t);
+}
+function parseTableRow(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map(c => c.trim());
+}
+function hasMarkdownTable(text: string): boolean {
+  const lines = text.split("\n");
+  for (let i = 0; i + 1 < lines.length; i++) {
+    if (lines[i].includes("|") && isTableSeparator(lines[i + 1])) return true;
+  }
+  return false;
+}
+type RichBlock =
+  | { type: "text"; lines: string[] }
+  | { type: "table"; header: string[]; rows: string[][] };
+function parseRichBlocks(text: string): RichBlock[] {
+  const lines = text.split("\n");
+  const blocks: RichBlock[] = [];
+  let i = 0;
+  const isStart = (j: number) => j + 1 < lines.length && lines[j].includes("|") && isTableSeparator(lines[j + 1]);
+  while (i < lines.length) {
+    if (isStart(i)) {
+      const header = parseTableRow(lines[i]);
+      i += 2;
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes("|") && !isTableSeparator(lines[i])) {
+        rows.push(parseTableRow(lines[i]));
+        i++;
+      }
+      blocks.push({ type: "table", header, rows });
+    } else {
+      const tl: string[] = [];
+      while (i < lines.length && !isStart(i)) { tl.push(lines[i]); i++; }
+      blocks.push({ type: "text", lines: tl });
+    }
+  }
+  return blocks;
+}
+
 export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvasOpts): FormCanvas {
   const { ml: ML, w: W, marginT: MARGIN_T, contentBottom: CONTENT_BOTTOM, drawFooter } = opts;
   const C = opts.colors ?? FORM_COLORS;
@@ -260,7 +306,73 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
   const BULLET_GUTTER = 12;
   const LINE_PAD = 5;
 
+  // Renderiza texto que contiene tablas Markdown: párrafos como texto y los
+  // bloques `| a | b |` como grilla. Maneja salto de página por línea/fila.
+  function renderRichTextArea(cx: number, cy: number, cw: number, text: string, minH: number): number {
+    const innerW = cw - LINE_PAD * 2;
+    const blocks = parseRichBlocks(text);
+    let curY = cy + LINE_PAD;
+    let broke = false;
+    const ensure = (h: number) => {
+      if (curY + h > CONTENT_BOTTOM) { pageBreak(); curY = MARGIN_T; broke = true; }
+    };
+
+    for (const block of blocks) {
+      if (block.type === "text") {
+        doc.fontSize(9).font("Helvetica").fillColor(C.BLACK);
+        for (const line of block.lines) {
+          const m = line.match(BULLET_RE);
+          const content = m ? m[2] : line;
+          const isBullet = !!m;
+          const lw = isBullet ? innerW - BULLET_GUTTER : innerW;
+          const h = doc.heightOfString(content || " ", { width: lw });
+          ensure(h);
+          if (isBullet) {
+            doc.rect(cx + LINE_PAD, curY + 2, BULLET_BOX, BULLET_BOX).strokeColor(C.BLACK).lineWidth(0.7).stroke();
+            doc.fillColor(C.BLACK).font("Helvetica").fontSize(9).text(content || " ", cx + LINE_PAD + BULLET_GUTTER, curY, { width: lw });
+          } else {
+            doc.fillColor(C.BLACK).font("Helvetica").fontSize(9).text(content || " ", cx + LINE_PAD, curY, { width: lw });
+          }
+          curY += h;
+        }
+      } else {
+        const nCols = Math.max(block.header.length, ...block.rows.map(r => r.length), 1);
+        const colW = cw / nCols;
+        const PAD = 3;
+        const FS = 8;
+        const measure = (cells: string[]) => {
+          doc.fontSize(FS).font("Helvetica");
+          let maxH = 0;
+          for (let c = 0; c < nCols; c++) {
+            const h = doc.heightOfString(sanitizePdfText(cells[c] ?? "") || " ", { width: colW - PAD * 2 });
+            if (h > maxH) maxH = h;
+          }
+          return maxH + PAD * 2;
+        };
+        const drawRow = (cells: string[], header: boolean) => {
+          const rowH = measure(cells);
+          ensure(rowH);
+          for (let c = 0; c < nCols; c++) {
+            const x = cx + c * colW;
+            if (header) doc.rect(x, curY, colW, rowH).fillColor("#e2e8f0").fill();
+            doc.rect(x, curY, colW, rowH).strokeColor(C.BORDER).lineWidth(0.5).stroke();
+            doc.fontSize(FS).font(header ? "Helvetica-Bold" : "Helvetica").fillColor(C.BLACK)
+              .text(sanitizePdfText(cells[c] ?? ""), x + PAD, curY + PAD, { width: colW - PAD * 2 });
+          }
+          curY += rowH;
+        };
+        drawRow(block.header, true);
+        for (const r of block.rows) drawRow(r, false);
+        curY += 3;
+      }
+    }
+    curY += LINE_PAD;
+    if (!broke && curY - cy < minH) curY = cy + minH;
+    return curY - cy;
+  }
+
   function textArea(cx: number, cy: number, cw: number, text: string, minH = 28): number {
+    if (text && hasMarkdownTable(text)) return renderRichTextArea(cx, cy, cw, text, minH);
     const innerW = cw - LINE_PAD * 2;
     const innerWBullet = innerW - BULLET_GUTTER;
     const rawLines = text ? text.split("\n") : [""];
