@@ -78,15 +78,15 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       tenantName: tenant?.name ?? tenantSlug.toUpperCase(),
       x: ML, y: MARGIN_T, w: W, page: canvas.page,
     });
-    canvas.y = MARGIN_T + hdrH;
+    canvas.y = MARGIN_T + hdrH + SEC_GAP; // ~1cm de separación entre el header y el recuadro
 
-    // ── REMOLCADOR / ORDEN INTERNA ──────────────────────────────────────────
+    // ── REMOLCADOR / SOLICITUD NUMERO ───────────────────────────────────────
     const R1_H = 22;
     ensureSpace(R1_H);
     const HALF = Math.floor(W / 2);
     cell(ML, canvas.y, 80, R1_H, "REMOLCADOR", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + 80, canvas.y, HALF - 80, R1_H, sanitizePdfText(wo.vesselCode ?? ""), { fontSize: 9 });
-    cell(ML + HALF, canvas.y, 100, R1_H, "ORDEN INTERNA N°", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+    cell(ML + HALF, canvas.y, 100, R1_H, "Solicitud Numero:", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + HALF + 100, canvas.y, W - HALF - 100, R1_H, sanitizePdfText(wo.workOrderCode ?? ""), { bold: true, fontSize: 9, color: "#1d4ed8" });
     canvas.y += R1_H;
 
