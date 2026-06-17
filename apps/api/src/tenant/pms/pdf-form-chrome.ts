@@ -319,8 +319,16 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
     }
 
     const lastSeg = segments[segments.length - 1];
-    const lastH = lastSeg.items.reduce((s, it) => s + it.height, 0) + LINE_PAD * 2;
-    return segments.length === 1 ? Math.max(minH, lastH) : lastH;
+    const lastContentH = lastSeg.items.reduce((s, it) => s + it.height, 0);
+    const lastBoxH = segments.length === 1
+      ? Math.max(minH, lastContentH + LINE_PAD * 2)
+      : lastContentH + LINE_PAD * 2;
+    // Devuelve el delta desde el inicio (cy) hasta el fondo real del contenido.
+    // Los callers hacen `canvas.y += textArea(...)` con cy === canvas.y, así que
+    // el delta deja la `y` exactamente en el fondo. Con page-break el último
+    // segmento arranca en MARGIN_T (otra página): sin este delta, el `+=` sumaba
+    // sobre la `y` de la página anterior y dejaba huecos enormes entre títulos.
+    return (lastSeg.startY + lastBoxH) - cy;
   }
 
   return {

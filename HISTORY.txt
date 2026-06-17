@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-06-17] FIX: PDF Plan (Mercurio) — huecos entre títulos + matriz que no aparecía
+Agent: Claude Opus 4.8
+- pdf-form-chrome.textArea: devolvía solo el alto del último segmento; con page-break el
+  patrón `canvas.y += textArea(...)` sumaba sobre la y de la página anterior y dejaba huecos
+  enormes entre secciones. Ahora devuelve el delta desde cy hasta el fondo real (multi-página
+  incluido). Corrige también el PDF de OT/Solicitud (bug latente compartido).
+- maintenance-plan-pdf-mercurio: la matriz de riesgo se dibuja SIEMPRE (parte del formulario
+  controlado); resalta la celda solo si el plan tiene ambos ejes. Antes no aparecía en planes
+  con riskLevel pero sin probability/consequence (ej. M01-EJE-BR-02, campos nuevos vacíos).
+- VERIFICACIÓN: render real con textos largos (~3000 chars, multi-página) + riskLevel sin ejes,
+  observado en visor: secciones contiguas (sin huecos) y matriz presente sin resaltado.
+- Backend-only (tsx), sin schema ni web → deploy: pull + limpiar cache tsx + pm2 restart.
+
 [2026-06-17] FEAT: PDF del Plan de mantenimiento en formato documento controlado (Mercurio)
 Agent: Claude Opus 4.8
 - Nuevo template Mercurio para el Plan de mantenimiento (apps/api/.../maintenance-plan-pdf-mercurio.ts):

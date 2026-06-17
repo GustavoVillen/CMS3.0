@@ -163,9 +163,10 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     const riskCons = p["riskConsequence"] ? String(p["riskConsequence"]) : null;
     const riskLevelStr = p["riskLevel"] ? String(p["riskLevel"]) : "";
     labelLine("Nivel de riesgo:", riskLevelStr ? (RISK_LEVEL_LABEL[riskLevelStr] ?? riskLevelStr) : undefined);
-    if (riskProb && riskCons) {
-      renderRiskMatrix(doc, canvas, riskProb, riskCons);
-    }
+    // La matriz es parte del formulario controlado: se dibuja siempre. La celda
+    // se resalta solo si el plan tiene cargados ambos ejes (probabilidad ×
+    // consecuencia); si no, se muestra la grilla de referencia sin resaltado.
+    renderRiskMatrix(doc, canvas, riskProb, riskCons);
     canvas.y += 8;
 
     // ── RESULTADO DEL ANÁLISIS DE RIESGO ────────────────────────────────────
@@ -204,7 +205,7 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
 
 // ── Matriz de riesgo (probabilidad × consecuencia) ────────────────────────────
 // Filas = consecuencia, columnas = probabilidad. Resalta la celda del plan.
-function renderRiskMatrix(doc: PDFKit.PDFDocument, canvas: FormCanvas, probability: string, consequence: string) {
+function renderRiskMatrix(doc: PDFKit.PDFDocument, canvas: FormCanvas, probability: string | null, consequence: string | null) {
   const PROBS = ["LIKELY", "PROBABLE", "UNLIKELY", "RARE"];
   const CONS = ["FATALITY", "MAJOR", "MINOR", "NEGLIGIBLE"];
   const probLabels: Record<string, string> = {
