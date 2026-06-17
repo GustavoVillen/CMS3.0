@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-06-17] TUNE: prompts de IA más concisos (criterios / LOTO / análisis de riesgo)
+Agent: Claude Opus 4.8
+- Pedido: que la IA ponga "solo lo importante" y sea más breve en Criterios de aceptación, LOTO,
+  Resultado del análisis de riesgo y RCM.
+- Se agregaron REGLAS DE CONCISIÓN a PROMPT_ACCEPTANCE (máx 6-8 criterios + 6 herramientas
+  específicas), PROMPT_LOTO (~8 pasos, sin teoría) y PROMPT_RISK (3-5 peligros "peligro → control"
+  + EPP específico). RCM ya estaba acotado (≤40 palabras / 2 oraciones) → sin cambios.
+- max_tokens intacto (techo, no fuerza longitud): la brevedad la fija el prompt, sin riesgo de
+  cortar a media frase.
+- VERIFICACIÓN (llamadas reales): criterios 1191 chars (antes ~5000+), LOTO conciso, riesgo 5
+  bullets. Backend-only (tsx) → deploy: pull + cache tsx + pm2 restart (sin build web ni db push).
+
 [2026-06-17] FIX: la IA cortaba criterios de aceptación / LOTO a media frase
 Agent: Claude Opus 4.8
 - Causa: max_tokens=1024 en suggestPlanAcceptanceCriteria y suggestPlanLoto. Son listas largas;

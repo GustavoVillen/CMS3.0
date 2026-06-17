@@ -15,6 +15,11 @@ const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Ge
 
 2. Una sección con las herramientas, equipos de medición e instrumentos requeridos.
 
+REGLAS DE CONCISIÓN (importante):
+- Sé breve: solo lo crítico y medible. Máximo 6-8 criterios, un bullet corto por criterio con su valor/tolerancia clave.
+- Sin redundancia, sin obviedades, sin explicaciones largas.
+- Herramientas: solo las específicas o de medición relevantes (no genéricas como trapos, guantes o llaves comunes); máximo 6.
+
 Usá exactamente este formato (sin introducción ni explicación adicional):
 [criterios de aceptación]
 
@@ -22,6 +27,10 @@ HERRAMIENTAS E INSTRUMENTOS NECESARIOS:
 [lista de herramientas e instrumentos]`;
 
 const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.
+
+REGLAS DE CONCISIÓN (importante):
+- Sé breve: solo las energías a bloquear y las verificaciones críticas. Máximo ~8 puntos, un paso corto por línea.
+- Directo y accionable. Sin justificaciones, sin teoría, sin redundancia.
 
 Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
 
@@ -54,17 +63,23 @@ CONSECUENCIA — severidad de la lesión más grave razonablemente plausible al 
 - MINOR: lesiones leves (primeros auxilios)
 - NEGLIGIBLE: lesiones insignificantes
 
+REGLAS DE CONCISIÓN (importante):
+- Solo los 3-5 peligros principales. Un bullet corto por peligro: "peligro → control clave". Sin párrafos largos ni redundancia.
+- EPP: solo el específico de esta tarea (máximo 5); no listes el genérico de rutina.
+
 Respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
 
 NIVEL: LOW|MEDIUM|HIGH|CRITICAL
 PROBABILIDAD: LIKELY|PROBABLE|UNLIKELY|RARE
 CONSECUENCIA: FATALITY|MAJOR|MINOR|NEGLIGIBLE
 
-[peligros identificados durante la ejecución, consecuencias para el operario y medidas de control]
+- [peligro principal 1 → control clave]
+- [peligro principal 2 → control clave]
+(3 a 5 bullets cortos)
 
 EQUIPOS DE PPE:
-- [equipo de protección 1]
-- [equipo de protección 2]`;
+- [EPP específico 1]
+- [EPP específico 2]`;
 
 interface BaseInput {
   assetLabel?: string | null;
