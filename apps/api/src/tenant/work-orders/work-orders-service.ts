@@ -737,6 +737,52 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
   return resumed;
 }
 
+// ── Tramitación: cadena de aprobación (Solicita → Aprueba → Autoriza) ─────────
+// Cada paso se dispara por drag-and-drop en el tablero y captura el nombre del
+// firmante. Solo registra los campos de tramitación (no toca el status
+// operativo). Secuencial: no se puede Autorizar sin Aprobar.
+export async function setWorkOrderApproval(
+  session: TenantAccessSession,
+  id: string,
+  payload: { step: "APRUEBA" | "AUTORIZA"; name: string },
+) {
+  ensureCanOperateWorkOrders(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = workOrdersClient(prismaRaw);
+
+  const name = normalizeRequiredText(payload.name, "name");
+  const current = await getTenantWorkOrder(session, id) as any;
+  const now = new Date();
+
+  let data: Record<string, unknown>;
+  if (payload.step === "APRUEBA") {
+    if (current.aprobadoAt) throw new RouteError(409, "ALREADY_APPROVED", "La OT ya fue aprobada.");
+    data = { aprobadoByName: name, aprobadoAt: now };
+  } else if (payload.step === "AUTORIZA") {
+    if (!current.aprobadoAt) throw new RouteError(409, "NOT_APPROVED", "La OT debe estar aprobada antes de autorizar.");
+    if (current.autorizadoAt) throw new RouteError(409, "ALREADY_AUTHORIZED", "La OT ya fue autorizada.");
+    data = { autorizadoByName: name, autorizadoAt: now };
+  } else {
+    throw new RouteError(400, "VALIDATION_ERROR", "Paso de tramitación inválido. Use APRUEBA o AUTORIZA.");
+  }
+
+  const updated = await prisma.workOrder.update({
+    where: { id: current.id },
+    data: { ...data, updatedByUserId: session.user.id },
+  });
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: payload.step === "APRUEBA" ? "WorkOrder.approved" : "WorkOrder.authorized",
+    entityType: "WorkOrder",
+    entityId: current.id,
+    metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, name },
+  });
+  return updated;
+}
+
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
   ensureCanOperateWorkOrders(session);
 

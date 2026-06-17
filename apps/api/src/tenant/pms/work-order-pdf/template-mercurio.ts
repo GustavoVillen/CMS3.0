@@ -266,6 +266,30 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       .text("OTROS (Indicar):", ML + 4, canvas.y + 6, { width: 80, lineBreak: false });
     canvas.y += OTROS_H;
 
+    // ── TRAMITACIÓN (cadena de aprobación: Solicita / Aprueba / Autoriza) ─────
+    sectionHeader("TRAMITACION DE LA ORDEN");
+    const TR_RH = 20;
+    const trPasoW = Math.floor(W * 0.22);
+    const trFechaW = Math.floor(W * 0.22);
+    const trNombreW = W - trPasoW - trFechaW;
+    ensureSpace(TR_RH);
+    cell(ML, canvas.y, trPasoW, TR_RH, "PASO", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY });
+    cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, "NOMBRE", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY });
+    cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, "FECHA", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
+    canvas.y += TR_RH;
+    const trRows: Array<[string, string, string]> = [
+      ["Solicita", createdByName ?? "—", fmt((wo as any).createdAt)],
+      ["Aprueba",  (wo as any).aprobadoByName ?? "—", (wo as any).aprobadoAt ? fmt((wo as any).aprobadoAt) : "—"],
+      ["Autoriza", (wo as any).autorizadoByName ?? "—", (wo as any).autorizadoAt ? fmt((wo as any).autorizadoAt) : "—"],
+    ];
+    for (const [paso, nombre, fecha] of trRows) {
+      ensureSpace(TR_RH);
+      cell(ML, canvas.y, trPasoW, TR_RH, paso, { bold: true, fontSize: 8 });
+      cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, sanitizePdfText(nombre), { fontSize: 9 });
+      cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, fecha, { fontSize: 8, align: "center" });
+      canvas.y += TR_RH;
+    }
+
     // ── FIRMAS ──────────────────────────────────────────────────────────────
     ensureSpace(68);
     canvas.y += 8;

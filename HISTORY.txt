@@ -1,5 +1,21 @@
 HISTORY.txt
 
+[2026-06-17] FEAT: tramitación de OT (Solicita → Aprueba → Autoriza) en el tablero Kanban
+Agent: Claude Opus 4.8
+- Schema: WorkOrder += aprobadoByName/At, autorizadoByName/At (nullable). Migración
+  20260617_wo_approval_chain. Solicita = creador de la OT (createdBy).
+- Backend: POST /app/pms/work-orders/:id/approval { step: APRUEBA|AUTORIZA, name }. Secuencial
+  (no autoriza sin aprobar), no re-aprueba/re-autoriza, name obligatorio. RBAC operate.
+- Tablero (WorkOrders.tsx): columnas Planificada→**Solicitada**, En progreso→**Aprobada**+**Autorizada**,
+  **Diferida** se mantiene, **Cerrada se quita**. Etapa derivada (woStage) de los campos de aprobación
+  + ON_HOLD. DnD: Solicitada→Aprobada y Aprobada→Autorizada abren modal que pide el nombre; no se puede
+  saltar Aprobada. Anchos de columna proporcionales (flex-1, antes w-64 fijo).
+- PDF Mercurio de OT: bloque TRAMITACION (Solicita/Aprueba/Autoriza con nombre + fecha).
+- VERIFICACIÓN: regla secuencial probada (AUTORIZA sin aprobar → ERR; APRUEBA→AUTORIZA OK; re-aprobar
+  → ERR; sin nombre → ERR). tsc api+web verde; vite build OK; PDF OT genera con el bloque.
+  El DnD interactivo no se click-testó (a verificar en la app). Front+backend → deploy: pull + build web
+  + db push + cache tsx + restart.
+
 [2026-06-17] TUNE: ficha de equipo — sección de identificación más compacta
 Agent: Claude Opus 4.8
 - labeledBox: cajas más bajas (44→30pt), label/valor reposicionados (label 7→6.5pt @ +5, valor

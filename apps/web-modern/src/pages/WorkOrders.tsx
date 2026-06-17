@@ -112,6 +112,11 @@ interface WorkOrder {
   observations: string | null;
   supportingDocUrl: string | null;
   createdAt: string;
+  // Tramitación (cadena de aprobación del tablero)
+  aprobadoByName: string | null;
+  aprobadoAt: string | null;
+  autorizadoByName: string | null;
+  autorizadoAt: string | null;
   // Mercurio form fields
   department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
   location: string | null;
@@ -1929,11 +1934,21 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
   LOW:      "border-l-2 border-l-blue-400/60",
 };
 
-const KANBAN_COLS: Array<{ colId: string; statuses: string[]; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
-  { colId: "PLANNED",     statuses: ["PLANNED"],              labelKey: "wo.kanban.planned",    headerCls: "text-blue-700 dark:text-blue-400",    borderCls: "border-t-2 border-blue-500/40",    droppable: false },
-  { colId: "IN_PROGRESS", statuses: ["IN_PROGRESS"],          labelKey: "wo.kanban.inProgress", headerCls: "text-emerald-700 dark:text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
-  { colId: "ON_HOLD",     statuses: ["ON_HOLD"],              labelKey: "wo.kanban.onHold",     headerCls: "text-yellow-700 dark:text-yellow-400",  borderCls: "border-t-2 border-yellow-500/40",  droppable: true  },
-  { colId: "CLOSED",      statuses: ["CLOSED", "CANCELLED"], labelKey: "wo.kanban.closed",     headerCls: "text-fg/30",    borderCls: "border-t-2 border-fg/15",       droppable: false },
+// ── Tramitación: etapa derivada de la cadena de aprobación + estado diferido ──
+type WoStage = "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "DIFERIDA" | "HIDDEN";
+function woStage(wo: WorkOrder): WoStage {
+  if (wo.status === "CLOSED" || wo.status === "CANCELLED") return "HIDDEN"; // no van al tablero
+  if (wo.status === "ON_HOLD") return "DIFERIDA";
+  if (wo.autorizadoAt) return "AUTORIZADA";
+  if (wo.aprobadoAt) return "APROBADA";
+  return "SOLICITADA";
+}
+
+const KANBAN_COLS: Array<{ colId: WoStage; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
+  { colId: "SOLICITADA", labelKey: "wo.kanban.solicitada", headerCls: "text-blue-700 dark:text-blue-400",       borderCls: "border-t-2 border-blue-500/40",   droppable: true  },
+  { colId: "APROBADA",   labelKey: "wo.kanban.aprobada",   headerCls: "text-violet-700 dark:text-violet-400",   borderCls: "border-t-2 border-violet-500/40", droppable: true  },
+  { colId: "AUTORIZADA", labelKey: "wo.kanban.autorizada", headerCls: "text-emerald-700 dark:text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
+  { colId: "DIFERIDA",   labelKey: "wo.kanban.onHold",     headerCls: "text-yellow-700 dark:text-yellow-400",   borderCls: "border-t-2 border-yellow-500/40", droppable: true  },
 ];
 
 function DeferralStatusBadge({ status }: { status: string }) {
@@ -1993,6 +2008,20 @@ function KanbanCardContent({ wo, deferralMap }: {
           <DeferralStatusBadge status={deferral.status} />
         </div>
       )}
+      {(wo.aprobadoByName || wo.autorizadoByName) && (
+        <div className="pt-1 border-t border-fg/10 space-y-0.5">
+          {wo.aprobadoByName && (
+            <p className="text-[9px] text-text-industrial/50">
+              <span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {wo.aprobadoByName}{wo.aprobadoAt ? ` · ${fmtDate(wo.aprobadoAt)}` : ""}
+            </p>
+          )}
+          {wo.autorizadoByName && (
+            <p className="text-[9px] text-text-industrial/50">
+              <span className="font-bold text-emerald-700 dark:text-emerald-400">Autorizó:</span> {wo.autorizadoByName}{wo.autorizadoAt ? ` · ${fmtDate(wo.autorizadoAt)}` : ""}
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2005,7 +2034,7 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
   onOpen: (wo: WorkOrder) => void;
   onDragStart: (wo: WorkOrder) => void;
 }) {
-  const isDraggable = wo.status === "PLANNED" || wo.status === "IN_PROGRESS" || wo.status === "ON_HOLD";
+  const isDraggable = woStage(wo) !== "HIDDEN";
   const isDragging  = draggingId === wo.id;
   const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-fg/10";
   const deferral    = deferralMap.get(wo.id);
@@ -2019,7 +2048,7 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
       draggable={isDraggable && !isLoading}
       onDragStart={e => {
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", JSON.stringify({ id: wo.id, status: wo.status }));
+        e.dataTransfer.setData("text/plain", JSON.stringify({ id: wo.id, stage: woStage(wo) }));
         onDragStart(wo);
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
@@ -2049,45 +2078,48 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const [draggingWo, setDraggingWo]   = useState<WorkOrder | null>(null);
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "APRUEBA" | "AUTORIZA" } | null>(null);
   // ref para evitar stale closure en handleDrop (React 18 batching)
   const draggingWoRef = React.useRef<WorkOrder | null>(null);
 
-  const handleDrop = useCallback(async (e: React.DragEvent, targetCol: string) => {
+  const handleDrop = useCallback((e: React.DragEvent, targetCol: WoStage) => {
     setOverCol(null);
     setDraggingWo(null);
     draggingWoRef.current = null;
 
-    let payload: { id: string; status: string } | null = null;
+    let payload: { id: string; stage: WoStage } | null = null;
     try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { /* noop */ }
-    if (!payload?.id || !payload?.status) return;
+    if (!payload?.id || !payload?.stage) return;
 
-    const { id, status } = payload;
-    if (status === targetCol) return;
+    const { id, stage } = payload;
+    if (stage === targetCol) return;
+    const wo = items.find(w => w.id === id);
+    if (!wo) return;
 
-    if (status === "PLANNED" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${id}/start`, {}); onReload(); }
-      catch (err) { console.error("[kanban] start failed", err); }
+    // Aprobar (Solicitada → Aprobada): pide nombre.
+    if (stage === "SOLICITADA" && targetCol === "APROBADA") { setPendingApproval({ wo, step: "APRUEBA" }); return; }
+    // Autorizar (Aprobada → Autorizada): pide nombre. No se puede saltar desde Solicitada.
+    if (stage === "APROBADA" && targetCol === "AUTORIZADA") { setPendingApproval({ wo, step: "AUTORIZA" }); return; }
+    // Diferir (cualquier etapa activa → Diferida): flujo de diferimiento existente.
+    if (targetCol === "DIFERIDA" && stage !== "DIFERIDA") { setPendingHold(wo); return; }
+    // Reanudar (Diferida → etapa activa): vuelve a su etapa de aprobación.
+    if (stage === "DIFERIDA" && targetCol !== "DIFERIDA") {
+      (async () => {
+        try { await api.post(`/app/pms/work-orders/${id}/resume`, {}); onReload(); }
+        catch (err) { console.error("[kanban] resume failed", err); }
+      })();
       return;
     }
-    if ((status === "PLANNED" || status === "IN_PROGRESS") && targetCol === "ON_HOLD") {
-      const wo = items.find(w => w.id === id);
-      if (wo) setPendingHold(wo);
-      return;
-    }
-    if (status === "ON_HOLD" && targetCol === "IN_PROGRESS") {
-      try { await api.post(`/app/pms/work-orders/${id}/resume`, {}); onReload(); }
-      catch (err) { console.error("[kanban] resume failed", err); }
-      return;
-    }
+    // Cualquier otro movimiento (ej. salto Solicitada→Autorizada, o retroceso) se ignora.
   }, [items, onReload]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
   return (
     <>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-3 pb-4">
         {KANBAN_COLS.map(col => {
-          const colItems = items.filter(w => col.statuses.includes(w.status));
+          const colItems = items.filter(w => woStage(w) === col.colId);
           const isOver   = overCol === col.colId && col.droppable;
           return (
             <div
@@ -2095,7 +2127,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
               onDragOver={e => { if (col.droppable) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
               onDragLeave={() => setOverCol(null)}
               onDrop={e => { e.preventDefault(); void handleDrop(e, col.colId); }}
-              className={`shrink-0 w-64 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
+              className={`flex-1 min-w-0 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(col.labelKey)}</span>
@@ -2126,7 +2158,75 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
           onSuccess={() => { setPendingHold(null); onReload(); }}
         />
       )}
+      {pendingApproval && (
+        <ApprovalModal
+          workOrder={pendingApproval.wo}
+          step={pendingApproval.step}
+          onClose={() => setPendingApproval(null)}
+          onSuccess={() => { setPendingApproval(null); onReload(); }}
+        />
+      )}
     </>
+  );
+}
+
+// ── ApprovalModal: captura el nombre del firmante al aprobar/autorizar ────────
+function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
+  workOrder: WorkOrder;
+  step: "APRUEBA" | "AUTORIZA";
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { user } = useAuth();
+  const [name, setName] = useState(user?.name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const title = step === "APRUEBA" ? "Aprobar OT" : "Autorizar OT";
+  const verb  = step === "APRUEBA" ? "aprueba" : "autoriza";
+
+  async function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError("Ingresá el nombre."); return; }
+    setSaving(true); setError(null);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, { step, name: trimmed });
+      onSuccess();
+    } catch {
+      setSaving(false);
+      setError("No se pudo registrar. Intentá de nuevo.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div>
+          <h2 className="text-base font-bold text-fg">{title}</h2>
+          <p className="text-xs text-text-industrial/60 mt-0.5">
+            {workOrder.workOrderCode} · {workOrder.assetName ?? workOrder.title ?? ""}
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Nombre de quien {verb}</label>
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") void submit(); }}
+            className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+            placeholder="Nombre y apellido"
+          />
+          {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">Cancelar</button>
+          <button onClick={() => void submit()} disabled={saving} className="px-4 py-1.5 rounded-lg text-sm font-bold bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {title}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

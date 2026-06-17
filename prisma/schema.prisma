@@ -1293,6 +1293,12 @@ model WorkOrder {
   lastReopenAt        DateTime?
   lastReopenReason    String?
   lastReopenByUserId  String?
+  // Tramitación (cadena de aprobación del tablero): Solicita (= creador) →
+  // Aprueba → Autoriza. El nombre se captura en cada paso del drag-and-drop.
+  aprobadoByName      String?
+  aprobadoAt          DateTime?
+  autorizadoByName    String?
+  autorizadoAt        DateTime?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]
