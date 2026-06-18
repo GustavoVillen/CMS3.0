@@ -33,6 +33,8 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
   const motivos = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"] as const;
   const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const;
   const COMM_OPTS = ["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const;
+  // La OT nace de un plan / mantenimiento programado → motivo "PLANIFICADO" tildado.
+  const isPlanned = !!(wo as any).maintenancePlanId || (wo as any).type === "PREVENTIVE";
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
@@ -69,6 +71,20 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     };
     // Separación de ~1cm antes de cada título de sección + el título.
     const SEC_GAP = 28;
+    const GAP_5MM = 14; // ~5mm de separación entre recuadros
+    // Casilla tildada estática (dato del sistema, no editable): borde + check dibujado.
+    const drawCheckedBox = (cx: number, cy: number, label: string, box = 9) => {
+      doc.rect(cx, cy, box, box).fillColor(WHITE).fill();
+      doc.rect(cx, cy, box, box).strokeColor(BORDER).lineWidth(0.8).stroke();
+      doc.moveTo(cx + 1.8, cy + box * 0.55)
+        .lineTo(cx + box * 0.42, cy + box - 1.8)
+        .lineTo(cx + box - 1.3, cy + 1.6)
+        .strokeColor(BLACK).lineWidth(1.1).stroke();
+      if (label) {
+        doc.fontSize(8).font("Helvetica").fillColor(BLACK)
+          .text(label, cx + box + 4, cy + 0.5, { lineBreak: false });
+      }
+    };
     const section = (title: string) => { canvas.y += SEC_GAP; sectionHeader(title); };
 
     // ── HEADER (documento controlado) ───────────────────────────────────────
@@ -89,6 +105,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     cell(ML + HALF, canvas.y, 100, R1_H, "Solicitud Numero:", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + HALF + 100, canvas.y, W - HALF - 100, R1_H, sanitizePdfText(wo.workOrderCode ?? ""), { bold: true, fontSize: 9, color: "#1d4ed8" });
     canvas.y += R1_H;
+    canvas.y += GAP_5MM; // 5mm entre Remolcador/Solicitud y Departamento
 
     // ── DEPARTAMENTO + FECHA ────────────────────────────────────────────────
     const R2_H = 18;
@@ -105,6 +122,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     DEPTS.forEach((d, i) => { fcheck(ML + i * deptW + 6, canvas.y + 6, d); });
     cell(ML + W - FECHA_W, canvas.y, FECHA_W, DEPT_ROW_H, fmt(wo.openDate), { fontSize: 9, align: "center" });
     canvas.y += DEPT_ROW_H;
+    canvas.y += GAP_5MM; // 5mm entre Departamento y Equipo Afectado
 
     // ── EQUIPO AFECTADO (ancho completo) ────────────────────────────────────
     const R3_H = 22;
@@ -139,8 +157,21 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     doc.rect(ML, canvas.y, W, MOTIVO_H).fillColor(WHITE).fill();
     doc.rect(ML, canvas.y, W, MOTIVO_H).strokeColor(BORDER).lineWidth(0.4).stroke();
     const motivoW = Math.floor(W / motivos.length);
-    motivos.forEach((m, i) => { fcheck(ML + i * motivoW + 6, canvas.y + 6, m); });
+    motivos.forEach((m, i) => {
+      const cx = ML + i * motivoW + 6;
+      const cy = canvas.y + 6;
+      // "PLANIFICADO" queda tildado por el sistema cuando la OT es programada.
+      if (m === "PLANIFICADO" && isPlanned) drawCheckedBox(cx, cy, m);
+      else fcheck(cx, cy, m);
+    });
     canvas.y += MOTIVO_H;
+
+    // ── TITULO DE LA OT (en el estilo del formulario) ────────────────────────
+    const TIT_H = 22;
+    ensureSpace(TIT_H);
+    cell(ML, canvas.y, 70, TIT_H, "TITULO", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+    cell(ML + 70, canvas.y, W - 70, TIT_H, sanitizePdfText((wo as any).title ?? ""), { fontSize: 9 });
+    canvas.y += TIT_H;
 
     // ── DESCRIPCION DEL TRABAJO A REALIZARSE ─────────────────────────────────
     section("DESCRIPCION DEL TRABAJO A REALIZARSE");
