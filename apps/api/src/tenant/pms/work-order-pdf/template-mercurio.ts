@@ -26,7 +26,7 @@ const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
 export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
-  const { wo, assetLabel, assetIsSafetyCritical, assignedName, createdByName, tenant, formLogoBuffer, formMeta, spareUsages, tenantSlug } = ctx;
+  const { wo, assetLabel, vesselName, assetIsSafetyCritical, assignedName, createdByName, tenant, formLogoBuffer, formMeta, spareUsages, tenantSlug } = ctx;
 
   // Checkboxes ahora interactivos (AcroForm): se tildan desde el visor PDF, sin
   // pre-marcado del sistema. Solo se usan las etiquetas de cada grupo.
@@ -100,8 +100,8 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     const R1_H = 22;
     ensureSpace(R1_H);
     const HALF = Math.floor(W / 2);
-    cell(ML, canvas.y, 80, R1_H, "REMOLCADOR", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 80, canvas.y, HALF - 80, R1_H, sanitizePdfText(wo.vesselCode ?? ""), { fontSize: 9 });
+    cell(ML, canvas.y, 80, R1_H, "EMBARCACION", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+    cell(ML + 80, canvas.y, HALF - 80, R1_H, sanitizePdfText(vesselName ?? wo.vesselCode ?? ""), { fontSize: 9 });
     cell(ML + HALF, canvas.y, 100, R1_H, "Solicitud Numero:", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + HALF + 100, canvas.y, W - HALF - 100, R1_H, sanitizePdfText(wo.workOrderCode ?? ""), { bold: true, fontSize: 9, color: "#1d4ed8" });
     canvas.y += R1_H;

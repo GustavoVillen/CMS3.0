@@ -109,6 +109,8 @@ export interface WorkOrderPdfContext {
   wo: any;
   /** Resolved asset display name or fallback. */
   assetLabel: string;
+  /** Nombre de la embarcación (Vessel.name); fallback al code si no se resuelve. */
+  vesselName: string | null;
   /** ISM Code 10.3 — flag de seguridad del activo. */
   assetIsSafetyCritical: boolean;
   /** Display name for assigned user (firstName + lastName) or null. */

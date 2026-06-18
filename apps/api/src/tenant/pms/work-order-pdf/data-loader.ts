@@ -129,6 +129,18 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
+  // ── Nombre de la embarcación (Vessel.name) ──
+  let vesselName: string | null = null;
+  if (prismaRaw && (wo as any).vesselCode) {
+    try {
+      const vessel = await (prismaRaw as any).vessel.findFirst({
+        where: { tenantId: wo.tenantId, code: (wo as any).vesselCode },
+        select: { name: true },
+      });
+      vesselName = vessel?.name ?? null;
+    } catch { /* non-blocking */ }
+  }
+
   // ── Progress photos (avances con kind=PHOTO) ──
   const progressPhotos: WorkOrderProgressPhoto[] = [];
   if (prismaRaw) {
@@ -192,6 +204,7 @@ export async function loadWorkOrderPdfContext(
   return {
     wo,
     assetLabel,
+    vesselName,
     assetIsSafetyCritical,
     assignedName,
     createdByName,
