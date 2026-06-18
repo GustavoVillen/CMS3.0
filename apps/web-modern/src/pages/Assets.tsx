@@ -211,7 +211,10 @@ function fmtHistoryDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString();
+  // Las fechas de ejecución/OT se guardan como medianoche UTC (date-only). Hay
+  // que formatearlas en UTC para no retroceder un día en husos negativos
+  // (ej. ART UTC-3: 2025-12-17T00:00Z se vería como 16/12 en hora local).
+  return date.toLocaleDateString(undefined, { timeZone: "UTC" });
 }
 
 const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
