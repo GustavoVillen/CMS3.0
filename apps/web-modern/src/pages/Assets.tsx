@@ -204,8 +204,11 @@ interface AssetHistoryRow {
   openDate: string | null;
   completedDate: string | null;
   statusNode: React.ReactNode;
+  isInspection: boolean;
   onClick?: () => void;
 }
+
+type AssetHistoryFilter = "ALL" | "MAINTENANCE" | "INSPECTION";
 
 function fmtHistoryDate(value: string | null): string {
   if (!value) return "—";
@@ -266,6 +269,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
       openDate: wo.openDate,
       completedDate: wo.completedDate,
       statusNode: <StatusBadge status={wo.status} />,
+      isInspection: wo.type === "INSPECTION",
       onClick: () => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`),
     }));
     const logRows: AssetHistoryRow[] = (logFetch.data?.items ?? [])
@@ -278,6 +282,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
         openDate: log.startedAt,
         completedDate: log.completedAt,
         statusNode: <WorkLogResultBadge result={log.result} />,
+        isInspection: log.taskType === "INSPECTION",
       }));
     const ref = (r: AssetHistoryRow): number => {
       const d = r.completedDate ?? r.openDate;
@@ -287,9 +292,32 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
     return [...woRows, ...logRows].sort((a, b) => ref(b) - ref(a));
   }, [woFetch.data, logFetch.data, navigate]);
 
+  const [filter, setFilter] = useState<AssetHistoryFilter>("ALL");
+  const visibleRows = useMemo(() => {
+    if (filter === "ALL") return rows;
+    if (filter === "INSPECTION") return rows.filter(r => r.isInspection);
+    return rows.filter(r => !r.isInspection);
+  }, [rows, filter]);
+
+  const filterBtnCls = (active: boolean) =>
+    `px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+      active
+        ? "bg-accent/15 border-accent/30 text-accent"
+        : "bg-fg/3 border-fg/10 text-text-industrial/60 hover:bg-fg/8"
+    }`;
+
   return (
     <div className="space-y-2 pt-2 border-t border-fg/10">
-      <h3 className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.history.title")}</h3>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.history.title")}</h3>
+        {!loading && !error && rows.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => setFilter("ALL")} className={filterBtnCls(filter === "ALL")}>{t("asset.history.filter.all")}</button>
+            <button type="button" onClick={() => setFilter("MAINTENANCE")} className={filterBtnCls(filter === "MAINTENANCE")}>{t("asset.history.filter.maintenance")}</button>
+            <button type="button" onClick={() => setFilter("INSPECTION")} className={filterBtnCls(filter === "INSPECTION")}>{t("asset.history.filter.inspection")}</button>
+          </div>
+        )}
+      </div>
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
       ) : error ? (
@@ -310,7 +338,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => (
+              {visibleRows.map(row => (
                 <tr
                   key={row.key}
                   onClick={row.onClick}
