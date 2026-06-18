@@ -471,6 +471,7 @@ export async function handleMaintenanceRoutes(
       vesselCode: url.searchParams.get("vesselCode"),
       workOrderId: url.searchParams.get("workOrderId"),
       maintenancePlanId: url.searchParams.get("maintenancePlanId"),
+      assetId: url.searchParams.get("assetId"),
       taskType: url.searchParams.get("taskType"),
       result: url.searchParams.get("result"),
     });

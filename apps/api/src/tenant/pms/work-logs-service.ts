@@ -6,6 +6,7 @@ export interface WorkLogListFilters {
   vesselCode?: string | null;
   workOrderId?: string | null;
   maintenancePlanId?: string | null;
+  assetId?: string | null;
   taskType?: string | null;
   result?: string | null;
 }
@@ -32,8 +33,24 @@ interface WorkLogRecord {
   createdAt: Date;
 }
 
+interface WorkLogFullRecord {
+  id: string;
+  logCode: string;
+  taskType: string;
+  result: string;
+  startedAt: Date;
+  completedAt: Date | null;
+  executedByName: string;
+  notes: string | null;
+  maintenancePlanId: string | null;
+  workOrderId: string | null;
+  assetId: string;
+  createdAt: Date;
+  maintenancePlan: { taskCode: string; title: string } | null;
+}
+
 type WorkLogDelegate = {
-  findMany(args: { where: Record<string, unknown>; orderBy?: unknown }): Promise<WorkLogRecord[]>;
+  findMany(args: { where: Record<string, unknown>; orderBy?: unknown; include?: unknown }): Promise<WorkLogFullRecord[]>;
   create(args: { data: Record<string, unknown> }): Promise<WorkLogRecord>;
 };
 
@@ -153,10 +170,15 @@ export async function listWorkLogs(session: TenantAccessSession, filters: WorkLo
   applyVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.workOrderId) where.workOrderId = filters.workOrderId;
   if (filters.maintenancePlanId) where.maintenancePlanId = filters.maintenancePlanId;
+  if (filters.assetId) where.assetId = filters.assetId;
   if (filters.taskType) where.taskType = filters.taskType;
   if (filters.result) where.result = filters.result;
 
-  return prisma.workLog.findMany({ where, orderBy: { createdAt: "desc" } });
+  return prisma.workLog.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { maintenancePlan: { select: { taskCode: true, title: true } } },
+  });
 }
 
 export async function createWorkLog(session: TenantAccessSession, payload: CreateWorkLogInput) {

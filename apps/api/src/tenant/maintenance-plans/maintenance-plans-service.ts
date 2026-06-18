@@ -184,6 +184,7 @@ interface MaintenancePlanRecord {
   title: string;
   description: string | null;
   responsible: string | null;
+  taskType: string;
   acceptanceCriteria: string | null;
   loto: string | null;
   sfiGroupNumber: number | null;
@@ -1058,7 +1059,7 @@ export async function quickClosePlan(
         maintenancePlanId: plan.id,
         assetId: plan.assetId,
         logCode,
-        taskType: "MAINTENANCE",
+        taskType: plan.taskType,
         result,
         startedAt: completedAt,
         completedAt,

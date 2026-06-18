@@ -180,6 +180,33 @@ interface AssetWorkOrder {
   completedDate: string | null;
 }
 
+// Registro de ejecución directa de un plan (sin OT). Los planes de inspección y
+// los mantenimientos cerrados con "Registrar Ejecución" quedan como WorkLog.
+interface AssetWorkLog {
+  id: string;
+  logCode: string;
+  taskType: string;
+  result: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  notes: string | null;
+  workOrderId: string | null;
+  maintenancePlanId: string | null;
+  maintenancePlan: { taskCode: string; title: string } | null;
+}
+
+// Fila normalizada del historial unificado (OTs + ejecuciones de planes).
+interface AssetHistoryRow {
+  key: string;
+  code: string;
+  type: string;
+  title: string | null;
+  openDate: string | null;
+  completedDate: string | null;
+  statusNode: React.ReactNode;
+  onClick?: () => void;
+}
+
 function fmtHistoryDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -196,17 +223,66 @@ const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
 };
 
+// Estado de un registro de ejecución de plan (WorkLogResult).
+const WorkLogResultBadge: React.FC<{ result: string }> = ({ result }) => {
+  const t = useT();
+  const cls =
+    result === "COMPLETED" ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
+    : result === "COMPLETED_WITH_OBSERVATIONS" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+    : result === "FOLLOW_UP_REQUIRED" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+    : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
+  const label = t(`worklog.result.${result}` as Parameters<typeof t>[0]);
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>{label}</span>;
+};
+
 // Historial de mantenimientos/inspecciones (órdenes de trabajo) del asset.
 // Solo lectura, se muestra al final del formulario en modo edición.
 const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
   const t = useT();
   const navigate = useNavigate();
-  const { data, loading, error } = useFetch<{ items: AssetWorkOrder[] }>(
+  const woFetch = useFetch<{ items: AssetWorkOrder[] }>(
     `/app/pms/work-orders?assetId=${encodeURIComponent(assetId)}`,
     [assetId],
   );
-  const rawItems = data?.items ?? [];
-  const items = [...rawItems].sort((a, b) => b.workOrderCode.localeCompare(a.workOrderCode));
+  const logFetch = useFetch<{ items: AssetWorkLog[] }>(
+    `/app/pms/work-logs?assetId=${encodeURIComponent(assetId)}`,
+    [assetId],
+  );
+
+  const loading = woFetch.loading || logFetch.loading;
+  const error = woFetch.error || logFetch.error;
+
+  // Historial unificado: OTs + ejecuciones directas de planes (WorkLog sin OT,
+  // para no duplicar con OTs ya listadas). Ordenado por fecha descendente.
+  const rows = useMemo<AssetHistoryRow[]>(() => {
+    const woRows: AssetHistoryRow[] = (woFetch.data?.items ?? []).map(wo => ({
+      key: `wo-${wo.id}`,
+      code: wo.workOrderCode,
+      type: wo.type,
+      title: wo.title,
+      openDate: wo.openDate,
+      completedDate: wo.completedDate,
+      statusNode: <StatusBadge status={wo.status} />,
+      onClick: () => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`),
+    }));
+    const logRows: AssetHistoryRow[] = (logFetch.data?.items ?? [])
+      .filter(log => !log.workOrderId)
+      .map(log => ({
+        key: `log-${log.id}`,
+        code: log.maintenancePlan?.taskCode ?? log.logCode,
+        type: log.taskType,
+        title: log.maintenancePlan?.title ?? log.notes,
+        openDate: log.startedAt,
+        completedDate: log.completedAt,
+        statusNode: <WorkLogResultBadge result={log.result} />,
+      }));
+    const ref = (r: AssetHistoryRow): number => {
+      const d = r.completedDate ?? r.openDate;
+      const t2 = d ? new Date(d).getTime() : NaN;
+      return Number.isNaN(t2) ? 0 : t2;
+    };
+    return [...woRows, ...logRows].sort((a, b) => ref(b) - ref(a));
+  }, [woFetch.data, logFetch.data, navigate]);
 
   return (
     <div className="space-y-2 pt-2 border-t border-fg/10">
@@ -215,7 +291,7 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
         <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
       ) : error ? (
         <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.history.loadError")}</p>
-      ) : items.length === 0 ? (
+      ) : rows.length === 0 ? (
         <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-3">{t("asset.history.empty")}</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-fg/10">
@@ -231,19 +307,19 @@ const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
               </tr>
             </thead>
             <tbody>
-              {items.map(wo => (
+              {rows.map(row => (
                 <tr
-                  key={wo.id}
-                  onClick={() => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`)}
-                  className="border-t border-fg/5 cursor-pointer hover:bg-fg/5 transition-colors"
-                  title={t("asset.history.openWo")}
+                  key={row.key}
+                  onClick={row.onClick}
+                  className={`border-t border-fg/5 transition-colors ${row.onClick ? "cursor-pointer hover:bg-fg/5" : ""}`}
+                  title={row.onClick ? t("asset.history.openWo") : undefined}
                 >
-                  <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">{wo.workOrderCode}</td>
-                  <td className="px-3 py-2 whitespace-nowrap"><WoTypeBadge type={wo.type} /></td>
-                  <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{wo.title ?? "—"}</span></td>
-                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(wo.openDate)}</td>
-                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(wo.completedDate)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={wo.status} /></td>
+                  <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">{row.code}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><WoTypeBadge type={row.type} /></td>
+                  <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{row.title ?? "—"}</span></td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(row.openDate)}</td>
+                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtHistoryDate(row.completedDate)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{row.statusNode}</td>
                 </tr>
               ))}
             </tbody>
