@@ -1158,6 +1158,7 @@ export const AssetsPage: React.FC = () => {
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
+  const openAssetId = (searchParams.get("open") ?? "").trim();
   const [searchText, setSearchText] = useState("");
 
   const updateFilters = useCallback((next: { status?: string; criticality?: string; vesselCode?: string }) => {
@@ -1196,6 +1197,19 @@ export const AssetsPage: React.FC = () => {
       setDetailLoadingId(null);
     }
   }, []);
+
+  // Auto-open asset modal when arriving from an "ACTIVO" click (e.g. plan modal)
+  useEffect(() => {
+    if (!openAssetId) return;
+    setDetailLoadingId(openAssetId);
+    api.get<Asset>(`/app/pms/assets/${openAssetId}`)
+      .then(detailed => setEditing(detailed))
+      .catch(() => {})
+      .finally(() => setDetailLoadingId(null));
+    const params = new URLSearchParams(searchParams);
+    params.delete("open");
+    setSearchParams(params, { replace: true });
+  }, [openAssetId, searchParams, setSearchParams]);
 
   const onDeleteRequested = useCallback((row: Asset) => {
     setDeleteTarget(row);

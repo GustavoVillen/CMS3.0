@@ -1733,7 +1733,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelCls}>{t("mp.asset")}</label>
+                  {assetId
+                    ? <button
+                        type="button"
+                        onClick={() => { onClose(); navigate(`/assets?open=${encodeURIComponent(assetId)}`); }}
+                        className={`${labelCls} hover:text-accent transition-colors cursor-pointer`}
+                        title={t("mp.modal.openAsset")}
+                      >{t("mp.asset")}</button>
+                    : <label className={labelCls}>{t("mp.asset")}</label>}
                   {loadingAssets
                     ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
                     : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />

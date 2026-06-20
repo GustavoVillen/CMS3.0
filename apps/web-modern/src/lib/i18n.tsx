@@ -1372,7 +1372,9 @@ const dict = {
 
   // WorkOrderModal — botones del footer
   "wo.modal.generatePdf":      { es: "Generar PDF",            en: "Generate PDF",          pt: "Gerar PDF" },
+  "wo.modal.generateDoc":      { es: "Word (.doc)",            en: "Word (.doc)",           pt: "Word (.doc)" },
   "wo.modal.generateServiceRequest": { es: "Solicitud de servicios", en: "Service request",  pt: "Solicitação de serviços" },
+  "wo.modal.generateServiceRequestDoc": { es: "Solicitud (.doc)", en: "Service request (.doc)", pt: "Solicitação (.doc)" },
   "wo.modal.postpone":         { es: "Diferir OT",             en: "Defer WO",              pt: "Adiar OT" },
   "wo.modal.closeWO":          { es: "Cerrar OT",              en: "Close WO",              pt: "Fechar OS" },
   "wo.modal.cancelWO":         { es: "Cancelar OT",            en: "Cancel WO",             pt: "Cancelar OS" },
@@ -1443,6 +1445,7 @@ const dict = {
   // MaintenancePlanModal — visible UI
   "mp.modal.readOnly":         { es: "Solo lectura — la edición de planes está restringida a Admin, Superintendente y Capitán/Jefe de Máquinas.", en: "Read only — plan editing is restricted to Admin, Superintendent and Captain/Chief Engineer.", pt: "Apenas leitura — a edição de planos está restrita ao Admin, Superintendente e Capitão/Chefe de Máquinas." },
   "mp.modal.loadingAssets":    { es: "Cargando activos…",     en: "Loading assets…",       pt: "Carregando ativos…" },
+  "mp.modal.openAsset":        { es: "Abrir activo",          en: "Open asset",            pt: "Abrir ativo" },
   "mp.modal.selectVessel":     { es: "— Seleccioná un buque —", en: "— Select a vessel —", pt: "— Selecione uma embarcação —" },
   "mp.modal.codeAuto":         { es: "Auto",                  en: "Auto",                  pt: "Auto" },
   "mp.modal.codeGenerating":   { es: "Generando…",            en: "Generating…",           pt: "Gerando…" },
@@ -1558,6 +1561,10 @@ const dict = {
   "dashboard.deferralsTitle":  { es: "Diferimientos",          en: "Deferrals",            pt: "Adiamentos" },
   "dashboard.deferralsSubtitle":{ es: "Estado activo",         en: "Active status",        pt: "Status ativo" },
   "dashboard.deferralsEmpty":  { es: "Sin diferimientos activos", en: "No active deferrals", pt: "Sem adiamentos ativos" },
+  "dashboard.oosTitle":        { es: "Equipos fuera de servicio", en: "Out-of-service equipment", pt: "Equipamentos fora de serviço" },
+  "dashboard.oosSubtitle":     { es: "Activos OUT_OF_SERVICE",   en: "OUT_OF_SERVICE assets", pt: "Ativos OUT_OF_SERVICE" },
+  "dashboard.oosEmpty":        { es: "Todos los equipos operativos", en: "All equipment operational", pt: "Todos os equipamentos operacionais" },
+  "dashboard.oosCountLabel":   { es: "fuera de servicio",        en: "out of service",        pt: "fora de serviço" },
   "dashboard.criticalSparesTitle":{ es: "Stock de Repuestos", en: "Spares Stock",       pt: "Estoque de Sobressalentes" },
   "dashboard.criticalSparesSubtitle":{ es: "Estado de stock (todos)", en: "Stock status (all)", pt: "Status de estoque (todos)" },
   "dashboard.criticalSparesEmpty":{ es: "Sin repuestos registrados", en: "No spares registered", pt: "Sem sobressalentes registrados" },
