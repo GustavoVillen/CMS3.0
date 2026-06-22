@@ -29,7 +29,7 @@ const SERVICE_REQUEST_CONFIG = {
     "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
     "comments", "generatedBy", "signatures", "communication", "distribution",
   ],
-  footer: { preparedBy: "Barlovento Servicios Profesionales", reviewedBy: "Asesoría Jurídica", approvedBy: "Gerente General" },
+  footer: { preparedBy: "Departamento Tecnico Mercurio", reviewedBy: "Gerente Mantenimiento", approvedBy: "Gerencia General" },
   departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
   distribution: ["JMA", "CAP"],
   communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
@@ -71,9 +71,9 @@ async function main() {
   await (prisma as any).tenantSetting.update({
     where: { tenantId },
     data: {
-      controlledDocPreparedBy: "Barlovento Servicios Profesionales",
-      controlledDocReviewedBy: "Asesoría Jurídica",
-      controlledDocApprovedBy: "Gerente General",
+      controlledDocPreparedBy: "Departamento Tecnico Mercurio",
+      controlledDocReviewedBy: "Gerente Mantenimiento",
+      controlledDocApprovedBy: "Gerencia General",
     },
   });
   console.log("✔ Footer del documento controlado seteado");

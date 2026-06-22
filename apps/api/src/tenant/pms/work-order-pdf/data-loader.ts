@@ -31,15 +31,24 @@ export async function loadWorkOrderPdfContext(
   //    secciones, opciones, logo) — fuente de verdad: tabla TenantForm. ──
   const resolvedForm = await resolveTenantForm(session.tenantSlug, formType);
 
-  // ── Assigned user ──
+  // ── Assigned user (nombre + nombre-formularios + firma para la caja del responsable) ──
   let assignedName: string | null = null;
+  let assignedFormName: string | null = null;
+  let assignedSignatureBuffer: Buffer | null = null;
   if (prismaRaw && (wo as any).assignedToUserId) {
     try {
       const u = await (prismaRaw as any).user.findUnique({
         where: { id: (wo as any).assignedToUserId },
-        select: { firstName: true, lastName: true },
+        select: { firstName: true, lastName: true, formName: true, signatureUrl: true },
       });
-      if (u) assignedName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || null;
+      if (u) {
+        assignedName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || null;
+        assignedFormName = u.formName?.trim() || null;
+        if (u.signatureUrl && typeof u.signatureUrl === "string") {
+          const m = u.signatureUrl.match(/^data:image\/[a-z+]+;base64,(.+)$/i);
+          if (m) { try { assignedSignatureBuffer = Buffer.from(m[1], "base64"); } catch { /* skip */ } }
+        }
+      }
     } catch { /* non-blocking */ }
   }
 
@@ -103,10 +112,10 @@ export async function loadWorkOrderPdfContext(
         try {
           const spare = await (prismaRaw as any).spare.findUnique({
             where: { id: m.spareId },
-            select: { name: true, partNumber: true },
+            select: { name: true, sku: true },
           });
           spareUsages.push({
-            spareName: spare ? `${spare.name}${spare.partNumber ? ` (${spare.partNumber})` : ""}` : m.spareId,
+            spareName: spare ? `${spare.name}${spare.sku ? ` (${spare.sku})` : ""}` : m.spareId,
             quantity: m.quantity,
             unit: m.unit,
           });
@@ -207,6 +216,8 @@ export async function loadWorkOrderPdfContext(
     vesselName,
     assetIsSafetyCritical,
     assignedName,
+    assignedFormName,
+    assignedSignatureBuffer,
     createdByName,
     tenant,
     tenantLogoBuffer,

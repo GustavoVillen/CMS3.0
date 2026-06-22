@@ -1,10 +1,11 @@
 import React from "react";
-import { Loader2, Wrench, AlertTriangle, ClipboardList, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
+import { Loader2, Wrench, AlertTriangle, ClipboardList, ClipboardCheck, ChevronRight, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
 import type { WoFilter } from "./MobileWorkOrders";
 import type { SparesFilter } from "./MobileSpares";
 
-interface WO { status: string; dueDate: string | null; }
+interface WO { status: string; dueDate: string | null; aprobadoAt: string | null; autorizadoAt: string | null; }
 interface Defect { status: string; }
 interface Spare { currentStock: number; minStock: number; reorderPoint: number; }
 interface Certificate { status: string; expiryDate: string | null; }
@@ -54,6 +55,9 @@ interface Props {
 }
 
 export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  // SS para aprobar: widget visible solo para superintendente/admin.
+  const canApproveSS = user?.role === "FLEET_SUPERINTENDENT" || user?.role === "TENANT_ADMIN";
   const { data: woData,    loading: woLoading    } = useFetch<{ items: WO[]            }>("/app/pms/work-orders");
   const { data: defData,   loading: defLoading   } = useFetch<{ items: Defect[]        }>("/app/pms/defects");
   const { data: spData                            } = useFetch<{ items: Spare[]         }>("/app/pms/spares");
@@ -67,6 +71,8 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
 
   const openWOs    = (woData?.items  ?? []).filter(w => w.status === "PLANNED" || w.status === "IN_PROGRESS");
   const overdueWOs = openWOs.filter(w => w.dueDate && new Date(w.dueDate) < today);
+  // SS SOLICITADAS = OT activa sin aprobado ni autorizado (etapa SOLICITADA de la tramitación).
+  const solicitadasWOs = openWOs.filter(w => !w.aprobadoAt && !w.autorizadoAt);
   const openDefs   = (defData?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
   const lowSpares  = (spData?.items  ?? []).filter(s => s.currentStock <= s.reorderPoint);
 
@@ -98,6 +104,24 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos", { sparesFilter: "low" })} />
           <KpiCard label="Certif. atención" icon={FileCheck}   value={certWarn.length}  warn={certWarn.length > 0} />
         </div>
+      )}
+
+      {/* SS para aprobar — solo superintendente/admin, y solo si hay solicitadas */}
+      {canApproveSS && solicitadasWOs.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate?.("ots", { woFilter: "solicitadas" })}
+          className="w-full rounded-xl border border-blue-500/40 bg-blue-500/5 p-3 flex items-center gap-3 text-left"
+        >
+          <ClipboardCheck className="w-5 h-5 text-blue-700 dark:text-blue-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
+              {solicitadasWOs.length} SS para aprobar
+            </p>
+            <p className="text-[10px] text-text-industrial/50">Tocá para revisarlas</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-blue-700/60 dark:text-blue-400/60 shrink-0" />
+        </button>
       )}
 
       {/* Reporte diario de hoy — status banner */}

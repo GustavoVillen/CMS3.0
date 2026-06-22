@@ -21,6 +21,10 @@ Casos típicos donde se ve la diferencia:
 - Probar bomba CI standby: JSA dice LOW (apretar un botón). RCM dice SAFETY (si no se prueba y falla en incendio, mueren personas).
 - Cambiar ánodos en sentina: JSA dice HIGH (espacio confinado). RCM dice NON_OPERATIONAL (si se posterga, corrosión gradual sin impacto inmediato).
 
+TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
+- INSPECCIÓN / PRUEBA: busca detectar una falla OCULTA. Si no se ejecuta, la falla queda sin detectar hasta que se necesita la función — típico de dispositivos de protección y seguridades (alarmas, paradas de emergencia, bombas standby), que suelen caer en SAFETY o ENVIRONMENTAL. Preguntate: "¿qué función protectora queda sin verificar y qué pasa cuando se la necesita?".
+- MANTENIMIENTO: previene la degradación o falla funcional del propio equipo. Si no se hace, el equipo se degrada y eventualmente falla en servicio (derate, paro → OPERATIONAL; o solo costo de reparación → NON_OPERATIONAL).
+
 Las 4 categorías RCM:
 - SAFETY: la falla pone en riesgo a personas (lesión, fatalidad). Ej: bomba CI standby no probada → no arranca en incendio.
 - ENVIRONMENTAL: la falla causa daño ambiental (vertido oleoso, emisión, contaminación). Ej: separador OWS no calibrado → descarga sobre 15ppm.
@@ -44,6 +48,7 @@ interface SuggestInput {
   assetSfiCode?: string | null;
   planTitle?: string | null;
   planDescription?: string | null;
+  taskType?: "INSPECTION" | "MAINTENANCE" | null;
 }
 
 export interface RcmConsequenceResult {
@@ -72,6 +77,10 @@ export async function suggestPlanConsequence(
     sfi: input.assetSfiCode ?? null,
     plan: input.planTitle ?? null,
     descripcion: input.planDescription ?? null,
+    tipoTarea:
+      input.taskType === "INSPECTION" ? "Inspección / prueba (detecta falla oculta)"
+      : input.taskType === "MAINTENANCE" ? "Mantenimiento (previene degradación/falla funcional)"
+      : null,
   };
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });

@@ -15,6 +15,7 @@ import {
   syncMemberVessels,
   updateMemberEmail,
   updateMemberRole,
+  updateMemberProfile,
 } from "./team-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
@@ -73,6 +74,14 @@ export async function handleTeamRoutes(
     const userId = url.pathname.split("/")[4];
     const { password } = await readJsonBody(request) as { password: string };
     sendJson(response, 200, await setMemberPassword(session, userId, password));
+    return true;
+  }
+
+  // PUT /app/team/members/:userId/profile  (nombre para formularios + firma)
+  if (method === "PUT" && /^\/app\/team\/members\/[^/]+\/profile$/.test(url.pathname)) {
+    const userId = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { formName?: string | null; signatureUrl?: string | null };
+    sendJson(response, 200, await updateMemberProfile(session, userId, body));
     return true;
   }
 

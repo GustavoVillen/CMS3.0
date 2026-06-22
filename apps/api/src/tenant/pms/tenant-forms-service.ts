@@ -47,9 +47,9 @@ interface FormDefaults {
 
 // Footer Mercurio actual (hoy hardcodeado en template-mercurio.ts).
 const MERCURIO_FOOTER: FormFooterDefaults = {
-  preparedBy: "Barlovento Servicios Profesionales",
-  reviewedBy: "Asesoría Jurídica",
-  approvedBy: "Gerente General",
+  preparedBy: "Departamento Tecnico Mercurio",
+  reviewedBy: "Gerente Mantenimiento",
+  approvedBy: "Gerencia General",
 };
 
 const SERVICE_REQUEST_CONFIG: FormConfig = {

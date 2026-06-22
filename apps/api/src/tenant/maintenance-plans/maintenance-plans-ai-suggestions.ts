@@ -28,6 +28,10 @@ HERRAMIENTAS E INSTRUMENTOS NECESARIOS:
 
 const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.
 
+TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
+- INSPECCIÓN: verificación/medición sin desarmar ni intervenir el equipo. El LOTO suele ser más acotado: aislar solo las energías necesarias para acercarse con seguridad. Si la inspección exige el equipo en marcha (p. ej. control de nivel a temperatura de operación), indicalo en lugar de bloquear todo.
+- MANTENIMIENTO: intervención física (desarme, cambio de componentes, ajuste). El LOTO debe ser completo: bloqueo y verificación de energía cero de TODAS las fuentes (eléctrica, mecánica, hidráulica, neumática, térmica, presión y fluidos residuales) antes de intervenir.
+
 REGLAS DE CONCISIÓN (importante):
 - Sé breve: solo las energías a bloquear y las verificaciones críticas. Máximo ~8 puntos, un paso corto por línea.
 - Directo y accionable. Sin justificaciones, sin teoría, sin redundancia.
@@ -42,6 +46,11 @@ Este análisis evalúa el riesgo PARA EL OPERARIO al EJECUTAR la tarea. Es decir
 NO confundir con RCM (otra herramienta del sistema). RCM pregunta lo opuesto: "¿qué pasa si la tarea NO se hace?". RCM mira la consecuencia de la falla en el equipo. Vos NO tenés que pensar en eso.
 
 Vos pensás en: espacio confinado, energías peligrosas, hot work, caídas, atrapamiento, exposición química, ruido, atmósferas explosivas, partes móviles, cargas suspendidas, presión residual, temperatura, electricidad. Cosas que pueden lastimar AL TRIPULANTE durante la ejecución.
+
+TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
+- INSPECCIÓN: verificación/medición sin intervenir el equipo; menor exposición (a veces con el equipo en marcha → cuidado con partes móviles y superficies calientes, pero sin desarme). Tiende a riesgo más bajo.
+- MANTENIMIENTO: intervención física (desarme, cambio de partes, ajuste); mayor exposición a energías liberadas, atrapamiento, presión/fluidos residuales y manipulación de cargas. Tiende a riesgo más alto.
+Ajustá NIVEL, PROBABILIDAD y CONSECUENCIA de forma coherente con el tipo de tarea, sin sobredimensionar una inspección ni subestimar un mantenimiento.
 
 Niveles de riesgo (operacional):
 - LOW: tarea rutinaria sin energías peligrosas, espacio normal, EPP básico.
@@ -84,6 +93,13 @@ EQUIPOS DE PPE:
 interface BaseInput {
   assetLabel?: string | null;
   taskDesc?: string | null;
+  taskType?: "INSPECTION" | "MAINTENANCE" | null;
+}
+
+function taskTypeLabel(taskType?: "INSPECTION" | "MAINTENANCE" | null): string | null {
+  if (taskType === "INSPECTION") return "Inspección (verificación/medición; normalmente sin desarmar ni intervenir el equipo)";
+  if (taskType === "MAINTENANCE") return "Mantenimiento (intervención física: desarme, cambio de componentes, ajuste)";
+  return null;
 }
 
 interface LotoInput extends BaseInput {
@@ -107,6 +123,8 @@ function buildContext(input: BaseInput, extras: Record<string, string | null | u
     `Activo: ${(input.assetLabel ?? "").trim() || "equipo desconocido"}`,
     `Tarea: ${(input.taskDesc ?? "").trim() || "tarea no especificada"}`,
   ];
+  const tt = taskTypeLabel(input.taskType);
+  if (tt) lines.push(`Tipo de tarea: ${tt}`);
   for (const [k, v] of Object.entries(extras)) {
     if (v && v.trim()) lines.push(`${k}: ${v.trim()}`);
   }

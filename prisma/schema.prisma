@@ -888,6 +888,9 @@ model User {
   preferredLocale  LocaleCode?
   firstName        String?
   lastName         String?
+  // Nombre a mostrar en los formularios controlados (firma) y firma como data URI (base64 PNG/JPG).
+  formName         String?
+  signatureUrl     String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 

@@ -60,6 +60,8 @@ export const Dashboard: React.FC = () => {
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   const crewSummary       = useFetch<{ onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number }>("/app/dashboard/crew-summary");
   const permitsSummary    = useFetch<{ active: number; pendingApproval: number; expiringSoon: number; expired: number }>("/app/dashboard/permits-summary");
+  // Equipos fuera de servicio (OUT_OF_SERVICE) — para identificarlos de un vistazo.
+  const oosAssets         = useFetch<ListResponse<{ id: string; assetCode: string; name: string; vesselCode: string; criticality: string }>>("/app/pms/assets?status=OUT_OF_SERVICE");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -406,6 +408,50 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           )}
         </div>
+
+        {/* Equipos fuera de servicio (OUT_OF_SERVICE) */}
+        {(() => {
+          const oosList = oosAssets.data?.items ?? [];
+          const oosStyle: React.CSSProperties | undefined = oosList.length > 0
+            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
+            : undefined;
+          return (
+        <div className="bento-card p-4! flex flex-col h-[226px]" style={oosStyle}>
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.oosTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.oosSubtitle")}</p>
+            </div>
+            {oosAssets.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          </div>
+          {oosAssets.error ? <ErrorMsg msg={oosAssets.error} /> : oosList.length === 0 && !oosAssets.loading ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+              <ShieldAlert className="w-6 h-6 text-text-industrial/40" />
+              <p className="text-xs text-text-industrial/40">{t("dashboard.oosEmpty")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col flex-1 min-h-0">
+              <button type="button" onClick={() => navigate("/assets?status=OUT_OF_SERVICE")}
+                className="flex items-baseline gap-2 mb-1.5 text-left shrink-0">
+                <span className="text-2xl font-bold text-red-600 dark:text-red-400">{oosList.length}</span>
+                <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.oosCountLabel")}</span>
+              </button>
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+                {oosList.map(a => (
+                  <button key={a.id} type="button" onClick={() => navigate("/assets?status=OUT_OF_SERVICE")}
+                    className="w-full flex items-center gap-2 text-left rounded px-1.5 py-1 hover:bg-fg/5 transition-colors group">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                    <span className="text-[12px] font-mono text-text-industrial/50 shrink-0">{a.assetCode}</span>
+                    <span className="text-[12px] text-text-industrial/70 group-hover:text-fg transition-colors truncate flex-1">{a.name}</span>
+                    <span className="text-[10px] text-text-industrial/40 shrink-0">{a.vesselCode}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+          );
+        })()}
 
         {/* Critical Spares stock status chart */}
         {(() => {

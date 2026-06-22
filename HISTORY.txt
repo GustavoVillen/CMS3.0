@@ -1,5 +1,23 @@
 HISTORY.txt
 
+[2026-06-22] FEAT: móvil — widget "SS para aprobar" para superintendente/admin
+Agent: Claude Opus 4.8
+- MobileDashboard: banner azul (color de la etapa SOLICITADA) visible solo si el rol es FLEET_SUPERINTENDENT
+  o TENANT_ADMIN y hay SS solicitadas; al tocarlo navega a OTs con filtro "solicitadas".
+- MobileWorkOrders: nuevo WoFilter "solicitadas" (OT activa sin aprobado ni autorizado) + chip "Para aprobar"
+  visible solo para super/admin. Reusa /app/pms/work-orders (ya scope por vessel/tenant). Lista, no aprueba aún.
+
+[2026-06-18] FEAT: exportar formularios a Word (.doc) además del PDF (Fase 1)
+Agent: Claude Opus 4.8
+- Enfoque HTML-como-.doc (application/msword), sin dependencias nuevas, reusando los data-loaders del PDF.
+- Infra nueva apps/api/src/tenant/pms/doc-export.ts (wrapAsWordDoc con mso-footer repetido + serveDoc +
+  helpers HTML del chrome). Renderers word-work-order.ts y word-service-request.ts (espejo HTML de los
+  templates PDF, mismo formMeta/formConfig). build*Doc en work-order-pdf-service + rutas .doc en
+  maintenance-router (/work-orders/:id/doc y /service-request.doc). Frontend: lib/download-doc.ts +
+  botones "Word (.doc)" / "Solicitud (.doc)" en el modal de OT + i18n. PDF intacto.
+- Deployado a prod (backend scp+reload, frontend vite build + swap dist con backup dist_old).
+- Fase 2 pendiente: el resto de los PDFs (defectos, planes, repuestos, reportes, etc.) con el mismo patrón.
+
 [2026-06-17] TUNE: footer del modal de OT — quitar "Iniciar OT", "Diferir" → "Diferir OT" a la derecha
 Agent: Claude Opus 4.8
 - Se elimina el botón "Iniciar OT" (+ handleStart/starting, ya sin uso). El botón de diferir se mueve

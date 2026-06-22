@@ -211,11 +211,16 @@ export async function renderServiceRequestPdf(ctx: WorkOrderPdfContext): Promise
         ensureSpace(70);
         const H = 60;
         const half = Math.floor(W / 2);
-        [["NOMBRE Y POSICION", createdByName ?? ""], ["FIRMA", ""]].forEach(([lab, value], i) => {
+        const nombrePos = ctx.assignedFormName ?? assignedName ?? createdByName ?? "";
+        [["NOMBRE Y POSICION", nombrePos], ["FIRMA", ""]].forEach(([lab, value], i) => {
           const bx = ML + i * half;
           const bw = i === 0 ? half : W - half;
           doc.rect(bx, canvas.y, bw, H).fillColor(WHITE).fill();
           doc.rect(bx, canvas.y, bw, H).strokeColor(BORDER).lineWidth(0.5).stroke();
+          // Caja FIRMA (i===1): incrusta la firma configurada del asignado.
+          if (i === 1 && ctx.assignedSignatureBuffer) {
+            try { doc.image(ctx.assignedSignatureBuffer, bx + bw / 2 - 35, canvas.y + 8, { fit: [70, 26], align: "center", valign: "center" }); } catch { /* skip */ }
+          }
           if (value) {
             doc.fontSize(9).font("Helvetica").fillColor(BLACK)
               .text(sanitizePdfText(value), bx + 8, canvas.y + 10, { width: bw - 16, lineBreak: false });

@@ -56,7 +56,8 @@ import {
 import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
 import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
-import { buildWorkOrderPdf, buildServiceRequestPdf } from "./work-order-pdf-service";
+import { buildWorkOrderPdf, buildServiceRequestPdf, buildWorkOrderDoc, buildServiceRequestDoc } from "./work-order-pdf-service";
+import { serveDoc } from "./doc-export";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
 
@@ -450,6 +451,23 @@ export async function handleMaintenanceRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    return true;
+  }
+
+  // ── Variantes .doc (Word) — espejo de las rutas .pdf ──
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/doc$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const wo = await getTenantWorkOrder(session, id);
+    serveDoc(response, await buildWorkOrderDoc(session, id), wo.workOrderCode);
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/service-request\.doc$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const wo = await getTenantWorkOrder(session, id);
+    serveDoc(response, await buildServiceRequestDoc(session, id), `Solicitud-Servicios-${wo.workOrderCode}`);
     return true;
   }
 

@@ -135,6 +135,21 @@ const ASSETS: AssetDef[] = [
       // EQUIPOS CRITICOS (pruebas)
       ["Seguridades: prueba de funcionamiento alarmas led P-T°-parada EGA", "1mo", "2026-05-02", null, "I"],
       ["Gobierno de emergencia: prueba de función con cubierta ángulo de timón", "1mo", "2026-05-28", null, "I"],
+      // ── Cronograma manual Volvo D16 MH (47706582, 09-2015) — ítems faltantes ──
+      ["Lectura de códigos de falla con herramienta de diagnóstico (VODIA)", "500h", null, null, "I"],
+      ["Control de nivel de refrigerante y mezcla anticongelante", "500h", null, null, "I"],
+      ["Control de nivel de electrolito de baterías", "500h", null, null, "I"],
+      ["Filtro de aire: control del indicador de restricción", "500h", null, null, "I"],
+      ["Pre-filtro de combustible: drenar agua y contaminación", "500h", null, null],
+      ["Filtro de agua de mar: limpieza", "500h", null, null],
+      ["Bomba de agua de mar: inspección de kit de desgaste, impeller y o-ring", "500h", null, null, "I"],
+      ["Control de ruidos anormales y fugas de aceite/combustible/agua (motor y transmisión)", "500h", null, null, "I"],
+      ["Filtro fino de combustible: cambio", "1000h", null, null],
+      ["Ánodos de zinc (intercambiador de calor / enfriador de aire de carga): cambio", "1000h", null, null],
+      ["Inspección de mangueras y abrazaderas de cables (motor y transmisión)", "1000h", null, null, "I"],
+      ["Limpieza y pintura de motor y transmisión", "1000h", null, null, "I"],
+      ["Cambio de correas de transmisión", "2000h", null, null],
+      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", null, null],
     ],
   },
   {
@@ -163,6 +178,21 @@ const ASSETS: AssetDef[] = [
       ["Cambio de grupo de baterías de arranque", "18mo", "2026-02-25", "2027-08-27"],
       ["Seguridades: prueba de funcionamiento alarmas led P-T°-parada EGA", "1mo", "2026-05-28", null, "I"],
       ["Gobierno de emergencia: prueba de función con cubierta ángulo de timón", "1mo", "2026-05-28", null, "I"],
+      // ── Cronograma manual Volvo D16 MH (47706582, 09-2015) — ítems faltantes ──
+      ["Lectura de códigos de falla con herramienta de diagnóstico (VODIA)", "500h", null, null, "I"],
+      ["Control de nivel de refrigerante y mezcla anticongelante", "500h", null, null, "I"],
+      ["Control de nivel de electrolito de baterías", "500h", null, null, "I"],
+      ["Filtro de aire: control del indicador de restricción", "500h", null, null, "I"],
+      ["Pre-filtro de combustible: drenar agua y contaminación", "500h", null, null],
+      ["Filtro de agua de mar: limpieza", "500h", null, null],
+      ["Bomba de agua de mar: inspección de kit de desgaste, impeller y o-ring", "500h", null, null, "I"],
+      ["Control de ruidos anormales y fugas de aceite/combustible/agua (motor y transmisión)", "500h", null, null, "I"],
+      ["Filtro fino de combustible: cambio", "1000h", null, null],
+      ["Ánodos de zinc (intercambiador de calor / enfriador de aire de carga): cambio", "1000h", null, null],
+      ["Inspección de mangueras y abrazaderas de cables (motor y transmisión)", "1000h", null, null, "I"],
+      ["Limpieza y pintura de motor y transmisión", "1000h", null, null, "I"],
+      ["Cambio de correas de transmisión", "2000h", null, null],
+      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", null, null],
     ],
   },
   {
@@ -174,6 +204,9 @@ const ASSETS: AssetDef[] = [
       ["Tomar muestras y analizar el aceite lubricante", "6mo", "2025-12-18", "2026-06-16"],
       ["Análisis de vibraciones", "9500h", 18979, 28479],
       ["Recorrido general", "24000h", null, 24000],
+      // ── Manual Volvo D16 MH cap. Reverse Gear (págs. 68-70) — Twin Disc ──
+      ["Control de nivel de aceite (a temperatura de operación, motor en ralentí)", "1mo", null, null, "I"],
+      ["Engrase del sello del cojinete del eje de salida (grasa de litio EP2)", "3mo", null, null],
     ],
   },
   {
@@ -185,6 +218,9 @@ const ASSETS: AssetDef[] = [
       ["Tomar muestras y analizar el aceite lubricante", "6mo", "2025-12-18", "2026-06-16"],
       ["Análisis de vibraciones", "9500h", 19056, 28556],
       ["Recorrido general", "24000h", null, 24000],
+      // ── Manual Volvo D16 MH cap. Reverse Gear (págs. 68-70) — Twin Disc ──
+      ["Control de nivel de aceite (a temperatura de operación, motor en ralentí)", "1mo", null, null, "I"],
+      ["Engrase del sello del cojinete del eje de salida (grasa de litio EP2)", "3mo", null, null],
     ],
   },
   {
@@ -686,6 +722,46 @@ const ASSETS: AssetDef[] = [
   },
 ];
 
+// ── DATA: repuestos exigidos por el manual Volvo Penta D16 MH (47706582) ──────
+//   Inventario por buque (Spare). Stock inicial 0 → quedan bajo punto de pedido
+//   para que el operador cargue las existencias reales. min/reorder/target en la
+//   unidad indicada. SFI 600 = componentes principales (motores). Sirven para
+//   ambos motores ER+BR (mismo modelo), por eso no se linkean a un asset único.
+interface SpareDef {
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;       // "u" = unidad · "L" = litros
+  crit: Crit;
+  min: number;
+  reorder: number;
+  target?: number;
+  mfr?: string;
+  model?: string;
+  desc?: string;      // longDescription (ref. manual / intervalo)
+}
+
+const SPARES: SpareDef[] = [
+  { sku: "VP-D16-OILF",       name: "Filtro de aceite de motor",                       category: "Filtros",      unit: "u", crit: "A", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Cambio en cada cambio de aceite (500 h / 12 m). 2 por motor. Manual pág. 46." },
+  { sku: "VP-D16-BYPF",       name: "Filtro by-pass de aceite",                        category: "Filtros",      unit: "u", crit: "A", min: 1, reorder: 1, target: 2, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Cambio en cada cambio de aceite (500 h / 12 m). Manual pág. 46." },
+  { sku: "VP-OIL-VDS3-15W40", name: "Aceite de motor VDS-3 SAE 15W/40",                category: "Lubricantes",  unit: "L", crit: "B", min: 55, reorder: 60, target: 120, desc: "Capacidad cárter ~55 L por motor. Grado VDS-3 (o sup.), viscosidad s/tabla. Manual págs. 45, 75." },
+  { sku: "VP-D16-FUELPRE",    name: "Cartucho pre-filtro de combustible",              category: "Filtros",      unit: "u", crit: "A", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 1000 h / 12 m. Manual págs. 50-51 (B)." },
+  { sku: "VP-D16-FUELFINE",   name: "Filtro fino de combustible",                      category: "Filtros",      unit: "u", crit: "A", min: 1, reorder: 1, target: 2, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 1000 h / 12 m. Manual pág. 40 (B)." },
+  { sku: "VP-D16-AIRF",       name: "Elemento filtro de aire",                         category: "Filtros",      unit: "u", crit: "A", min: 1, reorder: 1, target: 2, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 1000 h / 12 m. No se limpia, se descarta. Manual pág. 43 (B)." },
+  { sku: "VP-D16-IMP",        name: "Impeller bomba de agua de mar",                   category: "Bombas",       unit: "u", crit: "A", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 1000 h / 12 m. Llevar repuesto a bordo siempre. Manual pág. 61 (B)." },
+  { sku: "VP-D16-IMP-ORING",  name: "O-ring tapa bomba de agua de mar",                category: "Bombas",       unit: "u", crit: "B", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Con cada cambio de impeller. Manual pág. 61." },
+  { sku: "VP-D16-SWPKIT",     name: "Kit de desgaste bomba de agua de mar",            category: "Bombas",       unit: "u", crit: "A", min: 1, reorder: 1, target: 2, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 3000 h. Manual pág. 40 (D)." },
+  { sku: "VP-D16-ZINC",       name: "Ánodo de zinc (intercambiador / enfriador aire)", category: "Ánodos",       unit: "u", crit: "B", min: 4, reorder: 4, target: 8, mfr: "Volvo Penta", model: ENGINE_MP, desc: "2 por motor. Reemplazo 1000 h / 12 m. No pintar. Manual pág. 61 (B)." },
+  { sku: "VP-COOL-VCS",       name: "Refrigerante Volvo Penta VCS (amarillo, OAT)",    category: "Refrigerantes", unit: "L", crit: "B", min: 56, reorder: 60, target: 120, mfr: "Volvo Penta", desc: "Mezcla 40% conc. + 60% agua desmin. Sist. agua dulce ~56 L. Cambio 8000 h / 48 m. Manual págs. 56-57, 76 (E)." },
+  { sku: "VP-D16-BELT-WP",    name: "Correa de bomba de agua (drive belt)",            category: "Correas",      unit: "u", crit: "A", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 2000 h / 48 m. Cambiar en pares. Manual pág. 44 (C)." },
+  { sku: "VP-D16-BELT-ALT",   name: "Correa de alternador",                            category: "Correas",      unit: "u", crit: "A", min: 2, reorder: 2, target: 4, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo 2000 h / 48 m. Cambiar en pares. Manual pág. 44 (C)." },
+  { sku: "VP-D16-SWFILT-GSK", name: "Junta filtro de agua de mar",                     category: "Juntas",       unit: "u", crit: "C", min: 1, reorder: 1, target: 2, mfr: "Volvo Penta", model: ENGINE_MP, desc: "Reemplazo s/estado al limpiar el filtro (500 h). Manual pág. 62." },
+  // ── Caja reductora Twin Disc MG5170 (M01-CR-ER / M01-CR-BR) ──────────────────
+  { sku: "TD-5170-OILF",      name: "Filtro de aceite caja reductora",                 category: "Filtros",      unit: "u",  crit: "A", min: 2, reorder: 2, target: 4, mfr: "Twin Disc", model: "MG5170", desc: "Cambio con el cambio de aceite del reductor. Manual pág. 69 (Oil filter, Change)." },
+  { sku: "TD-5170-OIL",       name: "Aceite de caja reductora (s/placa del reductor)", category: "Lubricantes",  unit: "L",  crit: "B", min: 20, reorder: 25, target: 50, mfr: "Twin Disc", model: "MG5170", desc: "Tipo/volumen/presión según placa del reductor. Manual págs. 68, 77." },
+  { sku: "GREASE-LI-EP2",     name: "Grasa de litio EP2 (engrase de sello)",           category: "Lubricantes",  unit: "kg", crit: "C", min: 1, reorder: 1, target: 2, desc: "Mobilux EP2 / Statoil Uniway EP2N / Texaco Multifak EP2 / Q8 Rembrandt EP2. Engrase sello eje de salida Twin Disc. Manual pág. 70." },
+];
+
 // ── ejecución ────────────────────────────────────────────────────────────────
 async function main() {
   const tenant = await prisma.tenant.findUnique({ where: { slug: SLUG }, select: { id: true } });
@@ -774,9 +850,32 @@ async function main() {
     }
   }
 
+  // ── Repuestos (Spare) ───────────────────────────────────────────────────────
+  let nSpares = 0;
+  for (const s of SPARES) {
+    nSpares++;
+    console.log(`${DRY ? "DRY " : "✓ "}Spare ${s.sku} — ${s.name}`);
+    if (!DRY) {
+      const spareData = {
+        name: s.name, category: s.category, unit: s.unit, criticality: s.crit,
+        manufacturer: s.mfr ?? null, model: s.model ?? null, sfiCode: "600",
+        minStock: s.min, reorderPoint: s.reorder, targetStock: s.target ?? null,
+        longDescription: s.desc ?? null, status: "ACTIVE" as const,
+      };
+      await prisma.spare.upsert({
+        where: { tenantId_vesselCode_sku: { tenantId: tid, vesselCode: VESSEL, sku: s.sku } },
+        update: { ...spareData, updatedByUserId: uid },
+        create: {
+          tenantId: tid, vesselCode: VESSEL, sku: s.sku,
+          ...spareData, createdByUserId: uid, updatedByUserId: uid,
+        },
+      });
+    }
+  }
+
   console.log(
     `\n${DRY ? "DRY-RUN (no se escribió nada). " : "✅ Completado. "}` +
-      `${nAssets} activos · ${nPlans} planes de mantenimiento · ${totalEst}h estimadas totales.`,
+      `${nAssets} activos · ${nPlans} planes de mantenimiento · ${nSpares} repuestos · ${totalEst}h estimadas totales.`,
   );
 }
 

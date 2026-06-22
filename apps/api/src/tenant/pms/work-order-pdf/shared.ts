@@ -115,6 +115,10 @@ export interface WorkOrderPdfContext {
   assetIsSafetyCritical: boolean;
   /** Display name for assigned user (firstName + lastName) or null. */
   assignedName: string | null;
+  /** Nombre configurado para formularios del usuario asignado (o null). */
+  assignedFormName?: string | null;
+  /** Firma del usuario asignado (imagen decodificada) para la caja del responsable. */
+  assignedSignatureBuffer?: Buffer | null;
   /** Display name (or email fallback) for the user that created the WO. */
   createdByName: string | null;
   /** Tenant settings snapshot. */

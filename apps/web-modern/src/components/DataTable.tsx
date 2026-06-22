@@ -11,6 +11,9 @@ export interface Column<T> {
   className?: string;
   sortable?: boolean;
   sortValue?: (row: T) => string | number | Date | null | undefined;
+  // Ancho fijo de la columna (ej. "180px", "20%"). Solo tiene efecto con
+  // layoutFixed (table-fixed): evita que el ancho cambie según el contenido.
+  width?: string;
 }
 
 interface DataTableProps<T> {
@@ -21,9 +24,12 @@ interface DataTableProps<T> {
   keyFn: (row: T) => string;
   emptyText?: string;
   onRowClick?: (row: T) => void;
+  // Fija el layout de la tabla (table-fixed) para que los anchos no dependan
+  // del contenido de las filas visibles. Combinar con Column.width.
+  layoutFixed?: boolean;
 }
 
-export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false }: DataTableProps<T>) {
   const [searchParams, setSearchParams] = useSearchParams();
   const validSortKeys = useMemo(() => columns.map(col => col.key), [columns]);
 
@@ -134,7 +140,14 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-sm">
+      <table className={`w-full text-sm ${layoutFixed ? "table-fixed" : ""}`}>
+        {layoutFixed && (
+          <colgroup>
+            {columns.map(col => (
+              <col key={col.key} style={col.width ? { width: col.width } : undefined} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr className="border-b border-border bg-fg/[0.03]">
             {columns.map(col => (
@@ -190,6 +203,8 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     ACTIVE:      BADGE_SUCCESS,
     INACTIVE:    BADGE_NEUTRAL,
+    OPERATIONAL:    BADGE_SUCCESS,
+    OUT_OF_SERVICE: BADGE_DANGER,
     PLANNED:     BADGE_INFO,
     SCHEDULED:   BADGE_INFO,
     IN_PROGRESS: BADGE_ACCENT,

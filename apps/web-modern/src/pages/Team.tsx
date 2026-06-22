@@ -18,6 +18,8 @@ interface Member {
   legacyUserId: string | null;
   firstName: string | null;
   lastName: string | null;
+  formName: string | null;
+  signatureUrl: string | null;
   role: string;
   status: string;
   assignedVesselCodes: string[];
@@ -429,6 +431,8 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd]   = useState(false);
   const [selectedVessels, setSelectedVessels] = useState<Set<string>>(new Set(member.assignedVesselCodes));
+  const [formName, setFormName] = useState(member.formName ?? "");
+  const [signature, setSignature] = useState<string | null>(member.signatureUrl ?? null);
 
   const toggleVessel = (code: string) => {
     setSelectedVessels(prev => {
@@ -445,8 +449,10 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   const vesselsChanged =
     selectedVessels.size !== member.assignedVesselCodes.length ||
     member.assignedVesselCodes.some(c => !selectedVessels.has(c));
+  const formNameChanged = formName.trim() !== (member.formName ?? "");
+  const signatureChanged = (signature ?? null) !== (member.signatureUrl ?? null);
   const canEdit = !isSelf && !isRevoked;
-  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged);
+  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged || formNameChanged || signatureChanged);
 
   const handleSaveAll = async () => {
     if (emailChanged) {
@@ -468,6 +474,9 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
       }
       if (passwordSet) {
         await api.put(`/app/team/members/${member.userId}/password`, { password: password.trim() });
+      }
+      if (formNameChanged || signatureChanged) {
+        await api.put(`/app/team/members/${member.userId}/profile`, { formName: formName.trim(), signatureUrl: signature });
       }
       onChanged();
       onClose();
@@ -550,6 +559,38 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                   ⚠ Este rol necesita al menos una embarcación asignada para ver datos del sistema.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Formularios: nombre + firma */}
+          {canEdit && (
+            <div className="space-y-3 border border-fg/10 rounded-xl p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50">Formularios (firma)</p>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Nombre para formularios</label>
+                <input className={inputCls} value={formName} onChange={e => setFormName(e.target.value)} placeholder={fullName(member)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Firma (imagen PNG/JPG)</label>
+                {signature ? (
+                  <div className="flex items-center gap-3">
+                    <img src={signature} alt="firma" className="h-14 max-w-[180px] object-contain bg-white rounded border border-fg/10 p-1" />
+                    <button type="button" onClick={() => setSignature(null)} className="text-[11px] text-red-600 hover:underline">Quitar</button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 text-xs">
+                    Subir firma
+                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={e => {
+                      const f = e.target.files?.[0]; if (!f) return;
+                      if (f.size > 1_200_000) { setError("La imagen de firma es muy grande (máx ~1MB)."); return; }
+                      const reader = new FileReader();
+                      reader.onload = () => setSignature(reader.result as string);
+                      reader.readAsDataURL(f);
+                    }} />
+                  </label>
+                )}
+                <p className="text-[10px] text-text-industrial/40">Ideal PNG con fondo transparente. Se incrusta en la caja de firma del responsable.</p>
+              </div>
             </div>
           )}
 

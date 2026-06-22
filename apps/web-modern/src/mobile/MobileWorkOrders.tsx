@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { ChevronLeft, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
@@ -15,6 +16,9 @@ interface WO {
   status: string;
   criticality: string;
   dueDate: string | null;
+  // Tramitación (cadena de aprobación): SOLICITADA = sin aprobado ni autorizado.
+  aprobadoAt: string | null;
+  autorizadoAt: string | null;
   assetName: string | null;
   vesselCode: string;
   estimatedHours: number | null;
@@ -82,8 +86,9 @@ const CRIT_COLOR: Record<string, string> = {
 
 type View = "list" | "detail" | "close";
 
-/** Filtro de la lista de OTs. "open" = todas las activas; "overdue" = solo vencidas. */
-export type WoFilter = "open" | "overdue";
+/** Filtro de la lista de OTs. "open" = todas las activas; "overdue" = solo vencidas;
+ *  "solicitadas" = SS pendientes de aprobar (sin aprobado ni autorizado). */
+export type WoFilter = "open" | "overdue" | "solicitadas";
 
 // Acordeón con 5 chips de info del plan/OT.
 // Solo se puede tener un panel abierto a la vez. Si el campo correspondiente
@@ -501,6 +506,9 @@ interface MobileWorkOrdersProps {
 
 export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilter }) => {
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
+  const { user } = useAuth();
+  // Solo superintendente/admin aprueban SS → ven el filtro "Para aprobar".
+  const canApproveSS = user?.role === "FLEET_SUPERINTENDENT" || user?.role === "TENANT_ADMIN";
   const [filter, setFilter]       = useState<WoFilter>(initialFilter ?? "open");
   // Si el dashboard navega con un foco distinto, sincronizamos el filtro local.
   React.useEffect(() => {
@@ -543,7 +551,14 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     w => w.status === "PLANNED" || w.status === "IN_PROGRESS" || w.status === "ON_HOLD",
   );
   const overdueWOs = openWOs.filter(isOverdue);
-  const visibleWOs = filter === "overdue" ? overdueWOs : openWOs;
+  // SS SOLICITADAS = OT activa (no diferida/cerrada) sin aprobado ni autorizado.
+  const solicitadasWOs = (data?.items ?? []).filter(
+    w => (w.status === "PLANNED" || w.status === "IN_PROGRESS") && !w.aprobadoAt && !w.autorizadoAt,
+  );
+  const visibleWOs =
+    filter === "overdue"     ? overdueWOs :
+    filter === "solicitadas" ? solicitadasWOs :
+    openWOs;
 
   const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setInfoTab(null); setErr(null); };
   const back      = ()       => { setView("list"); setSelected(null); setInfoTab(null); setErr(null); };
@@ -924,6 +939,9 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         {([
           ["open",    "Activas",  openWOs.length,    "text-text-industrial/60"],
           ["overdue", "Vencidas", overdueWOs.length, "text-red-700 dark:text-red-400"],
+          ...(canApproveSS
+            ? [["solicitadas", "Para aprobar", solicitadasWOs.length, "text-blue-700 dark:text-blue-400"]] as [WoFilter, string, number, string][]
+            : []),
         ] as [WoFilter, string, number, string][]).map(([f, label, count, color]) => (
           <button
             key={f}
@@ -947,7 +965,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           </div>
         ) : visibleWOs.length === 0 ? (
           <div className="text-center py-10 text-text-industrial/30 text-sm">
-            {filter === "overdue" ? "Sin OTs vencidas" : "Sin órdenes activas"}
+            {filter === "overdue" ? "Sin OTs vencidas" : filter === "solicitadas" ? "Sin SS para aprobar" : "Sin órdenes activas"}
           </div>
         ) : (
           visibleWOs.map(wo => (

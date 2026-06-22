@@ -129,8 +129,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(R3_H * 2);
     cell(ML, canvas.y, W, R3_H, "EQUIPO AFECTADO", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     canvas.y += R3_H;
-    const assetCellText = assetIsSafetyCritical ? `${assetLabel}  [ISM 10.3]` : assetLabel;
-    cell(ML, canvas.y, W, R3_H, assetCellText, { fontSize: 9 });
+    cell(ML, canvas.y, W, R3_H, assetLabel, { fontSize: 9 });
     canvas.y += R3_H;
 
     // ── Datos de planificación (Responsable / Horas / Prioridad) ─────────────
@@ -144,9 +143,11 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
         { label: "Prioridad", value: sanitizePdfText(priorityLabel((wo as any).priority ?? "")), color: PRIORITY_COLOR[(wo as any).priority ?? ""] },
       ];
       const colW = Math.floor(W / planCols.length);
-      planCols.forEach((col, i) => { cell(ML + i * colW, canvas.y, colW, PLAN_ROW_H, col.label, { bold: true, fontSize: 7, bg: LIGHT, color: GRAY }); });
+      // La última columna toma el resto para que el borde derecho alinee con W.
+      const cwOf = (i: number) => (i === planCols.length - 1 ? W - colW * (planCols.length - 1) : colW);
+      planCols.forEach((col, i) => { cell(ML + i * colW, canvas.y, cwOf(i), PLAN_ROW_H, col.label, { bold: true, fontSize: 7, bg: LIGHT, color: GRAY }); });
       canvas.y += PLAN_ROW_H;
-      planCols.forEach((col, i) => { cell(ML + i * colW, canvas.y, colW, PLAN_ROW_H, col.value, { fontSize: 9, color: col.color }); });
+      planCols.forEach((col, i) => { cell(ML + i * colW, canvas.y, cwOf(i), PLAN_ROW_H, col.value, { fontSize: 9, color: col.color }); });
       canvas.y += PLAN_ROW_H;
     }
 
@@ -332,11 +333,15 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       doc.rect(bx, canvas.y, sigW2, SIG_H).strokeColor(BORDER).lineWidth(0.5).stroke();
       doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
         .text(label.toUpperCase(), bx + 6, canvas.y + 6, { width: sigW2 - 12, align: "center", lineBreak: false, characterSpacing: 0.3 });
+      // Caja del responsable (i===0): incrusta la firma configurada del asignado.
+      if (i === 0 && ctx.assignedSignatureBuffer) {
+        try { doc.image(ctx.assignedSignatureBuffer, bx + sigW2 / 2 - 28, canvas.y + 12, { fit: [56, 20], align: "center", valign: "center" }); } catch { /* skip */ }
+      }
       // Zona para firmar (a mano / Adobe Fill&Sign) y campo de texto para el nombre.
       doc.moveTo(bx + 10, canvas.y + 34).lineTo(bx + sigW2 - 10, canvas.y + 34).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
       doc.fontSize(6).font("Helvetica").fillColor(GRAY)
         .text("Firma", bx + 6, canvas.y + 36, { width: sigW2 - 12, align: "center", lineBreak: false });
-      ftext(bx + 8, canvas.y + 44, sigW2 - 16, 12, i === 0 ? (assignedName ?? "") : "", { fontSize: 8, align: "center" });
+      ftext(bx + 8, canvas.y + 44, sigW2 - 16, 12, i === 0 ? (ctx.assignedFormName ?? assignedName ?? "") : "", { fontSize: 8, align: "center" });
     });
     canvas.y += SIG_H;
 

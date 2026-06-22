@@ -36,9 +36,22 @@ export function RichTextArea({
   const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-crece el textarea al alto de su contenido para que editar no "achique"
+  // la caja respecto de la vista (que muestra todo el texto). El usuario puede
+  // ajustar manualmente con resize-y; minHeight mantiene `rows` como piso.
+  const autoGrow = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
   useEffect(() => {
-    if (editing && ref.current) ref.current.focus();
-  }, [editing]);
+    if (editing && ref.current) {
+      ref.current.focus();
+      autoGrow();
+    }
+  }, [editing, autoGrow]);
 
   const startEdit = useCallback(() => {
     if (!disabled) setEditing(true);
@@ -51,9 +64,11 @@ export function RichTextArea({
       <textarea
         ref={ref}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => { onChange(e.target.value); autoGrow(); }}
+        onInput={autoGrow}
         onBlur={stopEdit}
         rows={rows}
+        style={{ minHeight: `${rows * 1.625}rem` }}
         className={`${className} resize-y`}
         disabled={disabled}
         placeholder={placeholder}

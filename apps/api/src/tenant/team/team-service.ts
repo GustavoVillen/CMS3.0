@@ -69,7 +69,7 @@ export async function listTeamMembers(session: TenantAccessSession) {
   const memberships2 = await (prisma as any).tenantMembership.findMany({
     where: { tenantId },
     include: {
-      user: { select: { id: true, email: true, legacyUserId: true, firstName: true, lastName: true, status: true } },
+      user: { select: { id: true, email: true, legacyUserId: true, firstName: true, lastName: true, status: true, formName: true, signatureUrl: true } },
     },
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
   });
@@ -80,11 +80,41 @@ export async function listTeamMembers(session: TenantAccessSession) {
     legacyUserId: m.user.legacyUserId,
     firstName: m.user.firstName,
     lastName: m.user.lastName,
+    formName: m.user.formName,
+    signatureUrl: m.user.signatureUrl,
     role: m.role,
     status: m.status,
     assignedVesselCodes: m.assignedVesselCodes,
     joinedAt: m.joinedAt ?? m.createdAt,
   }));
+}
+
+// ─── Update Member Profile (nombre para formularios + firma) ────────────────────
+
+export async function updateMemberProfile(
+  session: TenantAccessSession,
+  userId: string,
+  input: { formName?: string | null; signatureUrl?: string | null },
+) {
+  ensureAdmin(session);
+  // La firma viaja como data URI base64; limitamos su tamaño (~1.5MB) por las dudas.
+  if (input.signatureUrl && input.signatureUrl.length > 1_500_000) {
+    throw new RouteError(400, "SIGNATURE_TOO_LARGE", "La imagen de firma es demasiado grande.");
+  }
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DB_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenantId = await getTenantId(prisma, session.tenantSlug);
+  const data: Record<string, unknown> = {};
+  if (input.formName !== undefined) data.formName = input.formName?.trim() || null;
+  if (input.signatureUrl !== undefined) data.signatureUrl = input.signatureUrl || null;
+
+  const result = await prisma.user.updateMany({
+    where: { id: userId, memberships: { some: { tenantId } } },
+    data,
+  });
+  if (result.count === 0) throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  return { ok: true };
 }
 
 // ─── Create Invitation ────────────────────────────────────────────────────────

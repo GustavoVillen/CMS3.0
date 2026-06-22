@@ -22,9 +22,9 @@ const SERVICE_REQUEST_CONFIG = {
     "comments", "generatedBy", "signatures", "communication", "distribution",
   ],
   footer: {
-    preparedBy: "Barlovento Servicios Profesionales",
-    reviewedBy: "Asesoría Jurídica",
-    approvedBy: "Gerente General",
+    preparedBy: "Departamento Tecnico Mercurio",
+    reviewedBy: "Gerente Mantenimiento",
+    approvedBy: "Gerencia General",
   },
   departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
   distribution: ["JMA", "CAP"],
@@ -82,12 +82,12 @@ async function main() {
     await (prisma as any).tenantSetting.update({
       where: { tenantId },
       data: {
-        controlledDocPreparedBy: "Barlovento Servicios Profesionales",
-        controlledDocReviewedBy: "Asesoría Jurídica",
-        controlledDocApprovedBy: "Gerente General",
+        controlledDocPreparedBy: "Departamento Tecnico Mercurio",
+        controlledDocReviewedBy: "Gerente Mantenimiento",
+        controlledDocApprovedBy: "Gerencia General",
       },
     });
-    console.log("✔ TenantSetting footer (Barlovento / Asesoría Jurídica / Gerente General)");
+    console.log("✔ TenantSetting footer (Departamento Tecnico Mercurio / Gerente Mantenimiento / Gerencia General)");
   }
 }
 
