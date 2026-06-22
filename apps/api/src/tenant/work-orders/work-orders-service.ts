@@ -134,7 +134,7 @@ interface MaintenancePlanRecord {
 }
 
 type WorkOrderDelegate = {
-  findMany(args: { where: Record<string, unknown>; orderBy?: unknown }): Promise<WorkOrderRecord[]>;
+  findMany(args: { where: Record<string, unknown>; orderBy?: unknown; select?: Record<string, unknown> }): Promise<WorkOrderRecord[]>;
   findFirst(args: { where: Record<string, unknown>; include?: Record<string, unknown> }): Promise<WorkOrderRecord | null>;
   create(args: { data: Record<string, unknown> }): Promise<WorkOrderRecord>;
   update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<WorkOrderRecord>;
@@ -302,7 +302,29 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   if (filters.assignedToUserId) where.assignedToUserId = filters.assignedToUserId;
   if (filters.assetId) where.assetId = filters.assetId;
 
-  const orders = await prisma.workOrder.findMany({ where, orderBy: { openDate: "desc" } });
+  // El listado NO devuelve los campos de texto/markdown pesados (description,
+  // observations, closeNotes, etc.): con cientos de OTs inflan la respuesta a
+  // varios MB y la tabla no los usa. El detalle de cada OT los trae aparte
+  // (getTenantWorkOrder). Allowlist explícita de los campos livianos del listado.
+  const orders = await prisma.workOrder.findMany({
+    where,
+    orderBy: { openDate: "desc" },
+    select: {
+      id: true, tenantId: true, vesselCode: true, assetId: true, maintenancePlanId: true,
+      workOrderCode: true, type: true, status: true, priority: true, criticality: true,
+      openDate: true, startDate: true, dueDate: true, completedDate: true,
+      independentVerifier: true, title: true, assignedToUserId: true,
+      estimatedHours: true, actualHours: true, taskMasterId: true,
+      riskLevel: true, checklistDocUrl: true, consequenceCategory: true,
+      department: true, location: true, communicationMethod: true, distribution: true,
+      woResult: true, executedByName: true, supportingDocUrl: true, runningHoursAtExecution: true,
+      createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
+      deletedAt: true, deletedByUserId: true,
+      reopenCount: true, lastReopenAt: true, lastReopenByUserId: true,
+      aprobadoByName: true, aprobadoAt: true, autorizadoByName: true, autorizadoAt: true,
+      rechazadoByName: true, rechazadoAt: true, rechazoReason: true,
+    },
+  });
 
   const assetIds = [...new Set(orders.map(o => o.assetId).filter(Boolean))];
   const userIds  = [...new Set(orders.map(o => (o as unknown as { assignedToUserId?: string | null }).assignedToUserId).filter((v): v is string => !!v))];
