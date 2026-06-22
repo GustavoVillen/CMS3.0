@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-06-22] FIX: móvil — tramitación de SS: faltaban Tarea y Responsable
+Agent: Claude Opus 4.8
+- La lista /app/pms/work-orders NO trae los textos pesados (description, criterios, LOTO, etc.):
+  al abrir la SS para tramitar ahora se busca el detalle completo (GET /work-orders/:id) y se
+  precargan Tarea + los campos editables del Plan.
+- Responsable usa el fallback del desktop: assignedToUserName ?? assignedToUserId (el assignee se
+  guarda como texto libre en assignedToUserId, por eso la lista no lo resolvía).
+
 [2026-06-22] TUNE: móvil — vista de tramitación de SS: secciones 1/2 reorganizadas
 Agent: Claude Opus 4.8
 - Sección 1 (lectura) ahora solo: Buque, Equipo, Tipo, Responsable, Tarea.

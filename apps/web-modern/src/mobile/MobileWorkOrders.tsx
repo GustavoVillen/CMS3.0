@@ -26,6 +26,7 @@ interface WO {
   autorizadoAt: string | null;
   assetName: string | null;
   assignedToUserName: string | null;
+  assignedToUserId: string | null;
   department: string | null;
   location: string | null;
   vesselCode: string;
@@ -586,15 +587,36 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const [edConseq, setEdConseq]         = useState("");
   const [edConseqRat, setEdConseqRat]   = useState("");
 
-  // Hidrata los campos editables del Plan al cambiar de SS.
+  // Al abrir una SS para tramitar, trae el DETALLE completo (la lista no incluye
+  // description ni los textos del plan) y precarga los campos editables.
   React.useEffect(() => {
-    setEdCriteria(selected?.acceptanceCriteria ?? "");
-    setEdLoto(selected?.loto ?? "");
-    setEdRisk(selected?.riskLevel ?? "");
-    setEdRiskResult(selected?.riskAnalysisResult ?? "");
-    setEdConseq(selected?.consequenceCategory ?? "");
-    setEdConseqRat(selected?.consequenceRationale ?? "");
+    if (!selected) return;
     setPlanOpen(false);
+    if (!(canApproveSS && (isSolicitada(selected) || isAprobada(selected)))) return;
+    // Hidrata con lo del item de lista mientras llega el detalle.
+    setEdCriteria(selected.acceptanceCriteria ?? "");
+    setEdLoto(selected.loto ?? "");
+    setEdRisk(selected.riskLevel ?? "");
+    setEdRiskResult(selected.riskAnalysisResult ?? "");
+    setEdConseq(selected.consequenceCategory ?? "");
+    setEdConseqRat(selected.consequenceRationale ?? "");
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await api.get<WO>(`/app/pms/work-orders/${selected.id}`);
+        if (cancelled) return;
+        setEdCriteria(full.acceptanceCriteria ?? "");
+        setEdLoto(full.loto ?? "");
+        setEdRisk(full.riskLevel ?? "");
+        setEdRiskResult(full.riskAnalysisResult ?? "");
+        setEdConseq(full.consequenceCategory ?? "");
+        setEdConseqRat(full.consequenceRationale ?? "");
+        // El detalle no resuelve assignedToUserName → conservar el de la lista.
+        setSelected(s => (s && s.id === full.id ? { ...full, assignedToUserName: s.assignedToUserName ?? full.assignedToUserName ?? null } : s));
+      } catch { /* usa los valores del item de lista */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
   const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -950,7 +972,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <ReadField label="Buque"       value={selected.vesselCode} />
               <ReadField label="Equipo"      value={selected.assetName} />
               <ReadField label="Tipo"        value={TYPE_LABEL[selected.type] ?? selected.type} />
-              <ReadField label="Responsable" value={selected.assignedToUserName} />
+              <ReadField label="Responsable" value={selected.assignedToUserName ?? selected.assignedToUserId} />
               <ReadField label="Tarea"       value={selected.description} full />
             </div>
           </section>
