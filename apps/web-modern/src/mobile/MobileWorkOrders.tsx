@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check } from "lucide-react";
+import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
-import { MarkdownText } from "../components/MarkdownText";
 import { AuthedImage, AuthedVideo, AuthedAudio } from "../lib/authed-media";
 
 interface WO {
@@ -23,7 +22,9 @@ interface WO {
   // APROBADA = aprobado, sin autorizar.
   aprobadoByName: string | null;
   aprobadoAt: string | null;
+  autorizadoByName: string | null;
   autorizadoAt: string | null;
+  checklistDocUrl: string | null;
   assetName: string | null;
   assignedToUserName: string | null;
   assignedToUserId: string | null;
@@ -51,13 +52,6 @@ const RISK_LABEL: Record<string, string> = {
   MEDIUM:   "Medio",
   HIGH:     "Alto",
   CRITICAL: "Crítico",
-};
-
-const RISK_COLOR: Record<string, string> = {
-  LOW:      "text-success-sea",
-  MEDIUM:   "text-yellow-700 dark:text-yellow-400",
-  HIGH:     "text-orange-700 dark:text-orange-400",
-  CRITICAL: "text-red-700 dark:text-red-400",
 };
 
 const CONSEQUENCE_LABEL: Record<string, string> = {
@@ -100,8 +94,6 @@ const SectionNum: React.FC<{ n: number; label: string }> = ({ n, label }) => (
   </div>
 );
 
-type InfoTab = "tarea" | "criteria" | "loto" | "riesgo" | "rcm";
-
 const STATUS_LABEL: Record<string, string> = {
   PLANNED:     "Planificada",
   IN_PROGRESS: "En ejecución",
@@ -131,110 +123,6 @@ type View = "list" | "detail" | "close";
 /** Filtro de la lista de OTs. "open"=activas; "overdue"=vencidas;
  *  "solicitadas"=SS pendientes de aprobar; "aprobadas"=SS pendientes de autorizar. */
 export type WoFilter = "open" | "overdue" | "solicitadas" | "aprobadas";
-
-// Acordeón con 5 chips de info del plan/OT.
-// Solo se puede tener un panel abierto a la vez. Si el campo correspondiente
-// está vacío, el chip queda deshabilitado y atenuado.
-const InfoAccordion: React.FC<{
-  wo: WO;
-  active: InfoTab | null;
-  onToggle: (tab: InfoTab | null) => void;
-}> = ({ wo, active, onToggle }) => {
-  const tabs: Array<{ id: InfoTab; label: string; hasContent: boolean }> = [
-    { id: "tarea",    label: "Tarea",     hasContent: !!wo.description },
-    { id: "criteria", label: "Criterios", hasContent: !!wo.acceptanceCriteria },
-    { id: "loto",     label: "LOTO",      hasContent: !!wo.loto },
-    { id: "riesgo",   label: "Riesgo",    hasContent: !!wo.riskLevel || !!wo.riskAnalysisResult },
-    { id: "rcm",      label: "RCM",       hasContent: !!wo.consequenceCategory || !!wo.consequenceRationale },
-  ];
-
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-5 gap-1.5">
-        {tabs.map(({ id, label, hasContent }) => {
-          const isActive = active === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onToggle(isActive ? null : id)}
-              disabled={!hasContent}
-              className={`py-2 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                !hasContent
-                  ? "bg-fg/5 border-fg/5 text-text-industrial/20 cursor-not-allowed"
-                  : isActive
-                  ? "bg-accent/15 text-accent border-accent/40"
-                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10 active:bg-fg/15"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {active === "tarea" && wo.description && (
-        <InfoPanel label="Tarea a ejecutar">
-          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.description}</p>
-        </InfoPanel>
-      )}
-
-      {active === "criteria" && wo.acceptanceCriteria && (
-        <InfoPanel label="Criterios de aceptación">
-          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.acceptanceCriteria}</p>
-        </InfoPanel>
-      )}
-
-      {active === "loto" && wo.loto && (
-        <InfoPanel label="LOTO (Lockout / Tagout)">
-          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.loto}</p>
-        </InfoPanel>
-      )}
-
-      {active === "riesgo" && (wo.riskLevel || wo.riskAnalysisResult) && (
-        <InfoPanel label="Nivel de riesgo">
-          {wo.riskLevel && (
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-text-industrial/40">Nivel</span>
-              <span className={`text-sm font-bold ${RISK_COLOR[wo.riskLevel] ?? "text-fg"}`}>
-                {RISK_LABEL[wo.riskLevel] ?? wo.riskLevel}
-              </span>
-            </div>
-          )}
-          {wo.riskAnalysisResult && (
-            <MarkdownText
-              text={wo.riskAnalysisResult}
-              className="text-xs text-fg/85 leading-relaxed"
-            />
-          )}
-        </InfoPanel>
-      )}
-
-      {active === "rcm" && (wo.consequenceCategory || wo.consequenceRationale) && (
-        <InfoPanel label="RCM — Consecuencia">
-          {wo.consequenceCategory && (
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-text-industrial/40">Categoría</span>
-              <span className="text-sm font-bold text-accent">
-                {CONSEQUENCE_LABEL[wo.consequenceCategory] ?? wo.consequenceCategory}
-              </span>
-            </div>
-          )}
-          {wo.consequenceRationale && (
-            <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{wo.consequenceRationale}</p>
-          )}
-        </InfoPanel>
-      )}
-    </div>
-  );
-};
-
-const InfoPanel: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div className="bg-fg/5 border border-accent/20 rounded-xl p-3 space-y-1.5">
-    <p className="text-[10px] uppercase tracking-wider text-accent/70 font-bold">{label}</p>
-    {children}
-  </div>
-);
 
 // Lista de avances de la OT: cada entrada muestra timestamp + media + texto.
 // canAdd: solo OTs abiertas pueden recibir nuevas notas.
@@ -559,7 +447,6 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   }, [initialFilter]);
   const [view, setView]           = useState<View>("list");
   const [selected, setSelected]   = useState<WO | null>(null);
-  const [infoTab, setInfoTab]     = useState<InfoTab | null>(null);
   const [showProgressSheet, setShowProgressSheet] = useState(false);
   const [notesReloadKey, setNotesReloadKey] = useState(0);
   const [woResult, setWoResult]   = useState<"SATISFACTORY" | "WITH_DEFICIENCIES">("SATISFACTORY");
@@ -586,13 +473,13 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const [edRiskResult, setEdRiskResult] = useState("");
   const [edConseq, setEdConseq]         = useState("");
   const [edConseqRat, setEdConseqRat]   = useState("");
+  const [uploadingChecklist, setUploadingChecklist] = useState(false);
 
-  // Al abrir una SS para tramitar, trae el DETALLE completo (la lista no incluye
-  // description ni los textos del plan) y precarga los campos editables.
+  // Al abrir el detalle, trae el DETALLE completo (la lista no incluye description
+  // ni los textos del plan) y precarga los campos editables del Plan.
   React.useEffect(() => {
     if (!selected) return;
     setPlanOpen(false);
-    if (!(canApproveSS && (isSolicitada(selected) || isAprobada(selected)))) return;
     // Hidrata con lo del item de lista mientras llega el detalle.
     setEdCriteria(selected.acceptanceCriteria ?? "");
     setEdLoto(selected.loto ?? "");
@@ -651,8 +538,8 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     filter === "aprobadas"   ? aprobadasWOs :
     openWOs;
 
-  const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setInfoTab(null); setErr(null); };
-  const back      = ()       => { setView("list"); setSelected(null); setInfoTab(null); setErr(null); };
+  const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setErr(null); };
+  const back      = ()       => { setView("list"); setSelected(null); setErr(null); };
   const openClose = ()       => {
     setView("close");
     setWoResult("SATISFACTORY");
@@ -706,6 +593,23 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       setSaving(false);
     }
   }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, photoFile, reload]);
+
+  const onChecklistSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f || !selected) return;
+    setUploadingChecklist(true); setErr(null);
+    try {
+      const { url } = await api.upload<{ url: string }>(`/app/attachments/upload?entityType=WorkOrder&entityId=${selected.id}`, f);
+      await api.patch(`/app/pms/work-orders/${selected.id}`, { checklistDocUrl: url });
+      setSelected(s => (s ? { ...s, checklistDocUrl: url } : s));
+      await reload();
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : "No se pudo subir el archivo.");
+    } finally {
+      setUploadingChecklist(false);
+    }
+  };
 
   const openApproval = (step: "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
     setApproverName(user?.name ?? "");
@@ -1105,6 +1009,8 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
   // ── Detail ──────────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
+    const canEdit = selected.status !== "CLOSED" && selected.status !== "CANCELLED";
+    const canClose = selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD";
     return (
       <div className="flex flex-col h-full">
         <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
@@ -1117,25 +1023,90 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Título */}
           <div>
             <p className="text-base font-bold text-fg">{selected.title ?? "(Sin título)"}</p>
             {selected.assetName && <p className="text-xs text-text-industrial/50 mt-0.5">{selected.assetName}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Criticidad</p>
-              <p className={`text-lg font-bold ${CRIT_COLOR[selected.criticality] ?? "text-fg"}`}>{selected.criticality}</p>
-            </div>
-            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Vencimiento</p>
-              <p className={`text-sm font-bold ${isOverdue(selected) ? "text-red-700 dark:text-red-400" : "text-fg"}`}>
-                {selected.dueDate ? selected.dueDate.slice(0, 10) : "—"}
-              </p>
-            </div>
-          </div>
 
-          {/* Acordeón de info: 5 chips expandibles con los campos del plan */}
-          <InfoAccordion wo={selected} active={infoTab} onToggle={setInfoTab} />
+          {/* #1 Tramitación (lectura) */}
+          <section className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Tramitación</p>
+            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-1">
+              {selected.aprobadoByName && (
+                <p className="text-xs text-fg"><span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${selected.aprobadoAt.slice(0, 10)}` : ""}</p>
+              )}
+              {selected.autorizadoByName && (
+                <p className="text-xs text-fg"><span className="font-bold text-emerald-700 dark:text-emerald-400">Autorizó:</span> {selected.autorizadoByName}{selected.autorizadoAt ? ` · ${selected.autorizadoAt.slice(0, 10)}` : ""}</p>
+              )}
+              {!selected.aprobadoByName && !selected.autorizadoByName && (
+                <p className="text-xs text-text-industrial/40">Sin registros de tramitación.</p>
+              )}
+            </div>
+          </section>
+
+          {/* #2 Información (lectura) */}
+          <section className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Información</p>
+            <div className="grid grid-cols-2 gap-2">
+              <ReadField label="Embarcación"     value={selected.vesselCode} />
+              <ReadField label="Equipo"          value={selected.assetName} />
+              <ReadField label="Criticidad"      value={selected.criticality} />
+              <ReadField label="Vencimiento"     value={selected.dueDate?.slice(0, 10)} />
+              <ReadField label="Responsable"     value={selected.assignedToUserName ?? selected.assignedToUserId} />
+              <ReadField label="Título de la OT" value={selected.title} full />
+              <ReadField label="Tarea"           value={selected.description} full />
+            </div>
+          </section>
+
+          {/* #3 Análisis (lectura, detrás de un botón) */}
+          <section className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Análisis</p>
+            <button
+              type="button"
+              onClick={() => setPlanOpen(v => !v)}
+              className="w-full flex items-center justify-between gap-2 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5"
+            >
+              <span className="text-xs font-bold text-fg">Ver análisis técnico</span>
+              <span className="text-[10px] text-text-industrial/50 flex items-center gap-1">
+                Criterios · LOTO · Riesgo · RCM
+                <ChevronDown className={`w-4 h-4 transition-transform ${planOpen ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+            {planOpen && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <ReadField label="Criterio de aceptación" value={selected.acceptanceCriteria} full />
+                <ReadField label="LOTO" value={selected.loto} full />
+                <ReadField label="Nivel de riesgo" value={selected.riskLevel ? (RISK_LABEL[selected.riskLevel] ?? selected.riskLevel) : null} />
+                <ReadField label="Resultado análisis de riesgo" value={selected.riskAnalysisResult} full />
+                <ReadField label="RCM" value={selected.consequenceCategory ? (CONSEQUENCE_LABEL[selected.consequenceCategory] ?? selected.consequenceCategory) : null} />
+                <ReadField label="Justificación RCM" value={selected.consequenceRationale} full />
+                {!selected.acceptanceCriteria && !selected.loto && !selected.riskLevel && !selected.riskAnalysisResult && !selected.consequenceCategory && (
+                  <p className="col-span-2 text-xs text-text-industrial/40">Sin análisis cargado.</p>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Documento checklist */}
+          <section className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Documento checklist</p>
+            {selected.checklistDocUrl ? (
+              <a href={selected.checklistDocUrl} target="_blank" rel="noreferrer"
+                className="flex items-center gap-2 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-xs font-medium text-accent">
+                <FileText className="w-4 h-4 shrink-0" /> Ver documento
+              </a>
+            ) : (
+              <p className="text-xs text-text-industrial/40">Sin documento.</p>
+            )}
+            {canEdit && (
+              <label className="flex items-center justify-center gap-2 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-xs font-bold text-text-industrial/70 active:bg-fg/10">
+                {uploadingChecklist ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {selected.checklistDocUrl ? "Reemplazar archivo" : "Subir archivo"}
+                <input type="file" className="hidden" disabled={uploadingChecklist} onChange={onChecklistSelect} />
+              </label>
+            )}
+          </section>
 
           {/* Observaciones consolidadas por AI (se actualizan tras cada avance) */}
           {selected.observations && (
@@ -1150,7 +1121,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
             </div>
           )}
 
-          {/* Registro de avances de trabajo */}
+          {/* Avances */}
           {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD" || selected.status === "CLOSED") && (
             <ProgressNotesPanel
               workOrderId={selected.id}
@@ -1167,59 +1138,62 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                 setTimeout(refetchWO, 6000);
               }}
               reloadKey={notesReloadKey}
-              canAdd={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
-              canDelete={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
+              canAdd={canEdit}
+              canDelete={canEdit}
             />
           )}
 
-          {/* Bloque de horas — siempre visible (permite cargarlas desde el detalle) */}
-          <HoursPanel
-            workOrderId={selected.id}
-            estimated={selected.estimatedHours}
-            actual={selected.actualHours}
-            isClosed={selected.status === "CLOSED"}
-            isEditable={selected.status !== "CLOSED" && selected.status !== "CANCELLED"}
-            onUpdated={(newActual) => setSelected({ ...selected, actualHours: newActual })}
-          />
-
-          {/* Datos de ejecución cuando ya está cerrada */}
-          {selected.status === "CLOSED" && (selected.executedByName || selected.completedDate || selected.runningHoursAtExecution != null) && (
-            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Ejecución</p>
-              {selected.executedByName && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-text-industrial/50">Ejecutado por</span>
-                  <span className="text-fg">{selected.executedByName}</span>
-                </div>
-              )}
-              {selected.completedDate && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-text-industrial/50">Fecha</span>
-                  <span className="text-fg">{selected.completedDate.slice(0, 10)}</span>
-                </div>
-              )}
-              {selected.runningHoursAtExecution != null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-text-industrial/50">Horas motor</span>
-                  <span className="text-fg tabular-nums">{selected.runningHoursAtExecution} h</span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Resultado de la OT */}
+          <section className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Resultado de la OT</p>
+            <HoursPanel
+              workOrderId={selected.id}
+              estimated={selected.estimatedHours}
+              actual={selected.actualHours}
+              isClosed={selected.status === "CLOSED"}
+              isEditable={canEdit}
+              onUpdated={(newActual) => setSelected({ ...selected, actualHours: newActual })}
+            />
+            {selected.status === "CLOSED" && (selected.executedByName || selected.completedDate || selected.runningHoursAtExecution != null) && (
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">Ejecución</p>
+                {selected.executedByName && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-text-industrial/50">Ejecutado por</span>
+                    <span className="text-fg">{selected.executedByName}</span>
+                  </div>
+                )}
+                {selected.completedDate && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-text-industrial/50">Fecha</span>
+                    <span className="text-fg">{selected.completedDate.slice(0, 10)}</span>
+                  </div>
+                )}
+                {selected.runningHoursAtExecution != null && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-text-industrial/50">Horas motor</span>
+                    <span className="text-fg tabular-nums">{selected.runningHoursAtExecution} h</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
 
           {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
-          <div className="space-y-2 pt-2">
-            {(selected.status === "PLANNED" || selected.status === "IN_PROGRESS" || selected.status === "ON_HOLD") && (
-              <button
-                type="button"
-                onClick={openClose}
-                className="w-full py-3 rounded-xl bg-success-sea text-fg text-sm font-bold"
-              >
-                Cerrar OT
-              </button>
-            )}
-          </div>
         </div>
+
+        {/* Footer */}
+        {canClose && (
+          <div className="shrink-0 p-3 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A]">
+            <button
+              type="button"
+              onClick={openClose}
+              className="w-full py-3 rounded-xl bg-success-sea text-white text-sm font-bold"
+            >
+              Cerrar OT
+            </button>
+          </div>
+        )}
 
         {/* Bottom sheet de registrar avance */}
         {showProgressSheet && (

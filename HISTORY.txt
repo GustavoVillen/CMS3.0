@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-06-22] FEAT: móvil — detalle de OT post-autorización reorganizado + checklist
+Agent: Claude Opus 4.8
+- Detalle reordenado: #1 Tramitación (lectura), #2 Información (Embarcación, Equipo, Criticidad,
+  Vencimiento, Responsable, Título, Tarea), #3 Análisis (botón → lectura: Criterios/LOTO/Riesgo/
+  Resultado/RCM), Documento Checklist (ver + subir/reemplazar archivo vía /attachments/upload),
+  Avances, Resultado de la OT, y footer fijo con "Cerrar OT".
+- Al abrir cualquier detalle se trae GET /work-orders/:id (la lista no incluye los textos pesados).
+- Limpieza: se elimina InfoAccordion/InfoPanel/RISK_COLOR/estado infoTab (código muerto).
+- Permisos de Trabajo queda pendiente (módulo aparte).
+
 [2026-06-22] FIX: móvil — tramitación de SS: faltaban Tarea y Responsable
 Agent: Claude Opus 4.8
 - La lista /app/pms/work-orders NO trae los textos pesados (description, criterios, LOTO, etc.):
