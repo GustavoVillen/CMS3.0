@@ -14,12 +14,20 @@ interface WO {
   title: string | null;
   description: string | null;
   status: string;
+  type: string;
+  priority: string;
   criticality: string;
+  openDate: string;
   dueDate: string | null;
-  // Tramitación (cadena de aprobación): SOLICITADA = sin aprobado ni autorizado.
+  // Tramitación (cadena de aprobación): SOLICITADA = sin aprobado ni autorizado;
+  // APROBADA = aprobado, sin autorizar.
+  aprobadoByName: string | null;
   aprobadoAt: string | null;
   autorizadoAt: string | null;
   assetName: string | null;
+  assignedToUserName: string | null;
+  department: string | null;
+  location: string | null;
   vesselCode: string;
   estimatedHours: number | null;
   actualHours: number | null;
@@ -58,6 +66,29 @@ const CONSEQUENCE_LABEL: Record<string, string> = {
   NON_OPERATIONAL: "No operacional",
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  PREVENTIVE: "Mant. Preventivo",
+  CORRECTIVE: "Mant. Correctivo / Reparación",
+  INSPECTION: "Inspección",
+};
+
+// Campo de solo-lectura para la vista de aprobación de SS. Si no hay valor, no renderiza.
+const ReadField: React.FC<{ label: string; value?: string | null; full?: boolean }> = ({ label, value, full }) =>
+  value ? (
+    <div className={`bg-fg/5 border border-fg/10 rounded-xl p-2.5 ${full ? "col-span-2" : ""}`}>
+      <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
+      <p className="text-xs text-fg mt-0.5 whitespace-pre-line break-words">{value}</p>
+    </div>
+  ) : null;
+
+// Encabezado de sección numerada (1 = Información, 2 = Plan), espejo del modal desktop.
+const SectionNum: React.FC<{ n: number; label: string }> = ({ n, label }) => (
+  <div className="flex items-center gap-2">
+    <span className="w-5 h-5 rounded-full bg-accent/15 text-accent text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
+    <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70">{label}</span>
+  </div>
+);
+
 type InfoTab = "tarea" | "criteria" | "loto" | "riesgo" | "rcm";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -86,9 +117,9 @@ const CRIT_COLOR: Record<string, string> = {
 
 type View = "list" | "detail" | "close";
 
-/** Filtro de la lista de OTs. "open" = todas las activas; "overdue" = solo vencidas;
- *  "solicitadas" = SS pendientes de aprobar (sin aprobado ni autorizado). */
-export type WoFilter = "open" | "overdue" | "solicitadas";
+/** Filtro de la lista de OTs. "open"=activas; "overdue"=vencidas;
+ *  "solicitadas"=SS pendientes de aprobar; "aprobadas"=SS pendientes de autorizar. */
+export type WoFilter = "open" | "overdue" | "solicitadas" | "aprobadas";
 
 // Acordeón con 5 chips de info del plan/OT.
 // Solo se puede tener un panel abierto a la vez. Si el campo correspondiente
@@ -530,6 +561,12 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving]       = useState(false);
   const [err, setErr]             = useState<string | null>(null);
+  // Tramitación de SS (aprobar / autorizar / rechazar) desde el detalle móvil.
+  const [approvalStep, setApprovalStep] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+  const [approverName, setApproverName] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  const [approving, setApproving]       = useState(false);
+  const [approvalErr, setApprovalErr]   = useState<string | null>(null);
 
   const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -546,18 +583,21 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const isOverdue = (wo: WO) => !!wo.dueDate && new Date(wo.dueDate) < today;
+  // SS SOLICITADA = OT activa (no diferida/cerrada) sin aprobado ni autorizado.
+  const isSolicitada = (wo: WO) => (wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && !wo.aprobadoAt && !wo.autorizadoAt;
+  // SS APROBADA = OT activa aprobada pero aún sin autorizar (pendiente de autorización).
+  const isAprobada = (wo: WO) => (wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && !!wo.aprobadoAt && !wo.autorizadoAt;
 
   const openWOs = (data?.items ?? []).filter(
     w => w.status === "PLANNED" || w.status === "IN_PROGRESS" || w.status === "ON_HOLD",
   );
   const overdueWOs = openWOs.filter(isOverdue);
-  // SS SOLICITADAS = OT activa (no diferida/cerrada) sin aprobado ni autorizado.
-  const solicitadasWOs = (data?.items ?? []).filter(
-    w => (w.status === "PLANNED" || w.status === "IN_PROGRESS") && !w.aprobadoAt && !w.autorizadoAt,
-  );
+  const solicitadasWOs = (data?.items ?? []).filter(isSolicitada);
+  const aprobadasWOs   = (data?.items ?? []).filter(isAprobada);
   const visibleWOs =
     filter === "overdue"     ? overdueWOs :
     filter === "solicitadas" ? solicitadasWOs :
+    filter === "aprobadas"   ? aprobadasWOs :
     openWOs;
 
   const selectWO  = (wo: WO) => { setSelected(wo); setView("detail"); setInfoTab(null); setErr(null); };
@@ -615,6 +655,33 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       setSaving(false);
     }
   }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, photoFile, reload]);
+
+  const openApproval = (step: "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
+    setApproverName(user?.name ?? "");
+    setRejectReason("");
+    setApprovalErr(null);
+    setApprovalStep(step);
+  };
+
+  const submitApproval = useCallback(async () => {
+    if (!selected || !approvalStep) return;
+    const name = approverName.trim();
+    if (!name) { setApprovalErr("Ingresá el nombre."); return; }
+    const reason = rejectReason.trim();
+    if (approvalStep === "RECHAZA" && !reason) { setApprovalErr("Ingresá el motivo del rechazo."); return; }
+    setApproving(true); setApprovalErr(null);
+    try {
+      await api.post(`/app/pms/work-orders/${selected.id}/approval`, {
+        step: approvalStep, name, reason: approvalStep === "RECHAZA" ? reason : undefined,
+      });
+      setApprovalStep(null);
+      await reload();
+      back();
+    } catch (e) {
+      setApprovalErr(e instanceof ApiError ? e.message : "No se pudo registrar. Intentá de nuevo.");
+      setApproving(false);
+    }
+  }, [selected, approvalStep, approverName, rejectReason, reload]);
 
   // ─── ESC guard: cierre con confirmación según vista ─────────────────────────
   const closeFormDirty =
@@ -788,6 +855,143 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     );
   }
 
+  // ── Detail: TRAMITACIÓN de SS ────────────────────────────────────────────────
+  // Para aprobadores (super/admin) con una SS pendiente: muestra secciones 1
+  // (Información) y 2 (Plan) en lectura + los botones del paso que corresponde:
+  //  · SOLICITADA → [APROBADA] / [NO APROBADA]   (APRUEBA / RECHAZA)
+  //  · APROBADA   → [AUTORIZADA] / [NO AUTORIZADA] (AUTORIZA / RECHAZA)
+  if (view === "detail" && selected && canApproveSS && (isSolicitada(selected) || isAprobada(selected))) {
+    const isAuth = isAprobada(selected);
+    const positiveStep: "APRUEBA" | "AUTORIZA" = isAuth ? "AUTORIZA" : "APRUEBA";
+    const positiveLabel = isAuth ? "AUTORIZADA" : "APROBADA";
+    const negativeLabel = isAuth ? "NO AUTORIZADA" : "NO APROBADA";
+    const phaseLabel    = isAuth ? "Aprobada" : "Solicitada";
+    const phaseBadgeCls = isAuth
+      ? "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20"
+      : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+    const sheetTitle   = approvalStep === "AUTORIZA" ? "Autorizar SS" : approvalStep === "APRUEBA" ? "Aprobar SS" : "Rechazar SS";
+    const sheetVerb    = approvalStep === "AUTORIZA" ? "autoriza"     : approvalStep === "APRUEBA" ? "aprueba"    : "rechaza";
+    const sheetConfirm = approvalStep === "AUTORIZA" ? "Autorizar"    : approvalStep === "APRUEBA" ? "Aprobar"    : "Rechazar";
+    return (
+      <div className="flex flex-col h-full">
+        <div className="shrink-0 flex items-center gap-3 p-4 border-b border-fg/10">
+          <button type="button" onClick={back} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="font-bold text-sm text-fg truncate flex-1">{selected.workOrderCode}</span>
+          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${phaseBadgeCls}`}>
+            {phaseLabel}
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          <div>
+            <p className="text-base font-bold text-fg">{selected.title ?? "(Sin título)"}</p>
+            {selected.assetName && <p className="text-xs text-text-industrial/50 mt-0.5">{selected.assetName}</p>}
+            {isAuth && selected.aprobadoByName && (
+              <p className="text-[11px] text-violet-700 dark:text-violet-400 mt-1">
+                Aprobó: {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${selected.aprobadoAt.slice(0, 10)}` : ""}
+              </p>
+            )}
+          </div>
+
+          {/* ── 1. Información ── */}
+          <section className="space-y-2">
+            <SectionNum n={1} label="Información" />
+            <div className="grid grid-cols-2 gap-2">
+              <ReadField label="Buque"       value={selected.vesselCode} />
+              <ReadField label="Equipo"      value={selected.assetName} />
+              <ReadField label="Tipo"        value={TYPE_LABEL[selected.type] ?? selected.type} />
+              <ReadField label="Prioridad"   value={selected.priority} />
+              <ReadField label="Criticidad"  value={selected.criticality} />
+              <ReadField label="Apertura"    value={selected.openDate?.slice(0, 10)} />
+              <ReadField label="Vencimiento" value={selected.dueDate?.slice(0, 10)} />
+            </div>
+          </section>
+
+          {/* ── 2. Plan ── */}
+          <section className="space-y-2">
+            <SectionNum n={2} label="Plan" />
+            <div className="grid grid-cols-2 gap-2">
+              <ReadField label="Departamento" value={selected.department} />
+              <ReadField label="Ubicación"    value={selected.location} />
+              <ReadField label="Responsable"  value={selected.assignedToUserName} />
+              <ReadField label="Tarea"        value={selected.description} full />
+              <ReadField label="Criterios de aceptación" value={selected.acceptanceCriteria} full />
+              <ReadField label="LOTO"         value={selected.loto} full />
+              <ReadField label="Riesgo"       value={selected.riskLevel ? (RISK_LABEL[selected.riskLevel] ?? selected.riskLevel) : null} />
+              <ReadField label="Análisis de riesgo" value={selected.riskAnalysisResult} full />
+              <ReadField label="Consecuencia" value={selected.consequenceCategory ? (CONSEQUENCE_LABEL[selected.consequenceCategory] ?? selected.consequenceCategory) : null} />
+              <ReadField label="Justificación" value={selected.consequenceRationale} full />
+            </div>
+          </section>
+        </div>
+
+        {/* Botones de tramitación */}
+        <div className="shrink-0 p-3 border-t border-fg/10 grid grid-cols-2 gap-2 bg-surface dark:bg-[#0D1B2A]">
+          <button type="button" onClick={() => openApproval(positiveStep)}
+            className="py-3 rounded-xl bg-success-sea text-white text-sm font-bold">
+            {positiveLabel}
+          </button>
+          <button type="button" onClick={() => openApproval("RECHAZA")}
+            className="py-3 rounded-xl bg-red-600 text-white text-sm font-bold">
+            {negativeLabel}
+          </button>
+        </div>
+
+        {/* Sheet: captura nombre (y motivo si rechaza) */}
+        {approvalStep && (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60" onClick={() => !approving && setApprovalStep(null)}>
+            <div className="w-full bg-surface dark:bg-[#0D1B2A] border-t border-fg/10 rounded-t-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+              <div>
+                <h2 className="text-base font-bold text-fg">{sheetTitle}</h2>
+                <p className="text-xs text-text-industrial/60 mt-0.5">{selected.workOrderCode} · {selected.assetName ?? selected.title ?? ""}</p>
+                {approvalStep === "RECHAZA" && (
+                  <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">La SS queda marcada como rechazada y vuelve a Solicitada.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
+                  Nombre de quien {sheetVerb}
+                </label>
+                <input
+                  value={approverName}
+                  onChange={e => setApproverName(e.target.value)}
+                  placeholder="Nombre y apellido"
+                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              {approvalStep === "RECHAZA" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
+                  <textarea
+                    rows={3}
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    placeholder="Por qué no se aprueba/autoriza…"
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+                  />
+                </div>
+              )}
+              {approvalErr && <p className="text-[11px] text-red-600 dark:text-red-400">{approvalErr}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setApprovalStep(null)} disabled={approving}
+                  className="flex-1 py-2.5 rounded-xl border border-fg/10 text-sm text-text-industrial/70 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => void submitApproval()} disabled={approving}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-1.5 ${approvalStep === "RECHAZA" ? "bg-red-600" : "bg-success-sea"}`}>
+                  {approving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {sheetConfirm}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── Detail ──────────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
     return (
@@ -940,7 +1144,10 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           ["open",    "Activas",  openWOs.length,    "text-text-industrial/60"],
           ["overdue", "Vencidas", overdueWOs.length, "text-red-700 dark:text-red-400"],
           ...(canApproveSS
-            ? [["solicitadas", "Para aprobar", solicitadasWOs.length, "text-blue-700 dark:text-blue-400"]] as [WoFilter, string, number, string][]
+            ? [
+                ["solicitadas", "Para aprobar",   solicitadasWOs.length, "text-blue-700 dark:text-blue-400"],
+                ["aprobadas",   "Para autorizar", aprobadasWOs.length,   "text-violet-700 dark:text-violet-400"],
+              ] as [WoFilter, string, number, string][]
             : []),
         ] as [WoFilter, string, number, string][]).map(([f, label, count, color]) => (
           <button
@@ -965,7 +1172,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           </div>
         ) : visibleWOs.length === 0 ? (
           <div className="text-center py-10 text-text-industrial/30 text-sm">
-            {filter === "overdue" ? "Sin OTs vencidas" : filter === "solicitadas" ? "Sin SS para aprobar" : "Sin órdenes activas"}
+            {filter === "overdue" ? "Sin OTs vencidas" : filter === "solicitadas" ? "Sin SS para aprobar" : filter === "aprobadas" ? "Sin SS para autorizar" : "Sin órdenes activas"}
           </div>
         ) : (
           visibleWOs.map(wo => (

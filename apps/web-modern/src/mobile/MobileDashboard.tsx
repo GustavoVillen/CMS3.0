@@ -73,6 +73,8 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
   const overdueWOs = openWOs.filter(w => w.dueDate && new Date(w.dueDate) < today);
   // SS SOLICITADAS = OT activa sin aprobado ni autorizado (etapa SOLICITADA de la tramitación).
   const solicitadasWOs = openWOs.filter(w => !w.aprobadoAt && !w.autorizadoAt);
+  // SS APROBADAS = OT activa aprobada pero aún sin autorizar (pendiente de autorización).
+  const aprobadasWOs   = openWOs.filter(w => w.aprobadoAt && !w.autorizadoAt);
   const openDefs   = (defData?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
   const lowSpares  = (spData?.items  ?? []).filter(s => s.currentStock <= s.reorderPoint);
 
@@ -129,6 +131,30 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
             <p className="text-[10px] text-text-industrial/50">Tocá para revisarlas</p>
           </div>
           <ChevronRight className="w-4 h-4 text-blue-700/60 dark:text-blue-400/60 shrink-0" />
+        </button>
+      )}
+
+      {/* SS para autorizar — solo superintendente/admin, y solo si hay aprobadas pendientes */}
+      {canApproveSS && aprobadasWOs.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate?.("ots", { woFilter: "aprobadas" })}
+          className="w-full rounded-xl border border-violet-500/40 bg-violet-500/5 p-3 flex items-center gap-3 text-left"
+        >
+          <span className="relative shrink-0">
+            <ClipboardCheck className="w-5 h-5 text-violet-700 dark:text-violet-400" />
+            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-75 animate-ping motion-reduce:hidden" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" />
+            </span>
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
+              {aprobadasWOs.length} SS para autorizar
+            </p>
+            <p className="text-[10px] text-text-industrial/50">Tocá para revisarlas</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-violet-700/60 dark:text-violet-400/60 shrink-0" />
         </button>
       )}
 

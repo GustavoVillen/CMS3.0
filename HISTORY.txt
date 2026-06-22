@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-06-22] FEAT: móvil — tramitación de SS (aprobar + autorizar) desde el detalle
+Agent: Claude Opus 4.8
+- Al abrir una SS pendiente (super/admin), el detalle muestra secciones 1 (Información) y 2 (Plan)
+  en lectura y los botones del paso correspondiente:
+  · SOLICITADA → [APROBADA]/[NO APROBADA] (APRUEBA/RECHAZA)
+  · APROBADA   → [AUTORIZADA]/[NO AUTORIZADA] (AUTORIZA/RECHAZA), con "Aprobó: …" de contexto.
+- Dos listas/chips separados: "Para aprobar" (azul, solicitadas) y "Para autorizar" (violeta, aprobadas),
+  con sus dos widgets en el panel. Reusa POST /app/pms/work-orders/:id/approval (secuencia y permisos ya
+  validados en backend). El rechazo limpia aprobado/autorizado y vuelve la SS a Solicitada con motivo.
+
 [2026-06-22] TUNE: móvil — el widget "SS para aprobar" titila para llamar la atención
 Agent: Claude Opus 4.8
 - Punto azul con animate-ping sobre el ícono (CSS puro: opacity/transform → GPU, sin JS ni timers).
