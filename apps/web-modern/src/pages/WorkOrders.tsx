@@ -769,6 +769,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [assignedTo, setAssignedTo]         = useState(workOrder.assignedToUserName ?? workOrder.assignedToUserId ?? "");
   const [dueDate, setDueDate]               = useState(toDateInputValue(workOrder.dueDate));
   const [openDate, setOpenDate]             = useState(toDateInputValue(workOrder.openDate));
+  const [type, setType]                     = useState(workOrder.type);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(workOrder.acceptanceCriteria ?? "");
   const [loto, setLoto]                     = useState(workOrder.loto ?? "");
   const [riskLevel, setRiskLevel]           = useState(workOrder.riskLevel ?? "");
@@ -798,7 +799,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [supportingDocUrl] = useState(workOrder.supportingDocUrl ?? "");
   // Solo OT correctivas ("Reparación"): detalle del defecto que motivó la reparación.
   // Si se completa, al cerrar la OT se abre el alta de defecto pre-cargada.
-  const isCorrective = workOrder.type === "CORRECTIVE";
+  const isCorrective = type === "CORRECTIVE";
   const [defectDetail, setDefectDetail] = useState("");
 
   // ── Spare usages ──
@@ -1151,6 +1152,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         assignedToUserId: normalizeOptionalText(assignedTo),
         dueDate: dueDate || null,
         openDate: openDate || undefined,
+        type,
         acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
         loto,
         riskLevel: normalizeOptionalText(riskLevel),
@@ -1174,7 +1176,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [title, description, assignedTo, dueDate, openDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+  }, [title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale,
       department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
@@ -1183,7 +1185,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    title, description, assignedTo, dueDate, openDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale,
     department, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
@@ -1355,7 +1357,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               {([
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
                 [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-fg"],
-                [t("wo.modal.type"),       null, null, <CategoryBadge key="cat" type={workOrder.type} />],
+                [t("wo.modal.type"),       null, null,
+                  tramitaPhase === "SOLICITADA" && isEditable
+                    ? <select key="ty" value={type} onChange={e => setType(e.target.value)}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50">
+                        <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
+                        <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
+                        <option value="INSPECTION">{t("wo.type.inspection")}</option>
+                      </select>
+                    : <CategoryBadge key="cat" type={type} />],
                 [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
                 [t("wo.modal.priority"),   workOrder.priority,              "text-fg"],
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
