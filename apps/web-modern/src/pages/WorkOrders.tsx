@@ -768,6 +768,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [description, setDescription]       = useState(workOrder.description ?? "");
   const [assignedTo, setAssignedTo]         = useState(workOrder.assignedToUserName ?? workOrder.assignedToUserId ?? "");
   const [dueDate, setDueDate]               = useState(toDateInputValue(workOrder.dueDate));
+  const [openDate, setOpenDate]             = useState(toDateInputValue(workOrder.openDate));
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(workOrder.acceptanceCriteria ?? "");
   const [loto, setLoto]                     = useState(workOrder.loto ?? "");
   const [riskLevel, setRiskLevel]           = useState(workOrder.riskLevel ?? "");
@@ -1149,6 +1150,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         description: normalizeOptionalText(description),
         assignedToUserId: normalizeOptionalText(assignedTo),
         dueDate: dueDate || null,
+        openDate: openDate || undefined,
         acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
         loto,
         riskLevel: normalizeOptionalText(riskLevel),
@@ -1172,7 +1174,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       onSaved();
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+  }, [title, description, assignedTo, dueDate, openDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale,
       department, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
@@ -1181,7 +1183,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    title, description, assignedTo, dueDate, openDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale,
     department, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
@@ -1357,8 +1359,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
                 [t("wo.modal.priority"),   workOrder.priority,              "text-fg"],
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
-                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg"],
-                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg"],
+                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
+                  tramitaPhase === "SOLICITADA" && isEditable
+                    ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                    : undefined],
+                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
+                  tramitaPhase === "SOLICITADA" && isEditable
+                    ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                    : undefined],
               ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
                 <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>

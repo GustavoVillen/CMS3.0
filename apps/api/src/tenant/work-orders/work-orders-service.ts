@@ -52,6 +52,7 @@ export interface UpdateWorkOrderInput {
   priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   criticality?: "A" | "B" | "C";
   dueDate?: string | Date | null;
+  openDate?: string | Date | null;
   title?: string | null;
   description?: string | null;
   assignedToUserId?: string | null;
@@ -577,6 +578,8 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.priority !== undefined) data.priority = payload.priority;
   if (payload.criticality !== undefined) data.criticality = payload.criticality;
   if (payload.dueDate !== undefined) data.dueDate = parseOptionalDate(payload.dueDate, "dueDate");
+  // openDate es NOT NULL en el schema: solo se actualiza si llega una fecha válida.
+  if (payload.openDate !== undefined) { const d = parseOptionalDate(payload.openDate, "openDate"); if (d) data.openDate = d; }
   if (payload.title !== undefined) data.title = normalizeOptionalText(payload.title);
   if (payload.description !== undefined) data.description = normalizeOptionalText(payload.description);
   if (payload.assignedToUserId !== undefined) data.assignedToUserId = normalizeOptionalText(payload.assignedToUserId);
