@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevWorkOrdersForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { workOrderPrefix } from "../../common/wo-code";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
@@ -421,7 +422,7 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
   // Race protection con @@unique(workOrderCode): retry en P2002.
   const created = await withUniqueRetry(async (attempt) => {
     const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-    const workOrderCode = `WO-${vesselCode}-${yy}-${String(existingCount + 1 + attempt).padStart(4, "0")}`;
+    const workOrderCode = `${workOrderPrefix(session.tenantSlug)}-${vesselCode}-${yy}-${String(existingCount + 1 + attempt).padStart(4, "0")}`;
     return prisma.workOrder.create({
       data: {
         tenantId,

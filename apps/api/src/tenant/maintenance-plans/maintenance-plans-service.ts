@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { workOrderPrefix } from "../../common/wo-code";
 import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
@@ -1142,18 +1143,22 @@ export async function openFormalWorkOrder(
   const woYY = String(woYear).slice(-2);
   // Usa MAX del número de secuencia en el código (no COUNT por createdAt) para
   // tolerar renombrados manuales y backdating sin generar códigos duplicados.
-  const codePrefix = `WO-${plan.vesselCode}-${woYY}-`;
+  // Cuerpo del código sin prefijo: "{VESSEL}-{YY}-". Match prefijo-agnóstico
+  // (3 chars: "WO-"/"SS-") para que la secuencia CONTINÚE desde códigos viejos
+  // al cambiar de prefijo, sin reiniciar en 0001.
+  const codeBody = `${plan.vesselCode}-${woYY}-`;
+  const codePrefix = `${workOrderPrefix(session.tenantSlug)}-${codeBody}`;
   const maxSeqRows = await prismaRaw.$queryRawUnsafe<{ max_seq: number | null }[]>(
     `SELECT MAX(CAST(SUBSTRING("workOrderCode", ${codePrefix.length + 1}) AS INTEGER)) AS max_seq
      FROM "WorkOrder"
      WHERE "tenantId" = $1 AND "vesselCode" = $2
-       AND "workOrderCode" LIKE $3 AND "deletedAt" IS NULL`,
+       AND SUBSTRING("workOrderCode", 4) LIKE $3 AND "deletedAt" IS NULL`,
     plan.tenantId,
     plan.vesselCode,
-    codePrefix + "%",
+    codeBody + "%",
   );
   const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
-  const workOrderCode = `WO-${plan.vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
+  const workOrderCode = `${workOrderPrefix(session.tenantSlug)}-${plan.vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
 
   // Hereda del plan cuando el payload no lo provee. Si el payload manda
   // el campo (incluso vacío "", el normalizeOptionalText lo convertirá a
