@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-06-22] TUNE: móvil — vista de tramitación de SS: secciones 1/2 reorganizadas
+Agent: Claude Opus 4.8
+- Sección 1 (lectura) ahora solo: Buque, Equipo, Tipo, Responsable, Tarea.
+- Sección 2 = un botón "Análisis técnico" que despliega campos EDITABLES: Criterios de aceptación,
+  LOTO, Nivel de riesgo (selector), Resultado análisis de riesgo, RCM (consecuencia + justificación).
+- Las ediciones del Plan se guardan vía PATCH al aprobar/autorizar (solo si cambiaron). Backend ya
+  permite editar a super/admin (ensureCanManageWorkOrders) en estado PLANNED.
+
 [2026-06-22] FEAT: móvil — tramitación de SS (aprobar + autorizar) desde el detalle
 Agent: Claude Opus 4.8
 - Al abrir una SS pendiente (super/admin), el detalle muestra secciones 1 (Información) y 2 (Plan)

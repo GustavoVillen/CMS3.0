@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ChevronLeft, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check } from "lucide-react";
+import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { api, ApiError } from "../lib/api";
@@ -71,6 +71,16 @@ const TYPE_LABEL: Record<string, string> = {
   CORRECTIVE: "Mant. Correctivo / Reparación",
   INSPECTION: "Inspección",
 };
+
+// Nivel de riesgo (selector editable en la sección 2 de la tramitación).
+const RISK_OPTS: Array<[string, string]> = [
+  ["LOW", "Bajo"], ["MEDIUM", "Medio"], ["HIGH", "Alto"], ["CRITICAL", "Crítico"],
+];
+// RCM / consecuencia (select editable).
+const CONSEQUENCE_OPTS: Array<[string, string]> = [
+  ["SAFETY", "Seguridad"], ["ENVIRONMENTAL", "Ambiental"],
+  ["OPERATIONAL", "Operacional"], ["NON_OPERATIONAL", "No operacional"],
+];
 
 // Campo de solo-lectura para la vista de aprobación de SS. Si no hay valor, no renderiza.
 const ReadField: React.FC<{ label: string; value?: string | null; full?: boolean }> = ({ label, value, full }) =>
@@ -567,6 +577,25 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const [rejectReason, setRejectReason] = useState("");
   const [approving, setApproving]       = useState(false);
   const [approvalErr, setApprovalErr]   = useState<string | null>(null);
+  // Sección 2 (Plan): campos editables, ocultos detrás de un botón.
+  const [planOpen, setPlanOpen]         = useState(false);
+  const [edCriteria, setEdCriteria]     = useState("");
+  const [edLoto, setEdLoto]             = useState("");
+  const [edRisk, setEdRisk]             = useState("");
+  const [edRiskResult, setEdRiskResult] = useState("");
+  const [edConseq, setEdConseq]         = useState("");
+  const [edConseqRat, setEdConseqRat]   = useState("");
+
+  // Hidrata los campos editables del Plan al cambiar de SS.
+  React.useEffect(() => {
+    setEdCriteria(selected?.acceptanceCriteria ?? "");
+    setEdLoto(selected?.loto ?? "");
+    setEdRisk(selected?.riskLevel ?? "");
+    setEdRiskResult(selected?.riskAnalysisResult ?? "");
+    setEdConseq(selected?.consequenceCategory ?? "");
+    setEdConseqRat(selected?.consequenceRationale ?? "");
+    setPlanOpen(false);
+  }, [selected?.id]);
 
   const onPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -671,6 +700,25 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     if (approvalStep === "RECHAZA" && !reason) { setApprovalErr("Ingresá el motivo del rechazo."); return; }
     setApproving(true); setApprovalErr(null);
     try {
+      // Persistir ediciones del Plan (criterios/LOTO/riesgo/RCM) solo si cambiaron.
+      const planPayload = {
+        acceptanceCriteria:   edCriteria.trim() || null,
+        loto:                 edLoto.trim() || null,
+        riskLevel:            edRisk || null,
+        riskAnalysisResult:   edRiskResult.trim() || null,
+        consequenceCategory:  (edConseq || null) as WO["consequenceCategory"],
+        consequenceRationale: edConseqRat.trim() || null,
+      };
+      const planDirty =
+        (planPayload.acceptanceCriteria   ?? "") !== (selected.acceptanceCriteria   ?? "") ||
+        (planPayload.loto                 ?? "") !== (selected.loto                 ?? "") ||
+        (planPayload.riskLevel            ?? "") !== (selected.riskLevel            ?? "") ||
+        (planPayload.riskAnalysisResult   ?? "") !== (selected.riskAnalysisResult   ?? "") ||
+        (planPayload.consequenceCategory  ?? "") !== (selected.consequenceCategory  ?? "") ||
+        (planPayload.consequenceRationale ?? "") !== (selected.consequenceRationale ?? "");
+      if (planDirty) {
+        await api.patch(`/app/pms/work-orders/${selected.id}`, planPayload);
+      }
       await api.post(`/app/pms/work-orders/${selected.id}/approval`, {
         step: approvalStep, name, reason: approvalStep === "RECHAZA" ? reason : undefined,
       });
@@ -681,7 +729,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       setApprovalErr(e instanceof ApiError ? e.message : "No se pudo registrar. Intentá de nuevo.");
       setApproving(false);
     }
-  }, [selected, approvalStep, approverName, rejectReason, reload]);
+  }, [selected, approvalStep, approverName, rejectReason, edCriteria, edLoto, edRisk, edRiskResult, edConseq, edConseqRat, reload]);
 
   // ─── ESC guard: cierre con confirmación según vista ─────────────────────────
   const closeFormDirty =
@@ -895,35 +943,76 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
             )}
           </div>
 
-          {/* ── 1. Información ── */}
+          {/* ── 1. Información (lectura) ── */}
           <section className="space-y-2">
             <SectionNum n={1} label="Información" />
             <div className="grid grid-cols-2 gap-2">
               <ReadField label="Buque"       value={selected.vesselCode} />
               <ReadField label="Equipo"      value={selected.assetName} />
               <ReadField label="Tipo"        value={TYPE_LABEL[selected.type] ?? selected.type} />
-              <ReadField label="Prioridad"   value={selected.priority} />
-              <ReadField label="Criticidad"  value={selected.criticality} />
-              <ReadField label="Apertura"    value={selected.openDate?.slice(0, 10)} />
-              <ReadField label="Vencimiento" value={selected.dueDate?.slice(0, 10)} />
+              <ReadField label="Responsable" value={selected.assignedToUserName} />
+              <ReadField label="Tarea"       value={selected.description} full />
             </div>
           </section>
 
-          {/* ── 2. Plan ── */}
+          {/* ── 2. Plan (editable, detrás de un botón) ── */}
           <section className="space-y-2">
             <SectionNum n={2} label="Plan" />
-            <div className="grid grid-cols-2 gap-2">
-              <ReadField label="Departamento" value={selected.department} />
-              <ReadField label="Ubicación"    value={selected.location} />
-              <ReadField label="Responsable"  value={selected.assignedToUserName} />
-              <ReadField label="Tarea"        value={selected.description} full />
-              <ReadField label="Criterios de aceptación" value={selected.acceptanceCriteria} full />
-              <ReadField label="LOTO"         value={selected.loto} full />
-              <ReadField label="Riesgo"       value={selected.riskLevel ? (RISK_LABEL[selected.riskLevel] ?? selected.riskLevel) : null} />
-              <ReadField label="Análisis de riesgo" value={selected.riskAnalysisResult} full />
-              <ReadField label="Consecuencia" value={selected.consequenceCategory ? (CONSEQUENCE_LABEL[selected.consequenceCategory] ?? selected.consequenceCategory) : null} />
-              <ReadField label="Justificación" value={selected.consequenceRationale} full />
-            </div>
+            <button
+              type="button"
+              onClick={() => setPlanOpen(v => !v)}
+              className="w-full flex items-center justify-between gap-2 bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5"
+            >
+              <span className="text-xs font-bold text-fg">Análisis técnico</span>
+              <span className="text-[10px] text-text-industrial/50 flex items-center gap-1">
+                Criterios · LOTO · Riesgo · RCM
+                <ChevronDown className={`w-4 h-4 transition-transform ${planOpen ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+
+            {planOpen && (
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">Criterios de aceptación</label>
+                  <textarea rows={2} value={edCriteria} onChange={e => setEdCriteria(e.target.value)}
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">LOTO</label>
+                  <textarea rows={2} value={edLoto} onChange={e => setEdLoto(e.target.value)}
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">Nivel de riesgo</label>
+                  <div className="flex gap-1.5">
+                    {RISK_OPTS.map(([val, label]) => (
+                      <button key={val} type="button" onClick={() => setEdRisk(edRisk === val ? "" : val)}
+                        className={`flex-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${
+                          edRisk === val ? "bg-accent text-accent-fg border-accent" : "bg-fg/5 text-text-industrial/60 border-fg/10"
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">Resultado análisis de riesgo</label>
+                  <textarea rows={2} value={edRiskResult} onChange={e => setEdRiskResult(e.target.value)}
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">RCM</label>
+                  <select value={edConseq} onChange={e => setEdConseq(e.target.value)}
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-accent/50">
+                    <option value="">Sin clasificar</option>
+                    {CONSEQUENCE_OPTS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                  </select>
+                  <textarea rows={2} value={edConseqRat} onChange={e => setEdConseqRat(e.target.value)} placeholder="Justificación"
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
+                </div>
+                <p className="text-[10px] text-text-industrial/40">Los cambios se guardan al aprobar / autorizar.</p>
+              </div>
+            )}
           </section>
         </div>
 
