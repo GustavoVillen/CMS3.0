@@ -3,6 +3,7 @@ import { Droplets, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { AssetSearchDropdown } from "./AssetSearchDropdown";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -415,10 +416,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     {loadingAssets
                       ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
                       : assets.length > 0
-                        ? <select value={assetId} onChange={e => { setAssetId(e.target.value); setAssetSuggested(false); }} className={inputCls}>
-                            <option value="">{t("wo.modal.selectEquipment")}</option>
-                            {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode} — {a.name}</option>)}
-                          </select>
+                        ? <AssetSearchDropdown assets={assets} value={assetId}
+                            onChange={id => { setAssetId(id); setAssetSuggested(false); }}
+                            placeholder={t("wo.modal.selectEquipment")} />
                         : <input value={assetId} onChange={e => { setAssetId(e.target.value); setAssetSuggested(false); }}
                             placeholder={t("wo.modal.noEquipmentEnterId")} className={inputCls} />
                     }
@@ -466,10 +466,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     {loadingAssets
                       ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
                       : assets.length > 0
-                        ? <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls}>
-                            <option value="">{t("wo.modal.selectEquipment")}</option>
-                            {assets.map(a => <option key={a.id} value={a.id}>{a.assetCode} — {a.name}</option>)}
-                          </select>
+                        ? <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId}
+                            placeholder={t("wo.modal.selectEquipment")} />
                         : <input value={assetId} onChange={e => setAssetId(e.target.value)}
                             placeholder={vesselCode ? t("wo.modal.noEquipmentEnterId") : t("wo.modal.enterVesselFirst")}
                             className={inputCls} />

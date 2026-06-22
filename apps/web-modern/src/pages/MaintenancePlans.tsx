@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   ClipboardList,
   Clock,
   ExternalLink,
@@ -36,6 +35,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { RichTextArea } from "../components/RichTextArea";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -290,128 +290,7 @@ const aiLabelStyle: React.CSSProperties = { backgroundColor: "#0c1f3f", color: "
 
 // ─── Asset live-search dropdown ────────────────────────────────────────────────
 
-interface AssetOption { id: string; assetCode: string; name: string | null; }
-
-function AssetSearchDropdown({ assets, value, onChange, disabled, placeholder }: {
-  assets: AssetOption[];
-  value: string;
-  onChange: (id: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-}) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const selected = assets.find(a => a.id === value) ?? null;
-
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    if (!q) return assets;
-    return assets.filter(a =>
-      a.assetCode.toLowerCase().includes(q) || (a.name ?? "").toLowerCase().includes(q)
-    );
-  }, [assets, query]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const handleOpen = () => {
-    if (disabled) return;
-    setOpen(true);
-    setQuery("");
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
-  const handleSelect = (a: AssetOption) => {
-    onChange(a.id);
-    setOpen(false);
-    setQuery("");
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange("");
-    setOpen(false);
-    setQuery("");
-  };
-
-  return (
-    <div ref={containerRef} className="relative">
-      {/* Trigger */}
-      <button
-        type="button"
-        onClick={handleOpen}
-        disabled={disabled}
-        className={`${inputCls} flex items-center gap-2 text-left cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : "hover:border-accent/40"}`}
-      >
-        {selected ? (
-          <>
-            {selected.name
-              ? <span className="flex-1 truncate text-yellow-700 dark:text-yellow-400 text-sm font-semibold">{selected.name}</span>
-              : <span className="flex-1 truncate font-mono text-accent text-sm">{selected.assetCode}</span>}
-            {selected.name && <span className="text-fg/40 text-xs font-mono truncate max-w-[160px]">{selected.assetCode}</span>}
-            <X className="w-3.5 h-3.5 text-fg/30 hover:text-fg shrink-0" onClick={handleClear} />
-          </>
-        ) : (
-          <>
-            <span className="flex-1 text-fg/30 text-sm">{placeholder ?? t("mp.selectAsset")}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-fg/30 shrink-0" />
-          </>
-        )}
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-surface dark:bg-[#111827] border border-fg/10 rounded-xl shadow-xl overflow-hidden">
-          {/* Search input */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-fg/10">
-            <Search className="w-3.5 h-3.5 text-fg/30 shrink-0" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Escape") { setOpen(false); setQuery(""); }
-                if (e.key === "Enter" && filtered.length === 1) handleSelect(filtered[0]);
-              }}
-              placeholder={t("mp.searchByCodeOrName")}
-              className="flex-1 bg-transparent text-sm text-fg placeholder-fg/20 outline-none"
-            />
-          </div>
-          {/* Options */}
-          <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-fg/30 text-center">{t("common.noResults")}</div>
-            ) : filtered.map(a => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => handleSelect(a)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-fg/5 transition-colors ${a.id === value ? "bg-accent/10" : ""}`}
-              >
-                {a.name
-                  ? <span className="text-yellow-700 dark:text-yellow-400 text-xs font-semibold truncate flex-1">{a.name}</span>
-                  : <span className="font-mono text-accent text-xs shrink-0">{a.assetCode}</span>}
-                {a.name && <span className="font-mono text-fg/40 text-xs shrink-0">{a.assetCode}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// AssetSearchDropdown se movió a components/AssetSearchDropdown.tsx (compartido con el modal de Nueva OT).
 
 // ─── ExecutionModal ───────────────────────────────────────────────────────────
 
@@ -1271,6 +1150,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-loto", {
         assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
+        taskType,
         acceptanceCriteria: acceptanceCriteria || null,
       });
       setLoto(res.text || prev);
@@ -1279,7 +1159,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     } finally {
       setLoadingLoto(false);
     }
-  }, [readOnly, loto, description, title, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
+  }, [readOnly, loto, description, title, taskType, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
 
   const handleRiskClick = useCallback(async () => {
     if (readOnly || loadingRisk) return;
@@ -1288,6 +1168,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       const res = await api.post<{ level: string; probability: string | null; consequence: string | null; analysis: string }>("/app/pms/maintenance-plans/suggest-risk", {
         assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
+        taskType,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
       });
@@ -1308,7 +1189,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     finally {
       setLoadingRisk(false);
     }
-  }, [readOnly, description, title, acceptanceCriteria, loto, loadingRisk, resolveAssetLabel]);
+  }, [readOnly, description, title, taskType, acceptanceCriteria, loto, loadingRisk, resolveAssetLabel]);
 
   const handleConsequenceClick = useCallback(async () => {
     if (readOnly || loadingConsequence) return;
@@ -1321,6 +1202,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           assetSfiCode: sfiGroupNumber != null ? `${sfiGroupNumber}00` : null,
           planTitle: title || null,
           planDescription: description || null,
+          taskType,
         },
       );
       if (res.category && ["SAFETY","ENVIRONMENTAL","OPERATIONAL","NON_OPERATIONAL"].includes(res.category)) {
@@ -1331,7 +1213,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     finally {
       setLoadingConsequence(false);
     }
-  }, [readOnly, plan, title, description, loadingConsequence, resolveAssetLabel, sfiGroupNumber]);
+  }, [readOnly, plan, title, description, taskType, loadingConsequence, resolveAssetLabel, sfiGroupNumber]);
 
   const onSave = async () => {
     setSaving(true);
@@ -2610,6 +2492,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("mp.col.vesselTaskSfi"),
+      width: "180px",
       sortValue: row => `${row.vesselCode} ${row.taskCode}`,
       render: row => (
         <div className="flex flex-col gap-0.5 min-w-[130px]">
@@ -2645,6 +2528,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "frequency",
       header: t("mp.col.frequency"),
+      width: "150px",
       sortValue: row => row.frequencyMonths ?? row.frequencyHours ?? 0,
       render: row => (
         <div className="flex flex-col gap-0.5">
@@ -2666,6 +2550,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "lastExecutionDate",
       header: t("mp.col.lastExecution"),
+      width: "130px",
       sortValue: row => row.lastExecutionDate ?? row.lastExecutionHours ?? null,
       render: row => {
         if (needsHours(row.triggerType)) {
@@ -2682,6 +2567,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "nextDueDate",
       header: t("mp.col.nextDue"),
+      width: "140px",
       sortValue: row => row.nextDueDate ?? row.nextDueHours ?? null,
       render: row => {
         const isOverdue = row.executionStatus === "OVERDUE";
@@ -2699,6 +2585,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "situacion",
       header: t("mp.col.status"),
+      width: "120px",
       sortValue: row => computeStatus(row),
       render: row => <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />,
     },
@@ -2706,6 +2593,7 @@ export const MaintenancePlansPage: React.FC = () => {
     {
       key: "taskCode" as keyof MaintenancePlan,
       header: t("mp.col.actions"),
+      width: "150px",
       sortable: false,
       render: row => {
         if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
@@ -2832,6 +2720,11 @@ export const MaintenancePlansPage: React.FC = () => {
             </button>
           );
         })}
+        {typeof sfiTab === "number" && (
+          <span className="ml-2 pl-3 border-l border-fg/15 text-xs font-semibold text-fg/70">
+            {t(`sfi.g.${sfiTab}` as Parameters<typeof t>[0])}
+          </span>
+        )}
       </div>
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
@@ -2871,6 +2764,7 @@ export const MaintenancePlansPage: React.FC = () => {
         keyFn={row => row.id}
         emptyText={t("empty.maintenancePlans")}
         onRowClick={row => { void openEdit(row); }}
+        layoutFixed
       />
 
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
