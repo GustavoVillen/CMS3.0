@@ -113,7 +113,15 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           onClick={() => onNavigate?.("ots", { woFilter: "solicitadas" })}
           className="w-full rounded-xl border border-blue-500/40 bg-blue-500/5 p-3 flex items-center gap-3 text-left"
         >
-          <ClipboardCheck className="w-5 h-5 text-blue-700 dark:text-blue-400 shrink-0" />
+          <span className="relative shrink-0">
+            <ClipboardCheck className="w-5 h-5 text-blue-700 dark:text-blue-400" />
+            {/* Indicador de atención: ping CSS puro (anima opacity/transform → GPU,
+                sin JS ni timers). Se apaga con prefers-reduced-motion (batería/a11y). */}
+            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75 animate-ping motion-reduce:hidden" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+            </span>
+          </span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
               {solicitadasWOs.length} SS para aprobar

@@ -1,5 +1,10 @@
 HISTORY.txt
 
+[2026-06-22] TUNE: móvil — el widget "SS para aprobar" titila para llamar la atención
+Agent: Claude Opus 4.8
+- Punto azul con animate-ping sobre el ícono (CSS puro: opacity/transform → GPU, sin JS ni timers).
+  Texto fijo y legible. Se apaga con prefers-reduced-motion (motion-reduce:hidden) por batería/a11y.
+
 [2026-06-22] FEAT: móvil — widget "SS para aprobar" para superintendente/admin
 Agent: Claude Opus 4.8
 - MobileDashboard: banner azul (color de la etapa SOLICITADA) visible solo si el rol es FLEET_SUPERINTENDENT
