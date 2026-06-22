@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-06-22] FEAT: PDF/Word OT — 4ª columna "CIERRA LA SS" en TRAMITACIÓN DE LA ORDEN
+Agent: Claude Opus 4.8
+- Bloque de firmas pasa de 3 a 4 columnas: SOLICITA · APRUEBA · AUTORIZA · CIERRA LA SS.
+- CIERRA: name=executedByName, date=completedDate, firma resuelta de updatedByUserId cuando la
+  OT está CLOSED (la OT cerrada queda bloqueada → updatedByUserId = quien cerró).
+- Aplica a template-mercurio.ts (PDF) y word-work-order.ts (Word). data-loader expone
+  cierraSignatureBuffer; shared.ts agrega el campo al WorkOrderPdfContext.
+- Los docs de SS usan otro formato de tramitación (tabla con checkboxes) → no se tocan.
+
 [2026-06-22] FEAT: móvil — detalle de OT post-autorización reorganizado + checklist
 Agent: Claude Opus 4.8
 - Detalle reordenado: #1 Tramitación (lectura), #2 Información (Embarcación, Equipo, Criticidad,

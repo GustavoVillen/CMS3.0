@@ -121,6 +121,13 @@ export interface WorkOrderPdfContext {
   assignedSignatureBuffer?: Buffer | null;
   /** Display name (or email fallback) for the user that created the WO. */
   createdByName: string | null;
+  /** Nombre para formularios del creador (= Solicita) y firmas de tramitación. */
+  createdByFormName?: string | null;
+  solicitaSignatureBuffer?: Buffer | null;
+  apruebaSignatureBuffer?: Buffer | null;
+  autorizaSignatureBuffer?: Buffer | null;
+  /** Firma de quien cerró la OT (= "Cierra la SS"); solo si la OT está CLOSED. */
+  cierraSignatureBuffer?: Buffer | null;
   /** Tenant settings snapshot. */
   tenant: WorkOrderPdfTenantInfo | null;
   /** Resolved logo image buffer or null. */

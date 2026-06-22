@@ -52,17 +52,42 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
-  // ── Created-by user ──
+  // ── Created-by user (= "Solicita") ──
   let createdByName: string | null = null;
+  let createdByFormName: string | null = null;
   if (prismaRaw && (wo as any).createdByUserId) {
     try {
       const u = await (prismaRaw as any).user.findUnique({
         where: { id: (wo as any).createdByUserId },
-        select: { firstName: true, lastName: true, email: true },
+        select: { firstName: true, lastName: true, email: true, formName: true },
       });
-      if (u) createdByName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || null;
+      if (u) {
+        createdByName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || null;
+        createdByFormName = u.formName?.trim() || null;
+      }
     } catch { /* non-blocking */ }
   }
+
+  // ── Firmas de tramitación: Solicita (creador), Aprueba, Autoriza ──
+  // Se incrustan en el recuadro TRAMITACION del PDF cuando el paso fue hecho
+  // por un usuario con firma cargada.
+  const sigByUserId = async (userId: string | null | undefined): Promise<Buffer | null> => {
+    if (!prismaRaw || !userId) return null;
+    try {
+      const u = await (prismaRaw as any).user.findUnique({ where: { id: userId }, select: { signatureUrl: true } });
+      const m = u?.signatureUrl?.match?.(/^data:image\/[a-z+]+;base64,(.+)$/i);
+      if (m) return Buffer.from(m[1], "base64");
+    } catch { /* non-blocking */ }
+    return null;
+  };
+  const solicitaSignatureBuffer = await sigByUserId((wo as any).createdByUserId);
+  const apruebaSignatureBuffer  = await sigByUserId((wo as any).aprobadoByUserId);
+  const autorizaSignatureBuffer = await sigByUserId((wo as any).autorizadoByUserId);
+  // "Cierra la SS": firma de quien cerró la OT. La OT cerrada queda bloqueada,
+  // así que updatedByUserId = quien la cerró.
+  const cierraSignatureBuffer = (wo as any).status === "CLOSED"
+    ? await sigByUserId((wo as any).updatedByUserId)
+    : null;
 
   // ── Tenant info + logo + template key ──
   let tenant: WorkOrderPdfContext["tenant"] = null;
@@ -219,6 +244,11 @@ export async function loadWorkOrderPdfContext(
     assignedFormName,
     assignedSignatureBuffer,
     createdByName,
+    createdByFormName,
+    solicitaSignatureBuffer,
+    apruebaSignatureBuffer,
+    autorizaSignatureBuffer,
+    cierraSignatureBuffer,
     tenant,
     tenantLogoBuffer,
     spareUsages,

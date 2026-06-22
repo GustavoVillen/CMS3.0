@@ -184,40 +184,13 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     ensureSpace(38);
     canvas.y += textArea(ML, canvas.y, W, sanitizePdfText((wo as any).acceptanceCriteria ?? ""), 38);
 
-    // ── TRAMITACION DE LA ORDEN ──────────────────────────────────────────────
-    section("TRAMITACION DE LA ORDEN");
-    const TR_RH = 20;
-    const trPasoW = Math.floor(W * 0.22);
-    const trFechaW = Math.floor(W * 0.22);
-    const trNombreW = W - trPasoW - trFechaW;
-    ensureSpace(TR_RH);
-    cell(ML, canvas.y, trPasoW, TR_RH, "PASO", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY });
-    cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, "NOMBRE", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY });
-    cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, "FECHA", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
-    canvas.y += TR_RH;
-    const trRows: Array<[string, string, string]> = [
-      ["Solicita", createdByName ?? "—", fmt((wo as any).createdAt)],
-      ["Aprueba",  (wo as any).aprobadoByName ?? "—", (wo as any).aprobadoAt ? fmt((wo as any).aprobadoAt) : "—"],
-      ["Autoriza", (wo as any).autorizadoByName ?? "—", (wo as any).autorizadoAt ? fmt((wo as any).autorizadoAt) : "—"],
-    ];
-    for (const [paso, nombre, fecha] of trRows) {
-      ensureSpace(TR_RH);
-      cell(ML, canvas.y, trPasoW, TR_RH, paso, { bold: true, fontSize: 8 });
-      cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, sanitizePdfText(nombre), { fontSize: 9 });
-      cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, fecha, { fontSize: 8, align: "center" });
-      canvas.y += TR_RH;
-    }
-    if ((wo as any).rechazadoAt) {
-      ensureSpace(TR_RH);
-      cell(ML, canvas.y, trPasoW, TR_RH, "Rechaza", { bold: true, fontSize: 8, color: "#b91c1c" });
-      cell(ML + trPasoW, canvas.y, trNombreW, TR_RH, sanitizePdfText((wo as any).rechazadoByName ?? "—"), { fontSize: 9, color: "#b91c1c" });
-      cell(ML + trPasoW + trNombreW, canvas.y, trFechaW, TR_RH, fmt((wo as any).rechazadoAt), { fontSize: 8, align: "center", color: "#b91c1c" });
-      canvas.y += TR_RH;
-      if ((wo as any).rechazoReason) {
-        section("MOTIVO DEL RECHAZO");
-        ensureSpace(30);
-        canvas.y += textArea(ML, canvas.y, W, sanitizePdfText((wo as any).rechazoReason), 30);
-      }
+    // ── MOTIVO DEL RECHAZO (si la OT fue rechazada) ──────────────────────────
+    // La tramitación (Solicita/Aprueba/Autoriza) se muestra abajo, en el recuadro
+    // de firmas. Acá solo queda el motivo del rechazo cuando corresponde.
+    if ((wo as any).rechazadoAt && (wo as any).rechazoReason) {
+      section("MOTIVO DEL RECHAZO");
+      ensureSpace(30);
+      canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(`Rechazada por ${(wo as any).rechazadoByName ?? "—"} (${fmt((wo as any).rechazadoAt)}): ${(wo as any).rechazoReason}`), 30);
     }
 
     // ── REGISTRO DE AVANCES ──────────────────────────────────────────────────
@@ -321,27 +294,34 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     fcheck(ML + distHalf + 8, canvas.y + 6, "Copia: Destinatarios");
     canvas.y += DIST_H;
 
-    // ── FIRMAS ───────────────────────────────────────────────────────────────
-    canvas.y += SEC_GAP;
-    ensureSpace(68);
-    const sigLabels = ["Responsable de ejecucion", "Supervisor / Jefe de Maquinas", "Verificado por"];
-    const sigW2 = Math.floor(W / 3);
-    const SIG_H = 56;
-    sigLabels.forEach((label, i) => {
-      const bx = ML + i * sigW2;
-      doc.rect(bx, canvas.y, sigW2, SIG_H).fillColor(LIGHT).fill();
-      doc.rect(bx, canvas.y, sigW2, SIG_H).strokeColor(BORDER).lineWidth(0.5).stroke();
+    // ── TRAMITACION DE LA ORDEN (firma digital + nombre + fecha) ──────────────
+    section("TRAMITACION DE LA ORDEN");
+    const SIG_H = 110;
+    ensureSpace(SIG_H);
+    const trCols: Array<{ label: string; name: string | null; date: Date | string | null; sig: Buffer | null | undefined }> = [
+      { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: (wo as any).createdAt, sig: ctx.solicitaSignatureBuffer },
+      { label: "APRUEBA",      name: (wo as any).aprobadoByName ?? null,     date: (wo as any).aprobadoAt, sig: ctx.apruebaSignatureBuffer },
+      { label: "AUTORIZA",     name: (wo as any).autorizadoByName ?? null,   date: (wo as any).autorizadoAt, sig: ctx.autorizaSignatureBuffer },
+      { label: "CIERRA LA SS", name: (wo as any).executedByName ?? null,     date: (wo as any).completedDate, sig: ctx.cierraSignatureBuffer },
+    ];
+    const trCW = Math.floor(W / 4);
+    trCols.forEach((c, i) => {
+      const bx = ML + i * trCW;
+      const bw = i === trCols.length - 1 ? W - trCW * (trCols.length - 1) : trCW; // última columna toma el resto (alineación)
+      doc.rect(bx, canvas.y, bw, SIG_H).fillColor(LIGHT).fill();
+      doc.rect(bx, canvas.y, bw, SIG_H).strokeColor(BORDER).lineWidth(0.5).stroke();
       doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
-        .text(label.toUpperCase(), bx + 6, canvas.y + 6, { width: sigW2 - 12, align: "center", lineBreak: false, characterSpacing: 0.3 });
-      // Caja del responsable (i===0): incrusta la firma configurada del asignado.
-      if (i === 0 && ctx.assignedSignatureBuffer) {
-        try { doc.image(ctx.assignedSignatureBuffer, bx + sigW2 / 2 - 28, canvas.y + 12, { fit: [56, 20], align: "center", valign: "center" }); } catch { /* skip */ }
+        .text(c.label, bx + 6, canvas.y + 5, { width: bw - 12, align: "center", lineBreak: false, characterSpacing: 0.5 });
+      // Firma digital (si el paso fue hecho por un usuario con firma cargada). 3x.
+      if (c.sig) {
+        try { doc.image(c.sig, bx + bw / 2 - 78, canvas.y + 16, { fit: [156, 66], align: "center", valign: "center" }); } catch { /* skip */ }
       }
-      // Zona para firmar (a mano / Adobe Fill&Sign) y campo de texto para el nombre.
-      doc.moveTo(bx + 10, canvas.y + 34).lineTo(bx + sigW2 - 10, canvas.y + 34).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
+      // Línea de firma + nombre + fecha.
+      doc.moveTo(bx + 8, canvas.y + 88).lineTo(bx + bw - 8, canvas.y + 88).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
+      doc.fontSize(8).font("Helvetica").fillColor(BLACK)
+        .text(sanitizePdfText(c.name ?? "—"), bx + 5, canvas.y + 90, { width: bw - 10, align: "center", lineBreak: false, ellipsis: true });
       doc.fontSize(6).font("Helvetica").fillColor(GRAY)
-        .text("Firma", bx + 6, canvas.y + 36, { width: sigW2 - 12, align: "center", lineBreak: false });
-      ftext(bx + 8, canvas.y + 44, sigW2 - 16, 12, i === 0 ? (ctx.assignedFormName ?? assignedName ?? "") : "", { fontSize: 8, align: "center" });
+        .text(c.date ? fmt(c.date) : "", bx + 5, canvas.y + 100, { width: bw - 10, align: "center", lineBreak: false });
     });
     canvas.y += SIG_H;
 

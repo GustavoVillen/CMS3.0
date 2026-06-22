@@ -74,19 +74,11 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   parts.push(docSection("CRITERIOS DE ACEPTACION"));
   parts.push(docTextBox(w.acceptanceCriteria ?? "", "36pt"));
 
-  // Tramitación
-  parts.push(docSpacer());
-  parts.push(docSection("TRAMITACION DE LA ORDEN"));
-  const trRows: string[][] = [
-    ["Solicita", createdByName ?? "—", fmt(w.createdAt)],
-    ["Aprueba", w.aprobadoByName ?? "—", w.aprobadoAt ? fmt(w.aprobadoAt) : "—"],
-    ["Autoriza", w.autorizadoByName ?? "—", w.autorizadoAt ? fmt(w.autorizadoAt) : "—"],
-  ];
-  if (w.rechazadoAt) trRows.push(["Rechaza", w.rechazadoByName ?? "—", fmt(w.rechazadoAt)]);
-  parts.push(docTable(["PASO", "NOMBRE", "FECHA"], trRows));
+  // Motivo del rechazo (si aplica). La tramitación con firma va al pie.
   if (w.rechazadoAt && w.rechazoReason) {
+    parts.push(docSpacer());
     parts.push(docSection("MOTIVO DEL RECHAZO"));
-    parts.push(docTextBox(w.rechazoReason, "30pt"));
+    parts.push(docTextBox(`Rechazada por ${w.rechazadoByName ?? "—"} (${fmt(w.rechazadoAt)}): ${w.rechazoReason}`, "30pt"));
   }
 
   // Registro de avances
@@ -140,16 +132,21 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   parts.push(docSection("DISTRIBUCION"));
   parts.push(docCheckboxRow(["Original: Recursos Humanos", "Copia: Destinatarios"], []));
 
-  // Firmas
+  // Tramitación de la orden (firma digital + nombre + fecha)
   parts.push(docSpacer());
-  const sigLabels = ["RESPONSABLE DE EJECUCION", "SUPERVISOR / JEFE DE MAQUINAS", "VERIFICADO POR"];
-  const sigImg = bufferToDataUri(ctx.assignedSignatureBuffer);
-  const sigName = ctx.assignedFormName ?? assignedName;
-  parts.push(`<table><tr>${sigLabels.map((l, i) => {
-    const inner = i === 0
-      ? `${sigImg ? `<img src="${sigImg}" style="height:26pt;max-width:90%;"><br>` : "<br><br>"}${sigName ? esc(sigName) : "_______________"}`
-      : `<br><br><br>_______________`;
-    return `<td style="height:48pt;background:#F3F4F6;text-align:center;vertical-align:top;font-size:7pt;color:#6B7280;font-weight:bold;">${esc(l)}<br>${inner}<br><span style="font-size:6pt;">Firma</span></td>`;
+  parts.push(docSection("TRAMITACION DE LA ORDEN"));
+  const trCols = [
+    { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: w.createdAt, sig: bufferToDataUri(ctx.solicitaSignatureBuffer) },
+    { label: "APRUEBA",      name: w.aprobadoByName, date: w.aprobadoAt, sig: bufferToDataUri(ctx.apruebaSignatureBuffer) },
+    { label: "AUTORIZA",     name: w.autorizadoByName, date: w.autorizadoAt, sig: bufferToDataUri(ctx.autorizaSignatureBuffer) },
+    { label: "CIERRA LA SS", name: w.executedByName, date: w.completedDate, sig: bufferToDataUri(ctx.cierraSignatureBuffer) },
+  ];
+  parts.push(`<table><tr>${trCols.map(c => {
+    const img = c.sig ? `<img src="${c.sig}" style="height:72pt;max-width:95%;">` : "";
+    return `<td style="width:25%;height:110pt;background:#F3F4F6;text-align:center;vertical-align:top;font-size:7pt;color:#6B7280;">` +
+      `<b>${esc(c.label)}</b><br>${img}<br>_______________<br>` +
+      `<span style="font-size:8pt;color:#111827;">${esc(c.name ?? "—")}</span>` +
+      `${c.date ? `<br><span style="font-size:6pt;">${esc(fmt(c.date))}</span>` : ""}</td>`;
   }).join("")}</tr></table>`);
 
   // Nivel de riesgo + análisis + LOTO
