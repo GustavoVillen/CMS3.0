@@ -1218,6 +1218,24 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } finally { setResuming(false); }
   }, [workOrder, onOpenAction, t]);
 
+  // Cierre finalizado: cierra el modal y, si es OT correctiva con detalle de
+  // defecto, abre el alta de defecto pre-cargada. Se usa tanto en el cierre
+  // directo como tras aceptar el aviso de stock, para que el defecto se abra
+  // igual aunque haya repuestos que superen el stock.
+  const finishClose = useCallback(() => {
+    onSaved();
+    if (isCorrective && defectDetail.trim().length > 0) {
+      navigate("/defects", { state: { createDefectFromWo: {
+        workOrderId: workOrder.id,
+        vesselCode: workOrder.vesselCode,
+        assetId: workOrder.assetId,
+        assetName: workOrder.assetName ?? null,
+        detail: defectDetail.trim(),
+        taskContext: [workOrder.title, workOrder.description].filter(Boolean).join(" — ") || null,
+      } } });
+    }
+  }, [onSaved, isCorrective, defectDetail, navigate, workOrder]);
+
   const onClose_WO = useCallback(async () => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
     setClosing(true); setErr(null);
@@ -1233,29 +1251,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
       });
-      // OT correctiva con detalle de defecto → tras cerrar, abrir el alta de defecto
-      // pre-cargada (vessel + equipo de la OT, IA redacta descripción y severidad).
-      const goToDefect = isCorrective && defectDetail.trim().length > 0;
+      // Si hubo repuestos sin stock, se muestra el aviso y el defecto (si aplica)
+      // se abre al "Aceptar y cerrar". Si no, finalizamos directo.
       if (res.failedMovements && res.failedMovements.length > 0) {
         setClosingWarning(t("wo.modal.closeStockWarning").replace("{count}", String(res.failedMovements.length)));
-      } else if (goToDefect) {
-        onSaved();
-        navigate("/defects", { state: { createDefectFromWo: {
-          workOrderId: workOrder.id,
-          vesselCode: workOrder.vesselCode,
-          assetId: workOrder.assetId,
-          assetName: workOrder.assetName ?? null,
-          detail: defectDetail.trim(),
-          taskContext: [workOrder.title, workOrder.description].filter(Boolean).join(" — ") || null,
-        } } });
       } else {
-        onSaved();
+        finishClose();
       }
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setClosing(false); }
   }, [woResult, executedByName, executionDate, observations, supportingDocFile, supportingDocUrl,
-      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, onSaved, t, workOrder,
-      isCorrective, defectDetail, navigate]);
+      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
@@ -2020,7 +2026,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {closingWarning && (
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
               <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
-              <button onClick={onSaved} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+              <button onClick={finishClose} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
                 {t("common.acceptAndClose")}
               </button>
             </div>
