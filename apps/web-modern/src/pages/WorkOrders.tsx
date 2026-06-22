@@ -13,6 +13,7 @@ import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
+import { downloadDoc } from "../lib/download-doc";
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -541,7 +542,8 @@ const ProgressNotesPanel: React.FC<{
   canEdit: boolean;
   onAdd: () => void;
   reloadKey: number;
-}> = ({ workOrderId, canAdd, canDelete, canEdit, onAdd, reloadKey }) => {
+  onChanged?: () => void;
+}> = ({ workOrderId, canAdd, canDelete, canEdit, onAdd, reloadKey, onChanged }) => {
   const t = useT();
   const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
@@ -560,20 +562,22 @@ const ProgressNotesPanel: React.FC<{
     try {
       await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
       await reload();
+      onChanged?.();
     } catch (e) {
       window.alert(e instanceof ApiError ? e.message : t("error.deleteProgress"));
     }
-  }, [workOrderId, reload]);
+  }, [workOrderId, reload, onChanged]);
 
   const handleSave = useCallback(async (noteId: string, text: string) => {
     try {
       await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text });
       await reload();
+      onChanged?.();
     } catch (e) {
       window.alert(e instanceof ApiError ? e.message : "No se pudo guardar el avance.");
       throw e;
     }
-  }, [workOrderId, reload]);
+  }, [workOrderId, reload, onChanged]);
 
   return (
     <div className="space-y-2">
@@ -774,9 +778,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     (workOrder as any).runningHoursAtExecution != null ? String((workOrder as any).runningHoursAtExecution) : ""
   );
   const [observations, setObservations]     = useState(workOrder.observations ?? workOrder.closeNotes ?? "");
+  // Último valor de Observaciones traído del servidor. Sirve para refrescar el
+  // campo tras un avance (la IA lo reconsolida) SIN pisar ediciones manuales del
+  // usuario: solo se actualiza si el campo sigue igual a este baseline.
+  const lastServerObsRef = React.useRef(workOrder.observations ?? workOrder.closeNotes ?? "");
   const [deficienciasText, setDeficienciasText] = useState("");
   const [supportingDocFile, setSupportingDocFile] = useState<File | null>(null);
   const [supportingDocUrl] = useState(workOrder.supportingDocUrl ?? "");
+  // Solo OT correctivas ("Reparación"): detalle del defecto que motivó la reparación.
+  // Si se completa, al cerrar la OT se abre el alta de defecto pre-cargada.
+  const isCorrective = workOrder.type === "CORRECTIVE";
+  const [defectDetail, setDefectDetail] = useState("");
 
   // ── Spare usages ──
   interface SpareUsage { spareId: string; spareName: string; unit: string; qty: number; criticality: string; available: number; }
@@ -875,13 +887,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [planExpanded, setPlanExpanded] = useState(!workOrder.maintenancePlanId);
   const fromPlan = !!workOrder.maintenancePlanId;
 
-  // Recarga spareUsages desde la API tras el pipeline asincrónico de detección de repuestos.
-  // Se llama con un delay después de guardar un avance para dar tiempo al pipeline de IA.
-  const reloadSpareUsages = useCallback(() => {
+  // Tras guardar/editar/borrar un avance, reconsulta la OT (con delay para dar
+  // tiempo al pipeline asincrónico de IA que reconsolida Observaciones y detecta
+  // repuestos) y refresca la ventana: spareUsages + Observaciones.
+  const refreshAfterAvance = useCallback(() => {
     const delay = 5000;
     setTimeout(async () => {
       try {
-        const fresh = await api.get<{ spareUsages?: any[] }>(`/app/pms/work-orders/${workOrder.id}`);
+        const fresh = await api.get<{ spareUsages?: any[]; observations?: string | null; closeNotes?: string | null }>(
+          `/app/pms/work-orders/${workOrder.id}`,
+        );
+        // ── Repuestos detectados por IA ──
         const freshUsages = fresh.spareUsages ?? [];
         if (freshUsages.length > 0) {
           const catalog = sparesData?.items ?? [];
@@ -897,6 +913,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             };
           }));
         }
+        // ── Observaciones reconsolidadas (sin pisar ediciones manuales) ──
+        const serverObs = fresh.observations ?? fresh.closeNotes ?? "";
+        const baseline = lastServerObsRef.current;
+        lastServerObsRef.current = serverObs;
+        setObservations(prev => (prev === baseline ? serverObs : prev));
       } catch { /* noop */ }
     }, delay);
   }, [workOrder.id, sparesData]);
@@ -1085,6 +1106,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [isEditable, workOrder, title, description, assignedTo]);
 
+  // ── Exportación a Word (.doc) ──
+  const [generatingDoc, setGeneratingDoc] = useState(false);
+  const handleGenerateDoc = useCallback(async () => {
+    setGeneratingDoc(true);
+    try {
+      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/doc`, workOrder.workOrderCode);
+    } finally {
+      setGeneratingDoc(false);
+    }
+  }, [workOrder.id, workOrder.workOrderCode]);
+
+  const [generatingSrDoc, setGeneratingSrDoc] = useState(false);
+  const handleGenerateServiceRequestDoc = useCallback(async () => {
+    setGeneratingSrDoc(true);
+    try {
+      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `Solicitud-Servicios-${workOrder.workOrderCode}`);
+    } finally {
+      setGeneratingSrDoc(false);
+    }
+  }, [workOrder.id, workOrder.workOrderCode]);
+
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
     try {
@@ -1181,15 +1223,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
       });
+      // OT correctiva con detalle de defecto → tras cerrar, abrir el alta de defecto
+      // pre-cargada (vessel + equipo de la OT, IA redacta descripción y severidad).
+      const goToDefect = isCorrective && defectDetail.trim().length > 0;
       if (res.failedMovements && res.failedMovements.length > 0) {
         setClosingWarning(t("wo.modal.closeStockWarning").replace("{count}", String(res.failedMovements.length)));
+      } else if (goToDefect) {
+        onSaved();
+        navigate("/defects", { state: { createDefectFromWo: {
+          workOrderId: workOrder.id,
+          vesselCode: workOrder.vesselCode,
+          assetId: workOrder.assetId,
+          assetName: workOrder.assetName ?? null,
+          detail: defectDetail.trim(),
+          taskContext: [workOrder.title, workOrder.description].filter(Boolean).join(" — ") || null,
+        } } });
       } else {
         onSaved();
       }
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setClosing(false); }
   }, [woResult, executedByName, executionDate, observations, supportingDocFile, supportingDocUrl,
-      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
+      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, onSaved, t, workOrder,
+      isCorrective, defectDetail, navigate]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
@@ -1647,6 +1703,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 canEdit={isResultEditable}
                 onAdd={() => setShowProgressSheet(true)}
                 reloadKey={notesReloadKey}
+                onChanged={refreshAfterAvance}
               />
             </section>
           )}
@@ -1743,6 +1800,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <label className={labelCls}>{t("wo.modal.observations")}</label>
               <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
             </div>
+            {isCorrective && !isClosed && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.defectDetail")}</label>
+                <textarea rows={2} value={defectDetail} onChange={e => setDefectDetail(e.target.value)} disabled={!isEditable}
+                  className={`${inputCls} resize-none`} placeholder={t("wo.modal.defectDetailPlaceholder")} />
+                <p className="text-[10px] text-text-industrial/40">{t("wo.modal.defectDetailHint")}</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.supportingDoc")}</label>
               {supportingDocUrl && !supportingDocFile && (
@@ -1960,10 +2025,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
             </button>
+            <button onClick={() => { void handleGenerateDoc(); }} disabled={generatingDoc}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
+              {generatingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateDoc")}
+            </button>
             {isMercurio && (
               <button onClick={() => { void handleGenerateServiceRequest(); }} disabled={generatingSr}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
                 {generatingSr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequest")}
+              </button>
+            )}
+            {isMercurio && (
+              <button onClick={() => { void handleGenerateServiceRequestDoc(); }} disabled={generatingSrDoc}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
+                {generatingSrDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequestDoc")}
               </button>
             )}
             {workOrder.status === "ON_HOLD" && (
@@ -2010,7 +2085,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       <ProgressNoteSheet
         workOrderId={workOrder.id}
         onClose={() => setShowProgressSheet(false)}
-        onSaved={() => { setNotesReloadKey(k => k + 1); reloadSpareUsages(); }}
+        onSaved={() => { setNotesReloadKey(k => k + 1); refreshAfterAvance(); }}
       />
     )}
 

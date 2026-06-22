@@ -368,6 +368,41 @@ export async function suggestDefectClassification(
   };
 }
 
+// ─── Redaccion de descripcion de defecto desde un detalle breve ─────────────
+
+const PROMPT_DESCRIPTION = `Sos un ingeniero de mantenimiento naval. A partir de un detalle BREVE escrito por el tecnico que ejecuto una reparacion correctiva, redacta una DESCRIPCION tecnica y clara del DEFECTO que motivo esa reparacion.
+
+Reglas:
+- Describi el DEFECTO (que falla o condicion anomala se observo), no la reparacion realizada.
+- Tono tecnico, conciso y objetivo. 1 a 3 oraciones. Sin vinetas ni encabezados.
+- Usa el equipo afectado y el contexto de la tarea si se proveen.
+- No inventes datos que no esten implicitos en el detalle.
+
+Responde SOLO con el texto de la descripcion, sin comillas, sin "Aqui tenes", sin code fence.`;
+
+export interface DefectDescriptionInput {
+  detail: string;
+  assetLabel?: string | null;
+  taskContext?: string | null;
+}
+
+export async function suggestDefectDescription(
+  session: TenantAccessSession,
+  input: DefectDescriptionInput,
+): Promise<{ text: string }> {
+  const detail = String(input.detail ?? "").trim();
+  if (!detail) throw new RouteError(400, "VALIDATION_ERROR", "Falta el detalle del defecto.");
+
+  const userContent = [
+    `Detalle del tecnico: ${detail}`,
+    input.assetLabel ? `Equipo afectado: ${input.assetLabel}` : "Equipo no especificado",
+    input.taskContext ? `Contexto de la tarea/OT: ${input.taskContext}` : null,
+  ].filter(Boolean).join("\n");
+
+  const raw = await callClaude(session, "defect_description_suggestion", PROMPT_DESCRIPTION, userContent, 400);
+  return { text: stripCodeFence(raw).trim() };
+}
+
 // ─── Deteccion de defectos similares (anti-duplicados) ──────────────────────
 
 export interface SimilarDefectsInput {

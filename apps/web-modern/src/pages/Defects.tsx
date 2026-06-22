@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Bot, Camera, Download, ExternalLink, GitBranch, Loader2, Maximize2, Minimize2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
@@ -220,7 +220,18 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
 
 // ─── CreateDefectModal ────────────────────────────────────────────────────────
 
+// Pre-carga del alta de defecto desde el cierre de una OT correctiva.
+export interface DefectPrefill {
+  workOrderId?: string;
+  vesselCode?: string;
+  assetId?: string;
+  assetName?: string | null;
+  detail?: string;        // detalle breve escrito por el técnico al cerrar la OT
+  taskContext?: string | null;
+}
+
 interface CreateDefectModalProps {
+  prefill?: DefectPrefill;
   onClose: () => void;
   onCreated: (defect: Defect) => void;
 }
@@ -231,17 +242,19 @@ const OP_STATES  = ["NORMAL", "DEGRADED", "RESTRICTED", "NO_GO"];
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/10 transition-all disabled:opacity-50";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5";
 
-const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreated }) => {
+const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose, onCreated }) => {
   const t = useT();
   // Reuse VesselContext (loaded once for the header) instead of re-fetching /app/vessels.
   const { vessels } = useVesselContext();
   const [assets, setAssets]                   = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets]     = useState(false);
-  const [vesselCode, setVesselCode]           = useState("");
-  const [assetId, setAssetId]                 = useState("");
+  const [vesselCode, setVesselCode]           = useState(prefill?.vesselCode ?? "");
+  const [assetId, setAssetId]                 = useState(prefill?.assetId ?? "");
   const [classification, setClassification]   = useState("");
   const [description, setDescription]         = useState("");
   const [severity, setSeverity]               = useState("MEDIUM");
+  // Auto-IA al abrir desde una OT correctiva (redacta descripción + clasifica severidad).
+  const [aiAutoLoading, setAiAutoLoading]     = useState(false);
   const [operationalState, setOperationalState] = useState("NORMAL");
   const [immediateAction, setImmediateAction] = useState("");
   const [saving, setSaving]                   = useState(false);
@@ -428,6 +441,46 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
       .finally(() => setLoadingAssets(false));
   }, [vesselCode]);
 
+  // Re-aplica el equipo del prefill una vez cargados los assets del buque
+  // (el efecto de cambio de buque resetea assetId a "").
+  const prefillAssetAppliedRef = React.useRef(false);
+  useEffect(() => {
+    if (!prefill?.assetId || prefillAssetAppliedRef.current) return;
+    if (!assets.some(a => a.id === prefill.assetId)) return;
+    prefillAssetAppliedRef.current = true;
+    setAssetId(prefill.assetId);
+  }, [assets, prefill?.assetId]);
+
+  // Auto-IA (alta desde OT correctiva): redacta la descripción a partir del
+  // detalle del técnico y luego clasifica la severidad. Best-effort: si algo
+  // falla, queda el detalle crudo como descripción y la severidad por defecto.
+  const autoAiRanRef = React.useRef(false);
+  useEffect(() => {
+    if (!prefill?.detail || autoAiRanRef.current) return;
+    autoAiRanRef.current = true;
+    void (async () => {
+      setAiAutoLoading(true);
+      const assetLabel = prefill.assetName ?? null;
+      let desc = (prefill.detail ?? "").trim();
+      try {
+        const d = await api.post<{ text: string }>("/app/pms/defects/suggest-description", {
+          detail: prefill.detail, assetLabel, taskContext: prefill.taskContext ?? null,
+        });
+        if (d.text?.trim()) desc = d.text.trim();
+      } catch { /* best-effort */ }
+      setDescription(desc);
+      try {
+        const c = await api.post<ClassifySuggestion>("/app/pms/defects/suggest-classification", {
+          description: desc, assetLabel, operationalState,
+        });
+        setSeverity(c.severity);
+        setClassification(c.classification);
+      } catch { /* best-effort */ }
+      setAiAutoLoading(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vesselCode)           { setErr(t("error.vesselRequired")); return; }
@@ -444,6 +497,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
         severity,
         operationalState,
         immediateAction: immediateAction.trim() || null,
+        workOrderId: prefill?.workOrderId ?? null,
       });
       // Upload fotos pendientes después de crear el defecto. Si una falla,
       // sigue con el resto y reporta al final pero no bloquea el flujo.
@@ -487,6 +541,13 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ onClose, onCreate
           </div>
         </div>
         <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
+          {prefill?.workOrderId && (
+            <div className="flex items-center gap-2 text-xs rounded-xl px-3 py-2 bg-accent/10 border border-accent/20 text-accent">
+              {aiAutoLoading
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> {t("def.fromWoAnalyzing")}</>
+                : <><Sparkles className="w-3.5 h-3.5 shrink-0" /> {t("def.fromWoReady")}</>}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>{t("form.vessel")}</label>
@@ -1540,10 +1601,23 @@ export const DefectsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing] = useState<Defect | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createPrefill, setCreatePrefill] = useState<DefectPrefill | undefined>(undefined);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useCopilotEmitter(!editing ? { module: "DEFECTS", screen: "DEFECT_LIST" } : null);
+
+  // Alta de defecto pre-cargada desde el cierre de una OT correctiva.
+  // El detalle viaja por router state (no por URL); se consume una sola vez.
+  useEffect(() => {
+    const fromWo = (location.state as { createDefectFromWo?: DefectPrefill } | null)?.createDefectFromWo;
+    if (!fromWo) return;
+    setCreatePrefill(fromWo);
+    setCreating(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const severityFilter = (searchParams.get("severity") ?? "").trim();
@@ -1675,8 +1749,9 @@ export const DefectsPage: React.FC = () => {
 
       {creating && (
         <CreateDefectModal
-          onClose={() => setCreating(false)}
-          onCreated={defect => { setCreating(false); void reload(); setEditing(defect); }}
+          prefill={createPrefill}
+          onClose={() => { setCreating(false); setCreatePrefill(undefined); }}
+          onCreated={defect => { setCreating(false); setCreatePrefill(undefined); void reload(); setEditing(defect); }}
         />
       )}
       {editing && (

@@ -908,6 +908,8 @@ const dict = {
 
   // Defects
   "def.newTitle":          { es: "Nuevo Defecto",                     en: "New Defect",                          pt: "Novo Defeito" },
+  "def.fromWoAnalyzing":   { es: "Generado desde una OT correctiva — la IA está redactando la descripción y la severidad…", en: "Created from a corrective WO — AI is drafting the description and severity…", pt: "Criado a partir de uma OS corretiva — a IA está redigindo a descrição e a severidade…" },
+  "def.fromWoReady":       { es: "Generado desde una OT correctiva — revisá los datos sugeridos por la IA y confirmá.", en: "Created from a corrective WO — review the AI-suggested data and confirm.", pt: "Criado a partir de uma OS corretiva — revise os dados sugeridos pela IA e confirme." },
   "def.classificationPh":  { es: "ej. Mecánico",                      en: "e.g. Mechanical",                     pt: "ex. Mecânico" },
   "def.descPh":            { es: "Describí el defecto encontrado o usá el micrófono para dictarlo…", en: "Describe the defect found or use the microphone to dictate it…", pt: "Descreva o defeito encontrado ou use o microfone para ditá-lo…" },
   "def.aiSuggestion":      { es: "Sugerencia IA",                     en: "AI Suggestion",                       pt: "Sugestão IA" },
@@ -1341,6 +1343,9 @@ const dict = {
   "wo.modal.actualHoursEstHint": { es: "— estimado: {h} h",    en: "— estimated: {h} h",   pt: "— estimado: {h} h" },
   "wo.modal.observations":     { es: "Observaciones",          en: "Observations",         pt: "Observações" },
   "wo.modal.observationsPlaceholder": { es: "Observaciones, hallazgos o notas de cierre", en: "Observations, findings or closing notes", pt: "Observações, achados ou notas de fechamento" },
+  "wo.modal.defectDetail":     { es: "Detalle del defecto",    en: "Defect detail",        pt: "Detalhe do defeito" },
+  "wo.modal.defectDetailPlaceholder": { es: "¿Qué defecto/falla motivó esta reparación?", en: "What defect/failure prompted this repair?", pt: "Que defeito/falha motivou este reparo?" },
+  "wo.modal.defectDetailHint": { es: "Opcional. Si lo completás, al cerrar la OT se abre el alta de defecto pre-cargada (la IA redacta la descripción y la severidad).", en: "Optional. If filled, closing the WO opens a pre-loaded defect form (AI drafts the description and severity).", pt: "Opcional. Se preenchido, ao fechar a OS abre o cadastro de defeito pré-carregado (a IA redige a descrição e a severidade)." },
   "wo.modal.supportingDoc":    { es: "Documento respaldatorio", en: "Supporting document", pt: "Documento de respaldo" },
 
   // Rewrite IA
