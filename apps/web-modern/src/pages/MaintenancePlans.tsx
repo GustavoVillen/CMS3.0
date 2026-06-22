@@ -111,15 +111,17 @@ function computeStatus(plan: MaintenancePlan): string {
     const due = parseLocalDate(plan.nextDueDate);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const daysLeft = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+    // Ventanas FIJAS, idénticas a deriveDashboardStatus del backend (mp-summary)
+    // para que el donut del Dashboard y esta lista cuenten exactamente lo mismo:
+    //  - vencido (< 0 días)            → OVERDUE  ("Vencidas")
+    //  - nunca ejecutado (no vencido)  → NEVER_EXECUTED ("Sin ejecutar")
+    //  - próximos 7 días               → DUE
+    //  - próximos 8–30 días            → UPCOMING ("Próximas")
+    //  - más de 30 días                → FUTURE   ("Al Día")
     if (daysLeft < 0)   return "OVERDUE";
-    // Ventana de PLANIFICACIÓN según la frecuencia de la tarea (aplica aunque
-    // nunca se haya ejecutado, igual que OVERDUE):
-    //  - anual o mayor (>= 12 meses): planificar con 1 mes de anticipación.
-    //  - mensual o menor (< 12 meses): planificar con 1 semana de anticipación.
-    const freqMonths = plan.frequencyMonths;
-    const planWindow = (freqMonths != null && freqMonths >= 12) ? 30 : 7;
-    if (daysLeft <= planWindow) return "PLANIFICAR";
-    if (neverExecuted) return "NEVER_EXECUTED";
+    if (neverExecuted)  return "NEVER_EXECUTED";
+    if (daysLeft <= 7)  return "DUE";
+    if (daysLeft <= 30) return "UPCOMING";
     return "FUTURE";
   }
   if (neverExecuted) return "NEVER_EXECUTED";
@@ -136,12 +138,6 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
           <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.overdue")}
         </span>
       </div>
-    );
-  if (es === "PLANIFICAR")
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20 whitespace-nowrap">
-        <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.planificar")}
-      </span>
     );
   if (es === "DUE")
     return (
@@ -2540,7 +2536,7 @@ export const MaintenancePlansPage: React.FC = () => {
     if (executionFilter) {
       items = items.filter(p => computeStatus(p) === executionFilter);
     } else if (overdueOnly) {
-      items = items.filter(p => { const s = computeStatus(p); return s === "OVERDUE" || s === "PLANIFICAR" || s === "DUE" || s === "IN_WINDOW"; });
+      items = items.filter(p => { const s = computeStatus(p); return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW"; });
     }
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
@@ -2578,7 +2574,7 @@ export const MaintenancePlansPage: React.FC = () => {
     if (!rawData) return 0;
     return rawData.items.filter(p => {
       const s = computeStatus(p);
-      return s === "OVERDUE" || s === "PLANIFICAR" || s === "DUE" || s === "IN_WINDOW";
+      return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW";
     }).length;
   }, [rawData]);
 
