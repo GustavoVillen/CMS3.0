@@ -118,7 +118,10 @@ export async function listMyNotifications(
 
   // Lazy sync: alertas pasivas (WO vencida, cert vencido) se materializan acá.
   // Throttle in-memory para no recalcular en cada poll de 30s.
-  await syncStaleNotificationsIfDue(prisma, tenant.id, session);
+  // NO se hace await: es best-effort y correr en background evita que un sync
+  // lento bloquee/cuelgue la respuesta de la lista (que se pollea cada 30s).
+  // Lo que materialice aparecerá en el próximo poll.
+  void syncStaleNotificationsIfDue(prisma, tenant.id, session);
 
   const baseWhere = { tenantId: tenant.id, recipientUserId: session.user.id, dismissedAt: null };
 
