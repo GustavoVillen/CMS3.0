@@ -550,6 +550,16 @@ const ProgressNotesPanel: React.FC<{
     [workOrderId, reloadKey],
   );
   const notes = data?.items ?? [];
+
+  // El padre bumpea `reloadKey` tras agregar/editar/borrar un avance. El refetch
+  // por deps respeta el cache SWR (30s) y devolvería la lista vieja; por eso acá
+  // forzamos una recarga fresca (reload = load(true), ignora el cache).
+  const reloadKeyRef = React.useRef(reloadKey);
+  useEffect(() => {
+    if (reloadKeyRef.current === reloadKey) return;
+    reloadKeyRef.current = reloadKey;
+    void reload();
+  }, [reloadKey, reload]);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [lightbox, setLightbox] = useState<ProgressNote | null>(null);
 
