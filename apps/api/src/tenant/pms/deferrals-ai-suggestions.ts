@@ -84,6 +84,7 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
   let requestedAt: string | Date | null = input.requestedAt ?? null;
   let targetDate:  string | Date | null = input.targetDate ?? null;
   let justification     = input.justification ?? null;
+  let vesselName: string | null = null;
 
   if (input.deferralId) {
     try {
@@ -96,6 +97,10 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
       justification = d.justification ?? justification;
       const prismaRaw = getPrismaClient();
       if (prismaRaw && d.tenantId) {
+        try {
+          const v = await (prismaRaw as any).vessel.findFirst({ where: { tenantId: d.tenantId, code: d.vesselCode }, select: { name: true } });
+          vesselName = v?.name ?? null;
+        } catch { /* non-blocking */ }
         const src = await resolveDeferralSource(prismaRaw, d.tenantId, d.sourceType, d.sourceId);
         sourceTypeLabel   = sourceTypeLabel ?? SOURCE_TYPE_LABELS[d.sourceType] ?? d.sourceType;
         const disp = [src.code, src.title].filter(Boolean).join(" — ");
@@ -106,8 +111,8 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
   }
 
   const lines = ["Datos del informe de diferimiento (CONTEXTO COMPLETO Y AUTORITATIVO — usá EXCLUSIVAMENTE estos datos):"];
-  if (deferralCode)      lines.push(`- Código del diferimiento: ${deferralCode}`);
-  if (vesselCode)        lines.push(`- Buque: ${vesselCode}`);
+  if (deferralCode)         lines.push(`- Código del diferimiento: ${deferralCode}`);
+  if (vesselName || vesselCode) lines.push(`- Buque: ${vesselName ?? vesselCode}`);
   if (assetLabel)        lines.push(`- Activo afectado: ${assetLabel}`);
   if (sourceTypeLabel)   lines.push(`- Tipo de origen: ${sourceTypeLabel}`);
   if (sourceDisplayName) lines.push(`- Origen (código y título): ${sourceDisplayName}`);

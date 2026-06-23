@@ -1,5 +1,12 @@
 HISTORY.txt
 
+[2026-06-23] FIX: Diferimiento — mostrar NOMBRE del buque, no el código
+Agent: Claude Opus 4.8
+- El PDF (campo EMBARCACIÓN) y la IA usaban el código del buque ("DCH") en vez del nombre
+  ("DON CHICUETO"). Se resuelve Vessel.name por (tenantId, code) y se usa en el PDF y en el
+  contexto de la IA. Fallback al código si no se resuelve.
+- Deploy: solo backend. pm2 restart cms3.
+
 [2026-06-23] FIX: IA de diferimientos — usar datos reales del informe (no inventar plazos)
 Agent: Claude Opus 4.8
 - La IA inventaba el plazo (ej. "+12 meses" cuando el aplazamiento era de ~3 meses) porque el

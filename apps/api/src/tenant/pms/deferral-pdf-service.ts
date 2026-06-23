@@ -56,7 +56,8 @@ const FOOTER_SIZE   = 40;
 export async function buildDeferralPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   const deferral = await getDeferral(session, id);
 
-  // Resolve source code + label + task description
+  // Resolve vessel name + source code + label + task description
+  let vesselName:  string | null = null;
   let sourceCode:  string | null = null;
   let sourceTitle: string | null = null;
   let sourceTask:  string | null = null;
@@ -69,6 +70,13 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
         select: { id: true },
       });
       tenantId = t?.id ?? null;
+    } catch { /* non-blocking */ }
+
+    try {
+      if (tenantId) {
+        const v = await (prismaRaw as any).vessel.findFirst({ where: { tenantId, code: deferral.vesselCode }, select: { name: true } });
+        vesselName = v?.name ?? null;
+      }
     } catch { /* non-blocking */ }
 
     try {
@@ -233,7 +241,7 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
 
     // ── Recuadro 1: Embarcación / Solicitud Número ───────────────────────────
     ensureSpace(58);
-    labeledBox(ML,           y, W / 2 - 6, 48, "Embarcación",      deferral.vesselCode, "#0369a1", accentBg);
+    labeledBox(ML,           y, W / 2 - 6, 48, "Embarcación",      vesselName ?? deferral.vesselCode, "#0369a1", accentBg);
     labeledBox(ML + W/2 + 6, y, W / 2 - 6, 48, "Solicitud número", deferral.deferralCode, "#1d4ed8");
     y += 56;
 
