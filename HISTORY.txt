@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-06-23] FIX: PDF Plan Mercurio — grilla markdown + negrita en la descripción
+Agent: Claude Opus 4.8
+- La "Descripción de la tarea" mostraba el markdown crudo: tablas "| a | b |" como texto y sin
+  respetar **negrita**. Causas: hasMarkdownTable/parseRichBlocks (pdf-form-chrome) exigían fila
+  separadora |---| (que el contenido no trae), y section() hacía sanitizePdfText() que quita los
+  ** antes de renderizar.
+- Fix en pdf-form-chrome.ts: detección de tablas sin separador (isTableRow); helper drawInlineRich
+  para **negrita** inline, usado en celdas de datos y párrafos de textArea/renderRichTextArea.
+- maintenance-plan-pdf-mercurio.ts: section() pasa keepMarkdown:true.
+- Beneficia a todos los forms "documento controlado" (incluida la SS). Deploy: build web NO requerido. pm2 restart cms3.
+
 [2026-06-23] FEAT: PDF Plan de Mantenimiento — mostrar Departamento/Área
 Agent: Claude Opus 4.8
 - El PDF del Plan no reflejaba el área asignada. Mercurio: se llena la fila "Departamento:"

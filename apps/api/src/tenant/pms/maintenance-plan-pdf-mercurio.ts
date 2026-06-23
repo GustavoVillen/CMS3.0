@@ -146,7 +146,9 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     }
     function section(label: string, content: string, inline?: string, minH = 36) {
       labelLine(label, inline);
-      canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(content || ""), minH);
+      // keepMarkdown: conserva `**negrita**` y los `|` de tablas; el textArea del
+      // chrome interpreta la grilla y la negrita inline.
+      canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(content || "", { keepMarkdown: true }), minH);
       canvas.y += 8;
     }
 

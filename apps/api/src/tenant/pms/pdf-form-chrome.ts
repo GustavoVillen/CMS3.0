@@ -213,12 +213,16 @@ function parseTableRow(line: string): string[] {
   if (t.endsWith("|")) t = t.slice(0, -1);
   return t.split("|").map(c => c.trim());
 }
+// Una "fila de tabla" es una línea cuyo trim empieza con "|" y tiene >=2 pipes
+// (ej. "| a | b |"). NO se exige fila separadora "|---|" — muchos contenidos
+// generados omiten el separador y aun así son tablas (espejo del renderer del
+// PDF estándar). Los separadores, si existen, se detectan y se descartan.
+function isTableRow(line: string): boolean {
+  const t = line.trim();
+  return t.startsWith("|") && (t.match(/\|/g)?.length ?? 0) >= 2;
+}
 function hasMarkdownTable(text: string): boolean {
-  const lines = text.split("\n");
-  for (let i = 0; i + 1 < lines.length; i++) {
-    if (lines[i].includes("|") && isTableSeparator(lines[i + 1])) return true;
-  }
-  return false;
+  return text.split("\n").some(isTableRow);
 }
 type RichBlock =
   | { type: "text"; lines: string[] }
@@ -227,20 +231,21 @@ function parseRichBlocks(text: string): RichBlock[] {
   const lines = text.split("\n");
   const blocks: RichBlock[] = [];
   let i = 0;
-  const isStart = (j: number) => j + 1 < lines.length && lines[j].includes("|") && isTableSeparator(lines[j + 1]);
   while (i < lines.length) {
-    if (isStart(i)) {
-      const header = parseTableRow(lines[i]);
-      i += 2;
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].includes("|") && !isTableSeparator(lines[i])) {
-        rows.push(parseTableRow(lines[i]));
+    if (isTableRow(lines[i])) {
+      const tableLines: string[] = [];
+      while (i < lines.length && isTableRow(lines[i])) {
+        if (!isTableSeparator(lines[i])) tableLines.push(lines[i]);
         i++;
       }
-      blocks.push({ type: "table", header, rows });
+      if (tableLines.length > 0) {
+        const header = parseTableRow(tableLines[0]);
+        const rows = tableLines.slice(1).map(parseTableRow);
+        blocks.push({ type: "table", header, rows });
+      }
     } else {
       const tl: string[] = [];
-      while (i < lines.length && !isStart(i)) { tl.push(lines[i]); i++; }
+      while (i < lines.length && !isTableRow(lines[i])) { tl.push(lines[i]); i++; }
       blocks.push({ type: "text", lines: tl });
     }
   }
@@ -306,6 +311,29 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
   const BULLET_GUTTER = 12;
   const LINE_PAD = 5;
 
+  // Dibuja una línea/celda interpretando **negrita** inline. Devuelve la altura
+  // que ocuparía (medida sobre el texto sin marcadores). Cada segmento se
+  // sanitiza (convierte unicode); los `**` se consumen al partir en tramos.
+  function drawInlineRich(text: string, x: number, yy: number, width: number, fontSize: number): number {
+    doc.fontSize(fontSize);
+    const plain = sanitizePdfText(text);
+    const h = doc.font("Helvetica").heightOfString(plain || " ", { width });
+    const parts = text.split(/(\*\*[^*\n]+?\*\*)/g).filter(p => p.length > 0);
+    if (parts.length === 0) {
+      doc.font("Helvetica").fillColor(C.BLACK).text(" ", x, yy, { width });
+      return h;
+    }
+    parts.forEach((part, idx) => {
+      const isBold = part.length > 4 && part.startsWith("**") && part.endsWith("**");
+      const seg = sanitizePdfText(isBold ? part.slice(2, -2) : part);
+      const isLast = idx === parts.length - 1;
+      doc.font(isBold ? "Helvetica-Bold" : "Helvetica").fillColor(C.BLACK);
+      if (idx === 0) doc.text(seg || " ", x, yy, { width, continued: !isLast });
+      else           doc.text(seg,        { width, continued: !isLast });
+    });
+    return h;
+  }
+
   // Renderiza texto que contiene tablas Markdown: párrafos como texto y los
   // bloques `| a | b |` como grilla. Maneja salto de página por línea/fila.
   function renderRichTextArea(cx: number, cy: number, cw: number, text: string, minH: number): number {
@@ -325,13 +353,13 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
           const content = m ? m[2] : line;
           const isBullet = !!m;
           const lw = isBullet ? innerW - BULLET_GUTTER : innerW;
-          const h = doc.heightOfString(content || " ", { width: lw });
+          const h = doc.fontSize(9).font("Helvetica").heightOfString(sanitizePdfText(content) || " ", { width: lw });
           ensure(h);
           if (isBullet) {
             doc.rect(cx + LINE_PAD, curY + 2, BULLET_BOX, BULLET_BOX).strokeColor(C.BLACK).lineWidth(0.7).stroke();
-            doc.fillColor(C.BLACK).font("Helvetica").fontSize(9).text(content || " ", cx + LINE_PAD + BULLET_GUTTER, curY, { width: lw });
+            drawInlineRich(content, cx + LINE_PAD + BULLET_GUTTER, curY, lw, 9);
           } else {
-            doc.fillColor(C.BLACK).font("Helvetica").fontSize(9).text(content || " ", cx + LINE_PAD, curY, { width: lw });
+            drawInlineRich(content, cx + LINE_PAD, curY, lw, 9);
           }
           curY += h;
         }
@@ -356,8 +384,13 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
             const x = cx + c * colW;
             if (header) doc.rect(x, curY, colW, rowH).fillColor("#e2e8f0").fill();
             doc.rect(x, curY, colW, rowH).strokeColor(C.BORDER).lineWidth(0.5).stroke();
-            doc.fontSize(FS).font(header ? "Helvetica-Bold" : "Helvetica").fillColor(C.BLACK)
-              .text(sanitizePdfText(cells[c] ?? ""), x + PAD, curY + PAD, { width: colW - PAD * 2 });
+            if (header) {
+              // El header va todo en negrita (no se interpreta **inline**).
+              doc.fontSize(FS).font("Helvetica-Bold").fillColor(C.BLACK)
+                .text(sanitizePdfText(cells[c] ?? ""), x + PAD, curY + PAD, { width: colW - PAD * 2 });
+            } else {
+              drawInlineRich(cells[c] ?? "", x + PAD, curY + PAD, colW - PAD * 2, FS);
+            }
           }
           curY += rowH;
         };
@@ -383,7 +416,8 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
       const m = line.match(BULLET_RE);
       const content = m ? m[2] : line;
       const wdt = m ? innerWBullet : innerW;
-      return { content, bullet: !!m, width: wdt, height: doc.heightOfString(content || " ", { width: wdt }) };
+      // Medir sobre el texto sin marcadores **; el render interpreta la negrita.
+      return { content, bullet: !!m, width: wdt, height: doc.heightOfString(sanitizePdfText(content) || " ", { width: wdt }) };
     });
 
     // Pre-computar segmentos (uno por pagina)
@@ -420,11 +454,9 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
         if (item.bullet) {
           doc.rect(cx + LINE_PAD, ly + 2, BULLET_BOX, BULLET_BOX)
              .strokeColor(C.BLACK).lineWidth(0.7).stroke();
-          doc.fillColor(C.BLACK).font("Helvetica").fontSize(9)
-             .text(item.content || " ", cx + LINE_PAD + BULLET_GUTTER, ly, { width: item.width });
+          drawInlineRich(item.content, cx + LINE_PAD + BULLET_GUTTER, ly, item.width, 9);
         } else {
-          doc.fillColor(C.BLACK).font("Helvetica").fontSize(9)
-             .text(item.content || " ", cx + LINE_PAD, ly, { width: item.width });
+          drawInlineRich(item.content, cx + LINE_PAD, ly, item.width, 9);
         }
         ly += item.height;
       }
