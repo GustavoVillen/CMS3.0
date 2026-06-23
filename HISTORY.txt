@@ -1,5 +1,12 @@
 HISTORY.txt
 
+[2026-06-23] FIX: PDF Mercurio — tildar el DEPARTAMENTO asignado a la SS
+Agent: Claude Opus 4.8
+- La fila de checkboxes de DEPARTAMENTO en template-mercurio.ts dibujaba todos los campos
+  AcroForm vacíos (fcheck) sin reflejar wo.department. Ahora el área asignada se tilda con
+  drawCheckedBox (mismo patrón que MOTIVO/PLANIFICADO). El Word y el SS-form ya lo hacían.
+- Solo template-mercurio.ts. Deploy: build web NO requerido. pm2 restart cms3.
+
 [2026-06-23] FEAT: Mercurio — "OT/Orden de Trabajo" se muestra como "SS/Solicitud de Servicio"
 Agent: Claude Opus 4.8
 - Capa de override de vocabulario en i18n (apps/web-modern/src/lib/i18n.tsx): cuando

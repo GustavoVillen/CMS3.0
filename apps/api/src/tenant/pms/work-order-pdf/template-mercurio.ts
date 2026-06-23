@@ -119,7 +119,12 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     doc.rect(ML, canvas.y, W - FECHA_W, DEPT_ROW_H).fillColor(WHITE).fill();
     doc.rect(ML, canvas.y, W - FECHA_W, DEPT_ROW_H).strokeColor(BORDER).lineWidth(0.4).stroke();
     const deptW = Math.floor((W - FECHA_W) / DEPTS.length);
-    DEPTS.forEach((d, i) => { fcheck(ML + i * deptW + 6, canvas.y + 6, d); });
+    DEPTS.forEach((d, i) => {
+      const dcx = ML + i * deptW + 6, dcy = canvas.y + 6;
+      // Tildar el área asignada a la SS (igual que MOTIVO/PLANIFICADO).
+      if ((wo as any).department === d) drawCheckedBox(dcx, dcy, d);
+      else fcheck(dcx, dcy, d);
+    });
     cell(ML + W - FECHA_W, canvas.y, FECHA_W, DEPT_ROW_H, fmt(wo.openDate), { fontSize: 9, align: "center" });
     canvas.y += DEPT_ROW_H;
     // Cuando el área es PROVEEDOR, mostrar el proveedor responsable en una fila propia.
