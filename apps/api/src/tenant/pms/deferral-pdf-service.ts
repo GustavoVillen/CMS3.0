@@ -325,7 +325,9 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
 
       if (decidedByName) {
         ensureSpace(50);
-        labeledBox(ML, y, W, 44, "Decidido por", decidedByName);
+        // "Diferimiento aprobado por" salvo cuando fue rechazado.
+        const decidedLabel = deferral.status === "REJECTED" ? "Diferimiento rechazado por" : "Diferimiento aprobado por";
+        labeledBox(ML, y, W, 44, decidedLabel, decidedByName);
         y += 52;
       }
 
