@@ -471,8 +471,8 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const handleDownloadPdf = useCallback(async () => {
     setDownloadingPdf(true);
     try {
-      // Persist locally edited compensatory measures + risk before generating PDF (only when REQUESTED)
-      if (deferral.status === "REQUESTED" && isDeferralDirty) {
+      // Persist locally edited compensatory measures + risk before generating PDF (en estados no terminales)
+      if (!isTerminal && isDeferralDirty) {
         try {
           await api.patch(`/app/pms/deferrals/${deferral.id}`, {
             compensatoryMeasures,
@@ -575,9 +575,9 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   useCopilotScreenContext();
 
   const handleCompensatoryClick = useCallback(async () => {
-    if (!showRequestedActions || loadingCompensatory) return;
+    if (isTerminal || loadingCompensatory) return;
     setLoadingCompensatory(true);
-    setCompensatoryMeasures("Analizando...");
+    setActionError(null);
     try {
       const sourceTypeLabel = deferral.sourceType === "WORK_ORDER" ? woTerms.full
         : deferral.sourceType === "DEFECT" ? "Defecto"
@@ -592,10 +592,12 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
         targetDate: deferral.targetDate ? fmtDate(deferral.targetDate) : null,
         justification: deferral.justification ?? null,
       });
-      setCompensatoryMeasures(res.text || "");
-    } catch { setCompensatoryMeasures(""); }
+      if (res.text) setCompensatoryMeasures(res.text);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "No se pudo generar las medidas compensatorias con IA.");
+    }
     finally { setLoadingCompensatory(false); }
-  }, [showRequestedActions, loadingCompensatory, deferral, sourceDisplayName]);
+  }, [isTerminal, loadingCompensatory, deferral, sourceDisplayName, woTerms]);
   useCopilotEmitter({
     module: "DEFERRALS",
     screen: "DEFERRAL_VIEW",
@@ -669,7 +671,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   consequence={riskConsequence}
                   level={riskLevel}
                   result={riskAnalysisResult}
-                  readOnly={!showRequestedActions}
+                  readOnly={isTerminal}
                   loading={loadingRisk}
                   onSelect={(p, c, lvl) => { setRiskProbability(p); setRiskConsequence(c); setRiskLevel(lvl); }}
                   onResultChange={setRiskAnalysisResult}
@@ -681,21 +683,21 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                 <button
                   type="button"
                   onClick={handleCompensatoryClick}
-                  disabled={!showRequestedActions || loadingCompensatory}
+                  disabled={isTerminal || loadingCompensatory}
                   className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors ${
-                    showRequestedActions
+                    !isTerminal
                       ? loadingCompensatory
                         ? "text-accent/50 animate-pulse cursor-default"
                         : "text-accent/70 hover:text-accent cursor-pointer"
                       : "text-text-industrial/40 cursor-default"
                   }`}
-                  title={showRequestedActions ? "Click para que la IA genere las medidas compensatorias" : undefined}
+                  title={!isTerminal ? "Click para que la IA genere las medidas compensatorias" : undefined}
                 >
                   <Sparkles className="w-3 h-3 shrink-0" />
                   {t("def2.compensatory")}
                   {loadingCompensatory && <span className="ml-1 normal-case font-normal">analizando...</span>}
                 </button>
-                {showRequestedActions ? (
+                {!isTerminal ? (
                   <textarea
                     rows={3}
                     value={compensatoryMeasures}

@@ -492,8 +492,12 @@ export async function updateDeferral(
   const deferral = deferralDelegate(prismaRaw);
 
   const current = await getDeferral(session, id);
-  if (current.status !== "REQUESTED") {
-    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo se puede editar un aplazamiento en estado REQUESTED (actual: ${current.status}).`);
+  // Editable mientras el diferimiento está vigente (no terminal). Permite
+  // refinar riesgo y medidas compensatorias incluso tras aprobar/activar; las
+  // ediciones quedan en la auditoría (publishAudit más abajo).
+  const TERMINAL = ["REJECTED", "EXPIRED", "CLOSED"];
+  if (TERMINAL.includes(current.status)) {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `No se puede editar un aplazamiento en estado ${current.status}.`);
   }
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
@@ -505,7 +509,21 @@ export async function updateDeferral(
   if (payload.riskConsequence      !== undefined) data.riskConsequence      = normalizeOptionalText(payload.riskConsequence);
   if (payload.riskAnalysisResult   !== undefined) data.riskAnalysisResult   = normalizeOptionalText(payload.riskAnalysisResult);
 
-  return deferral.update({ where: { id: current.id }, data });
+  const updated = await deferral.update({ where: { id: current.id }, data });
+  void publishAudit(prismaRaw, {
+    tenantId: updated.tenantId,
+    actorUserId: session.user.id,
+    action: "Deferral.updated",
+    entityType: "Deferral",
+    entityId: updated.id,
+    metadata: {
+      deferralCode: updated.deferralCode,
+      vesselCode: updated.vesselCode,
+      status: current.status,
+      fields: Object.keys(data).filter(k => k !== "updatedByUserId"),
+    },
+  });
+  return updated;
 }
 
 export async function cancelDeferral(session: TenantAccessSession, id: string) {

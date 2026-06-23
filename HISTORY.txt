@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-06-23] FEAT: Diferimientos — editar riesgo/medidas + IA en estados no terminales
+Agent: Claude Opus 4.8
+- Antes el Nivel de Riesgo y las Medidas Compensatorias (con sus botones IA) eran editables solo
+  en REQUESTED. Ahora también en UNDER_REVIEW/APPROVED/ACTIVE; bloqueado solo en REJECTED/EXPIRED/
+  CLOSED. updateDeferral permite la edición fuera de REQUESTED y registra Deferral.updated en la
+  auditoría (publishAudit).
+- Frontend Deferrals: gating por isTerminal (no por showRequestedActions) para riesgo + medidas.
+  El handler de compensatorias ya no pisa/borra el contenido y muestra el error si la IA falla.
+- Deploy: build web (gateado con tsc). pm2 restart cms3.
+
 [2026-06-23] FEAT: Diferimientos — análisis de riesgo (matriz) + PDF "Informe de Diferimiento" controlado
 Agent: Claude Opus 4.8
 - Schema: Deferral suma riskLevel/riskProbability/riskConsequence/riskAnalysisResult (nullable).
