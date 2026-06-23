@@ -6,7 +6,7 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import {
   fmt, val, typeLabel, statusLabel, priorityLabel, riskLabel, woResultLabel,
-  STATUS_COLOR, PRIORITY_COLOR, LOGO_PATH, PAGE_H, sanitizePdfText,
+  STATUS_COLOR, PRIORITY_COLOR, LOGO_PATH, PAGE_H, sanitizePdfText, areaText,
   type WorkOrderPdfContext,
 } from "./shared";
 import { renderLabeledTextBox } from "../pdf-helpers";
@@ -349,6 +349,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     textRow("Título de la OT", val((wo as any).title), 3, 3);
     inlineRow([
       { label: "Responsable asignado", value: assignedName ?? val((wo as any).assignedToUserId) },
+      { label: "Departamento",         value: areaText(wo as any) || "—" },
       { label: "Horas estimadas",      value: (wo as any).estimatedHours != null ? `${(wo as any).estimatedHours} h` : "—" },
     ]);
     textRowHighlight("Descripción / Tarea a ejecutar", val((wo as any).description), 3, 3);

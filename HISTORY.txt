@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-06-23] FIX: PDF OT (plantilla STANDARD) — mostrar Departamento/Área
+Agent: Claude Opus 4.8
+- La plantilla STANDARD (OT por defecto) no renderizaba el departamento asignado; sí lo hacían
+  Mercurio/SS/Word. Se agrega el campo "Departamento" en la sección "Plan de la Tarea" usando
+  areaText() (muestra Cubierta/Máquinas/… y "Proveedor — <nombre>" cuando aplica).
+- Solo template-standard.ts (apps/api). No toca schema ni datos.
+- Deploy: build web NO requerido. pm2 restart cms3.
+
 [2026-06-22] FEAT: PDF/Word OT — 4ª columna "CIERRA LA SS" en TRAMITACIÓN DE LA ORDEN
 Agent: Claude Opus 4.8
 - Bloque de firmas pasa de 3 a 4 columnas: SOLICITA · APRUEBA · AUTORIZA · CIERRA LA SS.
