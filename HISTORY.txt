@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-06-23] FIX: SS — botón "Medidas compensatorias" (IA) no funcionaba al pausar/diferir
+Agent: Claude Opus 4.8
+- En el cambio de vocabulario SS quedó WorkOrders.tsx HoldModal usando `woTerms.full` sin declarar
+  el hook useWoTerms() en ese componente → ReferenceError en runtime, tragado por el `catch {}` del
+  handler (la IA nunca se llamaba: 0 uso, 0 logs). Diagnóstico: UsageEvent sin registros para
+  deferral_compensatory_measures_suggestion pese a que el resto de features IA funcionan.
+- Fix: `const woTerms = useWoTerms()` en HoldModal; el catch ahora muestra el error (setErr) en
+  vez de silenciarlo. (Nota: tsc --noEmit NO detectó la variable no declarada — revisar config.)
+- Deploy: build web REQUERIDO. pm2 restart cms3.
+
 [2026-06-23] FIX: PDF Plan Mercurio — grilla markdown + negrita en la descripción
 Agent: Claude Opus 4.8
 - La "Descripción de la tarea" mostraba el markdown crudo: tablas "| a | b |" como texto y sin

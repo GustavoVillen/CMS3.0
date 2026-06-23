@@ -187,6 +187,7 @@ function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; du
 
 const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess: () => void }> = ({ workOrder, onClose, onSuccess }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const [holdReason,            setHoldReason]            = useState("");
   const [targetDate,            setTargetDate]            = useState("");
   const [compensatoryMeasures,  setCompensatoryMeasures]  = useState("");
@@ -237,9 +238,11 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
         justification:     holdReason.trim() || null,
       });
       setCompensatoryMeasures(res.text);
-    } catch { /* noop */ }
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "No se pudo generar la sugerencia con IA.");
+    }
     finally { setLoadingAI(false); }
-  }, [workOrder, targetDate, holdReason]);
+  }, [workOrder, targetDate, holdReason, woTerms]);
 
   const isBusy = saving || submitting;
 
