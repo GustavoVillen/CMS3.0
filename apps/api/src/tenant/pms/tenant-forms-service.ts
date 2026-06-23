@@ -15,7 +15,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { resolveTenantLogo } from "./pdf-helpers";
 import type { ControlledDocMeta } from "./pdf-form-chrome";
 
-export type TenantFormType = "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN";
+export type TenantFormType = "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN" | "DEFERRAL";
 
 const PUBLIC_DIR = join(process.cwd(), "..", "web-modern", "public");
 
@@ -104,6 +104,19 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     footer: MERCURIO_FOOTER,
     config: EMPTY_CONFIG,
   },
+  // El diferimiento ya emite su propio código (deferralCode "APL-..."), por eso
+  // codePattern null. Sigue el estilo del tenant (legacyStyle): Mercurio recibe
+  // el documento controlado "INFORME DE DIFERIMIENTO".
+  DEFERRAL: {
+    style: "STANDARD",
+    formCode: "REGI-MAN-09",
+    title: "INFORME DE DIFERIMIENTO",
+    revision: 2,
+    effectiveFrom: "01.05.2025",
+    codePattern: null,
+    footer: MERCURIO_FOOTER,
+    config: EMPTY_CONFIG,
+  },
 };
 
 export interface ResolvedTenantForm {
@@ -179,7 +192,7 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
   // Estilo: fila > (legacy enum del tenant) > default.
   // El Plan de mantenimiento sigue el estilo de documento del tenant (mismo
   // signal que la OT): así un tenant Mercurio recibe el formato controlado.
-  const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN")
+  const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN" || type === "DEFERRAL")
     ? (settings?.workOrderPdfTemplate as string | undefined)
     : undefined;
   const style = (form?.style ?? legacyStyle ?? def.style) as "STANDARD" | "MERCURIO";

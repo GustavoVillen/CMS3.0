@@ -22,6 +22,10 @@ export interface CreateDeferralInput {
   targetDate?: string | Date | null;
   justification?: string | null;
   compensatoryMeasures?: string | null;
+  riskLevel?: string | null;
+  riskProbability?: string | null;
+  riskConsequence?: string | null;
+  riskAnalysisResult?: string | null;
   reviewNotes?: string | null;
 }
 
@@ -39,6 +43,10 @@ interface DeferralRecord {
   targetDate: Date | null;
   justification: string | null;
   compensatoryMeasures: string | null;
+  riskLevel: string | null;
+  riskProbability: string | null;
+  riskConsequence: string | null;
+  riskAnalysisResult: string | null;
   reviewNotes: string | null;
   decisionAt: Date | null;
   decidedByUserId: string | null;
@@ -318,6 +326,10 @@ async function createDeferralCore(session: TenantAccessSession, payload: CreateD
         targetDate: parseOptionalDate(payload.targetDate, "targetDate"),
         justification: normalizeOptionalText(payload.justification),
         compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
+        riskLevel: normalizeOptionalText(payload.riskLevel),
+        riskProbability: normalizeOptionalText(payload.riskProbability),
+        riskConsequence: normalizeOptionalText(payload.riskConsequence),
+        riskAnalysisResult: normalizeOptionalText(payload.riskAnalysisResult),
         reviewNotes: normalizeOptionalText(payload.reviewNotes),
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
@@ -471,7 +483,7 @@ export async function activateDeferral(session: TenantAccessSession, id: string)
 export async function updateDeferral(
   session: TenantAccessSession,
   id: string,
-  payload: { justification?: string | null; compensatoryMeasures?: string | null; targetDate?: string | Date | null },
+  payload: { justification?: string | null; compensatoryMeasures?: string | null; targetDate?: string | Date | null; riskLevel?: string | null; riskProbability?: string | null; riskConsequence?: string | null; riskAnalysisResult?: string | null },
 ) {
   ensureCanManageDeferrals(session);
 
@@ -488,6 +500,10 @@ export async function updateDeferral(
   if (payload.justification        !== undefined) data.justification        = normalizeOptionalText(payload.justification);
   if (payload.compensatoryMeasures !== undefined) data.compensatoryMeasures = normalizeOptionalText(payload.compensatoryMeasures);
   if (payload.targetDate           !== undefined) data.targetDate           = parseOptionalDate(payload.targetDate, "targetDate");
+  if (payload.riskLevel            !== undefined) data.riskLevel            = normalizeOptionalText(payload.riskLevel);
+  if (payload.riskProbability      !== undefined) data.riskProbability      = normalizeOptionalText(payload.riskProbability);
+  if (payload.riskConsequence      !== undefined) data.riskConsequence      = normalizeOptionalText(payload.riskConsequence);
+  if (payload.riskAnalysisResult   !== undefined) data.riskAnalysisResult   = normalizeOptionalText(payload.riskAnalysisResult);
 
   return deferral.update({ where: { id: current.id }, data });
 }

@@ -148,6 +148,7 @@ enum TenantFormType {
   WORK_ORDER
   SERVICE_REQUEST
   MAINTENANCE_PLAN
+  DEFERRAL
   // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
 }
 
@@ -1441,6 +1442,10 @@ model Deferral {
   targetPort           String?
   justification        String?
   compensatoryMeasures String?
+  riskLevel            String?   // LOW | MEDIUM | HIGH | CRITICAL
+  riskProbability      String?   // LIKELY | PROBABLE | UNLIKELY | RARE
+  riskConsequence      String?   // FATALITY | MAJOR | MINOR | NEGLIGIBLE
+  riskAnalysisResult   String?
   reviewNotes          String?
   decisionAt           DateTime?
   decidedByUserId      String?

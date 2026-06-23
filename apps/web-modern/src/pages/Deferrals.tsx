@@ -10,6 +10,8 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms } from "../lib/i18n";
+import { RiskMatrix } from "../components/RiskMatrix";
+import { deriveRiskLevelFromMatrix, toUiRiskLevel, toUiRiskProbability, toUiRiskConsequence, type RiskLevel, type RiskProbability, type RiskConsequence } from "../lib/risk";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -36,6 +38,10 @@ interface Deferral {
   targetDate: string | null;
   justification: string | null;
   compensatoryMeasures: string | null;
+  riskLevel: string | null;
+  riskProbability: string | null;
+  riskConsequence: string | null;
+  riskAnalysisResult: string | null;
   reviewNotes: string | null;
   decisionAt: string | null;
   decidedByUserId: string | null;
@@ -371,6 +377,11 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const [actionError, setActionError] = useState<string | null>(null);
   const [compensatoryMeasures, setCompensatoryMeasures] = useState(deferral.compensatoryMeasures ?? "");
   const [loadingCompensatory, setLoadingCompensatory]   = useState(false);
+  const [riskProbability, setRiskProbability]           = useState<RiskProbability>(toUiRiskProbability(deferral.riskProbability));
+  const [riskConsequence, setRiskConsequence]           = useState<RiskConsequence>(toUiRiskConsequence(deferral.riskConsequence));
+  const [riskLevel, setRiskLevel]                       = useState<RiskLevel>(toUiRiskLevel(deferral.riskLevel));
+  const [riskAnalysisResult, setRiskAnalysisResult]     = useState(deferral.riskAnalysisResult ?? "");
+  const [loadingRisk, setLoadingRisk]                   = useState(false);
   const [downloadingPdf, setDownloadingPdf]             = useState(false);
   const [cancelling, setCancelling]                     = useState(false);
   const [confirmCancel, setConfirmCancel]               = useState(false);
@@ -382,7 +393,13 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     setActionError(null);
     setSavedOk(false);
     try {
-      await api.patch(`/app/pms/deferrals/${deferral.id}`, { compensatoryMeasures });
+      await api.patch(`/app/pms/deferrals/${deferral.id}`, {
+        compensatoryMeasures,
+        riskProbability: riskProbability || null,
+        riskConsequence: riskConsequence || null,
+        riskLevel: riskLevel || null,
+        riskAnalysisResult,
+      });
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
@@ -390,10 +407,46 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     } finally {
       setSaving(false);
     }
-  }, [compensatoryMeasures, deferral.id, t]);
+  }, [compensatoryMeasures, riskProbability, riskConsequence, riskLevel, riskAnalysisResult, deferral.id, t]);
+
+  const handleDeferralRiskClick = useCallback(async () => {
+    if (loadingRisk) return;
+    setLoadingRisk(true);
+    try {
+      const res = await api.post<{ level: string; probability: string | null; consequence: string | null; analysis: string }>(
+        "/app/pms/deferrals/suggest-deferral-risk",
+        {
+          deferralCode: deferral.deferralCode,
+          vesselCode: deferral.vesselCode,
+          assetLabel: assetDisplayName,
+          sourceTypeLabel: woTerms.full,
+          sourceDisplayName: [deferral.sourceCode, sourceDisplayName].filter(Boolean).join(" — "),
+          targetDate: deferral.targetDate,
+          justification: deferral.justification,
+        },
+      );
+      const aiProb = toUiRiskProbability(res.probability);
+      const aiCons = toUiRiskConsequence(res.consequence);
+      if (aiProb && aiCons) {
+        setRiskProbability(aiProb);
+        setRiskConsequence(aiCons);
+        setRiskLevel(deriveRiskLevelFromMatrix(aiProb, aiCons));
+      } else if (res.level) {
+        setRiskLevel(toUiRiskLevel(res.level));
+      }
+      if (res.analysis) setRiskAnalysisResult(res.analysis);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "No se pudo generar el análisis de riesgo con IA.");
+    } finally {
+      setLoadingRisk(false);
+    }
+  }, [loadingRisk, deferral.deferralCode, deferral.vesselCode, deferral.targetDate, deferral.justification, deferral.sourceCode, assetDisplayName, sourceDisplayName, woTerms]);
 
   // ESC guard
-  const isDeferralDirty = compensatoryMeasures !== (deferral.compensatoryMeasures ?? "");
+  const isDeferralDirty = compensatoryMeasures !== (deferral.compensatoryMeasures ?? "")
+    || (riskProbability || "") !== (toUiRiskProbability(deferral.riskProbability) || "")
+    || (riskConsequence || "") !== (toUiRiskConsequence(deferral.riskConsequence) || "")
+    || riskAnalysisResult !== (deferral.riskAnalysisResult ?? "");
   useEscapeGuard({
     enabled: !showReview && !showApprove && !showReject && !showClose && !confirmCancel,
     isDirty: isDeferralDirty,
@@ -418,9 +471,17 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const handleDownloadPdf = useCallback(async () => {
     setDownloadingPdf(true);
     try {
-      // Persist locally edited compensatory measures before generating PDF (only when REQUESTED)
-      if (deferral.status === "REQUESTED" && compensatoryMeasures !== (deferral.compensatoryMeasures ?? "")) {
-        try { await api.patch(`/app/pms/deferrals/${deferral.id}`, { compensatoryMeasures }); } catch { /* non-blocking */ }
+      // Persist locally edited compensatory measures + risk before generating PDF (only when REQUESTED)
+      if (deferral.status === "REQUESTED" && isDeferralDirty) {
+        try {
+          await api.patch(`/app/pms/deferrals/${deferral.id}`, {
+            compensatoryMeasures,
+            riskProbability: riskProbability || null,
+            riskConsequence: riskConsequence || null,
+            riskLevel: riskLevel || null,
+            riskAnalysisResult,
+          });
+        } catch { /* non-blocking */ }
       }
       const token = localStorage.getItem("gpms_token") ?? "";
       const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
@@ -438,7 +499,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     } finally {
       setDownloadingPdf(false);
     }
-  }, [deferral.id, deferral.deferralCode, deferral.status, deferral.compensatoryMeasures, compensatoryMeasures]);
+  }, [deferral.id, deferral.deferralCode, deferral.status, deferral.compensatoryMeasures, compensatoryMeasures, isDeferralDirty, riskProbability, riskConsequence, riskLevel, riskAnalysisResult]);
 
   const resolveSourceLabel = useCallback(async (): Promise<string> => {
     try {
@@ -601,6 +662,21 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   <p className="text-sm text-fg whitespace-pre-wrap">{deferral.justification}</p>
                 </div>
               )}
+              {/* Análisis de riesgo del diferimiento (entre Justificación y Medidas Compensatorias) */}
+              <div className="sm:col-span-2 space-y-3">
+                <RiskMatrix
+                  probability={riskProbability}
+                  consequence={riskConsequence}
+                  level={riskLevel}
+                  result={riskAnalysisResult}
+                  readOnly={!showRequestedActions}
+                  loading={loadingRisk}
+                  onSelect={(p, c, lvl) => { setRiskProbability(p); setRiskConsequence(c); setRiskLevel(lvl); }}
+                  onResultChange={setRiskAnalysisResult}
+                  onSuggest={handleDeferralRiskClick}
+                  aiTooltip="Click para que la IA evalúe el riesgo de diferir"
+                />
+              </div>
               <div className="sm:col-span-2 space-y-1.5">
                 <button
                   type="button"

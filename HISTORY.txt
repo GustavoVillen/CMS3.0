@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-06-23] FEAT: Diferimientos — análisis de riesgo (matriz) + PDF "Informe de Diferimiento" controlado
+Agent: Claude Opus 4.8
+- Schema: Deferral suma riskLevel/riskProbability/riskConsequence/riskAnalysisResult (nullable).
+  Enum TenantFormType suma DEFERRAL. (db push aplicado local; aplicar en VPS).
+- IA: suggestDeferralRisk (deferrals-ai-suggestions) evalúa el riesgo de operar con la condición
+  diferida (no el HSE de ejecución). Ruta POST /app/pms/deferrals/suggest-deferral-risk. Feature
+  telemetría deferral_risk_analysis_suggestion. Persistencia en updateDeferral/createDeferral.
+- Frontend: matriz extraída a componente compartido components/RiskMatrix.tsx + lib/risk.ts
+  (constantes/tipos/helpers). MaintenancePlans usa el componente (sin cambio de comportamiento).
+  Deferrals: sección de riesgo entre Justificación y Medidas Compensatorias; click en "Nivel de
+  riesgo" → IA; editable solo en REQUESTED; opcional (no bloquea aprobar). Persiste en PATCH y
+  antes de generar el PDF.
+- PDF: tipo de formulario DEFERRAL (tenant-forms) → Mercurio recibe documento controlado
+  ("INFORME DE DIFERIMIENTO": header + Revisión/Desde + footer Elaborado/Revisado/Aprobado, footer
+  por página vía bufferPages). Cuerpo reorganizado (Embarcación/Solicitud N° · Activo/Tipo origen/
+  Código/Estado/Fechas/Duración · Título de la Tarea/Tarea · Justificación · ANÁLISIS DE RIESGO
+  (matriz) · Medidas compensatorias · Decisión). Nuevo risk-matrix-pdf.ts (renderer plano).
+- Deploy: db push en VPS + build web (gateado con tsc). pm2 restart cms3.
+
 [2026-06-23] CHORE: typecheck real en web-modern + gate en build (auditoría post-woTerms)
 Agent: Claude Opus 4.8
 - Causa del bug del woTerms no declarado que pasó sin detección: la tsconfig.json raíz tenía

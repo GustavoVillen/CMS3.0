@@ -31,7 +31,7 @@ import {
   reviewDeferral,
   updateDeferral,
 } from "./deferrals-service";
-import { suggestCompensatoryMeasures } from "./deferrals-ai-suggestions";
+import { suggestCompensatoryMeasures, suggestDeferralRisk } from "./deferrals-ai-suggestions";
 import {
   cancelCapaRecord,
   closeCapaRecord,
@@ -200,6 +200,12 @@ export async function handleQualityRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody<Parameters<typeof suggestCompensatoryMeasures>[1]>(request);
     sendJson(response, 200, await suggestCompensatoryMeasures(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/deferrals/suggest-deferral-risk") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<Parameters<typeof suggestDeferralRisk>[1]>(request);
+    sendJson(response, 200, await suggestDeferralRisk(session, body));
     return true;
   }
   if (method === "POST" && /^\/app\/pms\/deferrals\/[^/]+\/review$/.test(url.pathname)) {
