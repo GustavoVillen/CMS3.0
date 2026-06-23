@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Bell, AlertTriangle, CheckCheck, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications, type NotificationDto } from "../lib/notifications";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 function severityClasses(sev: string): { dot: string; label: string } {
   if (sev === "CRITICAL") return { dot: "bg-red-500", label: "text-red-700 dark:text-red-400" };
@@ -10,7 +10,7 @@ function severityClasses(sev: string): { dot: string; label: string } {
   return { dot: "bg-sky-500", label: "text-sky-700 dark:text-sky-400" };
 }
 
-function timeAgo(iso: string, t: (k: string) => string): string {
+function timeAgo(iso: string, t: (k: TranslationKey) => string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60_000);
   if (m < 1) return t("notifications.justNow");

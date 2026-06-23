@@ -1,5 +1,19 @@
 HISTORY.txt
 
+[2026-06-23] CHORE: typecheck real en web-modern + gate en build (auditoría post-woTerms)
+Agent: Claude Opus 4.8
+- Causa del bug del woTerms no declarado que pasó sin detección: la tsconfig.json raíz tenía
+  files:[] → `tsc --noEmit` no chequeaba NADA, y `vite build` (esbuild) no tipa. Se agrega script
+  `typecheck` (tsc -p tsconfig.app.json --noEmit) y se gatea `build` con él.
+- 12 errores de tipo preexistentes arreglados para dejar el gate verde (solo tipos, sin cambio de
+  comportamiento): firmas t→TranslationKey (NotificationsBell, Dashboard), formatters recharts
+  (Dashboard, PlatformUsage), cleanup useEffect (VoiceReportSheet), setScreenContext Dispatch
+  (copilot-context), get<> AiDocuments, PeriodSuggestions.deferrals (DailyReports),
+  MaintenancePlan.criticality + comparación muerta CONDITION/EVENT (MaintenancePlans).
+- Auditoría del cambio de vocabulario SS: el woTerms de HoldModal era el ÚNICO bug de ese tipo
+  (0 TS2304; sin violaciones de rules-of-hooks). No quedan otros.
+- Deploy: build web REQUERIDO (ahora corre tsc antes de vite). pm2 restart cms3.
+
 [2026-06-23] FIX: PDF diferimientos — grilla markdown + negrita en descripciones
 Agent: Claude Opus 4.8
 - El PDF de diferimientos tiene su propio textBlock (no usa el chrome de createFormCanvas):

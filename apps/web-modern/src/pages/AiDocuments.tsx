@@ -311,7 +311,7 @@ function ViewEditVersionModal({
       setLoading(true);
       setError(null);
       try {
-        const doc = await api.get<AiDocument & { versions: Array<AiDocumentVersion & { content: string }> }>(`/app/ai-documents/${documentId}`);
+        const doc = await api.get<Omit<AiDocument, "versions"> & { versions: Array<AiDocumentVersion & { content: string }> }>(`/app/ai-documents/${documentId}`);
         if (cancelled) return;
         const v = doc.versions.find((x) => x.id === versionId);
         if (!v) {

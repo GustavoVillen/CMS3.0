@@ -917,6 +917,7 @@ interface PeriodSuggestions {
   maintenance: unknown[];
   defects: unknown[];
   spares: unknown[];
+  deferrals: unknown[];
 }
 
 const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose, onSaved }) => {

@@ -6,7 +6,7 @@ import {
 import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
-import { useT, useLocale, translate } from "../lib/i18n";
+import { useT, useLocale, translate, type TranslationKey } from "../lib/i18n";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
@@ -874,8 +874,8 @@ const FuelConsumptionWidget = ({
                 contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: "12px" }}
                 itemStyle={{ color: tooltipText }}
                 labelStyle={{ color: tooltipLabel, fontSize: 11 }}
-                formatter={(value: number, name: string) => [
-                  `${value.toLocaleString("es")} L`,
+                formatter={(value, name) => [
+                  `${Number(value).toLocaleString("es")} L`,
                   name === "realValue" ? t("dashboard.fuelReal") : t("dashboard.fuelEstimated"),
                 ]}
               />
@@ -913,7 +913,7 @@ const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
   loading: boolean;
   onClose: () => void;
   onNavigate: () => void;
-  t: (k: string) => string;
+  t: (k: TranslationKey) => string;
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />

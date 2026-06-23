@@ -57,7 +57,7 @@ export interface CopilotScreenContext {
 
 interface CopilotContextValue {
   screenContext: CopilotScreenContext | null;
-  setScreenContext: (ctx: CopilotScreenContext | null) => void;
+  setScreenContext: React.Dispatch<React.SetStateAction<CopilotScreenContext | null>>;
   /**
    * Set a message that CopilotoPanel should auto-send immediately.
    * The panel consumes it (sets back to null) after sending.

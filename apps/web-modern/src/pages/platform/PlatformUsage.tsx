@@ -349,7 +349,7 @@ const UsageChart: React.FC<{
             <Tooltip
               contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, fontSize: 12 }}
               labelStyle={{ color: "#e2e8f0" }}
-              formatter={(value: number, name: string) => [fmtY(value), name]}
+              formatter={(value, name) => [fmtY(Number(value)), name]}
             />
             <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }} />
             {users.map((user, i) => (

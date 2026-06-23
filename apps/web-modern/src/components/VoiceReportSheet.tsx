@@ -63,7 +63,7 @@ export const VoiceReportSheet: React.FC<VoiceReportSheetProps> = ({ onClose, onC
   // Arrancar la grabación automáticamente al montar
   useEffect(() => {
     if (supported && stage === "recording-initial") start();
-    return () => stop();
+    return () => { stop(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supported]);
 
