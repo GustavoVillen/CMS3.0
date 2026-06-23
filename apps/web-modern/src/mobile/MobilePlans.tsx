@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { ChevronLeft, Loader2, Zap, AlertTriangle, Clock } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useWoTerms } from "../lib/i18n";
 import { api, ApiError } from "../lib/api";
 
 interface Plan {
@@ -60,6 +61,9 @@ interface MobilePlansProps {
 
 export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
   const { data, loading, reload } = useFetch<{ items: Plan[] }>("/app/pms/maintenance-plans?status=ACTIVE");
+  const woTerms = useWoTerms();
+  // IN_WINDOW se rotula con el término del tenant ("OT abierta" / "SS abierta").
+  const statusLabel = (s: string) => s === "IN_WINDOW" ? `${woTerms.abbr} abierta` : (STATUS_LABEL[s] ?? s);
   const [filter, setFilter]       = useState<Filter>(initialFilter ?? "due");
 
   // Si llega un nuevo initialFilter desde el parent (ej. usuario tap distintos
@@ -100,7 +104,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
       setView("list");
       setSelected(null);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al abrir OT");
+      setErr(e instanceof ApiError ? e.message : `Error al abrir ${woTerms.abbr}`);
     } finally {
       setSaving(false);
     }
@@ -117,7 +121,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
           </button>
           <span className="font-bold text-sm text-fg truncate flex-1">{selected.taskCode}</span>
           <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${STATUS_COLOR[selected.executionStatus] ?? "bg-fg/5 text-fg/40 border-fg/10"}`}>
-            {STATUS_LABEL[selected.executionStatus] ?? selected.executionStatus}
+            {statusLabel(selected.executionStatus)}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -154,8 +158,8 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
               <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-yellow-200 leading-snug">
-                  Ya hay una OT abierta para este plan: <span className="font-mono font-bold">{selected.activeWorkOrderCode}</span>.
-                  Cerrala primero desde la solapa de OTs.
+                  Ya hay una {woTerms.abbr} abierta para este plan: <span className="font-mono font-bold">{selected.activeWorkOrderCode}</span>.
+                  Cerrala primero desde la solapa de {woTerms.abbr}.
                 </p>
               </div>
             ) : (
@@ -170,7 +174,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
                 ) : (
                   <>
                     <Zap className="w-4 h-4" />
-                    Abrir OT
+                    Abrir {woTerms.abbr}
                   </>
                 )}
               </button>
@@ -230,7 +234,7 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-[10px] font-mono text-text-industrial/40">{plan.taskCode}</span>
                     <span className={`text-[9px] px-1.5 py-px rounded-full border font-bold ${STATUS_COLOR[plan.executionStatus] ?? ""}`}>
-                      {STATUS_LABEL[plan.executionStatus] ?? plan.executionStatus}
+                      {statusLabel(plan.executionStatus)}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-fg truncate">{plan.title}</p>

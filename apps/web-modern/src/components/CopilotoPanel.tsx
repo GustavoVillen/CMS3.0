@@ -78,6 +78,7 @@ import { api, ApiError } from "../lib/api";
 import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
+import { useWoTerms, type WoTerms } from "../lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -171,7 +172,7 @@ function capabilityForModule(module: string | undefined): string {
 // Offline suggestion engine — zero API calls, pure heuristics
 // ---------------------------------------------------------------------------
 
-function computeSuggestions(ctx: CopilotScreenContext): Suggestion[] {
+function computeSuggestions(ctx: CopilotScreenContext, woTerms: WoTerms): Suggestion[] {
   const suggestions: Suggestion[] = [];
   const fv = ctx.fieldValues ?? {};
 
@@ -181,8 +182,8 @@ function computeSuggestions(ctx: CopilotScreenContext): Suggestion[] {
       suggestions.push({
         id: "wo-title",
         priority: "HIGH",
-        title: "Falta título de la OT",
-        explanation: "La orden de trabajo no tiene título descriptivo.",
+        title: `Falta título de la ${woTerms.abbr}`,
+        explanation: `La ${woTerms.full.toLowerCase()} no tiene título descriptivo.`,
       });
     }
     const desc = fv.description?.trim() ?? "";
@@ -245,7 +246,7 @@ function computeSuggestions(ctx: CopilotScreenContext): Suggestion[] {
 // Pending items prompt — single action that covers all missing fields
 // ---------------------------------------------------------------------------
 
-function buildPendingItemsPrompt(ctx: CopilotScreenContext, suggestions: Suggestion[]): string {
+function buildPendingItemsPrompt(ctx: CopilotScreenContext, suggestions: Suggestion[], woTerms: WoTerms): string {
   const fv     = ctx.fieldValues ?? {};
   const code   = ctx.entityCode  ? ` ${ctx.entityCode}`        : "";
   const vessel = ctx.vesselCode  ? ` (Vessel: ${ctx.vesselCode})` : "";
@@ -261,10 +262,10 @@ function buildPendingItemsPrompt(ctx: CopilotScreenContext, suggestions: Suggest
 
   if (ctx.module === "WORK_ORDERS") {
     return (
-      `Estoy completando la Work Order${code}${vessel}.` +
+      `Estoy completando la ${woTerms.full}${code}${vessel}.` +
       (filledList ? `\n\nEstado actual:\n${filledList}` : "") +
       `\n\nÍtems a mejorar:\n${pendingList}` +
-      `\n\nAyúdame a completar y mejorar esta orden de trabajo.`
+      `\n\nAyúdame a completar y mejorar esta ${woTerms.full.toLowerCase()}.`
     );
   }
 
@@ -516,6 +517,7 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 
 export const CopilotoPanel: React.FC = () => {
   const navigate = useNavigate();
+  const woTerms = useWoTerms();
   const { screenContext, requestMessage, setRequestMessage, hasApplyFieldsCallback, applyFields } = useCopilotScreenContext();
   // Buque seleccionado en el header — el copiloto lo usa como contexto de trabajo
   // por defecto para no preguntar "¿de qué buque?" cuando ya hay uno elegido.
@@ -580,7 +582,7 @@ export const CopilotoPanel: React.FC = () => {
   }, [expanded]);
 
   // Derived
-  const suggestions    = useMemo(() => screenContext ? computeSuggestions(screenContext) : [], [screenContext]);
+  const suggestions    = useMemo(() => screenContext ? computeSuggestions(screenContext, woTerms) : [], [screenContext, woTerms]);
   const hasSuggestions = suggestions.length > 0;
 
   // ---------------------------------------------------------------------------
@@ -1016,7 +1018,7 @@ export const CopilotoPanel: React.FC = () => {
       {screenContext && hasSuggestions && (
         <div className="px-2 py-2 border-b border-border shrink-0">
           <button
-            onClick={() => void sendMessage(buildPendingItemsPrompt(screenContext, suggestions))}
+            onClick={() => void sendMessage(buildPendingItemsPrompt(screenContext, suggestions, woTerms))}
             disabled={streaming}
             className="w-full text-[10px] px-2.5 py-2 rounded-lg bg-accent/10 border border-accent/20 text-accent font-semibold hover:bg-accent/20 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5"
           >

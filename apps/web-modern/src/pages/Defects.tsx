@@ -12,7 +12,7 @@ import { AuthedImage } from "../lib/authed-media";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useT } from "../lib/i18n";
+import { useT, useWoTerms } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { RichTextArea } from "../components/RichTextArea";
@@ -758,6 +758,7 @@ const fldLabel = "block text-xs font-semibold text-text-industrial/60 uppercase 
 
 const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const navigate = useNavigate();
   const [description, setDescription]         = useState(defect.description ?? "");
   const [classification, setClassification]   = useState(defect.classification ?? "");
@@ -1145,7 +1146,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               onClick={() => { setPostSaveStep(null); setShowCreateWo(true); }}
               className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
             >
-              Sí, crear OT permanente
+              Sí, crear {woTerms.abbr} permanente
             </button>
           </div>
         </div>
@@ -1513,9 +1514,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               </button>
               {!isClosed && (
                 <button onClick={() => setShowCreateWo(true)} disabled={!!defect.workOrderId}
-                  title={defect.workOrderId ? "Ya tiene una OT asociada" : undefined}
+                  title={defect.workOrderId ? `Ya tiene una ${woTerms.abbr} asociada` : undefined}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                  Crear OT Correctiva
+                  Crear {woTerms.abbr} Correctiva
                 </button>
               )}
               {/* Abrir MOC: defectos CRITICAL o con status DEFERRED suelen

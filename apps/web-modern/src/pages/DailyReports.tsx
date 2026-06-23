@@ -12,7 +12,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
-import { useT } from "../lib/i18n";
+import { useT, useWoTerms } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
 
 // ─── Base Types ───────────────────────────────────────────────────────────────
@@ -347,6 +347,7 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
 
 const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEntries?: MaintenanceEntry[]; suggestions?: any[]; suggestionPeriod?: { from: string | null; to: string } }> = ({ reportId, disabled, prefillEntries, suggestions, suggestionPeriod }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const { data, loading, reload } = useFetch<{ maintenanceEntries: MaintenanceEntry[] }>(
     `/app/daily-reports/${reportId}/full`,
     [reportId],
@@ -447,7 +448,7 @@ const MaintenanceTab: React.FC<{ reportId: string; disabled: boolean; prefillEnt
         <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-accent/5 border border-accent/20">
           <div className="flex items-center gap-2 text-[11px] text-accent/80">
             <ClipboardCopy className="w-3.5 h-3.5 shrink-0" />
-            <span><strong>{rows.length}</strong> OT{rows.length !== 1 ? "s" : ""} cargadas automáticamente del período {periodLabel}. Revisá y guardá para confirmar.</span>
+            <span><strong>{rows.length}</strong> {woTerms.abbr} cargadas automáticamente del período {periodLabel}. Revisá y guardá para confirmar.</span>
           </div>
           <button onClick={() => { setRows([]); setAutoSource(null); }} className="text-[10px] text-fg/30 hover:text-fg transition-colors shrink-0">{t("dr.clear")}</button>
         </div>

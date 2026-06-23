@@ -37,7 +37,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
   const isPlanned = !!(wo as any).maintenancePlanId || (wo as any).type === "PREVENTIVE";
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
+    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `SS ${wo.workOrderCode}` } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end",  () => resolve(Buffer.concat(chunks)));

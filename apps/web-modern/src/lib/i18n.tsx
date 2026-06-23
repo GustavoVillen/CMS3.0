@@ -1997,31 +1997,146 @@ const dict = {
 
 export type TranslationKey = keyof typeof dict;
 
+// ─── Vocabulario por tenant ─────────────────────────────────────────────────
+// Algunos tenants nombran las entidades de forma distinta. Mercurio gestiona
+// las Órdenes de Trabajo como "Solicitudes de Servicio" (SS) — para ese tenant
+// no existe el término "OT". En vez de duplicar callsites con t(isMercurio ? …),
+// se define una capa de override: cuando el vocabulario activo es "SS", useT()
+// resuelve primero la variante de SS_OVERRIDES y cae al diccionario base si no
+// hay override. Solo se overridean las claves que mencionan "OT"/"Orden(es) de
+// Trabajo"; el resto sale del diccionario base sin cambios.
+
+export type Vocab = "SS" | null;
+
+const SS_OVERRIDES: Partial<Record<TranslationKey, Record<Locale, string>>> = {
+  // Navegación / página / dashboard
+  "nav.workOrders":        { es: "Solicitudes de Servicio", en: "Service Requests",        pt: "Solicitações de Serviço" },
+  "page.workOrders":       { es: "Solicitudes de Servicio", en: "Service Requests",        pt: "Solicitações de Serviço" },
+  "dashboard.workOrders":  { es: "SS abiertas",             en: "Open Service Requests",   pt: "Solicitações de Serviço abertas" },
+  "dashboard.woTitle":     { es: "Solicitudes de Servicio", en: "Service Requests",        pt: "Solicitações de Serviço" },
+  "empty.workOrders":      { es: "Sin solicitudes de servicio", en: "No service requests", pt: "Sem solicitações de serviço" },
+
+  // Módulo de OT (lista / modal / tramitación)
+  "wo.new":                { es: "Nueva SS",                en: "New Service Request",     pt: "Nova SS" },
+  "wo.entityLabel":        { es: "Solicitud de Servicio",   en: "Service Request",         pt: "Solicitação de Serviço" },
+  "wo.entityLabelShort":   { es: "SS",                      en: "SR",                      pt: "SS" },
+  "wo.reopenReasonPlaceholder": { es: "Por qué se necesita re-abrir esta SS…", en: "Why this SR needs to be reopened…", pt: "Por que esta SS precisa ser reaberta…" },
+  "wo.reopenWarning":      { es: "Re-abrir una SS cerrada queda registrado en auditoría. Sólo hacelo para corregir un error documentado.", en: "Reopening a closed SR is audited. Only do this to correct a documented mistake.", pt: "Reabrir uma SS fechada fica registrado em auditoria. Faça isso apenas para corrigir um erro documentado." },
+  "wo.modal.title":        { es: "Nueva Solicitud de Servicio", en: "New Service Request",  pt: "Nova Solicitação de Serviço" },
+  "wo.modal.titleField":   { es: "Título de la SS",         en: "SR Title",                pt: "Título da SS" },
+  "wo.modal.create":       { es: "Crear SS",                en: "Create SR",               pt: "Criar SS" },
+  "wo.modal.resultSection":{ es: "Resultado de la Solicitud de Servicio", en: "Service Request Result", pt: "Resultado da Solicitação de Serviço" },
+  "wo.modal.postpone":     { es: "Diferir SS",              en: "Defer SR",                pt: "Adiar SS" },
+  "wo.modal.closeWO":      { es: "Cerrar SS",               en: "Close SR",                pt: "Fechar SS" },
+  "wo.modal.cancelWO":     { es: "Cancelar SS",             en: "Cancel SR",               pt: "Cancelar SS" },
+  "wo.modal.closeBeforeError": { es: "Completar el Resultado de la SS antes de cerrar", en: "Complete the SR Result before closing", pt: "Conclua o Resultado da SS antes de fechar" },
+  "wo.modal.resultRequired":   { es: "El resultado de la SS es requerido para cerrar.", en: "SR Result is required before closing.", pt: "O Resultado da SS é obrigatório para fechar." },
+  "wo.modal.closeStockWarning":{ es: "SS cerrada. No se pudo registrar el movimiento de stock para {count} repuesto(s). Verifique el stock manualmente.", en: "SR closed. Could not register stock movement for {count} spare(s). Verify stock manually.", pt: "SS fechada. Não foi possível registrar o movimento de estoque para {count} sobressalente(s). Verifique o estoque manualmente." },
+  "wo.modal.fluidSampleNotice": { es: "Al cerrar esta SS se creará automáticamente una muestra de {fluid} en estado DRAFT para análisis de fluidos.", en: "When this SR is closed, a {fluid} sample will be automatically created in DRAFT status for fluid analysis.", pt: "Ao fechar esta SS, uma amostra de {fluid} será criada automaticamente em estado DRAFT para análise de fluidos." },
+  "wo.modal.defectDetailHint": { es: "Opcional. Si lo completás, al cerrar la SS se abre el alta de defecto pre-cargada (la IA redacta la descripción y la severidad).", en: "Optional. If filled, closing the SR opens a pre-loaded defect form (AI drafts the description and severity).", pt: "Opcional. Se preenchido, ao fechar a SS abre o cadastro de defeito pré-carregado (a IA redige a descrição e a severidade)." },
+  "wo.page.openReport":        { es: "Reporte SS Abiertas", en: "Open SRs Report",         pt: "Relatório de SS Abertas" },
+  "wo.page.printOpenForVessel":{ es: "Imprimir SS abiertas de {vessel}", en: "Print open SRs for {vessel}", pt: "Imprimir SS abertas de {vessel}" },
+  "wo.page.printOpenAll":      { es: "Imprimir todas las SS abiertas agrupadas por responsable", en: "Print all open SRs grouped by assignee", pt: "Imprimir todas as SS abertas agrupadas por responsável" },
+
+  // Planes de mantenimiento
+  "mp.openWorkOrder":      { es: "Abrir SS",                en: "Open Service Request",    pt: "Abrir SS" },
+  "mp.modal.openWO":       { es: "Abrir SS",               en: "Open SR",                 pt: "Abrir SS" },
+  "mp.col.executeWO":      { es: "EJECUTAR SS",            en: "EXECUTE SR",              pt: "EXECUTAR SS" },
+  "mp.trm.AUTO_WO":        { es: "Requiere SS",            en: "Requires SR",             pt: "Requer SS" },
+  "mp.trm.APPROVAL_WO":    { es: "Requiere SS",            en: "Requires SR",             pt: "Requer SS" },
+  "mp.modal.duplicateWoTitle":  { es: "SS ya abierta para esta tarea", en: "SR already open for this task", pt: "SS já aberta para esta tarefa" },
+  "mp.modal.duplicateWoText":   { es: "Esta tarea ya tiene una Solicitud de Servicio abierta:", en: "This task already has an open Service Request:", pt: "Esta tarefa já tem uma Solicitação de Serviço aberta:" },
+  "mp.modal.duplicateWoConfirm":{ es: "¿Está seguro que quiere abrir una nueva SS?", en: "Are you sure you want to open a new SR?", pt: "Tem certeza que deseja abrir uma nova SS?" },
+  "mp.modal.openWoAnyway":      { es: "Abrir SS de todas formas", en: "Open SR anyway",   pt: "Abrir SS mesmo assim" },
+  "mp.modal.fluidSampleHint":   { es: "Al cerrar la SS generada por este plan, se creará automáticamente una muestra de fluido en estado DRAFT.", en: "When the SR generated by this plan is closed, a fluid sample will be automatically created in DRAFT status.", pt: "Ao fechar a SS gerada por este plano, uma amostra de fluido será criada automaticamente em estado DRAFT." },
+  "mp.modal.samplingHint":      { es: "Al cerrar la SS generada por este plan, se creará automáticamente una muestra (DRAFT) del tipo elegido.", en: "When the SR generated by this plan is closed, a sample of the chosen kind will be auto-created in DRAFT.", pt: "Ao fechar a SS gerada por este plano, uma amostra do tipo escolhido será criada em DRAFT." },
+
+  // Defectos
+  "def.fromWoAnalyzing":   { es: "Generado desde una SS correctiva — la IA está redactando la descripción y la severidad…", en: "Created from a corrective SR — AI is drafting the description and severity…", pt: "Criado a partir de uma SS corretiva — a IA está redigindo a descrição e a severidade…" },
+  "def.fromWoReady":       { es: "Generado desde una SS correctiva — revisá los datos sugeridos por la IA y confirmá.", en: "Created from a corrective SR — review the AI-suggested data and confirm.", pt: "Criado a partir de uma SS corretiva — revise os dados sugeridos pela IA e confirme." },
+  "def.tempRepairAsk":     { es: "La corrección fue temporaria. ¿Deseas ejecutar una nueva Solicitud de Servicio para la reparación permanente?", en: "The fix was temporary. Do you want to create a new Service Request for the permanent repair?", pt: "A correção foi temporária. Deseja executar uma nova Solicitação de Serviço para o reparo permanente?" },
+  "def.tempRepairHint":    { es: "Si creás la SS, se cerrará la SS original y se cerrará este registro de defecto.", en: "If you create the SR, the original SR will be closed and this defect record will be closed.", pt: "Se criar a SS, a SS original será fechada e este registro de defeito será fechado." },
+  "def.resolvedViaWo":     { es: "Resuelto vía SS",         en: "Resolved via SR",         pt: "Resolvido via SS" },
+  "def.origin.wo":         { es: "SS",                      en: "SR",                      pt: "SS" },
+  "def.origin.openWo":     { es: "Abrir la SS de origen",   en: "Open the source service request", pt: "Abrir a SS de origem" },
+  "def.class.wo":          { es: "Hallazgo en SS",          en: "Service request finding", pt: "Achado em SS" },
+  "def.saveWillCloseWo":   { es: "Al guardar se cerrará la SS asociada y este registro de defecto.", en: "On save the associated SR and this defect record will be closed.", pt: "Ao salvar, a SS associada e este registro de defeito serão fechados." },
+  "def.saveWillAskWo":     { es: "Al guardar se preguntará si deseas crear una SS para la reparación permanente.", en: "On save you'll be asked if you want to create a SR for the permanent repair.", pt: "Ao salvar, você será perguntado se deseja criar uma SS para o reparo permanente." },
+
+  // Análisis de fluidos
+  "fa.autoGen":            { es: "Generada automáticamente al cerrar una SS.", en: "Automatically generated on SR close.", pt: "Gerada automaticamente ao fechar uma SS." },
+  "fa.viewSourceWo":       { es: "Ver SS origen →",          en: "View source SR →",        pt: "Ver SS origem →" },
+
+  // Repuestos / historial de equipo / bitácora / auditorías externas
+  "sp.colWoRef":           { es: "SS / Referencia",         en: "SR / Reference",          pt: "SS / Referência" },
+  "asset.history.col.code":{ es: "SS",                      en: "SR",                      pt: "SS" },
+  "asset.history.empty":   { es: "Este equipo aún no tiene solicitudes de servicio registradas.", en: "This asset has no service requests recorded yet.", pt: "Este equipamento ainda não tem solicitações de serviço registradas." },
+  "asset.history.openWo":  { es: "Abrir esta solicitud de servicio", en: "Open this service request", pt: "Abrir esta solicitação de serviço" },
+  "capa.src.workOrder":    { es: "Solicitud de servicio",   en: "Service request",         pt: "Solicitação de serviço" },
+  "bit.entity.workOrder":  { es: "SS",                      en: "SR",                      pt: "SS" },
+  "ea.finding.promoteConfirm": { es: "¿Desea gestionar esta deficiencia como un defecto (SS, RCA, CAPA)?", en: "Manage this deficiency as a defect (SR, RCA, CAPA)?", pt: "Deseja gerir esta deficiência como um defeito (SS, RCA, CAPA)?" },
+
+  // Confiabilidad / cumplimiento
+  "compliance.row.woCompliance": { es: "SS compliance",         en: "SR compliance",         pt: "SS compliance" },
+  "rel.defMttr":           { es: "tiempo medio de reparación = promedio de (cierre − apertura) de las SS correctivas. Más bajo = se repara más rápido.", en: "mean time to repair = average of (close − open) of corrective service requests. Lower = repaired faster.", pt: "tempo médio de reparo = média de (fechamento − abertura) das SS corretivas. Menor = reparado mais rápido." },
+};
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-const I18nContext = createContext<Locale>("es");
+interface I18nValue { locale: Locale; vocab: Vocab; }
 
-export function I18nProvider({ locale, children }: { locale: Locale; children: React.ReactNode }) {
-  return <I18nContext.Provider value={locale}>{children}</I18nContext.Provider>;
+const I18nContext = createContext<I18nValue>({ locale: "es", vocab: null });
+
+export function I18nProvider({ locale, vocab = null, children }: { locale: Locale; vocab?: Vocab; children: React.ReactNode }) {
+  return <I18nContext.Provider value={{ locale, vocab }}>{children}</I18nContext.Provider>;
 }
 
 export function useLocale(): Locale {
-  return useContext(I18nContext);
+  return useContext(I18nContext).locale;
 }
 
-/** Returns a translation function bound to the active locale. */
+export function useVocab(): Vocab {
+  return useContext(I18nContext).vocab;
+}
+
+// Términos de la entidad "Orden de Trabajo" según el vocabulario del tenant.
+// Para Mercurio (vocab "SS") es "Solicitud de Servicio". Útil para strings que
+// embeben el sustantivo y no son claves i18n completas (labels/botones móviles).
+const WO_TERMS = {
+  OT: {
+    abbr:       { es: "OT", en: "WO", pt: "OS" },
+    full:       { es: "Orden de Trabajo",  en: "Work Order",  pt: "Ordem de Serviço" },
+    fullPlural: { es: "Órdenes de Trabajo", en: "Work Orders", pt: "Ordens de Serviço" },
+  },
+  SS: {
+    abbr:       { es: "SS", en: "SR", pt: "SS" },
+    full:       { es: "Solicitud de Servicio",  en: "Service Request",  pt: "Solicitação de Serviço" },
+    fullPlural: { es: "Solicitudes de Servicio", en: "Service Requests", pt: "Solicitações de Serviço" },
+  },
+} satisfies Record<string, Record<string, Record<Locale, string>>>;
+
+export interface WoTerms { abbr: string; full: string; fullPlural: string; }
+
+/** Devuelve los términos de la entidad OT/SS según locale + vocabulario del tenant. */
+export function useWoTerms(): WoTerms {
+  const { locale, vocab } = useContext(I18nContext);
+  const set = vocab === "SS" ? WO_TERMS.SS : WO_TERMS.OT;
+  return { abbr: set.abbr[locale], full: set.full[locale], fullPlural: set.fullPlural[locale] };
+}
+
+/** Returns a translation function bound to the active locale + tenant vocabulary. */
 export function useT() {
-  const locale = useLocale();
+  const { locale, vocab } = useContext(I18nContext);
   return (key: TranslationKey): string => {
-    const entry = dict[key as keyof typeof dict];
+    const entry = (vocab === "SS" && SS_OVERRIDES[key]) || dict[key as keyof typeof dict];
     if (!entry) return `[${key}]`;
     return entry[locale] ?? entry["es"] ?? `[${key}]`;
   };
 }
 
 /** Standalone translate — useful outside React (e.g. chart data builders). */
-export function translate(key: TranslationKey, locale: Locale): string {
-  const entry = dict[key as keyof typeof dict];
+export function translate(key: TranslationKey, locale: Locale, vocab: Vocab = null): string {
+  const entry = (vocab === "SS" && SS_OVERRIDES[key]) || dict[key as keyof typeof dict];
   if (!entry) return `[${key}]`;
   return entry[locale] ?? entry["es"] ?? `[${key}]`;
 }

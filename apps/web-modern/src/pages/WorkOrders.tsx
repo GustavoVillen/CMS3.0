@@ -10,7 +10,7 @@ import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
-import { useT, type TranslationKey } from "../lib/i18n";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { downloadDoc } from "../lib/download-doc";
@@ -231,7 +231,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
       const res = await api.post<{ text: string }>("/app/pms/deferrals/suggest-compensatory-measures", {
         vesselCode:        workOrder.vesselCode,
         assetLabel:        workOrder.assetName ?? workOrder.assetId,
-        sourceTypeLabel:   "Orden de Trabajo",
+        sourceTypeLabel:   woTerms.full,
         sourceDisplayName: [workOrder.workOrderCode, workOrder.title].filter(Boolean).join(" — "),
         targetDate:        targetDate || null,
         justification:     holdReason.trim() || null,
@@ -714,6 +714,7 @@ interface WorkOrderModalProps {
 
 const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const navigate = useNavigate();
   const { tenant, user } = useAuth();
   const isMercurio = tenant?.workOrderPdfTemplate === "MERCURIO";
@@ -888,7 +889,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         workOrderId: workOrder.id,
         classification: "WORK_ORDER_FINDING",
         severity: "MEDIUM",
-        description: deficienciasText.trim() || observations.trim() || `Deficiencias encontradas en OT ${workOrder.workOrderCode}`,
+        description: deficienciasText.trim() || observations.trim() || `Deficiencias encontradas en ${woTerms.abbr} ${workOrder.workOrderCode}`,
       };
       const res = await api.post<{ id: string; defectCode: string }>("/app/pms/defects", body);
       setCreatedDefectCode(res.defectCode ?? null);
@@ -1334,7 +1335,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <div className="text-xs text-emerald-700 dark:text-emerald-300 space-y-0.5">
                   {workOrder.aprobadoByName && <p><span className="font-bold">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}</p>}
                   <p><span className="font-bold">Autorizó:</span> {workOrder.autorizadoByName}{workOrder.autorizadoAt ? ` · ${fmtDate(workOrder.autorizadoAt)}` : ""}</p>
-                  <p className="text-text-industrial/60 normal-case">OT autorizada — avances y resultado habilitados.</p>
+                  <p className="text-text-industrial/60 normal-case">{woTerms.abbr} autorizada — avances y resultado habilitados.</p>
                 </div>
               ) : (
                 <>
@@ -1451,7 +1452,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   </div>
                   {rejected && workOrder.status === "ON_HOLD" && (
                     <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la OT o solicite uno nuevo.</p>
+                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la {woTerms.abbr} o solicite uno nuevo.</p>
                       <button
                         type="button"
                         onClick={() => { void handleResubmitDeferral(); }}
@@ -1689,7 +1690,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
                 <ShieldAlert className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200 font-semibold mb-1">Esta OT podría requerir permiso de trabajo</p>
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200 font-semibold mb-1">Esta {woTerms.abbr} podría requerir permiso de trabajo</p>
                   <p className="text-[11px] text-yellow-800 dark:text-yellow-200/80 leading-snug mb-2">
                     Por el contenido del trabajo, sugerimos: <span className="font-bold">{advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}</span>.
                     <span className="block text-[10px] text-yellow-800 dark:text-yellow-200/60 mt-0.5">
@@ -1748,7 +1749,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isAuthorized ? "opacity-70" : ""}`}>
           {!isAuthorized && (
             <p className="text-[11px] text-text-industrial/50 italic">
-              Los avances y el resultado se habilitan cuando la OT esté autorizada.
+              Los avances y el resultado se habilitan cuando la {woTerms.abbr} esté autorizada.
             </p>
           )}
 
@@ -2443,12 +2444,13 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   onSuccess: () => void;
 }) {
   const { user } = useAuth();
+  const woTerms = useWoTerms();
   const isReject = step === "RECHAZA";
   const [name, setName] = useState(user?.name ?? "");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const title = step === "APRUEBA" ? "Aprobar OT" : step === "AUTORIZA" ? "Autorizar OT" : "Rechazar OT";
+  const title = step === "APRUEBA" ? `Aprobar ${woTerms.abbr}` : step === "AUTORIZA" ? `Autorizar ${woTerms.abbr}` : `Rechazar ${woTerms.abbr}`;
   const verb  = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
 
   // ESC cierra esta ventana (captura + stopImmediatePropagation para no disparar
@@ -2491,7 +2493,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
             {workOrder.workOrderCode} · {workOrder.assetName ?? workOrder.title ?? ""}
           </p>
           {isReject && (
-            <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">La OT vuelve a Solicitada y queda marcada como rechazada.</p>
+            <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">La {woTerms.abbr} vuelve a Solicitada y queda marcada como rechazada.</p>
           )}
         </div>
         <div className="space-y-1.5">
@@ -2534,6 +2536,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
 
 export const WorkOrdersPage: React.FC = () => {
   const t = useT();
+  const woTerms = useWoTerms();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { selectedVesselCode } = useVesselContext();
@@ -2713,7 +2716,7 @@ export const WorkOrdersPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
         <button
-          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(selectedVesselCode); } finally { setGeneratingReport(false); } }}
+          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(selectedVesselCode, `${woTerms.abbr}s-Abiertas`); } finally { setGeneratingReport(false); } }}
           disabled={generatingReport}
           title={selectedVesselCode ? t("wo.page.printOpenForVessel").replace("{vessel}", selectedVesselCode) : t("wo.page.printOpenAll")}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"

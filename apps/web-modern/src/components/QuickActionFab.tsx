@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, X, Mic } from "lucide-react";
+import { useWoTerms } from "../lib/i18n";
 
 export type QuickAction =
   | "defect" | "near-miss" | "photo" | "wo-progress"
@@ -18,6 +19,7 @@ interface QuickActionFabProps {
 
 export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
   const [open, setOpen] = useState(false);
+  const woTerms = useWoTerms();
 
   // ESC cierra el sheet (mejora accesibilidad en pruebas con teclado).
   useEffect(() => {
@@ -70,13 +72,13 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
               <ActionTile
                 Icon={Camera}
                 label="Foto rápida"
-                hint="Subir foto al avance de OT"
+                hint={`Subir foto al avance de ${woTerms.abbr}`}
                 color="text-accent bg-accent/10 border-accent/30"
                 onClick={() => fire("photo")}
               />
               <ActionTile
                 Icon={Wrench}
-                label="Avance de OT"
+                label={`Avance de ${woTerms.abbr}`}
                 hint="Registrar progreso de trabajo"
                 color="text-success-sea bg-success-sea/10 border-success-sea/30"
                 onClick={() => fire("wo-progress")}

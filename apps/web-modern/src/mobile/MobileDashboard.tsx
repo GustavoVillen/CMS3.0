@@ -2,6 +2,7 @@ import React from "react";
 import { Loader2, Wrench, AlertTriangle, ClipboardList, ClipboardCheck, ChevronRight, Package, FileCheck, CalendarClock, CheckCircle, XCircle, Users, CalendarCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
+import { useWoTerms } from "../lib/i18n";
 import type { WoFilter } from "./MobileWorkOrders";
 import type { SparesFilter } from "./MobileSpares";
 
@@ -56,6 +57,7 @@ interface Props {
 
 export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
+  const woTerms = useWoTerms();
   // SS para aprobar: widget visible solo para superintendente/admin.
   const canApproveSS = user?.role === "FLEET_SUPERINTENDENT" || user?.role === "TENANT_ADMIN";
   const { data: woData,    loading: woLoading    } = useFetch<{ items: WO[]            }>("/app/pms/work-orders");
@@ -99,8 +101,8 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
-          <KpiCard label="OTs abiertas"   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots", { woFilter: "open" })} />
-          <KpiCard label="OTs vencidas"   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots", { woFilter: "overdue" })} />
+          <KpiCard label={`${woTerms.abbr} abiertas`}   icon={Wrench}        value={openWOs.length}   onClick={() => onNavigate?.("ots", { woFilter: "open" })} />
+          <KpiCard label={`${woTerms.abbr} vencidas`}   icon={Wrench}        value={overdueWOs.length} warn={overdueWOs.length > 0} onClick={() => onNavigate?.("ots", { woFilter: "overdue" })} />
           <KpiCard label="Planes vencidos" icon={CalendarClock} value={planAlert}        warn={planAlert > 0}        onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
           <KpiCard label="Defectos"       icon={AlertTriangle} value={openDefs.length}  warn={openDefs.length > 0}  onClick={() => onNavigate?.("defectos")} />
           <KpiCard label="Bajo reorden"   icon={Package}       value={lowSpares.length} warn={lowSpares.length > 0} onClick={() => onNavigate?.("repuestos", { sparesFilter: "low" })} />
@@ -244,7 +246,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           <div className="grid grid-cols-4 gap-2 text-center">
             <PlanStat label="Vencidos"   value={mpCounts.OVERDUE}    color="text-red-700 dark:text-red-400"    onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
             <PlanStat label="Próximos"   value={mpCounts.DUE}         color="text-orange-700 dark:text-orange-400" onClick={() => onNavigate?.("planes", { plansFilter: "due" })} />
-            <PlanStat label="OT abierta" value={mpCounts.IN_WINDOW}   color="text-yellow-700 dark:text-yellow-400" onClick={() => onNavigate?.("planes", { plansFilter: "all" })} />
+            <PlanStat label={`${woTerms.abbr} abierta`} value={mpCounts.IN_WINDOW}   color="text-yellow-700 dark:text-yellow-400" onClick={() => onNavigate?.("planes", { plansFilter: "all" })} />
             <PlanStat label="Por vencer" value={mpCounts.UPCOMING}    color="text-blue-700 dark:text-blue-400"   onClick={() => onNavigate?.("planes", { plansFilter: "upcoming" })} />
           </div>
         </div>

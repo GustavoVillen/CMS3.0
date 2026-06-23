@@ -9,7 +9,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useT } from "../lib/i18n";
+import { useT, useWoTerms } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -358,6 +358,7 @@ interface DeferralModalProps {
 
 const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSuccess }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const [showReview, setShowReview] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
   const [showReject, setShowReject] = useState(false);
@@ -517,7 +518,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     setLoadingCompensatory(true);
     setCompensatoryMeasures("Analizando...");
     try {
-      const sourceTypeLabel = deferral.sourceType === "WORK_ORDER" ? "Orden de Trabajo"
+      const sourceTypeLabel = deferral.sourceType === "WORK_ORDER" ? woTerms.full
         : deferral.sourceType === "DEFECT" ? "Defecto"
         : deferral.sourceType === "MAINTENANCE_PLAN" ? "Plan de Mantenimiento"
         : deferral.sourceType;
@@ -812,7 +813,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
           category: "TEMPORARY",
           vesselCode: deferral.vesselCode,
           title: `Operación con ${deferral.sourceCode ?? deferral.sourceType} postergada — ${deferral.assetName ?? "activo"}`,
-          reasonForChange: `Se postergó ${deferral.sourceType === "WORK_ORDER" ? "la OT" : deferral.sourceType === "DEFECT" ? "el defecto" : "el plan"} ${deferral.sourceCode ?? ""}${deferral.justification ? `. Justificación: ${deferral.justification}` : ""}.`,
+          reasonForChange: `Se postergó ${deferral.sourceType === "WORK_ORDER" ? `la ${woTerms.abbr}` : deferral.sourceType === "DEFECT" ? "el defecto" : "el plan"} ${deferral.sourceCode ?? ""}${deferral.justification ? `. Justificación: ${deferral.justification}` : ""}.`,
           proposedChange: deferral.compensatoryMeasures
             ? `Operación con las siguientes medidas compensatorias hasta el cierre de la postergación${deferral.targetDate ? ` (target: ${fmtDate(deferral.targetDate)})` : ""}:\n\n${deferral.compensatoryMeasures}`
             : `Operación con redundancia degradada hasta el cierre de la postergación${deferral.targetDate ? ` (target: ${fmtDate(deferral.targetDate)})` : ""}.`,

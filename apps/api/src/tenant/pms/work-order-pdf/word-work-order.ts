@@ -18,6 +18,9 @@ const STATUS_COLOR: Record<string, string> = {
 export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   const { wo, assetLabel, assignedName, createdByName, formMeta, spareUsages, tenant, tenantSlug, vesselName } = ctx;
   const w = wo as any;
+  // Mercurio gestiona las OT como "Solicitudes de Servicio" (SS).
+  const isMercurio = tenantSlug === "mercurio";
+  const woAbbr = isMercurio ? "SS" : "OT";
   const isPlanned = !!w.maintenancePlanId || w.type === "PREVENTIVE";
   const logo = bufferToDataUri(ctx.formLogoBuffer);
 
@@ -118,7 +121,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   // Resultado de ejecución
   if (w.woResult) {
     parts.push(docKvRow([
-      { label: "Resultado OT", value: woResultLabel(w.woResult), color: w.woResult === "SATISFACTORY" ? "#166534" : "#991b1b" },
+      { label: `Resultado ${woAbbr}`, value: woResultLabel(w.woResult), color: w.woResult === "SATISFACTORY" ? "#166534" : "#991b1b" },
       { label: "Estado", value: statusLabel(w.status ?? ""), color: STATUS_COLOR[w.status ?? ""] },
     ]));
     parts.push(docKvRow([
@@ -138,7 +141,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
 
   // Tramitación de la orden (firma digital + nombre + fecha)
   parts.push(docSpacer());
-  parts.push(docSection("TRAMITACION DE LA ORDEN"));
+  parts.push(docSection(isMercurio ? "TRAMITACION DE LA SOLICITUD" : "TRAMITACION DE LA ORDEN"));
   const trCols = [
     { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: w.createdAt, sig: bufferToDataUri(ctx.solicitaSignatureBuffer) },
     { label: "APRUEBA",      name: w.aprobadoByName, date: w.aprobadoAt, sig: bufferToDataUri(ctx.apruebaSignatureBuffer) },
@@ -188,7 +191,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   }
 
   return wrapAsWordDoc({
-    title: `OT ${wo.workOrderCode}`,
+    title: `${woAbbr} ${wo.workOrderCode}`,
     bodyHtml: parts.join("\n"),
     footerHtml: docControlledFooter(formMeta),
   });

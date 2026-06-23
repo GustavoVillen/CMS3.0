@@ -51,7 +51,7 @@ export async function printServiceRequest(wo: { id: string; workOrderCode: strin
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export async function printOpenWorkOrdersReport(vesselCode?: string | null): Promise<void> {
+export async function printOpenWorkOrdersReport(vesselCode?: string | null, fileLabel = "OTs-Abiertas"): Promise<void> {
   const trimmed = vesselCode?.trim() || "";
   const qs = trimmed ? `?vesselCode=${encodeURIComponent(trimmed)}` : "";
   const res = await fetch(`/app/pms/work-orders/open-report.pdf${qs}`, {
@@ -69,7 +69,7 @@ export async function printOpenWorkOrdersReport(vesselCode?: string | null): Pro
   const a    = document.createElement("a");
   a.href     = url;
   const today = new Date().toISOString().slice(0, 10);
-  a.download = trimmed ? `OTs-Abiertas-${trimmed}-${today}.pdf` : `OTs-Abiertas-${today}.pdf`;
+  a.download = trimmed ? `${fileLabel}-${trimmed}-${today}.pdf` : `${fileLabel}-${today}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

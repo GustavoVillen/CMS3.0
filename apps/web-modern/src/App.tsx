@@ -2,7 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
-import { I18nProvider, type Locale } from "./lib/i18n";
+import { I18nProvider, type Locale, type Vocab } from "./lib/i18n";
 import { VesselProvider } from "./lib/vessel-context";
 import { EscapeGuardProvider } from "./lib/escape-guard";
 import { NotificationsProvider } from "./lib/notifications";
@@ -184,8 +184,10 @@ function PlatformLoginRedirect() {
 function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
   const { tenant } = useAuth();
   const locale = (tenant?.locale ?? "es") as Locale;
+  // Mercurio gestiona las OT como "Solicitudes de Servicio" (SS) — vocabulario propio.
+  const vocab: Vocab = tenant?.workOrderPdfTemplate === "MERCURIO" ? "SS" : null;
   return (
-    <I18nProvider locale={locale}>
+    <I18nProvider locale={locale} vocab={vocab}>
       <VesselProvider>
         <NotificationsProvider>
           <EscapeGuardProvider>

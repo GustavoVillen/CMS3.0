@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
-import { useT, type TranslationKey } from "../lib/i18n";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 
 interface AuditLogItem {
   id: string;
@@ -137,7 +137,7 @@ function formatChanges(changes: Record<string, { from: unknown; to: unknown }>):
     .join(" | ");
 }
 
-function detailLine(item: AuditLogItem): string {
+function detailLine(item: AuditLogItem, woAbbr: string): string {
   const m = item.metadata;
   if (!m) return "";
 
@@ -188,7 +188,7 @@ function detailLine(item: AuditLogItem): string {
     if (action.includes("executed") || action.includes("closed"))
       return `Ejecución registrada: ${code}${s(m.result) ? ` — Resultado: ${m.result}` : ""}`;
     if (action === "OPENEDFROMPLAN" || action.includes("opened"))
-      return `OT abierta desde plan ${code}${s(m.workOrderCode) ? ` → ${m.workOrderCode}` : ""}`;
+      return `${woAbbr} abierta desde plan ${code}${s(m.workOrderCode) ? ` → ${m.workOrderCode}` : ""}`;
     // updated (default)
     return `Plan modificado: ${code}${title ? ` — ${title}` : ""}`;
   }
@@ -198,13 +198,13 @@ function detailLine(item: AuditLogItem): string {
     const code  = s(m.workOrderCode ?? m.code);
     const title = s(m.title);
     const note  = s(m.holdReason ?? m.cancelReason ?? m.closeNotes ?? m.notes);
-    if (action.includes("started"))   return `OT iniciada: ${code}${title ? ` — ${title}` : ""}`;
-    if (action.includes("held"))      return `OT en espera: ${code}${note ? ` — ${note}` : ""}`;
-    if (action.includes("cancelled")) return `OT cancelada: ${code}${note ? ` — ${note}` : ""}`;
-    if (action.includes("closed"))    return `OT cerrada: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("started"))   return `${woAbbr} iniciada: ${code}${title ? ` — ${title}` : ""}`;
+    if (action.includes("held"))      return `${woAbbr} en espera: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("cancelled")) return `${woAbbr} cancelada: ${code}${note ? ` — ${note}` : ""}`;
+    if (action.includes("closed"))    return `${woAbbr} cerrada: ${code}${note ? ` — ${note}` : ""}`;
     if (action.includes("created") || action === "OPENEDFROMPLAN")
-      return `OT creada: ${code}${title ? ` — ${title}` : ""}`;
-    return `OT modificada: ${code}${title ? ` — ${title}` : ""}`;
+      return `${woAbbr} creada: ${code}${title ? ` — ${title}` : ""}`;
+    return `${woAbbr} modificada: ${code}${title ? ` — ${title}` : ""}`;
   }
 
   // ── Spare ────────────────────────────────────────────────────────────────────
@@ -297,6 +297,7 @@ function downloadAuditExcel(entityType: string, from: string, to: string) {
 
 export const BitacoraPage: React.FC = () => {
   const t = useT();
+  const woTerms = useWoTerms();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [entityType, setEntityType] = useState("");
@@ -396,7 +397,7 @@ export const BitacoraPage: React.FC = () => {
                 (data?.items ?? []).map(item => {
                   const code   = refCode(item.metadata);
                   const vessel = vesselCode(item.metadata);
-                  const detail = detailLine(item);
+                  const detail = detailLine(item, woTerms.abbr);
                   const canNav = !!(ENTITY_ROUTE[item.entityType] && item.entityId);
 
                   return (

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
+import { useWoTerms } from "../lib/i18n";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
@@ -453,6 +454,7 @@ interface MobileWorkOrdersProps {
 export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilter }) => {
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
   const { user } = useAuth();
+  const woTerms = useWoTerms();
   // Solo superintendente/admin aprueban SS → ven el filtro "Para aprobar".
   const canApproveSS = user?.role === "FLEET_SUPERINTENDENT" || user?.role === "TENANT_ADMIN";
   const [filter, setFilter]       = useState<WoFilter>(initialFilter ?? "open");
@@ -576,7 +578,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       await reload();
       setSelected({ ...selected, status: "IN_PROGRESS" });
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al iniciar OT");
+      setErr(e instanceof ApiError ? e.message : `Error al iniciar ${woTerms.abbr}`);
     } finally {
       setSaving(false);
     }
@@ -604,7 +606,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       await reload();
       back();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al cerrar OT");
+      setErr(e instanceof ApiError ? e.message : `Error al cerrar ${woTerms.abbr}`);
     } finally {
       setSaving(false);
     }
@@ -1072,7 +1074,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <ReadField label="Vencimiento"     value={selected.dueDate?.slice(0, 10)} />
               <ReadField label="Responsable"     value={selected.assignedToUserName ?? selected.assignedToUserId} />
               <ReadField label="Área"            value={areaLabel(selected)} />
-              <ReadField label="Título de la OT" value={selected.title} full />
+              <ReadField label={`Título de la ${woTerms.abbr}`} value={selected.title} full />
               <ReadField label="Tarea"           value={selected.description} full />
             </div>
           </section>
@@ -1163,7 +1165,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
           {/* Resultado de la OT */}
           <section className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Resultado de la OT</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Resultado de la {woTerms.abbr}</p>
             <HoursPanel
               workOrderId={selected.id}
               estimated={selected.estimatedHours}
@@ -1208,7 +1210,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               onClick={openClose}
               className="w-full py-3 rounded-xl bg-success-sea text-white text-sm font-bold"
             >
-              Cerrar OT
+              Cerrar {woTerms.abbr}
             </button>
           </div>
         )}
@@ -1275,7 +1277,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           </div>
         ) : visibleWOs.length === 0 ? (
           <div className="text-center py-10 text-text-industrial/30 text-sm">
-            {filter === "overdue" ? "Sin OTs vencidas" : filter === "solicitadas" ? "Sin SS para aprobar" : filter === "aprobadas" ? "Sin SS para autorizar" : "Sin órdenes activas"}
+            {filter === "overdue" ? `Sin ${woTerms.abbr} vencidas` : filter === "solicitadas" ? "Sin SS para aprobar" : filter === "aprobadas" ? "Sin SS para autorizar" : "Sin órdenes activas"}
           </div>
         ) : (
           visibleWOs.map(wo => (

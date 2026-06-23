@@ -32,7 +32,7 @@ import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFil
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { useT } from "../lib/i18n";
+import { useT, useWoTerms } from "../lib/i18n";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
@@ -923,6 +923,7 @@ export interface MaintenancePlanModalProps {
 
 export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass }) => {
   const t = useT();
+  const woTerms = useWoTerms();
   const navigate = useNavigate();
   const isNew = plan === null;
   const readOnly = !isNew && !isAdmin;
@@ -1369,7 +1370,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("es-AR") : "—";
     const v = (x: unknown) => String(x ?? "").trim() || "—";
     const triggerLbl = (t: string) => ({ CALENDAR: "Meses (calendario)", MONTHS: "Meses (calendario)", HOURS: "Horas de operación", RUNNING_HOURS: "Horas de operación" }[t.toUpperCase()] ?? t);
-    const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: "OT automática", APPROVAL_WO: "OT con aprobación", CHECKLIST: "Completar Checklist" }[r] ?? r);
+    const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: `${woTerms.abbr} automática`, APPROVAL_WO: `${woTerms.abbr} con aprobación`, CHECKLIST: "Completar Checklist" }[r] ?? r);
     const statusLbl = (s: string) => ({ ACTIVE: "Activo", INACTIVE: "Inactivo", OVERDUE: "Vencido", DUE_SOON: "Por vencer" }[s] ?? s);
     const taskTypeLbl = (t: string) => ({ MAINTENANCE: "Mantenimiento", INSPECTION: "Inspección" }[t] ?? t);
     const riskLbl = (r: string) => ({ LOW: "BAJO", MEDIUM: "MEDIO", HIGH: "ALTO", CRITICAL: "CRÍTICO" }[r] ?? r.toUpperCase());

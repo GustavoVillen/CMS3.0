@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-06-23] FEAT: Mercurio — "OT/Orden de Trabajo" se muestra como "SS/Solicitud de Servicio"
+Agent: Claude Opus 4.8
+- Capa de override de vocabulario en i18n (apps/web-modern/src/lib/i18n.tsx): cuando
+  tenant.workOrderPdfTemplate === "MERCURIO" → vocab "SS". useT() resuelve SS_OVERRIDES (~55
+  claves) antes que el dict base; hook useWoTerms() para literales hardcodeados (móvil, etc.).
+- Cableado en App.tsx (TenantI18nWrapper → I18nProvider vocab).
+- Cubre módulo OT (desktop+móvil), dashboard, planes, defectos, repuestos, fluidos, bitácora,
+  daily reports, diferimientos, copiloto. Backend: word-work-order.ts + template-mercurio.ts
+  (metadata/labels SS según tenantSlug "mercurio"). wo-code.ts ya usaba prefijo SS-.
+- Otros tenants no cambian (vocab null → términos OT). PlatformTenants queda genérico a propósito.
+- Deploy: build web REQUERIDO (tocó frontend). pm2 restart cms3.
+
 [2026-06-23] FIX: PDF OT (plantilla STANDARD) — mostrar Departamento/Área
 Agent: Claude Opus 4.8
 - La plantilla STANDARD (OT por defecto) no renderizaba el departamento asignado; sí lo hacían
