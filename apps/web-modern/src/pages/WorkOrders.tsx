@@ -234,6 +234,8 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
         assetLabel:        workOrder.assetName ?? workOrder.assetId,
         sourceTypeLabel:   woTerms.full,
         sourceDisplayName: [workOrder.workOrderCode, workOrder.title].filter(Boolean).join(" — "),
+        sourceTask:        (workOrder as any).description ?? null,
+        requestedAt:       new Date().toISOString(),
         targetDate:        targetDate || null,
         justification:     holdReason.trim() || null,
       });

@@ -415,15 +415,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     try {
       const res = await api.post<{ level: string; probability: string | null; consequence: string | null; analysis: string }>(
         "/app/pms/deferrals/suggest-deferral-risk",
-        {
-          deferralCode: deferral.deferralCode,
-          vesselCode: deferral.vesselCode,
-          assetLabel: assetDisplayName,
-          sourceTypeLabel: woTerms.full,
-          sourceDisplayName: [deferral.sourceCode, sourceDisplayName].filter(Boolean).join(" — "),
-          targetDate: deferral.targetDate,
-          justification: deferral.justification,
-        },
+        { deferralId: deferral.id },
       );
       const aiProb = toUiRiskProbability(res.probability);
       const aiCons = toUiRiskConsequence(res.consequence);
@@ -579,18 +571,8 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     setLoadingCompensatory(true);
     setActionError(null);
     try {
-      const sourceTypeLabel = deferral.sourceType === "WORK_ORDER" ? woTerms.full
-        : deferral.sourceType === "DEFECT" ? "Defecto"
-        : deferral.sourceType === "MAINTENANCE_PLAN" ? "Plan de Mantenimiento"
-        : deferral.sourceType;
       const res = await api.post<{ text: string }>("/app/pms/deferrals/suggest-compensatory-measures", {
-        deferralCode: deferral.deferralCode ?? null,
-        vesselCode: deferral.vesselCode ?? null,
-        assetLabel: deferral.assetName ?? deferral.assetId ?? null,
-        sourceTypeLabel: sourceTypeLabel ?? null,
-        sourceDisplayName: sourceDisplayName ?? null,
-        targetDate: deferral.targetDate ? fmtDate(deferral.targetDate) : null,
-        justification: deferral.justification ?? null,
+        deferralId: deferral.id,
       });
       if (res.text) setCompensatoryMeasures(res.text);
     } catch (e) {

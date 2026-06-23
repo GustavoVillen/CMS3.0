@@ -5,33 +5,118 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getPrismaClient } from "../../platform/data/prisma-client";
+import { getDeferral } from "./deferrals-service";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
+// Barrera anti-invención: la IA debe ceñirse a los datos del informe.
+const NO_INVENT = `IMPORTANTE: Basate ÚNICAMENTE en los datos del informe provistos abajo. NO inventes ni asumas plazos, fechas, cantidades ni hechos que no estén explícitos; en particular, NO estimes la duración del aplazamiento — usá EXACTAMENTE la duración y las fechas indicadas en el contexto.`;
+
 const PROMPT_COMPENSATORY = `Sos experto en gestión de mantenimiento naval. Proponé directamente medidas compensatorias concretas, verificables y específicas al activo y al tipo de tarea aplazada, para mitigar el riesgo operacional mientras dure el aplazamiento. Las medidas deben ser prácticas, ejecutables por la tripulación, y enfocadas en monitoreo, controles operativos y planes de contingencia.
+
+${NO_INVENT}
 
 NO hagas preguntas: con la información provista alcanza para proponer medidas razonables. Respondé ÚNICAMENTE con las medidas compensatorias en formato de lista numerada, en texto plano, sin introducción ni explicación adicional.`;
 
 interface CompensatoryInput {
+  /** Si está, se cargan los datos autoritativos del diferimiento desde la DB. */
+  deferralId?: string | null;
+  // Campos cliente (fallback cuando aún no existe el diferimiento, ej. al pausar una OT):
   deferralCode?: string | null;
   vesselCode?: string | null;
   assetLabel?: string | null;
   sourceTypeLabel?: string | null;
   sourceDisplayName?: string | null;
+  sourceTask?: string | null;
+  requestedAt?: string | null;
   targetDate?: string | null;
   justification?: string | null;
 }
 
-function buildContext(input: CompensatoryInput): string {
-  const lines = ["Aplazamiento de mantenimiento (CONTEXTO COMPLETO — no preguntes información que ya está abajo):"];
-  if (input.deferralCode) lines.push(`- Código del aplazamiento: ${input.deferralCode}`);
-  if (input.vesselCode) lines.push(`- Buque: ${input.vesselCode}`);
-  if (input.assetLabel) lines.push(`- Activo afectado: ${input.assetLabel}`);
-  if (input.sourceTypeLabel) lines.push(`- Tipo de origen: ${input.sourceTypeLabel}`);
-  if (input.sourceDisplayName) lines.push(`- Origen específico: ${input.sourceDisplayName}`);
-  lines.push(`- Fecha objetivo del aplazamiento: ${input.targetDate ?? "no especificada"}`);
-  lines.push(`- Justificación del solicitante: ${input.justification ?? "No especificada"}`);
-  return lines.join("\n");
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  WORK_ORDER: "Orden de trabajo", DEFECT: "Defecto", MAINTENANCE_PLAN: "Plan de mantenimiento",
+};
+
+function fmtDateEs(d: string | Date | null | undefined): string {
+  if (!d) return "no especificada";
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "no especificada" : dt.toLocaleDateString("es-AR");
+}
+
+function durationLabel(from: string | Date | null | undefined, to: string | Date | null | undefined): string {
+  if (!from || !to) return "no determinada";
+  const a = new Date(from).getTime(), b = new Date(to).getTime();
+  if (isNaN(a) || isNaN(b)) return "no determinada";
+  const days = Math.max(0, Math.round((b - a) / 86_400_000));
+  const months = Math.round((days / 30.44) * 10) / 10;
+  return `${days} días (~${months} mes${months === 1 ? "" : "es"})`;
+}
+
+async function resolveDeferralSource(prismaRaw: any, tenantId: string, sourceType: string, sourceId: string): Promise<{ code: string | null; title: string | null; task: string | null }> {
+  try {
+    if (sourceType === "WORK_ORDER") {
+      const wo = await prismaRaw.workOrder.findFirst({ where: { id: sourceId, tenantId }, select: { workOrderCode: true, title: true, description: true } });
+      return { code: wo?.workOrderCode ?? null, title: wo?.title ?? null, task: wo?.description ?? null };
+    }
+    if (sourceType === "DEFECT") {
+      const def = await prismaRaw.defect.findFirst({ where: { id: sourceId, tenantId }, select: { defectCode: true, classification: true, description: true } });
+      return { code: def?.defectCode ?? null, title: def?.classification ?? null, task: def?.description ?? null };
+    }
+    if (sourceType === "MAINTENANCE_PLAN") {
+      const mp = await prismaRaw.maintenancePlan.findFirst({ where: { id: sourceId, tenantId }, select: { taskCode: true, title: true, description: true } });
+      return { code: mp?.taskCode ?? null, title: mp?.title ?? null, task: mp?.description ?? null };
+    }
+  } catch { /* non-blocking */ }
+  return { code: null, title: null, task: null };
+}
+
+// Construye el contexto autoritativo del informe. Si viene deferralId, carga los
+// datos reales (fechas, duración, detalle de la tarea) desde la DB; si no, usa
+// los campos del cliente (caso "pausar OT" antes de que exista el diferimiento).
+async function buildContext(session: TenantAccessSession, input: CompensatoryInput): Promise<{ context: string; vesselCode: string | null }> {
+  let deferralCode      = input.deferralCode ?? null;
+  let vesselCode        = input.vesselCode ?? null;
+  let assetLabel        = input.assetLabel ?? null;
+  let sourceTypeLabel   = input.sourceTypeLabel ?? null;
+  let sourceDisplayName = input.sourceDisplayName ?? null;
+  let sourceTask        = input.sourceTask ?? null;
+  let requestedAt: string | Date | null = input.requestedAt ?? null;
+  let targetDate:  string | Date | null = input.targetDate ?? null;
+  let justification     = input.justification ?? null;
+
+  if (input.deferralId) {
+    try {
+      const d: any = await getDeferral(session, input.deferralId);
+      deferralCode = d.deferralCode ?? deferralCode;
+      vesselCode   = d.vesselCode ?? vesselCode;
+      assetLabel   = d.assetName ?? d.assetId ?? assetLabel;
+      requestedAt  = d.requestedAt ?? requestedAt;
+      targetDate   = d.targetDate ?? targetDate;
+      justification = d.justification ?? justification;
+      const prismaRaw = getPrismaClient();
+      if (prismaRaw && d.tenantId) {
+        const src = await resolveDeferralSource(prismaRaw, d.tenantId, d.sourceType, d.sourceId);
+        sourceTypeLabel   = sourceTypeLabel ?? SOURCE_TYPE_LABELS[d.sourceType] ?? d.sourceType;
+        const disp = [src.code, src.title].filter(Boolean).join(" — ");
+        if (disp) sourceDisplayName = disp;
+        sourceTask = src.task ?? sourceTask;
+      }
+    } catch { /* fall back a campos del cliente */ }
+  }
+
+  const lines = ["Datos del informe de diferimiento (CONTEXTO COMPLETO Y AUTORITATIVO — usá EXCLUSIVAMENTE estos datos):"];
+  if (deferralCode)      lines.push(`- Código del diferimiento: ${deferralCode}`);
+  if (vesselCode)        lines.push(`- Buque: ${vesselCode}`);
+  if (assetLabel)        lines.push(`- Activo afectado: ${assetLabel}`);
+  if (sourceTypeLabel)   lines.push(`- Tipo de origen: ${sourceTypeLabel}`);
+  if (sourceDisplayName) lines.push(`- Origen (código y título): ${sourceDisplayName}`);
+  if (sourceTask)        lines.push(`- Detalle de la tarea diferida: ${sourceTask}`);
+  lines.push(`- Fecha de solicitud: ${fmtDateEs(requestedAt)}`);
+  lines.push(`- Fecha objetivo (fin del aplazamiento): ${fmtDateEs(targetDate)}`);
+  lines.push(`- Duración del aplazamiento: ${durationLabel(requestedAt, targetDate)}`);
+  lines.push(`- Justificación del solicitante: ${justification ?? "No especificada"}`);
+  return { context: lines.join("\n"), vesselCode };
 }
 
 export async function suggestCompensatoryMeasures(
@@ -44,6 +129,7 @@ export async function suggestCompensatoryMeasures(
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
+  const { context, vesselCode } = await buildContext(session, input);
 
   let response;
   try {
@@ -54,7 +140,7 @@ export async function suggestCompensatoryMeasures(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: PROMPT_COMPENSATORY, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${buildContext(input)}` }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${context}` }],
     });
   } catch (err) {
     log.error("[suggestCompensatoryMeasures] Anthropic call failed:", err);
@@ -70,7 +156,7 @@ export async function suggestCompensatoryMeasures(
       tenantSlug: session.tenantSlug,
       userId: session.user.id,
       userEmail: session.user.email,
-      vesselCode: input.vesselCode ?? null,
+      vesselCode,
       feature: "deferral_compensatory_measures_suggestion",
       model: MODEL,
       inputTokens: response.usage.input_tokens,
@@ -94,6 +180,8 @@ export async function suggestCompensatoryMeasures(
 // A diferencia del riesgo de ejecución (HSE/JSA) del Plan, acá se evalúa el
 // riesgo de SEGUIR OPERANDO con la condición diferida hasta la fecha objetivo.
 const PROMPT_DEFERRAL_RISK = `Sos experto en gestión de riesgo operacional naval (SOLAS/ISM). Vas a evaluar el riesgo de POSTERGAR (diferir) la tarea/condición indicada, es decir el riesgo de SEGUIR OPERANDO el buque con esa condición sin resolver hasta la fecha objetivo. NO evalúes el riesgo de ejecutar la tarea: evaluá la consecuencia y probabilidad de que la condición diferida derive en una falla/incidente mientras el aplazamiento esté activo, considerando el activo afectado, el tipo de tarea y el horizonte temporal.
+
+${NO_INVENT}
 
 Usá una matriz de probabilidad × consecuencia:
 - PROBABILIDAD: LIKELY (muy probable) | PROBABLE | UNLIKELY (improbable) | RARE (altamente improbable)
@@ -126,6 +214,7 @@ export async function suggestDeferralRisk(
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
+  const { context, vesselCode } = await buildContext(session, input);
 
   let response;
   try {
@@ -136,7 +225,7 @@ export async function suggestDeferralRisk(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: PROMPT_DEFERRAL_RISK, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${buildContext(input)}` }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${context}` }],
     });
   } catch (err) {
     log.error("[suggestDeferralRisk] Anthropic call failed:", err);
@@ -152,7 +241,7 @@ export async function suggestDeferralRisk(
       tenantSlug: session.tenantSlug,
       userId: session.user.id,
       userEmail: session.user.email,
-      vesselCode: input.vesselCode ?? null,
+      vesselCode,
       feature: "deferral_risk_analysis_suggestion",
       model: MODEL,
       inputTokens: response.usage.input_tokens,

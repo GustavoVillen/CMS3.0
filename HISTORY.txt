@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-06-23] FIX: IA de diferimientos — usar datos reales del informe (no inventar plazos)
+Agent: Claude Opus 4.8
+- La IA inventaba el plazo (ej. "+12 meses" cuando el aplazamiento era de ~3 meses) porque el
+  contexto NO incluía fecha de solicitud, duración real ni detalle de la tarea. Ahora
+  suggestDeferralRisk y suggestCompensatoryMeasures reciben deferralId y arman el contexto con los
+  datos AUTORITATIVOS de la DB: activo, origen (código+título), descripción de la tarea, fecha de
+  solicitud, fecha objetivo, DURACIÓN computada y justificación. + barrera anti-invención (NO_INVENT)
+  en ambos prompts.
+- HoldModal (pausar OT, antes de que exista el diferimiento): pasa requestedAt(hoy) + detalle de la
+  tarea para computar la duración real en su sugerencia de medidas.
+- Deploy: build web (gateado con tsc). pm2 restart cms3.
+
 [2026-06-23] FEAT: Diferimientos — editar riesgo/medidas + IA en estados no terminales
 Agent: Claude Opus 4.8
 - Antes el Nivel de Riesgo y las Medidas Compensatorias (con sus botones IA) eran editables solo
