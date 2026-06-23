@@ -65,6 +65,38 @@ def classify_g(g):
         return ("hours", float(s)) if float(s) > 0 else None
     return None
 
+def parse_freq(f):
+    """Frecuencia del Excel -> (kind, value). months/day/week/hours."""
+    if f is None: return None
+    if isinstance(f, (int, float)):
+        return ("hours", float(f)) if f > 0 else None
+    s = norm(f)
+    m = re.match(r"(\d+)", s)
+    if not m: return None
+    n = int(m.group(1))
+    if "mes" in s: return ("months", n)
+    if "ano" in s or "year" in s: return ("months", n * 12)
+    if "seman" in s: return ("week", n)
+    if "dia" in s: return ("day", n)
+    if re.fullmatch(r"\d+", s): return ("hours", n)
+    return None
+
+def bucket_freq(p):
+    """Frecuencia del bucket DCH -> (kind, value), mismo espacio que parse_freq."""
+    tt = p["triggerType"]
+    if tt in ("HOURS", "RUNNING_HOURS"): return ("hours", float(p["fh"])) if p["fh"] else None
+    if tt in ("MONTHS", "CALENDAR"): return ("months", int(p["fm"])) if p["fm"] else None
+    if tt == "DAY": return ("day", int(p["fm"])) if p["fm"] else None
+    if tt == "WEEK": return ("week", int(p["fm"])) if p["fm"] else None
+    return None
+
+# Activos cuya descripción RCM no matchea por texto pero sí recuperables por
+# FRECUENCIA dentro de los activos-excel listados (regex). Opt-in: no afecta al resto.
+ALIAS = {
+    # baterías/tablero EGA reales (excluye "Mbba de Incendio EGA portátil")
+    "DCH-BAT-EGA": [r"bateria.*ega", r"iluminacion de emergencia", r"tablero de luces"],
+}
+
 # ── parsear Excel ─────────────────────────────────────────────────────────────
 ws = openpyxl.load_workbook(XLSX, data_only=True)["Maquinas"]
 def cell(r, c): return ws.cell(r, c).value
@@ -93,7 +125,7 @@ for r in range(8, 46):
         exp = expand_abbr(b)
         mbase = re.match(r"(Motor (?:Principal|Auxiliar) (?:Estribor|Babor))", exp, re.I)
         key = mbase.group(1) if mbase else exp
-        excel[key].append((str(e).strip(), "date", max(dates)))
+        excel[key].append((str(e).strip(), "date", max(dates), parse_freq(cell(r, 6))))
 
 # MANTENIMIENTO (57-319)
 cur = None
@@ -104,7 +136,7 @@ for r in range(57, 320):
     if norm(e).startswith("trabajos no"): continue
     cg = classify_g(g)
     if cg is None: continue
-    excel[cur].append((str(e).strip(), cg[0], cg[1]))
+    excel[cur].append((str(e).strip(), cg[0], cg[1], parse_freq(cell(r, 6))))
 
 # ── planes DCH ────────────────────────────────────────────────────────────────
 plans = json.load(open(PLANS, encoding="utf-8"))
@@ -138,8 +170,19 @@ def cand_entries(asset_name):
     out = []
     for a, asc in scored:
         if asc >= floor:
-            for (t, k, v) in excel[a]: out.append((t, k, v, asc))
+            for (t, k, v, fr) in excel[a]: out.append((t, k, v, fr, asc))
     return out, best
+
+def alias_entries(acode):
+    """Entradas de los activos-excel que matchean las regex del ALIAS (bypass floor)."""
+    pats = ALIAS.get(acode)
+    if not pats: return []
+    out = []
+    for a, items in excel.items():
+        na = norm(a)
+        if any(re.search(p, na) for p in pats):
+            for (t, k, v, fr) in items: out.append((t, k, v, fr, 1.0))
+    return out
 
 mapping = {}
 report = {}
@@ -149,6 +192,7 @@ for p in plans: by_asset[(p["assetCode"], p["assetName"])].append(p)
 
 for (acode, aname), ps in sorted(by_asset.items()):
     cands, abest = cand_entries(aname)
+    acands = alias_entries(acode)
     lines_out = []
     for p in ps:
         want = "hours" if p["triggerType"] in ("HOURS","RUNNING_HOURS") else "date"
@@ -156,27 +200,39 @@ for (acode, aname), ps in sorted(by_asset.items()):
         matched = []   # (line, excelTitle, value)
         for ln in tlines:
             best, bs = None, 0.0
-            for (t, k, v, asc) in cands:
+            for (t, k, v, fr, asc) in cands:
                 if k != want: continue
                 sc = sim(ln, t)
                 if sc > bs: bs, best = sc, (t, k, v)
             if best and bs >= LINE_TH:
                 matched.append((ln, best[0], best[2]))
         cov = f"{len(matched)}/{len(tlines)}"
+        note = ""
         if matched:
-            vals = [m[2] for m in matched]
-            agg = max(vals)
-            if want == "hours":
-                mapping[p["taskCode"]] = {"hours": agg, "cov": cov}
-                vshow = f"{agg:g} h"; stats["hours"] += 1
-            else:
-                mapping[p["taskCode"]] = {"date": agg.isoformat(), "cov": cov}
-                vshow = agg.isoformat(); stats["date"] += 1
+            agg = max(m[2] for m in matched)
             stats["full" if len(matched)==len(tlines) else "partial"] += 1
-            lines_out.append(f"   OK  {cov:>5}  {p['title'][:34]:34} -> {vshow}")
+        elif acands:
+            # fallback por FRECUENCIA (solo activos en ALIAS)
+            bf = bucket_freq(p)
+            fv = [v for (t, k, v, fr, asc) in acands if k == want and fr and bf and fr == bf]
+            if fv:
+                agg = max(fv); cov = "freq"; note = " (freq)"
+                stats["partial"] += 1
+            else:
+                stats["none"] += 1
+                lines_out.append(f"   --  {cov:>5}  {p['title'][:34]:34} (sin match)")
+                continue
         else:
             stats["none"] += 1
             lines_out.append(f"   --  {cov:>5}  {p['title'][:34]:34} (sin match)")
+            continue
+        if want == "hours":
+            mapping[p["taskCode"]] = {"hours": agg, "cov": cov}
+            vshow = f"{agg:g} h"; stats["hours"] += 1
+        else:
+            mapping[p["taskCode"]] = {"date": agg.isoformat(), "cov": cov}
+            vshow = agg.isoformat(); stats["date"] += 1
+        lines_out.append(f"   OK  {cov:>5}  {p['title'][:34]:34} -> {vshow}{note}")
     report[(acode, aname)] = lines_out
 
 for (acode, aname), lns in sorted(report.items()):
