@@ -256,13 +256,16 @@ export function renderLabeledTextBox(
   // For "above" labels we reserve labelHeight above the box on every chunk.
   const aboveLabelBand = labelPosition === "above" ? labelHeight : 0;
 
-  // Pre-measure each logical line. If markdown, strip ** before measuring
-  // (Helvetica bold vs normal width differs <5%, irrelevant for line packing).
+  // Pre-measure each logical line. Para markdown se mide en Helvetica-Bold (la
+  // fuente más ancha): es una cota SUPERIOR de la altura real con tramos
+  // **negrita** mixtos, así nunca se subestima y el siguiente bloque no se
+  // solapa con el cuadro (la negrita wrapea a más líneas que el texto regular).
   const rawLines = safeText.split(/\r?\n/);
-  doc.fontSize(fontSize).font("Helvetica");
+  const measureFont = markdown ? "Helvetica-Bold" : "Helvetica";
   const lineHeights = rawLines.map(l => {
     const stripped = markdown ? l.replace(/\*\*/g, "") : l;
     if (!stripped.trim()) return fontSize + lineGap;
+    doc.fontSize(fontSize).font(measureFont);
     return doc.heightOfString(stripped, { width: innerW, lineGap });
   });
 

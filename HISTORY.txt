@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-06-23] FIX: PDF — solapamiento de sección tras texto con negrita (renderLabeledTextBox)
+Agent: Claude Opus 4.8
+- renderLabeledTextBox (pdf-helpers) medía la altura del texto markdown en Helvetica regular, pero
+  lo renderiza con tramos en Helvetica-Bold (más ancha → wrapea a más líneas). El cuadro quedaba
+  más corto que el contenido → el texto desbordaba y el siguiente título se solapaba (visible en el
+  Análisis de Riesgo del diferimiento, lleno de **Disparador:**). Verificado: medición vieja 146pt
+  vs real 149pt; nueva (bold) 149pt = cota superior exacta. Beneficia a TODOS los PDFs con markdown.
+- Deploy: solo backend. pm2 restart cms3.
+
 [2026-06-23] FIX: Diferimiento — mostrar NOMBRE del buque, no el código
 Agent: Claude Opus 4.8
 - El PDF (campo EMBARCACIÓN) y la IA usaban el código del buque ("DCH") en vez del nombre
