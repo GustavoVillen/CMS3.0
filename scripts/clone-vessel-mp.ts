@@ -10,6 +10,10 @@
  *     blanco, executionStatus=FUTURE, status=ACTIVE. El historial heredado se carga
  *     aparte (Excel). Un buque distinto tiene horas de motor propias.
  *   - Idempotente: upsert por (tenantId, vesselCode, code). Re-correr actualiza.
+ *   - SKIP_EXISTING=1: NO toca registros que ya existen en el destino (assets/planes/
+ *     spares cuyo código/sku ya está en DST). Sólo crea lo que falta. Útil cuando el
+ *     destino ya tiene datos en uso (ej. OTs colgando de un plan) que no se deben pisar
+ *     ni resetear. Los assets preexistentes igual se mapean para remapear FKs de lo nuevo.
  *   - FKs que son por-buque NO se copian a ciegas:
  *       · MaintenancePlan.assetId  → remapeado al asset del destino (obligatorio).
  *       · Spare.linkedAssetId      → remapeado si apunta a un asset del origen, si no null.
@@ -34,6 +38,7 @@ const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const SRC = process.env.SRC_VESSEL ?? "M01";
 const DST = process.env.DST_VESSEL ?? "DCH";
 const DRY = process.env.DRY === "1";
+const SKIP_EXISTING = process.env.SKIP_EXISTING === "1";
 
 /** Reemplaza el prefijo de buque del código. M01-... → DCH-... ; M01... → DCH... */
 function renameCode(code: string): string {
@@ -70,11 +75,32 @@ async function main() {
   });
   const assetMap = new Map<string, string>(); // srcAssetId → dstAssetId
   const seenAssetCodes = new Set<string>();
-  let nAssets = 0;
+
+  // Registros que ya existen en destino (para SKIP_EXISTING): code/sku → id.
+  const existingAssetByCode = new Map<string, string>();
+  const existingPlanCodes = new Set<string>();
+  const existingSpareSkus = new Set<string>();
+  if (SKIP_EXISTING) {
+    for (const a of await prisma.asset.findMany({ where: { tenantId: tid, vesselCode: DST, deletedAt: null }, select: { id: true, assetCode: true } }))
+      existingAssetByCode.set(a.assetCode, a.id);
+    for (const p of await prisma.maintenancePlan.findMany({ where: { tenantId: tid, vesselCode: DST, deletedAt: null }, select: { taskCode: true } }))
+      existingPlanCodes.add(p.taskCode);
+    for (const s of await prisma.spare.findMany({ where: { tenantId: tid, vesselCode: DST, deletedAt: null }, select: { sku: true } }))
+      existingSpareSkus.add(s.sku);
+    console.log(`SKIP_EXISTING: destino ya tiene ${existingAssetByCode.size} activos · ${existingPlanCodes.size} planes · ${existingSpareSkus.size} repuestos (no se tocarán).`);
+  }
+
+  let nAssets = 0, skipAssets = 0;
   for (const a of srcAssets) {
     const newCode = renameCode(a.assetCode);
     if (seenAssetCodes.has(newCode)) throw new Error(`Colisión de assetCode destino: ${newCode}`);
     seenAssetCodes.add(newCode);
+    if (SKIP_EXISTING && existingAssetByCode.has(newCode)) {
+      assetMap.set(a.id, existingAssetByCode.get(newCode)!); // mapear al existente para FKs de lo nuevo
+      skipAssets++;
+      console.log(`↷ Asset ${a.assetCode} → ${newCode} ya existe en ${DST}; se preserva`);
+      continue;
+    }
     const data = {
       sfiCode: a.sfiCode, name: a.name, criticality: a.criticality, status: a.status,
       manufacturer: a.manufacturer, model: a.model, serialNumber: a.serialNumber,
@@ -122,6 +148,11 @@ async function main() {
     const newCode = renameCode(p.taskCode);
     if (seenTaskCodes.has(newCode)) throw new Error(`Colisión de taskCode destino: ${newCode}`);
     seenTaskCodes.add(newCode);
+    if (SKIP_EXISTING && existingPlanCodes.has(newCode)) {
+      skipped++;
+      console.log(`↷ Plan ${p.taskCode} → ${newCode} ya existe en ${DST}; se preserva`);
+      continue;
+    }
     const data = {
       title: p.title, description: p.description, triggerType: p.triggerType,
       frequencyHours: p.frequencyHours, frequencyMonths: p.frequencyMonths, estimatedHours: p.estimatedHours,
@@ -155,8 +186,9 @@ async function main() {
     where: { tenantId: tid, vesselCode: SRC, deletedAt: null },
     orderBy: { sku: "asc" },
   });
-  let nSpares = 0;
+  let nSpares = 0, skipSpares = 0;
   for (const s of srcSpares) {
+    if (SKIP_EXISTING && existingSpareSkus.has(s.sku)) { skipSpares++; continue; }
     const linked = s.linkedAssetId ? assetMap.get(s.linkedAssetId) ?? null : null;
     const data = {
       name: s.name, category: s.category, criticality: s.criticality,
@@ -181,7 +213,9 @@ async function main() {
 
   console.log(
     `\n${DRY ? "DRY-RUN (no se escribió nada). " : "✅ Completado. "}` +
-      `${SRC} → ${DST}: ${nAssets} activos · ${nPlans} planes${skipped ? ` (${skipped} omitidos)` : ""} · ${nSpares} repuestos.`,
+      `${SRC} → ${DST}: ${nAssets} activos${skipAssets ? ` (+${skipAssets} preservados)` : ""}` +
+      ` · ${nPlans} planes${skipped ? ` (${skipped} ${SKIP_EXISTING ? "preservados" : "omitidos"})` : ""}` +
+      ` · ${nSpares} repuestos${skipSpares ? ` (+${skipSpares} preservados)` : ""}.`,
   );
 }
 
