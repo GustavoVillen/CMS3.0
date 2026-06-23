@@ -7,7 +7,7 @@ import {
   docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer,
 } from "../doc-export";
 
-const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"];
+const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"];
 const MOTIVOS = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"];
 const COMM_OPTS = ["IMPRESO", "EMAIL", "WHAPP", "OTRO"];
 const RISK_COLOR: Record<string, string> = { LOW: "#16a34a", MEDIUM: "#b45309", HIGH: "#b91c1c", CRITICAL: "#7f1d1d" };
@@ -39,6 +39,10 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
     { label: "FECHA", value: fmt(wo.openDate), labelWidth: "12%", valueWidth: "18%" },
   ]));
   parts.push(docCheckboxRow(DEPTS, w.department ? [w.department] : []));
+  // Cuando el área es PROVEEDOR, mostrar el proveedor responsable.
+  if (w.department === "PROVEEDOR" && w.providerName) {
+    parts.push(docKvRow([{ label: "PROVEEDOR", value: w.providerName, labelWidth: "20%", valueWidth: "80%" }]));
+  }
 
   // Equipo afectado (solo el nombre)
   parts.push(docSection("EQUIPO AFECTADO"));

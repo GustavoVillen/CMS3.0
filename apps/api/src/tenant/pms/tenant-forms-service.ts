@@ -58,7 +58,7 @@ const SERVICE_REQUEST_CONFIG: FormConfig = {
     "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
     "comments", "generatedBy", "signatures", "communication", "distribution",
   ],
-  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"],
   distribution: ["GGE", "PDT", "JTE", "JOP", "JRH", "JVE", "JCO", "JSE", "JUR", "ADM", "CAP", "JMA"],
   communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
   purchaseRequest: ["NORMAL", "AFECTA SEGURIDAD", "AFECTA SERVICIO"],

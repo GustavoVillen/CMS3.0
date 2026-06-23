@@ -338,6 +338,7 @@ const dict = {
   "mp.estimatedHours":    { es: "Horas estimadas",        en: "Estimated hours",          pt: "Horas estimadas" },
   "mp.nextDue":           { es: "Próx. Vencimiento",      en: "Next Due",                 pt: "Próx. Vencimento" },
   "mp.responsible":       { es: "Responsable",            en: "Responsible",              pt: "Responsável" },
+  "mp.department":        { es: "Área / Responsable",     en: "Area / Responsible",       pt: "Área / Responsável" },
   "mp.acceptanceCriteria":{ es: "Criterios de aceptación",en: "Acceptance criteria",      pt: "Critérios de aceitação" },
   "mp.loto":              { es: "LOTO",                   en: "LOTO",                     pt: "LOTO" },
   "mp.riskLevel":         { es: "Nivel de riesgo",        en: "Risk level",               pt: "Nivel de risco" },
@@ -1308,6 +1309,13 @@ const dict = {
 
   // WorkOrderModal — Mercurio extras
   "wo.modal.department":       { es: "Departamento",           en: "Department",           pt: "Departamento" },
+  "wo.modal.providerSelect":   { es: "Seleccionar proveedor…", en: "Select provider…",     pt: "Selecionar fornecedor…" },
+  // Áreas / responsable de la tarea (OT + Plan de mantenimiento)
+  "wo.dept.CUBIERTA":          { es: "Cubierta",               en: "Deck",                 pt: "Convés" },
+  "wo.dept.MAQUINAS":          { es: "Máquinas",               en: "Engine",               pt: "Máquinas" },
+  "wo.dept.BARCAZA":           { es: "Barcaza",                en: "Barge",                pt: "Barcaça" },
+  "wo.dept.PROVEEDOR":         { es: "Proveedor",              en: "Provider",             pt: "Fornecedor" },
+  "wo.dept.OTROS":             { es: "Otros",                  en: "Other",                pt: "Outros" },
   "wo.modal.location":         { es: "Ubicación",              en: "Location",             pt: "Localização" },
   "wo.modal.locationPlaceholder": { es: "Ej: Sala de máquinas, Cubierta proa…", en: "E.g.: Engine room, Foredeck…", pt: "Ex: Casa de máquinas, Convés de proa…" },
   "wo.modal.commMethodSection": { es: "Medio de comunicación utilizado", en: "Communication method used", pt: "Meio de comunicação utilizado" },

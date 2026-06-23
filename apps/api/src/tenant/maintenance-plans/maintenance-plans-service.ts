@@ -27,6 +27,8 @@ export interface CreateMaintenancePlanInput {
   frequencyMonths?: number | null;
   estimatedHours?: number | null;
   responsible?: string | null;
+  department?: MaintenancePlanDepartment | null;
+  providerId?: string | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -54,6 +56,9 @@ export interface CreateMaintenancePlanInput {
   nextDueHours?: number | null;
 }
 
+/** Área / responsable de la tarea — mismo set que WorkOrderDepartment. */
+export type MaintenancePlanDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
+
 export interface UpdateMaintenancePlanInput {
   taskType?: "MAINTENANCE" | "INSPECTION" | null;
   assetId?: string;
@@ -65,6 +70,8 @@ export interface UpdateMaintenancePlanInput {
   frequencyMonths?: number | null;
   estimatedHours?: number | null;
   responsible?: string | null;
+  department?: MaintenancePlanDepartment | null;
+  providerId?: string | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -579,11 +586,22 @@ export async function listTenantMaintenancePlans(
     }
   }
 
+  // Resolver nombre del proveedor para los planes con área = PROVEEDOR.
+  const providerIds = [...new Set(plans.map((p) => (p as unknown as { providerId?: string | null }).providerId).filter((v): v is string => !!v))];
+  const providerRows = providerIds.length > 0
+    ? await (prismaRaw as unknown as { provider: { findMany: (args: unknown) => Promise<{ id: string; name: string | null }[]> } }).provider.findMany({
+        where: { id: { in: providerIds }, tenantId },
+        select: { id: true, name: true },
+      })
+    : [];
+  const providerNameMap = new Map(providerRows.map((p) => [p.id, p.name ?? null]));
+
   return plans.map((p) => ({
     ...p,
     assetName: assetNameMap.get(p.assetId) ?? null,
     assetCurrentHours: assetCurrentHoursMap.get(p.assetId) ?? null,
     activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
+    providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
     executionStatus: deriveExecutionStatus(p),
   }));
 }
@@ -754,7 +772,20 @@ export async function getTenantMaintenancePlan(session: TenantAccessSession, id:
   const record = await prisma.maintenancePlan.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Maintenance plan no encontrado.");
   const workLogs = await loadRecentWorkLogs(prisma.workLog, record.tenantId, record.id);
-  return { ...record, workLogs };
+
+  let providerName: string | null = null;
+  const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
+  if (recProviderId) {
+    try {
+      const provider = await (prismaRaw as unknown as { provider: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).provider.findFirst({
+        where: { id: recProviderId, tenantId },
+        select: { name: true },
+      });
+      providerName = provider?.name ?? null;
+    } catch { /* non-blocking */ }
+  }
+
+  return { ...record, providerName, workLogs };
 }
 
 // ---------------------------------------------------------------------------
@@ -876,6 +907,9 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     frequencyMonths: normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths"),
     estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
     responsible: normalizeOptionalText(payload.responsible),
+    department: payload.department ?? null,
+    // providerId solo aplica cuando el área es PROVEEDOR; en otros casos se descarta.
+    providerId: payload.department === "PROVEEDOR" ? normalizeOptionalText(payload.providerId) : null,
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
     loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
@@ -962,6 +996,14 @@ export async function updateTenantMaintenancePlan(
   if (payload.frequencyMonths !== undefined) data.frequencyMonths = normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths");
   if (payload.estimatedHours !== undefined) data.estimatedHours = normalizeOptionalNumber(payload.estimatedHours, "estimatedHours");
   if (payload.responsible !== undefined) data.responsible = normalizeOptionalText(payload.responsible);
+  if (payload.department !== undefined) {
+    data.department = payload.department ?? null;
+    // Cambiar el área a algo distinto de PROVEEDOR limpia el proveedor asociado.
+    if (payload.department !== "PROVEEDOR") data.providerId = null;
+  }
+  if (payload.providerId !== undefined && data.providerId === undefined) {
+    data.providerId = normalizeOptionalText(payload.providerId);
+  }
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
   if (payload.sfiGroupNumber !== undefined) data.sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
@@ -1198,6 +1240,9 @@ export async function openFormalWorkOrder(
           ? (payload.consequenceCategory ?? null)
           : (planAny.consequenceCategory ?? null),
         consequenceRationale: inherit<string>(payload.consequenceRationale, planAny.consequenceRationale),
+        // Área / responsable: se hereda del plan a la OT.
+        department: planAny.department ?? null,
+        providerId: planAny.providerId ?? null,
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
       },

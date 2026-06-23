@@ -121,8 +121,10 @@ interface WorkOrder {
   rechazadoByName: string | null;
   rechazadoAt: string | null;
   rechazoReason: string | null;
-  // Mercurio form fields
-  department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  // Área / responsable + Mercurio form fields
+  department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS" | null;
+  providerId: string | null;
+  providerName: string | null;
   location: string | null;
   communicationMethod: string[];
   distribution: string[];
@@ -753,11 +755,23 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return () => { cancelled = true; };
   }, [workOrder.id, workOrder.status, deferralReloadKey]);
 
-  // ── Mercurio form fields ──
+  // ── Área / responsable + Mercurio form fields ──
   const [department, setDepartment]         = useState<string>(workOrder.department ?? "");
+  const [providerId, setProviderId]         = useState<string>(workOrder.providerId ?? "");
   const [location, setLocation]             = useState(workOrder.location ?? "");
   const [commMethod, setCommMethod]         = useState<string[]>(workOrder.communicationMethod ?? []);
   const [distribution, setDistribution]     = useState<string[]>(workOrder.distribution ?? []);
+
+  // Lista de proveedores del buque, para cuando el área es PROVEEDOR.
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
+  useEffect(() => {
+    if (department !== "PROVEEDOR" || providers.length > 0) return;
+    let cancelled = false;
+    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?vesselCode=${encodeURIComponent(workOrder.vesselCode)}&status=ACTIVE`)
+      .then(r => { if (!cancelled) setProviders(r.items ?? []); })
+      .catch(() => { if (!cancelled) setProviders([]); });
+    return () => { cancelled = true; };
+  }, [department, providers.length, workOrder.vesselCode]);
 
   function toggleArr(arr: string[], set: (v: string[]) => void, val: string) {
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
@@ -1160,6 +1174,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         consequenceCategory: consequenceCategory || null,
         consequenceRationale: normalizeOptionalText(consequenceRationale),
         department: (department as any) || null,
+        providerId: department === "PROVEEDOR" ? (providerId || null) : null,
         location: normalizeOptionalText(location),
         communicationMethod: commMethod,
         distribution,
@@ -1178,7 +1193,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     finally { setSaving(false); }
   }, [title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale,
-      department, location, commMethod, distribution,
+      department, providerId, location, commMethod, distribution,
       checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
       woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
       spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
@@ -1187,7 +1202,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isDirty = useDirtyTracker({
     title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale,
-    department, location, commMethod, distribution,
+    department, providerId, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
     woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
     supportingDocFileName: supportingDocFile?.name ?? "",
@@ -1494,31 +1509,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               hint={fromPlan ? t("wo.modal.planFromPlanHint") : undefined}
             />
 
-            {/* ── Departamento + Ubicación (solo Mercurio) ── */}
-            {isMercurio && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.department")}</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const).map(d => (
-                      <button key={d} type="button" disabled={!isEditable}
-                        onClick={() => setDepartment(department === d ? "" : d)}
-                        className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
-                          department === d
-                            ? "bg-accent text-accent-fg border-accent"
-                            : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                        }`}
-                      >{d}</button>
-                    ))}
-                  </div>
+            {/* ── Área / responsable (+ Ubicación en Mercurio) ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.department")}</label>
+                <div className="flex flex-wrap gap-2">
+                  {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
+                    <button key={d} type="button" disabled={!isEditable}
+                      onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderId(""); }}
+                      className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
+                        department === d
+                          ? "bg-accent text-accent-fg border-accent"
+                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
+                      }`}
+                    >{t(`wo.dept.${d}`)}</button>
+                  ))}
                 </div>
+                {department === "PROVEEDOR" && (
+                  <select value={providerId} onChange={e => setProviderId(e.target.value)} disabled={!isEditable}
+                    className={`${inputCls} mt-1`}>
+                    <option value="">{t("wo.modal.providerSelect")}</option>
+                    {providers.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {isMercurio && (
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.location")}</label>
                   <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable}
                     className={inputCls} placeholder={t("wo.modal.locationPlaceholder")} />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>

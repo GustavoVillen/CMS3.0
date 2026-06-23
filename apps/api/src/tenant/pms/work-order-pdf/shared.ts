@@ -55,6 +55,22 @@ export function woResultLabel(r: string | null | undefined): string {
   return r === "SATISFACTORY" ? "Satisfactorio" : "Con deficiencias";
 }
 
+export function departmentLabel(d: string | null | undefined): string {
+  if (!d) return "—";
+  const m: Record<string, string> = {
+    CUBIERTA: "Cubierta", MAQUINAS: "Máquinas", BARCAZA: "Barcaza",
+    PROVEEDOR: "Proveedor", OTROS: "Otros",
+  };
+  return m[d] ?? d;
+}
+
+/** Área / responsable como texto; cuando es PROVEEDOR agrega el nombre del proveedor. */
+export function areaText(wo: { department?: string | null; providerName?: string | null }): string {
+  if (!wo.department) return "";
+  const base = departmentLabel(wo.department);
+  return wo.department === "PROVEEDOR" && wo.providerName ? `${base} — ${wo.providerName}` : base;
+}
+
 export function motivoFromType(type: string): string {
   if (type === "CORRECTIVE")  return "FALLA";
   if (type === "INSPECTION")  return "INSPECCION";

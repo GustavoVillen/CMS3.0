@@ -1,7 +1,7 @@
 // Solicitud de servicios → Word (.doc). Espejo HTML de template-service-request.ts.
 // Recorre ctx.formConfig.sections (orden e inclusión = data del tenant).
 
-import { fmt, val, type WorkOrderPdfContext } from "./shared";
+import { fmt, val, areaText, type WorkOrderPdfContext } from "./shared";
 import {
   wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
   docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer,
@@ -27,7 +27,7 @@ export function renderServiceRequestDoc(ctx: WorkOrderPdfContext): Buffer {
       { label: label("solicitudN", "SOLICITUD N°"), value: docCode, labelWidth: "18%", valueWidth: "32%", color: "#1d4ed8" },
     ]),
     deptDate: () => docKvRow([
-      { label: label("departamento", "DEPARTAMENTO"), value: w.departmentText ?? "", labelWidth: "18%", valueWidth: "52%" },
+      { label: label("departamento", "DEPARTAMENTO"), value: w.departmentText ?? areaText(w), labelWidth: "18%", valueWidth: "52%" },
       { label: label("fecha", "FECHA"), value: fmt(wo.openDate), labelWidth: "12%", valueWidth: "18%" },
     ]),
     equipment: () => docSection(label("equipment", "EQUIPO O SISTEMA AFECTADO")) +

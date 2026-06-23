@@ -31,7 +31,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
   // Checkboxes ahora interactivos (AcroForm): se tildan desde el visor PDF, sin
   // pre-marcado del sistema. Solo se usan las etiquetas de cada grupo.
   const motivos = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"] as const;
-  const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "SERVICIOS"] as const;
+  const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const;
   const COMM_OPTS = ["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const;
   // La OT nace de un plan / mantenimiento programado → motivo "PLANIFICADO" tildado.
   const isPlanned = !!(wo as any).maintenancePlanId || (wo as any).type === "PREVENTIVE";
@@ -122,6 +122,15 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     DEPTS.forEach((d, i) => { fcheck(ML + i * deptW + 6, canvas.y + 6, d); });
     cell(ML + W - FECHA_W, canvas.y, FECHA_W, DEPT_ROW_H, fmt(wo.openDate), { fontSize: 9, align: "center" });
     canvas.y += DEPT_ROW_H;
+    // Cuando el área es PROVEEDOR, mostrar el proveedor responsable en una fila propia.
+    if ((wo as any).department === "PROVEEDOR" && (wo as any).providerName) {
+      const PROV_H = 18;
+      ensureSpace(PROV_H * 2);
+      const PROV_LBL = 80;
+      cell(ML, canvas.y, PROV_LBL, PROV_H, "PROVEEDOR", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+      cell(ML + PROV_LBL, canvas.y, W - PROV_LBL, PROV_H, sanitizePdfText((wo as any).providerName), { fontSize: 9 });
+      canvas.y += PROV_H;
+    }
     canvas.y += GAP_5MM; // 5mm entre Departamento y Equipo Afectado
 
     // ── EQUIPO AFECTADO (ancho completo) ────────────────────────────────────

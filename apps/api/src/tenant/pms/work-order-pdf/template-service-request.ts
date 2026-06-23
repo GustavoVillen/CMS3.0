@@ -7,7 +7,7 @@
 // listas y etiquetas salen de ctx.formConfig.
 
 import PDFDocument from "pdfkit";
-import { fmt, val, sanitizePdfText, PAGE_H, type WorkOrderPdfContext } from "./shared";
+import { fmt, val, sanitizePdfText, areaText, PAGE_H, type WorkOrderPdfContext } from "./shared";
 import {
   FORM_COLORS, FOOTER_H, drawControlledDocHeader, drawControlledDocFooter, createFormCanvas,
 } from "../pdf-form-chrome";
@@ -118,7 +118,7 @@ export async function renderServiceRequestPdf(ctx: WorkOrderPdfContext): Promise
         const FECHA_W = 90;
         const DEP_LBL = 95;
         cell(ML, canvas.y, DEP_LBL, H, label("departamento", "DEPARTAMENTO"), { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-        cell(ML + DEP_LBL, canvas.y, W - DEP_LBL - FECHA_W * 2, H, sanitizePdfText((wo as any).departmentText ?? ""), { fontSize: 9 });
+        cell(ML + DEP_LBL, canvas.y, W - DEP_LBL - FECHA_W * 2, H, sanitizePdfText((wo as any).departmentText ?? areaText(wo as any)), { fontSize: 9 });
         cell(ML + W - FECHA_W * 2, canvas.y, FECHA_W, H, label("fecha", "FECHA"), { bold: true, fontSize: 8, bg: NAVY, color: WHITE, align: "center" });
         cell(ML + W - FECHA_W, canvas.y, FECHA_W, H, fmt(wo.openDate), { fontSize: 9, align: "center" });
         canvas.y += H;

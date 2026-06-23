@@ -29,6 +29,7 @@ interface WO {
   assignedToUserName: string | null;
   assignedToUserId: string | null;
   department: string | null;
+  providerName: string | null;
   location: string | null;
   vesselCode: string;
   estimatedHours: number | null;
@@ -66,6 +67,21 @@ const TYPE_LABEL: Record<string, string> = {
   CORRECTIVE: "Mant. Correctivo / Reparación",
   INSPECTION: "Inspección",
 };
+
+const DEPT_LABEL: Record<string, string> = {
+  CUBIERTA: "Cubierta",
+  MAQUINAS: "Máquinas",
+  BARCAZA: "Barcaza",
+  PROVEEDOR: "Proveedor",
+  OTROS: "Otros",
+};
+
+// Etiqueta del área; cuando es PROVEEDOR agrega el nombre del proveedor.
+function areaLabel(wo: { department: string | null; providerName: string | null }): string | null {
+  if (!wo.department) return null;
+  const base = DEPT_LABEL[wo.department] ?? wo.department;
+  return wo.department === "PROVEEDOR" && wo.providerName ? `${base} — ${wo.providerName}` : base;
+}
 
 // Nivel de riesgo (selector editable en la sección 2 de la tramitación).
 const RISK_OPTS: Array<[string, string]> = [
@@ -877,6 +893,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <ReadField label="Equipo"      value={selected.assetName} />
               <ReadField label="Tipo"        value={TYPE_LABEL[selected.type] ?? selected.type} />
               <ReadField label="Responsable" value={selected.assignedToUserName ?? selected.assignedToUserId} />
+              <ReadField label="Área"        value={areaLabel(selected)} />
               <ReadField label="Tarea"       value={selected.description} full />
             </div>
           </section>
@@ -1054,6 +1071,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <ReadField label="Criticidad"      value={selected.criticality} />
               <ReadField label="Vencimiento"     value={selected.dueDate?.slice(0, 10)} />
               <ReadField label="Responsable"     value={selected.assignedToUserName ?? selected.assignedToUserId} />
+              <ReadField label="Área"            value={areaLabel(selected)} />
               <ReadField label="Título de la OT" value={selected.title} full />
               <ReadField label="Tarea"           value={selected.description} full />
             </div>

@@ -68,6 +68,9 @@ export interface MaintenancePlan {
   checklistTemplate: string | null;
   createdAt: string;
   responsible?: string | null;
+  department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS" | null;
+  providerId?: string | null;
+  providerName?: string | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -939,6 +942,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [title, setTitle] = useState(plan?.title ?? "");
   const [description, setDescription] = useState(plan?.description ?? "");
   const [responsible, setResponsible] = useState(plan?.responsible ?? "");
+  const [department, setDepartment] = useState<string>(plan?.department ?? "");
+  const [providerId, setProviderId] = useState<string>(plan?.providerId ?? "");
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
   const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? defaultSfiGroupNumber ?? null);
@@ -1039,6 +1045,18 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     }, 400);
   }, [vesselCode, isNew, plan?.vesselCode]);
 
+  // Proveedores del buque, para cuando el área es PROVEEDOR.
+  useEffect(() => {
+    if (department !== "PROVEEDOR" || providers.length > 0) return;
+    const vc = isNew ? vesselCode : plan?.vesselCode;
+    if (!vc) return;
+    let cancelled = false;
+    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?vesselCode=${encodeURIComponent(vc)}&status=ACTIVE`)
+      .then(r => { if (!cancelled) setProviders(r.items ?? []); })
+      .catch(() => { if (!cancelled) setProviders([]); });
+    return () => { cancelled = true; };
+  }, [department, providers.length, vesselCode, isNew, plan?.vesselCode]);
+
   useEffect(() => {
     if (!plan) return;
     setAssetId(plan.assetId ?? "");
@@ -1047,6 +1065,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setTitle(plan.title);
     setDescription(plan.description ?? "");
     setResponsible(plan.responsible ?? "");
+    setDepartment(plan.department ?? "");
+    setProviderId(plan.providerId ?? "");
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
@@ -1232,6 +1252,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           title: title.trim(),
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
+          department: (department as any) || null,
+          providerId: department === "PROVEEDOR" ? (providerId || null) : null,
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
@@ -1263,6 +1285,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           title: title.trim(),
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
+          department: (department as any) || null,
+          providerId: department === "PROVEEDOR" ? (providerId || null) : null,
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
@@ -1302,7 +1326,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   // ESC guard
   const planDirty = useDirtyTracker({
-    vesselCode, taskCode, assetId, taskType, title, description, responsible,
+    vesselCode, taskCode, assetId, taskType, title, description, responsible, department, providerId,
     acceptanceCriteria, loto, sfiGroupNumber,
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
@@ -1502,6 +1526,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         <div class="cell"><div class="cell-label">${t("mp.pdf.sfiGroup")}</div><div class="cell-value">${plan.sfiGroupNumber != null ? `${plan.sfiGroupNumber} - ${t(`sfi.g.${plan.sfiGroupNumber}` as Parameters<typeof t>[0])}` : "—"}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.taskType")}</div><div class="cell-value">${taskTypeLbl(plan.taskType)}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.responsible")}</div><div class="cell-value">${v(responsible)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.department")}</div><div class="cell-value">${v(
+          department
+            ? (department === "PROVEEDOR"
+                ? `${t(`wo.dept.PROVEEDOR` as Parameters<typeof t>[0])} — ${providers.find(p => p.id === providerId)?.name ?? plan.providerName ?? ""}`.trim().replace(/—\s*$/, "").trim()
+                : t(`wo.dept.${department}` as Parameters<typeof t>[0]))
+            : "",
+        )}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.criticality")}</div><div class="cell-value">${v(plan.criticality)}</div></div>
       </div>
 
@@ -1826,6 +1857,31 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               )}
               {samplingKind && (
                 <p className="text-[10px] text-accent/70">{t("mp.modal.samplingHint")}</p>
+              )}
+            </div>
+
+            {/* Área / responsable */}
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("mp.department")}</label>
+              <div className="flex flex-wrap gap-2">
+                {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
+                  <button key={d} type="button"
+                    onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderId(""); }}
+                    className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
+                      department === d
+                        ? "bg-accent text-accent-fg border-accent"
+                        : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
+                    }`}
+                  >{t(`wo.dept.${d}`)}</button>
+                ))}
+              </div>
+              {department === "PROVEEDOR" && (
+                <select value={providerId} onChange={e => setProviderId(e.target.value)} className={`${selectCls} mt-1`}>
+                  <option value="">{t("wo.modal.providerSelect")}</option>
+                  {providers.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                  ))}
+                </select>
               )}
             </div>
 

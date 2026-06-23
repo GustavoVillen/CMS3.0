@@ -40,11 +40,14 @@ export interface CreateWorkOrderInput {
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
-  department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  department?: WorkOrderDepartment | null;
+  providerId?: string | null;
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
 }
+
+export type WorkOrderDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
 
 export interface UpdateWorkOrderInput {
   assetId?: string;
@@ -74,8 +77,9 @@ export interface UpdateWorkOrderInput {
   actualHours?: number | null;
   observations?: string | null;
   supportingDocUrl?: string | null;
-  // Mercurio form fields
-  department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "SERVICIOS" | null;
+  // Área / responsable + Mercurio form fields
+  department?: WorkOrderDepartment | null;
+  providerId?: string | null;
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
@@ -317,35 +321,42 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       independentVerifier: true, title: true, assignedToUserId: true,
       estimatedHours: true, actualHours: true, taskMasterId: true,
       riskLevel: true, checklistDocUrl: true, consequenceCategory: true,
-      department: true, location: true, communicationMethod: true, distribution: true,
+      department: true, providerId: true, location: true, communicationMethod: true, distribution: true,
       woResult: true, executedByName: true, supportingDocUrl: true, runningHoursAtExecution: true,
       createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
       deletedAt: true, deletedByUserId: true,
       reopenCount: true, lastReopenAt: true, lastReopenByUserId: true,
-      aprobadoByName: true, aprobadoAt: true, autorizadoByName: true, autorizadoAt: true,
+      aprobadoByName: true, aprobadoByUserId: true, aprobadoAt: true,
+      autorizadoByName: true, autorizadoByUserId: true, autorizadoAt: true,
       rechazadoByName: true, rechazadoAt: true, rechazoReason: true,
     },
   });
 
   const assetIds = [...new Set(orders.map(o => o.assetId).filter(Boolean))];
   const userIds  = [...new Set(orders.map(o => (o as unknown as { assignedToUserId?: string | null }).assignedToUserId).filter((v): v is string => !!v))];
+  const providerIds = [...new Set(orders.map(o => (o as unknown as { providerId?: string | null }).providerId).filter((v): v is string => !!v))];
 
-  const [assetRows, userRows] = await Promise.all([
+  const [assetRows, userRows, providerRows] = await Promise.all([
     assetIds.length > 0
       ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
     userIds.length > 0
       ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
       : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null }[]),
+    providerIds.length > 0
+      ? (prismaRaw as unknown as { provider: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
+      : Promise.resolve([] as { id: string; name: string | null }[]),
   ]);
 
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
   const userNameMap  = new Map(userRows.map(u => [u.id, [u.firstName, u.lastName].filter(Boolean).join(" ") || null]));
+  const providerNameMap = new Map(providerRows.map(p => [p.id, p.name ?? null]));
 
   return orders.map(o => ({
     ...o,
     assetName: assetNameMap.get(o.assetId) ?? null,
     assignedToUserName: userNameMap.get((o as unknown as { assignedToUserId?: string | null }).assignedToUserId ?? "") ?? null,
+    providerName: providerNameMap.get((o as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
   }));
 }
 
@@ -372,6 +383,18 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     });
     assetName = asset?.name ?? null;
   } catch { /* non-blocking */ }
+
+  let providerName: string | null = null;
+  const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
+  if (recProviderId) {
+    try {
+      const provider = await (prismaRaw as unknown as { provider: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).provider.findFirst({
+        where: { id: recProviderId, tenantId },
+        select: { name: true },
+      });
+      providerName = provider?.name ?? null;
+    } catch { /* non-blocking */ }
+  }
 
   // Reconstruct spare usages from stock movements scoped to this WO
   const spareUsages: Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }> = [];
@@ -404,7 +427,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     }
   } catch { /* non-blocking */ }
 
-  return { ...record, assetName, spareUsages };
+  return { ...record, assetName, providerName, spareUsages };
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {
@@ -471,6 +494,8 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         consequenceCategory: payload.consequenceCategory ?? null,
         consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
         department: payload.department ?? null,
+        // providerId solo aplica cuando el área es PROVEEDOR; en otros casos se descarta.
+        providerId: payload.department === "PROVEEDOR" ? normalizeOptionalText(payload.providerId) : null,
         location: normalizeOptionalText(payload.location),
         communicationMethod: payload.communicationMethod ?? [],
         distribution: payload.distribution ?? [],
@@ -599,7 +624,14 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.actualHours !== undefined) data.actualHours = payload.actualHours ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
-  if (payload.department !== undefined) data.department = payload.department ?? null;
+  if (payload.department !== undefined) {
+    data.department = payload.department ?? null;
+    // Cambiar el área a algo distinto de PROVEEDOR limpia el proveedor asociado.
+    if (payload.department !== "PROVEEDOR") data.providerId = null;
+  }
+  if (payload.providerId !== undefined && data.providerId === undefined) {
+    data.providerId = normalizeOptionalText(payload.providerId);
+  }
   if (payload.location !== undefined) data.location = normalizeOptionalText(payload.location);
   if (payload.communicationMethod !== undefined) data.communicationMethod = payload.communicationMethod;
   if (payload.distribution !== undefined) data.distribution = payload.distribution;
@@ -786,18 +818,19 @@ export async function setWorkOrderApproval(
   if (payload.step === "APRUEBA") {
     if (current.aprobadoAt) throw new RouteError(409, "ALREADY_APPROVED", "La OT ya fue aprobada.");
     // Re-aprobar tras un rechazo: limpia el flag de rechazo (sale del rojo).
-    data = { aprobadoByName: name, aprobadoAt: now, rechazadoByName: null, rechazadoAt: null, rechazoReason: null };
+    // Se guarda el userId del que aprueba para incrustar su firma digital en el PDF.
+    data = { aprobadoByName: name, aprobadoByUserId: session.user.id, aprobadoAt: now, rechazadoByName: null, rechazadoAt: null, rechazoReason: null };
   } else if (payload.step === "AUTORIZA") {
     if (!current.aprobadoAt) throw new RouteError(409, "NOT_APPROVED", "La OT debe estar aprobada antes de autorizar.");
     if (current.autorizadoAt) throw new RouteError(409, "ALREADY_AUTHORIZED", "La OT ya fue autorizada.");
-    data = { autorizadoByName: name, autorizadoAt: now };
+    data = { autorizadoByName: name, autorizadoByUserId: session.user.id, autorizadoAt: now };
   } else if (payload.step === "RECHAZA") {
     // [NO APROBADA] / [NO AUTORIZADA]: devuelve la OT a Solicitada (en rojo),
     // limpiando aprobado/autorizado y registrando quién rechazó + el motivo.
     const reason = normalizeRequiredText(payload.reason ?? "", "reason");
     data = {
-      aprobadoByName: null, aprobadoAt: null,
-      autorizadoByName: null, autorizadoAt: null,
+      aprobadoByName: null, aprobadoByUserId: null, aprobadoAt: null,
+      autorizadoByName: null, autorizadoByUserId: null, autorizadoAt: null,
       rechazadoByName: name, rechazadoAt: now, rechazoReason: reason,
     };
   } else {

@@ -130,7 +130,8 @@ enum WorkOrderDepartment {
   CUBIERTA
   MAQUINAS
   BARCAZA
-  SERVICIOS
+  PROVEEDOR
+  OTROS
 }
 
 enum WorkOrderPdfTemplate {
@@ -1180,6 +1181,11 @@ model MaintenancePlan {
   frequencyMonths      Int?
   estimatedHours       Float?
   responsible          String?
+  // Área / responsable de la tarea (Cubierta, Máquinas, Barcaza, Proveedor, Otros).
+  // Se hereda a la OT al abrirla. Cuando department = PROVEEDOR, providerId apunta
+  // al Provider responsable (sin FK forzada; el nombre se resuelve al leer).
+  department           WorkOrderDepartment?
+  providerId           String?
   acceptanceCriteria   String?
   loto                 String?
   sfiGroupNumber       Int?
@@ -1273,8 +1279,11 @@ model WorkOrder {
   // RCM: consecuencia que se mitiga si la OT no se ejecuta
   consequenceCategory  ConsequenceCategory?
   consequenceRationale String?
-  // Mercurio form fields
+  // Área / responsable de la tarea (Cubierta, Máquinas, Barcaza, Proveedor, Otros).
+  // Cuando department = PROVEEDOR, providerId apunta al Provider responsable
+  // (sin FK forzada, mismo patrón que assignedToUserId; el nombre se resuelve al leer).
   department              WorkOrderDepartment?
+  providerId              String?
   location                String?
   communicationMethod     String[]
   distribution            String[]
@@ -1299,8 +1308,10 @@ model WorkOrder {
   // Tramitación (cadena de aprobación del tablero): Solicita (= creador) →
   // Aprueba → Autoriza. El nombre se captura en cada paso del drag-and-drop.
   aprobadoByName      String?
+  aprobadoByUserId    String?
   aprobadoAt          DateTime?
   autorizadoByName    String?
+  autorizadoByUserId  String?
   autorizadoAt        DateTime?
   // Rechazo de tramitación: [NO APROBADA] / [NO AUTORIZADA] devuelven la OT a
   // Solicitada (en rojo) limpiando aprobado/autorizado y registrando quién/por qué.
