@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-06-23] FEAT: PDF Plan de Mantenimiento — mostrar Departamento/Área
+Agent: Claude Opus 4.8
+- El PDF del Plan no reflejaba el área asignada. Mercurio: se llena la fila "Departamento:"
+  (estaba vacía) con areaText(plan). Estándar: nuevo campo "Departamento / Área" en Identificación.
+- Reutiliza areaText() de work-order-pdf/shared (Cubierta/Máquinas/… o "Proveedor — <nombre>").
+  getTenantMaintenancePlan ya devuelve department + providerName.
+- Solo maintenance-plan-pdf-mercurio.ts y maintenance-plan-pdf-service.ts. Deploy: build web NO requerido. pm2 restart cms3.
+
 [2026-06-23] FIX: PDF Mercurio — tildar el DEPARTAMENTO asignado a la SS
 Agent: Claude Opus 4.8
 - La fila de checkboxes de DEPARTAMENTO en template-mercurio.ts dibujaba todos los campos

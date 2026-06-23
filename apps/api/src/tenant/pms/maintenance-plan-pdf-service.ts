@@ -7,6 +7,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, splitTextIntoPageSegments } from "./pdf-helpers";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { renderMercurioMaintenancePlanPdf } from "./maintenance-plan-pdf-mercurio";
+import { areaText } from "./work-order-pdf/shared";
 
 function fmt(d: unknown): string {
   if (!d) return "—";
@@ -597,6 +598,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     inlineRow([
       { label: "Código de tarea",  value: val(p["taskCode"]) },
       { label: "Grupo SFI",        value: p["sfiGroupNumber"] != null ? `G${p["sfiGroupNumber"]}` : "—" },
+      { label: "Departamento / Área", value: val(areaText(p as any)) },
     ]);
     inlineRow([
       { label: "Tipo de tarea",    value: val(p["taskType"]) },

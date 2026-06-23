@@ -8,6 +8,7 @@
 
 import PDFDocument from "pdfkit";
 import { sanitizePdfText } from "./pdf-helpers";
+import { areaText } from "./work-order-pdf/shared";
 import {
   FORM_COLORS, FOOTER_H, PAGE_H,
   drawControlledDocHeader, drawControlledDocFooter, createFormCanvas, renderRiskMatrix,
@@ -105,10 +106,10 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     cell(ML + LBL_W + assetW + SFI_LBL_W, canvas.y, SFI_VAL_W, RH, p["sfiGroupNumber"] != null ? `G${p["sfiGroupNumber"]}` : "—", { fontSize: 9, align: "center" });
     canvas.y += RH;
 
-    // Fila C: Departamento | (vacío)
+    // Fila C: Departamento | área asignada (Cubierta/Máquinas/… o "Proveedor — <nombre>")
     ensureSpace(RH);
     cell(ML, canvas.y, LBL_W, RH, "Departamento:", lbl);
-    cell(ML + LBL_W, canvas.y, W - LBL_W, RH, "", { fontSize: 9 });
+    cell(ML + LBL_W, canvas.y, W - LBL_W, RH, sanitizePdfText(val(areaText(p as any))), { fontSize: 9 });
     canvas.y += RH;
 
     // Fila D: Frecuencia | freq | Hs.Est. | estimatedHours
