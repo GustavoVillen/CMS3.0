@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-06-23] FIX: PDF diferimientos — grilla markdown + negrita en descripciones
+Agent: Claude Opus 4.8
+- El PDF de diferimientos tiene su propio textBlock (no usa el chrome de createFormCanvas):
+  renderizaba el markdown crudo (tablas como texto, ** literales, sin sanitizar unicode).
+- Nuevo módulo pdf-markdown.ts (hasMarkdownTable + renderMarkdownBlocks + drawInlineBold): tablas
+  como grilla y **negrita** inline, page-break aware, sobre un doc "plano".
+- deferral-pdf-service.textBlock: contenido con tabla → renderMarkdownBlocks; resto →
+  renderLabeledTextBox(markdown:true) (reusa el helper compartido: arregla negrita + sanitiza).
+- Deploy: build web NO requerido. pm2 restart cms3.
+
 [2026-06-23] FIX: SS — botón "Medidas compensatorias" (IA) no funcionaba al pausar/diferir
 Agent: Claude Opus 4.8
 - En el cambio de vocabulario SS quedó WorkOrders.tsx HoldModal usando `woTerms.full` sin declarar

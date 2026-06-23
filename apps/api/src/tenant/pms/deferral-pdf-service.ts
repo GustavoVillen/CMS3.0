@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDeferral } from "./deferrals-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "./pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, renderLabeledTextBox } from "./pdf-helpers";
+import { hasMarkdownTable, renderMarkdownBlocks } from "./pdf-markdown";
 
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -263,53 +264,39 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     // ── JUSTIFICACIÓN Y MEDIDAS COMPENSATORIAS (always visible) ──────────────
     sectionTitle("Análisis técnico");
 
-    // Text block helper — always renders, even with "—".
-    // Si el contenido excede la página, se parte en segmentos con caja propia.
+    // Text block helper — always renders, even con "—".
+    // - Contenido con tabla Markdown ("| a | b |") → grilla fluida (label + grid),
+    //   con **negrita** en celdas. Multipágina vía renderMarkdownBlocks.
+    // - Resto (texto libre, posible **negrita**) → caja etiquetada compartida
+    //   (renderLabeledTextBox con markdown:true), que sanitiza y respeta negrita.
     function textBlock(label: string, content: string, opts: { highlight?: boolean } = {}) {
-      const text     = content || "—";
-      const padding  = 10;
-      const titleH   = 18;
-      const innerW   = W - padding * 2;
-      const bg = opts.highlight ? accentBg : bgBox;
+      const text       = content || "—";
+      const bg         = opts.highlight ? accentBg : bgBox;
       const labelColor = opts.highlight ? "#0369a1" : gray;
-      const textColor  = content && content !== "—" ? black : lightGray;
 
-      // Caso "—": single line, render simple
-      if (text === "—") {
-        doc.fontSize(9).font("Helvetica");
-        const oneH = doc.heightOfString("—", { width: innerW, lineGap: 2 });
-        const boxH = titleH + oneH + padding * 2;
-        const needed = boxH + 6;
-        ensureSpace(needed);
-        doc.roundedRect(ML, y, W, boxH, 6).fill(bg).stroke(border);
+      if (text !== "—" && hasMarkdownTable(text)) {
+        const titleH = 14;
+        ensureSpace(titleH + 28);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(labelColor)
-          .text(label.toUpperCase(), ML + padding, y + padding, { width: innerW });
-        doc.fontSize(9).font("Helvetica").fillColor(textColor)
-          .text("—", ML + padding, y + padding + titleH, { width: innerW, lineGap: 2 });
-        y += needed;
+          .text(label.toUpperCase(), ML, y, { width: W });
+        y += titleH;
+        y = renderMarkdownBlocks(doc, text, {
+          x: ML, width: W, startY: y, contentBottom: CONTENT_BOTTOM, resetY: MARGIN_V,
+          fontRegular: "Helvetica", fontBold: "Helvetica-Bold", fontSize: 9,
+          color: black, borderColor: border, headerBg: "#e2e8f0",
+        });
+        y += 8;
         return;
       }
 
-      const firstAvailable = CONTENT_BOTTOM - y - titleH - padding * 2 - 6;
-      const continuationAvailable = CONTENT_BOTTOM - MARGIN_V - titleH - padding * 2 - 6;
-      const segments = splitTextIntoPageSegments(
-        doc, text, innerW,
-        { font: "Helvetica", fontSize: 9, lineGap: 2 },
-        firstAvailable, continuationAvailable,
-      );
-
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (i > 0) { doc.addPage(); y = MARGIN_V; }
-        const boxH = titleH + seg.contentHeight + padding * 2;
-        const segLabel = seg.isContinuation ? `${label.toUpperCase()} (CONT.)` : label.toUpperCase();
-        doc.roundedRect(ML, y, W, boxH, 6).fill(bg).stroke(border);
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(labelColor)
-          .text(segLabel, ML + padding, y + padding, { width: innerW });
-        doc.fontSize(9).font("Helvetica").fillColor(textColor)
-          .text(seg.text, ML + padding, y + padding + titleH, { width: innerW, lineGap: 2 });
-        y += boxH + 6;
-      }
+      y = renderLabeledTextBox(doc, {
+        label, text: content, x: ML, y, width: W,
+        pageBottom: CONTENT_BOTTOM, pageTop: MARGIN_V,
+        markdown: true,
+        bg, border, labelColor,
+        textColor: content && content !== "—" ? black : lightGray,
+        cornerRadius: 6, sectionGap: 6,
+      });
     }
 
     textBlock("Justificación",          val(deferral.justification));
