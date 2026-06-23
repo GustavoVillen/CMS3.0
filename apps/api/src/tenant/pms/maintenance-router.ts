@@ -350,27 +350,29 @@ export async function handleMaintenanceRoutes(
     const kind = (url.searchParams.get("kind") ?? "TEXT").toUpperCase() as "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
 
     if (kind === "TEXT") {
-      // Sin archivo: body JSON con { text }
-      const body = await readJsonBody(request) as { text?: string };
-      const note = await createProgressNote(session, id, { kind, text: body.text });
+      // Sin archivo: body JSON con { text, occurredAt }
+      const body = await readJsonBody(request) as { text?: string; occurredAt?: string };
+      const note = await createProgressNote(session, id, { kind, text: body.text, occurredAt: body.occurredAt });
       sendJson(response, 201, note);
       return true;
     }
 
-    // Con archivo: binary body + headers x-filename y x-mime-type, opcional x-caption
+    // Con archivo: binary body + headers x-filename y x-mime-type, opcional x-caption / x-occurred-at
     const rawName = request.headers["x-filename"];
     const fileName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? `nota.${kind === "PHOTO" ? "jpg" : kind === "VIDEO" ? "mp4" : "webm"}`);
     const rawMime = request.headers["x-mime-type"];
     const mimeType = (Array.isArray(rawMime) ? rawMime[0] : rawMime) ?? undefined;
     const rawCaption = request.headers["x-caption"];
     const caption = rawCaption ? decodeURIComponent(Array.isArray(rawCaption) ? rawCaption[0] : rawCaption) : undefined;
+    const rawOccurred = request.headers["x-occurred-at"];
+    const occurredAt = (Array.isArray(rawOccurred) ? rawOccurred[0] : rawOccurred) ?? undefined;
 
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(chunk as Buffer);
     const fileBuffer = Buffer.concat(chunks);
     if (!fileBuffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
 
-    const note = await createProgressNote(session, id, { kind, text: caption, fileBuffer, fileName, mimeType });
+    const note = await createProgressNote(session, id, { kind, text: caption, fileBuffer, fileName, mimeType, occurredAt });
     sendJson(response, 201, note);
     return true;
   }

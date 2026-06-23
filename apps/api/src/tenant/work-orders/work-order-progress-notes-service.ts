@@ -14,6 +14,9 @@ import { assertNotLocked } from "../../common/record-lock";
 export interface CreateProgressNoteInput {
   kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
   text?: string | null;
+  // Fecha/hora del avance (editable desde el cliente). Si no viene o es inválida,
+  // se usa el momento actual. Es la fecha que se muestra y por la que se ordena.
+  occurredAt?: string | Date | null;
   // Para PHOTO/VIDEO/AUDIO: contenido del archivo
   fileBuffer?: Buffer;
   fileName?: string;
@@ -124,6 +127,14 @@ export async function createProgressNote(
     processed = true;
   }
 
+  // Fecha del avance: el cliente puede editarla. Si es válida, sobrescribe el
+  // createdAt (que es la fecha mostrada/ordenada); si no, default = now().
+  let occurredAt: Date | undefined;
+  if (input.occurredAt) {
+    const d = new Date(input.occurredAt);
+    if (!isNaN(d.getTime())) occurredAt = d;
+  }
+
   const created = await (prismaRaw as any).workOrderProgressNote.create({
     data: {
       tenantId: wo.tenantId,
@@ -137,6 +148,7 @@ export async function createProgressNote(
       processedText,
       processed,
       createdByUserId: session.user.id,
+      ...(occurredAt ? { createdAt: occurredAt } : {}),
     },
   });
 

@@ -38,10 +38,19 @@ async function compressImage(f: File): Promise<File> {
   });
 }
 
+// Devuelve el momento actual en formato `YYYY-MM-DDThh:mm` (hora local) para
+// un <input type="datetime-local">.
+function nowLocalInput(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
 // Bottom sheet para registrar un avance de trabajo en una OT.
 // Permite 4 tipos: texto, foto (comprimida), video (getUserMedia baja res), audio.
 export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSaved }) => {
   const [kind, setKind]         = useState<Kind>("TEXT");
+  const [when, setWhen]         = useState<string>(nowLocalInput());
   const [text, setText]         = useState("");
   const [file, setFile]         = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -300,16 +309,19 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       if (!file) { setErr("Capturá o seleccioná un archivo."); return; }
     }
 
+    const occurredAt = when ? new Date(when).toISOString() : undefined;
+
     setSaving(true);
     try {
       if (kind === "TEXT") {
-        await api.post(`/app/pms/work-orders/${workOrderId}/progress-notes?kind=TEXT`, { text: text.trim() });
+        await api.post(`/app/pms/work-orders/${workOrderId}/progress-notes?kind=TEXT`, { text: text.trim(), occurredAt });
       } else {
         const headers: Record<string, string> = {
           "x-filename":  encodeURIComponent(file!.name),
           "x-mime-type": file!.type || "application/octet-stream",
         };
         if (text.trim()) headers["x-caption"] = encodeURIComponent(text.trim());
+        if (occurredAt) headers["x-occurred-at"] = occurredAt;
         await api.uploadRaw(`/app/pms/work-orders/${workOrderId}/progress-notes?kind=${kind}`, file!, headers);
       }
       onSaved();
@@ -319,7 +331,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
     } finally {
       setSaving(false);
     }
-  }, [kind, text, file, workOrderId, onSaved, onClose]);
+  }, [kind, text, file, when, workOrderId, onSaved, onClose]);
 
   const minSec = (s: number) => {
     const m = Math.floor(s / 60); const r = s % 60;
@@ -367,6 +379,18 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
               <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Fecha y hora del avance (editable; default = ahora) */}
+        <div className="px-4 py-2.5 border-b border-fg/10 space-y-1.5">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/40">Fecha y hora del avance</label>
+          <input
+            type="datetime-local"
+            value={when}
+            max={nowLocalInput()}
+            onChange={(e) => setWhen(e.target.value)}
+            className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
+          />
         </div>
 
         {/* Body */}

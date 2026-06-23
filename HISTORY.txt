@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-06-23] FEAT: Avances de OT — fecha/hora editable
+Agent: Claude Opus 4.8
+- El modal "Registrar avance" (ProgressNoteSheet) suma un campo fecha/hora editable (default = ahora,
+  max = ahora para no permitir futuro). Se envía occurredAt (TEXT: en el body; media: header
+  x-occurred-at). createProgressNote lo usa para setear el createdAt de la WorkOrderProgressNote
+  (que es la fecha que se muestra y por la que se ordena/lista).
+- Deploy: build web (gateado con tsc). pm2 restart cms3.
+
 [2026-06-23] FIX: PDF — solapamiento de sección tras texto con negrita (renderLabeledTextBox)
 Agent: Claude Opus 4.8
 - renderLabeledTextBox (pdf-helpers) medía la altura del texto markdown en Helvetica regular, pero
