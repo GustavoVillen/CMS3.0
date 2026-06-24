@@ -109,7 +109,7 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
   // el documento controlado "INFORME DE DIFERIMIENTO".
   DEFERRAL: {
     style: "STANDARD",
-    formCode: "REGI-MAN-09",
+    formCode: "",
     title: "INFORME DE DIFERIMIENTO",
     revision: 2,
     effectiveFrom: "01.05.2025",

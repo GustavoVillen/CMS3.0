@@ -1,5 +1,12 @@
 HISTORY.txt
 
+[2026-06-23] FIX: Informe de Diferimiento — quitar el código de formulario (REGI-MAN-09)
+Agent: Claude Opus 4.8
+- El formCode del tipo DEFERRAL pasa a "" → ya no se muestra "REGI-MAN-09" en el header ni en el
+  footer del informe. drawControlledDocHeader centra el título verticalmente cuando no hay formCode
+  (evita la línea vacía). El rightInfo del footer del diferimiento filtra el código vacío.
+- Deploy: solo backend. pm2 restart cms3.
+
 [2026-06-23] FEAT: Avances de OT — fecha/hora editable
 Agent: Claude Opus 4.8
 - El modal "Registrar avance" (ProgressNoteSheet) suma un campo fecha/hora editable (default = ahora,

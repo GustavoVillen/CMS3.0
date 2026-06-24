@@ -348,7 +348,7 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(range.start + i);
       if (controlled) {
-        const rightInfo = `${form.meta.formCode} — ${deferral.deferralCode} — ${deferral.vesselCode} — Pagina ${i + 1} — ${fmt(new Date())}`;
+        const rightInfo = [form.meta.formCode, deferral.deferralCode, deferral.vesselCode, `Pagina ${i + 1}`, fmt(new Date())].filter(Boolean).join(" — ");
         drawControlledDocFooter(doc, { meta: form.meta, rightInfo, x: ML, w: W });
       } else {
         const footerY = PAGE_H - FOOTER_SIZE;

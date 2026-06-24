@@ -79,10 +79,16 @@ export function drawControlledDocHeader(
   const CTR_X  = x + LOGO_W;
   const CTR_W  = w - LOGO_W - INFO_W;
   doc.rect(CTR_X, y, CTR_W, HDR_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-  doc.fontSize(9).font("Helvetica-Bold").fillColor(NAVY)
-    .text(sanitizePdfText(meta.formCode), CTR_X + 4, y + 14, { width: CTR_W - 8, align: "center" });
-  doc.fontSize(10).font("Helvetica-Bold").fillColor(NAVY)
-    .text(sanitizePdfText(meta.title), CTR_X + 4, y + 32, { width: CTR_W - 8, align: "center" });
+  if (meta.formCode) {
+    doc.fontSize(9).font("Helvetica-Bold").fillColor(NAVY)
+      .text(sanitizePdfText(meta.formCode), CTR_X + 4, y + 14, { width: CTR_W - 8, align: "center" });
+    doc.fontSize(10).font("Helvetica-Bold").fillColor(NAVY)
+      .text(sanitizePdfText(meta.title), CTR_X + 4, y + 32, { width: CTR_W - 8, align: "center" });
+  } else {
+    // Sin código de formulario: el título se centra verticalmente en la celda.
+    doc.fontSize(11).font("Helvetica-Bold").fillColor(NAVY)
+      .text(sanitizePdfText(meta.title), CTR_X + 4, y + HDR_H / 2 - 7, { width: CTR_W - 8, align: "center" });
+  }
 
   const INFO_X = x + LOGO_W + CTR_W;
   const ROW_H_INFO = Math.floor(HDR_H / 4);
