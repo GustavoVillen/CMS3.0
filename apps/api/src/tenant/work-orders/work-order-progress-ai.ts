@@ -15,7 +15,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, isAiBudgetAvailable } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
@@ -64,6 +64,11 @@ export async function extractTextFromPhoto(
   }
   if (buffer.length === 0 || buffer.length > 15 * 1024 * 1024) {
     log.warn(`[progress-ai] Foto fuera de rango de tamaño (${buffer.length}b)`);
+    return null;
+  }
+
+  if (!(await isAiBudgetAvailable(tenantId))) {
+    log.warn("[progress-ai] tope mensual de IA alcanzado — OCR omitido");
     return null;
   }
 
@@ -178,6 +183,7 @@ export async function rewriteObservations(
     .filter(n => n.text && n.text.trim())
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   if (items.length === 0) return "";
+  if (!(await isAiBudgetAvailable(tenantId))) return null;
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
@@ -299,6 +305,7 @@ async function detectSparesFromText(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return [];
   if (!text || !text.trim() || spares.length === 0) return [];
+  if (!(await isAiBudgetAvailable(tenantId))) return [];
 
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();

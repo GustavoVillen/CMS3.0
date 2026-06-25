@@ -9,7 +9,7 @@ import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 
 export interface ExtractedField<T> {
   value: T | null;
@@ -91,6 +91,7 @@ export async function extractFluidReport(
     throw new RouteError(415, "UNSUPPORTED_MEDIA", `Tipo no soportado: ${mime}. Use PDF, JPG, PNG, GIF o WebP.`);
   }
 
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
   const base64 = buffer.toString("base64");
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
 

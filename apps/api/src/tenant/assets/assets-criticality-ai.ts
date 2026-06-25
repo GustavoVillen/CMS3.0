@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
@@ -86,6 +86,7 @@ export async function suggestAssetCriticality(
     serialNumber: input.serialNumber ?? null,
   };
 
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   const model = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();

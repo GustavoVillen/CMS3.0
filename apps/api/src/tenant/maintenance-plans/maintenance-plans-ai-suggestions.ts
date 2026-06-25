@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
@@ -146,6 +146,7 @@ async function callClaude(
   // subir los topes (3000) las generaciones largas necesitan más margen; Haiku
   // 4.5 es rápido, pero el tail con cache_creation del prompt puede acercarse a
   // los 45s previos, así que se amplía a 60s.
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);

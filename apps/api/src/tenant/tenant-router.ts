@@ -50,7 +50,7 @@ import {
 } from "./notifications/notifications-service";
 import { streamCopilotoChat, type ChatMessage } from "./copiloto/copiloto-service";
 import { recordCopilotQuestion } from "./copiloto/copilot-questions-log";
-import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant } from "./usage/usage-service";
+import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant, getAiBudgetStatus } from "./usage/usage-service";
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments, registerAttachmentRecord, softDeleteTenantAttachment } from "./attachments/attachments-service";
@@ -332,13 +332,15 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, slug);
     const prisma = (await import("../platform/data/prisma-client")).getPrismaClient();
     if (!prisma) {
-      sendJson(response, 200, { monthLabel: "", totalTokens: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+      sendJson(response, 200, { monthLabel: "", totalTokens: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, budget: null });
       return true;
     }
     const tenant = await prisma.tenant.findUnique({ where: { slug }, select: { id: true } });
     if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
     const summary = await getMonthlyAiUsageForUser(tenant.id, session.user.id);
-    sendJson(response, 200, summary);
+    // budget: estado del tope mensual de IA del tenant (% usado / bloqueado).
+    const budget = await getAiBudgetStatus(tenant.id);
+    sendJson(response, 200, { ...summary, budget });
     return true;
   }
 

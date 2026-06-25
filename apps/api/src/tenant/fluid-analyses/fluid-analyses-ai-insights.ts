@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, isAiBudgetAvailable } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { buildFluidAnalysisRegulationContext } from "../../common/regulations/maritime";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
@@ -48,6 +48,11 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     log.warn("[fluid-ai-insights] ANTHROPIC_API_KEY no configurada, skip");
+    return empty;
+  }
+
+  if (!(await isAiBudgetAvailable(input.tenantId))) {
+    log.warn("[fluid-ai-insights] tope mensual de IA alcanzado, skip");
     return empty;
   }
 

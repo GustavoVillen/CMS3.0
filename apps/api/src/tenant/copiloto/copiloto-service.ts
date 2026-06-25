@@ -23,7 +23,7 @@ import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-serv
 import { getActiveTenantAiDocs, getActiveTenantAiDocumentsIndex } from "../ai-documents/ai-documents-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, assertAiBudgetAvailable } from "../usage/usage-service";
 import type { FileContent } from "./file-parser-service";
 
 // ---------------------------------------------------------------------------
@@ -1235,6 +1235,9 @@ export async function streamCopilotoChat(
   if (!req.messages || req.messages.length === 0) {
     throw new RouteError(400, "INVALID_REQUEST", "messages array must not be empty.");
   }
+
+  // Hard cap de gasto IA por tenant — bloquea antes de facturar tokens.
+  await assertAiBudgetAvailable(req.tenantId);
 
   // Build context in parallel. La base documental NO se inyecta entera (los manuales
   // pueden pesar cientos de KB y disparaban la latencia en cada turno): se inyecta

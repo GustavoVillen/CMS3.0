@@ -10,13 +10,18 @@
  */
 
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { RouteError } from "../../http/route-error";
+import { getCachedTenantBySlug } from "../tenant-cache";
 
 // ── AI pricing (USD per million tokens) — hardcoded, updated when Anthropic changes prices ──
-// Source: https://www.anthropic.com/pricing  (last reviewed 2026-05-02)
+// Source: https://www.anthropic.com/pricing  (last reviewed 2026-06-24)
+// cacheRead = 0.1x input ; cacheWrite (5min TTL) = 1.25x input.
 export const AI_PRICING: Record<string, { in: number; out: number; cacheRead: number; cacheWrite: number }> = {
   "claude-haiku-4-5-20251001": { in: 1.0,  out: 5.0,  cacheRead: 0.10, cacheWrite: 1.25 },
   "claude-sonnet-4-6":         { in: 3.0,  out: 15.0, cacheRead: 0.30, cacheWrite: 3.75 },
-  "claude-opus-4-7":           { in: 15.0, out: 75.0, cacheRead: 1.50, cacheWrite: 18.75 },
+  // Opus 4.7/4.8: precio oficial vigente $5/$25 (antes estaba mal cargado a $15/$75).
+  "claude-opus-4-7":           { in: 5.0,  out: 25.0, cacheRead: 0.50, cacheWrite: 6.25 },
+  "claude-opus-4-8":           { in: 5.0,  out: 25.0, cacheRead: 0.50, cacheWrite: 6.25 },
 };
 
 export function aiCostUsd(
@@ -195,6 +200,116 @@ export async function getMonthlyAiUsageForUser(
     outputTokens: outTok,
     costUsd: cost,
   };
+}
+
+// ── Budget / tope mensual de IA (hard cap por tenant) ─────────────────────────
+// Objetivo: que la factura de Claude no supere AI_MONTHLY_BUDGET_USD por tenant
+// y por mes. El gasto se calcula del mismo UsageEvent (kind="ai_call").
+// Configurable por env; default USD 50.
+
+export const AI_MONTHLY_BUDGET_USD: number =
+  Number(process.env.AI_MONTHLY_BUDGET_USD) > 0 ? Number(process.env.AI_MONTHLY_BUDGET_USD) : 50;
+
+export interface AiBudgetStatus {
+  monthLabel: string;   // "2026-06"
+  budgetUsd: number;    // tope mensual
+  spentUsd: number;     // gasto del mes
+  pct: number;          // % usado (puede pasar 100 por overshoot de la última llamada)
+  remainingPct: number; // max(0, 100 - pct)
+  blocked: boolean;     // true cuando spent >= budget -> se bloquea la IA
+}
+
+// Cache corto del gasto por tenant: evita un aggregate por cada llamada de IA
+// (el copiloto puede invocar varias veces seguidas). El registro de uso es
+// asíncrono, así que un pequeño desfase es esperable; el overshoot es de centavos.
+const spendCache = new Map<string, { value: number; expires: number }>();
+const SPEND_CACHE_TTL_MS = 15_000;
+
+async function getMonthlyAiSpendForTenant(tenantId: string): Promise<number> {
+  const cached = spendCache.get(tenantId);
+  const nowMs = Date.now();
+  if (cached && cached.expires > nowMs) return cached.value;
+
+  const prisma = getPrismaClient();
+  if (!prisma) return 0;
+
+  const monthStart = startOfCurrentMonthUtc();
+  const grouped = await prisma.usageEvent.groupBy({
+    by: ["model"],
+    where: { tenantId, kind: "ai_call", createdAt: { gte: monthStart } },
+    _sum: {
+      inputTokens: true,
+      outputTokens: true,
+      cacheReadTokens: true,
+      cacheCreationTokens: true,
+    },
+  });
+
+  let cost = 0;
+  for (const g of grouped) {
+    cost += aiCostUsd(
+      g.model ?? "",
+      g._sum.inputTokens ?? 0,
+      g._sum.outputTokens ?? 0,
+      g._sum.cacheReadTokens ?? 0,
+      g._sum.cacheCreationTokens ?? 0,
+    );
+  }
+
+  spendCache.set(tenantId, { value: cost, expires: nowMs + SPEND_CACHE_TTL_MS });
+  return cost;
+}
+
+export async function getAiBudgetStatus(tenantId: string): Promise<AiBudgetStatus> {
+  const monthStart = startOfCurrentMonthUtc();
+  const monthLabel = `${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth() + 1).padStart(2, "0")}`;
+  const budgetUsd = AI_MONTHLY_BUDGET_USD;
+  const spentUsd = await getMonthlyAiSpendForTenant(tenantId);
+  const pct = budgetUsd > 0 ? (spentUsd / budgetUsd) * 100 : 0;
+  return {
+    monthLabel,
+    budgetUsd,
+    spentUsd,
+    pct,
+    remainingPct: Math.max(0, 100 - pct),
+    blocked: budgetUsd > 0 && spentUsd >= budgetUsd,
+  };
+}
+
+/**
+ * Guard para acciones de IA iniciadas por el usuario (copiloto, sugerencias).
+ * Lanza RouteError 429 cuando el tenant alcanzó el tope mensual: la llamada a
+ * Claude NO se realiza, evitando facturación por encima del presupuesto.
+ */
+export async function assertAiBudgetAvailable(tenantId: string): Promise<void> {
+  const status = await getAiBudgetStatus(tenantId);
+  if (status.blocked) {
+    throw new RouteError(
+      429,
+      "AI_BUDGET_EXCEEDED",
+      `Se alcanzó el límite mensual de uso de IA (${status.monthLabel}). El servicio se reactiva el próximo mes.`,
+    );
+  }
+}
+
+/**
+ * Variante no-lanzadora para features de fondo/opcionales (OCR de avances,
+ * insights automáticos) que deben degradar silenciosamente, no romper el flujo.
+ */
+export async function isAiBudgetAvailable(tenantId: string): Promise<boolean> {
+  const status = await getAiBudgetStatus(tenantId);
+  return !status.blocked;
+}
+
+/**
+ * Igual que assertAiBudgetAvailable pero resolviendo el tenant por slug —
+ * los servicios de IA reciben TenantAccessSession, que expone tenantSlug (no id).
+ * Si el tenant no se puede resolver, no bloquea (fail-open).
+ */
+export async function assertAiBudgetAvailableBySlug(tenantSlug: string): Promise<void> {
+  const tenant = await getCachedTenantBySlug(tenantSlug);
+  if (!tenant) return;
+  await assertAiBudgetAvailable(tenant.id);
 }
 
 export interface ListUsageFilters {

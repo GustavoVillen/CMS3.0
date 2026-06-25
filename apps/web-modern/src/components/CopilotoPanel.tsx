@@ -77,7 +77,7 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
 import { api, ApiError } from "../lib/api";
 import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
-import { useResizable } from "../lib/hooks";
+import { useResizable, useFetch } from "../lib/hooks";
 import { useWoTerms, type WoTerms } from "../lib/i18n";
 
 // ---------------------------------------------------------------------------
@@ -526,6 +526,11 @@ export const CopilotoPanel: React.FC = () => {
   // Resizable width (only applies when expanded)
   const { width: panelWidth, startResize } = useResizable("gpms_copilot_width", 320, 240, 520);
 
+  // Presupuesto mensual de IA del tenant (% usado / bloqueo). Se refresca tras
+  // cada mensaje para que el usuario vea cuánto del tope mensual lleva consumido.
+  const aiUsage = useFetch<{ budget: { pct: number; remainingPct: number; blocked: boolean; monthLabel: string } | null }>("/app/me/ai-usage");
+  const budget = aiUsage.data?.budget ?? null;
+
   // Panel state
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(LS_EXPANDED) !== "false"; } catch { return true; }
@@ -560,6 +565,14 @@ export const CopilotoPanel: React.FC = () => {
   useEffect(() => {
     try { localStorage.setItem(LS_EXPANDED, String(expanded)); } catch { /* noop */ }
   }, [expanded]);
+
+  // Al terminar un mensaje (streaming true -> false) refrescamos el % de IA.
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (prevStreamingRef.current && !streaming) aiUsage.reload();
+    prevStreamingRef.current = streaming;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming]);
 
   // Auto-select capability when module changes
   useEffect(() => {
@@ -980,6 +993,27 @@ export const CopilotoPanel: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── Presupuesto mensual de IA (% usado del tope del tenant) ── */}
+      {budget && (
+        <div className="px-3 py-1.5 border-b border-border shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] text-text-industrial/40 uppercase tracking-wider">IA del mes</span>
+            <span className={`text-[9px] font-mono font-bold ${budget.pct >= 100 ? "text-danger" : budget.pct >= 80 ? "text-amber-500" : "text-text-industrial/50"}`}>
+              {Math.min(100, Math.round(budget.pct))}%
+            </span>
+          </div>
+          <div className="h-1 rounded-full bg-fg/10 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${budget.pct >= 100 ? "bg-danger" : budget.pct >= 80 ? "bg-amber-500" : "bg-accent"}`}
+              style={{ width: `${Math.min(100, Math.max(2, budget.pct))}%` }}
+            />
+          </div>
+          {budget.blocked && (
+            <p className="text-[9px] text-danger mt-1">Límite mensual de IA alcanzado. Se reactiva el próximo mes.</p>
+          )}
+        </div>
+      )}
 
       {/* ── Capability selector ── */}
       <div className="px-2 py-1.5 border-b border-border shrink-0">

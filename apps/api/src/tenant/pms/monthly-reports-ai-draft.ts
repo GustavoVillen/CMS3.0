@@ -8,7 +8,7 @@
 // La IA NO firma ni cierra el reporte — solo genera el borrador.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { recordAiUsage } from "../usage/usage-service";
+import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
@@ -235,6 +235,7 @@ export async function generateMonthlyDraft(
   // ── Llamada a Claude ──
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "monthly_report_draft";
