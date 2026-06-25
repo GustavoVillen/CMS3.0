@@ -26,6 +26,17 @@ if (typeof window !== "undefined" && "geolocation" in navigator) {
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn; }
 
+// ── Señal de uso de IA ───────────────────────────────────────────────────────
+// Paths que ejecutan IA (Claude) y por ende mueven el % del presupuesto mensual.
+// Tras una llamada exitosa emitimos un evento global para que el badge del Sidebar
+// refresque el % en el acto, sin esperar al poll de 60s.
+const AI_USAGE_PATH_RE = /\/(suggest-|analyze-(deficiency|postponement|photo)|generate-draft)/;
+function notifyAiUsageIfNeeded(path: string): void {
+  if (typeof window !== "undefined" && AI_USAGE_PATH_RE.test(path)) {
+    window.dispatchEvent(new Event("ai-usage:changed"));
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -161,6 +172,7 @@ export const api = {
       if (res.status === 401) onUnauthorized?.();
       throw new ApiError(res.status, code, message);
     }
+    notifyAiUsageIfNeeded(path);
     if (res.status === 204) return undefined as T;
     return res.json();
   },

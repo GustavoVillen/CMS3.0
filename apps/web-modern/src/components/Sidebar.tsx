@@ -214,27 +214,31 @@ export const Sidebar: React.FC = () => {
     return () => { cancelled = true; clearInterval(id); };
   }, [selectedVesselCode]);
 
-  // ── My AI usage (this month) — polled every 60s ────────────────────────────
-  const [aiUsage, setAiUsage] = useState<{ totalTokens: number; costUsd: number } | null>(null);
+  // ── My AI usage (this month) — % del tope mensual, badge junto a "Sistemas OK".
+  // Polling cada 60s + refresco inmediato ante el evento global "ai-usage:changed"
+  // que emite el cliente api (acciones one-shot) y el copiloto al terminar.
+  const [aiUsage, setAiUsage] = useState<{ totalTokens: number; costUsd: number; pct: number | null; blocked: boolean } | null>(null);
   useEffect(() => {
     let stopped = false;
     const fetchUsage = () => {
-      api.get<{ totalTokens: number; costUsd: number }>("/app/me/ai-usage")
-        .then(s => { if (!stopped) setAiUsage({ totalTokens: s.totalTokens, costUsd: s.costUsd }); })
+      api.get<{ totalTokens: number; costUsd: number; budget: { pct: number; blocked: boolean } | null }>("/app/me/ai-usage")
+        .then(s => { if (!stopped) setAiUsage({ totalTokens: s.totalTokens, costUsd: s.costUsd, pct: s.budget?.pct ?? null, blocked: s.budget?.blocked ?? false }); })
         .catch(() => { /* silent — no badge if it fails */ });
     };
     fetchUsage();
     const id = setInterval(fetchUsage, 60_000);
-    return () => { stopped = true; clearInterval(id); };
+    window.addEventListener("ai-usage:changed", fetchUsage);
+    return () => { stopped = true; clearInterval(id); window.removeEventListener("ai-usage:changed", fetchUsage); };
   }, []);
 
-  const fmtTok = (n: number): string => {
-    if (n < 1000) return String(n);
-    if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
-    return `${(n / 1_000_000).toFixed(2)}M`;
-  };
-  const aiBadgeText = aiUsage ? `IA ${fmtTok(aiUsage.totalTokens)} tok` : null;
-  const aiBadgeTitle = aiUsage ? `Consumo IA del mes — ${aiUsage.totalTokens.toLocaleString("es-AR")} tokens (~US$ ${aiUsage.costUsd.toFixed(4)})` : "";
+  const aiPct = aiUsage?.pct ?? null;
+  const aiBadgeText = aiPct != null ? `IA ${Math.min(100, Math.round(aiPct))}%` : null;
+  const aiBadgeTitle = aiUsage
+    ? `Consumo IA del mes — ${Math.round(aiPct ?? 0)}% del tope mensual · ${aiUsage.totalTokens.toLocaleString("es-AR")} tokens (~US$ ${aiUsage.costUsd.toFixed(4)})`
+    : "";
+  const aiBadgeClass = aiPct == null
+    ? "text-fg/30"
+    : aiPct >= 100 ? "text-danger font-bold" : aiPct >= 80 ? "text-amber-500 font-semibold" : "text-fg/30";
 
   const effectiveWidth = collapsed ? COLLAPSED_W : width;
 
@@ -388,7 +392,7 @@ export const Sidebar: React.FC = () => {
               <div className="w-2 h-2 rounded-full bg-success-sea animate-pulse shrink-0" />
               <span className="text-[11px] text-fg/40">{t("nav.statusOk")}</span>
               {aiBadgeText && user?.role === "TENANT_ADMIN" && (
-                <span className="text-[10px] text-fg/30 ml-auto" title={aiBadgeTitle}>
+                <span className={`text-[10px] ml-auto ${aiBadgeClass}`} title={aiBadgeTitle}>
                   {aiBadgeText}
                 </span>
               )}
