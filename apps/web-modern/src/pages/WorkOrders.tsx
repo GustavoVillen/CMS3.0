@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -9,7 +9,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
@@ -715,9 +715,10 @@ interface WorkOrderModalProps {
   onClose: () => void;
   onSaved: () => void;
   onOpenAction: (wo: WorkOrder, type: ActionType) => void;
+  onCreateCorrective: (prefill: WoPrefill) => void;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onCreateCorrective }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -839,6 +840,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [usageSearch,    setUsageSearch]    = useState("");
   const [usageDropdown,  setUsageDropdown]  = useState(false);
   const [closingWarning, setClosingWarning] = useState<string | null>(null);
+  // Diálogo posterior al cierre "con deficiencias": ofrece registrar defecto / abrir OT correctiva.
+  const [showDeficiencyFollowup, setShowDeficiencyFollowup] = useState(false);
 
   const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number }> }>(
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
@@ -902,6 +905,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       navigate(`/defects?defectId=${res.id}`);
     } catch { setDefectPrompt("ask"); }
   }, [deficienciasText, observations, workOrder, navigate]);
+
+  // Igual que openDefectRecord pero SIN navegar: se usa en el diálogo post-cierre
+  // para que el usuario pueda registrar el defecto y aún elegir abrir la OT correctiva.
+  const createDefectInline = useCallback(async () => {
+    setDefectPrompt("creating");
+    try {
+      const res = await api.post<{ id: string; defectCode: string }>("/app/pms/defects", {
+        vesselCode: workOrder.vesselCode,
+        assetId: workOrder.assetId,
+        workOrderId: workOrder.id,
+        classification: "WORK_ORDER_FINDING",
+        severity: "MEDIUM",
+        description: deficienciasText.trim() || observations.trim() || `Deficiencias encontradas en ${woTerms.abbr} ${workOrder.workOrderCode}`,
+      });
+      setCreatedDefectCode(res.defectCode ?? null);
+      setDefectPrompt("created");
+    } catch { setDefectPrompt("ask"); }
+  }, [deficienciasText, observations, workOrder, woTerms]);
+
+  // Prefill de la OT correctiva a partir de la deficiencia de esta SS.
+  const buildCorrectivePrefill = useCallback((): WoPrefill => ({
+    source: "wo-deficiency",
+    sourceId: workOrder.id,
+    sourceCode: workOrder.workOrderCode,
+    sourceLabel: t("wo.defFollowup.correctiveSource"),
+    vesselCode: workOrder.vesselCode,
+    assetId: workOrder.assetId,
+    assetName: workOrder.assetName ?? null,
+    type: "CORRECTIVE",
+    priority: workOrder.priority ?? "MEDIUM",
+    criticality: workOrder.criticality ?? "B",
+    title: `${t("wo.defFollowup.correctiveTitlePrefix")} ${workOrder.title ?? workOrder.workOrderCode}`,
+    description: deficienciasText.trim() || observations.trim() || null,
+  }), [workOrder, deficienciasText, observations, t]);
 
   const [saving,          setSaving]         = useState(false);
   const [resuming,        setResuming]       = useState(false);
@@ -1248,6 +1285,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // directo como tras aceptar el aviso de stock, para que el defecto se abra
   // igual aunque haya repuestos que superen el stock.
   const finishClose = useCallback(() => {
+    // Cierre "con deficiencias": NO cerramos el modal todavía; mostramos el
+    // diálogo que ofrece registrar el defecto y/o abrir la OT correctiva.
+    if (woResult === "WITH_DEFICIENCIES") {
+      setClosingWarning(null);
+      setShowDeficiencyFollowup(true);
+      return;
+    }
     onSaved();
     if (isCorrective && defectDetail.trim().length > 0) {
       navigate("/defects", { state: { createDefectFromWo: {
@@ -1259,7 +1303,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         taskContext: [workOrder.title, workOrder.description].filter(Boolean).join(" — ") || null,
       } } });
     }
-  }, [onSaved, isCorrective, defectDetail, navigate, workOrder]);
+  }, [onSaved, woResult, isCorrective, defectDetail, navigate, workOrder]);
 
   const onClose_WO = useCallback(async () => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
@@ -2146,6 +2190,59 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       </div>
     </div>
 
+    {/* Diálogo post-cierre "con deficiencias": registrar defecto / abrir OT correctiva */}
+    {showDeficiencyFollowup && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-orange-500/30 rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-fg">{t("wo.defFollowup.title").replace("{abbr}", woTerms.abbr)}</p>
+              <p className="text-xs text-text-industrial/60 mt-0.5">{t("wo.defFollowup.subtitle").replace("{code}", workOrder.workOrderCode)}</p>
+            </div>
+          </div>
+
+          {defectPrompt === "created" && createdDefectCode && (
+            <div className="flex items-center gap-2 text-xs text-success-sea font-semibold bg-success-sea/10 border border-success-sea/20 rounded-lg px-3 py-2">
+              <CheckCheck className="w-3.5 h-3.5 shrink-0" />
+              {t("wo.defectPrompt.created")}: <span className="font-mono">{createdDefectCode}</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {defectPrompt !== "created" && (
+              <button
+                type="button"
+                disabled={defectPrompt === "creating"}
+                onClick={() => { void createDefectInline(); }}
+                className="w-full py-2 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/25 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5">
+                {defectPrompt === "creating" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+                {t("wo.defFollowup.registerDefect")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setShowDeficiencyFollowup(false); onCreateCorrective(buildCorrectivePrefill()); }}
+              className="w-full py-2 rounded-lg bg-accent/15 border border-accent/30 text-accent font-bold text-xs hover:bg-accent/25 transition-all flex items-center justify-center gap-1.5">
+              <Wrench className="w-3.5 h-3.5" />
+              {t("wo.defFollowup.openCorrective").replace("{abbr}", woTerms.abbr)}
+            </button>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="button"
+              onClick={() => { setShowDeficiencyFollowup(false); onSaved(); }}
+              className="px-4 py-1.5 rounded-lg text-xs text-text-industrial/70 hover:bg-fg/5 transition-colors">
+              {t("wo.defFollowup.done")}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Modal registrar avance */}
     {showProgressSheet && (
       <ProgressNoteSheet
@@ -2588,7 +2685,9 @@ export const WorkOrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
+  const [createPrefill, setCreatePrefill] = useState<WoPrefill | null>(null);
   const [viewMode, setViewMode]       = useState<"list" | "kanban">("kanban");
+  const [search, setSearch]           = useState("");
 
   useCopilotEmitter(!editing && !showCreate ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
   const [showExcel, setShowExcel]     = useState(false);
@@ -2656,6 +2755,23 @@ export const WorkOrdersPage: React.FC = () => {
     if (viewFilter === "open")      return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !(!!w.dueDate && parseLocalDate(w.dueDate) < now));
     return items;
   }, [data, viewFilter, deferralMap]);
+
+  // Buscador global: cuando hay texto, busca sobre TODAS las SS del buque
+  // (cualquier estado, incluidas las cerradas) ignorando el filtro de vista.
+  // Sin texto, respeta el comportamiento actual (visibleItems / viewFilter).
+  const displayItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return visibleItems;
+    const base = data?.items ?? null;
+    if (!base) return base;
+    return base.filter(w =>
+      (w.workOrderCode ?? "").toLowerCase().includes(q) ||
+      (w.title ?? "").toLowerCase().includes(q) ||
+      (w.assetName ?? "").toLowerCase().includes(q) ||
+      (w.assignedToUserName ?? "").toLowerCase().includes(q) ||
+      (w.vesselCode ?? "").toLowerCase().includes(q),
+    );
+  }, [search, visibleItems, data]);
 
   // Auto-open WO when arriving from a plan badge click
   useEffect(() => {
@@ -2819,19 +2935,35 @@ export const WorkOrdersPage: React.FC = () => {
             </button>
           );
         })}
+        {/* Buscador global de SS — busca en cualquier estado, incluidas cerradas. */}
+        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 ml-auto">
+          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t("wo.page.searchPlaceholder")}
+            className="w-64 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {viewMode === "list" ? (
-        <DataTable columns={columns} data={visibleItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
+        <DataTable columns={columns} data={displayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
       ) : (
-        <KanbanBoard items={visibleItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
+        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
       )}
 
-      {showCreate && (
+      {(showCreate || createPrefill) && (
         <CreateWorkOrderModal
+          prefill={createPrefill ?? undefined}
           initialVesselCode={selectedVesselCode ?? undefined}
-          onClose={() => setShowCreate(false)}
-          onSaved={() => { setShowCreate(false); void reload(); }}
+          onClose={() => { setShowCreate(false); setCreatePrefill(null); }}
+          onSaved={() => { setShowCreate(false); setCreatePrefill(null); void reload(); }}
         />
       )}
       {editing && (
@@ -2841,6 +2973,7 @@ export const WorkOrdersPage: React.FC = () => {
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void reload(); }}
           onOpenAction={openActionModal}
+          onCreateCorrective={(prefill) => { setEditing(null); setCreatePrefill(prefill); void reload(); }}
         />
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}

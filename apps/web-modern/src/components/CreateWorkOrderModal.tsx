@@ -9,7 +9,7 @@ import { AssetSearchDropdown } from "./AssetSearchDropdown";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WoPrefill {
-  source: "plan" | "defect" | "audit-finding";
+  source: "plan" | "defect" | "audit-finding" | "wo-deficiency";
   sourceId: string;
   sourceCode: string;
   sourceLabel: string;

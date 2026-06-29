@@ -1379,6 +1379,13 @@ const dict = {
 
   // Defect prompt al cerrar OT con deficiencias
   "wo.defectPrompt.question":  { es: "¿Deseas abrir un registro en el Log de Defectos?", en: "Do you want to open a record in the Defect Log?", pt: "Deseja abrir um registro no Log de Defeitos?" },
+  "wo.defFollowup.title":      { es: "Cerraste la {abbr} con deficiencias", en: "You closed the {abbr} with deficiencies", pt: "Você fechou a {abbr} com deficiências" },
+  "wo.defFollowup.subtitle":   { es: "{code} · Registrá el defecto y/o abrí una OT correctiva.", en: "{code} · Register the defect and/or open a corrective WO.", pt: "{code} · Registre o defeito e/ou abra uma OS corretiva." },
+  "wo.defFollowup.registerDefect": { es: "Registrar defecto", en: "Register defect", pt: "Registrar defeito" },
+  "wo.defFollowup.openCorrective": { es: "Abrir {abbr} correctiva", en: "Open corrective {abbr}", pt: "Abrir {abbr} corretiva" },
+  "wo.defFollowup.done":       { es: "Listo", en: "Done", pt: "Pronto" },
+  "wo.defFollowup.correctiveSource": { es: "Deficiencia de", en: "Deficiency from", pt: "Deficiência de" },
+  "wo.defFollowup.correctiveTitlePrefix": { es: "Correctiva —", en: "Corrective —", pt: "Corretiva —" },
   "wo.defectPrompt.openRecord":{ es: "Abrir Registro DEF",     en: "Open DEF Record",      pt: "Abrir Registro DEF" },
   "wo.defectPrompt.skipRecord":{ es: "No abrir Registro DEF",  en: "Don't open DEF Record",pt: "Não abrir Registro DEF" },
   "wo.defectPrompt.creating":  { es: "Creando registro…",      en: "Creating record…",     pt: "Criando registro…" },
@@ -1399,6 +1406,7 @@ const dict = {
 
   // WorkOrders page
   "wo.page.openReport":        { es: "Reporte OTs Abiertas",   en: "Open WOs Report",      pt: "Relatório de OS Abertas" },
+  "wo.page.searchPlaceholder": { es: "Buscar por código, tarea, equipo, responsable…", en: "Search by code, task, equipment, assignee…", pt: "Buscar por código, tarefa, equipamento, responsável…" },
   "wo.page.printOpenForVessel":{ es: "Imprimir OTs abiertas de {vessel}", en: "Print open WOs for {vessel}", pt: "Imprimir OS abertas de {vessel}" },
   "wo.page.printOpenAll":      { es: "Imprimir todas las OTs abiertas agrupadas por responsable", en: "Print all open WOs grouped by assignee", pt: "Imprimir todas as OS abertas agrupadas por responsável" },
 
