@@ -25,6 +25,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { recordAiUsage, assertAiBudgetAvailable } from "../usage/usage-service";
 import type { FileContent } from "./file-parser-service";
+import { log } from "../../common/logger";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -1478,6 +1479,7 @@ export async function streamCopilotoChat(
   let loopMessages: Anthropic.MessageParam[] = baseMessages;
   let round = 0;
 
+  let lastStopReason: string | null | undefined = null;
   while (true) {
     const allowTools = round < MAX_TOOL_ROUNDS;
     const roundStarted = Date.now();
@@ -1502,6 +1504,7 @@ export async function streamCopilotoChat(
     }
 
     const msg = await stream.finalMessage();
+    lastStopReason = msg.stop_reason;
 
     recordAiUsage({
       tenantId:            req.tenantId,
@@ -1554,6 +1557,11 @@ export async function streamCopilotoChat(
     const fallback = "No pude completar la respuesta. Reformulá la pregunta o intentá de nuevo.";
     accumulatedText = fallback;
     onChunk(fallback);
+  }
+
+  // [DEBUG TEMPORAL] Diagnóstico RCA: ver qué devolvió realmente el modelo.
+  if (req.capability === "defect_assistant") {
+    log.info(`[copiloto-debug] cap=${req.capability} rounds=${round} stop=${lastStopReason} len=${accumulatedText.length} hasCAMPOS=${accumulatedText.includes("[CAMPOS]")} hasClose=${accumulatedText.includes("[/CAMPOS]")} :: ${accumulatedText.slice(0, 1800).replace(/\s+/g, " ")}`);
   }
 
   // Después de todas las phases, parseamos [ACCIONES]...[/ACCIONES] en el
