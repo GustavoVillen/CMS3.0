@@ -2455,6 +2455,22 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario (no en RECHAZA):
+  // se elige de una lista y la firma del PDF se toma de ESE usuario.
+  const isAdmin = user?.role === "TENANT_ADMIN";
+  const adminPicker = isAdmin && !isReject;
+  const [onBehalfUserId, setOnBehalfUserId] = useState(user?.id ?? "");
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }[]>([]);
+  const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
+    (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
+
+  useEffect(() => {
+    if (!adminPicker) return;
+    api.get<typeof teamUsers>("/app/team/members")
+      .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setTeamUsers([]));
+  }, [adminPicker]);
   const title = step === "APRUEBA" ? `Aprobar ${woTerms.abbr}` : step === "AUTORIZA" ? `Autorizar ${woTerms.abbr}` : `Rechazar ${woTerms.abbr}`;
   const verb  = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
 
@@ -2477,6 +2493,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
     try {
       await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, {
         step, name: trimmed, reason: isReject ? trimmedReason : undefined,
+        onBehalfUserId: adminPicker && onBehalfUserId ? onBehalfUserId : undefined,
       });
       onSuccess();
     } catch {
@@ -2503,14 +2520,35 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Nombre de quien {verb}</label>
-          <input
-            autoFocus
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !isReject) void submit(); }}
-            className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
-            placeholder="Nombre y apellido"
-          />
+          {adminPicker ? (
+            <select
+              autoFocus
+              value={onBehalfUserId}
+              onChange={e => {
+                const uid = e.target.value;
+                setOnBehalfUserId(uid);
+                const u = teamUsers.find(x => x.userId === uid);
+                setName(u ? (memberName(u) || user?.name || "") : (user?.name ?? ""));
+              }}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+            >
+              {teamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
+              {teamUsers.map(u => (
+                <option key={u.userId} value={u.userId}>
+                  {(memberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !isReject) void submit(); }}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+              placeholder="Nombre y apellido"
+            />
+          )}
         </div>
         {isReject && (
           <div className="space-y-1.5">
