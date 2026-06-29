@@ -22,6 +22,9 @@ const W        = PW - ML - MR;
 const MARGIN_T = 36;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 
+const PT_PER_MM = 72 / 25.4;          // 1 mm en puntos PDF
+const TITLE_GAP = 7 * PT_PER_MM;      // separación fija de 7 mm antes de cada título
+
 const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
 export interface MercurioMaintenancePlanData {
@@ -127,10 +130,13 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     const RESP_LBL_W = 140;
     cell(ML, canvas.y, RESP_LBL_W, RH, "Responsable de la Tarea:", lbl);
     cell(ML + RESP_LBL_W, canvas.y, W - RESP_LBL_W, RH, sanitizePdfText(val(p["responsible"])), { fontSize: 9 });
-    canvas.y += RH + 8;
+    canvas.y += RH;
 
     // ── Helpers de sección estilo Mercurio (label negrita subrayada + caja) ──
     function labelLine(label: string, inline?: string) {
+      // Separación fija de 7 mm antes de cada título (se descarta si cae salto
+      // de página: ensureSpace resetea el cursor a marginT).
+      canvas.y += TITLE_GAP;
       ensureSpace(16);
       const y0 = canvas.y;
       doc.fontSize(9.5).font("Helvetica-Bold").fillColor(BLACK)
@@ -149,7 +155,7 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
       // keepMarkdown: conserva `**negrita**` y los `|` de tablas; el textArea del
       // chrome interpreta la grilla y la negrita inline.
       canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(content || "", { keepMarkdown: true }), minH);
-      canvas.y += 8;
+      // El gap antes del próximo título lo aplica labelLine (7 mm fijos).
     }
 
     // ── DESCRIPCIÓN DE LA TAREA (título inline + descripción) ────────────────
@@ -170,7 +176,6 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     // se resalta solo si el plan tiene cargados ambos ejes (probabilidad ×
     // consecuencia); si no, se muestra la grilla de referencia sin resaltado.
     renderRiskMatrix(doc, canvas, ML, W, riskProb, riskCons);
-    canvas.y += 8;
 
     // ── RESULTADO DEL ANÁLISIS DE RIESGO ────────────────────────────────────
     section("Resultado del Analisis de Riesgo:", val(p["riskAnalysisResult"]));

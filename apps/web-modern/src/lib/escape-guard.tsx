@@ -319,11 +319,16 @@ export function useEscapeGuard(opts: {
 //   useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 // ---------------------------------------------------------------------------
 
-export function useDirtyTracker<T>(value: T): boolean {
+export function useDirtyTracker<T>(value: T, resetKey?: unknown): boolean {
   const initialRef = useRef<string | null>(null);
+  const keyRef = useRef<unknown>(resetKey);
   const current = JSON.stringify(value);
-  if (initialRef.current === null) {
+  // Re-snapshot del baseline en el primer render o cuando cambia resetKey
+  // (ej. tras un guardado exitoso que deja el modal abierto: lo guardado pasa
+  // a ser el nuevo "limpio", evitando un aviso falso de cambios sin guardar).
+  if (initialRef.current === null || keyRef.current !== resetKey) {
     initialRef.current = current;
+    keyRef.current = resetKey;
   }
   return initialRef.current !== current;
 }

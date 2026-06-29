@@ -952,6 +952,11 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Feedback de "Guardado" + reset del dirty-tracker: al guardar, el modal NO se
+  // cierra (queda abierto para seguir editando), así que mostramos confirmación
+  // y reseteamos el baseline de cambios.
+  const [justSaved,   setJustSaved]   = useState(false);
+  const [saveResetKey, setSaveResetKey] = useState(0);
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
@@ -1284,7 +1289,11 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         savedId = plan.id;
       }
       await onSaved(savedId);
-      onClose();
+      // No cerramos el modal: queda abierto para seguir editando. Confirmamos
+      // el guardado y reseteamos el baseline del dirty-tracker.
+      setSaveResetKey(k => k + 1);
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 2500);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t("common.saveError"));
     } finally {
@@ -1304,7 +1313,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
-  });
+  }, saveResetKey);
   useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && !confirmDelete && !confirmDuplicateWO,
     isDirty: planDirty,
@@ -2061,9 +2070,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     else void onSave();
                   }}
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 bg-accent text-accent-fg hover:brightness-110"
+                  className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}
                 >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCircle2 className="w-4 h-4" />{t("mp.modal.saved")}</> : t("common.save")}
                 </button>
               )}
             </div>
