@@ -45,12 +45,12 @@ Immutable rules:
 - If the user asks for expiring/expired/valid certificates, include status filter when applicable. Example: [Abrir Certificados por vencer](/certificates?status=EXPIRING).
 - Apply the same pattern for other modules when applicable. Examples: [Abrir Ordenes de trabajo](/work-orders?vesselCode=LATERE&status=IN_PROGRESS), [Abrir Defectos abiertos](/defects?vesselCode=LATERE&status=OPEN).
 - When referencing a specific maintenance plan from query results, always include a direct link using its taskCode: [TASKCODE](/maintenance-plans?openId=PLAN_ID). Use the "id" field as PLAN_ID and "taskCode" as the display text.
-- When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
+- When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Prefer SINGLE KEYWORDS or root forms over full phrases (textSearch matches a substring per word; e.g. search "aceite" or "muestra", not "análisis de aceite" — and beware morphological variants: "análisis" won't match "analizar"). For questions about FLUID/OIL ANALYSIS or SAMPLING ("análisis/muestreo de aceite/lubricante/refrigerante"), the requirement is encoded structurally in the plan's samplingFluidType field (ENGINE_OIL, HYDRAULIC_OIL, COOLING_WATER, etc.), NOT necessarily in the text — filter by samplingFluidType (and/or scope by the equipment's assetId via query_assets) instead of relying only on textSearch. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
 - IMPORTANT: Before asking the user a question that can be answered by querying the system (e.g. "Does a maintenance plan exist?", "Are there open work orders?"), ALWAYS use the available query tools to look it up yourself first.
 - KNOWLEDGE BASE: The tenant's uploaded manuals, procedures, datasheets and technical documents are NOT included in this prompt — only their names appear under "## Base documental del tenant (índice)". When the user asks about the CONTENT of a manual/procedure/specification (recommended oil/fluid, part number, torque, interval, step of a procedure, etc.), call the search_knowledge_docs tool with relevant keywords (optionally documentName to target a specific manual). Cite the document name in your answer. If the index section is absent or the search returns nothing, say the document/info is not in the knowledge base — do NOT invent manufacturer data.
 - RCA / DEFECT PROACTIVE SEARCH: When you are in DEFECTS or RCA module and you are about to ask the user ANY question about maintenance history, previous work orders, last service date, last fluid/filter/component change, inspection records, or any operational record related to the asset — STOP before asking. First call query_maintenance_plans and query_work_orders using the assetId and vesselCode from the screen context (relatedEntities.assetId). Then in your response: (1) explicitly state what you found — plan name, last execution date/hours, or work orders — or state "No encontré registros de [X] para este activo en el sistema"; (2) only ask the user for additional context if the records were insufficient or absent. Never ask "¿Cuándo fue el último cambio de X?" without first querying the system yourself.
 - "ALREADY DONE?" CHECKS: When the user asks "¿se hizo X?", "¿cambiaron Y?", "¿cuándo fue el último cambio de Z?" or similar — call query_work_orders WITHOUT a status filter (to include PLANNED, IN_PROGRESS, ON_HOLD, CLOSED). Then for each row inspect the fields "observations" (AI-consolidated technician progress notes), "description" and "title" — these contain the actual work performed even on OTs that are still open. Only conclude "no se hizo" if no match is found in any of those fields across all statuses. When citing evidence, mention the OT code and whether it is CLOSED or still in progress.
-- RCA USER HYPOTHESIS FIRST: When you are about to start or guide an RCA (root cause analysis) — triggered by the user asking to "analizar la causa", "hacer el RCA", "iniciar RCA", "investigar el defecto", or any similar phrase — ALWAYS start with ONE single question before any analysis: "¿Ya tenés alguna hipótesis sobre la posible causa de este defecto?" Wait for the user's answer before proceeding. If the user already provided a hypothesis in their message, do NOT ask again — instead, critically evaluate it before incorporating it: check if it (1) identifies a specific, actionable cause (not just a symptom), (2) is technically plausible given the defect description and any maintenance records found, (3) is falsifiable — i.e., there is a way to confirm or rule it out. If the hypothesis is vague, symptom-level, or incomplete, point it out respectfully and help the user refine it to a proper root cause before proceeding with the full RCA. If the hypothesis is well-formed, confirm it explicitly and build the analysis from there.
+- RCA USER HYPOTHESIS FIRST: When you are about to start or guide an RCA (root cause analysis) — triggered by the user asking to "analizar la causa", "hacer el RCA", "iniciar RCA", "investigar el defecto", or any similar phrase — ALWAYS start with ONE single question before any analysis: "¿Ya tenés alguna hipótesis sobre la posible causa de este defecto?" Wait for the user's answer before proceeding. If the user already provided a hypothesis in their message, do NOT ask again — instead, critically evaluate it before incorporating it: check if it (1) identifies a specific, actionable cause (not just a symptom), (2) is technically plausible given the defect description and any maintenance records found, (3) is falsifiable — i.e., there is a way to confirm or rule it out. If the hypothesis is vague, symptom-level, or incomplete, point it out respectfully and help the user refine it to a proper root cause before proceeding with the full RCA. If the hypothesis is well-formed, confirm it explicitly and build the analysis from there. EXCEPCIÓN — MODO AUTOMÁTICO: si el mensaje del usuario incluye el marcador "[MODO ANÁLISIS AUTOMÁTICO]" o pide explícitamente completar los campos del RCA y devolver un bloque [CAMPOS], NO hagas la pregunta de hipótesis ni esperes respuesta: procedé directo al análisis completo y devolvé SIEMPRE, al final, el bloque [CAMPOS]{...}[/CAMPOS] con los campos pedidos (aunque hayas escrito texto explicativo antes).
 - FILL FIELDS: When the user asks to "completar campos faltantes", "complete missing fields", "fill the form", "llenar campos", "rellenar campos", or any similar phrase, analyze the screen context fieldValues (provided in ACTIVE RECORD above), identify fields whose value is null or empty, and propose expert-quality values for them based on domain knowledge and any already-filled fields. Embed the proposed values at the END of your response using EXACTLY this format with no spaces between the markers and the JSON:
 [CAMPOS]{"fieldKey": "proposed value", "fieldKey2": "proposed value 2"}[/CAMPOS]
 Use the exact key names from the fieldValues object in the screen context. Only include fields that were null/empty and that you can confidently propose — omit already-filled fields. After the block, briefly explain what you filled and why.
@@ -289,7 +289,8 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
           type: "string",
           description: "Filter by plan status: ACTIVE | DUE_SOON | OVERDUE | INACTIVE (optional)",
         },
-        textSearch: { type: "string", description: "Case-insensitive substring search across both title AND description/tasks fields simultaneously (optional). Use this to find plans related to a specific activity, inspection, or procedure." },
+        textSearch: { type: "string", description: "Case-insensitive search across title AND description/tasks. The query is split into words and matched as an AND of substrings, so word order and filler words don't matter. Prefer SINGLE KEYWORDS or root forms (e.g. 'aceite', 'muestra', 'analizar', 'termografia') over full phrases — morphological variants won't match (e.g. 'análisis' won't match 'analizar'). (optional)" },
+        samplingFluidType: { type: "string", description: "Filter to plans that REQUIRE a fluid/oil sample analysis of this type. USE THIS for questions about 'análisis/muestreo de aceite/lubricante/refrigerante' instead of textSearch. Values: ENGINE_OIL, HYDRAULIC_OIL, GEARBOX_OIL, TRANSMISSION_OIL, FUEL_DIESEL, FUEL_GASOIL, COOLING_WATER, BOILER_WATER, POTABLE_WATER, REFRIGERANT (optional)." },
         limit: { type: "number", description: "Max results to return (default 20, max 50)" },
       },
       required: ["vesselCode"],
@@ -639,11 +640,28 @@ async function executeCopilotTool(
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.textSearch) {
-        where.OR = [
-          { title:       { contains: input.textSearch as string, mode: "insensitive" } },
-          { description: { contains: input.textSearch as string, mode: "insensitive" } },
-        ];
+        // Tokenizado: cada palabra (>=3 chars) debe aparecer como substring en
+        // título o descripción (AND de OR). Así el orden de palabras y los
+        // términos de relleno no impiden el match. Fallback al substring crudo
+        // si no quedan tokens útiles (ej. búsqueda muy corta).
+        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim()).filter(t => t.length >= 3);
+        if (tokens.length > 0) {
+          where.AND = tokens.map(tok => ({
+            OR: [
+              { title:       { contains: tok, mode: "insensitive" } },
+              { description: { contains: tok, mode: "insensitive" } },
+            ],
+          }));
+        } else {
+          where.OR = [
+            { title:       { contains: input.textSearch as string, mode: "insensitive" } },
+            { description: { contains: input.textSearch as string, mode: "insensitive" } },
+          ];
+        }
       }
+      // Muestreo de fluidos (análisis de aceite/lubricante/refrigerante) está
+      // codificado en samplingFluidType, no siempre en el texto del plan.
+      if (input.samplingFluidType) where.samplingFluidType = input.samplingFluidType;
 
       const rows = await prisma.maintenancePlan.findMany({
         where,
@@ -664,6 +682,10 @@ async function executeCopilotTool(
           lastExecutionDate: true,
           lastExecutionHours: true,
           responsible: true,
+          assetId: true,
+          // Muestreo estructurado: marca si el plan exige análisis de fluido/aceite.
+          samplingKind: true,
+          samplingFluidType: true,
         },
       });
 
@@ -1461,7 +1483,11 @@ export async function streamCopilotoChat(
     const roundStarted = Date.now();
     const stream = client.messages.stream({
       model: MODEL,
-      max_tokens: 2048,
+      // 4096 (antes 2048): un RCA completo (6 campos) en un bloque [CAMPOS] puede
+      // superar 2048 tokens; si se trunca, falta el cierre [/CAMPOS] y el front
+      // reporta "no devolvió un análisis estructurado". Solo es un tope: no encarece
+      // las respuestas normales.
+      max_tokens: 4096,
       system: systemBlocks,
       ...(allowTools ? { tools: COPILOT_TOOLS } : {}),
       messages: loopMessages,
