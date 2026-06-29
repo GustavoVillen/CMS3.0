@@ -838,7 +838,7 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
 export async function setWorkOrderApproval(
   session: TenantAccessSession,
   id: string,
-  payload: { step: "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null },
+  payload: { step: "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null; actionDate?: string | Date | null },
 ) {
   ensureCanOperateWorkOrders(session);
 
@@ -850,10 +850,11 @@ export async function setWorkOrderApproval(
   const current = await getTenantWorkOrder(session, id) as any;
   const now = new Date();
 
-  // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario: en ese
-  // caso la firma del PDF se toma de ESE usuario (su signatureUrl), no del admin.
+  // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario (la firma
+  // del PDF se toma de ESE usuario) y/o registrar una fecha distinta de la acción.
   // El actor real siempre queda en el audit log y en updatedByUserId.
   let signerUserId = session.user.id;
+  let actionAt = now;
   if (session.user.role === "TENANT_ADMIN" && payload.step !== "RECHAZA") {
     const onBehalf = normalizeOptionalText(payload.onBehalfUserId);
     if (onBehalf && onBehalf !== session.user.id) {
@@ -864,6 +865,8 @@ export async function setWorkOrderApproval(
       if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
       signerUserId = onBehalf;
     }
+    const d = parseOptionalDate(payload.actionDate, "actionDate");
+    if (d) actionAt = d;
   }
 
   let data: Record<string, unknown>;
@@ -871,11 +874,11 @@ export async function setWorkOrderApproval(
     if (current.aprobadoAt) throw new RouteError(409, "ALREADY_APPROVED", "La OT ya fue aprobada.");
     // Re-aprobar tras un rechazo: limpia el flag de rechazo (sale del rojo).
     // Se guarda el userId del firmante para incrustar su firma digital en el PDF.
-    data = { aprobadoByName: name, aprobadoByUserId: signerUserId, aprobadoAt: now, rechazadoByName: null, rechazadoAt: null, rechazoReason: null };
+    data = { aprobadoByName: name, aprobadoByUserId: signerUserId, aprobadoAt: actionAt, rechazadoByName: null, rechazadoAt: null, rechazoReason: null };
   } else if (payload.step === "AUTORIZA") {
     if (!current.aprobadoAt) throw new RouteError(409, "NOT_APPROVED", "La OT debe estar aprobada antes de autorizar.");
     if (current.autorizadoAt) throw new RouteError(409, "ALREADY_AUTHORIZED", "La OT ya fue autorizada.");
-    data = { autorizadoByName: name, autorizadoByUserId: signerUserId, autorizadoAt: now };
+    data = { autorizadoByName: name, autorizadoByUserId: signerUserId, autorizadoAt: actionAt };
   } else if (payload.step === "RECHAZA") {
     // [NO APROBADA] / [NO AUTORIZADA]: devuelve la OT a Solicitada (en rojo),
     // limpiando aprobado/autorizado y registrando quién rechazó + el motivo.

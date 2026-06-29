@@ -2561,6 +2561,9 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
+  // Admin: fecha de la acción (aprobación/autorización). Default hoy.
+  const today = new Date().toISOString().slice(0, 10);
+  const [actionDate, setActionDate] = useState(today);
 
   useEffect(() => {
     if (!adminPicker) return;
@@ -2591,6 +2594,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
       await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, {
         step, name: trimmed, reason: isReject ? trimmedReason : undefined,
         onBehalfUserId: adminPicker && onBehalfUserId ? onBehalfUserId : undefined,
+        actionDate: adminPicker && actionDate ? actionDate : undefined,
       });
       onSuccess();
     } catch {
@@ -2647,6 +2651,19 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
             />
           )}
         </div>
+        {adminPicker && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
+              {step === "APRUEBA" ? "Fecha de aprobación" : "Fecha de autorización"}
+            </label>
+            <input
+              type="date"
+              value={actionDate}
+              onChange={e => setActionDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+            />
+          </div>
+        )}
         {isReject && (
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
