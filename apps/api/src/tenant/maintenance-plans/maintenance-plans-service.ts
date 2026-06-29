@@ -132,6 +132,11 @@ export interface OpenFormalWorkOrderInput {
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
+  // Solo TENANT_ADMIN: fecha de apertura (backdating) y abrir en nombre de
+  // otro usuario (queda como SOLICITA / createdByUserId). Ignorados si el actor
+  // no es admin. Ver openFormalWorkOrder.
+  openDate?: string | Date | null;
+  createdByUserId?: string | null;
 }
 
 interface RecalculatePlanInput {
@@ -1212,6 +1217,27 @@ export async function openFormalWorkOrder(
   };
   const planAny = plan as any;
 
+  // Solo TENANT_ADMIN puede registrar una fecha de apertura distinta (backdating)
+  // o abrir la OT en nombre de otro usuario (queda como SOLICITA / createdByUserId).
+  // Para el resto, se usa la fecha actual y el propio usuario. El actor real
+  // siempre queda en el audit log.
+  const isAdmin = session.user.role === "TENANT_ADMIN";
+  let woOpenDate: Date = new Date();
+  let woCreatorId = session.user.id;
+  if (isAdmin) {
+    const backdated = parseOptionalDate(payload.openDate, "openDate");
+    if (backdated) woOpenDate = backdated;
+    const onBehalf = normalizeOptionalText(payload.createdByUserId);
+    if (onBehalf && onBehalf !== session.user.id) {
+      const membership = await (prismaRaw as any).tenantMembership.findFirst({
+        where: { tenantId: plan.tenantId, userId: onBehalf },
+        select: { userId: true },
+      });
+      if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
+      woCreatorId = onBehalf;
+    }
+  }
+
   const woTxResult = await prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.create({
       data: {
@@ -1223,7 +1249,10 @@ export async function openFormalWorkOrder(
         type: "PREVENTIVE",
         status: "PLANNED",
         priority: payload.priority ?? "MEDIUM",
-        openDate: new Date(),
+        openDate: woOpenDate,
+        // createdAt alineado a la fecha de apertura: así en el PDF coinciden la
+        // FECHA y la fecha de la firma de SOLICITA (que se toma de createdAt).
+        createdAt: woOpenDate,
         dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
         title: normalizeOptionalText(payload.title) ?? plan.title,
         description: normalizeOptionalText(payload.description) ?? plan.description,
@@ -1243,8 +1272,8 @@ export async function openFormalWorkOrder(
         // Área / responsable: se hereda del plan a la OT.
         department: planAny.department ?? null,
         providerId: planAny.providerId ?? null,
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
+        createdByUserId: woCreatorId,
+        updatedByUserId: woCreatorId,
       },
     });
 
@@ -1269,6 +1298,9 @@ export async function openFormalWorkOrder(
       planTitle: plan.title,
       planId: plan.id,
       vesselCode: plan.vesselCode,
+      // Trazabilidad cuando un admin abre en nombre de otro / backdatea.
+      onBehalfOf: woCreatorId !== session.user.id ? woCreatorId : undefined,
+      openDate: woOpenDate.toISOString(),
     },
   });
   return woTxResult;

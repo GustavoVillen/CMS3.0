@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Droplets, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 
@@ -79,7 +80,14 @@ function TypeBadge({ type }: { type: string }) {
 
 export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, onClose, onSaved }) => {
   const t = useT();
+  const { user } = useAuth();
+  // Solo TENANT_ADMIN puede backdatear la apertura y abrir en nombre de otro.
+  const isAdmin = user?.role === "TENANT_ADMIN";
   const today = new Date().toISOString().slice(0, 10);
+
+  // "Abierta por (en nombre de)": queda como SOLICITA / createdByUserId.
+  const [onBehalfUserId, setOnBehalfUserId] = useState("");
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null }[]>([]);
 
   // ── INFO fields (standalone mode only) ────────────────────────────────────
   const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? initialVesselCode ?? "");
@@ -249,6 +257,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     void handleSuggestAsset();
   }, [prefill, assets, assetId, handleSuggestAsset]);
 
+  // Usuarios del tenant para el selector "Abierta por (en nombre de)" — solo admin.
+  // El endpoint /app/team/members ya es admin-only.
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get<{ userId: string; firstName: string | null; lastName: string | null }[]>("/app/team/members")
+      .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setTeamUsers([]));
+  }, [isAdmin]);
+
   // Vessel list for standalone mode
   useEffect(() => {
     if (prefill) return;
@@ -322,6 +339,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           consequenceCategory: consequenceCategory || null,
           consequenceRationale: consequenceRationale.trim() || null,
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
+          // Solo admin: fecha de apertura y abrir en nombre de otro (SOLICITA).
+          openDate:           isAdmin && openDate ? openDate : undefined,
+          createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
         });
         woId = created.id;
       } else {
@@ -343,6 +363,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           consequenceCategory: consequenceCategory || null,
           consequenceRationale: consequenceRationale.trim() || null,
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
+          // Solo admin: abrir en nombre de otro usuario (SOLICITA). openDate ya va arriba.
+          createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
         });
         woId = created.id;
       }
@@ -363,7 +385,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
-      checklistDocFile, onSaved, t]);
+      checklistDocFile, isAdmin, onBehalfUserId, onSaved, t]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -371,6 +393,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale, estimatedHours,
     checklistDocFileName: checklistDocFile?.name ?? "",
+    onBehalfUserId,
   });
   useEscapeGuard({ isDirty, onSave, onClose });
 
@@ -510,6 +533,31 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     <label className={labelCls}>{t("wo.modal.dueDate")}</label>
                     <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Admin: fecha de apertura (backdating) + abrir en nombre de otro usuario.
+                En modo standalone la fecha de apertura ya está arriba, así que acá
+                solo se agrega cuando el origen es un plan (donde no estaba). */}
+            {isAdmin && (
+              <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-fg/10">
+                {prefill && (
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>{t("wo.modal.openDate")}</label>
+                    <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.openedBy")}</label>
+                  <select value={onBehalfUserId} onChange={e => setOnBehalfUserId(e.target.value)} className={inputCls}>
+                    <option value="">{t("wo.modal.openedBySelf")}</option>
+                    {teamUsers.map(u => (
+                      <option key={u.userId} value={u.userId}>
+                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}

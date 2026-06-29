@@ -1208,6 +1208,8 @@ const dict = {
   "wo.modal.criticality":      { es: "Criticidad",             en: "Criticality",          pt: "Criticidade" },
   "wo.modal.openDate":         { es: "F. Apertura",            en: "Open date",            pt: "Data abertura" },
   "wo.modal.dueDate":          { es: "F. Vencimiento",         en: "Due date",             pt: "Data vencimento" },
+  "wo.modal.openedBy":         { es: "Abierta por (en nombre de)", en: "Opened by (on behalf of)", pt: "Aberta por (em nome de)" },
+  "wo.modal.openedBySelf":     { es: "Yo (actual)",            en: "Me (current)",         pt: "Eu (atual)" },
   "wo.modal.nextDueDate":      { es: "Próx. vencimiento",      en: "Next due",             pt: "Próx. vencimento" },
   "wo.modal.titleField":       { es: "Título de la OT",        en: "WO Title",             pt: "Título da OS" },
   "wo.modal.titlePlaceholder": { es: "Descripción breve de la tarea", en: "Short task description", pt: "Descrição breve da tarefa" },

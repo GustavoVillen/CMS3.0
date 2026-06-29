@@ -45,6 +45,8 @@ export interface CreateWorkOrderInput {
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
+  // Solo TENANT_ADMIN: abrir la OT en nombre de otro usuario (SOLICITA / createdByUserId).
+  createdByUserId?: string | null;
 }
 
 export type WorkOrderDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
@@ -462,6 +464,24 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     }
   }
 
+  // Solo TENANT_ADMIN puede abrir la OT en nombre de otro usuario. El actor real
+  // queda en el audit log. createdAt se alinea a openDate para que el PDF muestre
+  // la misma fecha en FECHA y en la firma de SOLICITA.
+  const isAdmin = session.user.role === "TENANT_ADMIN";
+  const woOpenDate = parseOptionalDate(payload.openDate, "openDate") ?? new Date();
+  let woCreatorId = session.user.id;
+  if (isAdmin) {
+    const onBehalf = normalizeOptionalText(payload.createdByUserId);
+    if (onBehalf && onBehalf !== session.user.id) {
+      const membership = await (prismaRaw as any).tenantMembership.findFirst({
+        where: { tenantId, userId: onBehalf },
+        select: { userId: true },
+      });
+      if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
+      woCreatorId = onBehalf;
+    }
+  }
+
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
 
@@ -480,7 +500,8 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         status: "PLANNED",
         priority: payload.priority ?? "MEDIUM",
         criticality: payload.criticality ?? "B",
-        openDate: parseOptionalDate(payload.openDate, "openDate") ?? new Date(),
+        openDate: woOpenDate,
+        ...(isAdmin ? { createdAt: woOpenDate } : {}),
         dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
         title: normalizeOptionalText(payload.title),
         description: normalizeOptionalText(payload.description),
@@ -499,8 +520,8 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         location: normalizeOptionalText(payload.location),
         communicationMethod: payload.communicationMethod ?? [],
         distribution: payload.distribution ?? [],
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
+        createdByUserId: woCreatorId,
+        updatedByUserId: woCreatorId,
       },
     });
   });
