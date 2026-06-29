@@ -484,11 +484,26 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
 
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
+  // Secuencia por MAX del número en el código (no COUNT por createdAt): con
+  // backdating o gaps el COUNT no coincide con el máximo real y generaba códigos
+  // ya usados (P2002). Match prefijo-agnóstico para continuar la numeración aunque
+  // cambie el prefijo (WO-/SS-). Mismo criterio que openFormalWorkOrder.
+  const codeBody = `${vesselCode}-${yy}-`;
+  const codePrefix = `${workOrderPrefix(session.tenantSlug)}-${codeBody}`;
 
   // Race protection con @@unique(workOrderCode): retry en P2002.
   const created = await withUniqueRetry(async (attempt) => {
-    const existingCount = await prismaRaw.workOrder.count({ where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-    const workOrderCode = `${workOrderPrefix(session.tenantSlug)}-${vesselCode}-${yy}-${String(existingCount + 1 + attempt).padStart(4, "0")}`;
+    const maxSeqRows = await prismaRaw.$queryRawUnsafe<{ max_seq: number | null }[]>(
+      `SELECT MAX(CAST(SUBSTRING("workOrderCode", ${codePrefix.length + 1}) AS INTEGER)) AS max_seq
+       FROM "WorkOrder"
+       WHERE "tenantId" = $1 AND "vesselCode" = $2
+         AND SUBSTRING("workOrderCode", 4) LIKE $3 AND "deletedAt" IS NULL`,
+      tenantId,
+      vesselCode,
+      codeBody + "%",
+    );
+    const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
+    const workOrderCode = `${codePrefix}${String(maxSeq + 1 + attempt).padStart(4, "0")}`;
     return prisma.workOrder.create({
       data: {
         tenantId,
