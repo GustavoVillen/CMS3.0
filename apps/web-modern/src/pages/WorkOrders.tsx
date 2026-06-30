@@ -850,6 +850,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [justSaved, setJustSaved] = useState(false);
   const [saveResetKey, setSaveResetKey] = useState(0);
 
+  // Cierre por ADMIN: pregunta quién cierra (firma CIERRA) y con qué fecha.
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [closeOnBehalfUserId, setCloseOnBehalfUserId] = useState(user?.id ?? "");
+  const [closeDate, setCloseDate] = useState("");
+  const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }[]>([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get<typeof closeTeamUsers>("/app/team/members")
+      .then(rows => setCloseTeamUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setCloseTeamUsers([]));
+  }, [isAdmin]);
+  const closeMemberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
+    (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
+
   const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number }> }>(
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
   );
@@ -1321,7 +1335,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [onSaved, woResult, isCorrective, defectDetail, navigate, workOrder]);
 
-  const onClose_WO = useCallback(async () => {
+  // opts (solo admin): completedDate = fecha de cierre elegida; closedByUserId = quién cierra (firma CIERRA).
+  const onClose_WO = useCallback(async (opts?: { completedDate?: string; closedByUserId?: string }) => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
     setClosing(true); setErr(null);
     try {
@@ -1335,12 +1350,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       const res = await api.post<{ id: string; failedMovements?: string[] }>(`/app/pms/work-orders/${workOrder.id}/close`, {
         woResult,
         executedByName: normalizeOptionalText(executedByName),
-        completedDate: executionDate || null,
+        completedDate: opts?.completedDate || executionDate || null,
         observations: normalizeOptionalText(observations),
         supportingDocUrl: supUrl,
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
         actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
+        closedByUserId: opts?.closedByUserId || undefined,
       });
       // 3. Generar PDF y finalizar (finishClose imprime el PDF). Si hubo repuestos
       // sin stock, se muestra el aviso y el PDF se genera al "Aceptar y cerrar".
@@ -2181,7 +2197,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 {t("wo.resume")}
               </button>
             )}
-            <button onClick={() => { void onClose_WO(); }} disabled={!canClose || closing}
+            <button
+              onClick={() => {
+                if (isAdmin) {
+                  setCloseOnBehalfUserId(user?.id ?? "");
+                  setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
+                  setShowCloseDialog(true);
+                } else {
+                  void onClose_WO();
+                }
+              }}
+              disabled={!canClose || closing}
               title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
               className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed">
               {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.modal.closeWO")}
@@ -2212,6 +2238,52 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         </div>
       </div>
     </div>
+
+    {/* Diálogo de cierre (ADMIN): quién cierra (firma CIERRA) + fecha de cierre */}
+    {showCloseDialog && (
+      <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+          <div>
+            <h2 className="text-base font-bold text-fg">Cerrar {woTerms.abbr}</h2>
+            <p className="text-xs text-text-industrial/60 mt-0.5">{workOrder.workOrderCode}</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Quién cierra</label>
+            <select
+              value={closeOnBehalfUserId}
+              onChange={e => setCloseOnBehalfUserId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+            >
+              {closeTeamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
+              {closeTeamUsers.map(u => (
+                <option key={u.userId} value={u.userId}>
+                  {(closeMemberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Fecha de cierre</label>
+            <input
+              type="date"
+              value={closeDate}
+              onChange={e => setCloseDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowCloseDialog(false)} disabled={closing} className="px-3 py-1.5 rounded-lg text-sm text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">Cancelar</button>
+            <button
+              onClick={() => { setShowCloseDialog(false); void onClose_WO({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); }}
+              disabled={closing}
+              className="px-4 py-1.5 rounded-lg text-sm font-bold bg-success-sea text-white hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+              {closing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Cerrar {woTerms.abbr}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Diálogo post-cierre "con deficiencias": registrar defecto / abrir OT correctiva */}
     {showDeficiencyFollowup && (

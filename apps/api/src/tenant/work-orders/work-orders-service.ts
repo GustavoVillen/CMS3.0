@@ -99,6 +99,8 @@ export interface CloseWorkOrderInput {
   woResult: "SATISFACTORY" | "WITH_DEFICIENCIES";
   executedByName?: string | null;
   completedDate?: string | Date | null;
+  // Solo TENANT_ADMIN: cerrar en nombre de otro usuario → su firma va en CIERRA.
+  closedByUserId?: string | null;
   observations?: string | null;
   supportingDocUrl?: string | null;
   independentVerifier?: string | null;
@@ -932,6 +934,22 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
 
+  // Solo TENANT_ADMIN puede cerrar en nombre de otro: la firma de CIERRA del PDF
+  // se toma de ESE usuario (updatedByUserId → cierraSignatureBuffer). El actor
+  // real queda en el audit log.
+  let closerUserId = session.user.id;
+  if (session.user.role === "TENANT_ADMIN") {
+    const onBehalf = normalizeOptionalText(payload.closedByUserId);
+    if (onBehalf && onBehalf !== session.user.id) {
+      const membership = await (prismaRaw as any).tenantMembership.findFirst({
+        where: { tenantId: current.tenantId, userId: onBehalf },
+        select: { userId: true },
+      });
+      if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
+      closerUserId = onBehalf;
+    }
+  }
+
   let samplingKind:      string | null = null;
   let samplingFluidType: string | null = null;
   let samplingPlanId:    string | null = null;
@@ -952,7 +970,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         supportingDocUrl: normalizeOptionalText(payload.supportingDocUrl),
         runningHoursAtExecution: payload.runningHoursAtExecution ?? null,
         actualHours: payload.actualHours ?? null,
-        updatedByUserId: session.user.id,
+        updatedByUserId: closerUserId,
       },
     });
 
