@@ -719,9 +719,10 @@ interface WorkOrderModalProps {
   onSaved: () => void;
   onOpenAction: (wo: WorkOrder, type: ActionType) => void;
   onCreateCorrective: (prefill: WoPrefill) => void;
+  onReload: () => void;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onCreateCorrective }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onCreateCorrective, onReload }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -845,6 +846,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [closingWarning, setClosingWarning] = useState<string | null>(null);
   // Diálogo posterior al cierre "con deficiencias": ofrece registrar defecto / abrir OT correctiva.
   const [showDeficiencyFollowup, setShowDeficiencyFollowup] = useState(false);
+  // "Guardar" no cierra la ventana: feedback + reset del dirty-tracker.
+  const [justSaved, setJustSaved] = useState(false);
+  const [saveResetKey, setSaveResetKey] = useState(0);
 
   const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number }> }>(
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
@@ -1199,6 +1203,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [workOrder.id, workOrder.workOrderCode]);
 
+  // PATCH con todos los campos editables. Reusado por "Guardar" y por "Cerrar OT".
+  const patchWorkOrder = useCallback(async (chkUrl: string | null, supUrl: string | null) => {
+    await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
+      title: normalizeOptionalText(title),
+      description: normalizeOptionalText(description),
+      assignedToUserId: normalizeOptionalText(assignedTo),
+      dueDate: dueDate || null,
+      openDate: openDate || undefined,
+      type,
+      acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
+      loto,
+      riskLevel: normalizeOptionalText(riskLevel),
+      riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
+      consequenceCategory: consequenceCategory || null,
+      consequenceRationale: normalizeOptionalText(consequenceRationale),
+      department: (department as any) || null,
+      providerId: department === "PROVEEDOR" ? (providerId || null) : null,
+      location: normalizeOptionalText(location),
+      communicationMethod: commMethod,
+      distribution,
+      checklistDocUrl: chkUrl,
+      woResult: normalizeOptionalText(woResult),
+      executedByName: normalizeOptionalText(executedByName),
+      completedDate: executionDate || null,
+      runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
+      actualHours: actualHours ? Number(actualHours) : null,
+      observations: normalizeOptionalText(observations),
+      supportingDocUrl: supUrl,
+      spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
+    });
+  }, [title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+      consequenceCategory, consequenceRationale, department, providerId, location, commMethod, distribution,
+      woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations, spareUsages, workOrder.id]);
+
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
     try {
@@ -1206,43 +1244,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         uploadIfNeeded(checklistDocFile, checklistDocUrl),
         uploadIfNeeded(supportingDocFile, supportingDocUrl),
       ]);
-      await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
-        title: normalizeOptionalText(title),
-        description: normalizeOptionalText(description),
-        assignedToUserId: normalizeOptionalText(assignedTo),
-        dueDate: dueDate || null,
-        openDate: openDate || undefined,
-        type,
-        acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
-        loto,
-        riskLevel: normalizeOptionalText(riskLevel),
-        riskAnalysisResult: normalizeOptionalText(riskAnalysisResult),
-        consequenceCategory: consequenceCategory || null,
-        consequenceRationale: normalizeOptionalText(consequenceRationale),
-        department: (department as any) || null,
-        providerId: department === "PROVEEDOR" ? (providerId || null) : null,
-        location: normalizeOptionalText(location),
-        communicationMethod: commMethod,
-        distribution,
-        checklistDocUrl: chkUrl,
-        woResult: normalizeOptionalText(woResult),
-        executedByName: normalizeOptionalText(executedByName),
-        completedDate: executionDate || null,
-        runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
-        actualHours: actualHours ? Number(actualHours) : null,
-        observations: normalizeOptionalText(observations),
-        supportingDocUrl: supUrl,
-        spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
-      });
-      onSaved();
+      await patchWorkOrder(chkUrl, supUrl);
+      // No cerramos la ventana: confirmamos, reseteamos el dirty-tracker y
+      // recargamos el listado de fondo.
+      setSaveResetKey(k => k + 1);
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 2500);
+      onReload();
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
-      consequenceCategory, consequenceRationale,
-      department, providerId, location, commMethod, distribution,
-      checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl,
-      woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
-      spareUsages, uploadIfNeeded, onSaved, t, workOrder.id]);
+  }, [uploadIfNeeded, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder, onReload, t]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -1252,7 +1263,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     checklistDocFileName: checklistDocFile?.name ?? "",
     woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
     supportingDocFileName: supportingDocFile?.name ?? "",
-  });
+  }, saveResetKey);
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   useEscapeGuard({
     enabled: !woClosedReadOnly,
@@ -1287,7 +1298,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // defecto, abre el alta de defecto pre-cargada. Se usa tanto en el cierre
   // directo como tras aceptar el aviso de stock, para que el defecto se abra
   // igual aunque haya repuestos que superen el stock.
-  const finishClose = useCallback(() => {
+  const finishClose = useCallback(async () => {
+    // La OT ya se cerró: generamos el PDF (no bloqueante si falla).
+    try { await printWorkOrder(workOrder); } catch { /* non-blocking */ }
     // Cierre "con deficiencias": NO cerramos el modal todavía; mostramos el
     // diálogo que ofrece registrar el defecto y/o abrir la OT correctiva.
     if (woResult === "WITH_DEFICIENCIES") {
@@ -1312,7 +1325,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
     setClosing(true); setErr(null);
     try {
-      const supUrl = await uploadIfNeeded(supportingDocFile, supportingDocUrl);
+      const [chkUrl, supUrl] = await Promise.all([
+        uploadIfNeeded(checklistDocFile, checklistDocUrl),
+        uploadIfNeeded(supportingDocFile, supportingDocUrl),
+      ]);
+      // 1. Guardar TODOS los edits (igual que "Guardar").
+      await patchWorkOrder(chkUrl, supUrl);
+      // 2. Cerrar la OT.
       const res = await api.post<{ id: string; failedMovements?: string[] }>(`/app/pms/work-orders/${workOrder.id}/close`, {
         woResult,
         executedByName: normalizeOptionalText(executedByName),
@@ -1323,16 +1342,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
       });
-      // Si hubo repuestos sin stock, se muestra el aviso y el defecto (si aplica)
-      // se abre al "Aceptar y cerrar". Si no, finalizamos directo.
+      // 3. Generar PDF y finalizar (finishClose imprime el PDF). Si hubo repuestos
+      // sin stock, se muestra el aviso y el PDF se genera al "Aceptar y cerrar".
       if (res.failedMovements && res.failedMovements.length > 0) {
         setClosingWarning(t("wo.modal.closeStockWarning").replace("{count}", String(res.failedMovements.length)));
       } else {
-        finishClose();
+        await finishClose();
       }
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setClosing(false); }
-  }, [woResult, executedByName, executionDate, observations, supportingDocFile, supportingDocUrl,
+  }, [woResult, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder,
+      executedByName, executionDate, observations,
       runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
@@ -2123,7 +2143,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {closingWarning && (
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
               <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
-              <button onClick={finishClose} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+              <button onClick={() => { void finishClose(); }} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
                 {t("common.acceptAndClose")}
               </button>
             </div>
@@ -2184,8 +2204,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
             {isEditable && canManage && (
               <button onClick={() => { void onSave(); }} disabled={saving}
-                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+                className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCheck className="w-4 h-4" />{t("mp.modal.saved")}</> : t("common.save")}
               </button>
             )}
           </div>
@@ -2992,6 +3012,7 @@ export const WorkOrdersPage: React.FC = () => {
           canManage={canManage}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void reload(); }}
+          onReload={() => { void reload(); }}
           onOpenAction={openActionModal}
           onCreateCorrective={(prefill) => { setEditing(null); setCreatePrefill(prefill); void reload(); }}
         />
