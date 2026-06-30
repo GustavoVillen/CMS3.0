@@ -20,7 +20,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
 import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
-import { AuthedImage, AuthedVideo, AuthedAudio } from "../lib/authed-media";
+import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 
 // Mini reference data for showing linked permits inside WO modal
 const PTW_STATUS_LABEL: Record<string, string> = {
@@ -449,7 +449,7 @@ const PhaseHeader: React.FC<{
 
 interface ProgressNote {
   id: string;
-  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
   text: string | null;
   fileUrl: string | null;
   createdAt: string;
@@ -512,6 +512,9 @@ const ProgressNoteCard: React.FC<{
       )}
       {note.kind === "AUDIO" && note.fileUrl && (
         <AuthedAudio src={note.fileUrl} controls className="w-full" />
+      )}
+      {note.kind === "DOCUMENT" && note.fileUrl && (
+        <AuthedDocLink src={note.fileUrl} />
       )}
       {editing ? (
         <div className="space-y-2">

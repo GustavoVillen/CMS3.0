@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { X, Type, Camera, Video as VideoIcon, Mic, Square, Loader2, Trash2 } from "lucide-react";
+import { X, Type, Camera, Video as VideoIcon, Mic, Square, Loader2, Trash2, FileText } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 
-type Kind = "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+type Kind = "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
 
 interface Props {
   workOrderId: string;
@@ -145,6 +145,16 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       setCompressing(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePreview]);
+
+  // ─── Documento (PDF/imagen/gráfico): sin compresión, archivo original ─────
+  const onDocSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    if (!f) return;
+    setErr(null);
+    setFile(f);
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    setFilePreview(null);
   }, [filePreview]);
 
   // ─── Video: grabación con getUserMedia a baja resolución ─────────────────
@@ -358,12 +368,13 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         </div>
 
         {/* Tipo de avance */}
-        <div className="grid grid-cols-4 gap-1.5 p-3 border-b border-fg/10">
+        <div className="grid grid-cols-5 gap-1.5 p-3 border-b border-fg/10">
           {([
-            { id: "TEXT" as Kind,  label: "Texto", Icon: Type },
-            { id: "PHOTO" as Kind, label: "Foto",  Icon: Camera },
-            { id: "VIDEO" as Kind, label: "Video", Icon: VideoIcon },
-            { id: "AUDIO" as Kind, label: "Audio", Icon: Mic },
+            { id: "TEXT" as Kind,     label: "Texto", Icon: Type },
+            { id: "PHOTO" as Kind,    label: "Foto",  Icon: Camera },
+            { id: "VIDEO" as Kind,    label: "Video", Icon: VideoIcon },
+            { id: "AUDIO" as Kind,    label: "Audio", Icon: Mic },
+            { id: "DOCUMENT" as Kind, label: "Doc",   Icon: FileText },
           ]).map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -565,6 +576,38 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   ⚠ Sin texto, la nota se guarda pero no contribuye a las Observaciones.
                 </p>
               )}
+            </>
+          )}
+
+          {/* ── DOCUMENTO (PDF o imagen/gráfico) ── */}
+          {kind === "DOCUMENT" && (
+            <>
+              {file ? (
+                <div className="flex items-center gap-2 px-3 py-3 rounded-xl border border-fg/10 bg-fg/5">
+                  <FileText className="w-5 h-5 text-accent shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-fg truncate">{file.name}</p>
+                    <p className="text-[10px] text-text-industrial/40">{(file.size / 1024).toFixed(0)} KB · {file.type || "documento"}</p>
+                  </div>
+                  <button type="button" onClick={resetMedia} className="p-1.5 rounded-lg text-text-industrial/40 hover:text-red-700 dark:hover:text-red-400">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 active:bg-fg/15">
+                  <FileText className="w-6 h-6" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Adjuntar documento</span>
+                  <span className="text-[10px] text-text-industrial/40 normal-case font-normal">PDF, imagen o gráfico</span>
+                  <input type="file" accept="application/pdf,image/*" className="hidden" onChange={onDocSelect} />
+                </label>
+              )}
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={2}
+                placeholder="Descripción opcional"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
+              />
             </>
           )}
 

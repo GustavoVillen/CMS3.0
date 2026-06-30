@@ -347,7 +347,7 @@ export async function handleMaintenanceRoutes(
 
   if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    const kind = (url.searchParams.get("kind") ?? "TEXT").toUpperCase() as "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+    const kind = (url.searchParams.get("kind") ?? "TEXT").toUpperCase() as "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
 
     if (kind === "TEXT") {
       // Sin archivo: body JSON con { text, occurredAt }
@@ -359,7 +359,7 @@ export async function handleMaintenanceRoutes(
 
     // Con archivo: binary body + headers x-filename y x-mime-type, opcional x-caption / x-occurred-at
     const rawName = request.headers["x-filename"];
-    const fileName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? `nota.${kind === "PHOTO" ? "jpg" : kind === "VIDEO" ? "mp4" : "webm"}`);
+    const fileName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? `nota.${kind === "PHOTO" ? "jpg" : kind === "VIDEO" ? "mp4" : kind === "DOCUMENT" ? "pdf" : "webm"}`);
     const rawMime = request.headers["x-mime-type"];
     const mimeType = (Array.isArray(rawMime) ? rawMime[0] : rawMime) ?? undefined;
     const rawCaption = request.headers["x-caption"];

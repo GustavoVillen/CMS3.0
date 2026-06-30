@@ -12,7 +12,7 @@ import { log } from "../../common/logger";
 import { assertNotLocked } from "../../common/record-lock";
 
 export interface CreateProgressNoteInput {
-  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
   text?: string | null;
   // Fecha/hora del avance (editable desde el cliente). Si no viene o es inválida,
   // se usa el momento actual. Es la fecha que se muestra y por la que se ordena.
@@ -121,7 +121,8 @@ export async function createProgressNote(
   // - PHOTO : queda processed=false; el pipeline AI corre OCR
   let processedText: string | null = null;
   let processed = false;
-  if (input.kind === "TEXT" || input.kind === "AUDIO" || input.kind === "VIDEO") {
+  // DOCUMENT (PDF/imagen): no se corre OCR; el caption (si lo hay) es el texto.
+  if (input.kind === "TEXT" || input.kind === "AUDIO" || input.kind === "VIDEO" || input.kind === "DOCUMENT") {
     const t = (input.text ?? "").trim();
     processedText = t || null;
     processed = true;

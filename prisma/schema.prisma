@@ -1338,6 +1338,7 @@ enum WorkOrderProgressKind {
   PHOTO
   VIDEO
   AUDIO
+  DOCUMENT
 }
 
 // Notas de avance que el técnico carga durante la ejecución de una OT.

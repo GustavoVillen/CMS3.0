@@ -6,7 +6,7 @@ import { useWoTerms } from "../lib/i18n";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
-import { AuthedImage, AuthedVideo, AuthedAudio } from "../lib/authed-media";
+import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 
 interface WO {
   id: string;
@@ -145,7 +145,7 @@ export type WoFilter = "open" | "overdue" | "solicitadas" | "aprobadas";
 // canAdd: solo OTs abiertas pueden recibir nuevas notas.
 interface ProgressNote {
   id: string;
-  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO";
+  kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
   text: string | null;
   fileUrl: string | null;
   mimeType: string | null;
@@ -272,6 +272,9 @@ const NoteCard: React.FC<{
       )}
       {note.kind === "AUDIO" && note.fileUrl && (
         <AuthedAudio src={note.fileUrl} controls className="w-full" />
+      )}
+      {note.kind === "DOCUMENT" && note.fileUrl && (
+        <AuthedDocLink src={note.fileUrl} />
       )}
       {note.text && (
         <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{note.text}</p>

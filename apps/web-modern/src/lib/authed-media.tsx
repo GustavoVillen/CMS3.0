@@ -14,6 +14,7 @@
 //   const blobUrl = useAuthedBlobUrl(rawUrl);
 
 import React, { useEffect, useRef, useState } from "react";
+import { FileText } from "lucide-react";
 
 /**
  * Traduce un URL viejo `/uploads/...` al nuevo `/app/files/...`. Si ya
@@ -106,6 +107,25 @@ export const AuthedAudio: React.FC<AuthedMediaProps> = ({ src, controls, ...rest
   const blobUrl = useAuthedBlobUrl(src);
   if (!blobUrl) return null;
   return <audio src={blobUrl} controls={controls} {...rest} />;
+};
+
+/**
+ * Link a un documento protegido (PDF/imagen) — lo abre en una pestaña nueva
+ * vía blob URL autenticado. Mientras carga muestra un estado deshabilitado.
+ */
+export const AuthedDocLink: React.FC<{ src: string; label?: string; className?: string }> = ({ src, label, className }) => {
+  const blobUrl = useAuthedBlobUrl(src);
+  return (
+    <a
+      href={blobUrl ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      className={className ?? `flex items-center gap-2 px-3 py-2 rounded-lg border border-fg/10 bg-fg/5 text-xs transition-colors ${blobUrl ? "text-accent hover:bg-fg/10" : "text-text-industrial/40 pointer-events-none"}`}
+    >
+      <FileText className="w-4 h-4 shrink-0" />
+      <span className="truncate">{blobUrl ? (label ?? "Ver documento") : "Cargando documento…"}</span>
+    </a>
+  );
 };
 
 /**
