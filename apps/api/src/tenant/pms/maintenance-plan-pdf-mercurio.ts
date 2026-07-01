@@ -24,6 +24,8 @@ const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 
 const PT_PER_MM = 72 / 25.4;          // 1 mm en puntos PDF
 const TITLE_GAP = 7 * PT_PER_MM;      // separación fija de 7 mm antes de cada título
+const LABEL_H   = 15;                 // alto real que consume un título (canvas.y = y0 + 15)
+const KEEP_MIN  = 26;                 // "keep-with-next": mínimo de contenido que baja junto al título (~2 líneas)
 
 const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
@@ -133,11 +135,14 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     canvas.y += RH;
 
     // ── Helpers de sección estilo Mercurio (label negrita subrayada + caja) ──
-    function labelLine(label: string, inline?: string) {
+    function labelLine(label: string, inline?: string, keepWithH = KEEP_MIN) {
+      // "Keep-with-next": reservar el título + un mínimo de contenido ANTES del gap,
+      // así ensureSpace salta de página antes del título si no entran juntos y el
+      // título no queda huérfano al pie. (ensureSpace no consume el alto: sólo decide.)
+      ensureSpace(TITLE_GAP + LABEL_H + keepWithH);
       // Separación fija de 7 mm antes de cada título (se descarta si cae salto
       // de página: ensureSpace resetea el cursor a marginT).
       canvas.y += TITLE_GAP;
-      ensureSpace(16);
       const y0 = canvas.y;
       doc.fontSize(9.5).font("Helvetica-Bold").fillColor(BLACK)
         .text(label, ML, y0, { lineBreak: false });
@@ -151,7 +156,8 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
       canvas.y = y0 + 15;
     }
     function section(label: string, content: string, inline?: string, minH = 36) {
-      labelLine(label, inline);
+      // El título baja junto con al menos minH de su contenido; el textArea pagina el resto.
+      labelLine(label, inline, minH);
       // keepMarkdown: conserva `**negrita**` y los `|` de tablas; el textArea del
       // chrome interpreta la grilla y la negrita inline.
       canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(content || "", { keepMarkdown: true }), minH);

@@ -61,6 +61,7 @@ const CM       = 72 / 2.54;
 const MARGIN_V = Math.round(1.5 * CM);
 const FOOTER_H = 40;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - MARGIN_V;
+const KEEP_MIN = 26; // "keep-with-next": mínimo de contenido que baja junto a un título (~2 líneas)
 
 // DejaVu Sans has full Unicode support (including ≥ ≤ etc.)
 // Paths for Linux (VPS) and Windows (local dev)
@@ -174,7 +175,9 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     }
 
     function sectionHeader(title: string) {
-      ensureSpace(22);
+      // keep-with-next: reservar la barra-título + un mínimo de contenido para que
+      // el encabezado no quede huérfano al pie de página.
+      ensureSpace(22 + KEEP_MIN);
       doc.rect(ML, y, W, 18).fillColor(bgHead).fill();
       doc.fontSize(8).font(FONT_BOLD).fillColor("#ffffff")
         .text(title.toUpperCase(), ML + 10, y + 5, { width: W - 20, characterSpacing: 1.2 });
@@ -315,7 +318,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         });
       });
       const headerH = Math.max(18, ...headerHeights) + 8;
-      ensureSpace(headerH);
+      ensureSpace(headerH + 16); // keep-with-next: header de tabla + al menos la primera fila
       headers.forEach((h, i) => {
         doc.rect(colX(i), y, colWidths[i], headerH).fillColor("#e2e8f0").fill();
         doc.rect(colX(i), y, colWidths[i], headerH).strokeColor(border).lineWidth(0.4).stroke();
@@ -437,7 +440,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         y += 6;
       } else {
         y += 10; // gap between previous element and this label
-        ensureSpace(22);
+        ensureSpace(22 + KEEP_MIN); // keep-with-next: título + mínimo de contenido juntos
         doc.fontSize(7).font(FONT_BOLD).fillColor(gray)
           .text(label.toUpperCase(), ML, y, { width: W, characterSpacing: 0.5 });
         y += 12;
