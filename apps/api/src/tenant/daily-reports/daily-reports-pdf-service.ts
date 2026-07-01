@@ -222,16 +222,26 @@ function renderPdf(ctx: { tenantName: string; report: any }): Promise<Buffer> {
     }
 
     // ── Mantenimiento ejecutado ──
-    const maintenance = (report.maintenanceEntries ?? []) as Array<{ title?: string; description?: string; equipmentLabel?: string }>;
-    if (maintenance.length > 0) {
+    // NOTA: el modelo DailyMaintenanceEntry usa taskTitle/shortDescription/equipmentLabel.
+    // (Antes se leía m.title/m.description — campos inexistentes — y toda la sección salía "—: —".)
+    const maintenance = (report.maintenanceEntries ?? []) as Array<{ taskTitle?: string; shortDescription?: string; equipmentLabel?: string }>;
+    const maintenanceRows = maintenance
+      .map((m) => ({
+        equip: (m.equipmentLabel ?? "").trim(),
+        task: (m.taskTitle ?? "").trim(),
+        desc: (m.shortDescription ?? "").trim(),
+      }))
+      .filter((r) => r.equip || r.task || r.desc); // saltar entradas sin contenido
+    if (maintenanceRows.length > 0) {
       ensureSpace(22);
       setFont(10, true);
       doc.fillColor(navy).text("Mantenimiento ejecutado", ML, y);
       y += 14;
       setFont(9, false);
       doc.fillColor(black);
-      for (const m of maintenance) {
-        const line = `• ${val(m.equipmentLabel || m.title)}: ${val(m.description || m.title)}`;
+      for (const r of maintenanceRows) {
+        const head = sanitize([r.equip, r.task].filter(Boolean).join(" — ") || "—");
+        const line = r.desc ? `• ${head}: ${sanitize(r.desc)}` : `• ${head}`;
         const h = doc.heightOfString(line, { width: W - 16 });
         ensureSpace(h + 4);
         doc.text(line, ML + 8, y, { width: W - 16 });
