@@ -14,6 +14,7 @@ import { RouteError } from "../../http/route-error";
 import { log } from "../../common/logger";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDailyReportWithSubEntities } from "./daily-report-integration-service";
+import { nearestCity } from "./nearest-city";
 
 function sanitize(s: string | null | undefined): string {
   if (s === null || s === undefined) return "";
@@ -143,16 +144,29 @@ function renderPdf(ctx: { tenantName: string; report: any }): Promise<Buffer> {
     rowPair("Oport. mantenimiento", report.maintenanceOpportunity ?? "—", "Recepcion repuestos", report.spareReception ?? "—");
 
     // ── Posicion geografica ──
+    // Ciudad/puerto más próximo estimado OFFLINE (dataset local + haversine, sin
+    // llamadas externas). Se muestra la distancia porque es una estimación.
+    const city = nearestCity(report.positionLat, report.positionLon);
+    const cityLine = city
+      ? `Ciudad más próxima: ${sanitize(city.name)}, ${sanitize(city.country)} (${
+          city.distanceKm < 1 ? "<1 km" : `~${Math.round(city.distanceKm).toLocaleString("es-AR")} km`
+        })`
+      : null;
+    const geoBoxH = cityLine ? 46 : 32;
     y += 8;
-    ensureSpace(40);
-    doc.rect(ML, y, W, 32).fillColor(bgBox).fill();
+    ensureSpace(geoBoxH + 8);
+    doc.rect(ML, y, W, geoBoxH).fillColor(bgBox).fill();
     setFont(7, true);
     doc.fillColor(navy).text("POSICION GEOGRAFICA", ML + 8, y + 6, { characterSpacing: 0.8 });
     setFont(10, false);
     doc.fillColor(black)
       .text(`Latitud: ${fmtCoord(report.positionLat)}    Longitud: ${fmtCoord(report.positionLon)}`,
             ML + 8, y + 18, { width: W - 16 });
-    y += 36;
+    if (cityLine) {
+      setFont(9, false);
+      doc.fillColor(black).text(cityLine, ML + 8, y + 32, { width: W - 16 });
+    }
+    y += geoBoxH + 4;
 
     // ── Resumen del dia ──
     if (report.summary && String(report.summary).trim()) {
