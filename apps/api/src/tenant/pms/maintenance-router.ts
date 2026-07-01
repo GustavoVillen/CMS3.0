@@ -59,6 +59,7 @@ import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf, buildServiceRequestPdf, buildWorkOrderDoc, buildServiceRequestDoc } from "./work-order-pdf-service";
 import { serveDoc } from "./doc-export";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
+import { buildDueSoonPlansXlsx } from "./maintenance-plans-due-excel-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
@@ -104,6 +105,25 @@ export async function handleMaintenanceRoutes(
       assetId: url.searchParams.get("assetId"),
     });
     sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  // Reporte Excel de planes PRÓXIMOS A VENCER (vencidos / por vencer / en ventana).
+  // Debe ir ANTES de la ruta genérica /maintenance-plans/:id para no ser capturada por ella.
+  if (method === "GET" && url.pathname === "/app/pms/maintenance-plans/due-soon.xlsx") {
+    enforceRateLimit(request, `xlsx:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode")?.trim() || null;
+    const buffer = await buildDueSoonPlansXlsx(session, { vesselCode });
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `Planes-Proximos-Vencer-${vesselCode}-${today}.xlsx`
+      : `Planes-Proximos-Vencer-${today}.xlsx`;
+    response.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

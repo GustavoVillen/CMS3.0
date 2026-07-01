@@ -1549,6 +1549,7 @@ const dict = {
   "mp.col.report":             { es: "REPORTAR",               en: "REPORT",                pt: "REPORTAR" },
   "mp.page.newTask":           { es: "NUEVA TAREA",            en: "NEW TASK",              pt: "NOVA TAREFA" },
   "mp.page.overdueToggle":     { es: "VENCIDOS / PRÓX. 7 DÍAS", en: "OVERDUE / NEXT 7 DAYS",pt: "VENCIDOS / PRÓX. 7 DIAS" },
+  "mp.page.dueSoonExcel":      { es: "Excel próx. a vencer", en: "Due-soon Excel", pt: "Excel próx. a vencer" },
   "mp.page.searchPlaceholder": { es: "Buscar por código, tarea, equipo, responsable…", en: "Search by code, task, equipment, assignee…", pt: "Buscar por código, tarefa, equipamento, responsável…" },
   "spares.page.searchPlaceholder": { es: "Buscar por código, nombre, buque, SFI…", en: "Search by code, name, vessel, SFI…", pt: "Buscar por código, nome, embarcação, SFI…" },
   "mp.page.allVessels":        { es: "Todos los buques",       en: "All vessels",           pt: "Todas as embarcações" },

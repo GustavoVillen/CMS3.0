@@ -2324,6 +2324,7 @@ export const MaintenancePlansPage: React.FC = () => {
 
   const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
   const [overdueOnly,   setOverdueOnly]   = useState(false);
+  const [dueXlsxBusy,   setDueXlsxBusy]   = useState(false);
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
@@ -2625,6 +2626,33 @@ export const MaintenancePlansPage: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+        </button>
+        {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
+        <button
+          onClick={async () => {
+            if (dueXlsxBusy) return;
+            setDueXlsxBusy(true);
+            try {
+              const qs = vesselFilter ? `?vesselCode=${encodeURIComponent(vesselFilter)}` : "";
+              const today = new Date().toISOString().slice(0, 10);
+              await downloadAuthedFile(
+                `/app/pms/maintenance-plans/due-soon.xlsx${qs}`,
+                `Planes-Proximos-Vencer-${vesselFilter || "flota"}-${today}.xlsx`,
+              );
+            } catch (err) {
+              setPageError(err instanceof Error ? err.message : "No se pudo exportar el Excel.");
+            } finally {
+              setDueXlsxBusy(false);
+            }
+          }}
+          disabled={dueXlsxBusy}
+          title={t("mp.page.dueSoonExcel")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300 text-xs font-bold hover:bg-orange-500/20 hover:border-orange-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {dueXlsxBusy
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <FileSpreadsheet className="w-3.5 h-3.5" />}
+          {t("mp.page.dueSoonExcel")}
         </button>
         {/* Toggle VENCIDOS / PRÓX. */}
         <button
