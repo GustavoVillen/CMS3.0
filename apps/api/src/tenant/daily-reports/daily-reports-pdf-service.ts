@@ -15,6 +15,7 @@ import { log } from "../../common/logger";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDailyReportWithSubEntities } from "./daily-report-integration-service";
 import { nearestCity } from "./nearest-city";
+import { resolveTenantLogo } from "../pms/pdf-helpers";
 
 function sanitize(s: string | null | undefined): string {
   if (s === null || s === undefined) return "";
@@ -63,28 +64,36 @@ export async function buildDailyReportPdf(session: TenantAccessSession, reportId
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
-  const tenantRow = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug }, include: { settings: { select: { displayName: true } } } });
+  const tenantRow = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug }, include: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true } } } });
   const tenantName = tenantRow?.settings?.displayName ?? session.tenantSlug;
 
   const report = await getDailyReportWithSubEntities(session, reportId);
   if (!report) throw new RouteError(404, "NOT_FOUND", "Reporte no encontrado.");
 
+  // Nombre del buque (mostrar NOMBRE, no código) + logo del tenant (archivo local, anti-SSRF).
+  let vesselName: string = report.vesselCode;
+  if (tenantRow) {
+    const vessel = await prisma.vessel.findFirst({ where: { tenantId: tenantRow.id, code: report.vesselCode }, select: { name: true } });
+    if (vessel?.name) vesselName = vessel.name;
+  }
+  const logoBuffer = await resolveTenantLogo(session.tenantSlug, tenantRow?.settings?.logoUrl, tenantRow?.settings?.logoUrlLight);
+
   try {
-    return await renderPdf({ tenantName, report });
+    return await renderPdf({ tenantName, vesselName, logoBuffer, report });
   } catch (err) {
     log.error("[buildDailyReportPdf] render failed:", err);
     throw new RouteError(500, "PDF_RENDER_FAILED", err instanceof Error ? err.message : "No se pudo generar el PDF.");
   }
 }
 
-function renderPdf(ctx: { tenantName: string; report: any }): Promise<Buffer> {
-  const { tenantName, report } = ctx;
+function renderPdf(ctx: { tenantName: string; vesselName: string; logoBuffer: Buffer | null; report: any }): Promise<Buffer> {
+  const { tenantName, vesselName, logoBuffer, report } = ctx;
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
       margin: 0,
-      info: { Title: sanitize(`Reporte Diario ${report.vesselCode} ${fmtDate(report.reportDate)}`) },
+      info: { Title: sanitize(`Reporte Diario ${vesselName} ${fmtDate(report.reportDate)}`) },
     });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
@@ -113,13 +122,19 @@ function renderPdf(ctx: { tenantName: string; report: any }): Promise<Buffer> {
     doc.fillColor("#94a3b8").text(sanitize(tenantName.toUpperCase()), ML, 18, { width: W, characterSpacing: 1.5 });
     setFont(16, true);
     doc.fillColor("#ffffff").text("REPORTE DIARIO", ML, 32, { width: W });
+    // Logo del tenant (arriba a la derecha) sobre chip blanco para que sea visible en el header navy.
+    if (logoBuffer) {
+      const lw = 120, lh = 42, lx = PW - MR - lw, ly = 9;
+      doc.roundedRect(lx, ly, lw, lh, 4).fillColor("#ffffff").fill();
+      try { doc.image(logoBuffer, lx + 6, ly + 5, { fit: [lw - 12, lh - 10], align: "center", valign: "center" }); } catch { /* skip */ }
+    }
     y = 80;
 
     // ── Identificacion ──
     doc.rect(ML, y, W, 22).fillColor(navy).fill();
     setFont(9, true);
     doc.fillColor("#ffffff")
-      .text(sanitize(`${report.vesselCode}  -  ${fmtDate(report.reportDate)}`), ML + 10, y + 7, { width: W - 20 });
+      .text(sanitize(`${vesselName}  -  ${fmtDate(report.reportDate)}`), ML + 10, y + 7, { width: W - 20 });
     y += 22;
 
     function rowPair(l1: string, v1: string, l2: string, v2: string) {
@@ -322,8 +337,10 @@ function renderPdf(ctx: { tenantName: string; report: any }): Promise<Buffer> {
     }
 
     // ── Comentarios operativos ──
-    if (report.operationalNotes && String(report.operationalNotes).trim()) {
-      const text = sanitize(report.operationalNotes);
+    // El campo del modelo es operationalRemarks (antes se leia operationalNotes, inexistente,
+    // por lo que la seccion nunca aparecia aunque hubiera comentario cargado).
+    if (report.operationalRemarks && String(report.operationalRemarks).trim()) {
+      const text = sanitize(report.operationalRemarks);
       setFont(9.5, false);
       const bodyH = Math.max(28, doc.heightOfString(text, { width: W - 16, lineGap: 3 }) + 24);
       ensureSpace(bodyH);
