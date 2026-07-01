@@ -271,14 +271,28 @@ const aiLabelStyle: React.CSSProperties = { backgroundColor: "#0c1f3f", color: "
 interface ExecutionModalProps {
   plan: MaintenancePlan;
   userName: string;
+  userId: string | null;
+  isAdmin: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose, onSuccess }) => {
+interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }
+const teamMemberName = (u: TeamMember) => (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
+
+const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId, isAdmin, onClose, onSuccess }) => {
   const navigate = useNavigate();
   const t = useT();
   const [executedByName, setExecutedByName] = useState(userName);
+  const [executedByUserId, setExecutedByUserId] = useState<string>(userId ?? "");
+  // Solo el admin puede reportar en nombre de otro usuario → carga la lista del equipo.
+  const [teamUsers, setTeamUsers] = useState<TeamMember[]>([]);
+  React.useEffect(() => {
+    if (!isAdmin) return;
+    api.get<TeamMember[]>("/app/team/members")
+      .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setTeamUsers([]));
+  }, [isAdmin]);
   const [result, setResult] = useState<"SATISFACTORIO" | "CON_DEFICIENCIAS">("SATISFACTORIO");
   const [notes, setNotes] = useState("");
   const [deficienciesNotes, setDeficienciesNotes] = useState("");
@@ -340,6 +354,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
       }
       await api.post(`/app/pms/maintenance-plans/${plan.id}/report-execution`, {
         executedByName: executedByName.trim(),
+        executedByUserId: executedByUserId || null,
         result,
         notes: normalizeOptionalText(notes),
         deficienciesNotes: result === "CON_DEFICIENCIAS" ? normalizeOptionalText(deficienciesNotes) : null,
@@ -387,7 +402,14 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
         a.href     = url;
-        a.download = `${plan.taskCode ?? plan.id}.pdf`;
+        // Nombre: INSP/MANT - fecha(yyyy.mm.dd) - codigo item - referencia corta (titulo + activo).
+        const prefix = plan.taskType === "INSPECTION" ? "INSP" : "MANT";
+        const ymd = (completedAt || new Date().toISOString().slice(0, 10)).replace(/-/g, ".");
+        const assetShort = (plan.assetName ?? "").split(",")[0]?.trim() ?? "";
+        const ref = [plan.title, assetShort].filter(Boolean).join(" ").trim();
+        const rawName = `${prefix}-${ymd}-${plan.taskCode ?? plan.id}${ref ? `-${ref}` : ""}`;
+        const safeName = rawName.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+        a.download = `${safeName}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -506,15 +528,37 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, onClose
             </div>
           </div>
 
-          {/* Executed by */}
+          {/* Executed by — el admin puede elegir el usuario ejecutor; el resto reporta a su nombre */}
           <div className="space-y-1.5">
             <label className={labelCls}>{t("mp.exec.executedBy")}</label>
-            <input
-              value={executedByName}
-              onChange={e => setExecutedByName(e.target.value)}
-              className={inputCls}
-              placeholder={t("mp.exec.executedByPlaceholder")}
-            />
+            {isAdmin && teamUsers.length > 0 ? (
+              <select
+                value={executedByUserId}
+                onChange={e => {
+                  const uid = e.target.value;
+                  setExecutedByUserId(uid);
+                  const m = teamUsers.find(u => u.userId === uid);
+                  if (m) setExecutedByName(teamMemberName(m) || executedByName);
+                }}
+                className={inputCls}
+              >
+                {!teamUsers.some(u => u.userId === (userId ?? "")) && (
+                  <option value={userId ?? ""}>{userName}</option>
+                )}
+                {teamUsers.map(u => (
+                  <option key={u.userId} value={u.userId}>
+                    {teamMemberName(u) || u.userId}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={executedByName}
+                onChange={e => setExecutedByName(e.target.value)}
+                className={inputCls}
+                placeholder={t("mp.exec.executedByPlaceholder")}
+              />
+            )}
           </div>
 
           {/* Date */}
@@ -2147,6 +2191,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         <ExecutionModal
           plan={plan}
           userName={userName}
+          userId={userId}
+          isAdmin={isAdmin}
           onClose={() => setShowExecution(false)}
           onSuccess={() => { setShowExecution(false); void onSaved(); }}
         />
@@ -2807,6 +2853,8 @@ export const MaintenancePlansPage: React.FC = () => {
         <ExecutionModal
           plan={reporting}
           userName={userName}
+          userId={user?.id ?? null}
+          isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
           onClose={() => setReporting(null)}
           onSuccess={() => { setReporting(null); void reload(); }}
         />

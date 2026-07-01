@@ -103,6 +103,8 @@ export interface UpdateMaintenancePlanInput {
 export interface QuickClosePlanInput {
   result: "COMPLETED" | "COMPLETED_WITH_OBSERVATIONS" | "NOT_COMPLETED" | "FOLLOW_UP_REQUIRED";
   executedByName: string;
+  /** Usuario que ejecutó (elegido por el admin). Default: quien reporta (session.user.id). */
+  executedByUserId?: string | null;
   hoursWorked?: number | null;
   runningHoursAtExecution?: number | null;
   notes?: string | null;
@@ -1111,7 +1113,9 @@ export async function quickClosePlan(
         result,
         startedAt: completedAt,
         completedAt,
-        executedByUserId: session.user.id,
+        // El admin puede reportar en nombre de otro usuario (executedByUserId elegido);
+        // si no se especifica, queda quien reporta. createdByUserId siempre es el actor real.
+        executedByUserId: (payload.executedByUserId && String(payload.executedByUserId).trim()) || session.user.id,
         executedByName: normalizeRequiredText(payload.executedByName, "executedByName"),
         hoursWorked,
         runningHoursAtExecution,
@@ -1312,6 +1316,7 @@ export async function openFormalWorkOrder(
 
 export interface ReportExecutionInput {
   executedByName: string;
+  executedByUserId?: string | null;
   result: "SATISFACTORIO" | "CON_DEFICIENCIAS";
   notes?: string | null;
   deficienciesNotes?: string | null;
@@ -1336,6 +1341,7 @@ export async function reportExecution(
   const closeResult = await quickClosePlan(session, id, {
     result: workLogResult,
     executedByName: normalizeRequiredText(payload.executedByName, "executedByName"),
+    executedByUserId: payload.executedByUserId ?? null,
     notes: noteParts.join("\n\n") || null,
     completedAt: payload.completedAt,
     runningHoursAtExecution: normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution"),
