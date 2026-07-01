@@ -865,13 +865,14 @@ export async function setWorkOrderApproval(
         select: { userId: true, role: true, assignedVesselCodes: true },
       });
       if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
-      // Solo puede firmar una aprobación/autorización un ADMIN o el SUPERINTENDENTE
-      // a cargo de esta embarcación (defensa en profundidad; el front ya filtra la lista).
+      // Solo puede firmar una aprobación/autorización un ADMIN, o el SUPERINTENDENTE
+      // o el JEFE DE MÁQUINAS (MAINTENANCE_MANAGER) a cargo de esta embarcación
+      // (defensa en profundidad; el front ya filtra la lista).
       const eligible = membership.role === "TENANT_ADMIN"
-        || (membership.role === "FLEET_SUPERINTENDENT"
+        || ((membership.role === "FLEET_SUPERINTENDENT" || membership.role === "MAINTENANCE_MANAGER")
             && Array.isArray(membership.assignedVesselCodes)
             && membership.assignedVesselCodes.includes(current.vesselCode));
-      if (!eligible) throw new RouteError(403, "NOT_ELIGIBLE_APPROVER", "Solo un administrador o el superintendente a cargo del buque puede aprobar/autorizar.");
+      if (!eligible) throw new RouteError(403, "NOT_ELIGIBLE_APPROVER", "Solo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar/autorizar.");
       signerUserId = onBehalf;
     }
     const d = parseOptionalDate(payload.actionDate, "actionDate");

@@ -2656,11 +2656,13 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null; role: string; assignedVesselCodes: string[] }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
-  // Aprobar/autorizar solo lo puede firmar un ADMIN o el SUPERINTENDENTE a cargo de
-  // ESTA embarcación. El resto del equipo no debe aparecer en el listado.
+  // Aprobar/autorizar solo lo puede firmar un ADMIN, o el SUPERINTENDENTE o el
+  // JEFE DE MÁQUINAS (MAINTENANCE_MANAGER) a cargo de ESTA embarcación.
+  // El resto del equipo no debe aparecer en el listado.
   const eligibleApprovers = teamUsers.filter(u =>
     u.role === "TENANT_ADMIN" ||
-    (u.role === "FLEET_SUPERINTENDENT" && (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode)),
+    ((u.role === "FLEET_SUPERINTENDENT" || u.role === "MAINTENANCE_MANAGER") &&
+      (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode)),
   );
   // Admin: fecha de la acción (aprobación/autorización). Default hoy.
   const today = new Date().toISOString().slice(0, 10);
