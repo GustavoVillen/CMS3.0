@@ -187,7 +187,7 @@ export async function confirmAndIntegrateDailyReport(
         executedByUserId: session.user.id,
         followUpRequired: entry.followUpRequired,
         createdByUserId: session.user.id,
-        notes: `Registrado desde Daily Report ${report.id}`,
+        notes: `Registrado desde Reporte Diario del ${completedAt.toLocaleDateString("es-AR")}`,
       },
     });
 

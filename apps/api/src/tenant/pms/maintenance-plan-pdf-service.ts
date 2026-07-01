@@ -109,6 +109,23 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       orderBy: { completedAt: "desc" },
       select: { result: true, executedByName: true, completedAt: true, runningHoursAtExecution: true, notes: true },
     });
+    // Registros antiguos guardaron el ID interno del reporte diario en la nota
+    // ("Registrado desde Daily Report <cuid>"). Al imprimir, lo reemplazamos por
+    // una referencia legible (fecha del reporte) — no mostrar códigos internos.
+    if (lastLog?.notes) {
+      const m = lastLog.notes.match(/^Registrado desde Daily Report\s+(\S+)\s*$/);
+      if (m) {
+        let ref = "Reporte Diario";
+        try {
+          const dr = await (prisma as any).dailyReport.findFirst({
+            where: { id: m[1], tenantId: tenantDbId },
+            select: { reportDate: true },
+          });
+          if (dr?.reportDate) ref = `Reporte Diario del ${new Date(dr.reportDate).toLocaleDateString("es-AR")}`;
+        } catch { /* non-blocking */ }
+        lastLog.notes = `Registrado desde ${ref}`;
+      }
+    }
     if (plan.assetId) {
       try {
         const asset = await (prisma as any).asset.findUnique({
