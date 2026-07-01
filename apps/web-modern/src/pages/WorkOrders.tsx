@@ -2422,6 +2422,22 @@ function DeferralStatusBadge({ status }: { status: string }) {
   );
 }
 
+// Etapa de tramitación (Solicitada / Aprobada / Autorizada / Diferida) para el listado.
+// Reutiliza woStage(); las OT cerradas/canceladas (HIDDEN) no muestran etapa.
+function WoStageBadge({ wo }: { wo: WorkOrder }) {
+  const t = useT();
+  const stage = woStage(wo);
+  if (stage === "HIDDEN") return <span className="text-xs text-text-industrial/30">—</span>;
+  const map: Record<Exclude<WoStage, "HIDDEN">, { label: string; cls: string }> = {
+    SOLICITADA: { label: t("wo.kanban.solicitada"), cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+    APROBADA:   { label: t("wo.kanban.aprobada"),   cls: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30" },
+    AUTORIZADA: { label: t("wo.kanban.autorizada"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+    DIFERIDA:   { label: t("wo.kanban.onHold"),     cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" },
+  };
+  const meta = map[stage];
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${meta.cls}`}>{meta.label}</span>;
+}
+
 function KanbanCardContent({ wo, deferralMap }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
@@ -2959,6 +2975,11 @@ export const WorkOrdersPage: React.FC = () => {
         const overdue = r.status !== "CLOSED" && r.status !== "CANCELLED" && parseLocalDate(r.dueDate) < new Date();
         return <span className={`text-xs whitespace-nowrap font-medium ${overdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{fmtDate(r.dueDate)}</span>;
       },
+    },
+    {
+      key: "stage", header: t("wo.col.stage"),
+      sortValue: r => woStage(r),
+      render: r => <WoStageBadge wo={r} />,
     },
     {
       key: "status", header: t("wo.col.status"),

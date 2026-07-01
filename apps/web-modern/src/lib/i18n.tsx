@@ -1283,6 +1283,7 @@ const dict = {
   "wo.col.openDate":           { es: "F. Apertura",            en: "Open date",            pt: "Data abertura" },
   "wo.col.dueDate":            { es: "F. Vencimiento",         en: "Due date",             pt: "Data vencimento" },
   "wo.col.status":             { es: "Estado",                 en: "Status",               pt: "Estado" },
+  "wo.col.stage":              { es: "Tramitación",            en: "Processing",           pt: "Tramitação" },
 
   // Work Order status badges
   "wo.status.closed":              { es: "Cerrada",                   en: "Closed",                  pt: "Fechada" },
