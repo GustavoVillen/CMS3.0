@@ -10,6 +10,8 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
+import { useDeepLink } from "../lib/deep-link";
+import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
@@ -364,7 +366,10 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
         <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("page.capa")}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <div className="flex items-center gap-1.5">
+              <CopyLinkButton />
+              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            </div>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -499,6 +504,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
 export const CapaPage: React.FC = () => {
   const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/capa");
   const [editing, setEditing] = useState<CapaRecord | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -550,6 +556,23 @@ export const CapaPage: React.FC = () => {
     }
   }, []);
 
+  // Deep-link: la URL `/capa/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { if (editing) setEditing(null); return; }
+    if (editing?.capaCode === linkCode) return;
+    const inList = data?.items?.find(c => c.capaCode === linkCode);
+    if (inList) { void openDetail(inList); return; }
+    setDetailLoadingId("deeplink");
+    api.get<{ items: CapaRecord[] }>(`/app/pms/capa`)
+      .then(r => {
+        const m = r.items.find(c => c.capaCode === linkCode);
+        if (m) return api.get<CapaRecord>(`/app/pms/capa/${m.id}`).then(setEditing).catch(() => setEditing(m));
+      })
+      .catch(() => {})
+      .finally(() => setDetailLoadingId(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode, data, editing]);
+
   const columns: Column<CapaRecord>[] = useMemo(() => [
     {
       key: "capaCode",
@@ -597,14 +620,14 @@ export const CapaPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("capa.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.capa")} onRowClick={row => { void openDetail(row); }} />
+      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.capa")} onRowClick={row => openLink(row.capaCode)} />
 
       {editing && (
         <CapaModal
           record={editing}
-          onClose={() => setEditing(null)}
+          onClose={() => closeLink()}
           onSuccess={() => {
-            setEditing(null);
+            closeLink();
             void reload();
           }}
         />

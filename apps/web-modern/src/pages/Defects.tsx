@@ -13,6 +13,8 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms } from "../lib/i18n";
+import { useDeepLink } from "../lib/deep-link";
+import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { RichTextArea } from "../components/RichTextArea";
@@ -1188,7 +1190,8 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
               <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /> · <AssetLabel id={defect.assetId} className="text-sm font-bold text-accent" /></p>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <CopyLinkButton />
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
@@ -1600,6 +1603,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
 export const DefectsPage: React.FC = () => {
   const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/defects");
   const [editing, setEditing] = useState<Defect | null>(null);
   const [creating, setCreating] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<DefectPrefill | undefined>(undefined);
@@ -1623,15 +1627,15 @@ export const DefectsPage: React.FC = () => {
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const severityFilter = (searchParams.get("severity") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
+  // Compat: `?defectId=` (por id) → resuelve el código y redirige a `/defects/:code`.
   const autoDefectId = searchParams.get("defectId");
-
   useEffect(() => {
     if (!autoDefectId) return;
     const params = new URLSearchParams(searchParams);
     params.delete("defectId");
     setSearchParams(params, { replace: true });
     api.get<Defect>(`/app/pms/defects/${autoDefectId}`)
-      .then(d => setEditing(d))
+      .then(d => openLink(d.defectCode))
       .catch(() => {});
   }, [autoDefectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1676,6 +1680,23 @@ export const DefectsPage: React.FC = () => {
       setDetailLoadingId(null);
     }
   }, []);
+
+  // Deep-link: la URL `/defects/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { if (editing) setEditing(null); return; }
+    if (editing?.defectCode === linkCode) return;
+    const inList = data?.items?.find(d => d.defectCode === linkCode);
+    if (inList) { void openDetail(inList); return; }
+    setDetailLoadingId("deeplink");
+    api.get<{ items: Defect[] }>(`/app/pms/defects`)
+      .then(r => {
+        const m = r.items.find(d => d.defectCode === linkCode);
+        if (m) return api.get<Defect>(`/app/pms/defects/${m.id}`).then(setEditing).catch(() => setEditing(m));
+      })
+      .catch(() => {})
+      .finally(() => setDetailLoadingId(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode, data, editing]);
 
   const columns: Column<Defect>[] = useMemo(() => [
     {
@@ -1746,21 +1767,21 @@ export const DefectsPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
 
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => { void openDetail(row); }} />
+      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => openLink(row.defectCode)} />
 
       {creating && (
         <CreateDefectModal
           prefill={createPrefill}
           onClose={() => { setCreating(false); setCreatePrefill(undefined); }}
-          onCreated={defect => { setCreating(false); setCreatePrefill(undefined); void reload(); setEditing(defect); }}
+          onCreated={defect => { setCreating(false); setCreatePrefill(undefined); void reload(); openLink(defect.defectCode); }}
         />
       )}
       {editing && (
         <DefectModal
           defect={editing}
-          onClose={() => setEditing(null)}
+          onClose={() => closeLink()}
           onSaved={() => {
-            setEditing(null);
+            closeLink();
             void reload();
           }}
         />

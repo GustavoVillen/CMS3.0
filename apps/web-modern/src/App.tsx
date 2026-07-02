@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
 import { I18nProvider, type Locale, type Vocab } from "./lib/i18n";
@@ -63,7 +63,9 @@ import { MocPage } from "./pages/Moc";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  // Guardamos la ubicación pedida para volver a ella tras el login (deep-links).
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" state={{ from: location }} replace />;
 }
 
 function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
@@ -136,14 +138,19 @@ export default function App() {
               <Route path="/vessels"           element={<VesselsPage />} />
               <Route path="/assets"            element={<AssetsPage />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
+              <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} />
               <Route path="/reliability"       element={<ReliabilityPage />} />
               <Route path="/work-orders"       element={<WorkOrdersPage />} />
+              <Route path="/work-orders/:code" element={<WorkOrdersPage />} />
               <Route path="/daily-reports"     element={<DailyReportsPage />} />
               <Route path="/defects"           element={<DefectsPage />} />
+              <Route path="/defects/:code"     element={<DefectsPage />} />
               <Route path="/deferrals"         element={<DeferralsPage />} />
+              <Route path="/deferrals/:code"   element={<DeferralsPage />} />
               <Route path="/capa"              element={<CapaPage />} />
+              <Route path="/capa/:code"        element={<CapaPage />} />
               <Route path="/inspections"       element={<InspectionsPage />} />
               <Route path="/certificates"      element={<CertificatesPage />} />
               <Route path="/spares"            element={<SparesPage />} />
@@ -160,11 +167,13 @@ export default function App() {
               <Route path="/permits"           element={<PermitsPage />} />
               <Route path="/external-audits"   element={<ExternalAuditsPage />} />
               <Route path="/near-miss"         element={<NearMissPage />} />
+              <Route path="/near-miss/:code"   element={<NearMissPage />} />
               <Route path="/rest-hours"        element={<RestHoursPage />} />
               <Route path="/checklists"        element={<ChecklistsPage />} />
               <Route path="/crew-matrix"       element={<CrewMatrixPage />} />
               <Route path="/crew-requirements-matrix" element={<RequireRole roles={["TENANT_ADMIN"]}><RequirementsMatrixPage /></RequireRole>} />
               <Route path="/moc"               element={<MocPage />} />
+              <Route path="/moc/:code"         element={<MocPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />

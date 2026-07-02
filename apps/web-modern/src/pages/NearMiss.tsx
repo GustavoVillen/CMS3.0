@@ -1,6 +1,6 @@
 // SIRE 2.0 Ch. 4 — Near Miss / Hazard Observation reporting.
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Loader2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -8,6 +8,8 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
+import { useDeepLink } from "../lib/deep-link";
+import { CopyLinkButton } from "../components/CopyLinkButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 
@@ -121,7 +123,10 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
               <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo reporte" : record!.nearMissCode}</h2>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <div className="flex items-center gap-1.5">
+            {!isNew && <CopyLinkButton />}
+            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
@@ -190,6 +195,15 @@ export const NearMissPage: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: NearMiss[] }>("/app/near-miss");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<NearMiss | null>(null);
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/near-miss");
+
+  // Deep-link: la URL `/near-miss/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { if (editing) setEditing(null); return; }
+    if (editing?.nearMissCode === linkCode) return;
+    const match = data?.items?.find(n => n.nearMissCode === linkCode);
+    if (match) setEditing(match);
+  }, [linkCode, data, editing]);
 
   const items = useMemo(() => {
     const all = data?.items ?? [];
@@ -223,7 +237,7 @@ export const NearMissPage: React.FC = () => {
       ) : (
         <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
           {items.map(n => (
-            <button key={n.id} onClick={() => setEditing(n)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
+            <button key={n.id} onClick={() => openLink(n.nearMissCode)} className="w-full text-left p-4 hover:bg-fg/5 transition-colors flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-text-industrial/40">{n.nearMissCode}</span>
@@ -253,8 +267,8 @@ export const NearMissPage: React.FC = () => {
       {(showCreate || editing) && (
         <NearMissModal
           record={editing}
-          onClose={() => { setShowCreate(false); setEditing(null); }}
-          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          onClose={() => { setShowCreate(false); closeLink(); }}
+          onSaved={() => { setShowCreate(false); closeLink(); void reload(); }}
         />
       )}
     </div>

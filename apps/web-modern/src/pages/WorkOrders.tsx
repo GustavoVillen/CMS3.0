@@ -10,6 +10,8 @@ import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
+import { CopyLinkButton } from "../components/CopyLinkButton";
+import { useDeepLink } from "../lib/deep-link";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
@@ -1393,7 +1395,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <CopyLinkButton />
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
@@ -2821,6 +2824,7 @@ export const WorkOrdersPage: React.FC = () => {
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/work-orders");
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [createPrefill, setCreatePrefill] = useState<WoPrefill | null>(null);
@@ -2911,21 +2915,6 @@ export const WorkOrdersPage: React.FC = () => {
     );
   }, [search, visibleItems, data]);
 
-  // Auto-open WO when arriving from a plan badge click
-  useEffect(() => {
-    if (!autoCode || !data?.items?.length) return;
-    const match = data.items.find(w => w.workOrderCode === autoCode);
-    if (!match) return;
-    setDetailLoadingId(match.id);
-    api.get<WorkOrder>(`/app/pms/work-orders/${match.id}`)
-      .then(detailed => setEditing(detailed))
-      .catch(() => setEditing(match))
-      .finally(() => setDetailLoadingId(null));
-    const params = new URLSearchParams(searchParams);
-    params.delete("autoCode");
-    setSearchParams(params, { replace: true });
-  }, [autoCode, data, searchParams, setSearchParams]);
-
   const openDetail = useCallback(async (row: WorkOrder) => {
     setDetailLoadingId(row.id);
     setTableActionError(null);
@@ -2936,15 +2925,28 @@ export const WorkOrdersPage: React.FC = () => {
     finally { setDetailLoadingId(null); }
   }, []);
 
+  // Compatibilidad: `?autoCode=` (badges de plan) → redirige a la ruta deep-link.
+  useEffect(() => {
+    if (autoCode) openLink(autoCode);
+  }, [autoCode, openLink]);
+
+  // Deep-link: la URL `/work-orders/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { setEditing(null); return; }
+    if (editing?.workOrderCode === linkCode) return;
+    const match = data?.items?.find(w => w.workOrderCode === linkCode);
+    if (match) void openDetail(match);
+  }, [linkCode, data, editing, openDetail]);
+
   const openActionModal = useCallback((wo: WorkOrder, type: ActionType) => {
     setActionTarget({ workOrder: wo, type });
   }, []);
 
   const onActionSuccess = useCallback(() => {
     setActionTarget(null);
-    setEditing(null);
+    closeLink();
     void reload();
-  }, [reload]);
+  }, [reload, closeLink]);
 
   const columns: Column<WorkOrder>[] = useMemo(() => [
     {
@@ -3096,9 +3098,9 @@ export const WorkOrdersPage: React.FC = () => {
       </div>
 
       {viewMode === "list" ? (
-        <DataTable columns={columns} data={displayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => { void openDetail(row); }} />
+        <DataTable columns={columns} data={displayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => openLink(row.workOrderCode)} />
       ) : (
-        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => { void openDetail(wo); }} onReload={reload} />
+        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
       )}
 
       {(showCreate || createPrefill) && (
@@ -3113,11 +3115,11 @@ export const WorkOrdersPage: React.FC = () => {
         <WorkOrderModal
           workOrder={editing}
           canManage={canManage}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); void reload(); }}
+          onClose={() => closeLink()}
+          onSaved={() => { closeLink(); void reload(); }}
           onReload={() => { void reload(); }}
           onOpenAction={openActionModal}
-          onCreateCorrective={(prefill) => { setEditing(null); setCreatePrefill(prefill); void reload(); }}
+          onCreateCorrective={(prefill) => { closeLink(); setCreatePrefill(prefill); void reload(); }}
         />
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}

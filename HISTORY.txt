@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-07-02] FEAT: links compartibles (deep-links) a OT/Plan/Diferimiento/Defecto/CAPA/MOC/Near Miss
+Agent: Claude Opus 4.8
+- Al abrir un detalle la URL queda tipo /work-orders/SS-M01-26-0346 (compartible), con botón
+  "Copiar link" en el header del modal. La URL es la fuente de verdad: hook useDeepLink
+  (lib/deep-link.ts) + un efecto resolver por página que abre/cierra según :code.
+- Rutas :code hermanas en App.tsx para work-orders, maintenance-plans, deferrals, defects, capa,
+  moc, near-miss. Compat: query params viejos (autoCode/defectId/openId) redirigen a la ruta nueva.
+- Retorno post-login: RequireAuth guarda la ubicación (state.from) y Login navega ahí al autenticar,
+  así un colega sin sesión aterriza directo en el registro tras loguearse.
+- Componente compartido CopyLinkButton.tsx. Sin backend. Deploy: build web REQUERIDO. pm2 restart cms3.
+
 [2026-06-23] FIX: Informe de Diferimiento — quitar el código de formulario (REGI-MAN-09)
 Agent: Claude Opus 4.8
 - El formCode del tipo DEFERRAL pasa a "" → ya no se muestra "REGI-MAN-09" en el header ni en el

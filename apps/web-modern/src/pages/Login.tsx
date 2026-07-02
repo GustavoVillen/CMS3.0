@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { PasswordInput } from "../components/PasswordInput";
@@ -31,6 +31,10 @@ function deriveTenantSlugFromHost(): string | null {
 export const Login: React.FC = () => {
   const { login, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Destino pedido antes del login (deep-link): volvemos ahí al autenticar.
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+  const returnTo = from?.pathname ? `${from.pathname}${from.search ?? ""}` : "/";
 
   // Si el host trae el tenant (subdominio), queda fijo y se oculta el campo.
   const hostTenant = deriveTenantSlugFromHost();
@@ -46,8 +50,8 @@ export const Login: React.FC = () => {
   });
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/", { replace: true });
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated) navigate(returnTo, { replace: true });
+  }, [isAuthenticated, navigate, returnTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

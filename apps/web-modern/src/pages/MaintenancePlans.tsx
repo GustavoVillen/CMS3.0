@@ -33,6 +33,8 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT, useWoTerms } from "../lib/i18n";
+import { useDeepLink } from "../lib/deep-link";
+import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
@@ -1612,7 +1614,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               </h2>
               {!isNew && <StatusBadgeInline plan={plan} onClickWo={plan.activeWorkOrderCode ? () => { onClose(); navigate(`/work-orders?autoCode=${plan.activeWorkOrderCode}`); } : undefined} />}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              {!isNew && <CopyLinkButton />}
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
@@ -2374,6 +2377,7 @@ export const MaintenancePlansPage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/maintenance-plans");
 
   useCopilotEmitter(!editing && !showModal ? { module: "MAINTENANCE_PLANS", screen: "MP_LIST" } : null);
   const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
@@ -2497,16 +2501,37 @@ export const MaintenancePlansPage: React.FC = () => {
     }
   };
 
-  // Auto-open plan when navigating from Bitácora (?openId=entityId)
+  // Compat: `?openId=` (por id, ej. desde Bitácora) → resuelve el taskCode y
+  // redirige a la ruta deep-link `/maintenance-plans/:code`.
   useEffect(() => {
     const openId = searchParams.get("openId");
     if (!openId) return;
     const params = new URLSearchParams(searchParams);
     params.delete("openId");
     setSearchParams(params, { replace: true });
-    void openEdit({ id: openId });
+    api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${openId}`)
+      .then(d => openLink(d.taskCode))
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep-link: la URL `/maintenance-plans/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { if (editing) { setShowModal(false); setEditing(null); } return; }
+    if (editing?.taskCode === linkCode) return;
+    const inList = rawData?.items?.find(p => p.taskCode === linkCode);
+    if (inList) { void openEdit(inList); return; }
+    // Fuera de los filtros actuales → buscar sin filtro por código.
+    setLoadingDetailId("deeplink");
+    api.get<{ items: MaintenancePlan[] }>(`/app/pms/maintenance-plans`)
+      .then(r => {
+        const m = r.items.find(p => p.taskCode === linkCode);
+        if (m) return openEdit(m);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingDetailId(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode, rawData, editing]);
 
   const userName = user?.name ?? user?.email ?? "";
 
@@ -2813,7 +2838,7 @@ export const MaintenancePlansPage: React.FC = () => {
         error={error}
         keyFn={row => row.id}
         emptyText={t("empty.maintenancePlans")}
-        onRowClick={row => { void openEdit(row); }}
+        onRowClick={row => openLink(row.taskCode)}
         layoutFixed
       />
 
@@ -2868,13 +2893,14 @@ export const MaintenancePlansPage: React.FC = () => {
           isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           setRequestMessage={setRequestMessageFromContext}
-          onClose={() => { setShowModal(false); setEditing(null); }}
+          onClose={() => { setShowModal(false); setEditing(null); closeLink(); }}
           onSaved={async (savedId) => {
             void reload();
             if (savedId) {
               try {
                 const detail = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${savedId}`);
                 setEditing(detail);
+                openLink(detail.taskCode);  // refleja el plan (recién creado o editado) en la URL
               } catch { /* silent, plan stays open */ }
             }
           }}

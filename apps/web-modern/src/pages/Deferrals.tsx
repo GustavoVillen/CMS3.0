@@ -10,6 +10,8 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms } from "../lib/i18n";
+import { useDeepLink } from "../lib/deep-link";
+import { CopyLinkButton } from "../components/CopyLinkButton";
 import { RiskMatrix } from "../components/RiskMatrix";
 import { deriveRiskLevelFromMatrix, toUiRiskLevel, toUiRiskProbability, toUiRiskConsequence, type RiskLevel, type RiskProbability, type RiskConsequence } from "../lib/risk";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
@@ -603,7 +605,10 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
         <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("page.deferrals")}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <div className="flex items-center gap-1.5">
+              <CopyLinkButton />
+              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            </div>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -898,6 +903,7 @@ export const DeferralsPage: React.FC = () => {
   const t = useT();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/deferrals");
   const [editing, setEditing] = useState<Deferral | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -935,26 +941,11 @@ export const DeferralsPage: React.FC = () => {
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
 
+  // Compat: `?autoCode=` → redirige a la ruta deep-link `/deferrals/:code`.
   const autoCode = (searchParams.get("autoCode") ?? "").trim();
   useEffect(() => {
-    if (!autoCode) return;
-    // Clear param immediately so it doesn't re-trigger
-    const params = new URLSearchParams(searchParams);
-    params.delete("autoCode");
-    setSearchParams(params, { replace: true });
-
-    setDetailLoadingId("autoCode");
-    // Fetch all deferrals unfiltered to find the matching code regardless of current filters
-    api.get<{ items: Deferral[] }>(`/app/pms/deferrals`)
-      .then(r => {
-        const match = r.items.find(d => d.deferralCode === autoCode);
-        if (!match) return;
-        return api.get<Deferral>(`/app/pms/deferrals/${match.id}`).then(setEditing).catch(() => setEditing(match));
-      })
-      .catch(() => {})
-      .finally(() => setDetailLoadingId(null));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoCode]);
+    if (autoCode) openLink(autoCode);
+  }, [autoCode, openLink]);
 
   const openDetail = useCallback(async (row: Deferral) => {
     setDetailLoadingId(row.id);
@@ -969,6 +960,24 @@ export const DeferralsPage: React.FC = () => {
       setDetailLoadingId(null);
     }
   }, []);
+
+  // Deep-link: la URL `/deferrals/:code` es la fuente de verdad del detalle.
+  useEffect(() => {
+    if (!linkCode) { if (editing) setEditing(null); return; }
+    if (editing?.deferralCode === linkCode) return;
+    const inList = data?.items?.find(d => d.deferralCode === linkCode);
+    if (inList) { void openDetail(inList); return; }
+    // Fuera de los filtros actuales → buscar sin filtro por código.
+    setDetailLoadingId("deeplink");
+    api.get<{ items: Deferral[] }>(`/app/pms/deferrals`)
+      .then(r => {
+        const m = r.items.find(d => d.deferralCode === linkCode);
+        if (m) return api.get<Deferral>(`/app/pms/deferrals/${m.id}`).then(setEditing).catch(() => setEditing(m));
+      })
+      .catch(() => {})
+      .finally(() => setDetailLoadingId(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode, data, editing]);
 
   const columns: Column<Deferral>[] = useMemo(() => [
     {
@@ -1034,12 +1043,12 @@ export const DeferralsPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del diferimiento...</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => { void openDetail(row); }} />
+      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => openLink(row.deferralCode)} />
 
       {editing && (
         <DeferralModal
           deferral={editing}
-          onClose={() => setEditing(null)}
+          onClose={() => closeLink()}
           onSuccess={() => { void reload(); }}
         />
       )}
