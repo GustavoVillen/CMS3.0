@@ -7,7 +7,7 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function printWorkOrder(wo: { id: string; workOrderCode: string }): Promise<void> {
+export async function printWorkOrder(wo: { id: string; workOrderCode: string; title?: string | null }): Promise<void> {
   const res = await fetch(`/app/pms/work-orders/${wo.id}/pdf`, {
     headers: getAuthHeaders(),
   });
@@ -22,7 +22,9 @@ export async function printWorkOrder(wo: { id: string; workOrderCode: string }):
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = `${wo.workOrderCode}.pdf`;
+  // Nombre: "{codigo}-{titulo}.pdf" (ej. SS-M01-26-0357-Cambio de rodamientos sellados.pdf).
+  const title = fileSafe(wo.title);
+  a.download = `${wo.workOrderCode}${title ? `-${title}` : ""}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
