@@ -112,7 +112,10 @@ export async function acceptTenantInvitation(
     throw new RouteError(404, "INVITE_NOT_FOUND", "Invitation not found.");
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: invitation.email } });
+  // email ya no es único en User; findFirst para no romper tipos. Este flujo de
+  // invitación crea un User nuevo, así que si ya hay uno con ese email lo tratamos
+  // como conflicto (la invitación asume alta nueva).
+  const existing = await prisma.user.findFirst({ where: { email: invitation.email } });
   if (existing) {
     throw new RouteError(409, "INVITE_USER_EXISTS", "User already exists.");
   }

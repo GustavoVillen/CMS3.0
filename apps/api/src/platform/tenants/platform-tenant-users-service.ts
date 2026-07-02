@@ -413,12 +413,9 @@ export async function updatePlatformTenantUser(
     throw new RouteError(404, "TENANT_USER_NOT_FOUND", "Tenant user not found.");
   }
 
-  if (nextEmail && membership.user.email !== nextEmail) {
-    const clash = await prisma.user.findUnique({ where: { email: nextEmail } });
-    if (clash) {
-      throw new RouteError(409, "TENANT_USER_EXISTS", "User email already exists.");
-    }
-  }
+  // El email ya no es único en User: se permite que varios usuarios lo compartan
+  // (buzón funcional / firma). No se valida colisión de email. La identidad de
+  // login sigue siendo legacyUserId, que sí se chequea abajo.
   if (request.legacyUserId && membership.user.legacyUserId !== request.legacyUserId) {
     const clash = await prisma.user.findUnique({ where: { legacyUserId: request.legacyUserId } });
     if (clash) {

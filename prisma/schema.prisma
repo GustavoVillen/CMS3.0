@@ -883,7 +883,11 @@ model PlatformSession {
 
 model User {
   id               String             @id @default(cuid())
-  email            String             @unique
+  // El email NO es único: varios usuarios pueden compartir el mismo (ej. buzón
+  // funcional de un buque/departamento). Es dato de contacto/firma, no la
+  // credencial de login. La identidad de login es legacyUserId (username), que
+  // sí es único. Ver login: apps/api/src/tenant/auth/tenant-auth-service.ts.
+  email            String
   legacyUserId     String?            @unique
   passwordHash     String
   status           UserStatus         @default(INVITED)
@@ -901,6 +905,9 @@ model User {
   refreshTokens                RefreshToken[]
   auditEvents                  AuditEvent[]       @relation("AuditTenantUser")
   superintendentAssignments    VesselSuperintendentAssignment[]
+
+  // Ya no es único, pero se busca por email en login e invitaciones.
+  @@index([email])
 }
 
 model TenantMembership {

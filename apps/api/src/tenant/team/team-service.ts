@@ -157,8 +157,10 @@ export async function createTeamInvitation(session: TenantAccessSession, input: 
 
   const tenantId = await getTenantId(prisma, session.tenantSlug);
 
-  // Check user doesn't already belong to the tenant
-  const existing = await prisma.user.findUnique({ where: { email } });
+  // Check user doesn't already belong to the tenant. El email ya no es único:
+  // findFirst devuelve algún user con ese email (si lo comparten, cualquiera
+  // sirve para el chequeo de pertenencia por email de esta invitación).
+  const existing = await prisma.user.findFirst({ where: { email } });
   if (existing) {
     const membership = await (prisma as any).tenantMembership.findFirst({
       where: { tenantId, userId: existing.id, status: { not: "REVOKED" } },
@@ -348,14 +350,10 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
     const cleanUsername = input.firstName.trim().toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "");
 
     // Mismo flujo que en Prisma mode: reusar user existente, reactivar si está
-    // REVOKED, rechazar si ya es miembro activo.
+    // REVOKED, rechazar si ya es miembro activo. El email no es único — se
+    // permite repetido; la identidad es el username (legacyUserId).
     const existingByUsername = getDevTenantUserByLegacyId(cleanUsername);
-    if (input.email) {
-      const existingByEmail = getDevTenantUserByEmail(internalEmail);
-      if (existingByEmail && existingByEmail.id !== existingByUsername?.id) {
-        throw new RouteError(409, "EMAIL_TAKEN", `El email "${internalEmail}" pertenece a otro usuario.`);
-      }
-    }
+    void getDevTenantUserByEmail;
 
     if (existingByUsername) {
       if (existingByUsername.tenantSlug === session.tenantSlug) {
@@ -430,14 +428,11 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
   //      a. Si ya es miembro ACTIVE de este tenant → 409 (ya está en el equipo).
   //      b. Si es miembro REVOKED de este tenant → reactivar la membership.
   //      c. Si no tiene membership en este tenant → crear membership reutilizando el User.
-  //   3. Email: si se pasa un email y pertenece a OTRO User existente, 409.
+  //   3. Email: NO es único — puede repetirse entre usuarios (buzón compartido).
   const existingByUsername = await prisma.user.findUnique({ where: { legacyUserId: cleanUsername } });
-  if (input.email) {
-    const existingByEmail = await prisma.user.findUnique({ where: { email: internalEmail } });
-    if (existingByEmail && existingByEmail.id !== existingByUsername?.id) {
-      throw new RouteError(409, "EMAIL_TAKEN", `El email "${internalEmail}" pertenece a otro usuario.`);
-    }
-  }
+  // El email ya no es único: varios usuarios pueden compartir el mismo (buzón
+  // funcional / firma). No se valida colisión de email — la identidad es el
+  // username (legacyUserId), que sí se chequea abajo.
 
   let user: { id: string; email: string; firstName: string | null; lastName: string | null };
 
@@ -639,27 +634,21 @@ export async function updateMemberEmail(session: TenantAccessSession, userId: st
   const prisma = getPrismaClient();
 
   if (!prisma) {
-    const { updateDevTenantUser, getDevTenantUserById, getDevTenantUserByEmail } =
+    const { updateDevTenantUser, getDevTenantUserById } =
       await import("../../platform/data/dev-tenant-user-store");
     const user = getDevTenantUserById(userId);
     if (!user || user.tenantSlug !== session.tenantSlug) {
       throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
     }
-    const taken = getDevTenantUserByEmail(email);
-    if (taken && taken.id !== userId) {
-      throw new RouteError(409, "EMAIL_TAKEN", `El email "${email}" pertenece a otro usuario.`);
-    }
+    // El email no es único: se permite compartirlo entre usuarios.
     updateDevTenantUser(userId, { email });
     return { userId, email };
   }
 
   const tenantId = await getTenantId(prisma, session.tenantSlug);
 
-  // email es @unique global en User — rechazar si ya pertenece a otro user.
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && existing.id !== userId) {
-    throw new RouteError(409, "EMAIL_TAKEN", `El email "${email}" pertenece a otro usuario.`);
-  }
+  // El email ya no es único en User — se permite que varios usuarios compartan
+  // el mismo (buzón funcional / firma). No se valida colisión.
 
   // updateMany scopeado por membership: solo actualiza si el user pertenece a
   // este tenant — un admin de otro tenant no puede cambiar el email de un user ajeno.

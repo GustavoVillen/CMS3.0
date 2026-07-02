@@ -102,7 +102,12 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
     // (botnet con muchas IPs ataca a una sola cuenta).
     assertNotLocked(`tenant:${tenant.slug}`, identifier);
 
-    const membership = await prisma.tenantMembership.findFirst({
+    // El email ya NO es único: puede haber varios Users activos con el mismo
+    // email en el tenant (buzón funcional compartido). Por eso traemos TODOS
+    // los candidatos que matchean el identificador y autenticamos a aquel cuya
+    // contraseña coincide. El legacyUserId (username) sigue siendo único, así
+    // que el login por usuario siempre resuelve a un único candidato.
+    const candidates = await prisma.tenantMembership.findMany({
       where: {
         tenantId: tenant.id,
         status: "ACTIVE",
@@ -115,18 +120,25 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       },
     });
 
-    // Always run scrypt (real or dummy) so response time doesn't leak whether
-    // the identifier matched a real membership.
-    const validMembership = !!membership && membership.user.status === "ACTIVE";
-    const membershipPasswordOk = verifyPasswordOrTimingDummy(
-      password,
-      validMembership ? membership!.user.passwordHash : null,
-    );
+    let membership: (typeof candidates)[number] | null = null;
+    for (const candidate of candidates) {
+      if (candidate.user.status !== "ACTIVE") continue;
+      if (verifyPassword(password, candidate.user.passwordHash)) {
+        membership = candidate;
+        break;
+      }
+    }
+
+    // Si ningún candidato coincide, corremos un scrypt dummy para no filtrar por
+    // timing si el identificador no existía en absoluto.
+    if (!membership) {
+      verifyPasswordOrTimingDummy(password, null);
+    }
 
     // Si la membership falla, no hay fallback. (El login de tripulación con
     // vesselCode + password fue eliminado — las tripulaciones ahora son Users
     // normales gestionados desde "Gestión del Equipo".)
-    if (!validMembership || !membershipPasswordOk) {
+    if (!membership) {
       // All paths failed. Single audit event with neutral metadata
       // (don't reveal which path got how far — keep response identical).
       recordLoginFailure(`tenant:${tenant.slug}`, identifier);
