@@ -1211,9 +1211,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const handleGenerateServiceRequestDoc = useCallback(async () => {
     setGeneratingSrDoc(true);
     try {
-      // Nombre actual + título de la OT (si tiene).
+      // Nombre: "{codigo}-{titulo}" (ej. SS-M01-26-0357-Cambio de rodamientos sellados).
       const t = (workOrder.title ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
-      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `Solicitud-Servicios-${workOrder.workOrderCode}${t ? `-${t}` : ""}`);
+      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `${workOrder.workOrderCode}${t ? `-${t}` : ""}`);
     } finally {
       setGeneratingSrDoc(false);
     }

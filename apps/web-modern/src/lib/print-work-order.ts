@@ -49,9 +49,9 @@ export async function printServiceRequest(wo: { id: string; workOrderCode: strin
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  // Nombre actual + título de la OT (si tiene): "Solicitud-Servicios-{codigo}-{titulo}.pdf".
+  // Nombre: "{codigo}-{titulo}.pdf" (ej. SS-M01-26-0357-Cambio de rodamientos sellados.pdf).
   const title = fileSafe(wo.title);
-  a.download = `Solicitud-Servicios-${wo.workOrderCode}${title ? `-${title}` : ""}.pdf`;
+  a.download = `${wo.workOrderCode}${title ? `-${title}` : ""}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
