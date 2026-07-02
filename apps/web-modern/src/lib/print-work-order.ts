@@ -29,7 +29,12 @@ export async function printWorkOrder(wo: { id: string; workOrderCode: string }):
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export async function printServiceRequest(wo: { id: string; workOrderCode: string }): Promise<void> {
+// Sanea un texto para usarlo como parte de un nombre de archivo.
+function fileSafe(s: string | null | undefined): string {
+  return (s ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+export async function printServiceRequest(wo: { id: string; workOrderCode: string; title?: string | null }): Promise<void> {
   const res = await fetch(`/app/pms/work-orders/${wo.id}/service-request.pdf`, {
     headers: getAuthHeaders(),
   });
@@ -44,7 +49,9 @@ export async function printServiceRequest(wo: { id: string; workOrderCode: strin
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = `Solicitud-Servicios-${wo.workOrderCode}.pdf`;
+  // Nombre actual + título de la OT (si tiene): "Solicitud-Servicios-{codigo}-{titulo}.pdf".
+  const title = fileSafe(wo.title);
+  a.download = `Solicitud-Servicios-${wo.workOrderCode}${title ? `-${title}` : ""}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -1211,11 +1211,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const handleGenerateServiceRequestDoc = useCallback(async () => {
     setGeneratingSrDoc(true);
     try {
-      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `Solicitud-Servicios-${workOrder.workOrderCode}`);
+      // Nombre actual + título de la OT (si tiene).
+      const t = (workOrder.title ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `Solicitud-Servicios-${workOrder.workOrderCode}${t ? `-${t}` : ""}`);
     } finally {
       setGeneratingSrDoc(false);
     }
-  }, [workOrder.id, workOrder.workOrderCode]);
+  }, [workOrder.id, workOrder.workOrderCode, workOrder.title]);
 
   // PATCH con todos los campos editables. Reusado por "Guardar" y por "Cerrar OT".
   const patchWorkOrder = useCallback(async (chkUrl: string | null, supUrl: string | null) => {
