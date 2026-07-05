@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "../lib/api";
-import {
-  LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
-  AlertTriangle, Clock, ShieldCheck, Microscope, Package, Truck,
-  UsersRound, UserCircle, ScrollText, ChevronLeft, ChevronRight, ChevronDown, Gauge, Bot,
-  FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse,
-} from "lucide-react";
+import { UserCircle, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useResizable } from "../lib/hooks";
-import { useT, type TranslationKey } from "../lib/i18n";
+import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
+import { NAV } from "../lib/nav-items";
+import { useHiddenNavPaths } from "../lib/nav-config";
 
 interface SidebarCounts {
   // Fase 1
@@ -54,92 +50,6 @@ const BADGE_KEY: Record<string, keyof SidebarCounts> = {
   "/providers":         "providerNcOpen",
 };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type Role = string;
-
-type NavItem = {
-  icon: React.ElementType;
-  labelKey: TranslationKey;
-  path: string;
-  end?: boolean;
-  roles?: Role[];
-};
-
-type NavSection = {
-  titleKey: TranslationKey;
-  items: NavItem[];
-};
-
-// ---------------------------------------------------------------------------
-// Navigation structure
-// ---------------------------------------------------------------------------
-
-const NAV: NavSection[] = [
-  {
-    titleKey: "nav.section.operation",
-    items: [
-      { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
-      { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
-      { icon: Activity,        labelKey: "nav.maintenanceWorkload", path: "/maintenance-workload" },
-      { icon: HeartPulse,      labelKey: "nav.reliability",      path: "/reliability" },
-      { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
-      { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
-      { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
-      { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
-      { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",
-        roles: ["TENANT_ADMIN"] },
-    ],
-  },
-  {
-    titleKey: "nav.section.control",
-    items: [
-      { icon: Clock,           labelKey: "nav.deferrals",        path: "/deferrals" },
-      { icon: Microscope,      labelKey: "nav.capa",             path: "/capa" },
-      { icon: ShieldCheck,     labelKey: "nav.certificates",     path: "/certificates" },
-      { icon: FlaskConical,    labelKey: "nav.fluidAnalyses",    path: "/fluid-analyses" },
-      { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
-      { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
-      { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
-      { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
-      { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },
-      { icon: ShieldAlert,     labelKey: "nav.permits",          path: "/permits" },
-    ],
-  },
-  {
-    titleKey: "nav.section.crew",
-    items: [
-      { icon: Users,           labelKey: "nav.crew",             path: "/crew" },
-      { icon: CalendarCheck,   labelKey: "nav.drills",           path: "/drills" },
-      { icon: Clock,           labelKey: "nav.restHours",        path: "/rest-hours" },
-      { icon: Grid3x3,         labelKey: "nav.crewMatrix",       path: "/crew-matrix" },
-    ],
-  },
-  {
-    titleKey: "nav.section.masters",
-    items: [
-      { icon: Ship,              labelKey: "nav.vessels",        path: "/vessels" },
-      { icon: SlidersHorizontal, labelKey: "nav.assets",         path: "/assets" },
-      { icon: Package,           labelKey: "nav.spares",         path: "/spares" },
-      { icon: Truck,             labelKey: "nav.providers",      path: "/providers" },
-    ],
-  },
-  {
-    titleKey: "nav.section.system",
-    items: [
-      { icon: Bot,               labelKey: "nav.aiDocuments",    path: "/ai-documents",
-        roles: ["TENANT_ADMIN"] },
-      { icon: ClipboardList,     labelKey: "nav.requirementsMatrix", path: "/crew-requirements-matrix",
-        roles: ["TENANT_ADMIN"] },
-      { icon: SlidersHorizontal, labelKey: "nav.configuration",  path: "/configuration",
-        roles: ["TENANT_ADMIN"] },
-      { icon: UsersRound,        labelKey: "nav.team",           path: "/team",
-        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"] },
-    ],
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -173,6 +83,8 @@ export const Sidebar: React.FC = () => {
         : (tenant.logoUrl || tenant.logoUrlLight))
     : null;
   const { selectedVesselCode } = useVesselContext();
+  // Paths ocultos por configuración del tenant (definidos por el admin en /configuration).
+  const hiddenNavPaths = useHiddenNavPaths();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("gpms_sidebar_collapsed") === "true",
@@ -302,7 +214,9 @@ export const Sidebar: React.FC = () => {
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-3">
         {NAV.map(section => {
           const visible = section.items.filter(
-            item => !item.roles || item.roles.includes(user?.role ?? ""),
+            item =>
+              (!item.roles || item.roles.includes(user?.role ?? "")) &&
+              !hiddenNavPaths.includes(item.path),
           );
           if (visible.length === 0) return null;
 

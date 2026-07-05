@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AppEnv } from "../config/env";
 import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
+import { readBinaryBody } from "../http/read-binary-body";
+import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-service";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
 import { resolveTenantSlugFromRequest } from "./bootstrap/public-bootstrap-route";
@@ -58,7 +60,7 @@ import { saveAttachment } from "./attachments/attachment-uploads-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
 import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
-import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport, getFuelConsumptionTrend } from "./daily-reports/daily-reports-service";
+import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport, reopenDailyReport, getFuelConsumptionTrend } from "./daily-reports/daily-reports-service";
 import {
   confirmAndIntegrateDailyReport,
   getDailyReportWithSubEntities,
@@ -585,9 +587,7 @@ export async function handleTenantRoutes(
     if (!canWriteCertificates(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para subir archivos de certificados.");
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveCertificateSourceFile(session.tenantSlug, originalName, buffer);
     sendJson(response, 200, result);
@@ -703,6 +703,13 @@ export async function handleTenantRoutes(
     return true;
   }
 
+  if (method === "POST" && /^\/app\/daily-reports\/[^/]+\/reopen$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await reopenDailyReport(session, id));
+    return true;
+  }
+
   if (method === "GET" && /^\/app\/daily-reports\/[^/]+\/period-suggestions$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const id = url.pathname.split("/")[3]!;
@@ -777,9 +784,7 @@ export async function handleTenantRoutes(
     const entityId   = url.searchParams.get("entityId");
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveAttachment(session.tenantSlug, entityType, originalName, buffer);
     // Si el caller dio entityType + entityId, registramos también en tabla Attachment
@@ -1056,9 +1061,7 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
     sendJson(response, 201, { url: saved.url, name: saved.name, mime: saved.mime });
@@ -1070,9 +1073,7 @@ export async function handleTenantRoutes(
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
     const vesselCode = (Array.isArray(request.headers["x-vessel-code"]) ? request.headers["x-vessel-code"][0] : request.headers["x-vessel-code"]) ?? null;
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     // Save the file first so the URL is available for later
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
@@ -1127,9 +1128,7 @@ export async function handleTenantRoutes(
     if (!isValidModule(mod)) throw new RouteError(400, "INVALID_MODULE", `Módulo desconocido: ${mod}`);
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     if (!canImport(mod, session.user.role)) throw new RouteError(403, "FORBIDDEN", "Sin permiso.");
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El cuerpo está vacío.");
     sendJson(response, 200, await previewImport(session, mod, buffer));
     return true;
@@ -1179,11 +1178,7 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, slug);
     enforceRateLimit(request, `ai-parse-file:${session.user.id}`, { maxRequests: 15, windowMs: 60_000 });
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     assertFileSize(buffer);
 
     const mimeType  = (request.headers["content-type"] ?? "application/octet-stream").split(";")[0]!.trim();
@@ -2326,6 +2321,25 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    return true;
+  }
+
+  // ── Configuración del menú lateral (tenant-wide) ──────────────────────────
+  // GET: cualquier usuario autenticado — el sidebar lo necesita para filtrar.
+  if (method === "GET" && url.pathname === "/app/tenant/nav-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const hiddenNavPaths = await getHiddenNavPaths(session);
+    sendJson(response, 200, { hiddenNavPaths });
+    return true;
+  }
+
+  // PATCH: solo TENANT_ADMIN puede cambiar qué módulos ve toda la empresa.
+  if (method === "PATCH" && url.pathname === "/app/tenant/nav-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden configurar el menú.");
+    const body = await readJsonBody(request) as { hiddenNavPaths?: unknown };
+    const hiddenNavPaths = await setHiddenNavPaths(session, body?.hiddenNavPaths);
+    sendJson(response, 200, { hiddenNavPaths });
     return true;
   }
 

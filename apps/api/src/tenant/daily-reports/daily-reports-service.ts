@@ -191,6 +191,25 @@ export async function updateTenantDailyReport(session: TenantAccessSession, id: 
   return prisma.dailyReport.update({ where: { id }, data });
 }
 
+/**
+ * Reabre un reporte diario para corrección (solo ADMIN): lo vuelve a DRAFT y
+ * limpia integratedAt, de modo que se desbloqueen todas las tabs para editar.
+ * NO revierte la integración ya aplicada (WorkLogs / avance de planes); solo
+ * habilita la edición. No re-integra por sí mismo.
+ */
+export async function reopenDailyReport(session: TenantAccessSession, id: string) {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo un administrador puede reabrir un reporte diario.");
+  }
+  await getTenantDailyReport(session, id); // valida tenant + scope (404 si no accesible)
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  return prisma.dailyReport.update({
+    where: { id },
+    data: { status: "DRAFT", integratedAt: null, updatedByUserId: session.user.id },
+  });
+}
+
 export interface FuelConsumptionPoint {
   date: string;   // YYYY-MM-DD
   liters: number;

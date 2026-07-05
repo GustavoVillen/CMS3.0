@@ -24,6 +24,9 @@ apps/api/uploads/
 docs/
 "Check Lists/"
 
+# Archivos con posibles credenciales (no versionar)
+Pass.docx
+
 # Source Excel files (large, owner-controlled)
 MANTENIMIENTO/
 

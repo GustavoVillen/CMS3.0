@@ -1,5 +1,34 @@
 HISTORY.txt
 
+[2026-07-05] DORMANTE: módulo CAPA oculto de la entrega (simplificación)
+Agent: Claude Opus 4.8
+- Decisión de producto: la empresa cliente recién arranca; el flujo correctivo/preventivo
+  básico ya vive DENTRO del Defecto (immediateAction, correctiveAction, rcaAnalysis,
+  rcaRootCause, rcaPreventiveActions, capaDescription). CAPA (con verificación de eficacia
+  ISM 10.2, 7 estados, fuentes DEFECT/WORK_ORDER/INSPECTION) es overkill al inicio.
+- NO se fusionó con Defectos (habría roto las fuentes WORK_ORDER/INSPECTION y el ciclo de
+  eficacia + trazabilidad de auditoría). Se OCULTÓ: sidebar + rutas /capa comentadas en
+  App.tsx; auto-creación de CAPA apagada con flag `CAPA_AUTO_CREATE=false` en defects-service
+  (RCA approval) e inspection-executions-service (findings). Todo con migas de pan.
+- Backend capa-service, página Capa.tsx, tabla CapaRecord e i18n quedan INTACTOS.
+  Reactivar = descomentar ~4 líneas UI + poner los 2 flags en true. Verificado (typecheck OK,
+  sidebar sin CAPA, /capa → placeholder). El defecto por inspección se mantiene.
+
+[2026-07-04] SCHEMA: RCM FailureMode — cierra el lazo modo-de-falla ↔ plan ↔ defecto
+Agent: Claude Opus 4.8
+- Nuevo modelo FailureMode (por activo, scope tenant+vessel, soft-delete + audit): causa,
+  efecto, consequenceCategory (reutiliza enum RCM), detectionMethod (enum nuevo
+  FailureDetectionMethod), mitigatingPlanId (link al plan que lo mitiga), probability.
+- Nuevo enum FailureDetectionMethod (NONE/INSPECTION/FLUID/VIBRATION/THERMAL/ULTRASOUND/CONDITION).
+- Nuevo campo Defect.failureModeId (nullable) → alimenta MTBF por modo de falla.
+- Cambio 100% aditivo, backward-compatible. db push + generate OK. Sin FK forzadas (patrón del repo).
+- MVP completo: backend (failure-modes-service + quality-router), página FailureModes.tsx,
+  i18n ES/EN/PT. Detección de huecos de cobertura (modo sin plan mitigante).
+- DORMANTE (2026-07-04): módulo OCULTADO de la entrega por decisión de producto — la empresa
+  cliente recién arranca con mantenimiento básico y no conviene abrumarla con RCM formal.
+  Solo se comentó el ítem del Sidebar y la Route en App.tsx (con migas de pan). Backend,
+  página, tabla FailureMode e i18n quedan INTACTOS. Reactivar = descomentar ~4 líneas.
+
 [2026-07-02] FEAT: links compartibles (deep-links) a OT/Plan/Diferimiento/Defecto/CAPA/MOC/Near Miss
 Agent: Claude Opus 4.8
 - Al abrir un detalle la URL queda tipo /work-orders/SS-M01-26-0346 (compartible), con botón

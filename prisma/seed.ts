@@ -16,7 +16,19 @@ const prisma = new PrismaClient({ adapter } as any);
 const SYSTEM_USER = "system";
 const now = new Date();
 
+// Contraseña de las cuentas admin sembradas. Configurable por env; si no se
+// setea, usa un default de DEMO (nunca debe usarse en producción).
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Mercurio26";
+
 async function main(): Promise<void> {
+  // Guarda: no sembrar credenciales de demo contra una base de producción por
+  // accidente. Para hacerlo a propósito, setear SEED_ALLOW_PRODUCTION=1.
+  if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "1") {
+    throw new Error(
+      "Seed bloqueado en NODE_ENV=production. Setear SEED_ALLOW_PRODUCTION=1 y SEED_ADMIN_PASSWORD para permitirlo explícitamente.",
+    );
+  }
+
   // ── Tenant & auth ──────────────────────────────────────────────────────────
   const demoTenant = await prisma.tenant.upsert({
     where: { slug: "demo" },
@@ -55,14 +67,14 @@ async function main(): Promise<void> {
     create: { tenantId: demoTenant.id, host: "demo.localhost", isPrimary: true },
   });
 
-  const platformPasswordHash = hashPassword("Mercurio26");
+  const platformPasswordHash = hashPassword(SEED_ADMIN_PASSWORD);
   await prisma.platformUser.upsert({
     where: { email: "admin@localhost" },
     update: { passwordHash: platformPasswordHash, role: PlatformRole.SUPERADMIN, status: UserStatus.ACTIVE, firstName: "Platform", lastName: "Admin" },
     create: { email: "admin@localhost", passwordHash: platformPasswordHash, role: PlatformRole.SUPERADMIN, status: UserStatus.ACTIVE, firstName: "Platform", lastName: "Admin" },
   });
 
-  const tenantPasswordHash = hashPassword("Mercurio26");
+  const tenantPasswordHash = hashPassword(SEED_ADMIN_PASSWORD);
   const tenantUser = await prisma.user.upsert({
     where: { email: "admin@demo.local" },
     update: { legacyUserId: "DEMOADMIN", passwordHash: tenantPasswordHash, status: UserStatus.ACTIVE, preferredLocale: "es", firstName: "Demo", lastName: "Admin" },

@@ -67,7 +67,7 @@ export interface UpdateDefectInput {
   repairType?: string | null;
 }
 
-interface DefectRecord {
+export interface DefectRecord {
   id: string;
   tenantId: string;
   vesselCode: string;
@@ -346,8 +346,10 @@ export async function listDefects(session: TenantAccessSession, filters: DefectL
   if (filters.assetId) where.assetId = filters.assetId;
 
   const items = await defect.findMany({ where, orderBy: { reportedAt: "desc" } });
-  const withWo = await attachWorkOrderCodes(prismaRaw, tenantId, items as Array<{ workOrderId: string | null }>);
-  return attachAuditOrigin(prismaRaw, tenantId, withWo as Array<{ classification: string; sourceType: string | null; sourceId: string | null } & Record<string, unknown>>);
+  // DefectRecord ya tiene workOrderId/classification/sourceType/sourceId, así que los
+  // genéricos de los helpers infieren el tipo completo y encadenan sin casts.
+  const withWo = await attachWorkOrderCodes(prismaRaw, tenantId, items);
+  return attachAuditOrigin(prismaRaw, tenantId, withWo);
 }
 
 export async function getDefect(session: TenantAccessSession, id: string) {
@@ -361,9 +363,9 @@ export async function getDefect(session: TenantAccessSession, id: string) {
 
   const record = await defect.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Defect no encontrado.");
-  const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record as { workOrderId: string | null } & Record<string, any>]);
-  const withOrigin = await attachAuditOrigin(prismaRaw, tenantId, enriched as Array<{ classification: string; sourceType: string | null; sourceId: string | null } & Record<string, unknown>>);
-  return withOrigin[0] as typeof record & { workOrderCode: string | null; auditId: string | null; auditCode: string | null };
+  const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record]);
+  const withOrigin = await attachAuditOrigin(prismaRaw, tenantId, enriched);
+  return withOrigin[0];
 }
 
 export async function createDefect(session: TenantAccessSession, payload: CreateDefectInput) {
@@ -537,7 +539,11 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
     payload.rcaApprovedAt !== undefined &&
     data.rcaApprovedAt !== null &&
     current.rcaApprovedAt === null;
-  if (wasJustApproved) {
+  // CAPA DORMANTE (2026-07-05): el módulo CAPA está oculto de la entrega. Se apaga la
+  // auto-creación de CAPA desde defectos para no generar registros huérfanos; el flujo
+  // correctivo/preventivo queda dentro del propio Defecto. Reactivar: CAPA_AUTO_CREATE = true.
+  const CAPA_AUTO_CREATE: boolean = false;
+  if (CAPA_AUTO_CREATE && wasJustApproved) {
     try {
       const severity = (updated as { severity?: string }).severity ?? current.severity;
       const priority =

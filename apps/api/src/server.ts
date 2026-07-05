@@ -5,6 +5,7 @@ import { sendHtml } from "./http/html-response";
 import { sendJson } from "./http/json-response";
 import { toErrorPayload } from "./http/route-error";
 import { getRequestUrl } from "./http/request-url";
+import { readBinaryBody } from "./http/read-binary-body";
 import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa } from "./http/static-files";
 import { buildHealthcheckPayload } from "./health/health-route";
 import { buildHomePage } from "./platform/home/home-page";
@@ -80,9 +81,10 @@ const server = createServer(async (request, response) => {
   // ── CSP report receiver (browsers POST violations here while in report-only) ─
   if (method === "POST" && url.pathname === "/internal/csp-report") {
     try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
+      // Cap chico: un CSP report legítimo es un JSON pequeño y este endpoint
+      // no está autenticado. readBinaryBody aborta si excede el tope; el catch
+      // externo lo traga y devolvemos 204 igual.
+      const raw = (await readBinaryBody(request, 256 * 1024)).toString("utf8");
       const { log } = await import("./common/logger");
       log.warn("[csp-violation]", raw.slice(0, 2000));
     } catch { /* swallow — receiver must never fail */ }

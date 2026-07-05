@@ -43,6 +43,13 @@ import {
   updateCapaRecord,
 } from "./capa-service";
 import { buildCapaPdf } from "./capa-pdf-service";
+import {
+  createFailureMode,
+  getFailureMode,
+  listFailureModes,
+  softDeleteFailureMode,
+  updateFailureMode,
+} from "./failure-modes-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -66,7 +73,8 @@ export async function handleQualityRoutes(
   const isDefectsPath = url.pathname.startsWith("/app/pms/defects");
   const isDeferralsPath = url.pathname.startsWith("/app/pms/deferrals");
   const isCapaPath = url.pathname.startsWith("/app/pms/capa");
-  if (!isDefectsPath && !isDeferralsPath && !isCapaPath) return false;
+  const isFailureModesPath = url.pathname.startsWith("/app/pms/failure-modes");
+  if (!isDefectsPath && !isDeferralsPath && !isCapaPath && !isFailureModesPath) return false;
 
   const tenantSlug = requireTenantSlug(request, env);
   const session = requireTenantAccessSession(request, tenantSlug);
@@ -161,6 +169,39 @@ export async function handleQualityRoutes(
     }
     if (method === "DELETE") {
       await softDeleteDefect(session, id);
+      sendJson(response, 200, { ok: true });
+      return true;
+    }
+  }
+
+  // --- FailureModes (RCM) ---
+  if (method === "GET" && url.pathname === "/app/pms/failure-modes") {
+    const items = await listFailureModes(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      assetId: url.searchParams.get("assetId"),
+      status: url.searchParams.get("status"),
+    });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/failure-modes") {
+    const body = await readJsonBody(request) as Parameters<typeof createFailureMode>[1];
+    sendJson(response, 201, await createFailureMode(session, body));
+    return true;
+  }
+  if (/^\/app\/pms\/failure-modes\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      sendJson(response, 200, await getFailureMode(session, id));
+      return true;
+    }
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateFailureMode>[2];
+      sendJson(response, 200, await updateFailureMode(session, id, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      await softDeleteFailureMode(session, id);
       sendJson(response, 200, { ok: true });
       return true;
     }

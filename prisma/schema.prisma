@@ -80,6 +80,19 @@ enum ConsequenceCategory {
   NON_OPERATIONAL  // Solo costo de reparación (sin impacto)
 }
 
+// RCM — cómo se detecta/previene un modo de falla. Vocabulario alineado con
+// SampleKind (mantenimiento por condición) + INSPECTION (prueba funcional) y
+// NONE para fallas ocultas (típico de dispositivos de protección/seguridades).
+enum FailureDetectionMethod {
+  NONE          // no detectable en operación (falla oculta)
+  INSPECTION    // inspección visual / prueba funcional
+  FLUID         // análisis de fluidos
+  VIBRATION
+  THERMAL
+  ULTRASOUND
+  CONDITION     // sensor / parámetro en línea
+}
+
 enum AssetStatus {
   OPERATIONAL
   DEGRADED
@@ -749,6 +762,10 @@ model TenantSetting {
   enabledLocales  LocaleCode[] @default([es])
   timezone        String
   currency        String
+  // Navegación: paths del menú lateral que el admin decidió OCULTAR para todo el
+  // tenant. Se guarda el complemento (los ocultos) para que default [] = todo
+  // visible y los módulos nuevos aparezcan por defecto sin re-configurar.
+  hiddenNavPaths  String[] @default([])
   // Automation policies
   autoUpdateCountersFromDailyReport     Boolean  @default(false)
   autoCreateFindingDrafts               Boolean  @default(false)
@@ -1127,6 +1144,7 @@ model Vessel {
   externalAudits   ExternalAudit[]
   nearMissReports  NearMissReport[]
   checklistExecutions ChecklistExecution[]
+  failureModes     FailureMode[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1392,6 +1410,9 @@ model Defect {
   // EXTERNAL_AUDIT_FINDING (sourceId = ExternalAuditFinding.id); extensible a otros orígenes.
   sourceType             String?
   sourceId               String?
+  // RCM: qué modo de falla se materializó en este defecto (acoplamiento flojo, sin FK
+  // forzada, igual que assetId). Alimenta MTBF por modo de falla. Opcional/backward-compat.
+  failureModeId          String?
   defectCode             String
   status                 DefectStatus           @default(OPEN)
   severity               DefectSeverity         @default(MEDIUM)
@@ -1432,6 +1453,47 @@ model Defect {
   @@index([tenantId, status])
   @@index([tenantId, reportedAt])
   @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, failureModeId])
+}
+
+// RCM — modo de falla de un activo: una forma concreta en que puede fallar, con
+// su causa, su efecto, la consecuencia que produce y — clave — el plan que lo
+// mitiga. Cierra el lazo RCM: FailureMode --mitiga--> MaintenancePlan, y
+// Defect.failureModeId --materializa--> FailureMode (para MTBF por modo).
+// Acoplamiento flojo por id (assetId / mitigatingPlanId) igual que Plan y Defect;
+// sin FK forzadas, scope tenant+vessel, soft-delete y audit estándar del proyecto.
+model FailureMode {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  code                 String                  // "FM-001" por activo
+  title                String                  // "Obstrucción del impulsor"
+  failureCause         String?                 // por qué falla (desgaste, cavitación…)
+  failureEffect        String?                 // qué pasa en el equipo cuando falla
+  // Reutiliza el enum RCM del plan — misma semántica de consecuencia mitigada
+  consequenceCategory  ConsequenceCategory?
+  consequenceRationale String?
+  detectionMethod      FailureDetectionMethod  @default(NONE)
+  // El link que faltaba: qué plan mitiga este modo de falla (sin FK forzada)
+  mitigatingPlanId     String?
+  // Probabilidad estimada — reutiliza el vocabulario de MaintenancePlan.riskProbability
+  probability          String?                 // LIKELY | PROBABLE | UNLIKELY | RARE
+  status               String                  @default("ACTIVE")
+  createdAt            DateTime                @default(now())
+  createdByUserId      String
+  updatedAt            DateTime                @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel                  @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, code])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, assetId])
+  @@index([tenantId, mitigatingPlanId])
 }
 
 model Deferral {

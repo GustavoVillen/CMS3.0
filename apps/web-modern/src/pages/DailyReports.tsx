@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, Send, Trash2, X,
+  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, RotateCcw, Send, Trash2, X,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -922,8 +922,10 @@ interface PeriodSuggestions {
 
 const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose, onSaved }) => {
   const t = useT();
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
   const [liveReport, setLiveReport] = useState<DailyReport | null>(report);
+  const [reopening, setReopening] = useState(false);
   const isNew = liveReport === null;
   const [activeTab, setActiveTab] = useState("info");
   const [prevData, setPrevData] = useState<Pick<FullReport, "maintenanceEntries" | "spareUsages" | "defectEntries"> | null>(null);
@@ -1044,6 +1046,23 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
   const isClosed = !isNew && liveReport!.status === "CLOSED";
   const isIntegrated = !isNew && !!liveReport!.integratedAt;
   const isOpDataLocked = isClosed || isIntegrated;
+
+  // Reabrir (solo ADMIN): vuelve el reporte a DRAFT y limpia integratedAt para
+  // desbloquear todas las tabs y poder corregir. No revierte la integración aplicada.
+  const handleReopen = async () => {
+    if (!liveReport) return;
+    if (!window.confirm("¿Reabrir este reporte para corregir? Volverá a estado DRAFT y quedará editable. La integración ya aplicada (horas y avance de planes) no se revierte.")) return;
+    setReopening(true); setSaveError(null);
+    try {
+      const updated = await api.post<DailyReport>(`/app/daily-reports/${liveReport.id}/reopen`);
+      setLiveReport(updated);
+      setStatus("DRAFT");
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("common.saveError"));
+    } finally {
+      setReopening(false);
+    }
+  };
 
   const saveInfo = async () => {
     setSaving(true); setSaveError(null);
@@ -1176,6 +1195,17 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
             )}
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && !isNew && (isIntegrated || isClosed) && (
+              <button
+                onClick={() => { void handleReopen(); }}
+                disabled={reopening}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50 transition-all"
+                title="Reabrir el reporte para corregir (solo administrador)"
+              >
+                {reopening ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Reabrir
+              </button>
+            )}
             <button onClick={() => { if (report === null && liveReport !== null) onSaved(); else onClose(); }} className="text-text-industrial/40 hover:text-fg transition-colors">
               <X className="w-5 h-5" />
             </button>

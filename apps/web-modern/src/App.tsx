@@ -26,16 +26,21 @@ import { MaintenancePlansPage } from "./pages/MaintenancePlans";
 import { MaintenanceGanttPage } from "./pages/MaintenanceGantt";
 import { MaintenanceWorkloadPage } from "./pages/MaintenanceWorkload";
 import { ReliabilityPage } from "./pages/Reliability";
+// DORMANTE — Modos de Falla (RCM): reactivar descomentando este import y la ruta de abajo.
+// import { FailureModesPage } from "./pages/FailureModes";
 import { VesselSuperintendentsPage } from "./pages/VesselSuperintendents";
 import { TeamPage } from "./pages/Team";
 import { DailyReportsPage } from "./pages/DailyReports";
 import { DeferralsPage } from "./pages/Deferrals";
-import { CapaPage } from "./pages/Capa";
+// DORMANTE — CAPA: módulo oculto de la entrega (simplificación). Reactivar descomentando
+// este import y las rutas /capa de abajo, + el ítem del Sidebar, + el flag CAPA_AUTO_CREATE.
+// import { CapaPage } from "./pages/Capa";
 import { SpareRequestsPage } from "./pages/SpareRequests";
 import { SpareReceiptsPage } from "./pages/SpareReceipts";
 import { MonthlyReportsPage } from "./pages/MonthlyReports";
 import { ProvidersPage } from "./pages/Providers";
 import { ProfilePage } from "./pages/Profile";
+import { ConfigurationPage } from "./pages/Configuration";
 import { PlatformLogin } from "./pages/platform/PlatformLogin";
 import { PlatformTenantsPage } from "./pages/platform/PlatformTenants";
 import { PlatformUsersPage } from "./pages/platform/PlatformUsers";
@@ -142,6 +147,8 @@ export default function App() {
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} />
               <Route path="/reliability"       element={<ReliabilityPage />} />
+              {/* DORMANTE — Modos de Falla (RCM): reactivar descomentando (y el import arriba). */}
+              {/* <Route path="/failure-modes"     element={<FailureModesPage />} /> */}
               <Route path="/work-orders"       element={<WorkOrdersPage />} />
               <Route path="/work-orders/:code" element={<WorkOrdersPage />} />
               <Route path="/daily-reports"     element={<DailyReportsPage />} />
@@ -149,8 +156,9 @@ export default function App() {
               <Route path="/defects/:code"     element={<DefectsPage />} />
               <Route path="/deferrals"         element={<DeferralsPage />} />
               <Route path="/deferrals/:code"   element={<DeferralsPage />} />
-              <Route path="/capa"              element={<CapaPage />} />
-              <Route path="/capa/:code"        element={<CapaPage />} />
+              {/* DORMANTE — CAPA: reactivar descomentando (y el import arriba + Sidebar). */}
+              {/* <Route path="/capa"              element={<CapaPage />} /> */}
+              {/* <Route path="/capa/:code"        element={<CapaPage />} /> */}
               <Route path="/inspections"       element={<InspectionsPage />} />
               <Route path="/certificates"      element={<CertificatesPage />} />
               <Route path="/spares"            element={<SparesPage />} />
@@ -176,6 +184,7 @@ export default function App() {
               <Route path="/moc/:code"         element={<MocPage />} />
               <Route path="/vessel-map"        element={<RequireRole roles={["TENANT_ADMIN"]}><VesselMapPage /></RequireRole>} />
               <Route path="/profile"           element={<ProfilePage />} />
+              <Route path="/configuration"     element={<RequireRole roles={["TENANT_ADMIN"]}><ConfigurationPage /></RequireRole>} />
               <Route path="*"                  element={<PlaceholderPage title="Módulo en Desarrollo" />} />
             </Route>
           </Routes>

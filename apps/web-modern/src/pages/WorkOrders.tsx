@@ -3069,6 +3069,9 @@ export const WorkOrdersPage: React.FC = () => {
                 const params = new URLSearchParams(searchParams);
                 if (opt.key) params.set("view", opt.key); else params.delete("view");
                 setSearchParams(params, { replace: true });
+                // Las OT cerradas no van al tablero (woStage → HIDDEN), así que
+                // al filtrar "Cerradas" pasamos automáticamente a vista lista.
+                if (opt.key === "closed") setViewMode("list");
               }}
               className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
                 active

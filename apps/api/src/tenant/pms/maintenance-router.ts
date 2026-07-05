@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AppEnv } from "../../config/env";
 import { sendJson } from "../../http/json-response";
 import { readJsonBody } from "../../http/read-json-body";
+import { readBinaryBody } from "../../http/read-binary-body";
 import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
@@ -221,9 +222,7 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const rawName = request.headers["x-filename"];
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "checklist");
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const { url: fileUrl, name } = await saveChecklistDocument(tenantSlug, originalName, buffer);
     await updateTenantMaintenancePlan(session, id, { checklistTemplate: fileUrl });
@@ -387,9 +386,7 @@ export async function handleMaintenanceRoutes(
     const rawOccurred = request.headers["x-occurred-at"];
     const occurredAt = (Array.isArray(rawOccurred) ? rawOccurred[0] : rawOccurred) ?? undefined;
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
-    const fileBuffer = Buffer.concat(chunks);
+    const fileBuffer = await readBinaryBody(request);
     if (!fileBuffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
 
     const note = await createProgressNote(session, id, { kind, text: caption, fileBuffer, fileName, mimeType, occurredAt });
