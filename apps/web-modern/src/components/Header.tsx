@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, LogOut, ChevronDown, Ship, Sun, Moon } from "lucide-react";
+import { User, LogOut, ChevronDown, Ship, Sun, Moon, BookOpen } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useNavigate } from "react-router-dom";
@@ -63,6 +63,16 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
             <ChevronDown className="w-3 h-3 text-fg/40 shrink-0 pointer-events-none" />
           </div>
         )}
+
+        {/* Manual de usuario — abre el manual completo en una pestaña nueva */}
+        <button
+          onClick={() => window.open("/manual.html", "_blank", "noopener,noreferrer")}
+          title={t("header.manual")}
+          aria-label={t("header.manual")}
+          className="w-9 h-9 flex items-center justify-center rounded-full text-fg/60 hover:text-fg hover:bg-fg/10 transition-all"
+        >
+          <BookOpen className="w-4 h-4" />
+        </button>
 
         {/* Theme toggle */}
         <button

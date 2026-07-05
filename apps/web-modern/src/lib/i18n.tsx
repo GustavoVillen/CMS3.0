@@ -25,6 +25,7 @@ const dict = {
   "nav.maintenanceGantt":  { es: "Gantt de Mant.",      en: "Maint. Gantt",         pt: "Gantt de Manut." },
   "nav.maintenanceWorkload": { es: "Carga de Mant.",     en: "Maint. Workload",     pt: "Carga de Manut." },
   "nav.reliability":       { es: "Confiabilidad",        en: "Reliability",         pt: "Confiabilidade" },
+  "nav.failureModes":      { es: "Modos de Falla",       en: "Failure Modes",       pt: "Modos de Falha" },
   "nav.workOrders":        { es: "Órdenes de Trabajo",  en: "Work Orders",         pt: "Ordens de Serviço" },
   "nav.dailyReports":      { es: "Reportes Diarios",   en: "Daily Reports",       pt: "Relatórios Diários" },
   "nav.monthlyReports":    { es: "Reportes Mensuales",  en: "Monthly Reports",     pt: "Relatórios Mensais" },
@@ -69,6 +70,15 @@ const dict = {
   "page.bitacora":          { es: "Bitácora del Sistema",      en: "System Logbook",          pt: "Diário do Sistema" },
   "page.configuration":     { es: "Configuración",             en: "Configuration",           pt: "Configuração" },
 
+  // Configuration page — sidebar menu visibility
+  "config.navTitle":        { es: "Menú lateral",              en: "Sidebar menu",            pt: "Menu lateral" },
+  "config.navSubtitle":     { es: "Elegí qué módulos ve tu equipo en el menú lateral izquierdo. Los que estén tildados aparecen; los destildados se ocultan para toda la empresa.", en: "Choose which modules your team sees in the left sidebar. Checked ones appear; unchecked ones are hidden for the whole company.", pt: "Escolha quais módulos sua equipe vê no menu lateral esquerdo. Os marcados aparecem; os desmarcados ficam ocultos para toda a empresa." },
+  "config.locked":          { es: "Siempre visible",           en: "Always visible",          pt: "Sempre visível" },
+  "config.enableAll":       { es: "Mostrar todos",             en: "Show all",                pt: "Mostrar todos" },
+  "config.save":            { es: "Guardar cambios",           en: "Save changes",            pt: "Salvar alterações" },
+  "config.saved":           { es: "Cambios guardados",         en: "Changes saved",           pt: "Alterações salvas" },
+  "config.saveError":       { es: "No se pudo guardar",        en: "Could not save",          pt: "Não foi possível salvar" },
+
   // Header chrome
   "header.allVessels":      { es: "Todos los buques",          en: "All vessels",             pt: "Todas as embarcações" },
   "header.userFallback":    { es: "Usuario",                   en: "User",                    pt: "Usuário" },
@@ -78,6 +88,7 @@ const dict = {
   "header.collapseMenu":    { es: "Colapsar menú",             en: "Collapse menu",           pt: "Recolher menu" },
   "header.themeLight":      { es: "Modo claro",                en: "Light mode",              pt: "Modo claro" },
   "header.themeDark":       { es: "Modo oscuro",               en: "Dark mode",               pt: "Modo escuro" },
+  "header.manual":          { es: "Manual de usuario",         en: "User manual",             pt: "Manual do usuário" },
 
   // Notificaciones (campana + banner CRITICAL)
   "notifications.title":           { es: "Notificaciones",                 en: "Notifications",                pt: "Notificações" },
@@ -225,6 +236,7 @@ const dict = {
   "page.superintendents":  { es: "Matriz de Superintendentes", en: "Superintendents Matrix", pt: "Matriz de Superintendentes" },
   "page.taskMasters":      { es: "Catálogo de Tareas",       en: "Task Catalog",            pt: "Catálogo de Tarefas" },
   "page.equipmentClasses": { es: "Clases de Equipos",        en: "Equipment Classes",       pt: "Classes de Equipamentos" },
+  "page.failureModes":     { es: "Modos de Falla (RCM)",     en: "Failure Modes (RCM)",     pt: "Modos de Falha (RCM)" },
   "page.team":             { es: "Gestión del Equipo",       en: "Team Management",         pt: "Gestão da Equipe" },
 
   // Team management
