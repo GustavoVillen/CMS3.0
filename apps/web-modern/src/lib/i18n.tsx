@@ -1571,6 +1571,19 @@ const dict = {
   "mp.page.weekFilterClear":   { es: "Quitar filtro de semana", en: "Clear week filter", pt: "Remover filtro de semana" },
   "mp.page.detailLoadError":   { es: "No se pudo cargar el detalle del plan.", en: "Could not load plan detail.", pt: "Não foi possível carregar os detalhes do plano." },
 
+  // MaintenancePlans — vista Excel (planilla compacta editable)
+  "mp.page.gridView":          { es: "Vista Excel",            en: "Excel view",            pt: "Vista Excel" },
+  "mp.grid.editHint":          { es: "Editá las celdas; se guardan al salir del campo.", en: "Edit cells; changes save on blur.", pt: "Edite as células; salvam ao sair do campo." },
+  "mp.grid.readonlyHint":      { es: "Vista compacta (solo lectura).", en: "Compact view (read-only).", pt: "Vista compacta (somente leitura)." },
+  "mp.grid.sfi":               { es: "SFI",                    en: "SFI",                   pt: "SFI" },
+  "mp.grid.taskCode":          { es: "CÓDIGO",                 en: "CODE",                  pt: "CÓDIGO" },
+  "mp.grid.equipo":            { es: "EQUIPO",                 en: "EQUIPMENT",             pt: "EQUIPAMENTO" },
+  "mp.grid.title":             { es: "TÍTULO",                 en: "TITLE",                 pt: "TÍTULO" },
+  "mp.grid.freqType":          { es: "FREC.",                  en: "FREQ.",                 pt: "FREQ." },
+  "mp.grid.freqValue":         { es: "CADA",                   en: "EVERY",                 pt: "CADA" },
+  "mp.grid.estimatedHours":    { es: "HS EST.",                en: "EST. HRS",              pt: "HS EST." },
+  "mp.grid.saveError":         { es: "No se pudo guardar",     en: "Could not save",        pt: "Não foi possível salvar" },
+
   // MaintenancePlans — StatusBadgeInline
   "mp.statusBadge.overdue":    { es: "VENCIDA",                en: "OVERDUE",               pt: "VENCIDA" },
   "mp.statusBadge.due":        { es: "POR VENCER",             en: "DUE",                   pt: "A VENCER" },

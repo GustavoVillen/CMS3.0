@@ -98,6 +98,11 @@ export interface UpdateMaintenancePlanInput {
   nextDueDate?: string | Date | null;
   nextDueHours?: number | null;
   executionStatus?: "FUTURE" | "UPCOMING" | "IN_WINDOW" | "DUE" | "OVERDUE" | "COMPLETED";
+  // Corrección manual (admin) de la última ejecución registrada del plan. NO crea
+  // un WorkLog: es una edición directa del valor almacenado (p. ej. cargar histórico
+  // o corregir una fecha errónea). El recálculo de vencimiento se hace por separado.
+  lastExecutionDate?: string | Date | null;
+  lastExecutionHours?: number | null;
 }
 
 export interface QuickClosePlanInput {
@@ -1052,6 +1057,8 @@ export async function updateTenantMaintenancePlan(
   if (payload.nextDueDate !== undefined) data.nextDueDate = parseOptionalDate(payload.nextDueDate, "nextDueDate");
   if (payload.nextDueHours !== undefined) data.nextDueHours = normalizeOptionalNumber(payload.nextDueHours, "nextDueHours");
   if (payload.executionStatus !== undefined) data.executionStatus = payload.executionStatus;
+  if (payload.lastExecutionDate !== undefined) data.lastExecutionDate = parseOptionalDate(payload.lastExecutionDate, "lastExecutionDate");
+  if (payload.lastExecutionHours !== undefined) data.lastExecutionHours = normalizeOptionalNumber(payload.lastExecutionHours, "lastExecutionHours");
 
   // Auto-calculate nextDueDate if it's still null after updates
   if (!data.nextDueDate && !current.nextDueDate) {

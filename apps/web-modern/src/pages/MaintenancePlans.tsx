@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Table2,
   Trash2,
   X,
   Zap,
@@ -32,6 +33,7 @@ import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFil
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
+import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
@@ -2382,6 +2384,7 @@ export const MaintenancePlansPage: React.FC = () => {
   useCopilotEmitter(!editing && !showModal ? { module: "MAINTENANCE_PLANS", screen: "MP_LIST" } : null);
   const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
   const [showExcel,     setShowExcel]     = useState(false);
+  const [gridView,      setGridView]      = useState(false);
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
@@ -2534,6 +2537,43 @@ export const MaintenancePlansPage: React.FC = () => {
   }, [linkCode, rawData, editing]);
 
   const userName = user?.name ?? user?.email ?? "";
+  const isAdmin = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER";
+
+  // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
+  const renderStatus = useCallback((row: MaintenancePlan) => (
+    <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />
+  ), [navigate]);
+
+  const renderActions = useCallback((row: MaintenancePlan) => {
+    if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
+    const needsWO = row.triggerResultMode === "AUTO_WO" || row.triggerResultMode === "APPROVAL_WO";
+    const hasActiveWo = !!row.activeWorkOrderCode && row.executionStatus === "IN_WINDOW";
+    return needsWO ? (
+      !hasActiveWo ? (
+        <button
+          onClick={async e => {
+            e.stopPropagation();
+            try {
+              const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
+              setExecuting(full);
+            } catch {
+              setExecuting(row);
+            }
+          }}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
+        >
+          <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
+        </button>
+      ) : null
+    ) : (
+      <button
+        onClick={e => { e.stopPropagation(); setReporting(row); }}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
+      >
+        <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
+      </button>
+    );
+  }, [t]);
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
     // ── Col 1: EMBARCACIÓN / TASKID / SFI ──────────────────────────────────
@@ -2635,7 +2675,7 @@ export const MaintenancePlansPage: React.FC = () => {
       header: t("mp.col.status"),
       width: "120px",
       sortValue: row => computeStatus(row),
-      render: row => <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />,
+      render: row => renderStatus(row),
     },
     // ── Col 8: ACCIONES ─────────────────────────────────────────────────────
     {
@@ -2643,43 +2683,10 @@ export const MaintenancePlansPage: React.FC = () => {
       header: t("mp.col.actions"),
       width: "150px",
       sortable: false,
-      render: row => {
-        if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
-        const needsWO = row.triggerResultMode === "AUTO_WO" || row.triggerResultMode === "APPROVAL_WO";
-        const hasActiveWo = !!row.activeWorkOrderCode && row.executionStatus === "IN_WINDOW";
-        return needsWO ? (
-          !hasActiveWo ? (
-          <button
-            onClick={async e => {
-              e.stopPropagation();
-              // El listado omite acceptanceCriteria, loto, riskAnalysisResult,
-              // consequenceRationale y checklistTemplate para reducir payload.
-              // Hay que traer el plan completo para que el modal de OT herede
-              // esos campos correctamente.
-              try {
-                const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
-                setExecuting(full);
-              } catch {
-                setExecuting(row);
-              }
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
-          >
-            <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
-          </button>
-          ) : null
-        ) : (
-          <button
-            onClick={e => { e.stopPropagation(); setReporting(row); }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
-          >
-            <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
-          </button>
-        );
-      },
+      render: row => renderActions(row),
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, vesselNameMap]);
+  ], [t, vesselNameMap, renderStatus, renderActions]);
 
   return (
     <div className="space-y-4">
@@ -2691,12 +2698,23 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Plus className="w-3.5 h-3.5" /> {t("mp.page.newTask")}
         </button>
-        {/* Excel */}
+        {/* Excel (import/export) */}
         <button
           onClick={() => setShowExcel(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+        </button>
+        {/* Toggle vista Excel (planilla compacta editable) ↔ tarjetas */}
+        <button
+          onClick={() => setGridView(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            gridView
+              ? "bg-accent/20 border-accent/40 text-accent"
+              : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30"
+          }`}
+        >
+          <Table2 className="w-3.5 h-3.5" /> {t("mp.page.gridView")}
         </button>
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
@@ -2831,16 +2849,36 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       )}
 
-      <DataTable
-        columns={columns}
-        data={data?.items ?? null}
-        loading={loading}
-        error={error}
-        keyFn={row => row.id}
-        emptyText={t("empty.maintenancePlans")}
-        onRowClick={row => openLink(row.taskCode)}
-        layoutFixed
-      />
+      {gridView ? (
+        loading && !data ? (
+          <div className="flex items-center gap-2 text-xs text-text-industrial/60 px-1 py-6">
+            <Loader2 className="w-4 h-4 animate-spin text-accent" /> {t("common.loading")}
+          </div>
+        ) : error ? (
+          <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{String(error)}</p>
+        ) : (
+          <MaintenancePlansGrid
+            plans={data?.items ?? []}
+            isAdmin={isAdmin}
+            vesselNameMap={vesselNameMap}
+            renderStatus={renderStatus}
+            renderActions={renderActions}
+            onOpenDetail={row => openLink(row.taskCode)}
+            emptyText={t("empty.maintenancePlans")}
+          />
+        )
+      ) : (
+        <DataTable
+          columns={columns}
+          data={data?.items ?? null}
+          loading={loading}
+          error={error}
+          keyFn={row => row.id}
+          emptyText={t("empty.maintenancePlans")}
+          onRowClick={row => openLink(row.taskCode)}
+          layoutFixed
+        />
+      )}
 
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
 
