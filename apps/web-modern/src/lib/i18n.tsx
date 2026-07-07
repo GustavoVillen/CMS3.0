@@ -1583,6 +1583,7 @@ const dict = {
   "mp.grid.freqValue":         { es: "CADA",                   en: "EVERY",                 pt: "CADA" },
   "mp.grid.estimatedHours":    { es: "HS EST.",                en: "EST. HRS",              pt: "HS EST." },
   "mp.grid.saveError":         { es: "No se pudo guardar",     en: "Could not save",        pt: "Não foi possível salvar" },
+  "mp.grid.resizeHint":        { es: "Arrastrá para ajustar el ancho", en: "Drag to resize column", pt: "Arraste para ajustar a largura" },
 
   // MaintenancePlans — StatusBadgeInline
   "mp.statusBadge.overdue":    { es: "VENCIDA",                en: "OVERDUE",               pt: "VENCIDA" },

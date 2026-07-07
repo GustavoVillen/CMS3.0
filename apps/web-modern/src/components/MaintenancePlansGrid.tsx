@@ -16,6 +16,23 @@ const TRIGGER_TYPES = ["MONTHS", "HOURS", "CALENDAR", "RUNNING_HOURS", "CONDITIO
 const SFI_GROUPS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const isHoursTT = (tt: string) => tt === "HOURS" || tt === "RUNNING_HOURS";
 
+// Columnas en orden de render. Anchos ajustables (drag en el borde del encabezado),
+// persistidos en localStorage.
+const COL_IDS = [
+  "open", "sfi", "taskCode", "equipo", "title", "freqType", "freqValue",
+  "estimatedHours", "lastExecution", "nextDue", "status", "actions",
+] as const;
+type ColId = (typeof COL_IDS)[number];
+const DEFAULT_WIDTHS: Record<ColId, number> = {
+  open: 34, sfi: 64, taskCode: 132, equipo: 200, title: 260, freqType: 112,
+  freqValue: 80, estimatedHours: 80, lastExecution: 140, nextDue: 150, status: 124, actions: 150,
+};
+const MIN_WIDTHS: Record<ColId, number> = {
+  open: 34, sfi: 44, taskCode: 90, equipo: 110, title: 120, freqType: 90,
+  freqValue: 56, estimatedHours: 56, lastExecution: 96, nextDue: 96, status: 96, actions: 110,
+};
+const COL_WIDTHS_LS_KEY = "mp.grid.colWidths";
+
 interface Asset { id: string; assetCode: string; name: string | null }
 
 interface Props {
@@ -211,20 +228,62 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
     });
   }, [rows, sortKey, sortDir, sortVal]);
 
+  // ── Ancho de columnas ajustable (drag) + persistencia ─────────────────────
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    let saved: Record<string, number> = {};
+    try { saved = JSON.parse(localStorage.getItem(COL_WIDTHS_LS_KEY) || "{}"); } catch { /* ignore */ }
+    return { ...DEFAULT_WIDTHS, ...saved };
+  });
+  const resizing = useRef<{ id: ColId; startX: number; startW: number } | null>(null);
+  const startResize = (id: ColId) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = { id, startX: e.clientX, startW: colWidths[id] ?? DEFAULT_WIDTHS[id] };
+    const onMove = (ev: MouseEvent) => {
+      const r = resizing.current;
+      if (!r) return;
+      const w = Math.max(MIN_WIDTHS[r.id], r.startW + (ev.clientX - r.startX));
+      setColWidths(prev => ({ ...prev, [r.id]: w }));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      resizing.current = null;
+      document.body.style.cursor = "";
+      setColWidths(prev => { try { localStorage.setItem(COL_WIDTHS_LS_KEY, JSON.stringify(prev)); } catch { /* ignore */ } return prev; });
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+  const widthOf = (id: ColId) => colWidths[id] ?? DEFAULT_WIDTHS[id];
+  const tableWidth = COL_IDS.reduce((s, id) => s + widthOf(id), 0);
+
   const th = "px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 whitespace-nowrap";
-  const renderHeader = (label: string, key?: SortKey, style?: React.CSSProperties) => {
-    if (!key) return <th className={th} style={style}>{label}</th>;
-    const active = sortKey === key;
+  const renderHeader = (id: ColId, label: string, key?: SortKey) => {
+    const active = key != null && sortKey === key;
     return (
-      <th className={th} style={style}>
-        <button
-          type="button"
-          onClick={() => toggleSort(key)}
-          className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none"
-        >
-          <span>{label}</span>
-          <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
-        </button>
+      <th className={`${th} relative`}>
+        {key ? (
+          <button
+            type="button"
+            onClick={() => toggleSort(key)}
+            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none max-w-full overflow-hidden"
+          >
+            <span className="truncate">{label}</span>
+            <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+          </button>
+        ) : (
+          <span className="truncate block">{label}</span>
+        )}
+        {id !== "open" && (
+          <div
+            onMouseDown={startResize(id)}
+            onClick={e => e.stopPropagation()}
+            title={t("mp.grid.resizeHint")}
+            className="absolute top-0 right-0 h-full w-2 cursor-col-resize select-none hover:bg-accent/40 active:bg-accent/60"
+          />
+        )}
       </th>
     );
   };
@@ -235,21 +294,24 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
         {isAdmin ? t("mp.grid.editHint") : t("mp.grid.readonlyHint")}
       </p>
       <div className="overflow-x-auto rounded-xl border border-fg/10">
-        <table className="w-full border-collapse text-fg">
+        <table className="border-collapse text-fg table-fixed" style={{ width: tableWidth }}>
+          <colgroup>
+            {COL_IDS.map(id => <col key={id} style={{ width: widthOf(id) }} />)}
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-fg/10">
-              <th className={th} style={{ width: 34 }} />
-              {renderHeader(t("mp.grid.sfi"), "sfi")}
-              {renderHeader(t("mp.grid.taskCode"), "taskCode")}
-              {renderHeader(t("mp.grid.equipo"), "equipo", { minWidth: 180 })}
-              {renderHeader(t("mp.grid.title"), "title", { minWidth: 220 })}
-              {renderHeader(t("mp.grid.freqType"), "freqType")}
-              {renderHeader(t("mp.grid.freqValue"), "freqValue")}
-              {renderHeader(t("mp.grid.estimatedHours"), "estimatedHours")}
-              {renderHeader(t("mp.col.lastExecution"), "lastExecution")}
-              {renderHeader(t("mp.col.nextDue"), "nextDue")}
-              {renderHeader(t("mp.col.status"), "status")}
-              {renderHeader(t("mp.col.actions"))}
+              {renderHeader("open", "")}
+              {renderHeader("sfi", t("mp.grid.sfi"), "sfi")}
+              {renderHeader("taskCode", t("mp.grid.taskCode"), "taskCode")}
+              {renderHeader("equipo", t("mp.grid.equipo"), "equipo")}
+              {renderHeader("title", t("mp.grid.title"), "title")}
+              {renderHeader("freqType", t("mp.grid.freqType"), "freqType")}
+              {renderHeader("freqValue", t("mp.grid.freqValue"), "freqValue")}
+              {renderHeader("estimatedHours", t("mp.grid.estimatedHours"), "estimatedHours")}
+              {renderHeader("lastExecution", t("mp.col.lastExecution"), "lastExecution")}
+              {renderHeader("nextDue", t("mp.col.nextDue"), "nextDue")}
+              {renderHeader("status", t("mp.col.status"), "status")}
+              {renderHeader("actions", t("mp.col.actions"))}
             </tr>
           </thead>
           <tbody className="divide-y divide-fg/5">
