@@ -2540,6 +2540,7 @@ export const MaintenancePlansPage: React.FC = () => {
   const isAdmin = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER";
 
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
+  const statusValue = useCallback((row: MaintenancePlan) => computeStatus(row), []);
   const renderStatus = useCallback((row: MaintenancePlan) => (
     <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />
   ), [navigate]);
@@ -2705,16 +2706,19 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        {/* Toggle vista Excel (planilla compacta editable) ↔ tarjetas */}
+        {/* Toggle vista Excel (planilla compacta editable) ↔ tarjetas — solo icono */}
         <button
           onClick={() => setGridView(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+          title={t("mp.page.gridView")}
+          aria-label={t("mp.page.gridView")}
+          aria-pressed={gridView}
+          className={`flex items-center justify-center p-1.5 rounded-lg border transition-all ${
             gridView
               ? "bg-accent/20 border-accent/40 text-accent"
               : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30"
           }`}
         >
-          <Table2 className="w-3.5 h-3.5" /> {t("mp.page.gridView")}
+          <Table2 className="w-4 h-4" />
         </button>
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
@@ -2863,6 +2867,7 @@ export const MaintenancePlansPage: React.FC = () => {
             vesselNameMap={vesselNameMap}
             renderStatus={renderStatus}
             renderActions={renderActions}
+            statusValue={statusValue}
             onOpenDetail={row => openLink(row.taskCode)}
             emptyText={t("empty.maintenancePlans")}
           />

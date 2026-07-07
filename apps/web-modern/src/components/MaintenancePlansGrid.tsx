@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
@@ -24,9 +24,14 @@ interface Props {
   vesselNameMap: Map<string, string>;
   renderStatus: (row: MaintenancePlan) => React.ReactNode;
   renderActions: (row: MaintenancePlan) => React.ReactNode;
+  statusValue: (row: MaintenancePlan) => string;
   onOpenDetail: (row: MaintenancePlan) => void;
   emptyText: string;
 }
+
+type SortKey =
+  | "sfi" | "taskCode" | "equipo" | "title" | "freqType" | "freqValue"
+  | "estimatedHours" | "lastExecution" | "nextDue" | "status";
 
 function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
   const out = { ...base };
@@ -126,7 +131,7 @@ const roMono = ro + " font-mono";
 // ─── Main grid ──────────────────────────────────────────────────────────────
 
 export const MaintenancePlansGrid: React.FC<Props> = ({
-  plans, isAdmin, vesselNameMap, renderStatus, renderActions, onOpenDetail, emptyText,
+  plans, isAdmin, vesselNameMap, renderStatus, renderActions, statusValue, onOpenDetail, emptyText,
 }) => {
   const t = useT();
   const [rows, setRows] = useState<MaintenancePlan[]>(plans);
@@ -167,7 +172,62 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
     }
   }, [t]);
 
+  // ── Orden por columna (clic en encabezado) ────────────────────────────────
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: SortKey) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir("asc"); }
+    else setSortDir(d => (d === "asc" ? "desc" : "asc"));
+  };
+
+  const sortVal = useCallback((row: MaintenancePlan, key: SortKey): string | number | null => {
+    const hb = isHoursTT(row.triggerType);
+    switch (key) {
+      case "sfi": return row.sfiGroupNumber ?? null;
+      case "taskCode": return row.taskCode ?? null;
+      case "equipo": return (row.assetName ?? row.assetId ?? "").toLowerCase();
+      case "title": return (row.title ?? "").toLowerCase();
+      case "freqType": return row.triggerType ?? null;
+      case "freqValue": return (hb ? row.frequencyHours : row.frequencyMonths) ?? null;
+      case "estimatedHours": return row.estimatedHours ?? null;
+      case "lastExecution": return hb ? (row.lastExecutionHours ?? null) : (row.lastExecutionDate ?? null);
+      case "nextDue": return hb ? (row.nextDueHours ?? null) : (row.nextDueDate ?? null);
+      case "status": return statusValue(row);
+      default: return null;
+    }
+  }, [statusValue]);
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = sortVal(a, sortKey);
+      const bv = sortVal(b, sortKey);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;   // vacíos al final, sin importar la dirección
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * dir;
+    });
+  }, [rows, sortKey, sortDir, sortVal]);
+
   const th = "px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 whitespace-nowrap";
+  const renderHeader = (label: string, key?: SortKey, style?: React.CSSProperties) => {
+    if (!key) return <th className={th} style={style}>{label}</th>;
+    const active = sortKey === key;
+    return (
+      <th className={th} style={style}>
+        <button
+          type="button"
+          onClick={() => toggleSort(key)}
+          className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none"
+        >
+          <span>{label}</span>
+          <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+        </button>
+      </th>
+    );
+  };
 
   return (
     <div className="space-y-2">
@@ -179,24 +239,24 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-fg/10">
               <th className={th} style={{ width: 34 }} />
-              <th className={th}>{t("mp.grid.sfi")}</th>
-              <th className={th}>{t("mp.grid.taskCode")}</th>
-              <th className={th} style={{ minWidth: 180 }}>{t("mp.grid.equipo")}</th>
-              <th className={th} style={{ minWidth: 220 }}>{t("mp.grid.title")}</th>
-              <th className={th}>{t("mp.grid.freqType")}</th>
-              <th className={th}>{t("mp.grid.freqValue")}</th>
-              <th className={th}>{t("mp.grid.estimatedHours")}</th>
-              <th className={th}>{t("mp.col.lastExecution")}</th>
-              <th className={th}>{t("mp.col.nextDue")}</th>
-              <th className={th}>{t("mp.col.status")}</th>
-              <th className={th}>{t("mp.col.actions")}</th>
+              {renderHeader(t("mp.grid.sfi"), "sfi")}
+              {renderHeader(t("mp.grid.taskCode"), "taskCode")}
+              {renderHeader(t("mp.grid.equipo"), "equipo", { minWidth: 180 })}
+              {renderHeader(t("mp.grid.title"), "title", { minWidth: 220 })}
+              {renderHeader(t("mp.grid.freqType"), "freqType")}
+              {renderHeader(t("mp.grid.freqValue"), "freqValue")}
+              {renderHeader(t("mp.grid.estimatedHours"), "estimatedHours")}
+              {renderHeader(t("mp.col.lastExecution"), "lastExecution")}
+              {renderHeader(t("mp.col.nextDue"), "nextDue")}
+              {renderHeader(t("mp.col.status"), "status")}
+              {renderHeader(t("mp.col.actions"))}
             </tr>
           </thead>
           <tbody className="divide-y divide-fg/5">
-            {rows.length === 0 && (
+            {sortedRows.length === 0 && (
               <tr><td colSpan={12} className="px-4 py-10 text-center text-xs text-text-industrial/40">{emptyText}</td></tr>
             )}
-            {rows.map(row => {
+            {sortedRows.map(row => {
               const assets = assetsByVessel[row.vesselCode] ?? [];
               const hoursBased = isHoursTT(row.triggerType);
               const err = errById[row.id];
