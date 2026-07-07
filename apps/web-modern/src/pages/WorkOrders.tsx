@@ -2204,13 +2204,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
             <button
               onClick={() => {
-                if (isAdmin) {
-                  setCloseOnBehalfUserId(user?.id ?? "");
-                  setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
-                  setShowCloseDialog(true);
-                } else {
-                  void onClose_WO();
-                }
+                setCloseOnBehalfUserId(user?.id ?? "");
+                setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
+                setShowCloseDialog(true);
               }}
               disabled={!canClose || closing}
               title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
@@ -2254,18 +2250,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Quién cierra</label>
-            <select
-              value={closeOnBehalfUserId}
-              onChange={e => setCloseOnBehalfUserId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
-            >
-              {closeTeamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
-              {closeTeamUsers.map(u => (
-                <option key={u.userId} value={u.userId}>
-                  {(closeMemberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
-                </option>
-              ))}
-            </select>
+            {isAdmin ? (
+              <select
+                value={closeOnBehalfUserId}
+                onChange={e => setCloseOnBehalfUserId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+              >
+                {closeTeamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
+                {closeTeamUsers.map(u => (
+                  <option key={u.userId} value={u.userId}>
+                    {(closeMemberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                autoFocus
+                value={executedByName}
+                onChange={e => setExecutedByName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { setShowCloseDialog(false); void onClose_WO({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); } }}
+                className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
+                placeholder="Nombre y apellido"
+              />
+            )}
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Fecha de cierre</label>
