@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert, Minimize2, Maximize2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate, type TranslationKey } from "../lib/i18n";
@@ -89,6 +89,25 @@ export const Dashboard: React.FC = () => {
     itemStyle: { color: isDark ? "#E0E1DD" : "#1A1D24" },
   };
   const [showInsights, setShowInsights] = React.useState(false);
+
+  // Modo compacto: reduce ~20% las dimensiones del dashboard para pantallas
+  // chicas. Preferencia por-usuario persistida en localStorage.
+  const [compact, setCompact] = React.useState<boolean>(() => {
+    try { return localStorage.getItem("dashboard.compact") === "1"; } catch { return false; }
+  });
+  const toggleCompact = () => setCompact(prev => {
+    const next = !prev;
+    try { localStorage.setItem("dashboard.compact", next ? "1" : "0"); } catch { /* ignore */ }
+    return next;
+  });
+  // Tokens de dimensión (usados por todas las cards de la grilla).
+  const cardH    = compact ? "h-[184px]" : "h-[226px]";
+  const cardPad  = compact ? "p-3!" : "p-4!";
+  const chartBox = compact ? "w-[128px] h-[128px]" : "w-[160px] h-[160px]";
+  const donut    = compact ? { inner: 35, outer: 58 } : { inner: 44, outer: 72 };
+  const legendW  = compact ? "w-[112px]" : "w-[130px]";
+  const gridGap  = compact ? "gap-3" : "gap-4";
+  const rootGap  = compact ? "space-y-4" : "space-y-6";
 
   // useFetch injects vesselCode automatically from VesselContext
   const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
@@ -255,7 +274,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   };
 
   return (
-    <div ref={dashboardRef} className="space-y-6 animate-in fade-in duration-500">
+    <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
       {/* Alerta superior: reportes sin procesar (drafts / estado inicial) por
           módulo. Solo se muestra si hay algo pendiente; cada badge navega a la
           lista filtrada del módulo para que se procesen. */}
@@ -296,7 +315,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
       {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
           archivar o mandar por email un estado puntual de la flota. */}
-      <div className="flex justify-end" data-export-exclude="true">
+      <div className="flex justify-end gap-2" data-export-exclude="true">
+        <button
+          onClick={toggleCompact}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          title={t("dashboard.compactTitle")}
+        >
+          {compact ? <Maximize2 className="w-3.5 h-3.5 text-accent" /> : <Minimize2 className="w-3.5 h-3.5 text-accent" />}
+          {compact ? t("dashboard.compactOff") : t("dashboard.compactOn")}
+        </button>
         <button
           onClick={() => { void exportDashboardHtml(); }}
           disabled={exporting}
@@ -328,9 +355,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       )}
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 lg:grid-cols-3 ${gridGap}`}>
         {/* WO chart */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.woTitle")}</h2>
@@ -340,10 +367,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
           {workOrders.error ? <ErrorMsg msg={workOrders.error} /> : (
             <div className="flex items-center gap-2 flex-1">
-              <div className="w-[160px] h-[160px] shrink-0 relative">
+              <div className={`${chartBox} shrink-0 relative`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {statusCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
@@ -354,7 +381,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className="w-[130px] space-y-2">
+              <div className={`${legendW} space-y-2`}>
                 {statusCounts.map(s => (
                   <button key={s.name} type="button" onClick={() => navigate(`/work-orders?view=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
@@ -375,7 +402,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
             : undefined;
           return (
-        <div className="bento-card p-4! flex flex-col h-[226px]" style={mpStyle}>
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={mpStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.mpTitle")}</h2>
@@ -385,10 +412,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
           {mpSummary.error ? <ErrorMsg msg={mpSummary.error} /> : (
             <div className="flex items-center gap-2 flex-1">
-              <div className="w-[160px] h-[160px] shrink-0 relative">
+              <div className={`${chartBox} shrink-0 relative`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={mpStatusCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={mpStatusCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {mpStatusCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
@@ -399,7 +426,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className="w-[130px] space-y-2">
+              <div className={`${legendW} space-y-2`}>
                 {mpStatusCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/maintenance-plans?executionStatus=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
@@ -416,7 +443,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         })()}
 
         {/* Deferrals status chart */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.deferralsTitle")}</h2>
@@ -431,10 +458,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
-              <div className="w-[160px] h-[160px] shrink-0 relative">
+              <div className={`${chartBox} shrink-0 relative`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={deferralCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={deferralCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {deferralCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
@@ -445,7 +472,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className="w-[130px] space-y-2">
+              <div className={`${legendW} space-y-2`}>
                 {deferralCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/deferrals?status=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
@@ -466,7 +493,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
             : undefined;
           return (
-        <div className="bento-card p-4! flex flex-col h-[226px]" style={oosStyle}>
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={oosStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.oosTitle")}</h2>
@@ -510,7 +537,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
             : undefined;
           return (
-        <div className="bento-card p-4! flex flex-col h-[226px]" style={csStyle}>
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={csStyle}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.criticalSparesTitle")}</h2>
@@ -525,10 +552,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
-              <div className="w-[160px] h-[160px] shrink-0 relative">
+              <div className={`${chartBox} shrink-0 relative`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={critSparesCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={critSparesCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {critSparesCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
@@ -539,7 +566,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className="w-[130px] space-y-2">
+              <div className={`${legendW} space-y-2`}>
                 {critSparesCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/spares?stockStatus=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
@@ -556,7 +583,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         })()}
 
         {/* Spare Requests status chart */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.spareReqTitle")}</h2>
@@ -571,10 +598,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
-              <div className="w-[160px] h-[160px] shrink-0 relative">
+              <div className={`${chartBox} shrink-0 relative`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={spareReqCounts} cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={spareReqCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {spareReqCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
@@ -585,7 +612,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.itemsLabel")}</span>
                 </div>
               </div>
-              <div className="w-[130px] space-y-2">
+              <div className={`${legendW} space-y-2`}>
                 {spareReqCounts.map(s => (
                   <button key={s.key} type="button" onClick={() => navigate(`/spare-requests?status=${s.key}`)}
                     className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
@@ -600,7 +627,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Crew & Drills summary (vetting widget) */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.crewTitle")}</h2>
@@ -669,7 +696,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
 
         {/* Permits to Work summary (vetting widget) */}
-        <div className="bento-card p-4! flex flex-col h-[226px]">
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-xs font-bold text-fg">{t("dashboard.permitsTitle")}</h2>
@@ -757,6 +784,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             loading={fuelData.loading}
             error={fuelData.error}
             vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : t("dashboard.allVessels")}
+            compact={compact}
           />
         </div>
       </div>
@@ -848,12 +876,13 @@ function buildDropletsChartData(raw: { date: string; liters: number }[]): ChartP
 }
 
 const FuelConsumptionWidget = ({
-  data, loading, error, vesselName,
+  data, loading, error, vesselName, compact = false,
 }: {
   data: { date: string; liters: number }[];
   loading: boolean;
   error: string | null;
   vesselName: string;
+  compact?: boolean;
 }) => {
   const t = useT();
   const { theme } = useTheme();
@@ -868,7 +897,7 @@ const FuelConsumptionWidget = ({
   const hasData = data.length > 0;
 
   return (
-    <div className="bento-card p-4! flex flex-col h-[190px]">
+    <div className={`bento-card ${compact ? "p-3!" : "p-4!"} flex flex-col ${compact ? "h-[152px]" : "h-[190px]"}`}>
       <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-xs font-bold text-fg flex items-center gap-2">
