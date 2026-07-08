@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Plus, X, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -151,7 +152,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
             <h2 className="text-base font-bold text-fg">{isEdit ? "Editar Clase" : "Nueva Clase de Equipo"}</h2>
             {isEdit && <p className="text-[10px] text-text-industrial/40">{initial!.code}</p>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">

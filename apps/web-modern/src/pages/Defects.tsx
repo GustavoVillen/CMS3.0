@@ -5,6 +5,7 @@ import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
@@ -539,7 +540,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
             <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button type="button" onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
         <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -1133,7 +1134,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("def.tempRepairTitle")}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
           <div className="p-6 space-y-3">
             <p className="text-sm text-fg/80">{t("def.tempRepairAsk")}</p>
@@ -1195,7 +1196,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+              <ModalCloseButton onClose={onClose} />
             </div>
           </div>
 
@@ -1582,14 +1583,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
       {/* Lightbox para ampliar fotos al click en el mosaico */}
       {lightboxPhoto && lightboxPhoto.description && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
-            className="absolute top-4 right-4 p-2 rounded-full bg-fg/10 hover:bg-fg/20 text-fg transition-colors"
-            title="Cerrar"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <ModalCloseButton onClose={() => setLightboxPhoto(null)} className="absolute top-4 right-4 z-10" />
           <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
             <AuthedImage src={lightboxPhoto.description} alt={lightboxPhoto.filename} className="max-h-[85vh] rounded-lg object-contain" />
             <p className="text-[10px] text-fg/40">{lightboxPhoto.filename}  ·  {fmtDate(lightboxPhoto.uploadedAt)}</p>

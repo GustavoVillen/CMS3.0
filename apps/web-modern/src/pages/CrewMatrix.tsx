@@ -3,11 +3,12 @@
 // Reemplaza el sistema viejo de CrewCapability con TrainingItem + CrewTrainingRecord.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Grid3x3, Loader2, X, AlertCircle, FileText } from "lucide-react";
+import { Grid3x3, Loader2, AlertCircle, FileText } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 
@@ -158,7 +159,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
               </span>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-3">
           <div>

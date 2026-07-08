@@ -9,6 +9,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useDeepLink } from "../lib/deep-link";
@@ -388,7 +389,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           </div>
           <div className="flex items-center gap-1.5">
             {!isNew && <CopyLinkButton />}
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
 

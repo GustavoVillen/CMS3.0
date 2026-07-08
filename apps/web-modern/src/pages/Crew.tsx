@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { Users, Plus, X, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
+import { Users, Plus, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
@@ -250,7 +251,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("crew.status.signedOff")}</span>}
             {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6">

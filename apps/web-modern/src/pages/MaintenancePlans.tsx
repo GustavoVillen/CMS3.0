@@ -39,6 +39,7 @@ import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { RichTextArea } from "../components/RichTextArea";
 import { RiskMatrix } from "../components/RiskMatrix";
@@ -170,7 +171,7 @@ function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClick
         {plan.activeWorkOrderCode && (
           <button
             type="button"
-            onClick={onClickWo}
+            onClick={onClickWo ? (e) => { e.stopPropagation(); onClickWo(); } : undefined}
             disabled={!onClickWo}
             className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-accent border-accent/30 font-mono whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-accent/10 enabled:cursor-pointer transition-colors"
           >
@@ -464,7 +465,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
         <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("mp.exec.savedTitle")}</h2>
-            <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
           <div className="p-6 space-y-4">
             <p className="text-sm text-fg/80">{t("mp.exec.printWoQuestion")}</p>
@@ -505,7 +506,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
             <h2 className="text-base font-bold text-fg">{t("mp.exec.reportTitle")}</h2>
             <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -794,7 +795,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
             <h2 className="text-base font-bold text-fg">{t("mp.postpone.title")}</h2>
             <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -1621,7 +1622,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+              <ModalCloseButton onClose={onClose} />
             </div>
           </div>
 

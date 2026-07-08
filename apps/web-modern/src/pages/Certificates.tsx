@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
@@ -210,7 +211,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
               {isEdit ? "Editar Certificado" : "Nuevo Certificado"}
             </h2>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

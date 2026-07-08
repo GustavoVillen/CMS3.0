@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X, ShieldCheck, ShieldAlert, Waypoints } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, ShieldAlert, Waypoints } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -183,7 +184,7 @@ const FailureModeDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved })
             <h2 className="text-base font-bold text-fg">{isEdit ? "Editar Modo de Falla" : "Nuevo Modo de Falla"}</h2>
             {isEdit && <p className="text-[10px] text-text-industrial/40 font-mono">{initial!.code}</p>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">

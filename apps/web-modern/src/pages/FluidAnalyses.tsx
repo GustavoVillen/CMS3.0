@@ -8,6 +8,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -1123,7 +1124,7 @@ function ModalShell({ title, onClose, children, wide }: { title: string; onClose
       <div className={`relative w-full ${wide ? "max-w-5xl" : "max-w-2xl"} max-h-[92vh] overflow-y-auto bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl shadow-2xl`}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-fg/10 sticky top-0 bg-surface dark:bg-[#0D1526] z-10">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg"><X className="w-4 h-4" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-5">{children}</div>
       </div>

@@ -6,8 +6,9 @@
 // que el padre (MobileLayout) traduce a cambio de tab + acción.
 
 import React, { useEffect, useState } from "react";
-import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, X, Mic } from "lucide-react";
+import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, Mic } from "lucide-react";
 import { useWoTerms } from "../lib/i18n";
+import { ModalCloseButton } from "./ModalCloseButton";
 
 export type QuickAction =
   | "defect" | "near-miss" | "photo" | "wo-progress"
@@ -45,9 +46,7 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
                 <p className="text-[10px] uppercase tracking-widest text-accent font-bold">Acción rápida</p>
                 <h2 className="text-sm font-bold text-fg">¿Qué necesitás reportar?</h2>
               </div>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-text-industrial/40 hover:text-fg">
-                <X className="w-5 h-5" />
-              </button>
+              <ModalCloseButton onClose={() => setOpen(false)} />
             </div>
 
             <div className="grid grid-cols-2 gap-2">

@@ -4,6 +4,7 @@ import { useFetch } from "../lib/hooks";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useT } from "../lib/i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -284,9 +285,12 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-fg/10">
-          <h2 className="text-base font-bold text-fg">Remover superintendente</h2>
-          <p className="text-xs text-text-industrial/40 mt-0.5">{fullName(superintendent.user)}</p>
+        <div className="flex items-start justify-between px-6 py-4 border-b border-fg/10">
+          <div>
+            <h2 className="text-base font-bold text-fg">Remover superintendente</h2>
+            <p className="text-xs text-text-industrial/40 mt-0.5">{fullName(superintendent.user)}</p>
+          </div>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4">
           <p className="text-xs text-text-industrial/60">

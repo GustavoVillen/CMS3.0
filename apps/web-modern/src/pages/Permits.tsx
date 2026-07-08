@@ -8,6 +8,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
@@ -397,7 +398,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             </div>
             {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         {!isNew && (

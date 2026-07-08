@@ -7,6 +7,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -497,7 +498,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-fg/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
 

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Download, Loader2, ShieldCheck, X } from "lucide-react";
+import { Download, Loader2, ShieldCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { api, ApiError } from "../lib/api";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
@@ -103,7 +104,7 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("capa.suggestClose")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">
@@ -178,7 +179,7 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, o
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("capa.close")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           {actionsTaken && (
@@ -250,7 +251,7 @@ const CancelCapaModal: React.FC<CancelCapaModalProps> = ({ capaId, onClose, onSu
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("capa.cancel")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -368,7 +369,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
             <h2 className="text-base font-bold text-fg">{t("page.capa")}</h2>
             <div className="flex items-center gap-1.5">
               <CopyLinkButton />
-              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+              <ModalCloseButton onClose={onClose} />
             </div>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">

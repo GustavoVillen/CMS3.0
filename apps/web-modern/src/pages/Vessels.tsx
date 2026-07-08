@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Ship, FileSpreadsheet, Plus, Trash2, X, Map } from "lucide-react";
+import { Ship, FileSpreadsheet, Plus, Trash2, Map } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -146,7 +147,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
             <Ship className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold text-fg">{isEdit ? t("vessel.editTitle") : t("vessel.newTitle")}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg transition-all"><X className="w-4 h-4" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-[1fr_7fr] gap-4">

@@ -9,6 +9,7 @@ import { api, ApiError } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 
@@ -160,7 +161,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("rh.editorHeader")} · {date}</p>
             <h2 className="text-sm font-bold text-fg">{crew.firstName} {crew.lastName} — {crew.rank}</h2>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="p-6 space-y-4">

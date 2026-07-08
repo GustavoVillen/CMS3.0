@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { FileSpreadsheet, Maximize2, Minimize2, Plus, Truck, X } from "lucide-react";
+import { FileSpreadsheet, Maximize2, Minimize2, Plus, Truck } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
@@ -133,7 +134,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-fg/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
 

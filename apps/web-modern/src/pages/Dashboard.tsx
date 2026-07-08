@@ -3,10 +3,11 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, Users, CalendarCheck, ShieldAlert, Minimize2, Maximize2 } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, translate, type TranslationKey } from "../lib/i18n";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
@@ -68,8 +69,6 @@ export const Dashboard: React.FC = () => {
   const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares");
   const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
-  const crewSummary       = useFetch<{ onboard: number; certsExpired: number; certsExpiringSoon: number; drillsScheduled: number; drillsCompletedYear: number }>("/app/dashboard/crew-summary");
-  const permitsSummary    = useFetch<{ active: number; pendingApproval: number; expiringSoon: number; expired: number }>("/app/dashboard/permits-summary");
   // Equipos fuera de servicio (OUT_OF_SERVICE) — para identificarlos de un vistazo.
   const oosAssets         = useFetch<ListResponse<{ id: string; assetCode: string; name: string; vesselCode: string; criticality: string }>>("/app/pms/assets?status=OUT_OF_SERVICE");
   // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
@@ -90,24 +89,14 @@ export const Dashboard: React.FC = () => {
   };
   const [showInsights, setShowInsights] = React.useState(false);
 
-  // Modo compacto: reduce ~20% las dimensiones del dashboard para pantallas
-  // chicas. Preferencia por-usuario persistida en localStorage.
-  const [compact, setCompact] = React.useState<boolean>(() => {
-    try { return localStorage.getItem("dashboard.compact") === "1"; } catch { return false; }
-  });
-  const toggleCompact = () => setCompact(prev => {
-    const next = !prev;
-    try { localStorage.setItem("dashboard.compact", next ? "1" : "0"); } catch { /* ignore */ }
-    return next;
-  });
-  // Tokens de dimensión (usados por todas las cards de la grilla).
-  const cardH    = compact ? "h-[184px]" : "h-[226px]";
-  const cardPad  = compact ? "p-3!" : "p-4!";
-  const chartBox = compact ? "w-[128px] h-[128px]" : "w-[160px] h-[160px]";
-  const donut    = compact ? { inner: 35, outer: 58 } : { inner: 44, outer: 72 };
-  const legendW  = compact ? "w-[112px]" : "w-[130px]";
-  const gridGap  = compact ? "gap-3" : "gap-4";
-  const rootGap  = compact ? "space-y-4" : "space-y-6";
+  // Densidad compacta fija (~20% menos) — pensada para pantallas chicas.
+  const cardH    = "h-[184px]";
+  const cardPad  = "p-3!";
+  const chartBox = "w-[128px] h-[128px]";
+  const donut    = { inner: 35, outer: 58 };
+  const legendW  = "w-[112px]";
+  const gridGap  = "gap-3";
+  const rootGap  = "space-y-4";
 
   // useFetch injects vesselCode automatically from VesselContext
   const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
@@ -275,9 +264,31 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
-      {/* Alerta superior: reportes sin procesar (drafts / estado inicial) por
-          módulo. Solo se muestra si hay algo pendiente; cada badge navega a la
-          lista filtrada del módulo para que se procesen. */}
+      {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
+          archivar o mandar por email un estado puntual de la flota. */}
+      <div className="flex justify-end" data-export-exclude="true">
+        <button
+          onClick={() => { void exportDashboardHtml(); }}
+          disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
+          title={t("dashboard.exportHtmlTitle")}
+        >
+          {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
+          {t("dashboard.exportHtml")}
+        </button>
+      </div>
+
+      {/* Compliance score + smart alerts (sólo managers) */}
+      <ComplianceDashboard />
+
+      {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
+       * (reporte diario, defectos abiertos, AI insights, certs por vencer).
+       * Antes los KPI eran 4 cards sueltas debajo; consolidados acá. */}
+      <MyDayPanel onShowInsights={() => setShowInsights(true)} />
+
+      {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
+          debajo de "Mi día". Solo se muestra si hay algo pendiente; cada badge
+          navega a la lista filtrada del módulo para que se procesen. */}
       {(() => {
         const pc = pendingCounts.data;
         if (!pc) return null;
@@ -312,36 +323,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
         );
       })()}
-
-      {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
-          archivar o mandar por email un estado puntual de la flota. */}
-      <div className="flex justify-end gap-2" data-export-exclude="true">
-        <button
-          onClick={toggleCompact}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-          title={t("dashboard.compactTitle")}
-        >
-          {compact ? <Maximize2 className="w-3.5 h-3.5 text-accent" /> : <Minimize2 className="w-3.5 h-3.5 text-accent" />}
-          {compact ? t("dashboard.compactOff") : t("dashboard.compactOn")}
-        </button>
-        <button
-          onClick={() => { void exportDashboardHtml(); }}
-          disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
-          title={t("dashboard.exportHtmlTitle")}
-        >
-          {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
-          {t("dashboard.exportHtml")}
-        </button>
-      </div>
-
-      {/* Compliance score + smart alerts (sólo managers) */}
-      <ComplianceDashboard />
-
-      {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
-       * (reporte diario, defectos abiertos, AI insights, certs por vencer).
-       * Antes los KPI eran 4 cards sueltas debajo; consolidados acá. */}
-      <MyDayPanel onShowInsights={() => setShowInsights(true)} />
 
       {/* AI Insights modal */}
       {showInsights && (
@@ -626,137 +607,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           )}
         </div>
 
-        {/* Crew & Drills summary (vetting widget) */}
-        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-xs font-bold text-fg">{t("dashboard.crewTitle")}</h2>
-              <p className="text-[10px] text-text-industrial/40">{t("dashboard.crewSubtitle")}</p>
-            </div>
-            {crewSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-          </div>
-          {(() => {
-            const c = crewSummary.data ?? { onboard: 0, certsExpired: 0, certsExpiringSoon: 0, drillsScheduled: 0, drillsCompletedYear: 0 };
-            return (
-              <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-2 auto-rows-fr">
-                <button onClick={() => navigate("/crew")}
-                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Users className="w-3 h-3 text-text-industrial/40" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewOnboard")}</span>
-                  </div>
-                  <p className="text-xl font-bold text-fg tabular-nums leading-none">{c.onboard}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1">&nbsp;</p>
-                </button>
-                <button onClick={() => navigate("/crew-matrix")}
-                  className={`text-left rounded-lg p-3 transition-colors flex flex-col ${
-                    c.certsExpired + c.certsExpiringSoon > 0
-                      ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
-                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className={`w-3 h-3 ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.crewCertsAttn")}</span>
-                  </div>
-                  <p className={`text-xl font-bold tabular-nums leading-none ${c.certsExpired + c.certsExpiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>
-                    {c.certsExpired + c.certsExpiringSoon}
-                  </p>
-                  <p className="text-[10px] mt-auto pt-1 leading-none">
-                    {c.certsExpired > 0 && (
-                      <span className="text-red-700 dark:text-red-400">{t("dashboard.crewExpiredCount").replace("{n}", String(c.certsExpired))}</span>
-                    )}
-                    {c.certsExpired > 0 && c.certsExpiringSoon > 0 && <span className="text-text-industrial/40"> · </span>}
-                    {c.certsExpiringSoon > 0 && (
-                      <span className="text-yellow-700 dark:text-yellow-400">{t("dashboard.crewExpiringSoon").replace("{n}", String(c.certsExpiringSoon))}</span>
-                    )}
-                    {c.certsExpired === 0 && c.certsExpiringSoon === 0 && <span>&nbsp;</span>}
-                  </p>
-                </button>
-                <button onClick={() => navigate("/drills")}
-                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <CalendarCheck className="w-3 h-3 text-text-industrial/40" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsMonth")}</span>
-                  </div>
-                  <p className="text-xl font-bold text-fg tabular-nums leading-none">{c.drillsScheduled}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1 leading-none">{t("dashboard.drillsScheduled")}</p>
-                </button>
-                <button onClick={() => navigate("/drills?status=COMPLETED")}
-                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors flex flex-col">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <CalendarCheck className="w-3 h-3 text-success-sea" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.drillsYear")}</span>
-                  </div>
-                  <p className="text-xl font-bold text-success-sea tabular-nums leading-none">{c.drillsCompletedYear}</p>
-                  <p className="text-[10px] text-text-industrial/40 mt-auto pt-1 leading-none">{t("dashboard.drillsCompleted")}</p>
-                </button>
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* Permits to Work summary (vetting widget) */}
-        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-xs font-bold text-fg">{t("dashboard.permitsTitle")}</h2>
-              <p className="text-[10px] text-text-industrial/40">{t("dashboard.permitsSubtitle")}</p>
-            </div>
-            {permitsSummary.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-          </div>
-          {(() => {
-            const p = permitsSummary.data ?? { active: 0, pendingApproval: 0, expiringSoon: 0, expired: 0 };
-            return (
-              <div className="flex-1 grid grid-cols-2 gap-2 content-start">
-                <button onClick={() => navigate("/permits?status=ACTIVE")}
-                  className="text-left rounded-lg bg-fg/5 border border-fg/10 p-3 hover:bg-fg/10 transition-colors">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <ShieldAlert className="w-3 h-3 text-success-sea" />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsActive")}</span>
-                  </div>
-                  <p className="text-xl font-bold text-success-sea tabular-nums">{p.active}</p>
-                </button>
-                <button onClick={() => navigate("/permits?status=REQUESTED")}
-                  className={`text-left rounded-lg p-3 transition-colors ${
-                    p.pendingApproval > 0
-                      ? "bg-yellow-500/5 border border-yellow-500/30 hover:bg-yellow-500/10"
-                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Clock className={`w-3 h-3 ${p.pendingApproval > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsToApprove")}</span>
-                  </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.pendingApproval > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-fg"}`}>{p.pendingApproval}</p>
-                </button>
-                <button onClick={() => navigate("/permits?status=ACTIVE")}
-                  className={`text-left rounded-lg p-3 transition-colors ${
-                    p.expiringSoon > 0
-                      ? "bg-orange-500/5 border border-orange-500/30 hover:bg-orange-500/10"
-                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className={`w-3 h-3 ${p.expiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpiring")}</span>
-                  </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.expiringSoon > 0 ? "text-orange-700 dark:text-orange-400" : "text-fg"}`}>{p.expiringSoon}</p>
-                </button>
-                <button onClick={() => navigate("/permits?status=ACTIVE")}
-                  className={`text-left rounded-lg p-3 transition-colors ${
-                    p.expired > 0
-                      ? "bg-red-500/5 border border-red-500/30 hover:bg-red-500/10"
-                      : "bg-fg/5 border border-fg/10 hover:bg-fg/10"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertCircle className={`w-3 h-3 ${p.expired > 0 ? "text-red-700 dark:text-red-400" : "text-text-industrial/40"}`} />
-                    <span className="text-[9px] uppercase tracking-wider text-text-industrial/50 font-bold">{t("dashboard.permitsExpired")}</span>
-                  </div>
-                  <p className={`text-xl font-bold tabular-nums ${p.expired > 0 ? "text-red-700 dark:text-red-400" : "text-fg"}`}>{p.expired}</p>
-                </button>
-              </div>
-            );
-          })()}
-        </div>
-
         {/* Inactive vessels — compact alert strip */}
         {(() => {
           const inactive = contextVessels.filter(v => v.status !== "ACTIVE");
@@ -784,7 +634,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             loading={fuelData.loading}
             error={fuelData.error}
             vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : t("dashboard.allVessels")}
-            compact={compact}
           />
         </div>
       </div>
@@ -876,13 +725,12 @@ function buildDropletsChartData(raw: { date: string; liters: number }[]): ChartP
 }
 
 const FuelConsumptionWidget = ({
-  data, loading, error, vesselName, compact = false,
+  data, loading, error, vesselName,
 }: {
   data: { date: string; liters: number }[];
   loading: boolean;
   error: string | null;
   vesselName: string;
-  compact?: boolean;
 }) => {
   const t = useT();
   const { theme } = useTheme();
@@ -897,7 +745,7 @@ const FuelConsumptionWidget = ({
   const hasData = data.length > 0;
 
   return (
-    <div className={`bento-card ${compact ? "p-3!" : "p-4!"} flex flex-col ${compact ? "h-[152px]" : "h-[190px]"}`}>
+    <div className="bento-card p-3! flex flex-col h-[152px]">
       <div className="flex items-center justify-between mb-1">
         <div>
           <h2 className="text-xs font-bold text-fg flex items-center gap-2">
@@ -1007,7 +855,7 @@ const InsightsModal = ({ insights, loading, onClose, onNavigate, t }: {
           <h2 className="text-sm font-bold">AI Insights</h2>
           <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 font-bold text-accent">{insights.length}</span>
         </div>
-        <button onClick={onClose} className="text-text-industrial/40 hover:text-fg text-lg leading-none transition-colors">✕</button>
+        <ModalCloseButton onClose={onClose} />
       </div>
 
       {/* List */}

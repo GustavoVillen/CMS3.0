@@ -1,8 +1,9 @@
 // SIRE 2.0 Ch. 4 — Near Miss / Hazard Observation reporting.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, Loader2, X } from "lucide-react";
+import { AlertTriangle, Plus, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -125,7 +126,7 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
           </div>
           <div className="flex items-center gap-1.5">
             {!isNew && <CopyLinkButton />}
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
 

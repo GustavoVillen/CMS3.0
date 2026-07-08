@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { Users, Plus, X, Loader2, AlertCircle } from "lucide-react";
+import { Users, Plus, Loader2, AlertCircle } from "lucide-react";
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { PasswordInput } from "../../components/PasswordInput";
+import { ModalCloseButton } from "../../components/ModalCloseButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ function ModalWrapper({ title, onClose, children }: { title: string; onClose: ()
       <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="px-6 py-5 space-y-4">{children}</div>
       </div>

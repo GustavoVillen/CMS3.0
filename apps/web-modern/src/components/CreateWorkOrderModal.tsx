@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Droplets, Loader2, Sparkles, Wrench, X } from "lucide-react";
+import { Droplets, Loader2, Sparkles, Wrench } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
+import { ModalCloseButton } from "./ModalCloseButton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -414,7 +415,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               )}
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         {/* Body */}

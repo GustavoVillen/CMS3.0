@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { X, Type, Camera, Video as VideoIcon, Mic, Square, Loader2, Trash2, FileText } from "lucide-react";
+import { Type, Camera, Video as VideoIcon, Mic, Square, Loader2, Trash2, FileText } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 
 type Kind = "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
 
@@ -362,9 +363,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-fg/10">
           <span className="text-sm font-bold text-fg">Registrar avance</span>
-          <button type="button" onClick={onClose} className="p-1.5 text-text-industrial/40 hover:text-fg">
-            <X className="w-5 h-5" />
-          </button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         {/* Tipo de avance */}

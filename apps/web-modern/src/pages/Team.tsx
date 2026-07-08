@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 
@@ -172,7 +173,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
       <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">Agregar miembro</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         {/* Tabs */}
@@ -522,7 +523,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             )}
             <p className="text-[10px] text-blue-700 dark:text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
           </div>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-5">

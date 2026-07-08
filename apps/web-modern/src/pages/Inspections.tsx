@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -278,7 +279,7 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("insp.complete")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -462,7 +463,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
             <h2 className="text-base font-bold text-fg">
               {editing.execution.executionCode} · {editing.execution.vesselCode}
             </h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
           <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -592,7 +593,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
       <div className="w-full max-w-4xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("insp.templates")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

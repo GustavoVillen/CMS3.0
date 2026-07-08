@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
@@ -846,7 +847,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -1122,7 +1123,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
       <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("common.delete")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg transition-colors" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-text-industrial/70">

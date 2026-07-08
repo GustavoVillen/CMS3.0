@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
@@ -226,7 +227,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
               </span>
             )}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -434,7 +435,7 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
         <div className="overflow-y-auto flex-1 p-6">
@@ -554,7 +555,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
       <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
           {!isNew && (

@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useCopilotEmitter } from "../lib/copilot-context";
@@ -267,7 +268,7 @@ const DrillModal: React.FC<{
             </div>
             {drill && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[drill.status]}`}>{t(STATUS_TKEY[drill.status])}</span>}
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -690,7 +691,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
               <h2 className="text-sm font-bold text-fg">{t("drill.catalogTitle")}</h2>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">

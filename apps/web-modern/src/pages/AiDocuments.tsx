@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, X, Eye, Save } from "lucide-react";
+import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, Eye, Save } from "lucide-react";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -551,9 +552,7 @@ function ModalShell({
             <Bot className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold text-fg">{title}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-fg/5 text-text-industrial/40 hover:text-fg transition-all">
-            <X className="w-4 h-4" />
-          </button>
+          <ModalCloseButton onClose={onClose} />
         </div>
 
         <div className="p-6">{children}</div>

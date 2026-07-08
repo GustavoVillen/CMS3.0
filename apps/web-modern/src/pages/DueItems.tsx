@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertCircle, Bell, CalendarCheck, CalendarClock, Clock, Loader2, X } from "lucide-react";
+import { AlertCircle, Bell, CalendarCheck, CalendarClock, Clock, Loader2 } from "lucide-react";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -102,7 +103,7 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
       <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("mp.quickClose")}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">

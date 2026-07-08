@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
-  Building2, Plus, Users, Globe, Mail, X, Loader2,
+  Building2, Plus, Users, Globe, Mail, Loader2,
   CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, Pencil, Trash2,
 } from "lucide-react";
 import { platformFetch, platformPost, platformPatch, platformDelete } from "../../lib/platform-auth";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { PasswordInput } from "../../components/PasswordInput";
+import { ModalCloseButton } from "../../components/ModalCloseButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ function ModalWrapper({ title, onClose, children }: { title: string; onClose: ()
       <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
           <h2 className="text-sm font-bold text-fg">{title}</h2>
-          <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-4 h-4" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="px-6 py-5 space-y-4">{children}</div>
       </div>
@@ -545,7 +546,7 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
               <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
               <h2 className="text-base font-bold text-fg">{tenant.displayName}</h2>
             </div>
-            <button onClick={onClose} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-5 h-5" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
 
           <div className="flex border-b border-fg/5 shrink-0">

@@ -112,9 +112,6 @@ const dict = {
   "dashboard.certificatesExpired": { es: "Certificados vencidos",   en: "Expired Certificates",   pt: "Certificados vencidos" },
 
   // Dashboard sections
-  "dashboard.compactOn":         { es: "Compacto",                 en: "Compact",                pt: "Compacto" },
-  "dashboard.compactOff":        { es: "Normal",                   en: "Normal",                 pt: "Normal" },
-  "dashboard.compactTitle":      { es: "Cambiar densidad del dashboard", en: "Toggle dashboard density", pt: "Alternar densidade do painel" },
   "dashboard.pending.title":     { es: "Reportes sin procesar",    en: "Unprocessed reports",    pt: "Relatórios não processados" },
   "dashboard.pending.hint":      { es: "Requieren atención — clic para procesar", en: "Require attention — click to process", pt: "Requerem atenção — clique para processar" },
   "dashboard.woTitle":           { es: "Órdenes de Trabajo",       en: "Work Orders",            pt: "Ordens de Serviço" },

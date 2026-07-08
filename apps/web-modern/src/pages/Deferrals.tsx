@@ -5,6 +5,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { MocModal, type MocPrefill } from "./Moc";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -139,7 +140,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.review")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -206,7 +207,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.approve")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -279,7 +280,7 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.reject")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -338,7 +339,7 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.close")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -607,7 +608,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
             <h2 className="text-base font-bold text-fg">{t("page.deferrals")}</h2>
             <div className="flex items-center gap-1.5">
               <CopyLinkButton />
-              <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+              <ModalCloseButton onClose={onClose} />
             </div>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">

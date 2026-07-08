@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, RotateCcw, Send, Trash2, X,
+  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, RotateCcw, Send, Trash2,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -1206,9 +1207,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                 Reabrir
               </button>
             )}
-            <button onClick={() => { if (report === null && liveReport !== null) onSaved(); else onClose(); }} className="text-text-industrial/40 hover:text-fg transition-colors">
-              <X className="w-5 h-5" />
-            </button>
+            <ModalCloseButton onClose={() => { if (report === null && liveReport !== null) onSaved(); else onClose(); }} />
           </div>
         </div>
 

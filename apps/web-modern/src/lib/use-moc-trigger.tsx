@@ -14,6 +14,7 @@ import React, { useCallback, useState } from "react";
 import { GitBranch, Plus } from "lucide-react";
 import { useT, type TranslationKey } from "./i18n";
 import { MocModal, type MocPrefill } from "../pages/Moc";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 
 export type MocTriggerReason =
   | "spareEquivalent"
@@ -63,9 +64,12 @@ const MocTriggerDialog: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-2">
-          <GitBranch className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-bold text-fg">{t("moc.trigger.title")}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold text-fg">{t("moc.trigger.title")}</h2>
+          </div>
+          <ModalCloseButton onClose={onLater} />
         </div>
         <p className="text-sm text-text-industrial leading-relaxed">{t("moc.trigger.askCreate")}</p>
         <div className="rounded-xl bg-accent/[0.06] border border-accent/20 px-3 py-2">

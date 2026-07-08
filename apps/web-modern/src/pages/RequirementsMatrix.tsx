@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, Loader2, Plus, X } from "lucide-react";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { api } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
@@ -342,7 +343,10 @@ export const RequirementsMatrixPage: React.FC = () => {
             onClick={e => e.stopPropagation()}
             className="bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
-            <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createItemTitle")}</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-fg">{t("rm.createItemTitle")}</h2>
+              <ModalCloseButton onClose={() => !savingNew && setShowNewItem(false)} />
+            </div>
 
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.itemCode")} *</label>
@@ -431,7 +435,10 @@ export const RequirementsMatrixPage: React.FC = () => {
             onClick={e => e.stopPropagation()}
             className="bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl p-6 w-full max-w-md space-y-3"
           >
-            <h2 className="text-sm font-bold uppercase tracking-widest text-fg mb-2">{t("rm.createRankTitle")}</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-fg">{t("rm.createRankTitle")}</h2>
+              <ModalCloseButton onClose={() => !savingNewRank && setShowNewRank(false)} />
+            </div>
 
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("rm.rankCode")} *</label>

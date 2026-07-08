@@ -5,6 +5,7 @@ import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSprea
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -255,7 +256,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
       <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{t("wo.hold")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -327,7 +328,7 @@ const CancelModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
       <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{t("wo.cancel")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-3">
           <label className={labelCls}>{t("wo.cancelReason")}</label>
@@ -376,7 +377,7 @@ const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
       <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{t("wo.reopen")}</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+          <ModalCloseButton onClose={onClose} />
         </div>
         <div className="p-6 space-y-3">
           <p className="text-[11px] text-text-industrial/70 leading-snug">
@@ -685,14 +686,7 @@ const ProgressNotesPanel: React.FC<{
       {/* Lightbox para ampliar la foto/video al hacer click en el mosaico */}
       {lightbox && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={() => setLightbox(null)}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
-            className="absolute top-4 right-4 p-2 rounded-full bg-fg/10 hover:bg-fg/20 text-fg transition-colors"
-            title="Cerrar"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <ModalCloseButton onClose={() => setLightbox(null)} className="absolute top-4 right-4 z-10" />
           <div className="max-w-5xl max-h-full flex flex-col items-center gap-2" onClick={e => e.stopPropagation()}>
             {lightbox.kind === "PHOTO" ? (
               <AuthedImage src={lightbox.fileUrl!} alt="" className="max-h-[85vh] rounded-lg object-contain" />
@@ -1400,7 +1394,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onClose}><X className="w-5 h-5 text-text-industrial/40 hover:text-fg" /></button>
+            <ModalCloseButton onClose={onClose} />
           </div>
         </div>
 
