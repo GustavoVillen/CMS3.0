@@ -112,6 +112,8 @@ const dict = {
   "dashboard.certificatesExpired": { es: "Certificados vencidos",   en: "Expired Certificates",   pt: "Certificados vencidos" },
 
   // Dashboard sections
+  "dashboard.pending.title":     { es: "Reportes sin procesar",    en: "Unprocessed reports",    pt: "Relatórios não processados" },
+  "dashboard.pending.hint":      { es: "Requieren atención — clic para procesar", en: "Require attention — click to process", pt: "Requerem atenção — clique para processar" },
   "dashboard.woTitle":           { es: "Órdenes de Trabajo",       en: "Work Orders",            pt: "Ordens de Serviço" },
   "dashboard.woSubtitle":        { es: "Distribución por estado",  en: "Distribution by status", pt: "Distribuição por estado" },
   "dashboard.fleetTitle":        { es: "Flota Activa",             en: "Active Fleet",           pt: "Frota Ativa" },

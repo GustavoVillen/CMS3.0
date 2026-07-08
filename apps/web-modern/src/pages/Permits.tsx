@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
 } from "lucide-react";
@@ -839,7 +840,12 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
 
 export const PermitsPage: React.FC = () => {
   const t = useT();
-  const [statusFilter, setStatusFilter] = useState<"" | PermitStatus>("");
+  // Estado inicial del filtro tomado de la URL (?status=DRAFT) — permite el
+  // deep-link desde la alerta "sin procesar" del Dashboard.
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<"" | PermitStatus>(
+    () => (searchParams.get("status") as PermitStatus | null) ?? "",
+  );
   const [typeFilter, setTypeFilter]     = useState<"" | PermitType>("");
 
   const path = useMemo(() => {

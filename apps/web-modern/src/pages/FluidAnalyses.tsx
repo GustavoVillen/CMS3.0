@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
@@ -146,6 +146,10 @@ export const FluidAnalysesPage: React.FC = () => {
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
   const [filters, setFilters] = useState({ fluidType: "" });
+  // Deep-link desde la alerta "sin procesar" del Dashboard: ?status=DRAFT
+  // filtra las muestras a ese estado.
+  const [searchParams] = useSearchParams();
+  const statusParam = (searchParams.get("status") ?? "").trim();
   const [creatingSample, setCreatingSample] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>("sampledAt");
@@ -168,7 +172,7 @@ export const FluidAnalysesPage: React.FC = () => {
   const assets = useMemo(() => assetsData?.items ?? [], [assetsData?.items]);
 
   const samples = useMemo(() => {
-    const items = [...(data?.items ?? [])];
+    const items = (statusParam ? (data?.items ?? []).filter(s => s.status === statusParam) : [...(data?.items ?? [])]);
     items.sort((a, b) => {
       let av: string | number | null = null;
       let bv: string | number | null = null;
@@ -186,7 +190,7 @@ export const FluidAnalysesPage: React.FC = () => {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return items;
-  }, [data?.items, sortKey, sortDir, assets]);
+  }, [data?.items, sortKey, sortDir, assets, statusParam]);
 
   return (
     <div className="space-y-5">

@@ -1,6 +1,7 @@
 // Management of Change (MOC) — workflow formal de cambios significativos.
 
 import React, { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles, Download } from "lucide-react";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useFetch } from "../lib/hooks";
@@ -587,8 +588,16 @@ export const MocPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Moc | null>(null);
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/moc");
+  // Deep-link desde la alerta "sin procesar" del Dashboard: ?status=REQUESTED
+  // filtra exactamente a ese estado (tiene prioridad sobre el toggle open/all).
+  const [searchParams] = useSearchParams();
+  const statusParam = (searchParams.get("status") ?? "").trim();
 
-  const items = (data?.items ?? []).filter(m => filterStatus === "open" ? !["REVIEWED", "CANCELLED", "REJECTED"].includes(m.status) : true);
+  const items = (data?.items ?? []).filter(m =>
+    statusParam ? m.status === statusParam
+    : filterStatus === "open" ? !["REVIEWED", "CANCELLED", "REJECTED"].includes(m.status)
+    : true,
+  );
 
   // Deep-link: la URL `/moc/:code` es la fuente de verdad del detalle.
   useEffect(() => {

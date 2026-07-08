@@ -37,6 +37,16 @@ interface AiInsight {
 
 interface ListResponse<T> { items: T[]; total: number; }
 
+// Conteos de reportes "sin procesar" (estado inicial de cada módulo) que el
+// Dashboard resalta como alerta. Subconjunto del endpoint sidebar-counts.
+interface PendingCounts {
+  fluidSamplesDraft: number;
+  permitsDraft: number;
+  defectsNew: number;
+  deferralsNew: number;
+  mocNew: number;
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
@@ -62,6 +72,8 @@ export const Dashboard: React.FC = () => {
   const permitsSummary    = useFetch<{ active: number; pendingApproval: number; expiringSoon: number; expired: number }>("/app/dashboard/permits-summary");
   // Equipos fuera de servicio (OUT_OF_SERVICE) — para identificarlos de un vistazo.
   const oosAssets         = useFetch<ListResponse<{ id: string; assetCode: string; name: string; vesselCode: string; criticality: string }>>("/app/pms/assets?status=OUT_OF_SERVICE");
+  // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
+  const pendingCounts     = useFetch<PendingCounts>("/app/dashboard/sidebar-counts");
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -244,6 +256,44 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div ref={dashboardRef} className="space-y-6 animate-in fade-in duration-500">
+      {/* Alerta superior: reportes sin procesar (drafts / estado inicial) por
+          módulo. Solo se muestra si hay algo pendiente; cada badge navega a la
+          lista filtrada del módulo para que se procesen. */}
+      {(() => {
+        const pc = pendingCounts.data;
+        if (!pc) return null;
+        const items = [
+          { key: "fluidSamples", labelKey: "nav.fluidAnalyses" as TranslationKey, count: pc.fluidSamplesDraft, route: "/fluid-analyses?status=DRAFT" },
+          { key: "permits",      labelKey: "nav.permits" as TranslationKey,       count: pc.permitsDraft,      route: "/permits?status=DRAFT" },
+          { key: "defects",      labelKey: "nav.defects" as TranslationKey,        count: pc.defectsNew,        route: "/defects?status=OPEN" },
+          { key: "deferrals",    labelKey: "nav.deferrals" as TranslationKey,      count: pc.deferralsNew,      route: "/deferrals?status=REQUESTED" },
+          { key: "moc",          labelKey: "nav.moc" as TranslationKey,            count: pc.mocNew,            route: "/moc?status=REQUESTED" },
+        ].filter(i => i.count > 0);
+        if (items.length === 0) return null;
+        return (
+          <div className="flex items-center gap-3 flex-wrap px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="shrink-0">
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300">{t("dashboard.pending.title")}</span>
+              <span className="hidden sm:inline text-[10px] text-text-industrial/50 ml-2">{t("dashboard.pending.hint")}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 flex-1">
+              {items.map(i => (
+                <button
+                  key={i.key}
+                  type="button"
+                  onClick={() => navigate(i.route)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-500/25 hover:border-amber-500/60 transition-colors"
+                >
+                  {t(i.labelKey)}
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-600 text-white text-[10px] font-bold tabular-nums">{i.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
           archivar o mandar por email un estado puntual de la flota. */}
       <div className="flex justify-end" data-export-exclude="true">

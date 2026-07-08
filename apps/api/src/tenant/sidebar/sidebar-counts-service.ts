@@ -27,6 +27,12 @@ export interface SidebarCounts {
   drillsOverdue: number;             // /drills
   sparesCriticalLow: number;         // /spares
   providerNcOpen: number;            // /providers
+  // Fase 3: reportes "sin procesar" (recién creados) — alertas del Dashboard.
+  fluidSamplesDraft: number;         // /fluid-analyses (FluidSample DRAFT)
+  permitsDraft: number;              // /permits (PermitToWork DRAFT)
+  defectsNew: number;                // /defects (Defect OPEN)
+  deferralsNew: number;              // /deferrals (Deferral REQUESTED)
+  mocNew: number;                    // /moc (MocRecord REQUESTED)
 }
 
 const EMPTY: SidebarCounts = {
@@ -38,6 +44,8 @@ const EMPTY: SidebarCounts = {
   checklistsOverdue: 0,
   permitsAttention: 0, crewCertsAttention: 0,
   drillsOverdue: 0, sparesCriticalLow: 0, providerNcOpen: 0,
+  fluidSamplesDraft: 0, permitsDraft: 0, defectsNew: 0,
+  deferralsNew: 0, mocNew: 0,
 };
 
 function vesselWhere(session: TenantAccessSession, requestedVesselCode: string | null, tenantId: string): Record<string, unknown> {
@@ -102,6 +110,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
   // a regeneraciones donde los nombres de delegados pueden faltar.
   const p = prisma as unknown as {
     workOrder: Delegate;
+    fluidSample: Delegate;
     defect: Delegate;
     deferral: Delegate;
     capaRecord: Delegate;
@@ -145,6 +154,11 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     providerNcOpen,
     scopeVesselCodes,
     sparesCriticalLow,
+    fluidSamplesDraft,
+    permitsDraft,
+    defectsNew,
+    deferralsNew,
+    mocNew,
   ] = await Promise.all([
     safe(() => p.workOrder.count({ where: { ...base, deletedAt: null, status: { in: ["PLANNED", "IN_PROGRESS"] } } })),
     safe(() => p.defect.count({ where: { ...base, deletedAt: null, status: { notIn: ["RESOLVED", "CLOSED"] } } })),
@@ -223,6 +237,12 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
         return spares.filter(s => (onHand.get(s.id) ?? 0) < s.minStock).length;
       } catch { return 0; }
     })(),
+    // Fase 3: reportes "sin procesar" (estado inicial de cada módulo).
+    safe(() => p.fluidSample.count({ where: { ...base, deletedAt: null, status: "DRAFT" } })),
+    safe(() => p.permitToWork.count({ where: { ...base, deletedAt: null, status: "DRAFT" } })),
+    safe(() => p.defect.count({ where: { ...base, deletedAt: null, status: "OPEN" } })),
+    safe(() => p.deferral.count({ where: { ...base, deletedAt: null, status: "REQUESTED" } })),
+    safe(() => p.mocRecord.count({ where: { ...base, deletedAt: null, status: "REQUESTED" } })),
   ]);
 
   // Daily reports faltantes: cantidad de buques del scope sin DailyReport de hoy.
@@ -251,6 +271,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     checklistsOverdue,
     permitsAttention, crewCertsAttention,
     drillsOverdue, sparesCriticalLow, providerNcOpen,
+    fluidSamplesDraft, permitsDraft, defectsNew, deferralsNew, mocNew,
   };
 }
 
