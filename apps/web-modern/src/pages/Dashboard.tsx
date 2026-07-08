@@ -264,22 +264,24 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
-      {/* Botón discreto para descargar snapshot HTML del dashboard. Útil para
-          archivar o mandar por email un estado puntual de la flota. */}
-      <div className="flex justify-end" data-export-exclude="true">
-        <button
-          onClick={() => { void exportDashboardHtml(); }}
-          disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
-          title={t("dashboard.exportHtmlTitle")}
-        >
-          {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
-          {t("dashboard.exportHtml")}
-        </button>
+      {/* Compliance score (izquierda) + Exportar HTML (derecha) en la MISMA fila,
+          cada uno en su esquina. El botón va absoluto arriba a la derecha para no
+          angostar las cards de compliance; el min-h reserva su lugar cuando la
+          sección de compliance no se renderiza (no-manager / sin scores). */}
+      <div className="relative min-h-[34px]">
+        <ComplianceDashboard />
+        <div className="absolute top-0 right-0" data-export-exclude="true">
+          <button
+            onClick={() => { void exportDashboardHtml(); }}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
+            title={t("dashboard.exportHtmlTitle")}
+          >
+            {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
+            {t("dashboard.exportHtml")}
+          </button>
+        </div>
       </div>
-
-      {/* Compliance score + smart alerts (sólo managers) */}
-      <ComplianceDashboard />
 
       {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
        * (reporte diario, defectos abiertos, AI insights, certs por vencer).

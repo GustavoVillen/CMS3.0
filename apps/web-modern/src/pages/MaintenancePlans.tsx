@@ -674,19 +674,11 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
           <button
             onClick={() => { void handleSaveAndPdf(); }}
             disabled={saving || uploading}
-            className="px-4 py-2 rounded-xl bg-fg/10 border border-fg/10 text-fg font-bold text-xs hover:bg-fg/15 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
           >
-            <FileDown className="w-3.5 h-3.5" />
-            {t("mp.exec.saveAndPdf")}
-          </button>
-          <button
-            onClick={() => { void handleSave(); }}
-            disabled={saving || uploading}
-            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
-          >
-            {uploading ? <span className="flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin" /> {t("mp.exec.uploading")}</span>
+            {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("mp.exec.uploading")}</>
               : saving ? <Loader2 className="w-4 h-4 animate-spin" />
-              : t("mp.exec.saveExecution")}
+              : <><FileDown className="w-3.5 h-3.5" /> {t("mp.exec.saveAndPdf")}</>}
           </button>
         </div>
       </div>
