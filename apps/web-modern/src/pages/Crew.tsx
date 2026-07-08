@@ -473,7 +473,11 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
       ) : (
         <div className="divide-y divide-fg/5">
           {crew.certifications.map(c => (
-            <div key={c.id} className="py-3 flex items-center gap-3">
+            <div
+              key={c.id}
+              onClick={!isLocked ? () => openEdit(c) : undefined}
+              className={`py-3 flex items-center gap-3 ${!isLocked ? "-mx-2 px-2 rounded-lg cursor-pointer hover:bg-fg/[0.03] transition-colors" : ""}`}
+            >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-sm font-medium text-fg">{t((CERT_TYPE_TKEY[c.type] ?? "cert.type.other") as TranslationKey)}</span>
@@ -487,9 +491,8 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-fg/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
-                {!isLocked && <button onClick={() => openEdit(c)} className="text-[10px] text-accent hover:underline">{t("common.edit")}</button>}
-                {!isLocked && <button onClick={() => { void onDelete(c.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline ml-2">{t("common.delete")}</button>}
+                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 rounded hover:bg-fg/5 text-text-industrial/40 hover:text-accent" title={t("cert.viewDoc")}><FileText className="w-4 h-4" /></a>}
+                {!isLocked && <button onClick={e => { e.stopPropagation(); void onDelete(c.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline">{t("common.delete")}</button>}
               </div>
             </div>
           ))}
