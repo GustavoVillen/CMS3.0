@@ -632,6 +632,7 @@ export const SparesPage: React.FC = () => {
   const [criticalityFilter,setCriticalityFilter] = useState(() => searchParams.get("criticality") ?? "");
   const [belowReorder,     setBelowReorder]      = useState(false);
   const [stockStatusFilter,setStockStatusFilter] = useState<string>(() => searchParams.get("stockStatus") ?? "");
+  const [categoryFilter,   setCategoryFilter]    = useState<string>("");
   const [searchText,       setSearchText]        = useState("");
   const [showExcel,        setShowExcel]         = useState(false);
   const [selected,         setSelected]          = useState<Spare | null | "new">(null);
@@ -651,6 +652,9 @@ export const SparesPage: React.FC = () => {
   const filteredItems = (() => {
     let items = data?.items ?? null;
     if (!items) return items;
+    if (categoryFilter) {
+      items = items.filter(s => (s.category ?? "") === categoryFilter);
+    }
     if (stockStatusFilter) {
       items = items.filter(s => {
         if (stockStatusFilter === "sin_stock")    return s.available <= 0;
@@ -681,7 +685,14 @@ export const SparesPage: React.FC = () => {
     { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-fg text-xs">{r.sku}</span> },
     { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
     { key: "vesselCode",   header: t("col.vessel"),        render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "category",     header: t("col.category"),      render: r => <span className="text-xs text-fg/60">{r.category ?? "—"}</span> },
+    { key: "category",     header: t("col.category"),      render: r => r.category
+        ? <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setCategoryFilter(prev => prev === r.category ? "" : (r.category ?? "")); }}
+            className="text-xs text-fg/60 hover:text-accent hover:underline transition-colors cursor-pointer"
+            title="Filtrar por esta categoría"
+          >{r.category}</button>
+        : <span className="text-xs text-fg/60">—</span> },
     { key: "criticality",  header: t("col.criticality"),   render: r => <CriticalityBadge value={r.criticality} /> },
     { key: "onHand",       header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },
     { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-fg/50">{r.minStock}</span> },
@@ -746,6 +757,16 @@ export const SparesPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all bg-accent/15 border-accent/30 text-accent">
             <AlertTriangle className="w-3.5 h-3.5" />
             {stockStatusFilter === "sin_stock" ? "Sin stock" : stockStatusFilter === "bajo_reorden" ? "Bajo reorden" : "Stock OK"}
+            <X className="w-3 h-3 ml-0.5" />
+          </button>
+        )}
+
+        {/* Category filter chip (click en la columna Categoría) */}
+        {categoryFilter && (
+          <button onClick={() => setCategoryFilter("")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all bg-accent/15 border-accent/30 text-accent"
+            title="Quitar filtro de categoría">
+            {categoryFilter}
             <X className="w-3 h-3 ml-0.5" />
           </button>
         )}
