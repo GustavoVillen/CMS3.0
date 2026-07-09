@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { Activity, AlertTriangle, FileCode, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useVesselContext } from "../lib/vessel-context";
 import { PageHeader } from "../components/PageHeader";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useT } from "../lib/i18n";
@@ -69,6 +70,7 @@ function openWeekInPlans(weekStart: string, weeks: number): void {
 
 export const MaintenanceWorkloadPage: React.FC = () => {
   const t = useT();
+  const { selectedVesselCode } = useVesselContext();
   const [weeks, setWeeks] = useState<number>(52);
   const [mode, setMode] = useState<Mode>("count");
 
@@ -124,8 +126,12 @@ export const MaintenanceWorkloadPage: React.FC = () => {
         <button
           onClick={() => {
             const today = new Date().toISOString().slice(0, 10);
+            // El export debe respetar el buque seleccionado (igual que la vista viva,
+            // que scopea vía useFetch). downloadAuthedFile no pasa por ese wrapper,
+            // así que agregamos vesselCode explícitamente.
+            const vesselQs = selectedVesselCode ? `&vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
             void downloadAuthedFile(
-              `/app/dashboard/maintenance-workload/html?weeks=${weeks}`,
+              `/app/dashboard/maintenance-workload/html?weeks=${weeks}${vesselQs}`,
               `workload_${today}.html`,
             );
           }}
