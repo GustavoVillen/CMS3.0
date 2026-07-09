@@ -145,6 +145,7 @@ export default function App() {
               <Route path="/assets"            element={<AssetsPage />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
+              <Route path="/mantenimiento-express" element={<MaintenancePlansPage lockedResultMode="EXPRESS" />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} />
               <Route path="/reliability"       element={<ReliabilityPage />} />

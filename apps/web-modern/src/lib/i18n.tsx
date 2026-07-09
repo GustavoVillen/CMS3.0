@@ -27,6 +27,7 @@ const dict = {
   "nav.reliability":       { es: "Confiabilidad",        en: "Reliability",         pt: "Confiabilidade" },
   "nav.failureModes":      { es: "Modos de Falla",       en: "Failure Modes",       pt: "Modos de Falha" },
   "nav.workOrders":        { es: "Órdenes de Trabajo",  en: "Work Orders",         pt: "Ordens de Serviço" },
+  "nav.expressMaintenance":{ es: "Mantenimiento Express", en: "Express Maintenance", pt: "Manutenção Express" },
   "nav.dailyReports":      { es: "Reportes Diarios",   en: "Daily Reports",       pt: "Relatórios Diários" },
   "nav.monthlyReports":    { es: "Reportes Mensuales",  en: "Monthly Reports",     pt: "Relatórios Mensais" },
   "nav.tmsa":              { es: "TMSA · Mantenimiento", en: "TMSA · Maintenance",  pt: "TMSA · Manutenção" },

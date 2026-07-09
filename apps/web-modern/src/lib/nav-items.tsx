@@ -4,7 +4,7 @@ import {
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
   FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck,
+  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck, Zap,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
 } from "lucide-react";
 import type { TranslationKey } from "./i18n";
@@ -48,6 +48,7 @@ export const NAV: NavSection[] = [
       // import de `Waypoints`. Backend, página, tabla e i18n siguen intactos.
       // { icon: Waypoints,       labelKey: "nav.failureModes",     path: "/failure-modes" },
       { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
+      { icon: Zap,             labelKey: "nav.expressMaintenance", path: "/mantenimiento-express" },
       { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
       { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",

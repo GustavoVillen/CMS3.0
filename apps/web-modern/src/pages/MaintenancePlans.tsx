@@ -2401,7 +2401,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export const MaintenancePlansPage: React.FC = () => {
+export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ lockedResultMode }) => {
   const t = useT();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2477,6 +2477,12 @@ export const MaintenancePlansPage: React.FC = () => {
   }, [statusFilter, vesselFilter]);
 
   const { data: rawData, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Vista "Mantenimiento Express": acota TODO (tabla + contadores) a los planes
+  // del modo bloqueado. Si no hay lockedResultMode, es la lista normal completa.
+  const baseItems = useMemo(() => {
+    const all = rawData?.items ?? [];
+    return lockedResultMode ? all.filter(p => p.triggerResultMode === lockedResultMode) : all;
+  }, [rawData, lockedResultMode]);
   // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
   const { vessels } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
@@ -2484,7 +2490,7 @@ export const MaintenancePlansPage: React.FC = () => {
   // ── Client-side filters: SFI tab + overdue toggle + SFI text ──────────────
   const data = useMemo(() => {
     if (!rawData) return null;
-    let items = rawData.items;
+    let items = baseItems;
 
     if (sfiTab !== "ALL") {
       items = items.filter(p => sfiTabOf(p.sfiGroupNumber) === sfiTab);
@@ -2512,27 +2518,27 @@ export const MaintenancePlansPage: React.FC = () => {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
     return { items, total: items.length };
-  }, [rawData, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds]);
+  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
     if (!rawData) return {} as Record<string, number>;
-    const counts: Record<string, number> = { ALL: rawData.items.length };
-    for (const p of rawData.items) {
+    const counts: Record<string, number> = { ALL: baseItems.length };
+    for (const p of baseItems) {
       const k = String(sfiTabOf(p.sfiGroupNumber));
       counts[k] = (counts[k] ?? 0) + 1;
     }
     return counts;
-  }, [rawData]);
+  }, [rawData, baseItems]);
 
   // ── Count of overdue/due/in_window for the toggle badge ───────────────────
   const urgentCount = useMemo(() => {
     if (!rawData) return 0;
-    return rawData.items.filter(p => {
+    return baseItems.filter(p => {
       const s = computeStatus(p);
       return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW";
     }).length;
-  }, [rawData]);
+  }, [rawData, baseItems]);
 
   const openEdit = async (row: Pick<MaintenancePlan, "id">) => {
     setLoadingDetailId(row.id);
@@ -2735,7 +2741,7 @@ export const MaintenancePlansPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
+      <PageHeader icon={lockedResultMode === "EXPRESS" ? Zap : ClipboardList} title={lockedResultMode === "EXPRESS" ? t("nav.expressMaintenance") : t("page.maintenancePlans")} total={data?.total} onReload={reload}>
         {/* Nueva tarea */}
         <button
           onClick={() => { setEditing(null); setShowModal(true); }}
@@ -2853,7 +2859,7 @@ export const MaintenancePlansPage: React.FC = () => {
       {/* ── Tabs SFI ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 flex-wrap">
         {SFI_TABS.map(tab => {
-          const count = tab.key === "ALL" ? (rawData?.total ?? 0) : (sfiTabCounts[String(tab.key)] ?? 0);
+          const count = tab.key === "ALL" ? (sfiTabCounts["ALL"] ?? rawData?.total ?? 0) : (sfiTabCounts[String(tab.key)] ?? 0);
           const isActive = sfiTab === tab.key;
           return (
             <button
