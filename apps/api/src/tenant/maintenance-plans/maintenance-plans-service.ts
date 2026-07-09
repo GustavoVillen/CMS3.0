@@ -581,21 +581,24 @@ export async function listTenantMaintenancePlans(
         })()
       : Promise.resolve([] as { assetId: string; runningHoursTotal: number }[]),
     planIds.length > 0
-      ? (prismaRaw as unknown as { workOrder: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string | null; workOrderCode: string }[]> } }).workOrder.findMany({
-          where: { tenantId, maintenancePlanId: { in: planIds }, status: { in: ["PLANNED", "IN_PROGRESS"] }, deletedAt: null },
-          select: { maintenancePlanId: true, workOrderCode: true },
+      ? (prismaRaw as unknown as { workOrder: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string | null; workOrderCode: string; status: string }[]> } }).workOrder.findMany({
+          // ON_HOLD incluido: una OT diferida no es "activa" (no cuelga de activeWoMap),
+          // pero su código debe seguir visible en el plan con marca de diferida.
+          where: { tenantId, maintenancePlanId: { in: planIds }, status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] }, deletedAt: null },
+          select: { maintenancePlanId: true, workOrderCode: true, status: true },
           orderBy: { createdAt: "desc" as const },
         })
-      : Promise.resolve([] as { maintenancePlanId: string | null; workOrderCode: string }[]),
+      : Promise.resolve([] as { maintenancePlanId: string | null; workOrderCode: string; status: string }[]),
   ]);
 
   const assetNameMap = new Map(assetRows.map((a) => [a.id, a.name ?? null]));
   const assetCurrentHoursMap = new Map(currentHoursRows.map((r) => [r.assetId, Number(r.runningHoursTotal)]));
-  const activeWoMap = new Map<string, string>();
+  const activeWoMap = new Map<string, string>();   // OT PLANNED/IN_PROGRESS (activa)
+  const deferredWoMap = new Map<string, string>(); // OT ON_HOLD (diferida)
   for (const wo of activeWos) {
-    if (wo.maintenancePlanId && !activeWoMap.has(wo.maintenancePlanId)) {
-      activeWoMap.set(wo.maintenancePlanId, wo.workOrderCode);
-    }
+    if (!wo.maintenancePlanId) continue;
+    const target = wo.status === "ON_HOLD" ? deferredWoMap : activeWoMap;
+    if (!target.has(wo.maintenancePlanId)) target.set(wo.maintenancePlanId, wo.workOrderCode);
   }
 
   // Resolver nombre del proveedor para los planes con área = PROVEEDOR.
@@ -613,6 +616,7 @@ export async function listTenantMaintenancePlans(
     assetName: assetNameMap.get(p.assetId) ?? null,
     assetCurrentHours: assetCurrentHoursMap.get(p.assetId) ?? null,
     activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
+    deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
     providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
     executionStatus: deriveExecutionStatus(p),
   }));

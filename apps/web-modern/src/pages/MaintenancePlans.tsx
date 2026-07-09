@@ -2,6 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  CalendarRange,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -34,6 +35,7 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
+import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
@@ -59,6 +61,7 @@ export interface MaintenancePlan {
   assetId: string;
   assetName?: string | null;
   activeWorkOrderCode?: string | null;
+  deferredWorkOrderCode?: string | null;
   assetCurrentHours?: number | null;
   taskCode: string;
   title: string;
@@ -143,67 +146,84 @@ function computeStatus(plan: MaintenancePlan): string {
   return plan.executionStatus ?? "FUTURE";
 }
 
-function StatusBadgeInline({ plan, onClickWo }: { plan: MaintenancePlan; onClickWo?: () => void }) {
+function StatusBadgeInline({ plan, onOpenWo }: { plan: MaintenancePlan; onOpenWo?: (code: string) => void }) {
   const t = useT();
   const es = computeStatus(plan);
-  if (es === "OVERDUE")
-    return (
-      <div className="flex flex-col items-start gap-0.5">
+
+  const pill = (() => {
+    if (es === "OVERDUE")
+      return (
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 whitespace-nowrap">
           <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.overdue")}
         </span>
-      </div>
-    );
-  if (es === "DUE")
-    return (
-      <div className="flex flex-col items-start gap-0.5">
+      );
+    if (es === "DUE")
+      return (
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20 whitespace-nowrap">
           <AlertTriangle className="w-2.5 h-2.5" /> {t("mp.statusBadge.due")}
         </span>
-      </div>
-    );
-  if (es === "IN_WINDOW")
-    return (
-      <div className="flex flex-col items-start gap-1">
+      );
+    if (es === "IN_WINDOW")
+      return (
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 whitespace-nowrap">
           <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.inWindow")}
         </span>
-        {plan.activeWorkOrderCode && (
-          <button
-            type="button"
-            onClick={onClickWo ? (e) => { e.stopPropagation(); onClickWo(); } : undefined}
-            disabled={!onClickWo}
-            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-accent border-accent/30 font-mono whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-accent/10 enabled:cursor-pointer transition-colors"
-          >
-            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-            {plan.activeWorkOrderCode}
-          </button>
-        )}
-      </div>
-    );
-  if (es === "NEVER_EXECUTED")
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-500/10 text-slate-400 border-slate-500/20 whitespace-nowrap">
-        <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.neverExecuted")}
-      </span>
-    );
-  if (es === "UPCOMING")
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 whitespace-nowrap">
-        <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.upcoming")}
-      </span>
-    );
-  if (es === "COMPLETED")
+      );
+    if (es === "NEVER_EXECUTED")
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-500/10 text-slate-400 border-slate-500/20 whitespace-nowrap">
+          <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.neverExecuted")}
+        </span>
+      );
+    if (es === "UPCOMING")
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 whitespace-nowrap">
+          <Clock className="w-2.5 h-2.5" /> {t("mp.statusBadge.upcoming")}
+        </span>
+      );
+    // COMPLETED y FUTURE comparten estilo "válido"
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 whitespace-nowrap">
         <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
       </span>
     );
-  // FUTURE
+  })();
+
+  // Código de OT bajo el badge: OT activa (acento) o, si la OT fue diferida
+  // (ON_HOLD), su código en amarillo con una "D" de DIFERIDA al lado.
+  const woCode = plan.activeWorkOrderCode ?? plan.deferredWorkOrderCode ?? null;
+  const isDeferred = !plan.activeWorkOrderCode && !!plan.deferredWorkOrderCode;
+  const woRow = woCode && (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onOpenWo ? (e) => { e.stopPropagation(); onOpenWo(woCode); } : undefined}
+        disabled={!onOpenWo}
+        className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold font-mono whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:cursor-pointer transition-colors ${
+          isDeferred
+            ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30 enabled:hover:bg-yellow-500/20"
+            : "bg-fg/5 text-accent border-accent/30 enabled:hover:bg-accent/10"
+        }`}
+      >
+        <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+        {woCode}
+      </button>
+      {isDeferred && (
+        <span
+          title={t("wo.status.postponed")}
+          className="inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30"
+        >
+          D
+        </span>
+      )}
+    </div>
+  );
+
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 whitespace-nowrap">
-      <CheckCircle2 className="w-2.5 h-2.5" /> {t("mp.statusBadge.valid")}
-    </span>
+    <div className="flex flex-col items-start gap-1">
+      {pill}
+      {woRow}
+    </div>
   );
 }
 
@@ -1607,7 +1627,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <h2 className="text-base font-bold text-fg">
                 {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
               </h2>
-              {!isNew && <StatusBadgeInline plan={plan} onClickWo={plan.activeWorkOrderCode ? () => { onClose(); navigate(`/work-orders?autoCode=${plan.activeWorkOrderCode}`); } : undefined} />}
+              {!isNew && <StatusBadgeInline plan={plan} onOpenWo={(code) => { onClose(); navigate(`/work-orders?autoCode=${code}`); }} />}
             </div>
             <div className="flex items-center gap-1.5">
               {!isNew && <CopyLinkButton />}
@@ -2378,6 +2398,7 @@ export const MaintenancePlansPage: React.FC = () => {
   const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
   const [showExcel,     setShowExcel]     = useState(false);
   const [gridView,      setGridView]      = useState(false);
+  const [showMatrix,    setShowMatrix]    = useState(false);
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
@@ -2535,7 +2556,7 @@ export const MaintenancePlansPage: React.FC = () => {
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
   const statusValue = useCallback((row: MaintenancePlan) => computeStatus(row), []);
   const renderStatus = useCallback((row: MaintenancePlan) => (
-    <StatusBadgeInline plan={row} onClickWo={row.activeWorkOrderCode ? () => navigate(`/work-orders?autoCode=${row.activeWorkOrderCode}`) : undefined} />
+    <StatusBadgeInline plan={row} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />
   ), [navigate]);
 
   const renderActions = useCallback((row: MaintenancePlan) => {
@@ -2713,6 +2734,14 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Table2 className="w-4 h-4" />
         </button>
+        {/* Matriz de vencimientos por equipo (periodicidad × equipo) */}
+        <button
+          onClick={() => setShowMatrix(true)}
+          title={t("mp.matrix.title")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+        >
+          <CalendarRange className="w-3.5 h-3.5 text-accent" /> {t("mp.page.matrixView")}
+        </button>
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
           onClick={async () => {
@@ -2879,6 +2908,16 @@ export const MaintenancePlansPage: React.FC = () => {
       )}
 
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
+
+      {showMatrix && (
+        <MaintenancePlansMatrix
+          plans={data?.items ?? []}
+          vesselNameMap={vesselNameMap}
+          getStatus={computeStatus}
+          onClose={() => setShowMatrix(false)}
+          onOpenPlan={code => { setShowMatrix(false); openLink(code); }}
+        />
+      )}
 
       {executing && (
         <CreateWorkOrderModal
