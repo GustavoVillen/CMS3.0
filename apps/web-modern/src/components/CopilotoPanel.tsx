@@ -550,8 +550,9 @@ export const CopilotoPanel: React.FC = () => {
   const [listening, setListening]   = useState(false);
   const recognitionRef              = useRef<SpeechRecognition | null>(null);
 
-  // speechSynthesis state
+  // speechSynthesis / TTS state
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -664,27 +665,26 @@ export const CopilotoPanel: React.FC = () => {
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (audioRef.current.src.startsWith("blob:")) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
     setSpeakingIdx(null);
   }, []);
 
-  const speakMessage = useCallback((msgIdx: number, content: string) => {
-    if (speakingIdx === msgIdx) { stopSpeaking(); return; }
-    stopSpeaking();
-
-    const summary = buildVoiceSummary(content);
+  // Fallback: voz del navegador (Web Speech API) si ElevenLabs no está disponible.
+  const speakWithBrowser = useCallback((msgIdx: number, summary: string) => {
     const utterance = new SpeechSynthesisUtterance(summary);
-
-    // Pick best Spanish voice available; fall back to browser default
     const voice = getSpanishVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang ?? "es-AR";
     utterance.rate = 1.05;
-
     utterance.onstart = () => setSpeakingIdx(msgIdx);
     utterance.onend   = () => setSpeakingIdx(null);
     utterance.onerror = () => setSpeakingIdx(null);
 
-    // Voices may not be loaded yet on first call — retry once after load
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.addEventListener("voiceschanged", () => {
         const v = getSpanishVoice();
@@ -694,7 +694,36 @@ export const CopilotoPanel: React.FC = () => {
     } else {
       window.speechSynthesis.speak(utterance);
     }
-  }, [speakingIdx, stopSpeaking]);
+  }, []);
+
+  const speakMessage = useCallback((msgIdx: number, content: string) => {
+    if (speakingIdx === msgIdx) { stopSpeaking(); return; }
+    stopSpeaking();
+
+    const summary = buildVoiceSummary(content);
+    setSpeakingIdx(msgIdx);
+
+    // Voz principal: ElevenLabs (backend). Si falla por cualquier motivo
+    // (key no configurada, red, upstream) cae a la voz del navegador.
+    (async () => {
+      try {
+        const { audioBase64, mime } = await api.post<{ audioBase64: string; mime: string }>(
+          "/app/copiloto/tts",
+          { text: summary },
+        );
+        // CSP permite media-src blob: (no data:), así que usamos un Blob URL.
+        const bytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const audio = new Audio(objectUrl);
+        audioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; setSpeakingIdx(null); };
+        audio.onerror = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; speakWithBrowser(msgIdx, summary); };
+        await audio.play();
+      } catch {
+        speakWithBrowser(msgIdx, summary);
+      }
+    })();
+  }, [speakingIdx, stopSpeaking, speakWithBrowser]);
 
   // ---------------------------------------------------------------------------
   // Message sending

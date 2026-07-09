@@ -90,6 +90,7 @@ export const MobileCopilot: React.FC = () => {
   const recordTimerRef = useRef<number | null>(null);
   const cancelledRef = useRef<boolean>(false);
   const micBtnRef = useRef<HTMLButtonElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const sendMessageRef = useRef<(text: string, fromVoice: boolean) => Promise<void>>(undefined);
 
   useEffect(() => {
@@ -98,20 +99,24 @@ export const MobileCopilot: React.FC = () => {
 
   useEffect(() => () => {
     window.speechSynthesis.cancel();
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     recognitionRef.current?.abort();
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
   }, []);
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (audioRef.current.src.startsWith("blob:")) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
     setSpeaking(false);
   }, []);
 
-  const speakText = useCallback((content: string) => {
-    const summary = buildVoiceSummary(content);
-    if (!summary) return;
-    window.speechSynthesis.cancel();
-
+  // Fallback: voz del navegador (Web Speech API) si ElevenLabs no está disponible.
+  const speakWithBrowser = useCallback((summary: string) => {
     const utter = new SpeechSynthesisUtterance(summary);
     const voice = getSpanishVoice();
     if (voice) utter.voice = voice;
@@ -131,6 +136,34 @@ export const MobileCopilot: React.FC = () => {
       window.speechSynthesis.speak(utter);
     }
   }, []);
+
+  const speakText = useCallback((content: string) => {
+    const summary = buildVoiceSummary(content);
+    if (!summary) return;
+    window.speechSynthesis.cancel();
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setSpeaking(true);
+
+    // Voz principal: ElevenLabs (backend). Fallback a la voz del navegador.
+    (async () => {
+      try {
+        const { audioBase64, mime } = await api.post<{ audioBase64: string; mime: string }>(
+          "/app/copiloto/tts",
+          { text: summary },
+        );
+        // CSP permite media-src blob: (no data:), así que usamos un Blob URL.
+        const bytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const audio = new Audio(objectUrl);
+        audioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; setSpeaking(false); };
+        audio.onerror = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; speakWithBrowser(summary); };
+        await audio.play();
+      } catch {
+        speakWithBrowser(summary);
+      }
+    })();
+  }, [speakWithBrowser]);
 
   const sendMessage = useCallback(async (text: string, fromVoice: boolean) => {
     if (!text.trim() || streaming) return;

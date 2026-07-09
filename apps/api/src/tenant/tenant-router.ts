@@ -1316,6 +1316,17 @@ export async function handleTenantRoutes(
     return true;
   }
 
+  // ── Copiloto: síntesis de voz (TTS) ───────────────────────────────────────
+  if (method === "POST" && url.pathname === "/app/copiloto/tts") {
+    const slug = requireTenantSlug(request, env);
+    const session = requireTenantAccessSession(request, slug);
+    enforceRateLimit(request, `copilot-tts:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody(request) as { text?: string };
+    const { synthesizeSpeech } = await import("./copiloto/tts-service");
+    sendJson(response, 200, await synthesizeSpeech(body.text ?? ""));
+    return true;
+  }
+
   // ── Copiloto one-shot analysis endpoints ─────────────────────────────────
   if (method === "POST" && url.pathname === "/app/copiloto/analyze-deficiency") {
     const slug = requireTenantSlug(request, env);
