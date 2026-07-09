@@ -49,6 +49,32 @@ interface PendingCounts {
 }
 
 // ---------------------------------------------------------------------------
+// DonutLegend — leyenda compartida de los donuts del dashboard.
+// La densidad se adapta a la cantidad de estados: con >4 ítems se compacta
+// (menos gap, sin padding vertical, texto un punto más chico) para que TODOS
+// entren en el alto fijo de la card sin recortarse. Sin esto, cards como
+// "Planes de Mantenimiento" (hasta 6 estados) cortaban el último ítem.
+// ---------------------------------------------------------------------------
+
+interface LegendItem { key: string; name: string; value: number; fill: string; }
+
+const DonutLegend: React.FC<{ items: LegendItem[]; onSelect: (item: LegendItem) => void }> = ({ items, onSelect }) => {
+  const dense = items.length > 4;
+  return (
+    <div className={`w-[112px] flex flex-col ${dense ? "gap-0.5" : "gap-2"}`}>
+      {items.map(s => (
+        <button key={s.key} type="button" onClick={() => onSelect(s)}
+          className={`w-full flex items-center gap-1.5 text-left rounded px-1 ${dense ? "py-0" : "py-0.5"} hover:bg-fg/5 transition-colors group`}>
+          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
+          <span className={`${dense ? "text-[12px]" : "text-[13px]"} text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1`}>{s.name}</span>
+          <span className={`${dense ? "text-[12px]" : "text-[13px]"} font-bold text-fg`}>{s.value}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -94,7 +120,6 @@ export const Dashboard: React.FC = () => {
   const cardPad  = "p-3!";
   const chartBox = "w-[128px] h-[128px]";
   const donut    = { inner: 35, outer: 58 };
-  const legendW  = "w-[112px]";
   const gridGap  = "gap-3";
   const rootGap  = "space-y-4";
 
@@ -364,16 +389,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className={`${legendW} space-y-2`}>
-                {statusCounts.map(s => (
-                  <button key={s.name} type="button" onClick={() => navigate(`/work-orders?view=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
-                  </button>
-                ))}
-              </div>
+              <DonutLegend items={statusCounts} onSelect={s => navigate(`/work-orders?view=${s.key}`)} />
             </div>
           )}
         </div>
@@ -409,16 +425,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className={`${legendW} space-y-2`}>
-                {mpStatusCounts.map(s => (
-                  <button key={s.key} type="button" onClick={() => navigate(`/maintenance-plans?executionStatus=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
-                  </button>
-                ))}
-              </div>
+              <DonutLegend items={mpStatusCounts} onSelect={s => navigate(`/maintenance-plans?executionStatus=${s.key}`)} />
             </div>
           )}
         </div>
@@ -455,16 +462,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className={`${legendW} space-y-2`}>
-                {deferralCounts.map(s => (
-                  <button key={s.key} type="button" onClick={() => navigate(`/deferrals?status=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
-                  </button>
-                ))}
-              </div>
+              <DonutLegend items={deferralCounts} onSelect={s => navigate(`/deferrals?status=${s.key}`)} />
             </div>
           )}
         </div>
@@ -549,16 +547,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>
-              <div className={`${legendW} space-y-2`}>
-                {critSparesCounts.map(s => (
-                  <button key={s.key} type="button" onClick={() => navigate(`/spares?stockStatus=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
-                  </button>
-                ))}
-              </div>
+              <DonutLegend items={critSparesCounts} onSelect={s => navigate(`/spares?stockStatus=${s.key}`)} />
             </div>
           )}
         </div>
@@ -595,16 +584,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.itemsLabel")}</span>
                 </div>
               </div>
-              <div className={`${legendW} space-y-2`}>
-                {spareReqCounts.map(s => (
-                  <button key={s.key} type="button" onClick={() => navigate(`/spare-requests?status=${s.key}`)}
-                    className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 hover:bg-fg/5 transition-colors group">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                    <span className="text-[13px] text-text-industrial/60 group-hover:text-fg transition-colors truncate flex-1">{s.name}</span>
-                    <span className="text-[13px] font-bold text-fg">{s.value}</span>
-                  </button>
-                ))}
-              </div>
+              <DonutLegend items={spareReqCounts} onSelect={s => navigate(`/spare-requests?status=${s.key}`)} />
             </div>
           )}
         </div>
