@@ -28,6 +28,83 @@ export interface MocWriteInput {
   plannedDate?: string | Date | null;
   relatedAssetId?: string | null;
   relatedWorkOrderId?: string | null;
+  // ─── Formulario controlado REGI-GES-06.1 ──────────────────────────────────
+  requesterName?: string | null;
+  requesterRegistration?: string | null;
+  changeManagerName?: string | null;
+  changeManagerRegistration?: string | null;
+  requestingArea?: string | null;
+  areaSupervisor?: string | null;
+  managementName?: string | null;
+  managerName?: string | null;
+  changeTypes?: string[];
+  duration?: string | null;
+  temporaryUntil?: string | Date | null;
+  locationType?: string | null;
+  locationUnit?: string | null;
+  physicalArea?: string | null;
+  currentSituation?: string | null;
+  expectedResult?: string | null;
+  evaluationAnswers?: unknown[];
+  evaluatorAreas?: string[];
+  technicalReviews?: unknown[];
+  actionPlan?: unknown[];
+  finalRiskLevel?: string | null;
+  recommendationsBeforeChange?: string | null;
+  additionalInfo?: string | null;
+  effectivenessAnswers?: unknown[];
+}
+
+/** array JSON passthrough — devuelve el array si lo es, o [] */
+function jsonArr(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+/** Screening del propio formulario: si alguna pregunta marca "¿puede impactar?"
+ * (canImpact=true) o se responde "No sabe" (UNKNOWN) en impacto, aplica la
+ * gestión completa. */
+function computeRequiresFull(answers: unknown): boolean {
+  if (!Array.isArray(answers)) return false;
+  return answers.some((a) => {
+    if (!a || typeof a !== "object") return false;
+    const o = a as { canImpact?: unknown; answer?: unknown };
+    return o.canImpact === true || o.answer === "UNKNOWN";
+  });
+}
+/** Ensambla los campos del formulario REGI-GES-06.1 en `data`.
+ * mode "create" setea siempre; mode "update" solo los presentes en input. */
+function applyFormFields(data: Record<string, unknown>, input: MocWriteInput, mode: "create" | "update") {
+  const set = (key: string, present: boolean, value: unknown) => {
+    if (mode === "create" || present) data[key] = value;
+  };
+  set("requesterName", input.requesterName !== undefined, normOpt(input.requesterName));
+  set("requesterRegistration", input.requesterRegistration !== undefined, normOpt(input.requesterRegistration));
+  set("changeManagerName", input.changeManagerName !== undefined, normOpt(input.changeManagerName));
+  set("changeManagerRegistration", input.changeManagerRegistration !== undefined, normOpt(input.changeManagerRegistration));
+  set("requestingArea", input.requestingArea !== undefined, normOpt(input.requestingArea));
+  set("areaSupervisor", input.areaSupervisor !== undefined, normOpt(input.areaSupervisor));
+  set("managementName", input.managementName !== undefined, normOpt(input.managementName));
+  set("managerName", input.managerName !== undefined, normOpt(input.managerName));
+  set("changeTypesJson", input.changeTypes !== undefined, jsonArr(input.changeTypes));
+  set("duration", input.duration !== undefined, normOpt(input.duration));
+  set("temporaryUntil", input.temporaryUntil !== undefined, parseOptDate(input.temporaryUntil, "temporaryUntil"));
+  set("locationType", input.locationType !== undefined, normOpt(input.locationType));
+  set("locationUnit", input.locationUnit !== undefined, normOpt(input.locationUnit));
+  set("physicalArea", input.physicalArea !== undefined, normOpt(input.physicalArea));
+  set("currentSituation", input.currentSituation !== undefined, normOpt(input.currentSituation));
+  set("expectedResult", input.expectedResult !== undefined, normOpt(input.expectedResult));
+  set("evaluatorAreasJson", input.evaluatorAreas !== undefined, jsonArr(input.evaluatorAreas));
+  set("technicalReviewsJson", input.technicalReviews !== undefined, jsonArr(input.technicalReviews));
+  set("actionPlanJson", input.actionPlan !== undefined, jsonArr(input.actionPlan));
+  set("finalRiskLevel", input.finalRiskLevel !== undefined, input.finalRiskLevel ? parseEnum(input.finalRiskLevel, RISK_LEVELS, "finalRiskLevel") : null);
+  set("recommendationsBeforeChange", input.recommendationsBeforeChange !== undefined, normOpt(input.recommendationsBeforeChange));
+  set("additionalInfo", input.additionalInfo !== undefined, normOpt(input.additionalInfo));
+  set("effectivenessAnswersJson", input.effectivenessAnswers !== undefined, jsonArr(input.effectivenessAnswers));
+  // Evaluación previa + screening derivado.
+  if (mode === "create" || input.evaluationAnswers !== undefined) {
+    const answers = jsonArr(input.evaluationAnswers);
+    data.evaluationAnswersJson = answers;
+    data.requiresFullManagement = computeRequiresFull(answers);
+  }
 }
 
 export interface TransitionInput {
@@ -143,24 +220,24 @@ export async function createMoc(session: TenantAccessSession, input: MocWriteInp
     throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel.");
   }
   const mocCode = await generateMocCode(prisma, tenantId, vesselCode);
-  const created = await del(prisma).create({
-    data: {
-      tenantId, vesselCode, mocCode,
-      category:           parseEnum(input.category, CATEGORIES, "category"),
-      title:              normReq(input.title, "title"),
-      reasonForChange:    normReq(input.reasonForChange, "reasonForChange"),
-      proposedChange:     normReq(input.proposedChange, "proposedChange"),
-      riskLevel:          input.riskLevel ? parseEnum(input.riskLevel, RISK_LEVELS, "riskLevel") : "MEDIUM",
-      impactAreasJson:    Array.isArray(input.impactAreas) ? input.impactAreas : [],
-      riskAssessmentNotes: normOpt(input.riskAssessmentNotes),
-      mitigationActions:  normOpt(input.mitigationActions),
-      plannedDate:        parseOptDate(input.plannedDate, "plannedDate"),
-      relatedAssetId:     normOpt(input.relatedAssetId),
-      relatedWorkOrderId: normOpt(input.relatedWorkOrderId),
-      createdByUserId:    session.user.id,
-      updatedByUserId:    session.user.id,
-    },
-  }) as unknown as { id: string };
+  const data: Record<string, unknown> = {
+    tenantId, vesselCode, mocCode,
+    category:           parseEnum(input.category, CATEGORIES, "category"),
+    title:              normReq(input.title, "title"),
+    reasonForChange:    normReq(input.reasonForChange, "reasonForChange"),
+    proposedChange:     normReq(input.proposedChange, "proposedChange"),
+    riskLevel:          input.riskLevel ? parseEnum(input.riskLevel, RISK_LEVELS, "riskLevel") : "MEDIUM",
+    impactAreasJson:    Array.isArray(input.impactAreas) ? input.impactAreas : [],
+    riskAssessmentNotes: normOpt(input.riskAssessmentNotes),
+    mitigationActions:  normOpt(input.mitigationActions),
+    plannedDate:        parseOptDate(input.plannedDate, "plannedDate"),
+    relatedAssetId:     normOpt(input.relatedAssetId),
+    relatedWorkOrderId: normOpt(input.relatedWorkOrderId),
+    createdByUserId:    session.user.id,
+    updatedByUserId:    session.user.id,
+  };
+  applyFormFields(data, input, "create");
+  const created = await del(prisma).create({ data }) as unknown as { id: string };
   void publishAudit(prisma, {
     tenantId, actorUserId: session.user.id,
     action: "Moc.created", entityType: "MocRecord", entityId: created.id,
@@ -189,6 +266,7 @@ export async function updateMoc(session: TenantAccessSession, id: string, input:
   if (input.plannedDate !== undefined) data.plannedDate = parseOptDate(input.plannedDate, "plannedDate");
   if (input.relatedAssetId !== undefined) data.relatedAssetId = normOpt(input.relatedAssetId);
   if (input.relatedWorkOrderId !== undefined) data.relatedWorkOrderId = normOpt(input.relatedWorkOrderId);
+  applyFormFields(data, input, "update");
   return del(prisma).update({ where: { id }, data });
 }
 

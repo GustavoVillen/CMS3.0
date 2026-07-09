@@ -1,6 +1,6 @@
 // Management of Change (MOC) — workflow formal de cambios significativos.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles, Download } from "lucide-react";
 import { downloadAuthedFile } from "../lib/authed-media";
@@ -10,6 +10,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { MocRegiSections, initRegiForm, serializeRegi, computeRequiresFull, type RegiForm } from "../components/moc/MocRegiSections";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useDeepLink } from "../lib/deep-link";
@@ -230,6 +231,18 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
   const [aiLoadingRisk, setAiLoadingRisk] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  // Estado "REGI-GES-06.1" (campos del formulario controlado más allá de los base).
+  const [regi, setRegi] = useState<RegiForm>(() => initRegiForm(moc as unknown as Record<string, unknown> | null));
+  const updateRegi = (patch: Partial<RegiForm>) => setRegi(prev => ({ ...prev, ...patch }));
+  const requiresFull = computeRequiresFull(regi, riskLevel);
+  const units = vessels.map(v => ({ code: v.code, name: v.name }));
+  const regiInitialStr = useMemo(
+    () => JSON.stringify(serializeRegi(initRegiForm(moc as unknown as Record<string, unknown> | null))),
+    [moc],
+  );
+  const regiStr = JSON.stringify(serializeRegi(regi));
+  const regiDirty = regiStr !== regiInitialStr;
+
   // Detección de cambios sin guardar (dirty check). Comparamos los campos
   // editables contra los valores del moc original. Sirve para que el botón
   // PDF guarde silenciosamente antes de descargar.
@@ -242,7 +255,8 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
     (moc.mitigationActions ?? "") !== mitigationActions ||
     moc.category !== category ||
     (moc.plannedDate?.slice(0, 10) ?? "") !== plannedDate ||
-    JSON.stringify(moc.impactAreasJson ?? []) !== JSON.stringify(impactAreas)
+    JSON.stringify(moc.impactAreasJson ?? []) !== JSON.stringify(impactAreas) ||
+    regiDirty
   );
 
   const handleDownloadPdf = async () => {
@@ -261,6 +275,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           plannedDate: plannedDate || null,
           relatedAssetId: prefill?.relatedAssetId ?? null,
           relatedWorkOrderId: prefill?.relatedWorkOrderId ?? null,
+          ...serializeRegi(regi),
         };
         await api.patch(`/app/mocs/${moc.id}`, payload);
       }
@@ -336,6 +351,8 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
         // Vínculos opcionales que vienen del prefill (Defect, OT, etc.).
         relatedAssetId: prefill?.relatedAssetId ?? null,
         relatedWorkOrderId: prefill?.relatedWorkOrderId ?? null,
+        // Campos del formulario controlado REGI-GES-06.1.
+        ...serializeRegi(regi),
       };
       if (isNew) await api.post("/app/mocs", payload);
       else await api.patch(`/app/mocs/${moc!.id}`, payload);
@@ -368,7 +385,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
   };
 
   // ESC: cerrar / preguntar guardar si hay cambios
-  const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas });
+  const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas, regi: regiStr });
   useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
@@ -463,6 +480,9 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               <textarea rows={6} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
           </div>
+
+          {/* Secciones del formulario controlado REGI-GES-06.1 (revelado progresivo). */}
+          <MocRegiSections form={regi} onChange={updateRegi} disabled={isLocked} requiresFull={requiresFull} units={units} />
 
           {moc && (
             <div className="rounded-lg bg-fg/[0.04] border border-fg/10 p-3 space-y-1.5 text-[11px]">

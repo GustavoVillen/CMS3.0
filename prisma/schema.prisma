@@ -3455,6 +3455,42 @@ model MocRecord {
   // Vínculos opcionales
   relatedAssetId        String?
   relatedWorkOrderId    String?
+
+  // ─── Formulario controlado REGI-GES-06.1 (campos aditivos, nullable) ────────
+  // Sección 1 · Identificación ampliada
+  requesterName             String?
+  requesterRegistration     String?   // matrícula del solicitante
+  changeManagerName         String?   // Gestor del Cambio
+  changeManagerRegistration String?
+  requestingArea            String?
+  areaSupervisor            String?
+  managementName            String?   // Gerencia
+  managerName               String?   // Gerente
+  // Sección 1 · Dimensión del cambio
+  changeTypesJson       Json          @default("[]") // ["INFRASTRUCTURE","TECHNOLOGICAL","PROCEDURES","ORGANIZATIONAL"]
+  duration              String?       // "PERMANENT" | "TEMPORARY"
+  temporaryUntil        DateTime?
+  locationType          String?       // "OFFICE" | "WAREHOUSE" | "WORKSHOP"
+  locationUnit          String?       // unidad/embarcación (RE ...)
+  physicalArea          String?
+  // Sección 1 · Descripción detallada (motivo=reasonForChange, propuesto=proposedChange ya existen)
+  currentSituation      String?       // Situación actual
+  expectedResult        String?       // Resultado esperado
+  // Sección 2 · Evaluación previa (24 preguntas) + screening
+  evaluationAnswersJson Json          @default("[]") // [{n,group,answer:"YES"|"NO"|"UNKNOWN",canImpact:bool}]
+  evaluatorAreasJson    Json          @default("[]") // ["SSMA","RRHH","OPERATIONS",...]
+  requiresFullManagement Boolean      @default(false) // derivado: algún impacto marcado
+  // Sección 3 · Clasificación, viabilidad y opinión técnica (SSMA + Apoyo)
+  technicalReviewsJson  Json          @default("[]") // [{team,evaluatorName,methodology,impactForSsma,viable,justification,riskClassification}]
+  // Sección 4 · Plan de acción para la implementación
+  actionPlanJson        Json          @default("[]") // [{impact,action,responsible,dueDate,status,observations}]
+  // Sección 5 · Aprobación para la implantación
+  finalRiskLevel        MocRiskLevel?
+  recommendationsBeforeChange String?
+  additionalInfo        String?       // Informaciones adicionales
+  // Sección 6 · Análisis de eficacia (7 preguntas)
+  effectivenessAnswersJson Json       @default("[]") // [{n,answer:"YES"|"NO",detail}]
+
   createdAt             DateTime      @default(now())
   createdByUserId       String
   updatedAt             DateTime      @updatedAt
