@@ -22,7 +22,7 @@ const dict = {
   "nav.vessels":           { es: "Buques",              en: "Vessels",             pt: "Embarcações" },
   "nav.assets":            { es: "Equipos",             en: "Assets",              pt: "Equipamentos" },
   "nav.maintenancePlans":  { es: "Plan de Mantenimiento", en: "Maintenance Plan",  pt: "Plano de Manutenção" },
-  "nav.maintenanceGantt":  { es: "Gantt de Mant.",      en: "Maint. Gantt",         pt: "Gantt de Manut." },
+  "nav.maintenanceGantt":  { es: "Gantt de Mantenimiento", en: "Maintenance Gantt", pt: "Gantt de Manutenção" },
   "nav.maintenanceWorkload": { es: "Carga de Mant.",     en: "Maint. Workload",     pt: "Carga de Manut." },
   "nav.reliability":       { es: "Confiabilidad",        en: "Reliability",         pt: "Confiabilidade" },
   "nav.failureModes":      { es: "Modos de Falla",       en: "Failure Modes",       pt: "Modos de Falha" },

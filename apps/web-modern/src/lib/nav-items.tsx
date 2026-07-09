@@ -4,7 +4,7 @@ import {
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
   FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck, Zap,
+  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck, Zap, CalendarRange,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
 } from "lucide-react";
 import type { TranslationKey } from "./i18n";
@@ -41,6 +41,7 @@ export const NAV: NavSection[] = [
     items: [
       { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
+      { icon: CalendarRange,   labelKey: "nav.maintenanceGantt", path: "/maintenance-gantt" },
       { icon: Activity,        labelKey: "nav.maintenanceWorkload", path: "/maintenance-workload" },
       { icon: HeartPulse,      labelKey: "nav.reliability",      path: "/reliability" },
       // DORMANTE — Modos de Falla (RCM): módulo listo pero oculto para no abrumar a
