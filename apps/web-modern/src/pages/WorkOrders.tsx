@@ -2560,59 +2560,23 @@ function KanbanCardContent({ wo, deferralMap }: {
   const now = new Date();
   const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
   const deferral  = deferralMap.get(wo.id);
+  // Tarjeta compacta: lo que interesa acá es el N° de OT y el Título. El equipo
+  // se muestra en el header del grupo; quién aprobó/autorizó no va en esta vista.
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <span className="font-mono font-bold text-fg text-[10px]">{wo.workOrderCode}</span>
-          <span className="ml-1.5"><VesselLabel code={wo.vesselCode} className="text-[10px]" showCode /></span>
-        </div>
+        <span className="font-mono font-bold text-fg text-[10px]">{wo.workOrderCode}</span>
         <CategoryBadge type={wo.type} />
       </div>
-      <div>
-        <p className="text-xs text-fg font-medium line-clamp-1">{wo.assetName ?? "—"}</p>
-        {wo.title && <p className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{wo.title}</p>}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        {wo.dueDate ? (
-          <span className={`text-[10px] font-medium ${isOverdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/50"}`}>
-            {isOverdue ? "⚠ " : ""}{fmtDate(wo.dueDate)}
-          </span>
-        ) : <span />}
-        {wo.assignedToUserName && (
-          <span className="text-[10px] text-text-industrial/40 truncate max-w-[90px]">{wo.assignedToUserName}</span>
-        )}
-      </div>
-      {deferral && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full border bg-fg/5 text-yellow-700 dark:text-yellow-300 border-yellow-500/30 font-mono">
-            {deferral.deferralCode}
-          </span>
-          <DeferralStatusBadge status={deferral.status} />
-        </div>
-      )}
-      {(wo.aprobadoByName || wo.autorizadoByName) && (
-        <div className="pt-1 border-t border-fg/10 space-y-0.5">
-          {wo.aprobadoByName && (
-            <p className="text-[9px] text-text-industrial/50">
-              <span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {wo.aprobadoByName}{wo.aprobadoAt ? ` · ${fmtDate(wo.aprobadoAt)}` : ""}
-            </p>
-          )}
-          {wo.autorizadoByName && (
-            <p className="text-[9px] text-text-industrial/50">
-              <span className="font-bold text-emerald-700 dark:text-emerald-400">Autorizó:</span> {wo.autorizadoByName}{wo.autorizadoAt ? ` · ${fmtDate(wo.autorizadoAt)}` : ""}
-            </p>
-          )}
-        </div>
-      )}
-      {wo.rechazadoAt && !wo.aprobadoByName && (
-        <div className="pt-1 border-t border-red-500/20 space-y-0.5">
-          <p className="text-[9px] text-red-700 dark:text-red-400">
-            <span className="font-bold">Rechazó:</span> {wo.rechazadoByName ?? "—"}{wo.rechazadoAt ? ` · ${fmtDate(wo.rechazadoAt)}` : ""}
-          </p>
-          {wo.rechazoReason && (
-            <p className="text-[9px] text-text-industrial/50 line-clamp-2">{wo.rechazoReason}</p>
-          )}
+      {wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>}
+      {(wo.dueDate || deferral) && (
+        <div className="flex items-center justify-between gap-2">
+          {wo.dueDate ? (
+            <span className={`text-[10px] font-medium ${isOverdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/50"}`}>
+              {isOverdue ? "⚠ " : ""}{fmtDate(wo.dueDate)}
+            </span>
+          ) : <span />}
+          {deferral && <DeferralStatusBadge status={deferral.status} />}
         </div>
       )}
     </>
@@ -2660,6 +2624,21 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
   );
 }
 
+// Agrupa las OT de una columna por equipo (asset). Clave por assetId (único por
+// buque) para no fusionar equipos homónimos de distintos buques; label = nombre.
+function groupWosByAsset(items: WorkOrder[]): { key: string; label: string; items: WorkOrder[] }[] {
+  const map = new Map<string, { label: string; items: WorkOrder[] }>();
+  for (const w of items) {
+    const key = w.assetId ?? w.assetName ?? "—";
+    const label = w.assetName ?? w.assetId ?? "—";
+    const g = map.get(key);
+    if (g) g.items.push(w); else map.set(key, { label, items: [w] });
+  }
+  return [...map.entries()]
+    .map(([key, g]) => ({ key, label: g.label, items: g.items }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload }: {
   items: WorkOrder[];
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
@@ -2673,6 +2652,11 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "APRUEBA" | "AUTORIZA" } | null>(null);
+  // Grupos por equipo colapsados (clave `${colId}::${assetKey}`). Default: expandidos.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((k: string) => {
+    setCollapsedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  }, []);
   // ref para evitar stale closure en handleDrop (React 18 batching)
   const draggingWoRef = React.useRef<WorkOrder | null>(null);
 
@@ -2729,17 +2713,40 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {colItems.map(wo => (
-                  <KanbanCard
-                    key={wo.id}
-                    wo={wo}
-                    deferralMap={deferralMap}
-                    isLoading={loadingId === wo.id}
-                    draggingId={draggingWo?.id ?? null}
-                    onOpen={onOpen}
-                    onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
-                  />
-                ))}
+                {groupWosByAsset(colItems).map(group => {
+                  const gkey = `${col.colId}::${group.key}`;
+                  const collapsed = collapsedGroups.has(gkey);
+                  return (
+                    <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(gkey)}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
+                        title={group.label}
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} />
+                        <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
+                        <span className="text-[11px] font-bold text-fg truncate flex-1">{group.label}</span>
+                        <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">{group.items.length}</span>
+                      </button>
+                      {!collapsed && (
+                        <div className="flex flex-col gap-2 p-2 pt-0">
+                          {group.items.map(wo => (
+                            <KanbanCard
+                              key={wo.id}
+                              wo={wo}
+                              deferralMap={deferralMap}
+                              isLoading={loadingId === wo.id}
+                              draggingId={draggingWo?.id ?? null}
+                              onOpen={onOpen}
+                              onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
