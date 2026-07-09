@@ -300,12 +300,13 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_work_orders",
     description:
-      "Query work orders for the current tenant/vessel. Use this to check open/in-progress work orders, find work order history for an asset, or verify whether a corrective action already exists. Returns also `observations` (AI-consolidated technician progress notes) and `woResult` (SATISFACTORY/WITH_DEFICIENCIES). The `observations` field reflects actual work performed even on OTs that are still IN_PROGRESS or ON_HOLD — search it to answer 'was task X already done?' queries before assuming nothing happened.",
+      "Query work orders for the current tenant/vessel. Use this to check open/in-progress work orders, find work order history for an asset, verify whether a corrective action already exists, or find WHEN a specific task was done. Returns also `observations` (AI-consolidated technician progress notes) and `woResult` (SATISFACTORY/WITH_DEFICIENCIES). CRITICAL: when the user asks about a SPECIFIC task (e.g. 'cambio de filtro de aire', 'cambio de aceite', '¿cuándo se hizo X?'), you MUST use textSearch — this vessel can have hundreds of work orders and without textSearch you only see the 20 most RECENT ones, so an older matching OT (e.g. done months ago) will be invisible and you would WRONGLY conclude nothing was done. textSearch searches across title, description AND observations, ignoring recency.",
     input_schema: {
       type: "object" as const,
       properties: {
         vesselCode: { type: "string", description: "Filter by vessel code (required)" },
         assetId: { type: "string", description: "Filter by asset ID (optional)" },
+        textSearch: { type: "string", description: "Case-insensitive keyword search across title, description AND observations (the task/work text). Words are split and matched as an AND of substrings, so word order and filler words don't matter. USE THIS for 'was task X done?' / 'when was X done?' queries (e.g. 'filtro aire', 'cambio aceite', 'inyectores'). Prefer SINGLE KEYWORDS or roots over full phrases. (optional but strongly recommended for task-specific queries)" },
         status: {
           type: "string",
           description: "Filter by status: PLANNED | IN_PROGRESS | ON_HOLD | DEFERRED | CLOSED | CANCELLED (optional). Omit to include all statuses — useful when checking if work was already in progress/closed.",
@@ -434,6 +435,7 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       properties: {
         vesselCode: { type: "string",  description: "Filter by vessel code (required)" },
         assetId:    { type: "string",  description: "Filter by asset ID (optional but recommended to focus on one equipment)" },
+        textSearch: { type: "string",  description: "Case-insensitive keyword search in the log notes (e.g. 'filtro', 'aceite', 'grasa'). Use it to find a specific express-maintenance task regardless of recency. (optional)" },
         sinceDate:  { type: "string",  description: "ISO date (YYYY-MM-DD) — only logs on/after this date (optional). Use it to sum consumption over a period." },
         limit:      { type: "number",  description: "Max results to return (default 20, max 50)" },
       },
@@ -720,6 +722,27 @@ async function executeCopilotTool(
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.type) where.type = input.type;
+      // Búsqueda por palabra clave en título + descripción + observaciones.
+      // Sin esto, el copiloto solo veía las 20 OT más recientes y no encontraba
+      // tareas ejecutadas hace meses (ej. "cambio de filtro de aire").
+      if (input.textSearch) {
+        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim()).filter(t => t.length >= 3);
+        if (tokens.length > 0) {
+          where.AND = tokens.map(tok => ({
+            OR: [
+              { title:        { contains: tok, mode: "insensitive" } },
+              { description:  { contains: tok, mode: "insensitive" } },
+              { observations: { contains: tok, mode: "insensitive" } },
+            ],
+          }));
+        } else {
+          where.OR = [
+            { title:        { contains: input.textSearch as string, mode: "insensitive" } },
+            { description:  { contains: input.textSearch as string, mode: "insensitive" } },
+            { observations: { contains: input.textSearch as string, mode: "insensitive" } },
+          ];
+        }
+      }
 
       const rows = await prisma.workOrder.findMany({
         where,
@@ -1028,6 +1051,14 @@ async function executeCopilotTool(
       if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId)  where.assetId = input.assetId;
       if (input.sinceDate) where.completedAt = { gte: new Date(input.sinceDate as string) };
+      if (input.textSearch) {
+        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim()).filter(t => t.length >= 3);
+        if (tokens.length > 0) {
+          where.AND = tokens.map(tok => ({ notes: { contains: tok, mode: "insensitive" } }));
+        } else {
+          where.notes = { contains: input.textSearch as string, mode: "insensitive" };
+        }
+      }
 
       const logs = await (prisma as any).workLog.findMany({
         where,
