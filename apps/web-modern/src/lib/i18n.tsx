@@ -402,6 +402,7 @@ const dict = {
   "mp.trm.AUTO_WO":      { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.APPROVAL_WO":  { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.CHECKLIST":    { es: "Completar ChkLst", en: "Complete Checklist", pt: "Completar ChkLst" },
+  "mp.trm.EXPRESS":      { es: "Mantenimiento Express", en: "Express maintenance", pt: "Manutenção express" },
   "mp.tt.HOURS":         { es: "Horas de operación",     en: "Operating hours",          pt: "Horas de operação" },
   "mp.tt.MONTHS":        { es: "Meses (calendario)",     en: "Months (calendar)",        pt: "Meses (calendário)" },
   "mp.tt.CALENDAR":      { es: "Fecha calendario",       en: "Calendar date",            pt: "Data calendário" },

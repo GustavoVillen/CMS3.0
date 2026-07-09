@@ -426,6 +426,21 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "query_work_logs",
+    description:
+      "Query work logs / express maintenance records (registros de mantenimiento hechos al equipo SIN OT — p.ej. 'mantenimiento express' como relleno/agregado de aceite lubricante, grasa, cambio de filtro). Use this to answer how much lube oil / consumable an equipment has been fed between services and to detect abnormal consumption (e.g. 'esta caja reductora está consumiendo mucho aceite'). Each result includes taskType, result, completedAt (when performed), executedByName, runningHoursAtExecution, notes AND `consumables` (the spares consumed in that record: spare name, quantity and unit, from the linked stock movements). These records are INVISIBLE to query_work_orders — always use this tool for oil top-ups / express maintenance history of an asset.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string",  description: "Filter by vessel code (required)" },
+        assetId:    { type: "string",  description: "Filter by asset ID (optional but recommended to focus on one equipment)" },
+        sinceDate:  { type: "string",  description: "ISO date (YYYY-MM-DD) — only logs on/after this date (optional). Use it to sum consumption over a period." },
+        limit:      { type: "number",  description: "Max results to return (default 20, max 50)" },
+      },
+      required: ["vesselCode"],
+    },
+  },
+  {
     name: "query_crew",
     description:
       "Query the crew roster (tripulación) for the current tenant/vessel. Use this when the user asks WHO holds a role on a vessel — captain/master, chief engineer, officers — who is onboard, crew by rank or nationality, sign-on/sign-off dates, or to find a crew member by name. Each result includes the crew member's name, rank name, vessel code AND vessel name, status (ONBOARD/SIGNED_OFF), nationality and dates. To answer 'who is the captain of <vessel>', filter by rank (e.g. 'capitán' / 'master') or omit rank and inspect the `rank` field of the returned crew; match the vessel by `vesselName` when the user refers to a vessel by name rather than code. Pass status='ONBOARD' for current crew (default behaviour for 'who is...' questions).",
@@ -1003,6 +1018,75 @@ async function executeCopilotTool(
 
       return wrapUntrusted(JSON.stringify(
         enriched.length > 0 ? enriched : { message: "No daily reports found matching the criteria." },
+      ));
+    }
+
+    if (name === "query_work_logs") {
+      const logsLimit = Math.min(Number(input.limit ?? 20), 50);
+      const where: Record<string, unknown> = { tenantId };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
+      if (input.assetId)  where.assetId = input.assetId;
+      if (input.sinceDate) where.completedAt = { gte: new Date(input.sinceDate as string) };
+
+      const logs = await (prisma as any).workLog.findMany({
+        where,
+        take: logsLimit,
+        orderBy: { startedAt: "desc" },
+        select: {
+          id: true, logCode: true, assetId: true, taskType: true, result: true,
+          startedAt: true, completedAt: true, executedByName: true,
+          runningHoursAtExecution: true, notes: true, workOrderId: true,
+        },
+      });
+
+      // Adjuntar los consumibles de cada registro (movimientos ISSUE colgados del
+      // WorkLog vía referenceType=WORK_LOG). Esto es lo que permite detectar
+      // consumo anómalo de aceite/lubricante por equipo.
+      const consumablesByLog: Record<string, any[]> = {};
+      if (logs.length > 0) {
+        const logIds = logs.map((l: any) => l.id);
+        const movements = await (prisma as any).stockMovement.findMany({
+          where: { tenantId, referenceType: "WORK_LOG", referenceId: { in: logIds } },
+          select: { referenceId: true, spareId: true, quantity: true, unit: true },
+        });
+        const spareIds = [...new Set(movements.map((m: any) => m.spareId).filter(Boolean))];
+        const spares = spareIds.length > 0
+          ? await (prisma as any).spare.findMany({
+              where: { id: { in: spareIds }, tenantId },
+              select: { id: true, name: true, sku: true, category: true },
+            })
+          : [];
+        const spareMap = new Map(spares.map((s: any) => [s.id, s]));
+        for (const m of movements) {
+          const key = m.referenceId as string;
+          if (!consumablesByLog[key]) consumablesByLog[key] = [];
+          const sp: any = spareMap.get(m.spareId);
+          consumablesByLog[key].push({
+            spare: sp?.name ?? m.spareId,
+            sku: sp?.sku ?? null,
+            category: sp?.category ?? null,
+            quantity: m.quantity,
+            unit: m.unit,
+          });
+        }
+      }
+
+      const result = logs.map((l: any) => ({
+        logCode: l.logCode,
+        assetId: l.assetId,
+        taskType: l.taskType,
+        result: l.result,
+        performedAt: l.completedAt ?? l.startedAt,
+        executedByName: l.executedByName,
+        runningHoursAtExecution: l.runningHoursAtExecution,
+        notes: l.notes,
+        linkedToWorkOrder: !!l.workOrderId,
+        consumables: consumablesByLog[l.id] ?? [],
+      }));
+
+      return wrapUntrusted(JSON.stringify(
+        result.length > 0 ? result : { message: "No work logs / express maintenance records found matching the criteria." },
       ));
     }
 

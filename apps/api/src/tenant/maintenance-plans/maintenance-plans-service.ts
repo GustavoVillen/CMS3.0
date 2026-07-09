@@ -4,6 +4,7 @@ import { RouteError } from "../../http/route-error";
 import { workOrderPrefix } from "../../common/wo-code";
 import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { resolveConsumables, createWorkLogSpareMovements } from "../pms/spare-consumption";
 
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
@@ -44,7 +45,7 @@ export interface CreateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
-  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
+  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST" | "EXPRESS";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
   windowLeadDays?: number | null;
@@ -87,7 +88,7 @@ export interface UpdateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
-  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
+  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST" | "EXPRESS";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
   windowLeadDays?: number | null;
@@ -114,6 +115,8 @@ export interface QuickClosePlanInput {
   runningHoursAtExecution?: number | null;
   notes?: string | null;
   completedAt?: string | Date | null;
+  /** Repuestos consumidos (solo Mantenimiento Express). Se registran como ISSUE atados al WorkLog. */
+  spareUsages?: Array<{ spareId: string; qty: number; unit?: string | null }>;
 }
 
 export interface CompleteChecklistInput {
@@ -1084,6 +1087,35 @@ export async function updateTenantMaintenancePlan(
   return updated;
 }
 
+// ---------------------------------------------------------------------------
+// generateWorkOrderCode — código único de OT ({PREFIX}-{VESSEL}-{YY}-{NNNN}).
+// Usa MAX del número de secuencia (no COUNT) para tolerar renombrados/backdating
+// sin duplicar; match de prefijo-agnóstico (3 chars WO-/SS-) para continuar la
+// secuencia al cambiar de prefijo. Reutilizado por openFormalWorkOrder y por la
+// OT automática de quickClosePlan.
+// ---------------------------------------------------------------------------
+async function generateWorkOrderCode(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantSlug: string | null | undefined,
+  tenantId: string,
+  vesselCode: string,
+): Promise<string> {
+  const woYY = String(new Date().getFullYear()).slice(-2);
+  const codeBody = `${vesselCode}-${woYY}-`;
+  const codePrefix = `${workOrderPrefix(tenantSlug)}-${codeBody}`;
+  const maxSeqRows = await prismaRaw.$queryRawUnsafe<{ max_seq: number | null }[]>(
+    `SELECT MAX(CAST(SUBSTRING("workOrderCode", ${codePrefix.length + 1}) AS INTEGER)) AS max_seq
+     FROM "WorkOrder"
+     WHERE "tenantId" = $1 AND "vesselCode" = $2
+       AND SUBSTRING("workOrderCode", 4) LIKE $3 AND "deletedAt" IS NULL`,
+    tenantId,
+    vesselCode,
+    codeBody + "%",
+  );
+  const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
+  return `${workOrderPrefix(tenantSlug)}-${vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
+}
+
 export async function quickClosePlan(
   session: TenantAccessSession,
   id: string,
@@ -1096,6 +1128,13 @@ export async function quickClosePlan(
   const prisma = maintenanceClient(prismaRaw);
 
   const plan = await getTenantMaintenancePlan(session, id);
+
+  // Consumo de repuestos (Mantenimiento Express): validar/resolver ANTES de la
+  // transacción para fallar temprano si algún repuesto no es del buque/tenant.
+  const resolvedConsumables = payload.spareUsages?.length
+    ? await resolveConsumables(prismaRaw, { tenantId: plan.tenantId, vesselCode: plan.vesselCode }, payload.spareUsages)
+    : [];
+
   const completedAt = parseOptionalDate(payload.completedAt, "completedAt") ?? new Date();
   const runningHoursAtExecution = normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution");
   const hoursWorked = normalizeOptionalNumber(payload.hoursWorked, "hoursWorked");
@@ -1111,12 +1150,59 @@ export async function quickClosePlan(
     runningHoursAtExecution,
   );
 
+  const executedByName = normalizeRequiredText(payload.executedByName, "executedByName");
+  const planAny = plan as any;
+  // Toda ejecución sin flujo de OT (DUE_ONLY / CHECKLIST / EXPRESS) genera igual
+  // un registro de OT: nace AUTORIZADA (firmada por "Sistema", sin aprobación
+  // manual) y ya CERRADA. AUTO_WO/APPROVAL_WO no pasan por quickClosePlan (usan
+  // openFormalWorkOrder), así que el registro queda naturalmente acotado.
+  const shouldCreateWo = planAny.triggerResultMode !== "AUTO_WO" && planAny.triggerResultMode !== "APPROVAL_WO";
+  const autoWoCode = shouldCreateWo
+    ? await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode)
+    : null;
+
   const txResult = await prisma.$transaction(async (tx) => {
+    // OT automática (registro): nace AUTORIZADA por Sistema y ya cerrada.
+    const workOrder = shouldCreateWo && autoWoCode
+      ? await tx.workOrder.create({
+          data: {
+            tenantId: plan.tenantId,
+            vesselCode: plan.vesselCode,
+            assetId: plan.assetId,
+            maintenancePlanId: plan.id,
+            workOrderCode: autoWoCode,
+            type: plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE",
+            status: "CLOSED",
+            priority: "MEDIUM",
+            openDate: completedAt,
+            createdAt: completedAt,
+            completedDate: completedAt,
+            woResult: result === "COMPLETED" ? "SATISFACTORY" : "WITH_DEFICIENCIES",
+            executedByName,
+            observations: normalizeOptionalText(payload.notes),
+            runningHoursAtExecution,
+            actualHours: hoursWorked,
+            title: plan.title,
+            description: plan.description,
+            taskMasterId: plan.taskMasterId ?? null,
+            department: planAny.department ?? null,
+            providerId: planAny.providerId ?? null,
+            // Tramitación automática: aprobada + autorizada por Sistema (sin firma humana).
+            aprobadoByName: "Sistema",
+            aprobadoAt: completedAt,
+            autorizadoByName: "Sistema",
+            autorizadoAt: completedAt,
+            createdByUserId: session.user.id,
+            updatedByUserId: session.user.id,
+          },
+        })
+      : null;
+
     const workLog = await tx.workLog.create({
       data: {
         tenantId: plan.tenantId,
         vesselCode: plan.vesselCode,
-        workOrderId: null,
+        workOrderId: workOrder?.id ?? null,
         maintenancePlanId: plan.id,
         assetId: plan.assetId,
         logCode,
@@ -1127,7 +1213,7 @@ export async function quickClosePlan(
         // El admin puede reportar en nombre de otro usuario (executedByUserId elegido);
         // si no se especifica, queda quien reporta. createdByUserId siempre es el actor real.
         executedByUserId: (payload.executedByUserId && String(payload.executedByUserId).trim()) || session.user.id,
-        executedByName: normalizeRequiredText(payload.executedByName, "executedByName"),
+        executedByName,
         hoursWorked,
         runningHoursAtExecution,
         notes: normalizeOptionalText(payload.notes),
@@ -1135,6 +1221,17 @@ export async function quickClosePlan(
         createdByUserId: session.user.id,
       },
     });
+
+    if (resolvedConsumables.length > 0) {
+      await createWorkLogSpareMovements(
+        tx,
+        { tenantId: plan.tenantId, vesselCode: plan.vesselCode },
+        workLog.id,
+        logCode,
+        resolvedConsumables,
+        session.user.id,
+      );
+    }
 
     const updatedPlan = await tx.maintenancePlan.update({
       where: { id: plan.id },
@@ -1149,7 +1246,7 @@ export async function quickClosePlan(
     });
     const workLogs = await loadRecentWorkLogs(tx.workLog, plan.tenantId, plan.id);
 
-    return { plan: { ...updatedPlan, workLogs }, workLog };
+    return { plan: { ...updatedPlan, workLogs }, workLog, workOrder };
   });
   void publishAudit(prismaRaw, {
     tenantId: plan.tenantId,
@@ -1166,6 +1263,23 @@ export async function quickClosePlan(
       completedAt: completedAt.toISOString(),
     },
   });
+  if (txResult.workOrder) {
+    void publishAudit(prismaRaw, {
+      tenantId: plan.tenantId,
+      actorUserId: session.user.id,
+      action: "WorkOrder.autoClosedFromPlan",
+      entityType: "WorkOrder",
+      entityId: txResult.workOrder.id,
+      metadata: {
+        workOrderCode: txResult.workOrder.workOrderCode,
+        planId: plan.id,
+        taskCode: plan.taskCode,
+        vesselCode: plan.vesselCode,
+        triggerResultMode: planAny.triggerResultMode,
+        completedAt: completedAt.toISOString(),
+      },
+    });
+  }
   return txResult;
 }
 
@@ -1201,26 +1315,7 @@ export async function openFormalWorkOrder(
   const prisma = maintenanceClient(prismaRaw);
 
   const plan = await getTenantMaintenancePlan(session, id);
-  const woYear = new Date().getFullYear();
-  const woYY = String(woYear).slice(-2);
-  // Usa MAX del número de secuencia en el código (no COUNT por createdAt) para
-  // tolerar renombrados manuales y backdating sin generar códigos duplicados.
-  // Cuerpo del código sin prefijo: "{VESSEL}-{YY}-". Match prefijo-agnóstico
-  // (3 chars: "WO-"/"SS-") para que la secuencia CONTINÚE desde códigos viejos
-  // al cambiar de prefijo, sin reiniciar en 0001.
-  const codeBody = `${plan.vesselCode}-${woYY}-`;
-  const codePrefix = `${workOrderPrefix(session.tenantSlug)}-${codeBody}`;
-  const maxSeqRows = await prismaRaw.$queryRawUnsafe<{ max_seq: number | null }[]>(
-    `SELECT MAX(CAST(SUBSTRING("workOrderCode", ${codePrefix.length + 1}) AS INTEGER)) AS max_seq
-     FROM "WorkOrder"
-     WHERE "tenantId" = $1 AND "vesselCode" = $2
-       AND SUBSTRING("workOrderCode", 4) LIKE $3 AND "deletedAt" IS NULL`,
-    plan.tenantId,
-    plan.vesselCode,
-    codeBody + "%",
-  );
-  const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
-  const workOrderCode = `${workOrderPrefix(session.tenantSlug)}-${plan.vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
+  const workOrderCode = await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode);
 
   // Hereda del plan cuando el payload no lo provee. Si el payload manda
   // el campo (incluso vacío "", el normalizeOptionalText lo convertirá a
@@ -1334,6 +1429,7 @@ export interface ReportExecutionInput {
   completedAt?: string | Date | null;
   runningHoursAtExecution?: number | null;
   hoursWorked?: number | null;
+  spareUsages?: Array<{ spareId: string; qty: number; unit?: string | null }>;
 }
 
 export async function reportExecution(
@@ -1357,12 +1453,41 @@ export async function reportExecution(
     completedAt: payload.completedAt,
     runningHoursAtExecution: normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution"),
     hoursWorked: normalizeOptionalNumber(payload.hoursWorked, "hoursWorked"),
+    spareUsages: payload.spareUsages,
   });
 
   return {
     ...closeResult,
     hasDeficiencies: payload.result === "CON_DEFICIENCIAS",
     deficienciesNotes: normalizeOptionalText(payload.deficienciesNotes),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// getLastSpareUsage — repuestos consumidos en la última ejecución del plan.
+// Alimenta el prellenado del reporte de Mantenimiento Express.
+// ---------------------------------------------------------------------------
+
+export async function getLastSpareUsage(session: TenantAccessSession, planId: string) {
+  const plan = await getTenantMaintenancePlan(session, planId);
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) return { lines: [] as Array<{ spareId: string; qty: number; unit: string }> };
+  const db = prismaRaw as any;
+
+  const lastLog = await db.workLog.findFirst({
+    where: { tenantId: plan.tenantId, maintenancePlanId: plan.id },
+    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true },
+  });
+  if (!lastLog) return { lines: [] };
+
+  const movements = await db.stockMovement.findMany({
+    where: { tenantId: plan.tenantId, referenceType: "WORK_LOG", referenceId: lastLog.id, movementType: "ISSUE" },
+    select: { spareId: true, quantity: true, unit: true },
+  });
+
+  return {
+    lines: movements.map((m: any) => ({ spareId: m.spareId, qty: m.quantity, unit: m.unit })),
   };
 }
 

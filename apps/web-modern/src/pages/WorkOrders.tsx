@@ -893,6 +893,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   const removeUsage = (idx: number) => setSpareUsages(prev => prev.filter((_, i) => i !== idx));
 
+  const updateUsageQty = (idx: number, raw: string) => {
+    const qty = raw === "" ? 0 : parseFloat(raw);
+    setSpareUsages(prev => prev.map((u, i) => (i === idx ? { ...u, qty: Number.isFinite(qty) ? qty : 0 } : u)));
+  };
+
   // ── Defect registration prompt ──
   type DefectPrompt = "idle" | "ask" | "creating" | "created" | "declined";
   const [defectPrompt, setDefectPrompt] = useState<DefectPrompt>("idle");
@@ -1996,8 +2001,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                             <span className={u.qty > u.available ? "text-orange-700 dark:text-orange-300" : "text-fg"}>{u.spareName}</span>
                           </div>
                         </td>
-                        <td className="py-1.5 text-right text-fg/70">{u.qty}</td>
-                        <td className="py-1.5 pl-2 text-fg/40">{u.unit}</td>
+                        <td className="py-1.5 text-right">
+                          {isEditable ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={u.qty}
+                              onChange={e => updateUsageQty(i, e.target.value)}
+                              className={`w-24 bg-fg/5 border rounded-lg px-2 py-1.5 text-sm font-semibold text-right focus:outline-none focus:border-accent/50 ${u.qty > u.available ? "border-orange-500/40 text-orange-700 dark:text-orange-300" : "border-fg/15 text-fg"}`}
+                            />
+                          ) : (
+                            <span className="text-fg/70">{u.qty}</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pl-2 text-fg/40 align-middle">{u.unit}</td>
                         {isEditable && (
                           <td className="py-1.5 text-right">
                             <button onClick={() => removeUsage(i)} className="text-fg/20 hover:text-red-700 dark:text-red-400 transition-colors">

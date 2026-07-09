@@ -14,6 +14,7 @@ import {
   deleteTenantMaintenancePlan,
   ensureCanManagePlans,
   generateUniqueTaskCode,
+  getLastSpareUsage,
   getTenantMaintenancePlan,
   getTenantMaintenancePlansSummary,
   listTenantMaintenancePlans,
@@ -201,6 +202,12 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof reportExecution>[2];
     sendJson(response, 200, await reportExecution(session, id, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/last-spare-usage$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, await getLastSpareUsage(session, id));
     return true;
   }
 

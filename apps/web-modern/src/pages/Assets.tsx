@@ -244,9 +244,10 @@ const WorkLogResultBadge: React.FC<{ result: string }> = ({ result }) => {
 
 // Historial de mantenimientos/inspecciones (órdenes de trabajo) del asset.
 // Solo lectura, se muestra al final del formulario en modo edición.
-const AssetHistory: React.FC<{ assetId: string }> = ({ assetId }) => {
+const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
   const t = useT();
   const navigate = useNavigate();
+  const assetId = asset.id;
   const woFetch = useFetch<{ items: AssetWorkOrder[] }>(
     `/app/pms/work-orders?assetId=${encodeURIComponent(assetId)}`,
     [assetId],
@@ -1057,7 +1058,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             </div>
           </div>
           {isEdit && initial?.id && <AssetMaintenancePlans asset={initial} />}
-          {isEdit && initial?.id && <AssetHistory assetId={initial.id} />}
+          {isEdit && initial?.id && <AssetHistory asset={initial} />}
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">

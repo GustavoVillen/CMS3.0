@@ -467,6 +467,7 @@ enum MovementRefType {
   DEFECT
   ADJUSTMENT
   SPARE_REQUEST
+  WORK_LOG
 }
 
 enum EvaluationStatus {
@@ -534,6 +535,7 @@ enum TriggerResultMode {
   AUTO_WO
   APPROVAL_WO
   CHECKLIST
+  EXPRESS
 }
 
 enum ExecutionWindowMode {
