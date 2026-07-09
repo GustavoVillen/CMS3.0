@@ -56,7 +56,10 @@ export interface SmartAlert {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, session: TenantAccessSession, tenantId: string, requestedVesselCode: string | null): Promise<Array<{ code: string; name: string; vesselType: string | null }>> {
+// Exportado para reuso por otros servicios read-only que iteran por buque
+// respetando el mismo scope tenant/vessel (ej. tmsa-service). Incluye el
+// chequeo anti-bypass de ?vesselCode fuera de la asignación del usuario.
+export async function listVesselsInScope(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, session: TenantAccessSession, tenantId: string, requestedVesselCode: string | null): Promise<Array<{ code: string; name: string; vesselType: string | null }>> {
   const where: Record<string, unknown> = { tenantId, deletedAt: null };
   // Validar requestedVesselCode contra el scope antes de aplicar. Sin esta
   // validación, un user no-admin podía pedir ?vesselCode=OTRO y recibir

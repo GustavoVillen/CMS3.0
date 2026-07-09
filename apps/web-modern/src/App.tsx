@@ -61,6 +61,7 @@ import { ChecklistsPage } from "./pages/Checklists";
 import { CrewMatrixPage } from "./pages/CrewMatrix";
 import { RequirementsMatrixPage } from "./pages/RequirementsMatrix";
 import { MocPage } from "./pages/Moc";
+import { TmsaPage } from "./pages/Tmsa";
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -165,6 +166,7 @@ export default function App() {
               <Route path="/spare-requests"    element={<SpareRequestsPage />} />
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
+              <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><TmsaPage /></RequireRole>} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

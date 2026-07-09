@@ -4,7 +4,7 @@ import {
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
   FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse,
+  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
 } from "lucide-react";
 import type { TranslationKey } from "./i18n";
@@ -50,6 +50,8 @@ export const NAV: NavSection[] = [
       { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
       { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
+      { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
+        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
       { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
       { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",
         roles: ["TENANT_ADMIN"] },
