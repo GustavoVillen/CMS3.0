@@ -263,6 +263,14 @@ export async function exportModule(
     baseWhere.vesselCode = { in: session.user.assignedVesselCodes };
   }
 
+  // El modelo Vessel identifica al buque por `code`, no por `vesselCode` (que sí
+  // existe en los demás módulos). Sin este remapeo, exportar Vessels con un buque
+  // seleccionado hace que Prisma reciba un campo inexistente → error 500.
+  if (module === "vessels" && "vesselCode" in baseWhere) {
+    baseWhere.code = baseWhere.vesselCode;
+    delete baseWhere.vesselCode;
+  }
+
   const records = await fetchRecords(prisma, module, baseWhere, filters);
   return buildWorkbook(module, records);
 }
