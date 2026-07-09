@@ -1588,6 +1588,28 @@ const dict = {
   "mp.grid.saveError":         { es: "No se pudo guardar",     en: "Could not save",        pt: "Não foi possível salvar" },
   "mp.grid.resizeHint":        { es: "Arrastrá para ajustar el ancho", en: "Drag to resize column", pt: "Arraste para ajustar a largura" },
 
+  // MaintenancePlans — matriz de vencimientos por equipo (pivote periodicidad × equipo)
+  "mp.page.matrixView":        { es: "Matriz",                 en: "Matrix",                pt: "Matriz" },
+  "mp.matrix.title":           { es: "Matriz de vencimientos por equipo", en: "Due-date matrix by equipment", pt: "Matriz de vencimentos por equipamento" },
+  "mp.matrix.subtitle":        { es: "{eq} equipos · {cols} periodicidades", en: "{eq} equipment · {cols} periodicities", pt: "{eq} equipamentos · {cols} periodicidades" },
+  "mp.matrix.equipmentCol":    { es: "Equipo o Sistema",       en: "Equipment or System",   pt: "Equipamento ou Sistema" },
+  "mp.matrix.modeDue":         { es: "Fecha de vencimiento",   en: "Due date",              pt: "Data de vencimento" },
+  "mp.matrix.modeLast":        { es: "Fecha de última ejecución", en: "Last execution date", pt: "Data da última execução" },
+  "mp.matrix.headerDue":       { es: "VENCIMIENTO",            en: "DUE DATE",              pt: "VENCIMENTO" },
+  "mp.matrix.headerLast":      { es: "ÚLTIMA EJECUCIÓN",       en: "LAST EXECUTION",        pt: "ÚLTIMA EXECUÇÃO" },
+  "mp.matrix.empty":           { es: "No hay planes para mostrar con los filtros actuales.", en: "No plans to show with the current filters.", pt: "Nenhum plano para exibir com os filtros atuais." },
+  "mp.matrix.multiTasks":      { es: "{n} tareas en esta periodicidad", en: "{n} tasks in this periodicity", pt: "{n} tarefas nesta periodicidade" },
+  "mp.matrix.freq.daily":      { es: "Diario",                 en: "Daily",                 pt: "Diário" },
+  "mp.matrix.freq.weekly":     { es: "Semanal",                en: "Weekly",                pt: "Semanal" },
+  "mp.matrix.freq.monthly":    { es: "Mensual",                en: "Monthly",               pt: "Mensal" },
+  "mp.matrix.freq.annual":     { es: "Anual",                  en: "Annual",                pt: "Anual" },
+  "mp.matrix.freq.other":      { es: "Otras",                  en: "Other",                 pt: "Outras" },
+  "mp.matrix.unit.month":      { es: "M",                      en: "M",                     pt: "M" },
+  "mp.matrix.unit.year":       { es: "A",                      en: "Y",                     pt: "A" },
+  "mp.matrix.unit.week":       { es: "sem",                    en: "wk",                    pt: "sem" },
+  "mp.matrix.unit.day":        { es: "d",                      en: "d",                     pt: "d" },
+  "mp.matrix.unit.hour":       { es: "h",                      en: "h",                     pt: "h" },
+
   // MaintenancePlans — StatusBadgeInline
   "mp.statusBadge.overdue":    { es: "VENCIDA",                en: "OVERDUE",               pt: "VENCIDA" },
   "mp.statusBadge.due":        { es: "POR VENCER",             en: "DUE",                   pt: "A VENCER" },
