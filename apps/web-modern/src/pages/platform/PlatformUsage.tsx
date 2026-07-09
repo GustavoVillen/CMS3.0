@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
+import { useTheme } from "../../lib/theme";
 
 interface UsageEvent {
   id: string;
@@ -305,17 +306,29 @@ const CHART_COLORS = [
 const UsageChart: React.FC<{
   items: UsageEvent[];
   kind: "ai_call" | "http_request";
+  userNames: Map<string, string>;
   onClose: () => void;
-}> = ({ items, kind, onClose }) => {
+}> = ({ items, kind, userNames, onClose }) => {
   const metric: "tokens" | "bytes" = kind === "ai_call" ? "tokens" : "bytes";
   const { points, users, bucket } = React.useMemo(
     () => buildChartSeries(items, metric),
     [items, metric],
   );
 
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const gridStroke    = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const axisStroke     = isDark ? "rgba(255,255,255,0.2)"  : "rgba(0,0,0,0.15)";
+  const axisTick       = isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.55)";
+  const tooltipBg       = isDark ? "#0f172a" : "#FFFFFF";
+  const tooltipBorder   = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+  const tooltipText     = isDark ? "#e2e8f0" : "#1A1D24";
+  const legendText      = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.65)";
+
   const yLabel  = kind === "ai_call" ? "Tokens" : "Bytes";
   const fmtY = kind === "ai_call" ? fmtTok : fmtKb;
   const bucketLabel = bucket === "minute" ? "minuto" : bucket === "hour" ? "hora" : "día";
+  const labelFor = (email: string) => userNames.get(email) ?? email;
 
   if (points.length === 0) {
     return (
@@ -338,25 +351,26 @@ const UsageChart: React.FC<{
       <div style={{ width: "100%", height: 320 }}>
         <ResponsiveContainer>
           <LineChart data={points} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-            <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }} stroke="rgba(255,255,255,0.2)" />
+            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+            <XAxis dataKey="label" tick={{ fill: axisTick, fontSize: 10 }} stroke={axisStroke} />
             <YAxis
-              tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
-              stroke="rgba(255,255,255,0.2)"
+              tick={{ fill: axisTick, fontSize: 10 }}
+              stroke={axisStroke}
               tickFormatter={(v: number) => fmtY(v)}
               width={60}
             />
             <Tooltip
-              contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: "#e2e8f0" }}
+              contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: tooltipText }}
               formatter={(value, name) => [fmtY(Number(value)), name]}
             />
-            <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }} />
+            <Legend wrapperStyle={{ fontSize: 11, color: legendText }} />
             {users.map((user, i) => (
               <Line
                 key={user}
                 type="monotone"
                 dataKey={user}
+                name={labelFor(user)}
                 stroke={CHART_COLORS[i % CHART_COLORS.length]}
                 strokeWidth={2}
                 dot={false}
@@ -382,6 +396,56 @@ export const PlatformUsagePage: React.FC = () => {
   const [data, setData] = React.useState<ListResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError]     = React.useState<string | null>(null);
+
+  // Resolución de nombres: los eventos de uso guardan solo el email (incluye
+  // los placeholders "named-<ts>@internal.<tenant>.local" de miembros directos
+  // sin login). Se resuelve el nombre real consultando los usuarios de cada
+  // tenant presente en los resultados, con cache por tenant entre reloads.
+  const [userNames, setUserNames] = React.useState<Map<string, string>>(new Map());
+  const tenantUsersCacheRef = React.useRef<Map<string, Map<string, string>>>(new Map());
+
+  React.useEffect(() => {
+    if (!data) return;
+    const slugs = Array.from(new Set(data.items.map(i => i.tenantSlug)));
+    const missing = slugs.filter(s => !tenantUsersCacheRef.current.has(s));
+
+    const combine = () => {
+      const combined = new Map<string, string>();
+      for (const s of slugs) {
+        const m = tenantUsersCacheRef.current.get(s);
+        if (m) for (const [k, v] of m) combined.set(k, v);
+      }
+      setUserNames(combined);
+    };
+
+    if (missing.length === 0) { combine(); return; }
+
+    void (async () => {
+      await Promise.all(missing.map(async slug => {
+        try {
+          const res = await platformFetch<{ items: Array<{ email: string; firstName?: string | null; lastName?: string | null }> }>(`/platform/tenants/${slug}/users`);
+          const m = new Map<string, string>();
+          for (const u of res.items) {
+            const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+            if (name) m.set(u.email, name);
+          }
+          tenantUsersCacheRef.current.set(slug, m);
+        } catch {
+          tenantUsersCacheRef.current.set(slug, new Map());
+        }
+      }));
+      combine();
+    })();
+  }, [data]);
+
+  const withUserNames = React.useCallback(<T extends { userEmail: string }>(cols: Column<T>[]): Column<T>[] =>
+    cols.map(c => c.key !== "userEmail" ? c : {
+      ...c,
+      render: (r: T) => {
+        const label = userNames.get(r.userEmail) ?? r.userEmail;
+        return <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{label}</span>;
+      },
+    }), [userNames]);
 
   const buildQuery = React.useCallback((extra: Record<string, string | number> = {}): string => {
     const sp = new URLSearchParams();
@@ -522,12 +586,12 @@ export const PlatformUsagePage: React.FC = () => {
       )}
 
       {showChart && (
-        <UsageChart items={chartItems} kind={kind} onClose={() => setShowChart(false)} />
+        <UsageChart items={chartItems} kind={kind} userNames={userNames} onClose={() => setShowChart(false)} />
       )}
 
       {groupBy === "minute" ? (
         <DataTable
-          columns={kind === "ai_call" ? AI_COLS_AGG : HTTP_COLS_AGG}
+          columns={withUserNames(kind === "ai_call" ? AI_COLS_AGG : HTTP_COLS_AGG)}
           data={aggregated.filter(r => r.kind === kind)}
           loading={loading}
           error={error}
@@ -536,7 +600,7 @@ export const PlatformUsagePage: React.FC = () => {
         />
       ) : (
         <DataTable
-          columns={kind === "ai_call" ? AI_COLS_RAW : HTTP_COLS_RAW}
+          columns={withUserNames(kind === "ai_call" ? AI_COLS_RAW : HTTP_COLS_RAW)}
           data={data?.items ?? null}
           loading={loading}
           error={error}
