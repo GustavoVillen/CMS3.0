@@ -10,7 +10,21 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
-import { MocRegiSections, initRegiForm, serializeRegi, computeRequiresFull, type RegiForm } from "../components/moc/MocRegiSections";
+import { MocRegiSections, initRegiForm, serializeRegi, computeRequiresFull, emptyActionRow, type RegiForm } from "../components/moc/MocRegiSections";
+
+// Borrador estructurado que devuelve el copiloto (POST /app/mocs/suggest-draft).
+interface MocAiDraft {
+  changeTypes?: string[];
+  duration?: string;
+  currentSituation?: string;
+  expectedResult?: string;
+  suggestedRiskLevel?: string;
+  evaluatorAreas?: string[];
+  evaluationAnswers?: { n: number; answer?: string; canImpact?: boolean }[];
+  actionPlan?: { impact?: string; action?: string; responsible?: string; observations?: string }[];
+  technicalReviews?: { team?: string; viable?: string; justification?: string }[];
+  recommendationsBeforeChange?: string;
+}
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useDeepLink } from "../lib/deep-link";
@@ -242,6 +256,51 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
   );
   const regiStr = JSON.stringify(serializeRegi(regi));
   const regiDirty = regiStr !== regiInitialStr;
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+
+  // Fase 3 — el copiloto arma un BORRADOR del formulario REGI-GES-06.1 a partir
+  // de la descripción del cambio; se aplica al estado para que el Gestor lo
+  // revise y edite (no pisa la situación actual/resultado si ya los escribiste).
+  const generateDraftAI = async () => {
+    if (aiDraftLoading || isLocked) return;
+    if (!proposedChange.trim() && !reasonForChange.trim()) {
+      setErr("Escribí al menos el motivo o el cambio propuesto antes de pedir el borrador."); return;
+    }
+    setAiDraftLoading(true); setErr(null);
+    try {
+      const draft = await api.post<MocAiDraft>("/app/mocs/suggest-draft", {
+        vesselName: vessels.find(v => v.code === vesselCode)?.name ?? vesselCode,
+        changeTypesHint: regi.changeTypes,
+        title, currentSituation: regi.currentSituation, reasonForChange,
+        proposedChange, expectedResult: regi.expectedResult,
+      });
+      const evalRec: RegiForm["evaluationAnswers"] = {};
+      for (const a of draft.evaluationAnswers ?? []) {
+        if (typeof a?.n === "number") evalRec[a.n] = { answer: (a.answer as RegiForm["evaluationAnswers"][number]["answer"]) ?? "", canImpact: !!a.canImpact };
+      }
+      const reviews = regi.technicalReviews.map(r => {
+        const d = draft.technicalReviews?.find(x => x.team === r.team);
+        return d ? { ...r, viable: (d.viable as typeof r.viable) ?? r.viable, justification: d.justification ?? r.justification } : r;
+      });
+      const plan = (draft.actionPlan ?? []).map(r => ({ ...emptyActionRow(), impact: r.impact ?? "", action: r.action ?? "", responsible: r.responsible ?? "", observations: r.observations ?? "" }));
+      updateRegi({
+        changeTypes: Array.isArray(draft.changeTypes) ? draft.changeTypes : regi.changeTypes,
+        duration: (draft.duration as RegiForm["duration"]) || regi.duration,
+        currentSituation: regi.currentSituation.trim() ? regi.currentSituation : (draft.currentSituation ?? ""),
+        expectedResult: regi.expectedResult.trim() ? regi.expectedResult : (draft.expectedResult ?? ""),
+        evaluatorAreas: Array.isArray(draft.evaluatorAreas) ? draft.evaluatorAreas : regi.evaluatorAreas,
+        evaluationAnswers: evalRec,
+        actionPlan: plan.length ? plan : regi.actionPlan,
+        technicalReviews: reviews,
+        recommendationsBeforeChange: draft.recommendationsBeforeChange ?? regi.recommendationsBeforeChange,
+      });
+      if (draft.suggestedRiskLevel) setRiskLevel(draft.suggestedRiskLevel);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "No se pudo generar el borrador con IA.");
+    } finally {
+      setAiDraftLoading(false);
+    }
+  };
 
   // Detección de cambios sin guardar (dirty check). Comparamos los campos
   // editables contra los valores del moc original. Sirve para que el botón
@@ -482,6 +541,21 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           </div>
 
           {/* Secciones del formulario controlado REGI-GES-06.1 (revelado progresivo). */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">Formulario REGI-GES-06.1</p>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => { void generateDraftAI(); }}
+                disabled={aiDraftLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[11px] font-bold hover:bg-accent/20 disabled:opacity-50 transition-colors"
+                title="El copiloto pre-completa dimensión, las 24 preguntas, plan de acción, riesgo y pareceres. Vos revisás y ajustás."
+              >
+                {aiDraftLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {aiDraftLoading ? "Generando borrador…" : "Generar borrador con IA"}
+              </button>
+            )}
+          </div>
           <MocRegiSections form={regi} onChange={updateRegi} disabled={isLocked} requiresFull={requiresFull} units={units} />
 
           {moc && (

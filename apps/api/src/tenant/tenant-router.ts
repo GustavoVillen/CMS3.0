@@ -38,11 +38,13 @@ import {
 import {
   listMocs, getMoc, createMoc, updateMoc, transitionMoc, deleteMoc,
 } from "./moc/moc-service";
-import { suggestRiskAssessment } from "./moc/moc-ai-suggestions";
+import { suggestRiskAssessment, suggestMocDraft } from "./moc/moc-ai-suggestions";
 import { buildMocPdf } from "./moc/moc-pdf-service";
 import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
 import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
+import { getTmsaMaintenanceEvidence } from "./tmsa/tmsa-service";
+import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import {
   listMyNotifications,
@@ -2038,6 +2040,13 @@ export async function handleTenantRoutes(
     sendJson(response, 200, await suggestRiskAssessment(session, body));
     return true;
   }
+  if (method === "POST" && url.pathname === "/app/mocs/suggest-draft") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-moc-draft:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestMocDraft>[1];
+    sendJson(response, 200, await suggestMocDraft(session, body));
+    return true;
+  }
   if (method === "GET" && /^\/app\/mocs\/[^/]+\/pdf$/.test(url.pathname)) {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
@@ -2102,6 +2111,31 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const vesselCode = url.searchParams.get("vesselCode");
     sendJson(response, 200, await getSmartAlerts(session, vesselCode));
+    return true;
+  }
+
+  // ── TMSA Elemento 4 — Reliability & Maintenance (read-only) ───────────────
+  if (method === "GET" && url.pathname === "/app/tmsa/maintenance") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode");
+    sendJson(response, 200, await getTmsaMaintenanceEvidence(session, vesselCode));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/tmsa/maintenance/pdf") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode");
+    const buffer = await buildTmsaMaintenancePdf(session, vesselCode);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `tmsa-elemento4-${vesselCode}-${dateStr}.pdf`
+      : `tmsa-elemento4-flota-${dateStr}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

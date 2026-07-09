@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { EVAL_QUESTIONS, EVALUATOR_AREAS, CHANGE_TYPES } from "./moc-form-catalog";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -230,4 +231,160 @@ export async function suggestRiskAssessment(
   const mitigation     = (sepIdx >= 0 ? text.slice(sepIdx + SECTION_SEPARATOR.length) : "").trim();
 
   return { riskAssessment, mitigation };
+}
+
+// ─── Borrador completo del formulario REGI-GES-06.1 (Fase 3) ───────────────────
+// A partir de la descripción del cambio, el copiloto pre-completa la dimensión,
+// las 24 respuestas de evaluación previa (con impacto), el plan de acción, la
+// clasificación de riesgo y los pareceres técnicos. Devuelve un BORRADOR
+// estructurado (tool-use forzado) que el Gestor del Cambio revisa y aprueba —
+// la IA nunca decide criticidad ni aprueba sola.
+
+export interface MocDraftInput {
+  vesselName?: string | null;
+  changeTypesHint?: string[] | null;
+  title?: string | null;
+  currentSituation?: string | null;
+  reasonForChange?: string | null;
+  proposedChange?: string | null;
+  expectedResult?: string | null;
+}
+
+const EVALUATOR_KEYS = EVALUATOR_AREAS.map(a => a.key);
+const CHANGE_TYPE_KEYS = CHANGE_TYPES.map(c => c.key);
+
+const DRAFT_TOOL: Anthropic.Tool = {
+  name: "moc_draft",
+  description: "Registra el borrador completo del formulario de gestión de cambios REGI-GES-06.1.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changeTypes: { type: "array", items: { type: "string", enum: CHANGE_TYPE_KEYS }, description: "Tipo(s) de cambio aplicables." },
+      duration: { type: "string", enum: ["PERMANENT", "TEMPORARY"], description: "Duración del cambio." },
+      currentSituation: { type: "string", description: "Situación actual redactada/refinada." },
+      expectedResult: { type: "string", description: "Resultado esperado redactado/refinado." },
+      suggestedRiskLevel: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], description: "Nivel de riesgo sugerido." },
+      evaluatorAreas: { type: "array", items: { type: "string", enum: EVALUATOR_KEYS }, description: "Áreas que deberían evaluar el cambio." },
+      evaluationAnswers: {
+        type: "array",
+        description: "Respuesta a CADA una de las 24 preguntas de evaluación previa.",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            n: { type: "integer", description: "Número de pregunta (1-24)." },
+            answer: { type: "string", enum: ["YES", "NO", "UNKNOWN"], description: "Respuesta a la pregunta." },
+            canImpact: { type: "boolean", description: "true si el cambio PUEDE impactar según esta pregunta." },
+          },
+          required: ["n", "answer", "canImpact"],
+        },
+      },
+      actionPlan: {
+        type: "array",
+        description: "Acciones recomendadas para implementar/mitigar el cambio.",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            impact: { type: "string", description: "Impacto en el proceso/tarea." },
+            action: { type: "string", description: "Acción concreta a realizar." },
+            responsible: { type: "string", description: "Rol/área responsable sugerido." },
+            observations: { type: "string", description: "Observaciones (opcional)." },
+          },
+          required: ["impact", "action"],
+        },
+      },
+      technicalReviews: {
+        type: "array",
+        description: "Borradores de parecer técnico (SSMA y Apoyo).",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            team: { type: "string", enum: ["SSMA", "SUPPORT"] },
+            viable: { type: "string", enum: ["YES", "NO"] },
+            justification: { type: "string", description: "Parecer técnico y recomendaciones." },
+          },
+          required: ["team", "viable", "justification"],
+        },
+      },
+      recommendationsBeforeChange: { type: "string", description: "Recomendaciones antes de aplicar el cambio." },
+    },
+    required: ["changeTypes", "suggestedRiskLevel", "evaluationAnswers"],
+  },
+};
+
+const DRAFT_PROMPT = `Sos experto senior en sistemas de gestión de seguridad (SMS) marítimos y en Gestión de Cambios (Management of Change — ISM 10.3, TMSA elemento 7). Te van a describir un cambio (MOC) propuesto para un buque/unidad. Tenés que PRE-COMPLETAR el formulario controlado REGI-GES-06.1 como un BORRADOR para que el Gestor del Cambio lo revise y ajuste.
+
+Reglas:
+- Registrá el resultado ÚNICAMENTE mediante la herramienta "moc_draft".
+- Respondé las 24 preguntas de evaluación previa (una por número). Para cada una: answer = YES/NO/UNKNOWN, y canImpact = true si el cambio PUEDE impactar en SSMA según esa pregunta.
+- Sé CONSERVADOR pero honesto: marcá canImpact=true (o answer=UNKNOWN) solo cuando el cambio propuesto realmente lo implique. Si el cambio es menor y una pregunta no aplica, answer=NO y canImpact=false.
+- El nivel de riesgo y las viabilidades son SUGERENCIAS; nunca son una aprobación.
+- El plan de acción y los pareceres deben ser accionables y específicos al cambio, no genéricos. Si el cambio es menor, el plan puede ser breve o vacío.
+- Texto en español técnico-naval, conciso.
+
+Las 24 preguntas de evaluación previa (por número):
+${EVAL_QUESTIONS.map(q => `${q.n}. ${q.text}`).join("\n")}`;
+
+export async function suggestMocDraft(session: TenantAccessSession, input: MocDraftInput) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  if (!input.proposedChange?.trim() && !input.reasonForChange?.trim()) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Describí al menos el motivo o el cambio propuesto antes de pedir el borrador a la IA.");
+  }
+
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
+  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
+
+  const context = [
+    "Cambio (MOC) propuesto:",
+    `- Unidad/buque: ${input.vesselName ?? "no especificado"}`,
+    `- Título: ${input.title ?? "—"}`,
+    `- Tipo(s) sugeridos por el usuario: ${input.changeTypesHint?.length ? input.changeTypesHint.join(", ") : "—"}`,
+    `- Situación actual: ${input.currentSituation ?? "—"}`,
+    `- Motivo del cambio: ${input.reasonForChange ?? "—"}`,
+    `- Cambio propuesto: ${input.proposedChange ?? "—"}`,
+    `- Resultado esperado: ${input.expectedResult ?? "—"}`,
+  ].join("\n");
+
+  let response;
+  try {
+    response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 3000,
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: DRAFT_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      tools: [DRAFT_TOOL],
+      tool_choice: { type: "tool", name: "moc_draft" },
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${context}` }],
+    });
+  } catch (err) {
+    log.error("[suggestMocDraft] Anthropic call failed:", err);
+    throw new RouteError(502, "AI_CALL_FAILED", "No se pudo generar el borrador con IA.");
+  }
+
+  (async () => {
+    const tenant = await getCachedTenantBySlug(session.tenantSlug);
+    if (!tenant) return;
+    recordAiUsage({
+      tenantId: tenant.id, tenantSlug: session.tenantSlug,
+      userId: session.user.id, userEmail: session.user.email,
+      vesselCode: null, feature: "moc_draft_suggestion", model: MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs: Date.now() - aiStarted,
+    });
+  })().catch(() => { /* swallow */ });
+
+  const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  if (!toolBlock) throw new RouteError(502, "AI_CALL_FAILED", "La IA no devolvió un borrador estructurado.");
+  return toolBlock.input as Record<string, unknown>;
 }
