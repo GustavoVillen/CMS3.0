@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CalendarClock, FileSpreadsheet } from "lucide-react";
+import { CalendarClock, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
 import type { MaintenancePlan } from "../pages/MaintenancePlans";
@@ -62,6 +62,19 @@ function toneForStatus(status: string): string {
   }
 }
 
+// Equivalente ARGB del color de urgencia para el Excel (mismo criterio que
+// toneForStatus). El default es azul, para que las fechas se lean como en la
+// vista en pantalla. Modo "última ejecución" no usa urgencia → azul oscuro.
+function xlsxToneForStatus(status: string): string {
+  switch (status) {
+    case "OVERDUE":   return "FFDC2626"; // rojo
+    case "DUE":       return "FFEA580C"; // naranja
+    case "UPCOMING":  return "FFCA8A04"; // ámbar
+    case "IN_WINDOW": return "FF0284C7"; // celeste
+    default:          return "FF2563EB"; // azul
+  }
+}
+
 const HEADER_ROW1_H = 30; // px — alto de la fila superior (VENCIMIENTO), para el offset sticky de la fila 2
 
 export const MaintenancePlansMatrix: React.FC<Props> = ({
@@ -69,6 +82,7 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
 }) => {
   const t = useT();
   const [mode, setMode] = useState<Mode>("due");
+  const [exporting, setExporting] = useState(false);
 
   const multiVessel = useMemo(
     () => new Set(plans.map(p => p.vesselCode)).size > 1,
@@ -194,51 +208,110 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
     );
   };
 
-  // Exporta exactamente lo visible (modo + filtros de la página) a un .xls real
-  // (SpreadsheetML 2003) generado en el cliente — sin backend ni dependencias, y
-  // sin el problema de delimitador/locale de un CSV.
-  const exportToExcel = () => {
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    const cell = (v: string) => `<Cell><Data ss:Type="String">${esc(v)}</Data></Cell>`;
-    const row = (vals: string[]) => `<Row>${vals.map(cell).join("")}</Row>`;
-    const headerLabel = mode === "due" ? t("mp.matrix.headerDue") : t("mp.matrix.headerLast");
-
-    const headerCells = [t("mp.matrix.equipmentCol")];
-    if (multiVessel) headerCells.push(t("mp.matrix.vesselCol"));
-    columns.forEach(c => headerCells.push(c.label));
-
-    const dataRows = rows.map(r => {
-      const vals = [r.label];
-      if (multiVessel) vals.push(vesselNameMap.get(r.vesselCode) ?? r.vesselCode);
-      columns.forEach(c => {
-        const inCell = cellMap.get(`${r.key}::${c.key}`);
-        if (!inCell || inCell.length === 0) { vals.push(""); return; }
-        const txt = displayVal(pickRep(inCell, c), c.kind);
-        vals.push(txt === "—" ? "" : inCell.length > 1 ? `${txt} (×${inCell.length})` : txt);
+  // Exporta exactamente lo visible (modo + filtros de la página) a un .xlsx real
+  // (OOXML vía exceljs) generado en el cliente. Un .xlsx real evita el warning de
+  // Excel "el formato y la extensión no coinciden" (que daba el SpreadsheetML con
+  // extensión .xls) y permite estilar la planilla como la matriz en pantalla:
+  // encabezado azul, columna de equipo sombreada, bordes, y las fechas coloreadas
+  // por urgencia. exceljs se carga con import dinámico → chunk aparte, no engorda
+  // el bundle principal.
+  const exportToExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { default: ExcelJS } = await import("exceljs");
+      const eqCols = multiVessel ? 2 : 1;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Matriz", {
+        views: [{ state: "frozen", xSplit: eqCols, ySplit: 2 }],
       });
-      return row(vals);
-    }).join("");
 
-    const xml =
-      `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n` +
-      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n` +
-      `<Worksheet ss:Name="Matriz">\n<Table>\n` +
-      row([`${t("mp.matrix.title")} — ${headerLabel}`]) +
-      row(headerCells) +
-      dataRows +
-      `\n</Table>\n</Worksheet>\n</Workbook>`;
+      const thin = { style: "thin" as const, color: { argb: "FFD0D7DE" } };
+      const border = { top: thin, left: thin, bottom: thin, right: thin };
 
-    const blob = new Blob(["﻿" + xml], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const today = new Date().toISOString().slice(0, 10);
-    a.download = `Matriz-Vencimientos-${mode === "due" ? "vencimiento" : "ultima-ejecucion"}-${today}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const headerLabel = mode === "due" ? t("mp.matrix.headerDue") : t("mp.matrix.headerLast");
+      const headerCells = [t("mp.matrix.equipmentCol")];
+      if (multiVessel) headerCells.push(t("mp.matrix.vesselCol"));
+      columns.forEach(c => headerCells.push(c.label));
+      const nCols = headerCells.length;
+
+      // Fila 1: título (fusionado sobre todas las columnas).
+      ws.mergeCells(1, 1, 1, nCols);
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = `${t("mp.matrix.title")} — ${headerLabel}`;
+      titleCell.font = { bold: true, size: 13, color: { argb: "FF1F6FEB" } };
+      titleCell.alignment = { vertical: "middle" };
+      ws.getRow(1).height = 24;
+
+      // Fila 2: encabezado (azul, texto blanco, centrado).
+      const hr = ws.getRow(2);
+      headerCells.forEach((h, i) => {
+        const c = hr.getCell(i + 1);
+        c.value = h;
+        c.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F6FEB" } };
+        c.alignment = { horizontal: i === 0 ? "left" : "center", vertical: "middle", wrapText: true };
+        c.border = border;
+      });
+      hr.height = 26;
+
+      // Filas de datos.
+      rows.forEach((r, ri) => {
+        const row = ws.getRow(3 + ri);
+        let ci = 1;
+        const eq = row.getCell(ci++);
+        eq.value = r.label;
+        eq.font = { bold: true, size: 10, color: { argb: "FF1A3A5A" } };
+        eq.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
+        eq.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+        eq.border = border;
+        if (multiVessel) {
+          const v = row.getCell(ci++);
+          v.value = vesselNameMap.get(r.vesselCode) ?? r.vesselCode;
+          v.font = { size: 9, color: { argb: "FF5A6B7B" } };
+          v.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
+          v.alignment = { horizontal: "left", vertical: "middle" };
+          v.border = border;
+        }
+        columns.forEach(col => {
+          const c = row.getCell(ci++);
+          c.border = border;
+          c.alignment = { horizontal: "center", vertical: "middle" };
+          const inCell = cellMap.get(`${r.key}::${col.key}`);
+          if (!inCell || inCell.length === 0) return;
+          const rep = pickRep(inCell, col);
+          const txt = displayVal(rep, col.kind);
+          if (txt === "—") return;
+          c.value = inCell.length > 1 ? `${txt} (×${inCell.length})` : txt;
+          const st = mode === "due" ? getStatus(rep) : "";
+          c.font = { size: 10, color: { argb: xlsxToneForStatus(st) }, bold: st === "OVERDUE" || st === "DUE" };
+        });
+      });
+
+      // Anchos de columna.
+      ws.getColumn(1).width = 34;
+      let ci = 2;
+      if (multiVessel) ws.getColumn(ci++).width = 16;
+      columns.forEach(() => { ws.getColumn(ci++).width = 12; });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `Matriz-Vencimientos-${mode === "due" ? "vencimiento" : "ultima-ejecucion"}-${today}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "No se pudo exportar el Excel.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const modeBtn = (m: Mode, label: string) => (
@@ -277,12 +350,14 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
           </div>
           <button
             type="button"
-            onClick={exportToExcel}
-            disabled={rows.length === 0}
+            onClick={() => { void exportToExcel(); }}
+            disabled={rows.length === 0 || exporting}
             title={t("mp.matrix.exportExcel")}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+            {exporting
+              ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
+              : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />} Excel
           </button>
         </div>
       </div>
