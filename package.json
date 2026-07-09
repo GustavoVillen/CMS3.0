@@ -30,7 +30,8 @@
     "start:desktop": "pnpm --filter @cms3/desktop start"
   },
   "dependencies": {
-    "@prisma/client": "7.7.0"
+    "@prisma/client": "7.7.0",
+    "exceljs": "^4.4.0"
   },
   "engines": {
     "node": ">=20.19.0"
