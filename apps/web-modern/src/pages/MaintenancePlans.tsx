@@ -2,6 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  CalendarRange,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -34,6 +35,7 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
+import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
@@ -2396,6 +2398,7 @@ export const MaintenancePlansPage: React.FC = () => {
   const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
   const [showExcel,     setShowExcel]     = useState(false);
   const [gridView,      setGridView]      = useState(false);
+  const [showMatrix,    setShowMatrix]    = useState(false);
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
@@ -2731,6 +2734,14 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Table2 className="w-4 h-4" />
         </button>
+        {/* Matriz de vencimientos por equipo (periodicidad × equipo) */}
+        <button
+          onClick={() => setShowMatrix(true)}
+          title={t("mp.matrix.title")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+        >
+          <CalendarRange className="w-3.5 h-3.5 text-accent" /> {t("mp.page.matrixView")}
+        </button>
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
           onClick={async () => {
@@ -2897,6 +2908,16 @@ export const MaintenancePlansPage: React.FC = () => {
       )}
 
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
+
+      {showMatrix && (
+        <MaintenancePlansMatrix
+          plans={data?.items ?? []}
+          vesselNameMap={vesselNameMap}
+          getStatus={computeStatus}
+          onClose={() => setShowMatrix(false)}
+          onOpenPlan={code => { setShowMatrix(false); openLink(code); }}
+        />
+      )}
 
       {executing && (
         <CreateWorkOrderModal
