@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, FileSpreadsheet } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
-import { ModalCloseButton } from "./ModalCloseButton";
 import type { MaintenancePlan } from "../pages/MaintenancePlans";
 
 // Matriz de vencimientos por equipo (solo lectura).
@@ -36,7 +35,6 @@ interface Props {
   vesselNameMap: Map<string, string>;
   /** computeStatus de la página — colorea los vencimientos por urgencia. */
   getStatus: (plan: MaintenancePlan) => string;
-  onClose: () => void;
   /** Abrir el detalle del plan al clickear una celda (deep-link por taskCode). */
   onOpenPlan?: (taskCode: string) => void;
 }
@@ -67,7 +65,7 @@ function toneForStatus(status: string): string {
 const HEADER_ROW1_H = 30; // px — alto de la fila superior (VENCIMIENTO), para el offset sticky de la fila 2
 
 export const MaintenancePlansMatrix: React.FC<Props> = ({
-  plans, vesselNameMap, getStatus, onClose, onOpenPlan,
+  plans, vesselNameMap, getStatus, onOpenPlan,
 }) => {
   const t = useT();
   const [mode, setMode] = useState<Mode>("due");
@@ -156,18 +154,23 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
     return fmtDate(p.lastExecutionDate) ?? "—";
   };
 
+  // Plan representativo de una celda (varias tareas del mismo equipo+periodicidad):
+  // en "vencimiento" el más próximo (mín.); en "última ejecución" el más reciente
+  // (máx.). Si ninguno tiene valor de fecha/horas, el primero.
+  const pickRep = (plansInCell: MaintenancePlan[], col: FreqBucket): MaintenancePlan => {
+    const withVal = plansInCell
+      .map(p => ({ p, v: cellVal(p, mode, col.kind) }))
+      .filter((x): x is { p: MaintenancePlan; v: number } => x.v != null)
+      .sort((a, b) => (mode === "due" ? a.v - b.v : b.v - a.v));
+    return withVal[0]?.p ?? plansInCell[0];
+  };
+
   const renderCell = (plansInCell: MaintenancePlan[] | undefined, col: FreqBucket) => {
     if (!plansInCell || plansInCell.length === 0) {
       return <span className="text-text-industrial/20">·</span>;
     }
     const count = plansInCell.length;
-    // Plan representativo: en "vencimiento" el más próximo (mín.); en "última
-    // ejecución" el más reciente (máx.). Si ninguno tiene valor, el primero.
-    const withVal = plansInCell
-      .map(p => ({ p, v: cellVal(p, mode, col.kind) }))
-      .filter((x): x is { p: MaintenancePlan; v: number } => x.v != null)
-      .sort((a, b) => (mode === "due" ? a.v - b.v : b.v - a.v));
-    const rep = withVal[0]?.p ?? plansInCell[0];
+    const rep = pickRep(plansInCell, col);
 
     const text = displayVal(rep, col.kind);
     const tone = mode === "due" ? toneForStatus(getStatus(rep)) : "text-fg/80";
@@ -191,6 +194,53 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
     );
   };
 
+  // Exporta exactamente lo visible (modo + filtros de la página) a un .xls real
+  // (SpreadsheetML 2003) generado en el cliente — sin backend ni dependencias, y
+  // sin el problema de delimitador/locale de un CSV.
+  const exportToExcel = () => {
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const cell = (v: string) => `<Cell><Data ss:Type="String">${esc(v)}</Data></Cell>`;
+    const row = (vals: string[]) => `<Row>${vals.map(cell).join("")}</Row>`;
+    const headerLabel = mode === "due" ? t("mp.matrix.headerDue") : t("mp.matrix.headerLast");
+
+    const headerCells = [t("mp.matrix.equipmentCol")];
+    if (multiVessel) headerCells.push(t("mp.matrix.vesselCol"));
+    columns.forEach(c => headerCells.push(c.label));
+
+    const dataRows = rows.map(r => {
+      const vals = [r.label];
+      if (multiVessel) vals.push(vesselNameMap.get(r.vesselCode) ?? r.vesselCode);
+      columns.forEach(c => {
+        const inCell = cellMap.get(`${r.key}::${c.key}`);
+        if (!inCell || inCell.length === 0) { vals.push(""); return; }
+        const txt = displayVal(pickRep(inCell, c), c.kind);
+        vals.push(txt === "—" ? "" : inCell.length > 1 ? `${txt} (×${inCell.length})` : txt);
+      });
+      return row(vals);
+    }).join("");
+
+    const xml =
+      `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n` +
+      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n` +
+      `<Worksheet ss:Name="Matriz">\n<Table>\n` +
+      row([`${t("mp.matrix.title")} — ${headerLabel}`]) +
+      row(headerCells) +
+      dataRows +
+      `\n</Table>\n</Worksheet>\n</Workbook>`;
+
+    const blob = new Blob(["﻿" + xml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const today = new Date().toISOString().slice(0, 10);
+    a.download = `Matriz-Vencimientos-${mode === "due" ? "vencimiento" : "ultima-ejecucion"}-${today}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   const modeBtn = (m: Mode, label: string) => (
     <button
       type="button"
@@ -208,38 +258,45 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
   const thBase = "border border-fg/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-text-industrial/60";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div
-        className={`w-full max-w-6xl max-h-[90vh] flex flex-col ${cornerBg} border border-fg/10 rounded-2xl shadow-2xl overflow-hidden`}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-fg/10">
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-fg flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-accent shrink-0" />
-              <span className="truncate">{t("mp.matrix.title")}</span>
-            </h2>
-            <p className="text-[11px] text-text-industrial/50">
-              {t("mp.matrix.subtitle").replace("{eq}", String(rows.length)).replace("{cols}", String(columns.length))}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="inline-flex rounded-xl border border-fg/10 bg-fg/5 p-0.5">
-              {modeBtn("due", t("mp.matrix.modeDue"))}
-              {modeBtn("last", t("mp.matrix.modeLast"))}
-            </div>
-            <ModalCloseButton onClose={onClose} />
-          </div>
+    <div className="flex flex-col gap-2">
+      {/* Barra del panel: título/subtítulo + toggle de modo (vencimiento ↔ última ejecución) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold text-fg flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-accent shrink-0" />
+            <span className="truncate">{t("mp.matrix.title")}</span>
+          </h2>
+          <p className="text-[11px] text-text-industrial/50">
+            {t("mp.matrix.subtitle").replace("{eq}", String(rows.length)).replace("{cols}", String(columns.length))}
+          </p>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="inline-flex rounded-xl border border-fg/10 bg-fg/5 p-0.5">
+            {modeBtn("due", t("mp.matrix.modeDue"))}
+            {modeBtn("last", t("mp.matrix.modeLast"))}
+          </div>
+          <button
+            type="button"
+            onClick={exportToExcel}
+            disabled={rows.length === 0}
+            title={t("mp.matrix.exportExcel")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+          </button>
+        </div>
+      </div>
 
-        {/* Cuerpo scrolleable */}
-        <div className="flex-1 overflow-auto p-4">
-          {rows.length === 0 ? (
-            <p className="text-sm text-text-industrial/50 px-2 py-10 text-center">{t("mp.matrix.empty")}</p>
-          ) : (
-            <table className="border-collapse text-sm">
-              <thead>
+      {/* Tabla: ocupa el recuadro central, con scroll interno (H y V) */}
+      {rows.length === 0 ? (
+        <p className="text-sm text-text-industrial/50 px-2 py-10 text-center">{t("mp.matrix.empty")}</p>
+      ) : (
+        <div
+          className={`overflow-auto rounded-xl border border-fg/10 ${cornerBg}`}
+          style={{ height: "calc(100vh - 15rem)", minHeight: 360 }}
+        >
+          <table className="border-collapse text-sm">
+            <thead>
                 <tr>
                   <th
                     rowSpan={2}
@@ -251,9 +308,14 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
                   <th
                     colSpan={columns.length}
                     style={{ height: HEADER_ROW1_H }}
-                    className={`${thBase} ${cornerBg} sticky top-0 z-20 text-center`}
+                    className={`${thBase} ${cornerBg} sticky top-0 z-20 text-left`}
                   >
-                    {mode === "due" ? t("mp.matrix.headerDue") : t("mp.matrix.headerLast")}
+                    {/* La celda abarca todas las columnas de periodicidad; con el texto centrado
+                        quedaría fuera de la vista al scrollear. Fijamos la etiqueta a la izquierda
+                        (sticky, justo después de la columna de equipo) para que siga visible. */}
+                    <span className="sticky inline-block" style={{ left: 224 }}>
+                      {mode === "due" ? t("mp.matrix.headerDue") : t("mp.matrix.headerLast")}
+                    </span>
                   </th>
                 </tr>
                 <tr>
@@ -288,9 +350,8 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
     </div>
   );
 };

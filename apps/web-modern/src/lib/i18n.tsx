@@ -1599,6 +1599,8 @@ const dict = {
   "mp.matrix.headerLast":      { es: "ÚLTIMA EJECUCIÓN",       en: "LAST EXECUTION",        pt: "ÚLTIMA EXECUÇÃO" },
   "mp.matrix.empty":           { es: "No hay planes para mostrar con los filtros actuales.", en: "No plans to show with the current filters.", pt: "Nenhum plano para exibir com os filtros atuais." },
   "mp.matrix.multiTasks":      { es: "{n} tareas en esta periodicidad", en: "{n} tasks in this periodicity", pt: "{n} tarefas nesta periodicidade" },
+  "mp.matrix.vesselCol":       { es: "Buque",                  en: "Vessel",                pt: "Embarcação" },
+  "mp.matrix.exportExcel":     { es: "Exportar la matriz a Excel", en: "Export matrix to Excel", pt: "Exportar a matriz para Excel" },
   "mp.matrix.freq.daily":      { es: "Diario",                 en: "Daily",                 pt: "Diário" },
   "mp.matrix.freq.weekly":     { es: "Semanal",                en: "Weekly",                pt: "Semanal" },
   "mp.matrix.freq.monthly":    { es: "Mensual",                en: "Monthly",               pt: "Mensal" },

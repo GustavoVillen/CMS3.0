@@ -2722,7 +2722,7 @@ export const MaintenancePlansPage: React.FC = () => {
         </button>
         {/* Toggle vista Excel (planilla compacta editable) ↔ tarjetas — solo icono */}
         <button
-          onClick={() => setGridView(v => !v)}
+          onClick={() => { const nv = !gridView; setGridView(nv); if (nv) setShowMatrix(false); }}
           title={t("mp.page.gridView")}
           aria-label={t("mp.page.gridView")}
           aria-pressed={gridView}
@@ -2734,13 +2734,18 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Table2 className="w-4 h-4" />
         </button>
-        {/* Matriz de vencimientos por equipo (periodicidad × equipo) */}
+        {/* Matriz de vencimientos por equipo (periodicidad × equipo) — vista del área central */}
         <button
-          onClick={() => setShowMatrix(true)}
+          onClick={() => { const nv = !showMatrix; setShowMatrix(nv); if (nv) setGridView(false); }}
           title={t("mp.matrix.title")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          aria-pressed={showMatrix}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            showMatrix
+              ? "bg-accent/20 border-accent/40 text-accent"
+              : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
+          }`}
         >
-          <CalendarRange className="w-3.5 h-3.5 text-accent" /> {t("mp.page.matrixView")}
+          <CalendarRange className="w-3.5 h-3.5" /> {t("mp.page.matrixView")}
         </button>
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
@@ -2875,7 +2880,22 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       )}
 
-      {gridView ? (
+      {showMatrix ? (
+        loading && !data ? (
+          <div className="flex items-center gap-2 text-xs text-text-industrial/60 px-1 py-6">
+            <Loader2 className="w-4 h-4 animate-spin text-accent" /> {t("common.loading")}
+          </div>
+        ) : error ? (
+          <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{String(error)}</p>
+        ) : (
+          <MaintenancePlansMatrix
+            plans={data?.items ?? []}
+            vesselNameMap={vesselNameMap}
+            getStatus={computeStatus}
+            onOpenPlan={code => openLink(code)}
+          />
+        )
+      ) : gridView ? (
         loading && !data ? (
           <div className="flex items-center gap-2 text-xs text-text-industrial/60 px-1 py-6">
             <Loader2 className="w-4 h-4 animate-spin text-accent" /> {t("common.loading")}
@@ -2908,16 +2928,6 @@ export const MaintenancePlansPage: React.FC = () => {
       )}
 
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
-
-      {showMatrix && (
-        <MaintenancePlansMatrix
-          plans={data?.items ?? []}
-          vesselNameMap={vesselNameMap}
-          getStatus={computeStatus}
-          onClose={() => setShowMatrix(false)}
-          onOpenPlan={code => { setShowMatrix(false); openLink(code); }}
-        />
-      )}
 
       {executing && (
         <CreateWorkOrderModal
