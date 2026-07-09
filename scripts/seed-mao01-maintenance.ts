@@ -114,12 +114,12 @@ const ASSETS: AssetDef[] = [
     tasks: [
       ["Control correas de transmisión", "500h", 23565, 24065],
       ["Cambio de aceite y filtros de aceite/by pass", "500h", 23565, 24065],
-      ["Cambio rotor de bomba de agua", "2500h", 23565, 26065],
+      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", 23565, 26565],
       ["Cambio de filtro de Gas Oil (primario/secundario)", "300h", 23565, 23865],
       ["Controlar luz de válvulas", "1800h", 23565, 25365],
       ["Tomar muestras y analizar el aceite lubricante", "6mo", "2025-12-21", "2026-06-19"],
-      ["Cambio de filtro de aire", "12mo", "2026-12-30", "2027-12-30"],
-      ["Cambio de líquido refrigerante", "24mo", "2024-05-20", "2026-05-20"],
+      ["Cambio de filtro de aire", "12mo", "2025-12-30", "2026-12-30"],
+      ["Cambio de líquido refrigerante", "48mo", "2024-05-20", "2028-05-20"],
       ["Control del turbocompresor", "2000h", 23565, 25565],
       ["Inyector N°1 - recorrido", "10000h", 18612, 28612],
       ["Inyector N°2 - recorrido", "10000h", 18612, 28612],
@@ -149,7 +149,6 @@ const ASSETS: AssetDef[] = [
       ["Inspección de mangueras y abrazaderas de cables (motor y transmisión)", "1000h", null, null, "I"],
       ["Limpieza y pintura de motor y transmisión", "1000h", null, null, "I"],
       ["Cambio de correas de transmisión", "2000h", null, null],
-      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", null, null],
     ],
   },
   {
@@ -158,12 +157,12 @@ const ASSETS: AssetDef[] = [
     tasks: [
       ["Control correas de transmisión", "500h", 23635, 24135],
       ["Cambio de aceite y filtros de aceite/by pass", "500h", 23635, 24135],
-      ["Cambio rotor de bomba de agua", "2500h", 23635, 26135],
+      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", 23635, 26635],
       ["Cambio de filtro de Gas Oil (primario/secundario)", "300h", 23635, 23935],
       ["Controlar luz de válvulas", "1800h", 23635, 25435],
       ["Tomar muestras y analizar el aceite lubricante", "6mo", "2025-12-28", "2026-06-26"],
       ["Cambio de filtro de aire", "12mo", "2025-10-11", "2026-10-11"],
-      ["Cambio de líquido refrigerante", "24mo", "2024-05-20", "2026-05-20"],
+      ["Cambio de líquido refrigerante", "48mo", "2024-05-20", "2028-05-20"],
       ["Control del turbocompresor", "2000h", 23635, 25635],
       ["Inyector N°1 - recorrido", "10000h", 23635, 33635],
       ["Inyector N°2 - recorrido", "10000h", 23635, 33635],
@@ -192,7 +191,6 @@ const ASSETS: AssetDef[] = [
       ["Inspección de mangueras y abrazaderas de cables (motor y transmisión)", "1000h", null, null, "I"],
       ["Limpieza y pintura de motor y transmisión", "1000h", null, null, "I"],
       ["Cambio de correas de transmisión", "2000h", null, null],
-      ["Cambio de kit de desgaste de bomba de agua de mar", "3000h", null, null],
     ],
   },
   {
@@ -274,7 +272,7 @@ const ASSETS: AssetDef[] = [
       ["Cambio de aceite", "250h", 62172, 62422],
       ["Cambio de filtro de aceite", "250h", 62172, 62422],
       ["Control de filtro de aire / limpieza enfriador agua", "500h", 62172, 62672],
-      ["Cambio de filtro de Gas Oil (primario/secundario)", "500h", 62172, 62672],
+      ["Cambio de filtro de Gas Oil (primario/secundario)", "250h", 62172, 62422],
       ["Cambio de filtro de aire", "1000h", 62172, 63172],
       ["Tomar muestras y analizar el aceite lubricante", "6mo", "2025-12-19", "2026-06-17"],
       ["Controlar luz de válvulas", "1500h", 62017, 63517],
@@ -378,9 +376,9 @@ const ASSETS: AssetDef[] = [
     tasks: [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", "2023-03-17", "2028-03-15"],
       ["Recorrido motor eléctrico: limpieza, barnizado, cambio rodamientos", "60mo", "2023-03-17", "2028-03-15"],
-      ["Toma de aislación a motor eléctrico", "12mo", "2026-11-12", "2027-11-12"],
-      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2026-10-25", "2027-10-25"],
-      ["Prueba de funcionamiento", "1mo", "2026-09-14", "2026-10-14"],
+      ["Toma de aislación a motor eléctrico", "12mo", "2025-11-12", "2026-11-12"],
+      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2025-10-25", "2026-10-25"],
+      ["Prueba de funcionamiento", "1mo", "2026-01-28", "2026-02-27"],
     ],
   },
   {
@@ -390,7 +388,7 @@ const ASSETS: AssetDef[] = [
       ["Recorrido de bomba: verificación aro rendimiento, cambio de sellos o reemplazo", "60mo", null, null],
       ["Recorrido motor eléctrico: limpieza, barnizado, cambio rodamientos", "60mo", null, null],
       ["Toma de aislación a motor eléctrico", "12mo", "2026-02-10", "2026-05-11"],
-      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2026-10-24", "2027-10-24"],
+      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2025-10-24", "2026-10-24"],
       ["Prueba de funcionamiento", "1mo", "2026-04-15", "2026-05-15"],
       ["Prueba de funcionamiento (en conjunto con Cubierta)", "15d", "2026-05-22", null, "I"],
     ],
@@ -432,7 +430,7 @@ const ASSETS: AssetDef[] = [
     tasks: [
       ["Recorrido de bomba: control de estator de goma, eje sin fin y retén", "60mo", "2024-02-20", "2029-02-18"],
       ["Recorrido motor eléctrico: limpieza, barnizado, cambio rodamientos", "60mo", null, "2030-12-29"],
-      ["Toma de aislación a motor eléctrico", "12mo", "2026-11-12", "2027-11-12"],
+      ["Toma de aislación a motor eléctrico", "12mo", "2025-11-12", "2026-11-12"],
       ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2026-02-19", "2027-02-19"],
     ],
   },
@@ -470,7 +468,7 @@ const ASSETS: AssetDef[] = [
       ["Control y cambio si es necesario de presostatos", "12000h", null, 12000],
       ["Control y cambio si es necesario de rodamientos", "12000h", null, 12000],
       ["Toma de aislación a motor eléctrico", "12mo", "2025-11-12", "2026-11-12"],
-      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2026-11-12", "2027-11-12"],
+      ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2025-11-12", "2026-11-12"],
       ["Recorrido general", "60mo", "2025-06-18", "2030-06-17"],
     ],
   },
@@ -479,7 +477,7 @@ const ASSETS: AssetDef[] = [
     tasks: [
       ["Prueba de funcionamiento, control de aceite y estado general", "1mo", "2026-03-28", "2026-04-27"],
       ["Cambio de aceite", "6mo", "2026-01-28", "2026-07-27"],
-      ["Toma de aislación a motor eléctrico", "12mo", "2026-11-12", "2027-11-12"],
+      ["Toma de aislación a motor eléctrico", "12mo", "2025-11-12", "2026-11-12"],
       ["Motor eléctrico: verificar ajustes y estanqueidad bornera", "12mo", "2025-10-19", "2026-10-19"],
     ],
   },
@@ -553,7 +551,7 @@ const ASSETS: AssetDef[] = [
     code: "M01-TERMOTQ", name: "Termotanque", group: 5, sub: "550", crit: "C",
     tasks: [
       ["Inspección visual, extracción de fondo", "1mo", "2026-04-15", "2026-05-15"],
-      ["Toma de aislación", "12mo", "2026-11-12", "2027-11-12"],
+      ["Toma de aislación", "12mo", "2025-11-12", "2026-11-12"],
     ],
   },
   {
@@ -832,7 +830,12 @@ async function main() {
         triggerType, frequencyHours, frequencyMonths, estimatedHours: est, taskType,
         triggerResultMode: "AUTO_WO", // "Requiere OT"
         sfiGroupNumber: a.group, sfiSubgroupCode: null,
-        responsible: a.group === 9 ? "Oficial Electrónico / Jefe de Máquinas" : "Jefe de Máquinas",
+        responsible:
+          a.group === 9
+            ? "Oficial Electrónico / Jefe de Máquinas"
+            : a.sub === "410" || a.sub === "420" || a.sub === "430"
+              ? "Puente / Capitán"
+              : "Jefe de Máquinas",
         status: "ACTIVE",
       };
       applyTiming(data, last ?? null, next ?? null);
