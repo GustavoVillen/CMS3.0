@@ -8,7 +8,7 @@ type Kind = "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
 interface Props {
   workOrderId: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (noteText?: string) => void;
 }
 
 // Comprime una imagen usando Canvas a máx 1280px y calidad JPEG 0.75.
@@ -335,7 +335,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
         if (occurredAt) headers["x-occurred-at"] = occurredAt;
         await api.uploadRaw(`/app/pms/work-orders/${workOrderId}/progress-notes?kind=${kind}`, file!, headers);
       }
-      onSaved();
+      onSaved(kind === "TEXT" ? text.trim() : undefined);
       onClose();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Error al guardar la nota.");

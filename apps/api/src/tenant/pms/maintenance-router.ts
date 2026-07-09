@@ -33,6 +33,7 @@ import {
   listTenantWorkOrders,
   startWorkOrder,
   updateTenantWorkOrder,
+  setWorkOrderType,
   reopenWorkOrder,
   resumeWorkOrder,
   setWorkOrderApproval,
@@ -338,6 +339,13 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof setWorkOrderApproval>[2];
     sendJson(response, 200, await setWorkOrderApproval(session, id, body));
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/pms\/work-orders\/[^/]+\/type$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof setWorkOrderType>[2];
+    sendJson(response, 200, await setWorkOrderType(session, id, body));
     return true;
   }
 

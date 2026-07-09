@@ -370,6 +370,65 @@ export async function suggestDefectClassification(
   };
 }
 
+// ─── Detección de deficiencia desde texto libre de OT (título/tarea/avance) ──
+
+const PROMPT_DEFICIENCY_DETECTION = `Sos un superintendente experto en mantenimiento naval. Un técnico escribió un texto en una Orden de Trabajo (puede ser el título, la tarea o un avance). Determiná si ese texto describe una DEFICIENCIA / defecto / hallazgo que amerite abrir un registro de Defecto formal para seguimiento.
+
+AMERITA un defecto cuando el texto menciona: algo roto, agrietado, fisurado, con fuga/pérdida, desgastado fuera de tolerancia, corroído, recalentado, con ruido/vibración anómala, fuera de norma, inoperativo, con riesgo a seguridad o medio ambiente, o cualquier condición que requiera reparación o seguimiento posterior.
+
+NO amerita cuando es trabajo rutinario/planificado normal sin hallazgo (ej. "cambio de aceite programado", "inspección de rutina sin novedad", "limpieza general", "engrase mensual").
+
+REGLAS DE SALIDA:
+- Respondé ÚNICAMENTE con JSON, sin texto adicional, sin "Aquí tenés", sin code fence.
+- Formato exacto: {"warrants": true|false, "reason": "1 oración concisa en español", "severity": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL"}
+- Si warrants es false, reason breve y severity "LOW".
+- Ante la duda, si hay señal de deterioro/riesgo, warrants=true.`;
+
+export interface DeficiencyDetectionInput {
+  text: string;
+  assetLabel?: string | null;
+  source?: string | null;
+}
+
+export interface DeficiencyDetection {
+  warrants: boolean;
+  reason: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+}
+
+export async function detectDeficiencyFromText(
+  session: TenantAccessSession,
+  input: DeficiencyDetectionInput,
+): Promise<DeficiencyDetection> {
+  const text = String(input.text ?? "").trim();
+  // Texto trivial → no gastar una llamada a la IA.
+  if (text.length < 12) return { warrants: false, reason: "", severity: "LOW" };
+
+  const userContent = [
+    input.source ? `Origen del texto: ${input.source}` : null,
+    input.assetLabel ? `Equipo: ${input.assetLabel}` : null,
+    `Texto: ${text}`,
+  ].filter(Boolean).join("\n");
+
+  const raw = await callClaude(session, "deficiency_detection", PROMPT_DEFICIENCY_DETECTION, userContent, 250);
+
+  let parsed: Partial<DeficiencyDetection>;
+  try {
+    parsed = JSON.parse(stripCodeFence(raw));
+  } catch {
+    log.warn("[detectDeficiencyFromText] JSON parse failed, raw:", raw.slice(0, 200));
+    return { warrants: false, reason: "", severity: "LOW" }; // falla suave: no sugerir
+  }
+
+  const sev = String(parsed.severity ?? "MEDIUM").toUpperCase();
+  const severity = (["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(sev) ? sev : "MEDIUM") as DeficiencyDetection["severity"];
+  return {
+    warrants: !!parsed.warrants,
+    reason: String(parsed.reason ?? "").trim(),
+    severity,
+  };
+}
+
 // ─── Redaccion de descripcion de defecto desde un detalle breve ─────────────
 
 const PROMPT_DESCRIPTION = `Sos un ingeniero de mantenimiento naval. A partir de un detalle BREVE escrito por el tecnico que ejecuto una reparacion correctiva, redacta una DESCRIPCION tecnica y clara del DEFECTO que motivo esa reparacion.

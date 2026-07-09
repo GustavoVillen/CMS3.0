@@ -16,7 +16,7 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
-import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, suggestDefectDescription, findSimilarDefects, parseVoiceReport } from "./defects-ai-suggestions";
+import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, suggestDefectDescription, findSimilarDefects, parseVoiceReport, detectDeficiencyFromText } from "./defects-ai-suggestions";
 import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
@@ -111,6 +111,12 @@ export async function handleQualityRoutes(
     enforceRateLimit(request, `ai-classify:${session.user.id}`, { maxRequests: 40, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestDefectClassification>[1];
     sendJson(response, 200, await suggestDefectClassification(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/defects/detect-deficiency") {
+    enforceRateLimit(request, `ai-defdetect:${session.user.id}`, { maxRequests: 40, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof detectDeficiencyFromText>[1];
+    sendJson(response, 200, await detectDeficiencyFromText(session, body));
     return true;
   }
   if (method === "POST" && url.pathname === "/app/pms/defects/suggest-description") {

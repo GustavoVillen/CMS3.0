@@ -1397,6 +1397,11 @@ const dict = {
 
   // Defect prompt al cerrar OT con deficiencias
   "wo.defectPrompt.question":  { es: "¿Deseas abrir un registro en el Log de Defectos?", en: "Do you want to open a record in the Defect Log?", pt: "Deseja abrir um registro no Log de Defeitos?" },
+  "wo.defAi.title":      { es: "Posible deficiencia detectada", en: "Possible deficiency detected", pt: "Possível deficiência detectada" },
+  "wo.defAi.openDefect": { es: "Abrir registro de defecto", en: "Open defect record", pt: "Abrir registro de defeito" },
+  "wo.defAi.dismiss":    { es: "Descartar", en: "Dismiss", pt: "Descartar" },
+  "wo.defAi.creating":   { es: "Creando…", en: "Creating…", pt: "Criando…" },
+  "wo.defAi.created":    { es: "Defecto {code} creado — completalo luego en Defectos", en: "Defect {code} created — complete it later in Defects", pt: "Defeito {code} criado — complete depois em Defeitos" },
   "wo.defFollowup.title":      { es: "Cerraste la {abbr} con deficiencias", en: "You closed the {abbr} with deficiencies", pt: "Você fechou a {abbr} com deficiências" },
   "wo.defFollowup.subtitle":   { es: "{code} · Registrá el defecto y/o abrí una OT correctiva.", en: "{code} · Register the defect and/or open a corrective WO.", pt: "{code} · Registre o defeito e/ou abra uma OS corretiva." },
   "wo.defFollowup.registerDefect": { es: "Registrar defecto", en: "Register defect", pt: "Registrar defeito" },

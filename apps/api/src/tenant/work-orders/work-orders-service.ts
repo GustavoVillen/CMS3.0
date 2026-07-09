@@ -689,6 +689,44 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   return updated;
 }
 
+/**
+ * Cambiar SOLO el tipo de la OT (Preventivo/Correctivo/Inspección). Permiso
+ * amplio (cualquier usuario salvo AUDITOR_READONLY): es un ajuste operativo
+ * liviano, a diferencia de la edición completa (canManageWorkOrders). Una OT
+ * CLOSED/CANCELLED no se toca (assertNotLocked).
+ */
+export async function setWorkOrderType(session: TenantAccessSession, id: string, payload: { type?: string }) {
+  ensureCanCreateWorkOrders(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = workOrdersClient(prismaRaw);
+
+  const type = String(payload.type ?? "").toUpperCase();
+  if (!["PREVENTIVE", "CORRECTIVE", "INSPECTION"].includes(type)) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Tipo de OT inválido.");
+  }
+
+  const current = await getTenantWorkOrder(session, id);
+  assertNotLocked("WORK_ORDER", current.status);
+
+  const updated = await prisma.workOrder.update({
+    where: { id: current.id },
+    data: { type, updatedByUserId: session.user.id },
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.typeChanged",
+    entityType: "WorkOrder",
+    entityId: current.id,
+    metadata: { workOrderCode: current.workOrderCode, from: current.type, to: type },
+  });
+
+  return updated;
+}
+
 export async function startWorkOrder(session: TenantAccessSession, id: string) {
   ensureCanOperateWorkOrders(session);
 

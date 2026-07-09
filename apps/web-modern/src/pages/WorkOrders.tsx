@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
@@ -1220,6 +1220,70 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [workOrder.id, workOrder.workOrderCode, workOrder.title]);
 
+  // Cambio de TIPO (Preventivo/Correctivo/Inspección): auto-guardado inmediato
+  // por endpoint dedicado (permiso amplio, cualquier usuario no-auditor), sin
+  // pasar por el "Guardar" gateado por gestión. Revierte si el server rechaza.
+  const [savingType, setSavingType] = useState(false);
+  const saveType = useCallback(async (next: string) => {
+    const prev = type;
+    if (next === prev) return;
+    setType(next);
+    setSavingType(true);
+    try {
+      await api.patch(`/app/pms/work-orders/${workOrder.id}/type`, { type: next });
+    } catch {
+      setType(prev);
+    } finally {
+      setSavingType(false);
+    }
+  }, [type, workOrder.id]);
+
+  // ── IA sugiere abrir un Defecto al escribir en la OT (título/tarea/avance) ──
+  // On-blur (título/tarea) y al guardar un avance: la IA lee el texto y, si
+  // detecta una deficiencia, ofrece crear un stub en Defectos sin interrumpir.
+  const canWriteDefects = !!user && ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "TECHNICIAN_OPERATOR", "INSPECTOR_COMPLIANCE"].includes(user.role);
+  const [defAi, setDefAi] = useState<{ reason: string; severity: string; sourceText: string } | null>(null);
+  const [defAiCreating, setDefAiCreating] = useState(false);
+  const [defAiCreatedCode, setDefAiCreatedCode] = useState<string | null>(null);
+  const defAiSeen = useRef<Set<string>>(new Set()); // dedupe: textos ya analizados/descartados/creados
+
+  const analyzeForDeficiency = useCallback(async (text: string, source: string) => {
+    const clean = (text ?? "").trim();
+    if (!canWriteDefects || clean.length < 12 || defAiSeen.current.has(clean)) return;
+    defAiSeen.current.add(clean);
+    try {
+      const res = await api.post<{ warrants: boolean; reason: string; severity: string }>(
+        "/app/pms/defects/detect-deficiency",
+        { text: clean, assetLabel: workOrder.assetName, source },
+      );
+      if (res.warrants) {
+        setDefAiCreatedCode(null);
+        setDefAi({ reason: res.reason, severity: res.severity || "MEDIUM", sourceText: clean });
+      }
+    } catch { /* falla suave: no sugerir */ }
+  }, [canWriteDefects, workOrder.assetName]);
+
+  const createDeficiencyStub = useCallback(async () => {
+    if (!defAi) return;
+    setDefAiCreating(true);
+    try {
+      const res = await api.post<{ id: string; defectCode: string }>("/app/pms/defects", {
+        vesselCode: workOrder.vesselCode,
+        assetId: workOrder.assetId,
+        workOrderId: workOrder.id,
+        classification: "WORK_ORDER_FINDING",
+        severity: defAi.severity,
+        description: defAi.sourceText,
+      });
+      setDefAiCreatedCode(res.defectCode);
+      setDefAi(null);
+    } catch { /* dejar el banner para reintentar */ } finally {
+      setDefAiCreating(false);
+    }
+  }, [defAi, workOrder.vesselCode, workOrder.assetId, workOrder.id]);
+
+  const dismissDefAi = useCallback(() => { setDefAi(null); setDefAiCreatedCode(null); }, []);
+
   // PATCH con todos los campos editables. Reusado por "Guardar" y por "Cerrar OT".
   const patchWorkOrder = useCallback(async (chkUrl: string | null, supUrl: string | null) => {
     await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
@@ -1406,6 +1470,33 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
+          {/* ── IA: posible deficiencia detectada en el texto de la OT ── */}
+          {(defAi || defAiCreatedCode) && (
+            <div className="rounded-xl border border-orange-500/25 bg-orange-500/5 p-3 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+              {defAiCreatedCode ? (
+                <div className="flex-1 flex items-center justify-between gap-2">
+                  <p className="text-xs text-orange-700 dark:text-orange-300">{t("wo.defAi.created").replace("{code}", defAiCreatedCode)}</p>
+                  <button type="button" onClick={dismissDefAi} className="text-fg/30 hover:text-fg shrink-0"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : defAi ? (
+                <div className="flex-1 space-y-2">
+                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">{t("wo.defAi.title")}</p>
+                  <p className="text-xs text-fg/70">{defAi.reason}</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => { void createDeficiencyStub(); }} disabled={defAiCreating}
+                      className="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-700 dark:text-orange-300 text-[11px] font-bold hover:bg-orange-500/30 disabled:opacity-50 transition-all">
+                      {defAiCreating ? t("wo.defAi.creating") : t("wo.defAi.openDefect")}
+                    </button>
+                    <button type="button" onClick={dismissDefAi} className="px-2.5 py-1 rounded-lg text-[11px] text-fg/50 hover:text-fg transition-colors">
+                      {t("wo.defAi.dismiss")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {/* ── 0. TRAMITACIÓN (Solicita → Aprueba → Autoriza) ── */}
           {isEditable && (
             <div className={`rounded-2xl border p-4 space-y-3 ${isRejected ? "border-red-500/40 bg-red-500/[0.06]" : "border-fg/10 bg-fg/[0.03]"}`}>
@@ -1466,9 +1557,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
                 [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-fg"],
                 [t("wo.modal.type"),       null, null,
-                  tramitaPhase === "SOLICITADA" && isEditable
-                    ? <select key="ty" value={type} onChange={e => setType(e.target.value)}
-                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50">
+                  isEditable
+                    ? <select key="ty" value={type} onChange={e => { void saveType(e.target.value); }} disabled={savingType}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50 disabled:opacity-60">
                         <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
                         <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
                         <option value="INSPECTION">{t("wo.type.inspection")}</option>
@@ -1639,11 +1730,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("wo.modal.titlePlaceholder")} />
+              <input value={title} onChange={e => setTitle(e.target.value)} onBlur={() => { void analyzeForDeficiency(title, "title"); }} disabled={!isEditable} className={inputCls} placeholder={t("wo.modal.titlePlaceholder")} />
             </div>
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>{t("wo.modal.task")}</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-y`} />
+              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable} className={`${inputCls} resize-y`} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -2367,7 +2458,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       <ProgressNoteSheet
         workOrderId={workOrder.id}
         onClose={() => setShowProgressSheet(false)}
-        onSaved={() => { setNotesReloadKey(k => k + 1); refreshAfterAvance(); }}
+        onSaved={(noteText) => { setNotesReloadKey(k => k + 1); refreshAfterAvance(); if (noteText) void analyzeForDeficiency(noteText, "avance"); }}
       />
     )}
 
