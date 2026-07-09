@@ -138,6 +138,62 @@ export async function buildDashboardHtml(
 // Maintenance Workload HTML
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Line chart SVG inline (sin JS) de "tareas por semana", réplica estática del
+ * gráfico Recharts de la página viva. Tema claro, coherente con htmlShell.
+ */
+function workloadChartSvg(
+  weeks: Array<{ weekStart: string; taskCount: number }>,
+): string {
+  if (weeks.length === 0) return "";
+  const W = 960, H = 340;
+  const mL = 40, mR = 16, mT = 16, mB = 44;
+  const plotW = W - mL - mR;
+  const plotH = H - mT - mB;
+  const n = weeks.length;
+
+  const rawMax = Math.max(...weeks.map(w => w.taskCount), 0);
+  const maxY = Math.max(4, Math.ceil(rawMax / 4) * 4);
+
+  const x = (i: number) => mL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const y = (v: number) => mT + plotH - (v / maxY) * plotH;
+
+  // Grilla + labels Y (5 líneas: 0..maxY)
+  const yTicks = [0, 1, 2, 3, 4].map(k => (maxY / 4) * k);
+  const grid = yTicks.map(v => {
+    const yy = y(v).toFixed(1);
+    return `<line x1="${mL}" y1="${yy}" x2="${W - mR}" y2="${yy}" stroke="#e2e8f0" stroke-width="1"/>`
+      + `<text x="${mL - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#94a3b8">${v}</text>`;
+  }).join("");
+
+  // Labels X (~12 marcas máximo, dd/mm)
+  const step = Math.max(1, Math.ceil(n / 12));
+  const xLabels = weeks.map((w, i) => {
+    if (i % step !== 0 && i !== n - 1) return "";
+    const d = w.weekStart.slice(0, 10);
+    const [, mm, dd] = d.split("-");
+    const lbl = dd && mm ? `${dd}/${mm}` : esc(d);
+    return `<text x="${x(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#94a3b8">${lbl}</text>`;
+  }).join("");
+
+  // Línea + marcadores
+  const pts = weeks.map((w, i) => `${x(i).toFixed(1)},${y(w.taskCount).toFixed(1)}`).join(" ");
+  const dots = weeks.map((w, i) =>
+    w.taskCount > 0
+      ? `<circle cx="${x(i).toFixed(1)}" cy="${y(w.taskCount).toFixed(1)}" r="2.5" fill="#0284c7"/>`
+      : "").join("");
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tareas por semana" style="max-width:100%;height:auto;">
+  <rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>
+  ${grid}
+  <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT + plotH}" stroke="#cbd5e1" stroke-width="1"/>
+  <line x1="${mL}" y1="${mT + plotH}" x2="${W - mR}" y2="${mT + plotH}" stroke="#cbd5e1" stroke-width="1"/>
+  <polyline fill="none" stroke="#0284c7" stroke-width="1.5" points="${pts}"/>
+  ${dots}
+  ${xLabels}
+</svg>`;
+}
+
 export async function buildWorkloadHtml(
   session: TenantAccessSession,
   vesselCode: string | null,
@@ -182,6 +238,12 @@ export async function buildWorkloadHtml(
   <div class="kpi"><div class="label">Sin estimación</div><div class="value">${proj.plansWithoutEstimate}</div></div>
   <div class="kpi"><div class="label">Total tareas (ventana)</div><div class="value">${totalTasks}</div></div>
   <div class="kpi"><div class="label">Total hs-hombre</div><div class="value">${totalLabor.toFixed(1)}</div></div>
+</div>
+
+<h2>Tareas por semana</h2>
+<div class="sub" style="margin-bottom:8px;">Suma de ocurrencias proyectadas — próximas ${weeks} semanas.</div>
+<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:16px;">
+  ${workloadChartSvg(proj.weeks)}
 </div>
 
 <h2>Distribución semanal</h2>
