@@ -1597,6 +1597,9 @@ const dict = {
 
   // MaintenancePlans — matriz de vencimientos por equipo (pivote periodicidad × equipo)
   "mp.page.matrixView":        { es: "Matriz",                 en: "Matrix",                pt: "Matriz" },
+  "mp.page.groupByEquipment":  { es: "Agrupar por equipo",     en: "Group by equipment",    pt: "Agrupar por equipamento" },
+  "mp.page.expandAll":         { es: "Expandir todo",          en: "Expand all",            pt: "Expandir tudo" },
+  "mp.page.collapseAll":       { es: "Colapsar todo",          en: "Collapse all",          pt: "Recolher tudo" },
   "mp.matrix.title":           { es: "Matriz de vencimientos por equipo", en: "Due-date matrix by equipment", pt: "Matriz de vencimentos por equipamento" },
   "mp.matrix.subtitle":        { es: "{eq} equipos · {cols} periodicidades", en: "{eq} equipment · {cols} periodicities", pt: "{eq} equipamentos · {cols} periodicidades" },
   "mp.matrix.equipmentCol":    { es: "Equipo o Sistema",       en: "Equipment or System",   pt: "Equipamento ou Sistema" },

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Loader2, AlertCircle, SearchX, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Loader2, AlertCircle, SearchX, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 export { fmtDate } from "../lib/utils";
@@ -16,6 +16,17 @@ export interface Column<T> {
   width?: string;
 }
 
+// Agrupación opt-in. Cuando se pasa, las filas se agrupan por keyFn con un
+// header colapsable por grupo (labelFn + contador) y se ordenan DENTRO de cada
+// grupo con sortRows. El orden de los grupos sale de sortGroups (default:
+// alfabético por label). Con groupBy activo se desactiva el orden por columna.
+export interface GroupBy<T> {
+  keyFn: (row: T) => string;
+  labelFn: (row: T) => string;
+  sortRows?: (a: T, b: T) => number;
+  sortGroups?: (a: { key: string; label: string; count: number }, b: { key: string; label: string; count: number }) => number;
+}
+
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[] | null;
@@ -27,9 +38,14 @@ interface DataTableProps<T> {
   // Fija el layout de la tabla (table-fixed) para que los anchos no dependan
   // del contenido de las filas visibles. Combinar con Column.width.
   layoutFixed?: boolean;
+  // Agrupación (opt-in). Ver GroupBy. Requiere collapsedGroups + onToggleGroup
+  // para el estado de colapsado (controlado por el padre).
+  groupBy?: GroupBy<T>;
+  collapsedGroups?: Set<string>;
+  onToggleGroup?: (key: string) => void;
 }
 
-export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup }: DataTableProps<T>) {
   const [searchParams, setSearchParams] = useSearchParams();
   const validSortKeys = useMemo(() => columns.map(col => col.key), [columns]);
 
@@ -97,8 +113,31 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
       .map(item => item.row);
   }, [columns, data, sortDirection, sortKey]);
 
+  // Con groupBy activo, el orden lo define la agrupación (grupos + sortRows),
+  // no el orden por columna. Partimos de `data` (sin ordenar por columna).
+  const groups = useMemo(() => {
+    if (!groupBy || !data) return null;
+    const map = new Map<string, { key: string; label: string; rows: T[] }>();
+    for (const row of data) {
+      const gk = groupBy.keyFn(row);
+      let g = map.get(gk);
+      if (!g) { g = { key: gk, label: groupBy.labelFn(row), rows: [] }; map.set(gk, g); }
+      g.rows.push(row);
+    }
+    const arr = [...map.values()];
+    if (groupBy.sortRows) for (const g of arr) g.rows.sort(groupBy.sortRows);
+    arr.sort((a, b) =>
+      groupBy.sortGroups
+        ? groupBy.sortGroups({ key: a.key, label: a.label, count: a.rows.length }, { key: b.key, label: b.label, count: b.rows.length })
+        : a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }),
+    );
+    return arr;
+  }, [groupBy, data]);
+
+  const sortingEnabled = !groupBy;
+
   const onHeaderClick = (column: Column<T>) => {
-    if (column.sortable === false || !column.header.trim()) return;
+    if (!sortingEnabled || column.sortable === false || !column.header.trim()) return;
 
     const params = new URLSearchParams(searchParams);
 
@@ -153,34 +192,68 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             {columns.map(col => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
+                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${!sortingEnabled || col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
                 onClick={() => onHeaderClick(col)}
-                aria-sort={sortKey === col.key ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+                aria-sort={sortingEnabled && sortKey === col.key ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.header}
-                  {col.sortable !== false && col.header.trim() && sortKey !== col.key && <ChevronsUpDown className="w-3 h-3 opacity-50" />}
-                  {col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "asc" && <ChevronUp className="w-3 h-3 text-accent" />}
-                  {col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "desc" && <ChevronDown className="w-3 h-3 text-accent" />}
+                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey !== col.key && <ChevronsUpDown className="w-3 h-3 opacity-50" />}
+                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "asc" && <ChevronUp className="w-3 h-3 text-accent" />}
+                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "desc" && <ChevronDown className="w-3 h-3 text-accent" />}
                 </span>
               </th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {sortedData.map(row => (
-            <tr
-              key={keyFn(row)}
-              className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
-              onClick={() => onRowClick?.(row)}
-            >
-              {columns.map(col => (
-                <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
-                  {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
-                </td>
+          {groups
+            ? groups.map(g => {
+                const collapsed = collapsedGroups?.has(g.key) ?? false;
+                return (
+                  <React.Fragment key={g.key}>
+                    <tr className="bg-fg/[0.05] border-y border-border">
+                      <td colSpan={columns.length} className="px-3 py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onToggleGroup?.(g.key)}
+                          className="flex items-center gap-1.5 text-left text-fg hover:text-accent transition-colors select-none"
+                        >
+                          {collapsed ? <ChevronRight className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
+                          <span className="text-xs font-bold">{g.label}</span>
+                          <span className="text-[10px] text-text-industrial/50 font-semibold">({g.rows.length})</span>
+                        </button>
+                      </td>
+                    </tr>
+                    {!collapsed && g.rows.map(row => (
+                      <tr
+                        key={keyFn(row)}
+                        className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
+                        onClick={() => onRowClick?.(row)}
+                      >
+                        {columns.map(col => (
+                          <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
+                            {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })
+            : sortedData.map(row => (
+                <tr
+                  key={keyFn(row)}
+                  className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  {columns.map(col => (
+                    <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
+                      {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
         </tbody>
       </table>
     </div>

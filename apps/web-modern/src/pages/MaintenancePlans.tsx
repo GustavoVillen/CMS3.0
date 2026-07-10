@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   CalendarRange,
   CheckCircle2,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ClipboardList,
   Clock,
   ExternalLink,
@@ -12,6 +14,7 @@ import {
   FileText,
   Filter,
   GitBranch,
+  ListTree,
   Loader2,
   Maximize2,
   Minimize2,
@@ -267,6 +270,23 @@ function formatFrequency(plan: MaintenancePlan): string {
 function normalizeOptionalText(value: string): string | null {
   const t = value.trim();
   return t || null;
+}
+
+// Rango de frecuencia para ordenar "de menor a mayor" (intervalo más corto
+// primero). Convierte todo a un escalar comparable: calendario en días
+// (semanal < mensual < anual…), horas después de todo lo calendario, y sin
+// frecuencia (CONDITION/EVENT) al final. Mismo criterio que la Matriz.
+function freqRank(p: MaintenancePlan): number {
+  const tt = (p.triggerType || "").toUpperCase();
+  if ((tt === "HOURS" || tt === "RUNNING_HOURS") && p.frequencyHours != null && p.frequencyHours > 0) {
+    return 10_000_000 + p.frequencyHours;
+  }
+  if (tt === "DAY" && p.frequencyMonths != null && p.frequencyMonths > 0) return p.frequencyMonths;
+  if (tt === "WEEK" && p.frequencyMonths != null && p.frequencyMonths > 0) return p.frequencyMonths * 7;
+  if ((tt === "MONTHS" || tt === "CALENDAR") && p.frequencyMonths != null && p.frequencyMonths > 0) {
+    return Math.round(p.frequencyMonths * 30.44);
+  }
+  return 99_999_999;
 }
 
 const TRIGGER_TYPES = ["MONTHS", "HOURS", "CALENDAR", "RUNNING_HOURS", "CONDITION", "EVENT", "DAY", "WEEK"] as const;
@@ -2429,6 +2449,9 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   const [showExcel,     setShowExcel]     = useState(false);
   const [gridView,      setGridView]      = useState(false);
   const [showMatrix,    setShowMatrix]    = useState(false);
+  // Agrupar la lista por equipo (default ON) + estado de grupos colapsados.
+  const [groupByEquipment, setGroupByEquipment] = useState(true);
+  const [collapsedGroups,  setCollapsedGroups]  = useState<Set<string>>(new Set());
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
@@ -2739,6 +2762,33 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, vesselNameMap, renderStatus, renderActions]);
 
+  // ── Agrupación por equipo (lista default) ─────────────────────────────────
+  const allGroupKeys = useMemo(
+    () => [...new Set((data?.items ?? []).map(p => p.assetId))],
+    [data],
+  );
+  const allCollapsed = allGroupKeys.length > 0 && allGroupKeys.every(k => collapsedGroups.has(k));
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+  const toggleAllGroups = useCallback(() => {
+    setCollapsedGroups(allCollapsed ? new Set<string>() : new Set(allGroupKeys));
+  }, [allCollapsed, allGroupKeys]);
+  const planGroupBy = useMemo(
+    () => groupByEquipment
+      ? {
+          keyFn: (r: MaintenancePlan) => r.assetId,
+          labelFn: (r: MaintenancePlan) => r.assetName ?? r.assetId,
+          sortRows: (a: MaintenancePlan, b: MaintenancePlan) => freqRank(a) - freqRank(b),
+        }
+      : undefined,
+    [groupByEquipment],
+  );
+
   return (
     <div className="space-y-4">
       <PageHeader icon={lockedResultMode === "EXPRESS" ? Zap : ClipboardList} title={lockedResultMode === "EXPRESS" ? t("nav.expressMaintenance") : t("page.maintenancePlans")} total={data?.total} onReload={reload}>
@@ -2783,6 +2833,33 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
         >
           <CalendarRange className="w-3.5 h-3.5" /> {t("mp.page.matrixView")}
         </button>
+        {/* Agrupar por equipo + expandir/colapsar todo (solo en la lista default) */}
+        {!showMatrix && !gridView && (
+          <>
+            <button
+              onClick={() => setGroupByEquipment(v => !v)}
+              title={t("mp.page.groupByEquipment")}
+              aria-pressed={groupByEquipment}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                groupByEquipment
+                  ? "bg-accent/20 border-accent/40 text-accent"
+                  : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
+              }`}
+            >
+              <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
+            </button>
+            {groupByEquipment && (
+              <button
+                onClick={toggleAllGroups}
+                title={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
+                aria-label={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
+                className="flex items-center justify-center p-1.5 rounded-lg border bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30 transition-all"
+              >
+                {allCollapsed ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+              </button>
+            )}
+          </>
+        )}
         {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
         <button
           onClick={async () => {
@@ -2960,6 +3037,9 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           emptyText={t("empty.maintenancePlans")}
           onRowClick={row => openLink(row.taskCode)}
           layoutFixed
+          groupBy={planGroupBy}
+          collapsedGroups={collapsedGroups}
+          onToggleGroup={toggleGroup}
         />
       )}
 
