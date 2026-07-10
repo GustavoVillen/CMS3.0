@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, Filter, Loader2, type LucideIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, Loader2, type LucideIcon } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 
@@ -130,12 +131,10 @@ type Row =
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MaintenanceGanttPage() {
+  const navigate = useNavigate();
   const { data, loading, error } = useFetch<ListResponse>("/app/pms/maintenance-plans?limit=500");
   const plans = data?.items ?? [];
 
-  const vessels = useMemo(() => Array.from(new Set(plans.map((p) => p.vesselCode))).sort(), [plans]);
-
-  const [selectedVessel, setSelectedVessel] = useState<string>("ALL");
   const [selectedYear,   setSelectedYear]   = useState<number>(new Date().getFullYear());
   const [selectedType,   setSelectedType]   = useState<string>("ALL");
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set(Object.keys(STATUS_LABELS)));
@@ -156,24 +155,20 @@ export function MaintenanceGanttPage() {
     return [c - 2, c - 1, c, c + 1, c + 2];
   }, []);
 
-  // ── Filtrado (buque / tipo / estado). El año NO filtra: se ve todo con scroll. ──
+  // ── Filtrado (tipo / estado). El buque lo scopea el selector global del header;
+  //    el año NO filtra: se ve todo con scroll. ──
   const filtered = useMemo(() => plans.filter((p) => {
-    if (selectedVessel !== "ALL" && p.vesselCode !== selectedVessel) return false;
     if (selectedType !== "ALL" && p.taskType !== selectedType) return false;
     if (!activeStatuses.has(p.executionStatus)) return false;
     return true;
-  }), [plans, selectedVessel, selectedType, activeStatuses]);
+  }), [plans, selectedType, activeStatuses]);
 
   const statusCounts = useMemo(() => {
-    const base = plans.filter((p) => {
-      if (selectedVessel !== "ALL" && p.vesselCode !== selectedVessel) return false;
-      if (selectedType !== "ALL" && p.taskType !== selectedType) return false;
-      return true;
-    });
+    const base = plans.filter((p) => selectedType === "ALL" || p.taskType === selectedType);
     const counts: Record<string, number> = {};
     base.forEach((p) => { counts[p.executionStatus] = (counts[p.executionStatus] ?? 0) + 1; });
     return counts;
-  }, [plans, selectedVessel, selectedType]);
+  }, [plans, selectedType]);
 
   // ── Rango temporal (min/max de últimas ejec. y próximos venc., con padding) ──
   const range = useMemo(() => {
@@ -259,14 +254,6 @@ export function MaintenanceGanttPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-text-industrial/40" />
-          <select value={selectedVessel} onChange={(e) => setSelectedVessel(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40">
-            <option value="ALL">Todos los buques</option>
-            {vessels.map((v) => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-
         <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} title="Ir al año" className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40">
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
@@ -366,7 +353,13 @@ export function MaintenanceGanttPage() {
                 const xLast = lastD ? xOf(lastD) : null;
                 const xNext = nextD ? xOf(nextD) : null;
                 return (
-                  <div key={row.key} className="flex border-b border-fg/[0.04] hover:bg-fg/[0.02] group" style={{ height: ROW_H }}>
+                  <div
+                    key={row.key}
+                    onClick={() => navigate(`/maintenance-plans?openId=${p.id}`)}
+                    title="Abrir el plan de mantenimiento"
+                    className="flex border-b border-fg/[0.04] hover:bg-fg/[0.02] group cursor-pointer"
+                    style={{ height: ROW_H }}
+                  >
                     <div className="sticky left-0 z-10 flex flex-col justify-center px-3 border-r border-fg/10 shrink-0 bg-surface dark:bg-[#0a0f1e] group-hover:bg-fg/[0.02]" style={{ width: LEFT_W, minWidth: LEFT_W, paddingLeft: 36 }}>
                       <span className="text-[11px] leading-tight truncate text-fg/80" title={`${p.taskCode} · ${p.title}`}>
                         <span className="font-mono font-semibold text-accent">{p.taskCode}</span>
