@@ -107,7 +107,19 @@ export async function handleMaintenanceRoutes(
       taskMasterId: url.searchParams.get("taskMasterId"),
       assetId: url.searchParams.get("assetId"),
     });
-    sendJson(response, 200, { items, total: items.length });
+    // La LISTA no muestra los campos de texto pesados (LOTO, criterios de
+    // aceptación, análisis de riesgo, justificación de consecuencia): son ~60%
+    // del payload y solo se ven en el detalle/modal, que refetchea el plan
+    // completo por id. Los quitamos de la respuesta de lista para que "Todos
+    // los buques" (1000+ planes) no transfiera varios MB. `description` se
+    // conserva porque el buscador de la lista filtra por él.
+    const light = items.map((p) => {
+      const { loto, acceptanceCriteria, riskAnalysisResult, consequenceRationale, ...rest } =
+        p as Record<string, unknown>;
+      void loto; void acceptanceCriteria; void riskAnalysisResult; void consequenceRationale;
+      return rest;
+    });
+    sendJson(response, 200, { items: light, total: light.length }, request);
     return true;
   }
 
