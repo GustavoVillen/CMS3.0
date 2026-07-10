@@ -323,7 +323,7 @@ interface ExecutionModalProps {
   onSuccess: () => void;
 }
 
-interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }
+interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean }
 const teamMemberName = (u: TeamMember) => (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
 
 const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId, isAdmin, onClose, onSuccess }) => {
@@ -617,7 +617,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
                 )}
                 {teamUsers.map(u => (
                   <option key={u.userId} value={u.userId}>
-                    {teamMemberName(u) || u.userId}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                    {teamMemberName(u) || u.userId}{!u.hasSignature ? "  ·  (sin firma)" : ""}
                   </option>
                 ))}
               </select>

@@ -689,7 +689,9 @@ export const TeamPage: React.FC = () => {
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [reloadCount, setReloadCount] = useState(0);
 
-  const { data, loading, error, reload } = useFetch<Member[]>("/app/team/members", [reloadCount]);
+  // withSignatures=1: esta pantalla muestra/edita la imagen de firma, así que
+  // necesita el data-URI completo (el resto de la app usa la versión liviana).
+  const { data, loading, error, reload } = useFetch<Member[]>("/app/team/members?withSignatures=1", [reloadCount]);
   const members = data ?? [];
 
   const triggerReload = () => { setReloadCount(c => c + 1); reload(); };

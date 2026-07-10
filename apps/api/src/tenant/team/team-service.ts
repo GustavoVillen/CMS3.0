@@ -36,7 +36,16 @@ async function getTenantId(prisma: NonNullable<ReturnType<typeof getPrismaClient
 
 // ─── List Members ─────────────────────────────────────────────────────────────
 
-export async function listTeamMembers(session: TenantAccessSession) {
+// La firma (`signatureUrl`) se guarda como data-URI base64 de hasta ~1.5MB por
+// usuario (ver updateMemberProfile). Devolverla para TODOS los miembros hace que
+// esta respuesta pese varios MB → el listado de "quien autoriza/aprueba" en las
+// OT tardaba hasta ~10s en habilitarse. Por eso el endpoint es LIVIANO por
+// defecto: devuelve `hasSignature` (bool) sin el blob. Solo la pantalla de
+// Usuarios pide `withSignatures` para ver/editar la imagen.
+export async function listTeamMembers(
+  session: TenantAccessSession,
+  opts: { withSignatures?: boolean } = {},
+) {
   ensureAdmin(session);
   const prisma = getPrismaClient();
 
@@ -44,48 +53,63 @@ export async function listTeamMembers(session: TenantAccessSession) {
     // Dev mode: read from in-memory store
     const { listDevTenantUsers } = await import("../../platform/data/dev-tenant-user-store");
     const users: DevTenantUserRecord[] = listDevTenantUsers({ tenantSlug: session.tenantSlug });
-    return users.map(u => ({
-      userId: u.id,
-      email: u.email,
-      legacyUserId: u.legacyUserId,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      role: u.role,
-      status: u.membershipStatus,
-      assignedVesselCodes: u.assignedVesselCodes,
-      joinedAt: u.createdAt,
-    }));
+    return users.map(u => {
+      const sig = (u as { signatureUrl?: string | null }).signatureUrl ?? null;
+      return {
+        userId: u.id,
+        email: u.email,
+        legacyUserId: u.legacyUserId,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        status: u.membershipStatus,
+        assignedVesselCodes: u.assignedVesselCodes,
+        joinedAt: u.createdAt,
+        hasSignature: !!sig,
+        ...(opts.withSignatures ? { signatureUrl: sig } : {}),
+      };
+    });
   }
 
   const tenantId = await getTenantId(prisma, session.tenantSlug);
   const memberships = await (prisma as any).tenantMembership.findMany({
     where: { tenantId },
     include: {
-      user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } },
+      user: {
+        select: {
+          id: true, email: true, legacyUserId: true, firstName: true, lastName: true,
+          status: true, formName: true,
+          // El blob base64 solo se selecciona/transfiere en modo withSignatures.
+          ...(opts.withSignatures ? { signatureUrl: true } : {}),
+        },
+      },
     },
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
   });
 
-  const memberships2 = await (prisma as any).tenantMembership.findMany({
-    where: { tenantId },
-    include: {
-      user: { select: { id: true, email: true, legacyUserId: true, firstName: true, lastName: true, status: true, formName: true, signatureUrl: true } },
-    },
-    orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-  });
+  // Modo liviano: saber quién tiene firma sin traer el blob (consulta mínima).
+  let hasSigSet: Set<string> | null = null;
+  if (!opts.withSignatures) {
+    const withSig = await prisma.user.findMany({
+      where: { memberships: { some: { tenantId } }, signatureUrl: { not: null } },
+      select: { id: true },
+    });
+    hasSigSet = new Set(withSig.map((u: { id: string }) => u.id));
+  }
 
-  return memberships2.map((m: any) => ({
+  return memberships.map((m: any) => ({
     userId: m.userId,
     email: m.user.email,
     legacyUserId: m.user.legacyUserId,
     firstName: m.user.firstName,
     lastName: m.user.lastName,
     formName: m.user.formName,
-    signatureUrl: m.user.signatureUrl,
     role: m.role,
     status: m.status,
     assignedVesselCodes: m.assignedVesselCodes,
     joinedAt: m.joinedAt ?? m.createdAt,
+    hasSignature: opts.withSignatures ? (m.user.signatureUrl != null) : hasSigSet!.has(m.userId),
+    ...(opts.withSignatures ? { signatureUrl: m.user.signatureUrl } : {}),
   }));
 }
 

@@ -850,7 +850,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [closeOnBehalfUserId, setCloseOnBehalfUserId] = useState(user?.id ?? "");
   const [closeDate, setCloseDate] = useState("");
-  const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null }[]>([]);
+  const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean }[]>([]);
   useEffect(() => {
     if (!isAdmin) return;
     api.get<typeof closeTeamUsers>("/app/team/members")
@@ -2362,7 +2362,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 {closeTeamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
                 {closeTeamUsers.map(u => (
                   <option key={u.userId} value={u.userId}>
-                    {(closeMemberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                    {(closeMemberName(u) || u.userId)}{!u.hasSignature ? "  ·  (sin firma)" : ""}
                   </option>
                 ))}
               </select>
@@ -2791,7 +2791,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const isAdmin = user?.role === "TENANT_ADMIN";
   const adminPicker = isAdmin && !isReject;
   const [onBehalfUserId, setOnBehalfUserId] = useState(user?.id ?? "");
-  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; signatureUrl: string | null; role: string; assignedVesselCodes: string[] }[]>([]);
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role: string; assignedVesselCodes: string[] }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
   // Aprobar/autorizar solo lo puede firmar un ADMIN, o el SUPERINTENDENTE o el
@@ -2877,7 +2877,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
               {eligibleApprovers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
               {eligibleApprovers.map(u => (
                 <option key={u.userId} value={u.userId}>
-                  {(memberName(u) || u.userId)}{!u.signatureUrl ? "  ·  (sin firma)" : ""}
+                  {(memberName(u) || u.userId)}{!u.hasSignature ? "  ·  (sin firma)" : ""}
                 </option>
               ))}
             </select>

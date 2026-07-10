@@ -35,9 +35,11 @@ export async function handleTeamRoutes(
 
   const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
 
-  // GET /app/team/members
+  // GET /app/team/members  (?withSignatures=1 incluye el data-URI de la firma —
+  // solo lo pide la pantalla de Usuarios; el resto usa la versión liviana)
   if (method === "GET" && url.pathname === "/app/team/members") {
-    sendJson(response, 200, await listTeamMembers(session));
+    const withSignatures = url.searchParams.get("withSignatures") === "1";
+    sendJson(response, 200, await listTeamMembers(session, { withSignatures }));
     return true;
   }
 
