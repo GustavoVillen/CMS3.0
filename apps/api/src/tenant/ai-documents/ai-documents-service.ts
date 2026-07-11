@@ -350,6 +350,19 @@ export async function getActiveTenantAiDocs(tenantId: string): Promise<ActiveAiD
 
 /** Devuelve sólo los nombres de los documentos ACTIVE — índice liviano para el system prompt. */
 export async function getActiveTenantAiDocumentsIndex(tenantId: string): Promise<string[]> {
-  const docs = await getActiveTenantAiDocs(tenantId);
-  return docs.map(d => d.name);
+  const prisma = getPrismaClient();
+  if (!prisma) return [];
+
+  // Query dedicada SIN traer `content`: este índice sólo necesita los nombres.
+  // Antes reusaba getActiveTenantAiDocs, que transfería el contenido COMPLETO de
+  // todos los manuales (cientos de KB) desde Postgres en CADA turno del copiloto
+  // sólo para descartarlo y quedarse con los nombres. El contenido se consulta
+  // on-demand vía la tool `search_knowledge_docs`. Mismo where/orderBy/fallback.
+  const versions = await prisma.aiDocumentVersion.findMany({
+    where: { tenantId, status: "ACTIVE" },
+    orderBy: [{ activatedAt: "desc" }, { createdAt: "desc" }],
+    select: { document: { select: { name: true } } },
+  });
+
+  return versions.map(v => v.document?.name?.trim() || "Documento");
 }

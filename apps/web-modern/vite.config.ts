@@ -14,6 +14,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // No emitir source maps en producción: no aportan a usuarios y triplican el
+  // tamaño del artefacto de deploy (además de exponer el código fuente).
+  build: {
+    sourcemap: false,
+  },
   server: {
     port: 5174,
     proxy: {

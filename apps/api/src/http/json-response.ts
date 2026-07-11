@@ -19,7 +19,11 @@ export function sendJson(
   response.setHeader("Content-Type", "application/json; charset=utf-8");
 
   const body = JSON.stringify(payload);
-  const acceptsGzip = !!req && /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
+  // Fallback a response.req (Node siempre lo expone en respuestas del server) para
+  // que la compresión aplique a TODAS las respuestas grandes, no sólo a los pocos
+  // call-sites que pasan `req` explícito. SSE no usa sendJson → no se ve afectado.
+  const httpReq = req ?? response.req;
+  const acceptsGzip = !!httpReq && /\bgzip\b/.test(String(httpReq.headers["accept-encoding"] ?? ""));
 
   if (acceptsGzip && Buffer.byteLength(body) > GZIP_MIN_BYTES) {
     response.setHeader("Vary", "Accept-Encoding");

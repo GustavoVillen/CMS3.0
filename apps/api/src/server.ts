@@ -20,6 +20,7 @@ import { evictExpiredSessions } from "./tenant/auth/session-store";
 import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
 import { evictExpiredLockouts } from "./http/login-lockout";
 import { attachUsageTracking } from "./http/usage-tracking-middleware";
+import { purgeOldUsageEvents } from "./tenant/usage/usage-service";
 
 loadDotEnvFile();
 
@@ -193,5 +194,20 @@ async function runInsightScheduler(): Promise<void> {
 // First run 30 s after startup, then every 6 h
 setTimeout(() => { runInsightScheduler().catch(() => {}); }, 30_000);
 setInterval(() => { runInsightScheduler().catch(() => {}); }, 6 * 60 * 60 * 1_000);
+
+// ── Retención de UsageEvent — purga diaria ──────────────────────────────────
+// La tabla crece 1 fila por cada request HTTP autenticado. purgeOldUsageEvents()
+// (borra lo anterior a 6 meses) ya existía pero no estaba cableada a ningún cron.
+// Primera corrida 60 s post-arranque (para no competir con el boot), luego cada 24 h.
+async function runUsagePurge(): Promise<void> {
+  try {
+    const removed = await purgeOldUsageEvents();
+    if (removed > 0) process.stdout.write(`[usage-purge] removed ${removed} events older than 6 months\n`);
+  } catch (err) {
+    process.stderr.write(`[usage-purge] aborted: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+setTimeout(() => { runUsagePurge().catch(() => {}); }, 60_000);
+setInterval(() => { runUsagePurge().catch(() => {}); }, 24 * 60 * 60 * 1_000).unref();
 
 // restart: 1776615000000
