@@ -1,5 +1,6 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { PageLoader } from "./PageLoader";
 import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, MessageCircleQuestion, LogOut, ChevronRight, Map } from "lucide-react";
 import { usePlatformAuth } from "../lib/platform-auth";
 
@@ -71,7 +72,9 @@ export const PlatformLayout: React.FC = () => {
           <span className="text-xs text-red-700 dark:text-red-400/60 font-mono">PLATFORM ADMIN CONSOLE</span>
         </header>
         <main className="flex-1 overflow-y-auto p-6 bg-surface dark:bg-[#080D1D]">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

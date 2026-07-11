@@ -1,7 +1,8 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { CopilotoPanel } from "./CopilotoPanel";
+import { PageLoader } from "./PageLoader";
 import { Outlet, useLocation } from "react-router-dom";
 import { CopilotContextProvider } from "../lib/copilot-context";
 import { useT, type TranslationKey } from "../lib/i18n";
@@ -45,7 +46,9 @@ export const Layout: React.FC = () => {
         <div className="flex-1 flex flex-col min-w-0 transform-[translateZ(0)]">
           <Header title={title} />
           <main className="flex-1 overflow-y-auto p-6 bg-bg">
-            <Outlet />
+            <Suspense fallback={<PageLoader />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
         <CopilotoPanel />
