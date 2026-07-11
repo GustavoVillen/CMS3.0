@@ -1,5 +1,11 @@
 HISTORY.txt
 
+[2026-07-11] Historial de ejecuciones editable en el modal de Plan de Mantenimiento
+Agent: Claude Opus 4.8
+- Schema: WorkOrder gana @@index([tenantId, maintenancePlanId]) para el listado de
+  ejecuciones por plan (listPlanExecutions). Cambio no destructivo (solo índice).
+- Sin cambios de datos ni de tablas/enums.
+
 [2026-07-05] DORMANTE: módulo CAPA oculto de la entrega (simplificación)
 Agent: Claude Opus 4.8
 - Decisión de producto: la empresa cliente recién arranca; el flujo correctivo/preventivo

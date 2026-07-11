@@ -236,6 +236,20 @@ interface WorkOrderRecord {
   workOrderCode: string;
 }
 
+// Fila del historial de ejecuciones de un plan (una OT por ejecución).
+interface WorkOrderExecRecord {
+  id: string;
+  workOrderCode: string;
+  status: string;
+  type: string;
+  openDate: Date;
+  completedDate: Date | null;
+  executedByName: string | null;
+  runningHoursAtExecution: number | null;
+  woResult: string | null;
+  observations: string | null;
+}
+
 type MaintenancePlanDelegate = {
   findMany(args: { where: Record<string, unknown>; orderBy?: unknown; omit?: Record<string, true>; select?: Record<string, true> }): Promise<MaintenancePlanRecord[]>;
   findFirst(args: { where: Record<string, unknown>; include?: Record<string, unknown> }): Promise<MaintenancePlanRecord | null>;
@@ -246,10 +260,14 @@ type MaintenancePlanDelegate = {
 type WorkLogDelegate = {
   create(args: { data: Record<string, unknown> }): Promise<WorkLogRecord>;
   findMany(args: { where: Record<string, unknown>; orderBy?: unknown; take?: number }): Promise<WorkLogRecord[]>;
+  updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
 };
 
 type WorkOrderDelegate = {
   create(args: { data: Record<string, unknown> }): Promise<WorkOrderRecord>;
+  findMany(args: { where: Record<string, unknown>; orderBy?: unknown; select?: Record<string, true> }): Promise<WorkOrderExecRecord[]>;
+  findFirst(args: { where: Record<string, unknown>; orderBy?: unknown; select?: Record<string, true> }): Promise<WorkOrderExecRecord | null>;
+  update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<WorkOrderRecord>;
 };
 
 interface MaintenanceTx {
@@ -1281,6 +1299,134 @@ export async function quickClosePlan(
     });
   }
   return txResult;
+}
+
+// ── Historial de ejecuciones del plan ────────────────────────────────────────
+// Cada ejecución de un plan queda registrada como una WorkOrder con
+// maintenancePlanId = plan.id (las express además tienen un WorkLog espejo por
+// workOrderId). La OT es por tanto la fuente canónica y completa del historial.
+
+export interface UpdatePlanExecutionInput {
+  completedDate?: string | Date | null;
+  executedByName?: string | null;
+  runningHoursAtExecution?: number | null;
+  woResult?: string | null;
+  observations?: string | null;
+}
+
+/** Lista las ejecuciones (OTs) de un plan, más recientes primero. Read scope = poder ver el plan. */
+export async function listPlanExecutions(session: TenantAccessSession, planId: string) {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = maintenanceClient(prismaRaw);
+
+  // getTenantMaintenancePlan aplica scope tenant/vessel y lanza 404 si no hay acceso.
+  const plan = await getTenantMaintenancePlan(session, planId);
+
+  const rows = await prisma.workOrder.findMany({
+    where: { tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null },
+    orderBy: [{ completedDate: "desc" }, { openDate: "desc" }],
+    select: {
+      id: true, workOrderCode: true, status: true, type: true,
+      openDate: true, completedDate: true, executedByName: true,
+      runningHoursAtExecution: true, woResult: true, observations: true,
+    },
+  });
+  return rows;
+}
+
+/**
+ * Edita una ejecución del historial (fecha / ejecutado por / horas / resultado /
+ * observaciones) sobre la OT que la representa, incluso si está CERRADA — es una
+ * corrección de historial acotada, solo admin (canManagePlans). No pasa por el
+ * candado de OT (assertNotLocked) a propósito: no reabre la OT ni toca su
+ * tramitación, solo estos campos. Sincroniza el WorkLog espejo (ejecución
+ * express) para que el copiloto y los reportes vean datos coherentes, y refresca
+ * lastExecution/nextDue del plan desde la ejecución más reciente.
+ */
+export async function updatePlanExecution(
+  session: TenantAccessSession,
+  planId: string,
+  workOrderId: string,
+  payload: UpdatePlanExecutionInput,
+) {
+  ensureCanManagePlans(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = maintenanceClient(prismaRaw);
+
+  const plan = await getTenantMaintenancePlan(session, planId);
+
+  // La OT debe existir, ser de este tenant y pertenecer a este plan.
+  const wo = await prisma.workOrder.findFirst({
+    where: { id: workOrderId, tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null },
+    select: { id: true, workOrderCode: true, status: true, type: true, openDate: true, completedDate: true, executedByName: true, runningHoursAtExecution: true, woResult: true, observations: true },
+  });
+  if (!wo) throw new RouteError(404, "EXECUTION_NOT_FOUND", "Ejecución no encontrada para este plan.");
+
+  const woData: Record<string, unknown> = { updatedByUserId: session.user.id };
+  if (payload.completedDate !== undefined) woData.completedDate = parseOptionalDate(payload.completedDate, "completedDate");
+  if (payload.executedByName !== undefined) woData.executedByName = normalizeOptionalText(payload.executedByName);
+  if (payload.runningHoursAtExecution !== undefined) woData.runningHoursAtExecution = normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution");
+  if (payload.woResult !== undefined) woData.woResult = normalizeOptionalText(payload.woResult);
+  if (payload.observations !== undefined) woData.observations = normalizeOptionalText(payload.observations);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.workOrder.update({ where: { id: wo.id }, data: woData });
+
+    // Sincronizar el WorkLog espejo (solo existe en ejecuciones express).
+    const logData: Record<string, unknown> = {};
+    if (payload.completedDate !== undefined) logData.completedAt = woData.completedDate;
+    // executedByName en WorkLog es NOT NULL: solo se sincroniza si hay valor.
+    if (payload.executedByName !== undefined && woData.executedByName) logData.executedByName = woData.executedByName;
+    if (payload.runningHoursAtExecution !== undefined) logData.runningHoursAtExecution = woData.runningHoursAtExecution;
+    if (payload.observations !== undefined) logData.notes = woData.observations;
+    if (Object.keys(logData).length > 0) {
+      await tx.workLog.updateMany({ where: { workOrderId: wo.id, tenantId: plan.tenantId }, data: logData });
+    }
+
+    // Refrescar el resumen del plan desde la ejecución más reciente (por fecha).
+    const latest = await tx.workOrder.findFirst({
+      where: { tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null, completedDate: { not: null } },
+      orderBy: { completedDate: "desc" },
+      select: { completedDate: true, runningHoursAtExecution: true },
+    });
+    if (latest?.completedDate) {
+      const nextDue = recalculateNextDue(
+        { triggerType: plan.triggerType, frequencyHours: plan.frequencyHours, frequencyMonths: plan.frequencyMonths },
+        latest.completedDate,
+        latest.runningHoursAtExecution ?? null,
+      );
+      await tx.maintenancePlan.update({
+        where: { id: plan.id },
+        data: {
+          lastExecutionDate: latest.completedDate,
+          lastExecutionHours: latest.runningHoursAtExecution ?? null,
+          nextDueDate: nextDue.nextDueDate,
+          nextDueHours: nextDue.nextDueHours,
+          updatedByUserId: session.user.id,
+        },
+      });
+    }
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: plan.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.executionEdited",
+    entityType: "WorkOrder",
+    entityId: wo.id,
+    metadata: {
+      workOrderCode: wo.workOrderCode,
+      planId: plan.id,
+      taskCode: plan.taskCode,
+      vesselCode: plan.vesselCode,
+      changed: Object.keys(payload),
+    },
+  });
+
+  return listPlanExecutions(session, planId);
 }
 
 export async function completeChecklistPlan(

@@ -17,11 +17,13 @@ import {
   getLastSpareUsage,
   getTenantMaintenancePlan,
   getTenantMaintenancePlansSummary,
+  listPlanExecutions,
   listTenantMaintenancePlans,
   openFormalWorkOrder,
   postponePlan,
   quickClosePlan,
   reportExecution,
+  updatePlanExecution,
   updateTenantMaintenancePlan,
 } from "../maintenance-plans/maintenance-plans-service";
 import {
@@ -254,6 +256,24 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof openFormalWorkOrder>[2];
     sendJson(response, 201, await openFormalWorkOrder(session, id, body));
+    return true;
+  }
+
+  // Historial de ejecuciones del plan (OTs). Debe ir ANTES de la ruta genérica
+  // /maintenance-plans/:id para no ser capturada por ella.
+  if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/executions$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const items = await listPlanExecutions(session, id);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/pms\/maintenance-plans\/[^/]+\/executions\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const woId = url.pathname.split("/")[6]!;
+    const body = await readJsonBody(request) as Parameters<typeof updatePlanExecution>[3];
+    const items = await updatePlanExecution(session, id, woId, body);
+    sendJson(response, 200, { items, total: items.length });
     return true;
   }
 

@@ -45,6 +45,7 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { PlanHistoryModal } from "../components/PlanHistoryModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { SpareUsageEditor, type SpareLine } from "../components/SpareUsageEditor";
 import { RichTextArea } from "../components/RichTextArea";
@@ -1074,6 +1075,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting,    setDeleting]    = useState(false);
   const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [showMoc, setShowMoc] = useState(false);
   // Popup interceptor: aparece al tocar Guardar cuando hay cambio de
   // periodicidad. El user elige Cancelar / Guardar sin MOC / Abrir MOC.
@@ -2161,6 +2163,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             <div className="flex gap-2">
               {!isNew && (
                 <button
+                  onClick={() => setShowHistory(true)}
+                  className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  {t("mp.modal.history")}
+                </button>
+              )}
+              {!isNew && (
+                <button
                   onClick={downloadPdf}
                   className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
                   title={t("mp.modal.pdfTooltip")}
@@ -2270,6 +2281,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           plan={plan}
           onClose={() => setShowPostpone(false)}
           onSuccess={() => { setShowPostpone(false); void onSaved(); }}
+        />
+      )}
+      {!isNew && showHistory && plan !== null && (
+        <PlanHistoryModal
+          plan={plan}
+          isAdmin={isAdmin}
+          onClose={() => setShowHistory(false)}
+          onEdited={() => { void onSaved(plan.id); }}
         />
       )}
 

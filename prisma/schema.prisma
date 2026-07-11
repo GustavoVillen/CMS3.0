@@ -1358,6 +1358,8 @@ model WorkOrder {
   @@index([tenantId, openDate])
   // Historial de OTs por equipo (modal/PDF del asset): listTenantWorkOrders({ assetId }).
   @@index([tenantId, assetId])
+  // Historial de ejecuciones por plan (modal Historial): listPlanExecutions({ maintenancePlanId }).
+  @@index([tenantId, maintenancePlanId])
 }
 
 enum WorkOrderProgressKind {
