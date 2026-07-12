@@ -552,7 +552,6 @@ const dict = {
   "error.emailRequired":        { es: "El email es requerido para invitar.",     en: "Email is required to send an invitation.", pt: "O email é obrigatório para convidar." },
   "error.userRequired":         { es: "El nombre de usuario es requerido.",      en: "User name is required.",                 pt: "O nome de usuário é obrigatório." },
   "error.vesselAssignedRequired": { es: "La solicitud debe tener un vessel asignado.", en: "The request must have an assigned vessel.", pt: "A solicitação deve ter uma embarcação atribuída." },
-  "error.aiNoAnalysis":         { es: "La IA no devolvió un análisis estructurado. Intentá de nuevo.", en: "AI did not return a structured analysis. Please try again.", pt: "A IA não retornou uma análise estruturada. Tente novamente." },
 
   // Confirmations
   "confirm.deleteTeamMember":   { es: "¿Eliminar a {name} del equipo? Esta acción no se puede deshacer.", en: "Remove {name} from the team? This action cannot be undone.", pt: "Remover {name} da equipe? Esta ação não pode ser desfeita." },

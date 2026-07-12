@@ -10,6 +10,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getDefect } from "./defects-service";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -808,4 +809,198 @@ async function parseVoiceReportInner(
     log.error("[parseVoiceReport] post-parse error:", err, "raw:", raw.slice(0, 400));
     throw new RouteError(502, "AI_POSTPROCESS_ERROR", "No se pudo procesar la respuesta de la IA. Probá repetir el reporte.");
   }
+}
+
+// ─── Análisis de Causa Raíz (RCA) — salida estructurada forzada ─────────────
+// A diferencia del resto de este archivo (texto libre + JSON.parse), acá se
+// usa tool-use forzado (mismo patrón que moc-ai-suggestions.ts: suggestMocDraft)
+// para garantizar una respuesta estructurada válida en una sola llamada — sin
+// depender de que el modelo cierre bien un bloque de texto delimitado.
+// El contexto de recurrencia (defectos/OTs previas del mismo equipo) se
+// precarga acá con una consulta liviana, en vez de dejar que el modelo lo pida
+// vía tool-use agéntico (eso implicaba 2-3 idas y vueltas completas a Claude).
+
+const RCA_METHODOLOGIES = ["FIVE_WHYS", "FISHBONE", "FTA", "BARRIER_ANALYSIS"] as const;
+
+const RCA_TOOL: Anthropic.Tool = {
+  name: "rca_analysis",
+  description: "Registra el análisis de causa raíz (RCA) completo para el defecto.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      rcaMethodology: { type: "string", enum: [...RCA_METHODOLOGIES], description: "Metodología más adecuada para este caso (no siempre Five Whys)." },
+      rcaAnalysis: { type: "string", description: "Resumen ejecutivo del análisis completo." },
+      rcaImmediateCause: { type: "string", description: "Causa inmediata — el fallo observable directo." },
+      rcaContributingCause: { type: "string", description: "Causas contribuyentes — factores que agravaron o permitieron el fallo." },
+      rcaRootCause: { type: "string", description: "Causa raíz — la causa sistémica de fondo, la que si se corrige evita que el problema recurra." },
+      rcaPreventiveActions: { type: "string", description: "Acciones preventivas concretas, accionables y verificables (no genéricas)." },
+    },
+    required: ["rcaMethodology", "rcaAnalysis", "rcaImmediateCause", "rcaContributingCause", "rcaRootCause", "rcaPreventiveActions"],
+  },
+};
+
+const RCA_PROMPT = `Sos un superintendente experto en mantenimiento naval especializado en análisis de causa raíz (RCA). Te van a pasar los datos de un defecto y, si existe, un historial de defectos y órdenes de trabajo previas del mismo equipo. Completá un análisis RCA completo y accionable.
+
+Reglas:
+- Registrá el resultado ÚNICAMENTE mediante la herramienta "rca_analysis".
+- Elegí la metodología (FIVE_WHYS, FISHBONE, FTA o BARRIER_ANALYSIS) que mejor se adapte al caso.
+- Distinguí con claridad: causa inmediata (el fallo observable) ≠ causa contribuyente (factores que agravaron) ≠ causa raíz (la causa sistémica de fondo).
+- Si el historial muestra fallos previos similares en este equipo, tenelo en cuenta explícitamente: puede indicar que una reparación anterior fue insuficiente o que la causa raíz real nunca se atacó.
+- Las acciones preventivas deben ser concretas, accionables y verificables ("agregar medición trimestral de vibración con umbral de alerta >X mm/s", no "mejorar el mantenimiento").
+- Español técnico-naval, conciso pero completo. No repitas la misma idea en varios campos.`;
+
+export interface RcaSuggestionInput {
+  defectId: string;
+  description: string;
+  severity?: string | null;
+  operationalState?: string | null;
+  immediateAction?: string | null;
+  correctiveAction?: string | null;
+}
+
+export interface RcaSuggestion {
+  rcaMethodology: typeof RCA_METHODOLOGIES[number];
+  rcaAnalysis: string;
+  rcaImmediateCause: string;
+  rcaContributingCause: string;
+  rcaRootCause: string;
+  rcaPreventiveActions: string;
+}
+
+function isoDateOnly(d: Date | string | null | undefined): string {
+  if (!d) return "fecha desconocida";
+  const date = new Date(d);
+  return Number.isNaN(date.getTime()) ? "fecha desconocida" : date.toISOString().slice(0, 10);
+}
+
+async function buildAssetHistoryContext(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  assetId: string,
+  excludeDefectId: string,
+): Promise<string[]> {
+  const [priorDefects, priorWorkOrders] = await Promise.all([
+    (prisma as unknown as { defect: { findMany(a: unknown): Promise<Array<{ defectCode: string; description: string; severity: string; reportedAt: Date; rcaRootCause: string | null }>> } }).defect.findMany({
+      where: { tenantId, assetId, id: { not: excludeDefectId }, deletedAt: null },
+      select: { defectCode: true, description: true, severity: true, reportedAt: true, rcaRootCause: true },
+      orderBy: { reportedAt: "desc" },
+      take: 5,
+    }),
+    (prisma as unknown as { workOrder: { findMany(a: unknown): Promise<Array<{ workOrderCode: string; title: string | null; type: string; completedDate: Date | null; woResult: string | null }>> } }).workOrder.findMany({
+      where: { tenantId, assetId, deletedAt: null, status: "CLOSED" },
+      select: { workOrderCode: true, title: true, type: true, completedDate: true, woResult: true },
+      orderBy: { completedDate: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  const lines: string[] = [];
+  if (priorDefects.length > 0) {
+    lines.push("Defectos previos en este mismo equipo:");
+    for (const d of priorDefects) {
+      lines.push(`- ${d.defectCode} (${isoDateOnly(d.reportedAt)}, ${d.severity}): ${d.description}${d.rcaRootCause ? ` [causa raíz previa: ${d.rcaRootCause}]` : ""}`);
+    }
+  }
+  if (priorWorkOrders.length > 0) {
+    lines.push("Últimas OTs cerradas en este mismo equipo:");
+    for (const w of priorWorkOrders) {
+      lines.push(`- ${w.workOrderCode} (${isoDateOnly(w.completedDate)}, ${w.type}): ${w.title ?? "—"}${w.woResult ? ` — resultado: ${w.woResult}` : ""}`);
+    }
+  }
+  return lines;
+}
+
+export async function suggestDefectRca(
+  session: TenantAccessSession,
+  input: RcaSuggestionInput,
+): Promise<RcaSuggestion> {
+  const defectId = String(input.defectId ?? "").trim();
+  if (!defectId) throw new RouteError(400, "VALIDATION_ERROR", "Falta el defectId.");
+  const description = String(input.description ?? "").trim();
+  if (!description) throw new RouteError(400, "VALIDATION_ERROR", "Falta la descripcion del defecto.");
+
+  // getDefect ya aplica el scope de tenant/vessel de la sesión — 404 si no existe/no hay acceso.
+  const defect = await getDefect(session, defectId);
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  await assertAiBudgetAvailableBySlug(session.tenantSlug);
+
+  const prisma = getPrismaClient();
+  const historyLines = prisma
+    ? await buildAssetHistoryContext(prisma, defect.tenantId, defect.assetId, defectId)
+    : [];
+
+  const userContent = [
+    `Defecto ${defect.defectCode} — buque ${defect.vesselCode}, equipo ${defect.assetId}`,
+    `Descripción: ${description}`,
+    input.severity ? `Severidad: ${input.severity}` : null,
+    input.operationalState ? `Estado operacional: ${input.operationalState}` : null,
+    input.immediateAction ? `Acción inmediata tomada: ${input.immediateAction}` : null,
+    input.correctiveAction ? `Acción correctiva planeada: ${input.correctiveAction}` : null,
+    historyLines.length > 0 ? "" : null,
+    ...historyLines,
+  ].filter((l): l is string => l != null).join("\n");
+
+  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  const aiStarted = Date.now();
+  const locale = await getTenantAiLocale(session.tenantSlug);
+  const feature = "defect_rca_suggestion";
+
+  let response;
+  try {
+    response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      system: [
+        { type: "text", text: localeInstruction(locale) },
+        { type: "text", text: RCA_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      tools: [RCA_TOOL],
+      tool_choice: { type: "tool", name: "rca_analysis" },
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${userContent}` }],
+    });
+    log.info(`[${feature}] Claude responded in ${Date.now() - aiStarted}ms (in=${response.usage.input_tokens} out=${response.usage.output_tokens})`);
+  } catch (err) {
+    log.error(`[${feature}] Anthropic call failed after ${Date.now() - aiStarted}ms:`, err);
+    throw new RouteError(502, "AI_CALL_FAILED", "No se pudo generar el análisis RCA con IA.");
+  }
+
+  (async () => {
+    const tenant = await getCachedTenantBySlug(session.tenantSlug);
+    if (!tenant) return;
+    recordAiUsage({
+      tenantId: tenant.id,
+      tenantSlug: session.tenantSlug,
+      userId: session.user.id,
+      userEmail: session.user.email,
+      vesselCode: defect.vesselCode,
+      feature,
+      model: MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      latencyMs: Date.now() - aiStarted,
+    });
+  })().catch(() => { /* swallow */ });
+
+  const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  if (!toolBlock) throw new RouteError(502, "AI_CALL_FAILED", "La IA no devolvió un análisis estructurado.");
+  const out = toolBlock.input as Partial<RcaSuggestion>;
+
+  const methodology = String(out.rcaMethodology ?? "").toUpperCase();
+  const validMethodology = (RCA_METHODOLOGIES as readonly string[]).includes(methodology)
+    ? (methodology as RcaSuggestion["rcaMethodology"])
+    : "FIVE_WHYS";
+
+  return {
+    rcaMethodology: validMethodology,
+    rcaAnalysis: String(out.rcaAnalysis ?? "").trim(),
+    rcaImmediateCause: String(out.rcaImmediateCause ?? "").trim(),
+    rcaContributingCause: String(out.rcaContributingCause ?? "").trim(),
+    rcaRootCause: String(out.rcaRootCause ?? "").trim(),
+    rcaPreventiveActions: String(out.rcaPreventiveActions ?? "").trim(),
+  };
 }

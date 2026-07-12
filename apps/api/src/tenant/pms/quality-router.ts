@@ -16,7 +16,7 @@ import {
   updateDefect,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
-import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, suggestDefectDescription, findSimilarDefects, parseVoiceReport, detectDeficiencyFromText } from "./defects-ai-suggestions";
+import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, suggestDefectDescription, findSimilarDefects, parseVoiceReport, detectDeficiencyFromText, suggestDefectRca } from "./defects-ai-suggestions";
 import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
@@ -123,6 +123,12 @@ export async function handleQualityRoutes(
     enforceRateLimit(request, `ai-describe:${session.user.id}`, { maxRequests: 40, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestDefectDescription>[1];
     sendJson(response, 200, await suggestDefectDescription(session, body));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/pms/defects/suggest-rca") {
+    enforceRateLimit(request, `ai-rca:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestDefectRca>[1];
+    sendJson(response, 200, await suggestDefectRca(session, body));
     return true;
   }
   if (method === "POST" && url.pathname === "/app/pms/defects/find-similar") {

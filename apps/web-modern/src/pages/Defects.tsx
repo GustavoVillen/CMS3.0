@@ -947,90 +947,34 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     if (rcaAnalyzing) return;
     setRcaAnalyzing(true);
     setRcaAnalysisError(null);
-
-    const prompt = [
-      `[MODO ANÁLISIS AUTOMÁTICO — No hagas preguntas previas. Procedé directamente al análisis completo y completá los campos faltantes del RCA con un bloque [CAMPOS].]`,
-      ``,
-      `Completá los campos faltantes del RCA para el defecto ${defect.defectCode} del buque ${defect.vesselCode}.`,
-      ``,
-      `Datos del defecto:`,
-      `- Descripción: ${description || defect.description}`,
-      `- Severidad: ${severity}`,
-      `- Estado operacional: ${operationalState}`,
-      immediateAction ? `- Acción inmediata: ${immediateAction}` : null,
-      ``,
-      `Instrucciones:`,
-      `1. Consultá query_defects (assetId: "${defect.assetId}") y query_work_orders para identificar patrones o fallas recurrentes en este equipo.`,
-      `2. Elegí la metodología más adecuada: FIVE_WHYS, FISHBONE, FTA o BARRIER_ANALYSIS.`,
-      `3. Identificá causa inmediata, causa contribuyente y causa raíz.`,
-      `4. Proponé acciones preventivas concretas.`,
-      `5. Devolvé TODO en un único bloque [CAMPOS]{"rcaMethodology":"...","rcaAnalysis":"...","rcaImmediateCause":"...","rcaContributingCause":"...","rcaRootCause":"...","rcaPreventiveActions":"..."}[/CAMPOS]`,
-    ].filter(Boolean).join("\n");
-
     try {
-      const reader = await api.stream("/app/copiloto/chat", {
-        capability: "defect_assistant",
-        locale: navigator.language?.split("-")[0] ?? "es",
-        messages: [{ role: "user", content: prompt }],
-        // El RCA se apoya en las query_* (defectos/OTs), no en los manuales del
-        // tenant. Saltear la base documental aligera el prompt y acelera bastante.
-        includeKnowledgeDocs: false,
-        screenContext: {
-          module: "DEFECTS",
-          screen: "DEFECT_EDIT",
-          entityId: defect.id,
-          entityCode: defect.defectCode,
-          vesselCode: defect.vesselCode,
-          fieldValues: {
-            description: description || null,
-            severity,
-            operationalState,
-            immediateAction: immediateAction || null,
-          },
-          relatedEntities: { assetId: defect.assetId },
-        },
+      const fields = await api.post<{
+        rcaMethodology: RcaMethodology;
+        rcaAnalysis: string;
+        rcaImmediateCause: string;
+        rcaContributingCause: string;
+        rcaRootCause: string;
+        rcaPreventiveActions: string;
+      }>("/app/pms/defects/suggest-rca", {
+        defectId: defect.id,
+        description: description || defect.description,
+        severity,
+        operationalState,
+        immediateAction: immediateAction || null,
+        correctiveAction: correctiveAction || null,
       });
-
-      let fullResponse = "";
-      outer: while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of value.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") break outer;
-          try {
-            const parsed = JSON.parse(data) as { text?: string; error?: string };
-            if (parsed.error) { setRcaAnalysisError(parsed.error); break outer; }
-            if (parsed.text) fullResponse += parsed.text;
-          } catch { /* partial SSE chunk */ }
-        }
-      }
-
-      const match = fullResponse.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
-      if (match) {
-        try {
-          const fields = JSON.parse(match[1].trim()) as Record<string, string>;
-          if (fields.rcaMethodology && ["FIVE_WHYS", "FISHBONE", "FTA", "BARRIER_ANALYSIS"].includes(fields.rcaMethodology)) {
-            setRcaMethodology(fields.rcaMethodology as RcaMethodology);
-          }
-          if (fields.rcaAnalysis)          setRcaAnalysis(fields.rcaAnalysis);
-          if (fields.rcaImmediateCause)    setRcaImmediateCause(fields.rcaImmediateCause);
-          if (fields.rcaContributingCause) setRcaContributingCause(fields.rcaContributingCause);
-          if (fields.rcaRootCause)         setRcaRootCause(fields.rcaRootCause);
-          if (fields.rcaPreventiveActions) setRcaPreventiveActions(fields.rcaPreventiveActions);
-        } catch {
-          setRcaAnalysisError(t("common.saveError"));
-        }
-      } else {
-        setRcaAnalysisError(t("error.aiNoAnalysis"));
-      }
-    } catch (e: any) {
-      setRcaAnalysisError(e?.message ?? "Error al conectar con el copiloto.");
+      setRcaMethodology(fields.rcaMethodology);
+      setRcaAnalysis(fields.rcaAnalysis);
+      setRcaImmediateCause(fields.rcaImmediateCause);
+      setRcaContributingCause(fields.rcaContributingCause);
+      setRcaRootCause(fields.rcaRootCause);
+      setRcaPreventiveActions(fields.rcaPreventiveActions);
+    } catch (e) {
+      setRcaAnalysisError(e instanceof ApiError ? e.message : "No se pudo generar el análisis RCA.");
     } finally {
       setRcaAnalyzing(false);
     }
-  }, [defect, description, severity, operationalState, immediateAction, rcaAnalyzing]);
+  }, [defect.id, defect.description, description, severity, operationalState, immediateAction, correctiveAction, rcaAnalyzing]);
 
   useCopilotApplyFields(!isClosed ? (fields) => {
     if (fields.description          !== undefined) setDescription(fields.description);
