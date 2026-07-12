@@ -754,12 +754,14 @@ interface DefectModalProps {
   defect: Defect;
   onClose: () => void;
   onSaved: () => void;
+  /** Refresca la lista de fondo sin cerrar el modal (ej. tras "Aprobar RCA"). */
+  onReload: () => void;
 }
 
 const fldCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60 transition-all";
 const fldLabel = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 
-const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) => {
+const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onReload }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1043,7 +1045,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
     if (fields.rcaPreventiveActions !== undefined) setRcaPreventiveActions(fields.rcaPreventiveActions);
   } : null);
 
-  const patchDefect = useCallback(async () => {
+  const patchDefect = useCallback(async (extra?: Record<string, unknown>) => {
     if (!description.trim()) { setActionError(t("error.briefDescRequired")); return false; }
     if (!classification.trim()) { setActionError(t("def.classification")); return false; }
     setSaving(true); setActionError(null);
@@ -1063,6 +1065,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
         rcaPreventiveActions: normalizeOptionalText(rcaPreventiveActions),
         repairType: repairType ?? null,
         status,
+        ...extra,
       });
       return true;
     } catch (err) {
@@ -1448,22 +1451,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved }) =
                   type="button"
                   onClick={async () => {
                     if (!confirm(t("confirm.approveRca"))) return;
-                    try {
-                      const now = new Date().toISOString();
-                      await api.patch(`/app/pms/defects/${defect.id}`, {
-                        rcaAnalysis: normalizeOptionalText(rcaAnalysis),
-                        rcaMethodology: rcaMethodology || null,
-                        rcaImmediateCause: normalizeOptionalText(rcaImmediateCause),
-                        rcaContributingCause: normalizeOptionalText(rcaContributingCause),
-                        rcaRootCause: normalizeOptionalText(rcaRootCause),
-                        rcaPreventiveActions: normalizeOptionalText(rcaPreventiveActions),
-                        rcaApprovedAt: now,
-                      });
-                      setRcaApprovedAt(now);
-                      onSaved();
-                    } catch (err) {
-                      setActionError(err instanceof ApiError ? err.message : "Error al aprobar el RCA.");
-                    }
+                    const now = new Date().toISOString();
+                    // Guarda TODOS los campos del formulario (no solo RCA) — mismo patchDefect
+                    // que usa "Guardar" — y no cierra el modal (a diferencia de handleSave).
+                    if (!await patchDefect({ rcaApprovedAt: now })) return;
+                    setRcaApprovedAt(now);
+                    onReload();
                   }}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
                 >
@@ -1778,6 +1771,7 @@ export const DefectsPage: React.FC = () => {
             closeLink();
             void reload();
           }}
+          onReload={() => void reload()}
         />
       )}
     </div>
