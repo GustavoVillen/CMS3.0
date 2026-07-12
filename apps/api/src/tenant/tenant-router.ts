@@ -44,6 +44,7 @@ import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
 import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
 import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa/tmsa-service";
+import { suggestTmsaAssessment } from "./tmsa/tmsa-ai-suggestions";
 import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import {
@@ -2137,6 +2138,13 @@ export async function handleTenantRoutes(
     const vesselCode = url.searchParams.get("vesselCode") ?? "";
     const metric = url.searchParams.get("metric") ?? "";
     sendJson(response, 200, await getTmsaMetricDetail(session, vesselCode, metric));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/tmsa/maintenance/assessment") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-tmsa:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestTmsaAssessment>[1];
+    sendJson(response, 200, await suggestTmsaAssessment(session, body));
     return true;
   }
   if (method === "GET" && url.pathname === "/app/tmsa/maintenance/pdf") {

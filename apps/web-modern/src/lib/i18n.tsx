@@ -1975,6 +1975,11 @@ const dict = {
   "tmsa.detail.loadError":   { es: "No se pudo cargar el detalle.",             en: "Could not load the detail.",         pt: "Não foi possível carregar o detalhe." },
   "tmsa.detail.empty":       { es: "No hay elementos para esta métrica.",       en: "No items for this metric.",          pt: "Não há itens para esta métrica." },
   "tmsa.detail.rowHint":     { es: "Abrir",                                     en: "Open",                                pt: "Abrir" },
+  "tmsa.detail.analyze":         { es: "Analizar con IA",                          en: "Analyze with AI",                    pt: "Analisar com IA" },
+  "tmsa.detail.analyzing":       { es: "Analizando...",                            en: "Analyzing...",                       pt: "Analisando..." },
+  "tmsa.detail.analyzeError":    { es: "No se pudo generar el análisis con IA.",   en: "Could not generate the AI analysis.", pt: "Não foi possível gerar a análise com IA." },
+  "tmsa.detail.analyzeDisclaimer": { es: "Borrador generado por IA — revisá antes de usarlo en la autoevaluación TMSA.", en: "AI-generated draft — review before using it in the TMSA self-assessment.", pt: "Rascunho gerado por IA — revise antes de usar na autoavaliação TMSA." },
+  "tmsa.detail.recommendedAction": { es: "Acción recomendada",                      en: "Recommended action",                 pt: "Ação recomendada" },
 
   // ─── Compliance Dashboard ───────────────────────────────────────────────────
   "compliance.scoreTitle":        { es: "Compliance score por buque", en: "Compliance score by vessel", pt: "Compliance score por navio" },
