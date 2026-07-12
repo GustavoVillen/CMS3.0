@@ -204,12 +204,14 @@ interface AssetHistoryRow {
   title: string | null;
   openDate: string | null;
   completedDate: string | null;
+  statusText: string;
   statusNode: React.ReactNode;
   isInspection: boolean;
   onClick?: () => void;
 }
 
 type AssetHistoryFilter = "ALL" | "MAINTENANCE" | "INSPECTION";
+type AssetHistorySortKey = "code" | "type" | "title" | "openDate" | "completedDate" | "status";
 
 function fmtHistoryDate(value: string | null): string {
   if (!value) return "—";
@@ -270,6 +272,7 @@ const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
       title: wo.title,
       openDate: wo.openDate,
       completedDate: wo.completedDate,
+      statusText: wo.status,
       statusNode: <StatusBadge status={wo.status} />,
       isInspection: wo.type === "INSPECTION",
       onClick: () => navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`),
@@ -283,6 +286,7 @@ const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
         title: log.maintenancePlan?.title ?? log.notes,
         openDate: log.startedAt,
         completedDate: log.completedAt,
+        statusText: log.result,
         statusNode: <WorkLogResultBadge result={log.result} />,
         isInspection: log.taskType === "INSPECTION",
       }));
@@ -295,11 +299,60 @@ const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
   }, [woFetch.data, logFetch.data, navigate]);
 
   const [filter, setFilter] = useState<AssetHistoryFilter>("ALL");
-  const visibleRows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     if (filter === "ALL") return rows;
     if (filter === "INSPECTION") return rows.filter(r => r.isInspection);
     return rows.filter(r => !r.isInspection);
   }, [rows, filter]);
+
+  // Orden por columna (clic en encabezado) — mismo patrón que MaintenancePlansGrid.
+  const [sortKey, setSortKey] = useState<AssetHistorySortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: AssetHistorySortKey) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir("asc"); }
+    else setSortDir(d => (d === "asc" ? "desc" : "asc"));
+  };
+  const sortVal = (row: AssetHistoryRow, key: AssetHistorySortKey): string | number | null => {
+    switch (key) {
+      case "code": return row.code;
+      case "type": return row.type;
+      case "title": return (row.title ?? "").toLowerCase();
+      case "openDate": return row.openDate ? new Date(row.openDate).getTime() : null;
+      case "completedDate": return row.completedDate ? new Date(row.completedDate).getTime() : null;
+      case "status": return row.statusText;
+      default: return null;
+    }
+  };
+  const visibleRows = useMemo(() => {
+    if (!sortKey) return filteredRows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filteredRows].sort((a, b) => {
+      const av = sortVal(a, sortKey);
+      const bv = sortVal(b, sortKey);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * dir;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredRows, sortKey, sortDir]);
+
+  const historyTh = (key: AssetHistorySortKey, label: string, extraCls = "") => {
+    const active = sortKey === key;
+    return (
+      <th className={`text-left font-semibold px-3 py-2 whitespace-nowrap ${extraCls}`}>
+        <button
+          type="button"
+          onClick={() => toggleSort(key)}
+          className="inline-flex items-center gap-1 hover:text-fg transition-colors select-none"
+        >
+          <span>{label}</span>
+          <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+        </button>
+      </th>
+    );
+  };
 
   const filterBtnCls = (active: boolean) =>
     `px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
@@ -331,12 +384,12 @@ const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-fg/5 text-text-industrial/50">
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.code")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.type")}</th>
-                <th className="text-left font-semibold px-3 py-2">{t("asset.history.col.title")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.openDate")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.completedDate")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.history.col.status")}</th>
+                {historyTh("code", t("asset.history.col.code"))}
+                {historyTh("type", t("asset.history.col.type"))}
+                {historyTh("title", t("asset.history.col.title"))}
+                {historyTh("openDate", t("asset.history.col.openDate"))}
+                {historyTh("completedDate", t("asset.history.col.completedDate"))}
+                {historyTh("status", t("asset.history.col.status"))}
               </tr>
             </thead>
             <tbody>
