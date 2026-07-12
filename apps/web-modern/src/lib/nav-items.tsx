@@ -3,9 +3,11 @@ import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
-  FlaskConical, FileBarChart, Activity, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, HeartPulse, BadgeCheck, Zap, CalendarRange,
+  FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
+  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
+  // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
+  // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
 } from "lucide-react";
 import type { TranslationKey } from "./i18n";
 
@@ -40,10 +42,16 @@ export const NAV: NavSection[] = [
     titleKey: "nav.section.operation",
     items: [
       { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
+      { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
+        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
       { icon: CalendarRange,   labelKey: "nav.maintenanceGantt", path: "/maintenance-gantt" },
-      { icon: Activity,        labelKey: "nav.maintenanceWorkload", path: "/maintenance-workload" },
-      { icon: HeartPulse,      labelKey: "nav.reliability",      path: "/reliability" },
+      // DORMANTE — Carga de Mantenimiento: módulo oculto a pedido del usuario. Reactivar:
+      // descomentar la línea de abajo + el import de `Activity` + la ruta en App.tsx.
+      // { icon: Activity,        labelKey: "nav.maintenanceWorkload", path: "/maintenance-workload" },
+      // DORMANTE — Confiabilidad: módulo oculto a pedido del usuario. Reactivar:
+      // descomentar la línea de abajo + el import de `HeartPulse` + la ruta en App.tsx.
+      // { icon: HeartPulse,      labelKey: "nav.reliability",      path: "/reliability" },
       // DORMANTE — Modos de Falla (RCM): módulo listo pero oculto para no abrumar a
       // empresas que recién arrancan. Reactivar: descomentar la línea de abajo y el
       // import de `Waypoints`. Backend, página, tabla e i18n siguen intactos.
@@ -52,8 +60,6 @@ export const NAV: NavSection[] = [
       { icon: Zap,             labelKey: "nav.expressMaintenance", path: "/mantenimiento-express" },
       { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
-      { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
-        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
       { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
       { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",
         roles: ["TENANT_ADMIN"] },

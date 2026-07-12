@@ -41,8 +41,12 @@ const AiDocumentsPage = React.lazy(() => import("./pages/AiDocuments").then(m =>
 const FluidAnalysesPage = React.lazy(() => import("./pages/FluidAnalyses").then(m => ({ default: m.FluidAnalysesPage })));
 const MaintenancePlansPage = React.lazy(() => import("./pages/MaintenancePlans").then(m => ({ default: m.MaintenancePlansPage })));
 const MaintenanceGanttPage = React.lazy(() => import("./pages/MaintenanceGantt").then(m => ({ default: m.MaintenanceGanttPage })));
-const MaintenanceWorkloadPage = React.lazy(() => import("./pages/MaintenanceWorkload").then(m => ({ default: m.MaintenanceWorkloadPage })));
-const ReliabilityPage = React.lazy(() => import("./pages/Reliability").then(m => ({ default: m.ReliabilityPage })));
+// DORMANTE — Carga de Mantenimiento: reactivar descomentando esta línea, la ruta de abajo
+// y el ítem del Sidebar (nav-items.tsx).
+// const MaintenanceWorkloadPage = React.lazy(() => import("./pages/MaintenanceWorkload").then(m => ({ default: m.MaintenanceWorkloadPage })));
+// DORMANTE — Confiabilidad: reactivar descomentando esta línea, la ruta de abajo
+// y el ítem del Sidebar (nav-items.tsx).
+// const ReliabilityPage = React.lazy(() => import("./pages/Reliability").then(m => ({ default: m.ReliabilityPage })));
 // DORMANTE — Modos de Falla (RCM): reactivar descomentando esta línea y la ruta de abajo.
 // const FailureModesPage = React.lazy(() => import("./pages/FailureModes").then(m => ({ default: m.FailureModesPage })));
 const VesselSuperintendentsPage = React.lazy(() => import("./pages/VesselSuperintendents").then(m => ({ default: m.VesselSuperintendentsPage })));
@@ -213,8 +217,10 @@ export default function App() {
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
               <Route path="/mantenimiento-express" element={<MaintenancePlansPage lockedResultMode="EXPRESS" />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
-              <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} />
-              <Route path="/reliability"       element={<ReliabilityPage />} />
+              {/* DORMANTE — Carga de Mantenimiento: reactivar descomentando (y el import arriba + Sidebar). */}
+              {/* <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} /> */}
+              {/* DORMANTE — Confiabilidad: reactivar descomentando (y el import arriba + Sidebar). */}
+              {/* <Route path="/reliability"       element={<ReliabilityPage />} /> */}
               {/* DORMANTE — Modos de Falla (RCM): reactivar descomentando (y el import arriba). */}
               {/* <Route path="/failure-modes"     element={<FailureModesPage />} /> */}
               <Route path="/work-orders"       element={<WorkOrdersPage />} />
