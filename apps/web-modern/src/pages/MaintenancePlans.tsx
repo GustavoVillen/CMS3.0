@@ -2526,7 +2526,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     return lockedResultMode ? all.filter(p => p.triggerResultMode === lockedResultMode) : all;
   }, [rawData, lockedResultMode]);
   // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
-  const { vessels } = useVesselContext();
+  const { vessels, selectedVesselCode } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
 
   // ── Client-side filters: SFI tab + overdue toggle + SFI text ──────────────
@@ -2885,11 +2885,14 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             if (dueXlsxBusy) return;
             setDueXlsxBusy(true);
             try {
-              const qs = vesselFilter ? `?vesselCode=${encodeURIComponent(vesselFilter)}` : "";
+              // Respeta el buque seleccionado globalmente (VesselContext), igual que
+              // ExcelPanel — el vesselCode de la URL (deep-link) tiene prioridad si vino.
+              const effectiveVessel = vesselFilter || selectedVesselCode || "";
+              const qs = effectiveVessel ? `?vesselCode=${encodeURIComponent(effectiveVessel)}` : "";
               const today = new Date().toISOString().slice(0, 10);
               await downloadAuthedFile(
                 `/app/pms/maintenance-plans/due-soon.xlsx${qs}`,
-                `Planes-Proximos-Vencer-${vesselFilter || "flota"}-${today}.xlsx`,
+                `Planes-Proximos-Vencer-${effectiveVessel || "flota"}-${today}.xlsx`,
               );
             } catch (err) {
               setPageError(err instanceof Error ? err.message : "No se pudo exportar el Excel.");
