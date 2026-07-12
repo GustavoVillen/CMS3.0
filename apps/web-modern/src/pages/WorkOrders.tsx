@@ -1569,7 +1569,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 [t("wo.modal.priority"),   workOrder.priority,              "text-fg"],
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
                 [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
-                  tramitaPhase === "SOLICITADA" && isEditable
+                  (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
                     ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
                         className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
                     : undefined],
