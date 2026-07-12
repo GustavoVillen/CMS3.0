@@ -555,7 +555,6 @@ const dict = {
   "error.aiNoAnalysis":         { es: "La IA no devolvió un análisis estructurado. Intentá de nuevo.", en: "AI did not return a structured analysis. Please try again.", pt: "A IA não retornou uma análise estruturada. Tente novamente." },
 
   // Confirmations
-  "confirm.approveRca":         { es: "¿Aprobar el análisis RCA? Esta acción se registra con tu usuario y la fecha actual.", en: "Approve RCA analysis? This action is recorded with your user and current date.", pt: "Aprovar a análise RCA? Esta ação é registrada com seu usuário e a data atual." },
   "confirm.deleteTeamMember":   { es: "¿Eliminar a {name} del equipo? Esta acción no se puede deshacer.", en: "Remove {name} from the team? This action cannot be undone.", pt: "Remover {name} da equipe? Esta ação não pode ser desfeita." },
   "confirm.cancelDeferral":     { es: "Cancelar diferimiento",                  en: "Cancel deferral",                        pt: "Cancelar adiamento" },
   "confirm.confirmQ":           { es: "¿Confirmar?",                            en: "Confirm?",                               pt: "Confirmar?" },

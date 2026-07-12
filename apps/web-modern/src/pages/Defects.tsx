@@ -1450,7 +1450,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!confirm(t("confirm.approveRca"))) return;
                     const now = new Date().toISOString();
                     // Guarda TODOS los campos del formulario (no solo RCA) — mismo patchDefect
                     // que usa "Guardar" — y no cierra el modal (a diferencia de handleSave).
