@@ -6,13 +6,13 @@
 // que el padre (MobileLayout) traduce a cambio de tab + acción.
 
 import React, { useEffect, useState } from "react";
-import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, Mic } from "lucide-react";
+import { Plus, AlertTriangle, AlertOctagon, Camera, Wrench, Mic, Zap } from "lucide-react";
 import { useWoTerms } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
 
 export type QuickAction =
   | "defect" | "near-miss" | "photo" | "wo-progress"
-  | "defect-voice" | "near-miss-voice";
+  | "defect-voice" | "near-miss-voice" | "express";
 
 interface QuickActionFabProps {
   onAction: (a: QuickAction) => void;
@@ -50,6 +50,14 @@ export const QuickActionFab: React.FC<QuickActionFabProps> = ({ onAction }) => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+              <ActionTile
+                wide
+                Icon={Zap}
+                label="Mantenimiento express"
+                hint="Reportar mantenimiento hecho + repuestos"
+                color="text-accent bg-accent/10 border-accent/30"
+                onClick={() => fire("express")}
+              />
               <ActionTile
                 Icon={AlertTriangle}
                 label="Reportar defecto"
@@ -106,11 +114,13 @@ const ActionTile: React.FC<{
   hint: string;
   color: string;
   onClick: () => void;
+  /** Ocupa las dos columnas del grid (tile destacado). */
+  wide?: boolean;
   /** Si está, muestra un sub-botón mic en la esquina superior derecha. */
   onMicClick?: () => void;
   micAriaLabel?: string;
-}> = ({ Icon, label, hint, color, onClick, onMicClick, micAriaLabel }) => (
-  <div className={`relative p-4 rounded-2xl border text-left ${color}`}>
+}> = ({ Icon, label, hint, color, onClick, wide, onMicClick, micAriaLabel }) => (
+  <div className={`relative p-4 rounded-2xl border text-left ${color} ${wide ? "col-span-2" : ""}`}>
     <button
       type="button"
       onClick={onClick}

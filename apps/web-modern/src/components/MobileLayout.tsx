@@ -14,13 +14,16 @@ import { MobilePlans, type PlansFilter } from "../mobile/MobilePlans";
 import { MobileCrew } from "../mobile/MobileCrew";
 import { MobileDrills } from "../mobile/MobileDrills";
 import { MobileCrewCerts } from "../mobile/MobileCrewCerts";
+import { MobileExpressMaintenance } from "../mobile/MobileExpressMaintenance";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
 import { VoiceReportSheet } from "./VoiceReportSheet";
 import { useEscapeGuard } from "../lib/escape-guard";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto"
   // Sub-vistas accesibles solo desde el dashboard (no van a la barra inferior).
-  | "crew" | "drills" | "crewcerts";
+  | "crew" | "drills" | "crewcerts"
+  // Mantenimiento Express: se abre desde el FAB "+", sin tab en la barra.
+  | "express";
 
 // Alias para los tabs accesibles desde dashboard (omite "dashboard" — no
 // tiene sentido navegar a sí mismo)
@@ -87,6 +90,7 @@ export const MobileLayout: React.FC = () => {
       case "near-miss-voice":  setVoiceType("near_miss"); break;
       case "photo":            setTab("ots"); break;
       case "wo-progress":      setTab("ots"); break;
+      case "express":          setTab("express"); break;
     }
   };
 
@@ -143,12 +147,13 @@ export const MobileLayout: React.FC = () => {
           {tab === "crew"       && <div className="h-full overflow-hidden flex flex-col"><MobileCrew onBack={() => setTab("dashboard")} /></div>}
           {tab === "drills"     && <div className="h-full overflow-hidden flex flex-col"><MobileDrills initialFilter="overdue" onBack={() => setTab("dashboard")} /></div>}
           {tab === "crewcerts"  && <div className="h-full overflow-hidden flex flex-col"><MobileCrewCerts initialFilter="expired" onBack={() => setTab("dashboard")} /></div>}
+          {tab === "express"    && <div className="h-full overflow-hidden flex flex-col"><MobileExpressMaintenance onBack={() => setTab("dashboard")} /></div>}
         </main>
 
         {/* ── FAB Acción rápida (sobre el bottom nav) ──────────────────────── */}
         {/* Lo ocultamos en tabs que ya tienen su propio "+"/input flotante para
             no superponer (Defectos, Copiloto) y en las sub-vistas de foco. */}
-        {tab !== "defectos" && tab !== "copiloto" && tab !== "crew" && tab !== "drills" && tab !== "crewcerts" && (
+        {tab !== "defectos" && tab !== "copiloto" && tab !== "crew" && tab !== "drills" && tab !== "crewcerts" && tab !== "express" && (
           <QuickActionFab onAction={handleQuickAction} />
         )}
 
