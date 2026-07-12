@@ -639,7 +639,7 @@ export async function listTenantMaintenancePlans(
     activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
     deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
     providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
-    executionStatus: deriveExecutionStatus(p),
+    executionStatus: deriveExecutionStatus(p, assetCurrentHoursMap.get(p.assetId) ?? null),
   }));
 }
 
@@ -1746,8 +1746,21 @@ export async function restorePlanAfterWoCancellation(
   const plan = await prisma.maintenancePlan.findFirst({ where: { id: planId, deletedAt: null } });
   if (!plan) return;
 
+  // Planes por horas necesitan el acumulado actual del asset para no caer
+  // siempre en "FUTURE" (mismo patrón que listTenantMaintenancePlans/deriveDashboardStatus).
+  let currentHours: number | null = null;
+  if (plan.nextDueHours != null) {
+    const rows = await prismaRaw.$queryRawUnsafe<{ runningHoursTotal: number }[]>(
+      `SELECT "runningHoursTotal" FROM "DailyEquipmentHours"
+       WHERE "assetId" = $1 AND "tenantId" = $2 AND "runningHoursTotal" IS NOT NULL
+       ORDER BY "createdAt" DESC LIMIT 1`,
+      plan.assetId, plan.tenantId,
+    );
+    currentHours = rows[0]?.runningHoursTotal != null ? Number(rows[0].runningHoursTotal) : null;
+  }
+
   // Re-derive status ignoring the IN_WINDOW override (WO no longer active)
-  const restoredStatus = deriveExecutionStatus({ ...plan, executionStatus: null });
+  const restoredStatus = deriveExecutionStatus({ ...plan, executionStatus: null }, currentHours);
 
   await prisma.maintenancePlan.update({
     where: { id: planId },
