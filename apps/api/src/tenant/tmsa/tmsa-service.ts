@@ -315,3 +315,225 @@ async function computeOne(
 
   return { vesselCode: vessel.code, vesselName: vessel.name, summary, groups };
 }
+
+// ── Drill-down por métrica ────────────────────────────────────────────────────
+// Para cada métrica "count" del panel, lista las entidades concretas que la
+// componen (mismo filtro que computeOne — no debe poder dar un número
+// distinto al de la tarjeta). El frontend arma un link de navegación por
+// entityType (asset → /assets?open=, workOrder → /work-orders?openId=, etc.).
+
+function isoDateOnly(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  const date = new Date(d);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+export type TmsaEntityType = "asset" | "workOrder" | "maintenancePlan" | "deferral" | "spare" | "spareRequest" | "fluidAnalysis" | "defect" | "moc";
+
+export interface TmsaDetailItem {
+  id: string;
+  code: string;
+  label: string;
+  sublabel?: string | null;
+  entityType: TmsaEntityType;
+}
+
+export async function getTmsaMetricDetail(
+  session: TenantAccessSession,
+  vesselCode: string,
+  metric: string,
+): Promise<{ items: TmsaDetailItem[] }> {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [] };
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) return { items: [] };
+  const vessels = await listVesselsInScope(prisma, session, tenant.id, vesselCode);
+  if (vessels.length === 0) return { items: [] };
+
+  const tenantId = tenant.id;
+  const now = new Date();
+  const d90 = new Date(now.getTime() - 90 * 86_400_000);
+  const d60 = new Date(now.getTime() - 60 * 86_400_000);
+  const dCritical = new Date(now.getTime() - CRITICAL_OVERDUE_DAYS * 86_400_000);
+  const base = { tenantId, vesselCode, deletedAt: null };
+
+  const p = prisma as unknown as {
+    asset: { findMany(a: unknown): Promise<any[]> };
+    maintenancePlan: { findMany(a: unknown): Promise<any[]> };
+    workOrder: { findMany(a: unknown): Promise<any[]> };
+    deferral: { findMany(a: unknown): Promise<any[]> };
+    spare: { findMany(a: unknown): Promise<any[]> };
+    spareRequest: { findMany(a: unknown): Promise<any[]> };
+    fluidAnalysisResult: { findMany(a: unknown): Promise<any[]> };
+    defect: { findMany(a: unknown): Promise<any[]>; groupBy(a: unknown): Promise<Array<{ assetId: string | null; _count: { _all: number } }>> };
+    mocRecord: { findMany(a: unknown): Promise<any[]> };
+  };
+
+  const assetSelect = { id: true, assetCode: true, name: true, criticality: true, status: true };
+  const asAsset = (a: any): TmsaDetailItem =>
+    ({ id: a.id, code: a.assetCode, label: a.name ?? a.assetCode, sublabel: `Criticidad ${a.criticality} · ${a.status}`, entityType: "asset" });
+  const asWorkOrder = (w: any): TmsaDetailItem =>
+    ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${isoDateOnly(w.dueDate)}` : null, entityType: "workOrder" });
+  const asPlan = (pl: any): TmsaDetailItem =>
+    ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: pl.nextDueDate ? `Próximo ${isoDateOnly(pl.nextDueDate)}` : null, entityType: "maintenancePlan" });
+  const asDeferral = (d: any): TmsaDetailItem =>
+    ({ id: d.id, code: d.deferralCode, label: d.justification ?? d.deferralCode, sublabel: d.status, entityType: "deferral" });
+  const asSpare = (s: any): TmsaDetailItem =>
+    ({ id: s.id, code: s.sku, label: s.name, entityType: "spare" });
+  const asSpareRequest = (r: any): TmsaDetailItem =>
+    ({ id: r.id, code: r.requestCode, label: `${r.priority} · ${r.status}`, sublabel: isoDateOnly(r.requestedAt), entityType: "spareRequest" });
+  const asDefect = (d: any): TmsaDetailItem =>
+    ({ id: d.id, code: d.defectCode, label: d.description, sublabel: d.severity, entityType: "defect" });
+  const asMoc = (m: any): TmsaDetailItem =>
+    ({ id: m.id, code: m.mocCode, label: m.title, sublabel: m.status, entityType: "moc" });
+
+  switch (metric) {
+    case "assetsTotal": {
+      const rows = await p.asset.findMany({ where: { ...base }, select: assetSelect, orderBy: { assetCode: "asc" } });
+      return { items: rows.map(asAsset) };
+    }
+    case "assetsWithPlan":
+    case "assetsWithoutPlan": {
+      const plans = await p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true } });
+      const ids = [...new Set(plans.map((pl: any) => pl.assetId))];
+      const where = metric === "assetsWithPlan" ? { ...base, id: { in: ids } } : { ...base, id: { notIn: ids } };
+      if (metric === "assetsWithPlan" && ids.length === 0) return { items: [] };
+      const rows = await p.asset.findMany({ where, select: assetSelect, orderBy: { assetCode: "asc" } });
+      return { items: rows.map(asAsset) };
+    }
+    case "criticalAssets": {
+      const rows = await p.asset.findMany({ where: { ...base, criticality: "A" }, select: assetSelect, orderBy: { assetCode: "asc" } });
+      return { items: rows.map(asAsset) };
+    }
+    case "safetyCritical": {
+      const rows = await p.asset.findMany({ where: { ...base, isSafetyCritical: true }, select: assetSelect, orderBy: { assetCode: "asc" } });
+      return { items: rows.map(asAsset) };
+    }
+    case "criticalOverdueWo": {
+      const rows = await p.workOrder.findMany({
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: now } },
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" },
+      });
+      return { items: rows.map(asWorkOrder) };
+    }
+    case "woOpen": {
+      const rows = await p.workOrder.findMany({
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] } },
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" }, take: 200,
+      });
+      return { items: rows.map(asWorkOrder) };
+    }
+    case "woOverdue": {
+      const rows = await p.workOrder.findMany({
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, dueDate: { lt: now } },
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" },
+      });
+      return { items: rows.map(asWorkOrder) };
+    }
+    case "woCriticalOverdue": {
+      const rows = await p.workOrder.findMany({
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: dCritical } },
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" },
+      });
+      return { items: rows.map(asWorkOrder) };
+    }
+    case "plansOverdue": {
+      const rows = await p.maintenancePlan.findMany({
+        where: { ...base, status: "OVERDUE" },
+        select: { id: true, taskCode: true, title: true, nextDueDate: true }, orderBy: { nextDueDate: "asc" },
+      });
+      return { items: rows.map(asPlan) };
+    }
+    case "deferralsActive": {
+      const rows = await p.deferral.findMany({
+        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
+        select: { id: true, deferralCode: true, justification: true, status: true }, orderBy: { deferralCode: "asc" },
+      });
+      return { items: rows.map(asDeferral) };
+    }
+    case "deferralsWithRisk":
+    case "deferralsWithApproval":
+    case "deferralsExpired": {
+      // Mismo filtro base que computeOne, luego el mismo predicado exacto en JS
+      // (no en SQL) para garantizar que el drill-down nunca desalinee con el
+      // número mostrado en la tarjeta.
+      const active = await p.deferral.findMany({
+        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
+        select: { id: true, deferralCode: true, justification: true, status: true, riskLevel: true, decisionAt: true, targetDate: true, expiredAt: true },
+        orderBy: { deferralCode: "asc" },
+      });
+      let filtered = active;
+      if (metric === "deferralsWithRisk") filtered = active.filter((d: any) => d.riskLevel != null && d.riskLevel !== "");
+      else if (metric === "deferralsWithApproval") filtered = active.filter((d: any) => d.decisionAt != null);
+      else filtered = active.filter((d: any) =>
+        d.status === "ACTIVE" && ((d.expiredAt && new Date(d.expiredAt) < now) || (d.targetDate && new Date(d.targetDate) < now)));
+      return { items: filtered.map(asDeferral) };
+    }
+    case "sparesCriticalLow": {
+      const spares = await p.spare.findMany({ where: { ...base, criticality: "A", status: "ACTIVE" }, select: { id: true, sku: true, name: true, minStock: true } });
+      if (spares.length === 0) return { items: [] };
+      const onHand = await getOnHandMap(prisma, spares.map((s: any) => s.id));
+      const low = spares.filter((s: any) => (onHand.get(s.id) ?? 0) < s.minStock);
+      return { items: low.map((s: any) => ({ ...asSpare(s), sublabel: `Stock ${onHand.get(s.id) ?? 0} / mínimo ${s.minStock}` })) };
+    }
+    case "spareRequestsPending": {
+      // Sin filtro por vesselCode — igual que computeOne (el pedido de repuestos es tenant-wide, no por buque).
+      const rows = await p.spareRequest.findMany({
+        where: { tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } },
+        select: { id: true, requestCode: true, status: true, priority: true, requestedAt: true }, orderBy: { requestedAt: "desc" },
+      });
+      return { items: rows.map(asSpareRequest) };
+    }
+    case "plansWithSampling": {
+      const rows = await p.maintenancePlan.findMany({
+        where: { ...base, status: "ACTIVE", samplingKind: { not: null } },
+        select: { id: true, taskCode: true, title: true, nextDueDate: true }, orderBy: { taskCode: "asc" },
+      });
+      return { items: rows.map(asPlan) };
+    }
+    case "analysesOutOfRange": {
+      const rows = await p.fluidAnalysisResult.findMany({
+        where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode, deletedAt: null } },
+        select: { id: true, verdict: true, receivedAt: true, sample: { select: { sampleCode: true } } },
+        orderBy: { receivedAt: "desc" },
+      });
+      return { items: rows.map((r: any) => ({ id: r.id, code: r.sample.sampleCode, label: `Verdict ${r.verdict}`, sublabel: isoDateOnly(r.receivedAt), entityType: "fluidAnalysis" as const })) };
+    }
+    case "defectsWithRca": {
+      const rows = await p.defect.findMany({
+        where: { ...base, rcaApprovedAt: { not: null } },
+        select: { id: true, defectCode: true, description: true, severity: true }, orderBy: { defectCode: "desc" },
+      });
+      return { items: rows.map(asDefect) };
+    }
+    case "recurringAssets": {
+      const grouped = await p.defect.groupBy({
+        by: ["assetId"],
+        where: { ...base, reportedAt: { gte: d60 } },
+        _count: { _all: true },
+        having: { assetId: { _count: { gte: 3 } } },
+      });
+      const ids = grouped.filter(g => g.assetId).map(g => g.assetId as string);
+      if (ids.length === 0) return { items: [] };
+      const countByAsset = new Map(grouped.map(g => [g.assetId, g._count._all]));
+      const rows = await p.asset.findMany({ where: { ...base, id: { in: ids } }, select: assetSelect });
+      return { items: rows.map((a: any) => ({ ...asAsset(a), sublabel: `${countByAsset.get(a.id) ?? 0} defectos en 60 días` })) };
+    }
+    case "mocOpen": {
+      const rows = await p.mocRecord.findMany({
+        where: { ...base, status: { notIn: ["REVIEWED", "REJECTED", "CANCELLED"] } },
+        select: { id: true, mocCode: true, title: true, status: true }, orderBy: { mocCode: "desc" },
+      });
+      return { items: rows.map(asMoc) };
+    }
+    case "mocPendingImpl": {
+      const rows = await p.mocRecord.findMany({
+        where: { ...base, status: { in: ["APPROVED", "IN_PROGRESS"] } },
+        select: { id: true, mocCode: true, title: true, status: true }, orderBy: { mocCode: "desc" },
+      });
+      return { items: rows.map(asMoc) };
+    }
+    default:
+      return { items: [] };
+  }
+}

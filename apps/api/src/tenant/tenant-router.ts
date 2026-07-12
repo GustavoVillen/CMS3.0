@@ -43,7 +43,7 @@ import { buildMocPdf } from "./moc/moc-pdf-service";
 import { getSidebarCounts } from "./sidebar/sidebar-counts-service";
 import { getComplianceScores, getSmartAlerts } from "./compliance/compliance-service";
 import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
-import { getTmsaMaintenanceEvidence } from "./tmsa/tmsa-service";
+import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa/tmsa-service";
 import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import {
@@ -2130,6 +2130,13 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const vesselCode = url.searchParams.get("vesselCode");
     sendJson(response, 200, await getTmsaMaintenanceEvidence(session, vesselCode));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/tmsa/maintenance/detail") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const metric = url.searchParams.get("metric") ?? "";
+    sendJson(response, 200, await getTmsaMetricDetail(session, vesselCode, metric));
     return true;
   }
   if (method === "GET" && url.pathname === "/app/tmsa/maintenance/pdf") {

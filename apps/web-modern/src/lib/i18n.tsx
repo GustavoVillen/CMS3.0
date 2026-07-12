@@ -1971,6 +1971,11 @@ const dict = {
   "tmsa.metric.mocOpen":              { es: "MOC abiertos",                en: "Open MOC",                 pt: "MOC abertos" },
   "tmsa.metric.mocPendingImpl":       { es: "Pend. implementación",        en: "Pending implementation",   pt: "Pend. implementação" },
 
+  "tmsa.detail.hint":        { es: "Click en una métrica para ver el detalle",  en: "Click a metric to see the detail",   pt: "Clique em uma métrica para ver o detalhe" },
+  "tmsa.detail.loadError":   { es: "No se pudo cargar el detalle.",             en: "Could not load the detail.",         pt: "Não foi possível carregar o detalhe." },
+  "tmsa.detail.empty":       { es: "No hay elementos para esta métrica.",       en: "No items for this metric.",          pt: "Não há itens para esta métrica." },
+  "tmsa.detail.rowHint":     { es: "Abrir",                                     en: "Open",                                pt: "Abrir" },
+
   // ─── Compliance Dashboard ───────────────────────────────────────────────────
   "compliance.scoreTitle":        { es: "Compliance score por buque", en: "Compliance score by vessel", pt: "Compliance score por navio" },
   "compliance.pdfTitle":          { es: "Descargar PDF",        en: "Download PDF",        pt: "Baixar PDF" },
