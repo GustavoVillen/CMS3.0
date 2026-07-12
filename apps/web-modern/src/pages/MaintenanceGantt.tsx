@@ -19,6 +19,13 @@ interface MaintenancePlan {
   executionStatus: string;
   lastExecutionDate: string | null;
   nextDueDate: string | null;
+  /**
+   * Solo para planes por horas sin nextDueDate: fecha estimada a partir del
+   * promedio de horas/día del asset (ver loadAvgHoursPerDayMap en el backend).
+   * Es una proyección, no un vencimiento real — el marcador se dibuja con
+   * menor opacidad y borde punteado para distinguirla.
+   */
+  projectedDueDate: string | null;
   sfiGroupNumber: number | null;
   assetName: string | null;
 }
@@ -348,7 +355,8 @@ export function MaintenanceGanttPage() {
 
                 const p = row.plan;
                 const lastD = parseDate(p.lastExecutionDate);
-                const nextD = parseDate(p.nextDueDate);
+                const isProjected = !p.nextDueDate && !!p.projectedDueDate;
+                const nextD = parseDate(p.nextDueDate) ?? parseDate(p.projectedDueDate);
                 const nextColor = STATUS_COLORS[p.executionStatus] ?? STATUS_COLORS.FUTURE;
                 const xLast = lastD ? xOf(lastD) : null;
                 const xNext = nextD ? xOf(nextD) : null;
@@ -366,7 +374,7 @@ export function MaintenanceGanttPage() {
                         <span className="text-text-industrial/60"> · {p.title}</span>
                       </span>
                       <span className="text-[9px] tabular-nums text-text-industrial/40 leading-tight">
-                        {lastD ? fmtDMY(lastD) : "—"} <span className="opacity-50">→</span> {nextD ? fmtDMY(nextD) : "—"}
+                        {lastD ? fmtDMY(lastD) : "—"} <span className="opacity-50">→</span> {nextD ? `${isProjected ? "~" : ""}${fmtDMY(nextD)}` : "—"}
                       </span>
                     </div>
                     <div className="relative shrink-0 track-bg" style={{ width: timelineW, "--px": `${pxPerMonth}px` } as React.CSSProperties}>
@@ -386,12 +394,18 @@ export function MaintenanceGanttPage() {
                           <svg viewBox="0 0 10 10" className="w-2 h-2"><path d="M1 5l2.5 2.5L9 2" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </span>
                       )}
-                      {/* marca próximo vencimiento (por estado) */}
+                      {/* marca próximo vencimiento (por estado) — punteada/semitransparente si es una fecha proyectada (plan por horas sin nextDueDate real) */}
                       {xNext != null && (
                         <span
-                          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-md shadow-sm z-[3] transition-transform hover:scale-110 ${p.executionStatus === "OVERDUE" ? "gantt-pulse" : ""}`}
-                          style={{ left: xNext, width: 15, height: 15, background: nextColor, border: "1px solid rgba(0,0,0,.18)", ["--pc" as string]: nextColor }}
-                          title={`Próximo vencimiento · ${fmtDMY(nextD!)} · ${STATUS_LABELS[p.executionStatus] ?? p.executionStatus}`}
+                          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-md shadow-sm z-[3] transition-transform hover:scale-110 ${p.executionStatus === "OVERDUE" && !isProjected ? "gantt-pulse" : ""}`}
+                          style={{
+                            left: xNext, width: 15, height: 15,
+                            background: isProjected ? "transparent" : nextColor,
+                            border: isProjected ? `2px dashed ${nextColor}` : "1px solid rgba(0,0,0,.18)",
+                            opacity: isProjected ? 0.75 : 1,
+                            ["--pc" as string]: nextColor,
+                          }}
+                          title={`${isProjected ? "Próximo vencimiento estimado (por horas)" : "Próximo vencimiento"} · ${fmtDMY(nextD!)} · ${STATUS_LABELS[p.executionStatus] ?? p.executionStatus}`}
                         />
                       )}
                     </div>

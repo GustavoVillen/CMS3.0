@@ -632,15 +632,37 @@ export async function listTenantMaintenancePlans(
     : [];
   const providerNameMap = new Map(providerRows.map((p) => [p.id, p.name ?? null]));
 
-  return plans.map((p) => ({
-    ...p,
-    assetName: assetNameMap.get(p.assetId) ?? null,
-    assetCurrentHours: assetCurrentHoursMap.get(p.assetId) ?? null,
-    activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
-    deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
-    providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
-    executionStatus: deriveExecutionStatus(p, assetCurrentHoursMap.get(p.assetId) ?? null),
-  }));
+  // Planes por horas sin nextDueDate no tienen dónde ubicarse en una vista de
+  // calendario (Gantt). Se les estima una fecha proyectada a partir del
+  // promedio de horas/día del asset — mismo cálculo que la curva de carga de
+  // trabajo. Es una estimación (no un vencimiento real): el consumidor
+  // (Gantt) es responsable de distinguirla visualmente si corresponde.
+  const projectionAssetIds = [
+    ...new Set(plans.filter((p) => p.nextDueDate == null && p.nextDueHours != null).map((p) => p.assetId)),
+  ];
+  const avgHoursPerDayMap = await loadAvgHoursPerDayMap(prismaRaw, tenantId, projectionAssetIds, new Date());
+
+  return plans.map((p) => {
+    const currentHours = assetCurrentHoursMap.get(p.assetId) ?? null;
+    let projectedDueDate: string | null = null;
+    if (p.nextDueDate == null && p.nextDueHours != null) {
+      const avgPerDay = avgHoursPerDayMap.get(p.assetId) ?? 0;
+      if (avgPerDay > 0) {
+        const daysToNext = (p.nextDueHours - (currentHours ?? 0)) / avgPerDay;
+        projectedDueDate = new Date(Date.now() + daysToNext * DAY_MS).toISOString().slice(0, 10);
+      }
+    }
+    return {
+      ...p,
+      assetName: assetNameMap.get(p.assetId) ?? null,
+      assetCurrentHours: currentHours,
+      activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
+      deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
+      providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
+      executionStatus: deriveExecutionStatus(p, currentHours),
+      projectedDueDate,
+    };
+  });
 }
 
 // ─── Dashboard summary ─────────────────────────────────────────────────────
@@ -1884,6 +1906,54 @@ function isDateTrigger(triggerType: string): boolean {
   return triggerType === "MONTHS" || triggerType === "CALENDAR" || triggerType === "DAY" || triggerType === "WEEK";
 }
 
+/**
+ * Promedio de horas de marcha por día calendario, por asset, en base a los
+ * últimos HOURS_HISTORY_WINDOW_DAYS días de DailyEquipmentHours. Usado para
+ * traducir un vencimiento por horas (nextDueHours) a una fecha proyectada
+ * estimada — tanto para la curva de carga de trabajo como para el Gantt.
+ */
+async function loadAvgHoursPerDayMap(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  assetIds: string[],
+  today: Date,
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (assetIds.length === 0) return map;
+  const sinceDate = addUtcDays(today, -HOURS_HISTORY_WINDOW_DAYS);
+  const placeholders = assetIds.map((_, i) => `$${i + 1}`).join(", ");
+  const tenantPlaceholder = `$${assetIds.length + 1}`;
+  const sincePlaceholder = `$${assetIds.length + 2}`;
+  const historyRows = await prismaRaw.$queryRawUnsafe<{
+    assetId: string;
+    minHours: number;
+    maxHours: number;
+    minAt: Date;
+    maxAt: Date;
+  }[]>(
+    `SELECT "assetId",
+            MIN("runningHoursTotal")::float AS "minHours",
+            MAX("runningHoursTotal")::float AS "maxHours",
+            MIN("createdAt") AS "minAt",
+            MAX("createdAt") AS "maxAt"
+     FROM "DailyEquipmentHours"
+     WHERE "assetId" IN (${placeholders})
+       AND "tenantId" = ${tenantPlaceholder}
+       AND "runningHoursTotal" IS NOT NULL
+       AND "createdAt" >= ${sincePlaceholder}
+     GROUP BY "assetId"`,
+    ...assetIds, tenantId, sinceDate,
+  );
+  for (const r of historyRows) {
+    const dayDiff = (new Date(r.maxAt).getTime() - new Date(r.minAt).getTime()) / DAY_MS;
+    if (dayDiff <= 0) continue;
+    const hoursDiff = Number(r.maxHours) - Number(r.minHours);
+    if (hoursDiff <= 0) continue;
+    map.set(r.assetId, Math.min(hoursDiff / dayDiff, MAX_RUNNING_HOURS_PER_DAY));
+  }
+  return map;
+}
+
 export async function getMaintenanceWorkloadProjection(
   session: TenantAccessSession,
   filters: MaintenanceWorkloadFilters = {},
@@ -1975,7 +2045,6 @@ export async function getMaintenanceWorkloadProjection(
   ];
 
   const currentHoursMap = new Map<string, number>();
-  const avgHoursPerDayMap = new Map<string, number>();
 
   if (hoursPlanAssetIds.length > 0) {
     // Latest runningHoursTotal por asset
@@ -1994,38 +2063,10 @@ export async function getMaintenanceWorkloadProjection(
       ...hoursPlanAssetIds, tenantId,
     );
     for (const r of currentRows) currentHoursMap.set(r.assetId, Number(r.runningHoursTotal));
-
-    // Promedio horas/día por asset usando últimos N días
-    const sinceDate = addUtcDays(today, -HOURS_HISTORY_WINDOW_DAYS);
-    const sincePlaceholder = `$${hoursPlanAssetIds.length + 2}`;
-    const historyRows = await prismaRaw.$queryRawUnsafe<{
-      assetId: string;
-      minHours: number;
-      maxHours: number;
-      minAt: Date;
-      maxAt: Date;
-    }[]>(
-      `SELECT "assetId",
-              MIN("runningHoursTotal")::float AS "minHours",
-              MAX("runningHoursTotal")::float AS "maxHours",
-              MIN("createdAt") AS "minAt",
-              MAX("createdAt") AS "maxAt"
-       FROM "DailyEquipmentHours"
-       WHERE "assetId" IN (${placeholders})
-         AND "tenantId" = ${tenantPlaceholder}
-         AND "runningHoursTotal" IS NOT NULL
-         AND "createdAt" >= ${sincePlaceholder}
-       GROUP BY "assetId"`,
-      ...hoursPlanAssetIds, tenantId, sinceDate,
-    );
-    for (const r of historyRows) {
-      const dayDiff = (new Date(r.maxAt).getTime() - new Date(r.minAt).getTime()) / DAY_MS;
-      if (dayDiff <= 0) continue;
-      const hoursDiff = Number(r.maxHours) - Number(r.minHours);
-      if (hoursDiff <= 0) continue;
-      avgHoursPerDayMap.set(r.assetId, Math.min(hoursDiff / dayDiff, MAX_RUNNING_HOURS_PER_DAY));
-    }
   }
+
+  // Promedio horas/día por asset usando últimos N días
+  const avgHoursPerDayMap = await loadAvgHoursPerDayMap(prismaRaw, tenantId, hoursPlanAssetIds, today);
 
   // ── Proyección por plan ────────────────────────────────────────────────────
   let projectedPlans = 0;
