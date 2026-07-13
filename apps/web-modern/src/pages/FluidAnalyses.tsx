@@ -618,9 +618,23 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
   const [regenerating, setRegenerating] = useState(false);
 
   const regenerate = async () => {
+    // Marca de tiempo del análisis actual (null si aún no hay). Sirve para
+    // detectar cuándo llegó uno NUEVO al regenerar uno existente.
+    const prevGen = result.aiAnalysisGeneratedAt ?? null;
     setRegenerating(true);
     try {
+      // Lanza la generación en segundo plano (responde al instante).
       await api.post(`/app/fluid-analyses/${sampleId}/generate-ai-analysis`, {});
+      // Sondea la muestra hasta que aparezca un análisis nuevo (o se agote el tiempo).
+      const started = Date.now();
+      while (Date.now() - started < 180_000) {
+        await new Promise(r => setTimeout(r, 4000));
+        let fresh: { result?: FluidResult | null } | null = null;
+        try { fresh = await api.get<{ result?: FluidResult | null }>(`/app/fluid-analyses/${sampleId}`); }
+        catch { /* transitorio: reintentar en la próxima vuelta */ }
+        const gen = fresh?.result?.aiAnalysisGeneratedAt ?? null;
+        if (fresh?.result?.aiAnalysis && gen !== prevGen) break;
+      }
       await onRefresh();
     } catch { /* ignore */ }
     finally {
@@ -632,18 +646,18 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
     return (
       <div className="space-y-2 pt-2 border-t border-fg/10">
         <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
+          <FileText className="w-4 h-4 text-accent" /> Análisis
         </h3>
         <div className="p-3 rounded-xl bg-fg/5 border border-dashed border-fg/10 text-center">
           <p className="text-xs text-text-industrial/50">
             {regenerating
               ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> Generando análisis...</>
-              : "Este análisis aún no tiene insight IA."}
+              : "Este análisis aún no fue generado."}
           </p>
           {!regenerating && (
             <button onClick={() => { void regenerate(); }}
               className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20">
-              <Sparkles className="w-3.5 h-3.5" /> Generar análisis IA
+              <FileText className="w-3.5 h-3.5" /> Generar análisis
             </button>
           )}
         </div>
@@ -655,7 +669,7 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
     <div className="space-y-2 pt-2 border-t border-fg/10">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent" /> Análisis IA
+          <FileText className="w-4 h-4 text-accent" /> Análisis
         </h3>
         <div className="flex items-center gap-2">
           {result.aiAnalysisGeneratedAt && (
@@ -980,7 +994,7 @@ function ResultFormModal({
 
   const submit = async () => {
     setErr(null);
-    if (!verdict) { setErr("El veredicto es requerido (la IA puede sugerirlo)."); return; }
+    if (!verdict) { setErr("El veredicto es requerido."); return; }
     setSaving(true);
     try {
       const paramObj: Record<string, { value: number | string; unit?: string }> = {};
@@ -1016,11 +1030,11 @@ function ResultFormModal({
           tabIndex={-1}
         >
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-accent" />
+            <FileText className="w-4 h-4 text-accent" />
             <p className="text-xs font-bold text-accent">{t("fa.uploadLabReport")}</p>
           </div>
           <p className="text-[11px] text-text-industrial/60">
-            La IA va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.
+            El sistema va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.
             También podés <kbd className="px-1 py-0.5 rounded bg-fg/10 border border-fg/20 text-[10px] font-mono">Ctrl+V</kbd> una imagen del portapapeles.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1039,11 +1053,11 @@ function ResultFormModal({
             >
               <Clipboard className="w-3.5 h-3.5 text-accent" /> Pegar imagen
             </button>
-            {extracting && <span className="text-xs text-accent flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando con IA...</span>}
+            {extracting && <span className="text-xs text-accent flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando...</span>}
             {file && !extracting && <span className="text-xs text-text-industrial/60 truncate max-w-[300px]">{file.name}</span>}
           </div>
           {extractError && <p className="text-xs text-red-700 dark:text-red-400">{extractError}</p>}
-          {extractNote && <p className="text-[11px] text-text-industrial/60 italic">IA: {extractNote}</p>}
+          {extractNote && <p className="text-[11px] text-text-industrial/60 italic">Nota: {extractNote}</p>}
           {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer" className="text-xs text-accent inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver archivo cargado</a>}
         </div>
 
@@ -1078,7 +1092,7 @@ function ResultFormModal({
                 <div className="col-span-3">Parámetro</div>
                 <div className="col-span-3">Valor</div>
                 <div className="col-span-2">Unidad</div>
-                <div className="col-span-3">IA</div>
+                <div className="col-span-3">Confianza</div>
                 <div className="col-span-1"></div>
               </div>
               {params.map((p, i) => (
@@ -1116,7 +1130,7 @@ function ConfidenceBadge({ confidence }: { confidence: "high" | "medium" | "low"
   }[confidence];
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${m.bg} ${m.text}`}>
-      IA {m.label}
+      {m.label}
     </span>
   );
 }

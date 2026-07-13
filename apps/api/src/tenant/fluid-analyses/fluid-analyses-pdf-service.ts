@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getFluidSample } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "../pms/pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments, sanitizePdfText, renderInlineBoldText } from "../pms/pdf-helpers";
 
 function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -13,14 +13,6 @@ function fmt(d: Date | string | null | undefined): string {
 function val(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
   return String(v);
-}
-
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 const FLUID_LABELS: Record<string, string> = {
@@ -173,6 +165,144 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
       }
     }
 
+    // ── Renderizado de Markdown (informe IA) ──────────────────────────────────
+    // El análisis IA viene como Markdown con encabevados (##/###), tablas y
+    // texto con **negrita**. Renderizamos cada bloque respetando saltos de
+    // página. Para texto libre NO usamos caja de fondo (no hay "badge" que se
+    // pueda quedar atrás), así que el patrón splitTextIntoPageSegments basta.
+
+    const isMdRow = (l: string) => {
+      const t = l.trim();
+      return t.startsWith("|") && t.endsWith("|") && t.length > 1;
+    };
+    const isMdSep = (l: string) => {
+      const t = l.trim();
+      if (!isMdRow(t)) return false;
+      return t.slice(1, -1).split("|").every(c => /^\s*:?-+:?\s*$/.test(c));
+    };
+    const parseMdRow = (l: string) => l.trim().slice(1, -1).split("|").map(c => c.trim());
+
+    function renderMdHeading(text: string, level: number) {
+      const clean = sanitizePdfText(text);
+      if (level <= 2) {
+        ensureSpace(30);
+        doc.rect(ML, y, W, 16).fillColor("#eef2f7").fill();
+        doc.fontSize(9).font("Helvetica-Bold").fillColor(navy)
+          .text(clean, ML + 8, y + 4, { width: W - 16 });
+        y += 26;
+      } else {
+        ensureSpace(26);
+        doc.fontSize(9.5).font("Helvetica-Bold").fillColor(navy)
+          .text(clean, ML, y + 4, { width: W });
+        y = doc.y + 9;
+      }
+    }
+
+    function renderMdBodyText(text: string) {
+      const clean = sanitizePdfText(text, { keepMarkdown: true });
+      // Evitar escribir la primera línea sobre el footer si el cursor quedó al pie.
+      if (CONTENT_BOTTOM - y < 24) { doc.addPage(); y = MARGIN_V; }
+      const firstAvail = CONTENT_BOTTOM - y;
+      const contAvail  = CONTENT_BOTTOM - MARGIN_V;
+      // Medimos con Helvetica-Bold (cota superior de altura) para que ningún
+      // segmento medido "que entra" termine desbordando en el render real.
+      const segs = splitTextIntoPageSegments(
+        doc, clean, W,
+        { font: "Helvetica-Bold", fontSize: 8.5, lineGap: 2 },
+        firstAvail, contAvail,
+      );
+      for (let i = 0; i < segs.length; i++) {
+        if (i > 0) { doc.addPage(); y = MARGIN_V; }
+        renderInlineBoldText(doc, segs[i].text, ML, y, W, 8.5, 2, black);
+        y = doc.y + 4;
+      }
+    }
+
+    function renderMdTable(header: string[], rows: string[][]) {
+      const nCols = Math.max(1, header.length);
+      const colW = W / nCols;
+      const cellPad = 3;
+      const fs = 7;
+      const lg = 1;
+
+      const measureRow = (cells: string[], bold: boolean) => {
+        let maxH = 0;
+        for (let c = 0; c < nCols; c++) {
+          const txt = sanitizePdfText(cells[c] ?? "");
+          doc.fontSize(fs).font(bold ? "Helvetica-Bold" : "Helvetica");
+          const h = doc.heightOfString(txt || " ", { width: colW - 2 * cellPad, lineGap: lg });
+          if (h > maxH) maxH = h;
+        }
+        return Math.max(13, maxH + 2 * cellPad);
+      };
+
+      const drawRow = (cells: string[], bold: boolean, idx: number) => {
+        const rowH = measureRow(cells, bold);
+        // Salto de página: reabrimos el encabezado en la página nueva.
+        if (y + rowH > CONTENT_BOTTOM) {
+          doc.addPage(); y = MARGIN_V;
+          drawRow(header, true, -1);
+        }
+        const bg = bold ? "#e2e8f0" : (idx % 2 === 0 ? bgBox : "#ffffff");
+        doc.rect(ML, y, W, rowH).fillColor(bg).fill();
+        doc.rect(ML, y, W, rowH).strokeColor(border).lineWidth(0.3).stroke();
+        for (let c = 0; c < nCols; c++) {
+          const cx = ML + c * colW;
+          if (c > 0) {
+            doc.moveTo(cx, y).lineTo(cx, y + rowH).strokeColor(border).lineWidth(0.3).stroke();
+          }
+          doc.fontSize(fs).font(bold ? "Helvetica-Bold" : "Helvetica").fillColor(bold ? gray : black)
+            .text(sanitizePdfText(cells[c] ?? ""), cx + cellPad, y + cellPad, { width: colW - 2 * cellPad, lineGap: lg });
+        }
+        y += rowH;
+      };
+
+      ensureSpace(30);
+      drawRow(header, true, -1);
+      rows.forEach((r, idx) => drawRow(r, false, idx));
+      y += 8;
+    }
+
+    function renderAiReport(md: string) {
+      const lines = md.replace(/\r\n/g, "\n").split("\n");
+      let paraBuf: string[] = [];
+      const flushPara = () => {
+        const text = paraBuf.join("\n").trim();
+        paraBuf = [];
+        if (text) renderMdBodyText(text);
+      };
+
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        // Tabla: fila de encabezado + separador |---|
+        if (isMdRow(line) && i + 1 < lines.length && isMdSep(lines[i + 1])) {
+          flushPara();
+          const header = parseMdRow(line);
+          const bodyRows: string[][] = [];
+          let j = i + 2;
+          while (j < lines.length && isMdRow(lines[j]) && !isMdSep(lines[j])) {
+            bodyRows.push(parseMdRow(lines[j]));
+            j++;
+          }
+          renderMdTable(header, bodyRows);
+          i = j;
+          continue;
+        }
+        // Encabezados
+        const hMatch = /^(#{1,3})\s+(.*)$/.exec(line);
+        if (hMatch) {
+          flushPara();
+          renderMdHeading(hMatch[2], hMatch[1].length);
+          i++;
+          continue;
+        }
+        paraBuf.push(line);
+        i++;
+      }
+      flushPara();
+    }
+
     // ── Header ──────────────────────────────────────────────────────────────
     const HEADER_H = 56;
     const TENANT_LOGO_MAX_W = 90;
@@ -285,16 +415,16 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
       y += 12;
     }
 
-    // ── Análisis IA ─────────────────────────────────────────────────────────
+    // ── Análisis ────────────────────────────────────────────────────────────
     if (sample.result?.aiAnalysis) {
-      sectionHeader("Análisis IA");
+      sectionHeader("Análisis");
       if (sample.result.aiAnalysisGeneratedAt) {
         ensureSpace(12);
         doc.fontSize(7.5).font("Helvetica-Oblique").fillColor(gray)
           .text(`Generado: ${fmt(sample.result.aiAnalysisGeneratedAt)}`, ML, y, { width: W });
         y += 12;
       }
-      textRow("Interpretación", stripMarkdown(sample.result.aiAnalysis));
+      renderAiReport(sample.result.aiAnalysis);
     }
 
     // ── Footer con sello CMS3.0 ────────────────────────────────────────────

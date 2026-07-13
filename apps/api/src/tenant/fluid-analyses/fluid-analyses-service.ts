@@ -192,14 +192,18 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
 
 export async function regenerateFluidAiAnalysis(session: TenantAccessSession, id: string) {
   const tenantId = await resolveTenantId(session);
-  await generateFluidAiAnalysis({
+  // El informe es extenso (~60s). Se genera en SEGUNDO PLANO y se responde al
+  // instante; el frontend sondea GET /app/fluid-analyses/:id hasta que aparece
+  // el nuevo análisis. Así el request HTTP no queda colgado ~60s (evita cortes
+  // de timeout del proxy en producción).
+  void generateFluidAiAnalysis({
     tenantId,
     tenantSlug: session.tenantSlug,
     userId: session.user.id,
     userEmail: session.user.email,
     sampleId: id,
-  });
-  return getFluidSample(session, id);
+  }).catch(() => { /* errores ya se loguean y se tragan dentro del generador */ });
+  return { status: "generating", sampleId: id };
 }
 
 export async function getFluidSample(session: TenantAccessSession, id: string) {
@@ -389,14 +393,9 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
     metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
   });
 
-  // Generate AI insight (tendencias + interpretación + recomendaciones) in background
-  void generateFluidAiAnalysis({
-    tenantId,
-    tenantSlug: session.tenantSlug,
-    userId: session.user.id,
-    userEmail: session.user.email,
-    sampleId,
-  }).catch(err => { /* swallow */ void err; });
+  // El análisis IA (informe de especialista senior) NO se dispara automáticamente:
+  // es un informe extenso y costoso, se genera on-demand con el botón
+  // "Generar/Regenerar análisis IA" → regenerateFluidAiAnalysis().
 
   if (verdict === "CRITICAL" || verdict === "ACTION_REQUIRED") {
     void publishAudit(prisma, {

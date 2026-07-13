@@ -989,7 +989,7 @@ const dict = {
   "fa.viewOrigReport":    { es: "Ver reporte original",                en: "View original report",                pt: "Ver relatório original" },
   "fa.modifyResult":      { es: "Modificar resultado",                 en: "Modify result",                       pt: "Modificar resultado" },
   "fa.noLabResult":       { es: "Esta muestra todavía no tiene resultado del laboratorio.", en: "This sample doesn't have a lab result yet.", pt: "Esta amostra ainda não tem resultado do laboratório." },
-  "fa.loadResultAi":      { es: "Cargar resultado (IA)",               en: "Load result (AI)",                    pt: "Carregar resultado (IA)" },
+  "fa.loadResultAi":      { es: "Cargar resultado",                    en: "Load result",                         pt: "Carregar resultado" },
   "fa.assetTrend":        { es: "Tendencia del equipo",                en: "Equipment trend",                     pt: "Tendência do equipamento" },
   "fa.noParams":          { es: "Sin parámetros registrados.",         en: "No parameters recorded.",             pt: "Sem parâmetros registrados." },
   "fa.colParam":          { es: "Parámetro",                           en: "Parameter",                           pt: "Parâmetro" },
