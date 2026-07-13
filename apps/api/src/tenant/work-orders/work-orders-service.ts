@@ -957,6 +957,44 @@ export async function setWorkOrderApproval(
       onBehalfOf: signerUserId !== session.user.id ? signerUserId : undefined,
     },
   });
+
+  // Auto-create Sample DRAFT al AUTORIZAR (no al cerrar): así la tripulación ya
+  // sabe, desde que la OT se despacha, que debe tomar la muestra durante la
+  // ejecución. Horas/fecha reales se completan al cerrar la OT (ver closeWorkOrder).
+  if (payload.step === "AUTORIZA" && current.maintenancePlanId) {
+    try {
+      const plan = await (prismaRaw as any).maintenancePlan.findFirst({
+        where: { id: current.maintenancePlanId, tenantId: current.tenantId, deletedAt: null },
+        select: { id: true, samplingKind: true, samplingFluidType: true },
+      });
+      const planKind      = plan?.samplingKind as string | null;
+      const planFluidType = plan?.samplingFluidType as string | null;
+      if (plan && (planKind || planFluidType)) {
+        const existing = await (prismaRaw as any).fluidSample.findFirst({
+          where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, deletedAt: null },
+          select: { id: true },
+        });
+        if (!existing) {
+          await createFluidSampleFromWorkOrder({
+            tenantId:        current.tenantId,
+            vesselCode:      current.vesselCode,
+            assetId:         current.assetId,
+            kind:            (planKind || "FLUID") as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
+            fluidType:       planFluidType as FluidTypeEnum | null,
+            workOrderId:     current.id,
+            workOrderCode:   current.workOrderCode,
+            planId:          plan.id,
+            runningHours:    null,
+            completedAt:     actionAt,
+            createdByUserId: session.user.id,
+          });
+        }
+      }
+    } catch (err) {
+      log.error("[setWorkOrderApproval] auto-create Sample failed", err);
+    }
+  }
+
   return updated;
 }
 
@@ -995,10 +1033,6 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
       closerUserId = onBehalf;
     }
   }
-
-  let samplingKind:      string | null = null;
-  let samplingFluidType: string | null = null;
-  let samplingPlanId:    string | null = null;
 
   const closedResult = await prisma.$transaction(async (tx) => {
     const startDate = current.status === "PLANNED" ? completedDate : undefined;
@@ -1046,16 +1080,6 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             updatedByUserId: session.user.id,
           },
         });
-        // Capture sampling info for post-commit auto-creation of Sample.
-        // samplingKind disparador del auto-create. Si solo está samplingFluidType
-        // (datos heredados pre-CBM), inferimos kind=FLUID por compatibilidad.
-        const planKind      = (plan as any).samplingKind as string | null;
-        const planFluidType = (plan as any).samplingFluidType as string | null;
-        if (planKind || planFluidType) {
-          samplingKind      = planKind || "FLUID";
-          samplingFluidType = planFluidType;
-          samplingPlanId    = plan.id;
-        }
       }
     }
 
@@ -1168,29 +1192,30 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to auto-resolve linked external-audit defects:", err);
   }
 
-  // Auto-create Sample DRAFT si el plan era un plan de muestreo (cualquier kind).
-  let createdFluidSampleId: string | null = null;
-  if (samplingKind) {
-    try {
-      createdFluidSampleId = await createFluidSampleFromWorkOrder({
-        tenantId:        current.tenantId,
-        vesselCode:      current.vesselCode,
-        assetId:         current.assetId,
-        kind:            samplingKind as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
-        fluidType:       samplingFluidType as FluidTypeEnum | null,
-        workOrderId:     current.id,
-        workOrderCode:   current.workOrderCode,
-        planId:          samplingPlanId,
-        runningHours:    payload.runningHoursAtExecution ?? null,
-        completedAt:     completedDate,
-        createdByUserId: session.user.id,
+  // La muestra DRAFT ya se creó al AUTORIZAR la OT (ver setWorkOrderApproval).
+  // Acá solo completamos sus datos reales de ejecución (horas/fecha), que al
+  // autorizar todavía no se conocían.
+  try {
+    const sampleDel = (prismaRaw as unknown as {
+      fluidSample: {
+        findFirst(a: { where: Record<string, unknown> }): Promise<{ id: string; runningHours: number | null } | null>;
+        update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      };
+    }).fluidSample;
+    const linkedSample = await sampleDel.findFirst({
+      where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, status: "DRAFT", deletedAt: null },
+    });
+    if (linkedSample && linkedSample.runningHours == null) {
+      await sampleDel.update({
+        where: { id: linkedSample.id },
+        data: { sampledAt: completedDate, runningHours: payload.runningHoursAtExecution ?? null, updatedByUserId: session.user.id },
       });
-    } catch (err) {
-      log.error("[closeWorkOrder] auto-create Sample failed", err);
     }
+  } catch (err) {
+    log.error("[closeWorkOrder] failed to backfill linked Sample:", err);
   }
 
-  return { ...closedResult, failedMovements, createdFluidSampleId };
+  return { ...closedResult, failedMovements };
 }
 
 export async function cancelWorkOrder(session: TenantAccessSession, id: string, payload: CancelWorkOrderInput) {

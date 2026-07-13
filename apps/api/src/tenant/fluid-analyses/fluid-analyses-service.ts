@@ -492,10 +492,11 @@ async function createDefectFromResult(
   return defect.id;
 }
 
-// ── Auto-create a DRAFT sample from a closed work order ─────────────────────
+// ── Auto-create a DRAFT sample from an authorized work order ────────────────
 //
-// Called from closeWorkOrder when the linked MaintenancePlan has a
-// `samplingFluidType` set. The newly created FluidSample is in DRAFT status —
+// Called from setWorkOrderApproval (step AUTORIZA) when the linked MaintenancePlan
+// has a sampling kind/fluid set. The newly created FluidSample is in DRAFT status —
+// runningHours/sampledAt are backfilled when the WO closes (closeWorkOrder), and
 // the user finishes filling lab data afterwards from the FluidAnalyses page.
 
 export type SampleKindInput = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER";
@@ -536,7 +537,7 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
       runningHours:      input.runningHours,
       sampledByUserId:   input.createdByUserId,
       status:            "DRAFT",
-      notes:             `Generada automáticamente al cerrar OT ${input.workOrderCode}.`,
+      notes:             `Generada automáticamente al autorizar OT ${input.workOrderCode}.`,
       sourceWorkOrderId: input.workOrderId,
       sourcePlanId:      input.planId,
       createdByUserId:   input.createdByUserId,
