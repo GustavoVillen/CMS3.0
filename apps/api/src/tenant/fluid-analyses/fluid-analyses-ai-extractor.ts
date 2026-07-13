@@ -64,7 +64,13 @@ REGLAS:
 - "low" cuando es una conjetura razonable (ejemplo: el reporte no dice fecha de toma pero infieres del contexto).
 - Para parámetros: usar siempre nombres en minúsculas y abreviados estándar (fe, cu, cr, pb, al, sn, si, water, fuel, tbn, tan, viscosity40, viscosity100, ph, alkalinity, hardness, nitrites, chlorides, freeChlorine, sediment, sulfur, density, iso, particles, etc.)
 - Devolvé EXCLUSIVAMENTE JSON válido — sin texto antes, sin markdown, sin comentarios, sin trailing comma.
-- Si la imagen es ilegible o no es un reporte de análisis, devolvé un JSON con todos los value en null y notes explicando por qué.`;
+- Si la imagen es ilegible o no es un reporte de análisis, devolvé un JSON con todos los value en null y notes explicando por qué.
+
+IMPORTANTE — reportes con historial de varias muestras:
+Algunos laboratorios entregan una tabla con el HISTORIAL de varias muestras del mismo equipo, cada una con su propia fecha de muestreo (ej: una fila de 2025 y otra de 2026). En ese caso NO combines ni promedies datos de distintas filas.
+- Si el usuario te indica una fecha de referencia, elegí la fila cuya fecha de muestreo coincida o sea la más cercana a esa referencia, y extraé los datos SOLO de esa fila (Desgaste, Contaminantes, Fluido, Aditivos, etc. de esa misma columna/fila).
+- Si no hay fecha de referencia, elegí la fila de muestreo más reciente.
+- En "notes" mencioná qué fila elegiste (fecha de muestra y código de muestra si el reporte lo tiene) y que las demás filas del historial fueron ignoradas.`;
 
 const ALLOWED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
@@ -72,6 +78,8 @@ interface ExtractInput {
   buffer: Buffer;
   mime: string;
   vesselCode?: string | null;
+  /** Fecha de la muestra a completar (ISO), para desambiguar reportes con historial de varias muestras. */
+  referenceDate?: string | null;
 }
 
 export async function extractFluidReport(
@@ -110,9 +118,12 @@ export async function extractFluidReport(
   const fluidModel = "claude-haiku-4-5-20251001";
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
+  const referenceDateInstruction = input.referenceDate
+    ? `\nFecha de referencia de la muestra a completar: ${input.referenceDate}. Si el reporte trae un historial de varias muestras, usá SOLO la fila cuya fecha de muestreo coincida o esté más cerca de esta fecha.`
+    : "";
   contentBlocks.push({
     type: "text",
-    text: `${localeUserReminder(locale)}\nExtraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.`,
+    text: `${localeUserReminder(locale)}\nExtraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.${referenceDateInstruction}`,
   });
 
   // Antes Sonnet 4.6 + 4096. Haiku ya hace OCR de PDF y es ~5× más rápido/barato.

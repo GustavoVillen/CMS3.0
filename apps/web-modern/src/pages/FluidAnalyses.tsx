@@ -120,7 +120,7 @@ function VerdictBadge({ verdict }: { verdict: Verdict }) {
   );
 }
 
-async function uploadAndExtract(file: File, vesselCode: string | null): Promise<{ extracted: any; file: { url: string; name: string; mime: string } }> {
+async function uploadAndExtract(file: File, vesselCode: string | null, referenceDate: string | null): Promise<{ extracted: any; file: { url: string; name: string; mime: string } }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/octet-stream",
     "X-Filename": encodeURIComponent(file.name),
@@ -130,6 +130,7 @@ async function uploadAndExtract(file: File, vesselCode: string | null): Promise<
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (slug)  headers["X-Tenant-Slug"] = slug;
   if (vesselCode) headers["X-Vessel-Code"] = vesselCode;
+  if (referenceDate) headers["X-Reference-Date"] = referenceDate;
   const res = await fetch("/app/fluid-analyses/extract", { method: "POST", headers, body: file });
   if (!res.ok) {
     let msg = res.statusText;
@@ -893,13 +894,16 @@ function ResultFormModal({
   const [saving, setSaving]         = useState(false);
   const [err, setErr]               = useState<string | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractNote, setExtractNote]   = useState<string | null>(null);
 
   const processFile = useCallback(async (f: File) => {
     setFile(f);
     setExtractError(null);
+    setExtractNote(null);
     setExtracting(true);
     try {
-      const { extracted, file: saved } = await uploadAndExtract(f, sample.vesselCode);
+      const referenceDate = sample.sampledAt ? sample.sampledAt.slice(0, 10) : null;
+      const { extracted, file: saved } = await uploadAndExtract(f, sample.vesselCode, referenceDate);
       setReportUrl(saved.url);
       setReportMime(saved.mime);
 
@@ -914,12 +918,13 @@ function ResultFormModal({
         newParams.push({ key: k, value: String(p.value), unit: p.unit ?? "", conf: p.confidence });
       }
       if (newParams.length > 0) setParams(newParams);
+      if (typeof extracted.notes === "string" && extracted.notes.trim()) setExtractNote(extracted.notes.trim());
     } catch (e: any) {
       setExtractError(e.message ?? "No se pudo extraer el reporte. Cargá los datos manualmente.");
     } finally {
       setExtracting(false);
     }
-  }, [sample.vesselCode]);
+  }, [sample.vesselCode, sample.sampledAt]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -1038,6 +1043,7 @@ function ResultFormModal({
             {file && !extracting && <span className="text-xs text-text-industrial/60 truncate max-w-[300px]">{file.name}</span>}
           </div>
           {extractError && <p className="text-xs text-red-700 dark:text-red-400">{extractError}</p>}
+          {extractNote && <p className="text-[11px] text-text-industrial/60 italic">IA: {extractNote}</p>}
           {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer" className="text-xs text-accent inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver archivo cargado</a>}
         </div>
 
