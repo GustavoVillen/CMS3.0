@@ -1147,6 +1147,7 @@ model Vessel {
   nearMissReports  NearMissReport[]
   checklistExecutions ChecklistExecution[]
   failureModes     FailureMode[]
+  voyageTankReports VoyageTankReport[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1869,6 +1870,92 @@ model DailyDefectEntry {
   dailyReport            DailyReport    @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
 
   @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+// ─── Voyage Tank Report (Formulario M2 — Medición de Tanques por viaje) ──────
+
+enum VoyageTankReportStatus {
+  DRAFT
+  CLOSED
+}
+
+model VoyageTankReport {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  voyageCode        String                 // "M01"
+  reportCode        String?                // "M2-<VESSEL>-<YY>-<NNNN>"
+  tramo             String?                // free-text route "KM 773 ... AL KM 1578 ..."
+  reportDateTime    DateTime?              // Fecha/hora del encabezado
+  status            VoyageTankReportStatus @default(DRAFT)
+  // SUBIDA (viaje)
+  kmStart           Float?
+  kmEnd             Float?
+  dateStart         DateTime?
+  dateEnd           DateTime?
+  daysNav           Int?                   // "Días" (se auto-sugiere de las fechas)
+  // Bunker
+  bunkerReceivedLts Float?                 // Recepción
+  bargeDeliveredLts Float?                 // Entrega (Bczas)
+  signatory         String?                // "Jefe de Máquinas"
+  notes             String?
+  createdAt         DateTime               @default(now())
+  createdByUserId   String
+  updatedAt         DateTime               @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  tankReadings      VoyageTankReading[]
+  engineHours       VoyageEngineHours[]
+
+  @@unique([tenantId, vesselCode, voyageCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model VoyageTankReading {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  voyageReportId        String
+  tankLabel             String   // "TANQUE N°1 Estribor"
+  tankOrder             Int      // orden estable
+  // INICIAL
+  liquidHeightMmInitial Float?
+  waterHeightMmInitial  Float?
+  volumeTotalLtsInitial Float?
+  volumeWaterLtsInitial Float?
+  // FINAL
+  liquidHeightMmFinal   Float?
+  waterHeightMmFinal    Float?
+  volumeTotalLtsFinal   Float?
+  volumeWaterLtsFinal   Float?
+  createdAt             DateTime @default(now())
+
+  voyageReport          VoyageTankReport @relation(fields: [voyageReportId], references: [id], onDelete: Cascade)
+
+  @@index([voyageReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model VoyageEngineHours {
+  id             String   @id @default(cuid())
+  tenantId       String
+  vesselCode     String
+  voyageReportId String
+  assetId        String?  // enlaza al Asset cuando se siembra de equipos trackeados
+  engineLabel    String   // "M/P N°1 ER"
+  engineOrder    Int
+  hoursInitial   Float?
+  hoursFinal     Float?
+  createdAt      DateTime @default(now())
+
+  voyageReport   VoyageTankReport @relation(fields: [voyageReportId], references: [id], onDelete: Cascade)
+
+  @@index([voyageReportId])
   @@index([tenantId, vesselCode])
 }
 

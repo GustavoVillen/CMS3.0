@@ -15,6 +15,7 @@ const TITLE_KEYS: Record<string, TranslationKey> = {
   "/maintenance-gantt": "page.maintenanceGantt",
   "/work-orders":       "page.workOrders",
   "/daily-reports":     "page.dailyReports",
+  "/voyage-tank-reports": "page.voyageTankReports",
   "/reports":           "page.monthlyReports",
   "/defects":           "page.defects",
   "/deferrals":         "page.deferrals",

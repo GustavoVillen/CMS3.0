@@ -74,6 +74,9 @@ import {
 } from "./daily-reports/daily-report-integration-service";
 import { getDailyReportPeriodSuggestions } from "./daily-reports/daily-report-suggestions-service";
 import { buildDailyReportPdf } from "./daily-reports/daily-reports-pdf-service";
+import { listVoyageTankReports, getVoyageTankReport, createVoyageTankReport, updateVoyageTankReport } from "./voyage-tank-reports/voyage-tank-reports-service";
+import { getVoyageTankReportFull, upsertVoyageTankReadings, upsertVoyageEngineHours } from "./voyage-tank-reports/voyage-tank-reports-integration-service";
+import { buildVoyageTankReportPdf } from "./voyage-tank-reports/voyage-tank-reports-pdf-service";
 import { listTenantDeferrals } from "./deferrals/deferrals-service";
 import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
@@ -777,6 +780,76 @@ export async function handleTenantRoutes(
     const id = url.pathname.split("/")[3]!;
     const body = await readJsonBody(request) as { entries: Parameters<typeof upsertDailySpareUsages>[2] };
     sendJson(response, 200, await upsertDailySpareUsages(session, id, body.entries ?? []));
+    return true;
+  }
+
+  // ── Voyage Tank Reports (Formulario M2) ──────────────────────────────────────
+  if (method === "GET" && url.pathname === "/app/voyage-tank-reports") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const records = await listVoyageTankReports(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      status:     url.searchParams.get("status"),
+    });
+    sendJson(response, 200, { items: records, total: records.length });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/voyage-tank-reports") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof createVoyageTankReport>[1];
+    sendJson(response, 201, await createVoyageTankReport(session, body));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/voyage-tank-reports\/[^/]+\/full$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    sendJson(response, 200, await getVoyageTankReportFull(session, id));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/voyage-tank-reports\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const buffer = await buildVoyageTankReportPdf(session, id);
+    const filename = `medicion-tanques-${id}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/voyage-tank-reports\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/").pop()!;
+    sendJson(response, 200, await getVoyageTankReport(session, id));
+    return true;
+  }
+
+  if (method === "PATCH" && /^\/app\/voyage-tank-reports\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/").pop()!;
+    const body = await readJsonBody(request) as Parameters<typeof updateVoyageTankReport>[2];
+    sendJson(response, 200, await updateVoyageTankReport(session, id, body));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/voyage-tank-reports\/[^/]+\/tank-readings$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertVoyageTankReadings>[2] };
+    sendJson(response, 200, await upsertVoyageTankReadings(session, id, body.entries ?? []));
+    return true;
+  }
+
+  if (method === "PUT" && /^\/app\/voyage-tank-reports\/[^/]+\/engine-hours$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as { entries: Parameters<typeof upsertVoyageEngineHours>[2] };
+    sendJson(response, 200, await upsertVoyageEngineHours(session, id, body.entries ?? []));
     return true;
   }
 

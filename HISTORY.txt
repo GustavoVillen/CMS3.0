@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-07-14] Módulo Medición de Tanques por Viaje (Formulario M2)
+Agent: Claude Opus 4.8
+- Schema: nuevos modelos VoyageTankReport + VoyageTankReading + VoyageEngineHours
+  y enum VoyageTankReportStatus (DRAFT/CLOSED); relación voyageTankReports en Vessel.
+  Documento por viaje: mediciones de carboneras inicial/final, horómetros por motor,
+  datos de viaje (km/fechas/días) y bunker. Neto/NATURALES/Consumo/Diferencia se
+  calculan al vuelo (no se guardan). db push aplicado a cms3.
+
 [2026-07-11] Historial de ejecuciones editable en el modal de Plan de Mantenimiento
 Agent: Claude Opus 4.8
 - Schema: WorkOrder gana @@index([tenantId, maintenancePlanId]) para el listado de

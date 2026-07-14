@@ -4,7 +4,7 @@ import {
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
-  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange,
+  ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange, Fuel,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -59,6 +59,7 @@ export const NAV: NavSection[] = [
       { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
       { icon: Zap,             labelKey: "nav.expressMaintenance", path: "/mantenimiento-express" },
       { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
+      { icon: Fuel,            labelKey: "nav.voyageTankReports", path: "/voyage-tank-reports" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
       { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
       { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",

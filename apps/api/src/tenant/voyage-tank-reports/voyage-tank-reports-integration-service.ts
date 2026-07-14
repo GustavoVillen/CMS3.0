@@ -1,0 +1,136 @@
+// Voyage Tank Report (Formulario M2) — carga full + upsert de hijos.
+// Patrón delete-all-then-recreate espejo de daily-report-integration-service.ts.
+// Sin integración PMS (no avanza planes ni WorkLogs): es un documento standalone.
+
+import type { TenantAccessSession } from "../auth/session-store";
+import { getPrismaClient } from "../../platform/data/prisma-client";
+import { RouteError } from "../../http/route-error";
+
+function scopedWhere(session: TenantAccessSession, tenantId: string, id: string): Record<string, unknown> {
+  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  // FAIL-CLOSED: ADMIN y FLEET_SUPERINTENDENT ven todo el tenant; el resto solo
+  // sus vessels asignados; sin asignación → no ve nada.
+  if (session.user.role !== "TENANT_ADMIN" && session.user.role !== "FLEET_SUPERINTENDENT") {
+    where.vesselCode = session.user.assignedVesselCodes.length === 0
+      ? "__NO_ASSIGNED_VESSEL__"
+      : { in: session.user.assignedVesselCodes };
+  }
+  return where;
+}
+
+export async function getVoyageTankReportFull(session: TenantAccessSession, reportId: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const report = await prisma.voyageTankReport.findFirst({
+    where: scopedWhere(session, tenant.id, reportId),
+    include: {
+      tankReadings: { orderBy: { tankOrder: "asc" } },
+      engineHours: { orderBy: { engineOrder: "asc" } },
+    },
+  });
+  if (!report) throw new RouteError(404, "NOT_FOUND", "Medición no encontrada.");
+  return report;
+}
+
+async function assertEditable(session: TenantAccessSession, reportId: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+  const report = await prisma.voyageTankReport.findFirst({ where: scopedWhere(session, tenant.id, reportId) });
+  if (!report) throw new RouteError(404, "NOT_FOUND", "Medición no encontrada.");
+  if (report.status === "CLOSED") throw new RouteError(409, "REPORT_CLOSED", "No se puede modificar una medición cerrada.");
+  return { prisma, tenant, report };
+}
+
+export interface TankReadingInput {
+  tankLabel: string;
+  tankOrder?: number | null;
+  liquidHeightMmInitial?: number | null;
+  waterHeightMmInitial?: number | null;
+  volumeTotalLtsInitial?: number | null;
+  volumeWaterLtsInitial?: number | null;
+  liquidHeightMmFinal?: number | null;
+  waterHeightMmFinal?: number | null;
+  volumeTotalLtsFinal?: number | null;
+  volumeWaterLtsFinal?: number | null;
+}
+
+export async function upsertVoyageTankReadings(session: TenantAccessSession, reportId: string, entries: TankReadingInput[]) {
+  const { prisma, tenant, report } = await assertEditable(session, reportId);
+
+  await prisma.voyageTankReading.deleteMany({ where: { voyageReportId: reportId } });
+
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined || (v as string) === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const results = [];
+  let i = 0;
+  for (const entry of entries) {
+    results.push(await prisma.voyageTankReading.create({
+      data: {
+        tenantId: tenant.id,
+        vesselCode: report.vesselCode,
+        voyageReportId: reportId,
+        tankLabel: entry.tankLabel,
+        tankOrder: entry.tankOrder ?? i,
+        liquidHeightMmInitial: num(entry.liquidHeightMmInitial),
+        waterHeightMmInitial: num(entry.waterHeightMmInitial),
+        volumeTotalLtsInitial: num(entry.volumeTotalLtsInitial),
+        volumeWaterLtsInitial: num(entry.volumeWaterLtsInitial),
+        liquidHeightMmFinal: num(entry.liquidHeightMmFinal),
+        waterHeightMmFinal: num(entry.waterHeightMmFinal),
+        volumeTotalLtsFinal: num(entry.volumeTotalLtsFinal),
+        volumeWaterLtsFinal: num(entry.volumeWaterLtsFinal),
+      },
+    }));
+    i++;
+  }
+  return results;
+}
+
+export interface EngineHoursInput {
+  assetId?: string | null;
+  engineLabel: string;
+  engineOrder?: number | null;
+  hoursInitial?: number | null;
+  hoursFinal?: number | null;
+}
+
+export async function upsertVoyageEngineHours(session: TenantAccessSession, reportId: string, entries: EngineHoursInput[]) {
+  const { prisma, tenant, report } = await assertEditable(session, reportId);
+
+  await prisma.voyageEngineHours.deleteMany({ where: { voyageReportId: reportId } });
+
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined || (v as string) === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const results = [];
+  let i = 0;
+  for (const entry of entries) {
+    results.push(await prisma.voyageEngineHours.create({
+      data: {
+        tenantId: tenant.id,
+        vesselCode: report.vesselCode,
+        voyageReportId: reportId,
+        assetId: entry.assetId ?? null,
+        engineLabel: entry.engineLabel,
+        engineOrder: entry.engineOrder ?? i,
+        hoursInitial: num(entry.hoursInitial),
+        hoursFinal: num(entry.hoursFinal),
+      },
+    }));
+    i++;
+  }
+  return results;
+}

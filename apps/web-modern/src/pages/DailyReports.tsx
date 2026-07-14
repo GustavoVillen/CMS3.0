@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-  CheckCircle, ClipboardCopy, Droplets, FileText, Loader2, Locate, Plus, RotateCcw, Send, Trash2,
+  CheckCircle, ClipboardCopy, Droplets, FileText, Fuel, Loader2, Locate, Plus, RotateCcw, Send, Trash2,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -257,7 +257,7 @@ const EquipmentHoursTab: React.FC<{ reportId: string; vesselCode: string; disabl
 
 // ─── Consumos Tab ─────────────────────────────────────────────────────────────
 
-const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ reportId, disabled }) => {
+const ConsumosTab: React.FC<{ reportId: string; vesselCode: string; disabled: boolean }> = ({ reportId, vesselCode, disabled }) => {
   const t = useT();
   const { data, loading } = useFetch<{ fuelConsumedLiters?: number | null; oilConsumedLiters?: number | null }>(
     `/app/daily-reports/${reportId}`,
@@ -340,6 +340,15 @@ const ConsumosTab: React.FC<{ reportId: string; disabled: boolean }> = ({ report
           </button>
         </div>
       )}
+      {/* Enlace a la medición de tanques por viaje (Formulario M2) — registro detallado
+          de carboneras inicial/final con cálculo de consumo. */}
+      <Link
+        to={`/voyage-tank-reports?vesselCode=${encodeURIComponent(vesselCode)}`}
+        className="flex items-center gap-2 text-[11px] text-accent hover:text-accent/80 font-semibold pt-1"
+      >
+        <Fuel className="w-3.5 h-3.5" />
+        Medición de tanques por viaje (M2)
+      </Link>
     </div>
   );
 };
@@ -1404,7 +1413,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
             <p className="text-xs text-text-industrial/40 text-center py-8">Guardá la información básica primero para habilitar esta sección.</p>
           )}
           {!isNew && activeTab === "equipment"   && <EquipmentHoursTab reportId={liveReport!.id} vesselCode={liveReport!.vesselCode} disabled={isOpDataLocked} />}
-          {!isNew && activeTab === "consumos"    && <ConsumosTab       reportId={liveReport!.id} disabled={isOpDataLocked} />}
+          {!isNew && activeTab === "consumos"    && <ConsumosTab       reportId={liveReport!.id} vesselCode={liveReport!.vesselCode} disabled={isOpDataLocked} />}
           {!isNew && activeTab === "maintenance" && <MaintenanceTab    reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.maintenanceEntries} suggestions={suggestions?.maintenance as any[]} suggestionPeriod={suggestions?.period} />}
           {!isNew && activeTab === "spares"      && <SpareUsageTab     reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.spareUsages}        suggestions={suggestions?.spares as any[]}      suggestionPeriod={suggestions?.period} />}
           {!isNew && activeTab === "defects"     && <DefectEntriesTab  reportId={liveReport!.id} disabled={isOpDataLocked} prefillEntries={prevData?.defectEntries}       suggestions={suggestions?.defects as any[]}     suggestionPeriod={suggestions?.period} />}
