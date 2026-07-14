@@ -65,6 +65,72 @@ const labelCls = "text-xs font-bold uppercase tracking-wider text-text-industria
 
 type View = "list" | "create" | "detail";
 
+// ── Emparejado Babor/Estribor (o #1/#2) para "Horas por equipo" ──────────────
+// Agrupa equipos hermanos por su nombre base y los ordena Babor/#1 (izquierda)
+// → Estribor/#2 (derecha) para renderizar 2 por fila. Los equipos sin hermano
+// quedan a ancho completo.
+const SIDE_BABOR = /\bbabor\b/i;
+const SIDE_ESTRIBOR = /\bestribor\b/i;
+const TRAIL_NUM = /(?:#|nro\.?|n[º°])?\s*(\d+)\s*$/i;
+
+/** Nombre base sin el sufijo de lado/número, para agrupar hermanos. */
+function equipmentBaseKey(name: string): string {
+  return name
+    .replace(/\s*(?:de\s+)?(?:babor|estribor)\s*$/i, "")
+    .replace(/\s*(?:#|nro\.?|n[º°])?\s*\d+\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Orden dentro del grupo: Babor/#1 primero (izq), Estribor/#2 después (der). */
+function equipmentSideRank(name: string, idx: number): number {
+  if (SIDE_BABOR.test(name)) return 0;
+  if (SIDE_ESTRIBOR.test(name)) return 1;
+  const m = name.match(TRAIL_NUM);
+  if (m) return parseInt(m[1], 10);
+  return 1000 + idx; // sin lado reconocible → conserva el orden original
+}
+
+/** Convierte la lista de equipos en filas [izquierda, derecha|null]. */
+function pairTrackedAssets(assets: Asset[]): Array<[Asset, Asset | null]> {
+  const groups = new Map<string, Asset[]>();
+  const order: string[] = [];
+  assets.forEach(a => {
+    const key = equipmentBaseKey(a.name) || a.name.toLowerCase();
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key)!.push(a);
+  });
+  const rows: Array<[Asset, Asset | null]> = [];
+  order.forEach(key => {
+    const items = groups.get(key)!;
+    if (items.length === 1) { rows.push([items[0], null]); return; }
+    const sorted = items
+      .map((a, i) => ({ a, r: equipmentSideRank(a.name, i) }))
+      .sort((x, y) => x.r - y.r)
+      .map(o => o.a);
+    for (let i = 0; i < sorted.length; i += 2) {
+      rows.push([sorted[i], sorted[i + 1] ?? null]);
+    }
+  });
+  return rows;
+}
+
+/** Caja de un equipo: nombre + input de horas. Reutilizable izq/der/full. */
+const AssetHoursBox: React.FC<{ asset: Asset; value: string; onChange: (v: string) => void }> = ({ asset, value, onChange }) => (
+  <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-1.5">
+    <p className="text-[11px] font-semibold text-fg leading-tight">{asset.name}</p>
+    <input
+      type="number"
+      inputMode="decimal"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder="Horas (h)"
+      className="w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+    />
+  </div>
+);
+
 export const MobileDailyReport: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: DailyReport[] }>("/app/daily-reports");
   const { selectedVesselCode }    = useVesselContext();
@@ -111,6 +177,8 @@ export const MobileDailyReport: React.FC = () => {
     [selectedVesselCode],
   );
   const trackedAssets = assetsData?.items ?? [];
+  // Filas de "Horas por equipo": hermanos Babor/Estribor (o #1/#2) en la misma fila.
+  const equipmentRows = useMemo(() => pairTrackedAssets(trackedAssets), [trackedAssets]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -328,18 +396,15 @@ export const MobileDailyReport: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-2">
-                {trackedAssets.map(a => (
-                  <div key={a.id} className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-1.5">
-                    <p className="text-[11px] font-semibold text-fg truncate">{a.name}</p>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={hoursByAsset[a.id] ?? ""}
-                      onChange={e => updateAssetHours(a.id, e.target.value)}
-                      placeholder="Horas totales (h)"
-                      className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-                    />
-                  </div>
+                {equipmentRows.map(([left, right], i) => (
+                  right ? (
+                    <div key={i} className="grid grid-cols-2 gap-2 items-start">
+                      <AssetHoursBox asset={left} value={hoursByAsset[left.id] ?? ""} onChange={v => updateAssetHours(left.id, v)} />
+                      <AssetHoursBox asset={right} value={hoursByAsset[right.id] ?? ""} onChange={v => updateAssetHours(right.id, v)} />
+                    </div>
+                  ) : (
+                    <AssetHoursBox key={i} asset={left} value={hoursByAsset[left.id] ?? ""} onChange={v => updateAssetHours(left.id, v)} />
+                  )
                 ))}
               </div>
             )}
