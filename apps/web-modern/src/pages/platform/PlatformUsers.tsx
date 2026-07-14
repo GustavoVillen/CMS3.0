@@ -188,7 +188,7 @@ export const PlatformUsersPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay usuarios de plataforma" onRowClick={setEditing} />
+      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay usuarios de plataforma" onRowClick={r => setEditing(r)} />
 
       {creating && <CreateUserModal onClose={() => setCreating(false)} onCreated={reload} />}
       {editing  && <EditUserModal user={editing} onClose={() => setEditing(null)} onSaved={reload} />}

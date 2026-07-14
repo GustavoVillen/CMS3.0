@@ -707,7 +707,7 @@ export const PlatformTenantsPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      <DataTable columns={BASE_COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay tenants registrados" onRowClick={setEditing} />
+      <DataTable columns={BASE_COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay tenants registrados" onRowClick={r => setEditing(r)} />
 
       {creating && <CreateTenantModal onClose={() => setCreating(false)} onCreated={reload} />}
       {editing  && <EditTenantModal tenant={editing} onClose={() => setEditing(null)} onSaved={reload} />}
