@@ -20,7 +20,9 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT_BASE = `Actúa como especialista senior en análisis de lubricantes usados, tribología y mantenimiento predictivo de motores diésel marinos.
 
-Vas a recibir, en formato JSON, los DATOS YA TRANSCRITOS de la muestra actual de análisis de aceite de un equipo, más el HISTORIAL de muestras anteriores del mismo equipo y mismo tipo de fluido tal como están registrados en el sistema PMS. No recibís la imagen del reporte: los valores ya fueron extraídos, tu trabajo empieza en la validación y el análisis.
+Vas a recibir, en formato JSON, los DATOS YA TRANSCRITOS de la muestra actual de análisis de aceite de un equipo, más el HISTORIAL de muestras anteriores del mismo equipo y mismo tipo de fluido, y las ÓRDENES DE TRABAJO ('intervencionesOT') del mismo equipo ocurridas entre la muestra anterior y la actual, tal como están registrados en el sistema PMS. No recibís la imagen del reporte: los valores ya fueron extraídos, tu trabajo empieza en la validación y el análisis.
+
+USO DE 'intervencionesOT': son las OTs del equipo en la ventana entre muestras. Revisalas para detectar (a) CAMBIOS o REPOSICIONES de aceite — si hubo un cambio de aceite entre muestras, la comparación NO es acumulativa a través de él (aclaralo y datá el evento); (b) REPARACIONES/intervenciones que puedan explicar variaciones (ej. cambio de cojinetes → pico de metales por asentamiento). Las OT no traen litros como dato: usá la cantidad solo si aparece en el título/descripción. Si 'intervencionesOT' viene vacío, tratá las intervenciones y el cambio de aceite como "No informado".
 
 Tu objetivo es:
 
@@ -195,7 +197,7 @@ Usá "No calculable" cuando falten datos o el cálculo sea inválido. Confianza:
 Máximo 3 ítems, UNA línea cada uno: parámetro — evidencia breve — qué falta para confirmar. No repitas lo ya dicho en 4-7.
 
 ### 9. Datos faltantes
-Lista concisa con código trazable (D-01, D-02, …), una línea cada uno. Incluí, cuando no estén disponibles: horas del aceite; fecha/alcance del cambio de aceite; reposiciones; ficha técnica del aceite; TBN y viscosidad del aceite nuevo; punto de muestreo; intervenciones entre muestras.
+Lista concisa con código trazable (D-01, D-02, …), una línea cada uno. Incluí, cuando no estén disponibles: horas del aceite; fecha/alcance del cambio de aceite; reposiciones (litros); ficha técnica del aceite; TBN y viscosidad del aceite nuevo; punto de muestreo; intervenciones entre muestras. NO listes "intervenciones entre muestras" ni "fecha de cambio de aceite" como faltantes si 'intervencionesOT' ya las aporta — en ese caso resumilas en las secciones correspondientes. Aclará que los litros de reposición no son un dato del sistema (solo texto de OT si figura).
 
 ### 10. Recomendaciones
 | Código | Acción | Motivo | Plazo u horas | Criterio de cierre |
@@ -272,6 +274,26 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
     select: { name: true, assetCode: true },
   });
 
+  // OTs del MISMO equipo en la ventana entre la muestra anterior y la actual.
+  // Le dan a la IA contexto de intervenciones: cambios/reposiciones de aceite
+  // (reinician la tendencia) y reparaciones que expliquen variaciones. Las OT no
+  // guardan litros como dato; lo que haya de cantidad vendrá en el texto (título/
+  // descripción). Ventana: desde la muestra previa (o 365 días atrás si no hay)
+  // hasta la muestra actual.
+  const prevSampledAt: Date | null = history.length > 0 ? history[history.length - 1].sampledAt : null;
+  const woWindowStart = prevSampledAt ?? new Date(sample.sampledAt.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const workOrders = await (prisma as any).workOrder.findMany({
+    where: {
+      tenantId: input.tenantId,
+      assetId: sample.assetId,
+      deletedAt: null,
+      openDate: { gte: woWindowStart, lte: sample.sampledAt },
+    },
+    orderBy: { openDate: "asc" },
+    take: 25,
+    select: { type: true, status: true, title: true, description: true, openDate: true, completedDate: true },
+  });
+
   const dataPayload = {
     // Aclaración explícita para la IA sobre el significado de las horas: el
     // sistema registra horas del EQUIPO al muestrear, NO horas del aceite.
@@ -302,6 +324,18 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
         verdict: h.result?.verdict ?? null,
         parameters: h.result?.parameters ?? null,
       })),
+    // Órdenes de trabajo del equipo entre la muestra anterior y la actual.
+    // Si está vacío, no hubo OT registradas en la ventana (tratar intervenciones
+    // como "No informado"). Los litros de reposición solo si están en el texto.
+    notaIntervencionesOT: "intervencionesOT = OTs del mismo equipo entre la muestra previa y la actual. Usalas para detectar cambios/reposiciones de aceite (reinician la tendencia) e intervenciones que expliquen variaciones. Las OT NO tienen litros como dato: la cantidad, si existe, está en titulo/descripcion.",
+    intervencionesOT: workOrders.map((w: any) => ({
+      tipo: w.type,
+      estado: w.status,
+      titulo: w.title,
+      descripcion: w.description ? String(w.description).slice(0, 300) : null,
+      fechaApertura: w.openDate ? w.openDate.toISOString().slice(0, 10) : null,
+      fechaCierre: w.completedDate ? w.completedDate.toISOString().slice(0, 10) : null,
+    })),
   };
 
   // Nota: NO se inyecta el contexto regulatorio (CIMAC/OEM) acá. La Sección 6
