@@ -177,37 +177,38 @@ Máximo seis líneas: clasificación; condición puntual del aceite; comparabili
 | Parámetro | Anterior | Actual | Diferencia | Variación % | Tasa por 100 h | Evaluación | Confianza |
 |---|---|---|---|---|---|---|---|
 
-Usá "No calculable" cuando falten datos o el cálculo sea inválido. Confianza: alta / media / baja.
+Usá "No calculable" cuando falten datos o el cálculo sea inválido. Confianza: alta / media / baja. Incluí solo los parámetros con cambio o valor relevante (no listes todos si no aportan). La celda "Evaluación" ≤ 10 palabras y NO repitas la cadena de valores (ya está en Anterior/Actual).
 
 ### 4. Metales de desgaste
-Explicá los cambios relevantes y su relación con PQI, horas y posibles intervenciones.
+2-3 frases: cambios relevantes y su relación con PQI, horas y posibles intervenciones. No repitas números ya listados en la tabla.
 
 ### 5. Contaminación
-Evaluá polvo, agua, refrigerante, combustible y mezcla de lubricantes.
+2-3 frases cubriendo polvo, agua, refrigerante, combustible y mezcla — solo lo que aplique. Sin repetir valores de la tabla.
 
 ### 6. Condición del aceite
-Analizá viscosidad, TBN, hollín, FTIR y estabilidad general.
+2-3 frases: viscosidad, TBN, hollín/FTIR y estabilidad. Sin repetir valores de la tabla.
 
 ### 7. Paquete de aditivos
-Indicá si los cambios parecen compatibles con formulación diferente, cambio de aceite, reposición, mezcla o variación analítica.
+1-2 frases: si los cambios parecen compatibles con formulación diferente, cambio de aceite, reposición, mezcla o variación analítica. Si no hay datos de aditivos, decilo en una línea.
 
 ### 8. Variaciones que requieren confirmación
-Para cada parámetro que merezca seguimiento: evidencia; interpretación probable; interpretación alternativa; información necesaria para confirmarlo.
+Máximo 3 ítems, UNA línea cada uno: parámetro — evidencia breve — qué falta para confirmar. No repitas lo ya dicho en 4-7.
 
 ### 9. Datos faltantes
-Enumerá cada requerimiento con código trazable (D-01, D-02, …). Incluí como mínimo, cuando no estén disponibles: horas del aceite; fecha y alcance del cambio de aceite; cantidad de reposición; ficha técnica del aceite; TBN y viscosidad del aceite nuevo; punto exacto de muestreo; intervenciones entre muestras.
+Lista concisa con código trazable (D-01, D-02, …), una línea cada uno. Incluí, cuando no estén disponibles: horas del aceite; fecha/alcance del cambio de aceite; reposiciones; ficha técnica del aceite; TBN y viscosidad del aceite nuevo; punto de muestreo; intervenciones entre muestras.
 
 ### 10. Recomendaciones
 | Código | Acción | Motivo | Plazo u horas | Criterio de cierre |
 |---|---|---|---|---|
 
-No recomiendes automáticamente repetir la muestra en seis meses. Definí el intervalo preferentemente en horas de operación y según el nivel de incertidumbre.
+Celdas breves. No recomiendes automáticamente repetir la muestra en seis meses. Definí el intervalo preferentemente en horas de operación y según el nivel de incertidumbre.
 
 ### 11. Conclusión profesional
-Conclusión breve, apta para incorporarse al PMS o a una Orden de Trabajo. Separá claramente: hechos confirmados; variaciones observadas; hipótesis; conclusiones no confirmables.
+Máximo 4 líneas, separando: hechos confirmados; hipótesis; conclusiones no confirmables. NO repitas los números ya presentados en las secciones anteriores — solo la síntesis.
 
 REGLAS DE FORMATO:
 - Devolvé EXCLUSIVAMENTE el informe en Markdown, sin texto introductorio ni cierres tipo "espero que te sirva".
+- SÉ CONCISO: apuntá a ~1000 palabras en total. Priorizá densidad de información sobre extensión y NO repitas datos entre secciones (cada dato se dice una vez).
 - Las tablas deben ser Markdown válido (fila de encabezado + fila separadora |---|---| + filas de datos).
 - Si solo hay 1 muestra (la actual, sin historial), aclaralo en el Resumen ejecutivo, clasificá según condición puntual y comparabilidad, y limitate a interpretar la muestra puntual (la Tabla de variaciones irá "No calculable").
 - Tono técnico, directo, sin marketing.`;
@@ -309,7 +310,9 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
   const systemPrompt = SYSTEM_PROMPT_BASE;
 
   const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 1 });
-  const model = "claude-sonnet-5";
+  // Modelo configurable por env (para poder cambiar sin redeploy de código).
+  // Default Sonnet 5 (más preciso); Haiku es ~2-3× más rápido y barato.
+  const model = process.env.FLUID_AI_MODEL || "claude-sonnet-5";
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(input.tenantSlug);
 
