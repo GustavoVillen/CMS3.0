@@ -1877,6 +1877,7 @@ model DailyDefectEntry {
 
 enum VoyageTankReportStatus {
   DRAFT
+  SUBMITTED
   CLOSED
 }
 

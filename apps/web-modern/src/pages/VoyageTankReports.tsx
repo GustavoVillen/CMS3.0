@@ -69,7 +69,7 @@ const inputCls  = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 tex
 const inputSm    = "w-full bg-fg/5 border border-fg/10 rounded-md px-1.5 py-1 text-[11px] text-fg text-right placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls  = "block text-[10px] font-semibold text-text-industrial/60 uppercase tracking-wider";
 
-const STATUSES = ["DRAFT", "CLOSED"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "CLOSED"] as const;
 
 // Helpers de cálculo (misma fórmula que el PDF backend).
 const n = (v: string): number => { const x = Number(v); return Number.isFinite(x) ? x : 0; };

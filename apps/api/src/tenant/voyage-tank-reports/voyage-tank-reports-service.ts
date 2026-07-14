@@ -29,7 +29,7 @@ export interface CreateVoyageTankReportInput {
   voyageCode: string;
   tramo?: string | null;
   reportDateTime?: string | null;
-  status?: "DRAFT" | "CLOSED";
+  status?: "DRAFT" | "SUBMITTED" | "CLOSED";
   kmStart?: number | null;
   kmEnd?: number | null;
   dateStart?: string | null;
