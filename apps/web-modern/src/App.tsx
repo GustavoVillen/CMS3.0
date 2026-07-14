@@ -25,6 +25,8 @@ import { PageLoader } from "./components/PageLoader";
 
 // Layout mobile completo (un usuario desktop nunca descarga /m ni sus vistas, y viceversa).
 const MobileLayout = React.lazy(() => import("./components/MobileLayout").then(m => ({ default: m.MobileLayout })));
+// Página móvil standalone SOLO de Reportes Diarios (link directo /m-daily-reports).
+const MobileDailyReportsPage = React.lazy(() => import("./mobile/MobileDailyReportsPage").then(m => ({ default: m.MobileDailyReportsPage })));
 
 // Tenant
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -203,6 +205,8 @@ export default function App() {
 
             {/* ── Tenant mobile ── */}
             <Route path="/m" element={<RequireAuth><TenantI18nWrapper><MobileLayout /></TenantI18nWrapper></RequireAuth>} />
+            {/* Link directo solo de Reportes Diarios (Capitán / Jefe de Máquinas). */}
+            <Route path="/m-daily-reports" element={<RequireAuth><TenantI18nWrapper><MobileDailyReportsPage /></TenantI18nWrapper></RequireAuth>} />
 
             {/* ── Tenant ── */}
             <Route path="/login" element={<TenantLoginRedirect />} />
