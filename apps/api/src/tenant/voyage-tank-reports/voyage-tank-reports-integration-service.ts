@@ -5,6 +5,8 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { refreshExecutionStatuses } from "../pms/execution-windows-service";
+import { log } from "../../common/logger";
 
 function scopedWhere(session: TenantAccessSession, tenantId: string, id: string): Record<string, unknown> {
   const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
@@ -133,4 +135,87 @@ export async function upsertVoyageEngineHours(session: TenantAccessSession, repo
     i++;
   }
   return results;
+}
+
+/**
+ * Integra los horómetros del M2 al PMS (avance de planes de mantenimiento por
+ * horas). Antes esto lo hacía el Reporte Diario al confirmarse; ahora corre al
+ * marcar el M2 como SUBMITTED. Usa `hoursFinal` como lectura acumulada actual
+ * de cada motor (equivalente a runningHoursTotal del reporte diario):
+ *   - bootstrap: si un plan HOURS/RUNNING_HOURS del asset no tiene nextDueHours,
+ *     lo siembra (base = lastExecutionHours ?? hoursFinal) + frequencyHours.
+ *   - avance: refresca windowOpenHours cuando la lectura se acerca al vencimiento.
+ * Luego recalcula executionStatus de los planes del tenant (misma fn que el
+ * reporte diario). Réplica de daily-report-integration-service (Steps 1-2).
+ */
+export async function integrateVoyageTankReportHours(
+  session: TenantAccessSession,
+  reportId: string,
+): Promise<{ updatedRunningHoursCount: number; recalculatedPlansCount: number }> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const report = await prisma.voyageTankReport.findFirst({
+    where: { id: reportId, tenantId: tenant.id, deletedAt: null },
+    include: { engineHours: true },
+  });
+  if (!report) throw new RouteError(404, "NOT_FOUND", "Medición no encontrada.");
+
+  const vesselCode = report.vesselCode;
+  const engineRows = (report.engineHours ?? []) as Array<{ assetId: string | null; hoursFinal: number | null }>;
+  let updatedRunningHoursCount = 0;
+
+  for (const e of engineRows) {
+    if (!e.assetId || e.hoursFinal == null) continue;
+    const currentHours = e.hoursFinal;
+
+    const plans = await (prisma as any).maintenancePlan.findMany({
+      where: {
+        tenantId: tenant.id,
+        vesselCode,
+        assetId: e.assetId,
+        triggerType: { in: ["HOURS", "RUNNING_HOURS"] },
+        deletedAt: null,
+        status: { not: "INACTIVE" },
+      },
+    });
+
+    for (const plan of plans) {
+      if (!plan.frequencyHours || plan.frequencyHours <= 0) continue;
+      const updates: Record<string, unknown> = {};
+
+      if (plan.nextDueHours == null) {
+        // Bootstrap: nunca se le seteó vencimiento por horas.
+        const baseHours = plan.lastExecutionHours ?? currentHours;
+        updates.nextDueHours = baseHours + plan.frequencyHours;
+        updates.windowOpenHours = (baseHours + plan.frequencyHours) - plan.frequencyHours * 0.1;
+      } else if (currentHours > plan.nextDueHours - plan.frequencyHours * 0.5) {
+        // Se acerca al vencimiento: refrescar la apertura de ventana.
+        updates.windowOpenHours = plan.nextDueHours - plan.frequencyHours * 0.1;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await (prisma as any).maintenancePlan.update({ where: { id: plan.id }, data: updates });
+        updatedRunningHoursCount++;
+      }
+    }
+  }
+
+  // Recalcular executionStatus del tenant con la lectura máxima (mismo patrón daily).
+  const maxHours = engineRows.reduce<number | undefined>((m, e) => {
+    if (e.hoursFinal == null) return m;
+    return m == null || e.hoursFinal > m ? e.hoursFinal : m;
+  }, undefined);
+
+  let recalculatedPlansCount = 0;
+  try {
+    recalculatedPlansCount = await refreshExecutionStatuses(tenant.id, maxHours);
+  } catch (err) {
+    log.error("[voyage-tank integrate] refreshExecutionStatuses failed:", err);
+  }
+
+  return { updatedRunningHoursCount, recalculatedPlansCount };
 }

@@ -241,9 +241,21 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
         await loadFull(created.id, created.vesselCode);
         setSavedMsg("Medición creada.");
       } else {
-        await api.patch(`/app/voyage-tank-reports/${live!.id}`, headerPayload());
+        // Persistir hijos ANTES del PATCH de estado: al pasar a SUBMITTED el
+        // backend integra los horómetros al mantenimiento, y debe ver los
+        // valores recién cargados (no los anteriores).
         await persistChildren(live!.id);
-        setSavedMsg("Guardado.");
+        const res = await api.patch<VoyageTankReport & { _integration?: { updatedRunningHoursCount: number; recalculatedPlansCount: number } }>(`/app/voyage-tank-reports/${live!.id}`, headerPayload());
+        setLive(res);
+        const integ = res._integration;
+        if (status === "SUBMITTED" && integ) {
+          const parts = [];
+          if (integ.updatedRunningHoursCount > 0) parts.push(`${integ.updatedRunningHoursCount} plan(es) de horas actualizados`);
+          if (integ.recalculatedPlansCount > 0) parts.push(`${integ.recalculatedPlansCount} recalculados`);
+          setSavedMsg(parts.length ? `Enviado · ${parts.join(" · ")}` : "Enviado.");
+        } else {
+          setSavedMsg("Guardado.");
+        }
       }
       setTimeout(() => setSavedMsg(null), 2500);
     } catch (e) {

@@ -6,6 +6,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
+import { integrateVoyageTankReportHours } from "./voyage-tank-reports-integration-service";
+import { log } from "../../common/logger";
 
 // Plantilla por defecto de carboneras/tanques (orden del formulario M2 en papel).
 // Se siembra al crear el reporte para que grilla y PDF coincidan siempre.
@@ -189,5 +191,20 @@ export async function updateVoyageTankReport(session: TenantAccessSession, id: s
   if (input.signatory !== undefined) data.signatory = input.signatory?.trim() || null;
   if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
 
-  return prisma.voyageTankReport.update({ where: { id }, data });
+  const updated = await prisma.voyageTankReport.update({ where: { id }, data });
+
+  // Al ENVIAR (transición a SUBMITTED) integramos los horómetros al avance de
+  // planes de mantenimiento por horas — antes lo hacía el Reporte Diario. Se
+  // corre solo en la transición (no cada guardado) y es tolerante a fallas: si
+  // la integración falla, el envío igual queda guardado.
+  if (input.status === "SUBMITTED" && existing.status !== "SUBMITTED") {
+    try {
+      const integration = await integrateVoyageTankReportHours(session, id);
+      return { ...updated, _integration: integration };
+    } catch (err) {
+      log.error("[voyage-tank] integración de horómetros falló:", err);
+    }
+  }
+
+  return updated;
 }

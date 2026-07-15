@@ -1,6 +1,7 @@
 import React from "react";
 import {
-  LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench, FileText,
+  LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench,
+  // FileText,  // DORMANTE: icono de Reportes Diarios — reactivar junto con la ruta
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
   UsersRound, ScrollText, Gauge, Bot,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
@@ -58,7 +59,12 @@ export const NAV: NavSection[] = [
       // { icon: Waypoints,       labelKey: "nav.failureModes",     path: "/failure-modes" },
       { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
       { icon: Zap,             labelKey: "nav.expressMaintenance", path: "/mantenimiento-express" },
-      { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
+      // DORMANTE — Reportes Diarios: reemplazado por "Medición de Tanques" (M2) a
+      // pedido del usuario. La operación diaria (horómetros, consumos) ahora se
+      // carga en el M2, y sus horómetros avanzan los planes de mantenimiento al
+      // enviarlo. La ruta /daily-reports y su pantalla siguen INTACTAS (accesibles
+      // por link directo / móvil). Reactivar: descomentar la línea de abajo.
+      // { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
       { icon: Fuel,            labelKey: "nav.voyageTankReports", path: "/voyage-tank-reports" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
       { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
