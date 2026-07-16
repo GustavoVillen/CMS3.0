@@ -1034,7 +1034,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
         }).catch(() => {}); // WO might already be closed — ignore
       }
       await api.post(`/app/pms/defects/${defect.id}/close`, {
-        closeNotes: `Reparación permanente completada.`,
+        closeNotes: `Reporte de Defecto cerrado.`,
       });
       onSaved();
     } catch (err) {
