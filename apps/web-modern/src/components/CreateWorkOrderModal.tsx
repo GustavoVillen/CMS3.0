@@ -4,6 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { WO_MAINTENANCE_KINDS } from "../lib/wo-form-catalog";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
 
@@ -70,6 +71,25 @@ const RISK_LEVEL_OPTS: [string, string, string, string][] = [
   ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                    "text-red-600 border-red-600/40"],
 ];
 
+/**
+ * TIPO para los tenants con el formulario REGI-OPE-26.3: los 5 del papel, más
+ * "Inspección" — que el papel no lista pero la empresa usa al crear OT a mano.
+ * Las 5 viajan como `maintenanceKind` (el backend deriva el type grueso);
+ * "Inspección" viaja como `type`, porque no tiene equivalente fino.
+ */
+const WO_KIND_OPTIONS = [
+  ...WO_MAINTENANCE_KINDS,
+  { value: "INSPECTION", label: "Inspección" },
+];
+
+/** Tipo grueso de un prefill (ej. OT correctiva nacida de un defecto) → opción fina. */
+function kindFromType(t?: string): string {
+  if (t === "INSPECTION") return "INSPECTION";
+  // Un correctivo que nace de un defecto es, por definición, no programado.
+  if (t === "CORRECTIVE") return "CORRECTIVO_NO_PROGRAMADO";
+  return "PREVENTIVO";
+}
+
 function TypeBadge({ type }: { type: string }) {
   const t = useT();
   if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
@@ -81,7 +101,8 @@ function TypeBadge({ type }: { type: string }) {
 
 export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, onClose, onSaved }) => {
   const t = useT();
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
   // Solo TENANT_ADMIN puede backdatear la apertura y abrir en nombre de otro.
   const isAdmin = user?.role === "TENANT_ADMIN";
   const today = new Date().toISOString().slice(0, 10);
@@ -98,6 +119,12 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [resolvedAssetName, setResolvedAssetName] = useState(prefill?.assetName ?? null);
   const [type, setType]               = useState(prefill?.type ?? "PREVENTIVE");
+  // Mercurio elige el tipo FINO del REGI-OPE-26.3 (5 opciones) en vez del grueso
+  // (Preventivo/Correctivo/Inspección): es el que dice su formulario. El backend
+  // deriva el grueso desde éste, así MTTR / OT→Defecto / reportes no se enteran.
+  // "Inspección" no está en el papel pero se mantiene: la empresa la usa a mano
+  // (ej. "Inspección subacua del sistema de propulsión").
+  const [maintKind, setMaintKind]     = useState(kindFromType(prefill?.type));
   const [priority, setPriority]       = useState(prefill?.priority ?? "MEDIUM");
   const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
   const [openDate, setOpenDate]       = useState(today);
@@ -349,7 +376,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         const created = await api.post<{ id: string }>("/app/pms/work-orders", {
           vesselCode:         (prefill?.vesselCode ?? vesselCode).trim().toUpperCase(),
           assetId:            prefill?.assetSelectable ? assetId : (prefill?.assetId ?? assetId),
-          type:               prefill?.type    ?? type,
+          // Mercurio manda el tipo fino y el backend deriva el grueso; el resto
+          // sigue mandando el grueso. "Inspección" no tiene fino: va como type.
+          ...(isMercurio
+            ? (maintKind === "INSPECTION"
+                ? { type: "INSPECTION" }
+                : { maintenanceKind: maintKind })
+            : { type: prefill?.type ?? type }),
           priority:           prefill?.priority ?? priority,
           criticality:        prefill?.criticality ?? criticality,
           openDate,
@@ -501,15 +534,23 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <label className={labelCls}>{t("wo.modal.type")}</label>
-                    <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                      <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
-                      <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
-                      <option value="INSPECTION">{t("wo.type.inspection")}</option>
-                    </select>
+                    {isMercurio ? (
+                      <select value={maintKind} onChange={e => setMaintKind(e.target.value)} className={inputCls}>
+                        {WO_KIND_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
+                        <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
+                        <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
+                        <option value="INSPECTION">{t("wo.type.inspection")}</option>
+                      </select>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className={labelCls}>{t("wo.modal.priority")}</label>
-                    <select value={priority} onChange={e => setPriority(e.target.value)} className={inputCls}>
+                    <select value={priority} onChange={e => setPriority(e.target.value)} title={t("priority.hint")} className={inputCls}>
                       <option value="LOW">{t("priority.low")}</option>
                       <option value="MEDIUM">{t("priority.medium")}</option>
                       <option value="HIGH">{t("priority.high")}</option>

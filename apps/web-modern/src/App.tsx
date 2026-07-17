@@ -2,7 +2,7 @@ import React, { Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
-import { I18nProvider, type Locale, type Vocab } from "./lib/i18n";
+import { I18nProvider, type Locale } from "./lib/i18n";
 import { VesselProvider } from "./lib/vessel-context";
 import { EscapeGuardProvider } from "./lib/escape-guard";
 import { NotificationsProvider } from "./lib/notifications";
@@ -60,6 +60,7 @@ const DeferralsPage = React.lazy(() => import("./pages/Deferrals").then(m => ({ 
 // esta línea y las rutas /capa de abajo, + el ítem del Sidebar, + el flag CAPA_AUTO_CREATE.
 // const CapaPage = React.lazy(() => import("./pages/Capa").then(m => ({ default: m.CapaPage })));
 const SpareRequestsPage = React.lazy(() => import("./pages/SpareRequests").then(m => ({ default: m.SpareRequestsPage })));
+const ServiceRequestsPage = React.lazy(() => import("./pages/ServiceRequests").then(m => ({ default: m.ServiceRequestsPage })));
 const SpareReceiptsPage = React.lazy(() => import("./pages/SpareReceipts").then(m => ({ default: m.SpareReceiptsPage })));
 const MonthlyReportsPage = React.lazy(() => import("./pages/MonthlyReports").then(m => ({ default: m.MonthlyReportsPage })));
 const ProvidersPage = React.lazy(() => import("./pages/Providers").then(m => ({ default: m.ProvidersPage })));
@@ -243,6 +244,7 @@ export default function App() {
               <Route path="/certificates"      element={<CertificatesPage />} />
               <Route path="/spares"            element={<SparesPage />} />
               <Route path="/spare-requests"    element={<SpareRequestsPage />} />
+              <Route path="/service-requests"  element={<ServiceRequestsPage />} />
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
               <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><TmsaPage /></RequireRole>} />
@@ -285,10 +287,8 @@ function PlatformLoginRedirect() {
 function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
   const { tenant } = useAuth();
   const locale = (tenant?.locale ?? "es") as Locale;
-  // Mercurio gestiona las OT como "Solicitudes de Servicio" (SS) — vocabulario propio.
-  const vocab: Vocab = tenant?.workOrderPdfTemplate === "MERCURIO" ? "SS" : null;
   return (
-    <I18nProvider locale={locale} vocab={vocab}>
+    <I18nProvider locale={locale}>
       <VesselProvider>
         <NotificationsProvider>
           <EscapeGuardProvider>

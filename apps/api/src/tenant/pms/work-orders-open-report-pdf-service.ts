@@ -83,7 +83,9 @@ export async function buildOpenWorkOrdersReportPdf(
   if (!tenantRow) throw new Error("Tenant not found");
   const tenantId = tenantRow.id;
   const tenantName: string | null = tenantRow.settings?.displayName ?? null;
-  const isMercurio = tenantRow.settings?.workOrderPdfTemplate === "MERCURIO";
+  // "MERCURIO_OT" (REGI-OPE-26.3, vigente) y "MERCURIO" (anterior, conservado
+  // para poder volver atrás) comparten el estilo del documento controlado.
+  const isMercurio = !!tenantRow.settings?.workOrderPdfTemplate?.startsWith("MERCURIO");
   const tenantLogoBuffer = await resolveTenantLogo(
     session.tenantSlug,
     tenantRow.settings?.logoUrl,
@@ -369,7 +371,7 @@ export async function buildOpenWorkOrdersReportPdf(
       y += 12;
       const colW = Math.floor(W / 3);
       const labels = [
-        "Elaborado: Barlovento Servicios Profesionales",
+        "Elaborado: Mercurio Group",
         "Revisado: Asesoría Jurídica",
         "Aprobado: Gerente General",
       ];

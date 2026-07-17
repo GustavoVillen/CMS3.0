@@ -23,13 +23,43 @@ const PASSWORD = process.env.ADMIN_PASSWORD || "Mercurio2026";
 const TZ       = process.env.TZ_NAME || "America/Asuncion";
 const CURRENCY = process.env.CURRENCY || "PYG";
 
+// Cada documento controlado trae SU pie de firmas (literal del papel).
+const WORK_ORDER_FOOTER = {        // REGI-OPE-26.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Persona Designada en Tierra",
+  approvedBy: "Gerente General",
+};
+const SERVICE_REQUEST_FOOTER = {   // REGI-LOG-01.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Asesoria Juridica",
+  approvedBy: "Gerente General",
+};
+
+// Formulario de OT (REGI-OPE-26.3). El orden replica el papel.
+const WORK_ORDER_CONFIG = {
+  sections: [
+    "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
+    "request", "task", "spares", "materials", "schedule", "completion",
+    "pending", "risk", "signatures",
+  ],
+  footer: WORK_ORDER_FOOTER,
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"],
+  distribution: [],
+  communicationMethods: [],
+  purchaseRequest: [],
+  labels: {},
+};
+
+// Formulario de SS (REGI-LOG-01.3). `workOrderRef` es el único agregado al papel:
+// la OT de la que cuelga la SS.
 const SERVICE_REQUEST_CONFIG = {
   sections: [
-    "header", "deptDate", "equipment", "equipAssigned", "description", "causes",
-    "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
-    "comments", "generatedBy", "signatures", "communication", "distribution",
+    "header", "deptDate", "assignedTo", "equipment", "workOrderRef",
+    "description", "causes", "purchaseRequest", "tramitacion", "hojaRuta",
+    "taller", "entregaRecepcion", "comments", "signatures",
+    "communication", "distribution",
   ],
-  footer: { preparedBy: "Departamento Tecnico Mercurio", reviewedBy: "Gerente Mantenimiento", approvedBy: "Gerencia General" },
+  footer: SERVICE_REQUEST_FOOTER,
   departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
   distribution: ["JMA", "CAP"],
   communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
@@ -57,8 +87,8 @@ async function main() {
 
   // 2) Formularios controlados
   const forms = [
-    { type: "WORK_ORDER", data: { style: "MERCURIO", formCode: "REGI-MAN-02.4", title: "Orden Interna de Trabajo", revision: 2, effectiveFrom: "01.05.2025", codePattern: null } },
-    { type: "SERVICE_REQUEST", data: { style: "MERCURIO", formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png", codePattern: "SS-{seq:0000}-{vesselShort}-{year}", config: SERVICE_REQUEST_CONFIG } },
+    { type: "WORK_ORDER", data: { style: "MERCURIO", formCode: "REGI-OPE-26.3", title: "Orden de trabajo", revision: 0, effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG } },
+    { type: "SERVICE_REQUEST", data: { style: "MERCURIO", formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png", codePattern: null, config: SERVICE_REQUEST_CONFIG } },
   ];
   for (const f of forms) {
     const row = await (prisma as any).tenantForm.upsert({

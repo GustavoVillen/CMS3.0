@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { CopyLinkButton } from "../components/CopyLinkButton";
+import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { useDeepLink } from "../lib/deep-link";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -39,6 +41,37 @@ const PTW_STATUS_COLOR: Record<string, string> = {
   CLOSED: "bg-success-sea/10 text-success-sea border-success-sea/20",
   CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
+
+// ── Solicitudes de Servicio (SS) vinculadas ──
+// Una SS es el pedido de un servicio externo (un taller) que cuelga de una OT
+// abierta. No es un sinónimo de OT: es una entidad aparte con su propio flujo.
+// Sólo se puede abrir mientras la OT esté viva (no diferida/cerrada/cancelada).
+const WO_OPEN_STATUSES_FOR_SS = ["PLANNED", "IN_PROGRESS", "ON_HOLD"];
+
+const SS_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador", SOLICITADA: "Solicitada", APROBADA: "Aprobada",
+  AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
+  REJECTED: "Rechazada", CANCELLED: "Cancelada",
+};
+const SS_STATUS_COLOR: Record<string, string> = {
+  DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
+  SOLICITADA: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  APROBADA: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  AUTORIZADA: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20",
+  IN_PROGRESS: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+  COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/20",
+  REJECTED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
+};
+
+interface LinkedServiceRequest {
+  id: string;
+  serviceRequestCode: string;
+  status: string;
+  title: string | null;
+  description: string | null;
+  openDate: string;
+}
 
 interface LinkedPermit {
   id: string;
@@ -110,6 +143,14 @@ interface WorkOrder {
   checklistDocUrl: string | null;
   consequenceCategory: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale: string | null;
+  // Formulario controlado REGI-OPE-26.3 (nullable: las OT anteriores no lo tienen)
+  voyageNumber?: string | null;
+  requestedByArea?: string | null;
+  assignedToArea?: string | null;
+  systemArea?: string | null;
+  maintenanceKind?: string | null;
+  taskCompleted?: boolean | null;
+  pendingDetail?: string | null;
   // Result fields
   woResult: string | null;
   executedByName: string | null;
@@ -706,6 +747,55 @@ const ProgressNotesPanel: React.FC<{
   );
 };
 
+/**
+ * Nueva SS desde la OT. Lo único que hay que escribir es qué servicio se le pide
+ * al taller: el resto lo hereda el backend de la OT (buque, equipo, causas…).
+ */
+const NewServiceRequestModal: React.FC<{
+  defaultValue: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (servicio: string) => Promise<void>;
+}> = ({ defaultValue, busy, onClose, onConfirm }) => {
+  const [servicio, setServicio] = useState(defaultValue);
+  const [error, setError] = useState<string | null>(null);
+
+  const confirmar = async () => {
+    if (!servicio.trim()) { setError("Escribí qué servicio se solicita."); return; }
+    setError(null);
+    try { await onConfirm(servicio.trim()); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo crear la solicitud de servicio."); }
+  };
+
+  return (
+    <FormModal
+      title="Nueva solicitud de servicio"
+      subtitle="Se hereda el resto de los datos de esta orden de trabajo"
+      onClose={onClose}
+      error={error}
+      footer={
+        <>
+          <button type="button" onClick={onClose}
+            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] text-text-industrial/60">
+            Cancelar
+          </button>
+          <button type="button" onClick={() => { void confirmar(); }} disabled={busy}
+            className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold disabled:opacity-50">
+            {busy ? "Creando…" : "Crear SS"}
+          </button>
+        </>
+      }
+    >
+      <div>
+        <label className={labelCls}>¿Qué servicio se solicita al taller externo?</label>
+        <textarea className={inputCls + " min-h-[72px] resize-y"} value={servicio} autoFocus
+          onChange={e => setServicio(e.target.value)}
+          placeholder="Ej. Reparación del servo timón de babor" />
+      </div>
+    </FormModal>
+  );
+};
+
 // ── WorkOrderModal ────────────────────────────────────────────────────────────
 
 interface WorkOrderModalProps {
@@ -723,7 +813,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const woTerms = useWoTerms();
   const navigate = useNavigate();
   const { tenant, user } = useAuth();
-  const isMercurio = tenant?.workOrderPdfTemplate === "MERCURIO";
+  // Tenants con el formulario controlado de Mercurio. "MERCURIO_OT" es el
+  // formulario vigente (REGI-OPE-26.3) y "MERCURIO" el anterior, que se
+  // conserva para poder volver atrás: los dos usan estos campos.
+  const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
 
@@ -769,16 +862,63 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [commMethod, setCommMethod]         = useState<string[]>(workOrder.communicationMethod ?? []);
   const [distribution, setDistribution]     = useState<string[]>(workOrder.distribution ?? []);
 
-  // Lista de proveedores del buque, para cuando el área es PROVEEDOR.
-  const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
+  // Prioridad de la OT. En el formulario REGI-OPE-26.3 se elige por plazo
+  // (Inmediato / 24hs / Semana / Mes) — es el mismo dato con otro nombre.
+  const [priority, setPriority] = useState<string>(workOrder.priority ?? "MEDIUM");
+
+  // ── Formulario controlado REGI-OPE-26.3 ──
+  // Nullable en la base: las OT anteriores al formulario abren con los recuadros
+  // vacíos y siguen siendo válidas.
+  const [regiForm, setRegiForm] = useState<WoRegiForm>({
+    voyageNumber:    workOrder.voyageNumber ?? "",
+    requestedByArea: workOrder.requestedByArea ?? "",
+    assignedToArea:  workOrder.assignedToArea ?? "",
+    systemArea:      workOrder.systemArea ?? "",
+    maintenanceKind: workOrder.maintenanceKind ?? "",
+    pendingDetail:   workOrder.pendingDetail ?? "",
+    taskCompleted:   workOrder.taskCompleted === true ? "YES" : workOrder.taskCompleted === false ? "NO" : "",
+  });
+  const [plannedItems, setPlannedItems] = useState<WoPlannedItem[]>([]);
+  const { data: plannedItemsData, reload: reloadPlannedItems } = useFetch<{ items: WoPlannedItem[] }>(
+    isMercurio ? `/app/pms/work-orders/${workOrder.id}/items` : null,
+    [workOrder.id],
+  );
   useEffect(() => {
-    if (department !== "PROVEEDOR" || providers.length > 0) return;
+    if (!plannedItemsData?.items) return;
+    // La recarga trae la verdad del servidor, pero NO debe pisar las filas que el
+    // usuario está cargando: "+ Agregar" crea una fila vacía que todavía no se
+    // guardó (sin descripción no se persiste), y sin esto la recarga posterior al
+    // auto-guardado la hacía desaparecer al segundo de aparecer.
+    setPlannedItems(prev => {
+      const enCurso = prev.filter(i => !i.id && !i.description.trim());
+      return [...plannedItemsData.items, ...enCurso];
+    });
+  }, [plannedItemsData]);
+
+  // Estado del auto-guardado del bloque REGI-OPE-26.3 (ver saveRegiBlock).
+  const [regiSaving, setRegiSaving] = useState(false);
+  const [regiSaved, setRegiSaved] = useState(false);
+  const [regiErr, setRegiErr] = useState<string | null>(null);
+  /** Se marca en los onChange del bloque: distingue edición del usuario de carga inicial. */
+  const regiTouched = useRef(false);
+  const regiSavedSnapshotRef = useRef<string | null>(null);
+  const touchRegi = useCallback(() => { regiTouched.current = true; }, []);
+
+  // Talleres del buque. Se piden cuando el trabajo se le da a un tercero:
+  // "Asignado a: Tercerizado" en el formulario REGI-OPE-26.3, o el área
+  // PROVEEDOR en los tenants que siguen con el formulario anterior.
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
+  // Empresa tercerizada fuera del catálogo (alternativa a providerId).
+  const [providerOther, setProviderOther] = useState((workOrder as any).providerOther ?? "");
+  const needsProvider = department === "PROVEEDOR" || regiForm.assignedToArea === "TERCERIZADO";
+  useEffect(() => {
+    if (!needsProvider || providers.length > 0) return;
     let cancelled = false;
     api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?vesselCode=${encodeURIComponent(workOrder.vesselCode)}&status=ACTIVE`)
       .then(r => { if (!cancelled) setProviders(r.items ?? []); })
       .catch(() => { if (!cancelled) setProviders([]); });
     return () => { cancelled = true; };
-  }, [department, providers.length, workOrder.vesselCode]);
+  }, [needsProvider, providers.length, workOrder.vesselCode]);
 
   function toggleArr(arr: string[], set: (v: string[]) => void, val: string) {
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
@@ -1151,6 +1291,38 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     description: title || description || workOrder.title || workOrder.description || "",
   }), [workOrder, title, description, advisoryMatches]);
 
+  // ── Solicitudes de Servicio (SS) de esta OT ──
+  // Una SS es el pedido de un servicio externo (un taller) y sólo puede abrirse
+  // desde una OT abierta — de ahí que el botón dependa del estado de la OT.
+  const { data: linkedSrData, reload: reloadServiceRequests } = useFetch<{ items: LinkedServiceRequest[] }>(
+    `/app/pms/work-orders/${workOrder.id}/service-requests`,
+    [workOrder.id],
+  );
+  const linkedServiceRequests = linkedSrData?.items ?? [];
+  // Abierta Y autorizada: pedirle un servicio a un taller compromete gasto, así
+  // que la OT tiene que estar autorizada primero (el backend valida igual).
+  const canOpenServiceRequest =
+    WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status) && !!workOrder.autorizadoAt;
+  const [creatingSr, setCreatingSr] = useState(false);
+  const [newSrOpen, setNewSrOpen] = useState(false);
+  // Lo único que no se puede heredar: qué servicio se le pide al tercero. El
+  // resto (buque, equipo, departamento, causas, taller) lo completa el backend
+  // desde la OT — ver createServiceRequestForWorkOrder.
+  const handleCreateServiceRequest = useCallback(async (servicio: string) => {
+    setCreatingSr(true);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/service-requests`, {
+        title: servicio,
+        description: servicio,
+        priority: workOrder.priority,
+      });
+      reloadServiceRequests();
+      setNewSrOpen(false);
+    } finally {
+      setCreatingSr(false);
+    }
+  }, [workOrder, reloadServiceRequests]);
+
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const handleGeneratePdf = useCallback(async () => {
     setGeneratingPdf(true);
@@ -1178,25 +1350,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [isEditable, workOrder, title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
 
-  const [generatingSr, setGeneratingSr] = useState(false);
-  const handleGenerateServiceRequest = useCallback(async () => {
-    setGeneratingSr(true);
-    try {
-      if (isEditable) {
-        try {
-          await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
-            title: normalizeOptionalText(title),
-            description: normalizeOptionalText(description),
-            assignedToUserId: normalizeOptionalText(assignedTo),
-          });
-        } catch { /* non-blocking — still try to print */ }
-      }
-      await printServiceRequest(workOrder);
-    } finally {
-      setGeneratingSr(false);
-    }
-  }, [isEditable, workOrder, title, description, assignedTo]);
-
   // ── Exportación a Word (.doc) ──
   const [generatingDoc, setGeneratingDoc] = useState(false);
   const handleGenerateDoc = useCallback(async () => {
@@ -1207,18 +1360,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       setGeneratingDoc(false);
     }
   }, [workOrder.id, workOrder.workOrderCode]);
-
-  const [generatingSrDoc, setGeneratingSrDoc] = useState(false);
-  const handleGenerateServiceRequestDoc = useCallback(async () => {
-    setGeneratingSrDoc(true);
-    try {
-      // Nombre: "{codigo}-{titulo}" (ej. SS-M01-26-0357-Cambio de rodamientos sellados).
-      const t = (workOrder.title ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
-      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/service-request.doc`, `${workOrder.workOrderCode}${t ? `-${t}` : ""}`);
-    } finally {
-      setGeneratingSrDoc(false);
-    }
-  }, [workOrder.id, workOrder.workOrderCode, workOrder.title]);
 
   // Cambio de TIPO (Preventivo/Correctivo/Inspección): auto-guardado inmediato
   // por endpoint dedicado (permiso amplio, cualquier usuario no-auditor), sin
@@ -1293,6 +1434,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       dueDate: dueDate || null,
       openDate: openDate || undefined,
       type,
+      priority: priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
       acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
       loto,
       riskLevel: normalizeOptionalText(riskLevel),
@@ -1300,10 +1442,24 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       consequenceCategory: consequenceCategory || null,
       consequenceRationale: normalizeOptionalText(consequenceRationale),
       department: (department as any) || null,
-      providerId: department === "PROVEEDOR" ? (providerId || null) : null,
+      // El taller se guarda si el trabajo se terceriza — sea por el formulario
+      // nuevo ("Asignado a: Tercerizado") o por el área PROVEEDOR del anterior.
+      providerId: needsProvider ? (providerId || null) : null,
+      providerOther: needsProvider ? normalizeOptionalText(providerOther) : null,
       location: normalizeOptionalText(location),
       communicationMethod: commMethod,
       distribution,
+      // Formulario REGI-OPE-26.3. Sólo se manda en los tenants que lo usan;
+      // en el resto los campos no existen en el modal y quedarían en null.
+      ...(isMercurio ? {
+        voyageNumber: normalizeOptionalText(regiForm.voyageNumber),
+        requestedByArea: regiForm.requestedByArea || null,
+        assignedToArea: regiForm.assignedToArea || null,
+        systemArea: regiForm.systemArea || null,
+        maintenanceKind: regiForm.maintenanceKind || null,
+        pendingDetail: normalizeOptionalText(regiForm.pendingDetail),
+        taskCompleted: regiForm.taskCompleted === "YES" ? true : regiForm.taskCompleted === "NO" ? false : null,
+      } : {}),
       checklistDocUrl: chkUrl,
       woResult: normalizeOptionalText(woResult),
       executedByName: normalizeOptionalText(executedByName),
@@ -1314,9 +1470,100 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       supportingDocUrl: supUrl,
       spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
     });
-  }, [title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+
+    // Repuestos/materiales del formulario: se sincronizan aparte (tabla hija).
+    // Los que ya existen se dejan como están; se crean los nuevos y se borran
+    // los que el usuario quitó.
+    if (isMercurio) {
+      const base = `/app/pms/work-orders/${workOrder.id}/items`;
+      const kept = new Set(plannedItems.map(i => i.id).filter(Boolean) as string[]);
+      const original = plannedItemsData?.items ?? [];
+      await Promise.all([
+        ...original.filter(o => o.id && !kept.has(o.id)).map(o => api.delete(`${base}/${o.id}`)),
+        ...plannedItems.filter(i => !i.id && i.description.trim()).map(i =>
+          api.post(base, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+        ...plannedItems.filter(i => i.id && i.description.trim()).map(i =>
+          api.patch(`${base}/${i.id}`, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+      ]);
+    }
+  }, [title, description, assignedTo, dueDate, openDate, type, priority, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, department, providerId, location, commMethod, distribution,
-      woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations, spareUsages, workOrder.id]);
+      woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations, spareUsages,
+      isMercurio, needsProvider, regiForm, plannedItems, plannedItemsData, workOrder.id]);
+
+  // ── Auto-guardado del formulario REGI-OPE-26.3 ────────────────────────────
+  // El bloque son casi todos tildes: obligar a acordarse del botón "Guardar" es
+  // una invitación a perder el dato. Peor: el dirty-tracker de abajo NO mira
+  // estos campos, así que al salir se perdían EN SILENCIO, sin siquiera avisar.
+  //
+  // El patch es acotado a los campos del bloque a propósito: tildar "Preventivo"
+  // no debe arrastrar al servidor un título a medio tipear del resto del modal.
+  const saveRegiBlock = useCallback(async () => {
+    setRegiSaving(true); setRegiErr(null);
+    try {
+      await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
+        priority: priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+        location: normalizeOptionalText(location),
+        providerId: needsProvider ? (providerId || null) : null,
+        providerOther: needsProvider ? normalizeOptionalText(providerOther) : null,
+        voyageNumber: normalizeOptionalText(regiForm.voyageNumber),
+        requestedByArea: regiForm.requestedByArea || null,
+        assignedToArea: regiForm.assignedToArea || null,
+        systemArea: regiForm.systemArea || null,
+        maintenanceKind: regiForm.maintenanceKind || null,
+        pendingDetail: normalizeOptionalText(regiForm.pendingDetail),
+        taskCompleted: regiForm.taskCompleted === "YES" ? true : regiForm.taskCompleted === "NO" ? false : null,
+      });
+      // Repuestos/materiales viven en una tabla hija: crear los nuevos, borrar
+      // los quitados, actualizar los que quedaron.
+      const base = `/app/pms/work-orders/${workOrder.id}/items`;
+      const kept = new Set(plannedItems.map(i => i.id).filter(Boolean) as string[]);
+      const original = plannedItemsData?.items ?? [];
+      await Promise.all([
+        ...original.filter(o => o.id && !kept.has(o.id)).map(o => api.delete(`${base}/${o.id}`)),
+        ...plannedItems.filter(i => !i.id && i.description.trim()).map(i =>
+          api.post(base, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+        ...plannedItems.filter(i => i.id && i.description.trim()).map(i =>
+          api.patch(`${base}/${i.id}`, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+      ]);
+      // Recuperar los ids de los ítems recién creados: sin esto, el próximo
+      // auto-guardado los volvería a crear (duplicados).
+      reloadPlannedItems();
+      setRegiSaved(true);
+      window.setTimeout(() => setRegiSaved(false), 2000);
+      onReload();
+    } catch (e) {
+      setRegiErr(e instanceof ApiError ? e.message : t("common.saveError"));
+    } finally {
+      setRegiSaving(false);
+    }
+  }, [workOrder.id, priority, location, providerId, providerOther, needsProvider, regiForm, plannedItems,
+      plannedItemsData, reloadPlannedItems, onReload, t]);
+
+  // Huella de lo que edita el bloque. Los ids de los ítems quedan FUERA: al
+  // recargarlos tras guardar, la huella no cambia y el efecto no se redispara.
+  const regiSnapshot = JSON.stringify({
+    regiForm, priority, location, providerId, providerOther,
+    // Sólo los ítems que REALMENTE se persisten: una fila recién agregada, sin
+    // descripción, no se guarda — y por lo tanto tampoco debe disparar un
+    // guardado (que además recargaría la lista y le borraría la fila al usuario).
+    items: plannedItems
+      .filter(i => i.description.trim())
+      .map(i => ({ kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+  });
+
+  useEffect(() => {
+    // Sólo tras una edición real del usuario: si no, el efecto dispararía un
+    // guardado apenas terminan de cargar los ítems del servidor.
+    if (!regiTouched.current) return;
+    if (!isMercurio || !isEditable) return;
+    if (regiSavedSnapshotRef.current === regiSnapshot) return; // ya guardado
+    const id = window.setTimeout(() => {
+      regiSavedSnapshotRef.current = regiSnapshot;
+      void saveRegiBlock();
+    }, 700); // deja terminar de tipear antes de mandar
+    return () => window.clearTimeout(id);
+  }, [regiSnapshot, isMercurio, isEditable, saveRegiBlock]);
 
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
@@ -1566,7 +1813,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       </select>
                     : <CategoryBadge key="cat" type={type} />],
                 [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
-                [t("wo.modal.priority"),   workOrder.priority,              "text-fg"],
+                // Lee del estado (no de workOrder) para reflejar en el acto el
+                // cambio hecho en el recuadro PRIORIDAD del formulario.
+                [t("wo.modal.priority"),   priority,                        "text-fg"],
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
                 [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
                   (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
@@ -1680,6 +1929,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>{/* end mt-3 */}
           </section>
 
+          {/* ── Formulario controlado REGI-OPE-26.3 (solo tenants con el form de Mercurio) ── */}
+          {isMercurio && (
+            <WoRegiSections
+              form={regiForm}
+              onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
+              items={plannedItems}
+              onItemsChange={v => { touchRegi(); setPlannedItems(v); }}
+              priority={priority}
+              onPriorityChange={v => { touchRegi(); setPriority(v); }}
+              disabled={!isEditable}
+              providers={providers}
+              providerId={providerId}
+              onProviderChange={v => { touchRegi(); setProviderId(v); }}
+              providerOther={providerOther}
+              onProviderOtherChange={v => { touchRegi(); setProviderOther(v); }}
+              location={location}
+              onLocationChange={v => { touchRegi(); setLocation(v); }}
+              saving={regiSaving}
+              saved={regiSaved}
+              error={regiErr}
+            />
+          )}
+
           {/* ── 2. PLAN ── */}
           <section className="space-y-4">
             <PhaseHeader
@@ -1693,40 +1965,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               hint={fromPlan ? t("wo.modal.planFromPlanHint") : undefined}
             />
 
-            {/* ── Área / responsable (+ Ubicación en Mercurio) ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.department")}</label>
-                <div className="flex flex-wrap gap-2">
-                  {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
-                    <button key={d} type="button" disabled={!isEditable}
-                      onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderId(""); }}
-                      className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
-                        department === d
-                          ? "bg-accent text-accent-fg border-accent"
-                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                      }`}
-                    >{t(`wo.dept.${d}`)}</button>
-                  ))}
-                </div>
-                {department === "PROVEEDOR" && (
-                  <select value={providerId} onChange={e => setProviderId(e.target.value)} disabled={!isEditable}
-                    className={`${inputCls} mt-1`}>
-                    <option value="">{t("wo.modal.providerSelect")}</option>
-                    {providers.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              {isMercurio && (
+            {/* ── Área / responsable ── */}
+            {/* En los tenants con el formulario REGI-OPE-26.3 esto vive arriba,
+                en el bloque del formulario: el área son los recuadros del papel
+                (Solicitado por / Asignado a / Sistema) y la ubicación va en su
+                cabecera. Repetirlos acá confundía. El taller se elige junto a
+                "Asignado a: Tercerizado". */}
+            {!isMercurio && (
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.location")}</label>
-                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable}
-                    className={inputCls} placeholder={t("wo.modal.locationPlaceholder")} />
+                  <label className={labelCls}>{t("wo.modal.department")}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
+                      <button key={d} type="button" disabled={!isEditable}
+                        onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderId(""); }}
+                        className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
+                          department === d
+                            ? "bg-accent text-accent-fg border-accent"
+                            : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
+                        }`}
+                      >{t(`wo.dept.${d}`)}</button>
+                    ))}
+                  </div>
+                  {department === "PROVEEDOR" && (
+                    <select value={providerId} onChange={e => setProviderId(e.target.value)} disabled={!isEditable}
+                      className={`${inputCls} mt-1`}>
+                      <option value="">{t("wo.modal.providerSelect")}</option>
+                      {providers.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>
@@ -1928,6 +2200,79 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </section>
 
+          {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
+          {/* Una SS es el pedido de un servicio externo (un taller). Sólo se abre
+              desde una OT abierta, por eso el botón depende del estado de la OT. */}
+          <section className="space-y-3">
+            <PhaseHeader
+              n={5}
+              label="Solicitudes de Servicio"
+              dotCls="bg-cyan-500/15 text-cyan-700 dark:text-cyan-400"
+              borderCls="border-cyan-500/25"
+              action={canOpenServiceRequest ? (
+                <button
+                  type="button"
+                  onClick={() => setNewSrOpen(true)}
+                  disabled={creatingSr}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50"
+                >
+                  {creatingSr ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Nueva SS
+                </button>
+              ) : undefined}
+            />
+
+            {newSrOpen && (
+              <NewServiceRequestModal
+                busy={creatingSr}
+                defaultValue={title || workOrder.title || ""}
+                onClose={() => setNewSrOpen(false)}
+                onConfirm={handleCreateServiceRequest}
+              />
+            )}
+
+            {/* Recuadro propio (mismo trato que "Tarea concluida"): contratar un
+                taller externo es una decisión de peso y no debe leerse como una
+                nota al pie entre secciones. */}
+            <div className="space-y-2 bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
+
+            {/* El porqué se muestra SIEMPRE que no se pueda abrir una SS, haya o
+                no SS previas: sin esto, la ausencia del botón no se explica sola.
+                Se distingue el motivo: "todavía no autorizada" se resuelve
+                autorizando; "cerrada" ya no tiene vuelta. */}
+            {!canOpenServiceRequest && (
+              <p className="text-[11px] text-text-industrial/50 italic">
+                {WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status)
+                  ? `Para solicitar un servicio externo, la ${woTerms.abbr} tiene que estar autorizada. Hoy está ${tramitaPhase === "APROBADA" ? "aprobada, falta autorizarla" : "solicitada, falta aprobarla y autorizarla"}.`
+                  : `Una solicitud de servicio sólo puede abrirse mientras la ${woTerms.abbr} esté abierta.`}
+              </p>
+            )}
+
+            {linkedServiceRequests.length === 0 && canOpenServiceRequest && (
+              <p className="text-[11px] text-text-industrial/50 italic">
+                Sin solicitudes de servicio. Creá una si este trabajo necesita un taller externo.
+              </p>
+            )}
+
+            {linkedServiceRequests.length > 0 && (
+              <div className="space-y-2">
+                {linkedServiceRequests.map(sr => (
+                  <Link
+                    key={sr.id}
+                    to={`/service-requests?openId=${sr.id}`}
+                    className="flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
+                  >
+                    <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
+                    <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
+                      {SS_STATUS_LABEL[sr.status] ?? sr.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            </div>
+          </section>
+
           {/* ── Tramitación gate: 5 (Avances) y 6 (Resultado) solo con OT AUTORIZADA ── */}
           <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isAuthorized ? "opacity-70" : ""}`}>
           {!isAuthorized && (
@@ -1939,7 +2284,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── 5. AVANCES ── */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
-              <PhaseHeader n={5} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
+              <PhaseHeader n={6} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
                 canAdd={isResultEditable}
@@ -1952,9 +2297,23 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── 6. RESULTADO ── */}
+          {/* ── 7. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
+              Se completa al terminar el trabajo: va después de los avances y
+              antes del resultado. Sección propia porque en el papel también lo es. */}
+          {isMercurio && (
+            <section className="space-y-3">
+              <PhaseHeader n={7} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
+              <WoRegiClosure
+                form={regiForm}
+                onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
+                disabled={!isResultEditable}
+              />
+            </section>
+          )}
+
+          {/* ── RESULTADO (8 con el formulario de Mercurio, que suma "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 8 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             <div className="space-y-1.5">
@@ -2286,18 +2645,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateDoc")}
             </button>
-            {isMercurio && (
-              <button onClick={() => { void handleGenerateServiceRequest(); }} disabled={generatingSr}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
-                {generatingSr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequest")}
-              </button>
-            )}
-            {isMercurio && (
-              <button onClick={() => { void handleGenerateServiceRequestDoc(); }} disabled={generatingSrDoc}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
-                {generatingSrDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateServiceRequestDoc")}
-              </button>
-            )}
             {workOrder.status === "ON_HOLD" && (
               <button onClick={() => { void handleResume(); }} disabled={resuming}
                 className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5">

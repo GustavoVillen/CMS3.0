@@ -41,6 +41,16 @@ import {
   setWorkOrderApproval,
 } from "../work-orders/work-orders-service";
 import {
+  createServiceRequestForWorkOrder,
+  listWorkOrderServiceRequests,
+} from "../service-requests/service-requests-service";
+import {
+  createWorkOrderItem,
+  deleteWorkOrderItem,
+  listWorkOrderItems,
+  updateWorkOrderItem,
+} from "../work-orders/work-order-items-service";
+import {
   createProgressNote,
   listProgressNotes,
   updateProgressNote,
@@ -61,7 +71,7 @@ import {
 import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
 import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
-import { buildWorkOrderPdf, buildServiceRequestPdf, buildWorkOrderDoc, buildServiceRequestDoc } from "./work-order-pdf-service";
+import { buildWorkOrderPdf, buildWorkOrderDoc } from "./work-order-pdf-service";
 import { serveDoc } from "./doc-export";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildDueSoonPlansXlsx } from "./maintenance-plans-due-excel-service";
@@ -403,6 +413,53 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  // ── Solicitudes de Servicio (SS) de esta OT ────────────────────────────────
+  // Este POST es la ÚNICA forma de crear una SS: no existe `POST /app/pms/
+  // service-requests`. Así la regla "una SS sólo se abre desde una OT abierta"
+  // no se puede saltear (el service valida además que la OT esté abierta).
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/service-requests$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const items = await listWorkOrderServiceRequests(session, id);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/service-requests$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof createServiceRequestForWorkOrder>[2];
+    sendJson(response, 201, await createServiceRequestForWorkOrder(session, id, body));
+    return true;
+  }
+
+  // ── REPUESTOS / MATERIALES planificados (recuadros del formulario) ─────────
+  if (/^\/app\/pms\/work-orders\/[^/]+\/items$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      const items = await listWorkOrderItems(session, id);
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof createWorkOrderItem>[2];
+      sendJson(response, 201, await createWorkOrderItem(session, id, body));
+      return true;
+    }
+  }
+
+  if (/^\/app\/pms\/work-orders\/[^/]+\/items\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const itemId = url.pathname.split("/")[6]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateWorkOrderItem>[3];
+      sendJson(response, 200, await updateWorkOrderItem(session, id, itemId, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      sendJson(response, 200, await deleteWorkOrderItem(session, id, itemId));
+      return true;
+    }
+  }
+
   // ── Progress notes (avances de trabajo): TEXT, PHOTO, VIDEO, AUDIO ──────────
   if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
@@ -505,35 +562,12 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
-  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/service-request\.pdf$/.test(url.pathname)) {
-    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
-    const id = url.pathname.split("/")[4]!;
-    const wo = await getTenantWorkOrder(session, id);
-    const filename = `Solicitud-Servicios-${wo.workOrderCode}.pdf`;
-    const buffer = await buildServiceRequestPdf(session, id);
-    response.writeHead(200, {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": buffer.length,
-    });
-    response.end(buffer);
-    return true;
-  }
-
   // ── Variantes .doc (Word) — espejo de las rutas .pdf ──
   if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/doc$/.test(url.pathname)) {
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
     const wo = await getTenantWorkOrder(session, id);
     serveDoc(response, await buildWorkOrderDoc(session, id), wo.workOrderCode);
-    return true;
-  }
-
-  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/service-request\.doc$/.test(url.pathname)) {
-    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
-    const id = url.pathname.split("/")[4]!;
-    const wo = await getTenantWorkOrder(session, id);
-    serveDoc(response, await buildServiceRequestDoc(session, id), `Solicitud-Servicios-${wo.workOrderCode}`);
     return true;
   }
 

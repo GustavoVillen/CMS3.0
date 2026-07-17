@@ -45,20 +45,38 @@ interface FormDefaults {
   config: FormConfig;
 }
 
-// Footer Mercurio actual (hoy hardcodeado en template-mercurio.ts).
+// Footer Mercurio genérico (fallback para formularios sin uno propio).
 const MERCURIO_FOOTER: FormFooterDefaults = {
   preparedBy: "Departamento Tecnico Mercurio",
   reviewedBy: "Gerente Mantenimiento",
   approvedBy: "Gerencia General",
 };
 
+// Cada documento controlado trae SU pie de firmas — no son intercambiables.
+// Literal de los formularios del cliente.
+const WORK_ORDER_FOOTER: FormFooterDefaults = {        // REGI-OPE-26.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Persona Designada en Tierra",
+  approvedBy: "Gerente General",
+};
+const SERVICE_REQUEST_FOOTER: FormFooterDefaults = {   // REGI-LOG-01.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Asesoria Juridica",
+  approvedBy: "Gerente General",
+};
+
+// Orden e identificadores replican el papel REGI-LOG-01.3 (ver SS-74-M01-2026).
+// `workOrderRef` es el único agregado: imprime la OT de la que cuelga la SS —
+// toda SS nace de una OT y sin el número no se puede rastrear el servicio.
 const SERVICE_REQUEST_CONFIG: FormConfig = {
   sections: [
-    "header", "deptDate", "equipment", "equipAssigned", "description", "causes",
-    "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
-    "comments", "generatedBy", "signatures", "communication", "distribution",
+    "header", "deptDate", "assignedTo", "equipment", "workOrderRef",
+    "description", "causes", "purchaseRequest", "tramitacion", "hojaRuta",
+    "taller", "entregaRecepcion", "comments", "signatures",
+    "communication", "distribution",
   ],
-  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"],
+  // Recuadro ASIGNADO A del papel. PROVEEDOR no está en el formulario impreso.
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
   distribution: ["GGE", "PDT", "JTE", "JOP", "JRH", "JVE", "JCO", "JSE", "JUR", "ADM", "CAP", "JMA"],
   communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
   purchaseRequest: ["NORMAL", "AFECTA SEGURIDAD", "AFECTA SERVICIO"],
@@ -69,17 +87,38 @@ const EMPTY_CONFIG: FormConfig = {
   sections: [], departments: [], distribution: [], communicationMethods: [], purchaseRequest: [], labels: {},
 };
 
+// Formulario de OT REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025).
+// El orden de `sections` replica el papel. Las listas de opciones de los
+// recuadros (SOLICITADO POR / ASIGNADO A / TIPO / SISTEMA / autorizaciones)
+// son enums del schema, no config: cambiarlas es un cambio de dominio.
+// `departments` acá es la lista del recuadro DEPARTAMENTO del encabezado.
+const WORK_ORDER_CONFIG: FormConfig = {
+  sections: [
+    "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
+    "request", "task", "spares", "materials", "schedule", "completion",
+    "pending", "risk", "signatures", "riskAnnex",
+  ],
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"],
+  distribution: [],
+  communicationMethods: [],
+  purchaseRequest: [],
+  labels: {},
+};
+
 // Defaults por tipo (replican el comportamiento Mercurio actual).
 const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
+  // Hasta jul-2026 este default apuntaba a REGI-LOG-01.3 "Solicitud de
+  // Servicios" — el formulario de la SS, no el de la OT. Era el mismo
+  // malentendido OT=SS: son dos documentos distintos del cliente.
   WORK_ORDER: {
     style: "MERCURIO",
-    formCode: "REGI-LOG-01.3",
-    title: "Solicitud de Servicios",
-    revision: 2,
-    effectiveFrom: "01.05.2025",
+    formCode: "REGI-OPE-26.3",
+    title: "Orden de trabajo",
+    revision: 0,
+    effectiveFrom: "29.12.2025",
     codePattern: null, // usa el workOrderCode existente
-    footer: MERCURIO_FOOTER,
-    config: EMPTY_CONFIG,
+    footer: WORK_ORDER_FOOTER,
+    config: WORK_ORDER_CONFIG,
   },
   SERVICE_REQUEST: {
     style: "MERCURIO",
@@ -87,8 +126,11 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     title: "Solicitud de servicios",
     revision: 2,
     effectiveFrom: "01.05.2025",
-    codePattern: "SS-{seq:0000}-{vesselShort}-{year}",
-    footer: MERCURIO_FOOTER,
+    // El código lo genera el service al crear la SS, con el formato del papel
+    // (SS-<seq>-<BUQUE>-<AÑO>, correlativo por buque y año). Este patrón emitía
+    // un número distinto al imprimir y con otro padding (SS-0074-M01-2026).
+    codePattern: null,
+    footer: SERVICE_REQUEST_FOOTER,
     config: SERVICE_REQUEST_CONFIG,
   },
   // El Plan de mantenimiento no emite correlativo propio: el "PM No." es el

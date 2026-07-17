@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench,
   // FileText,  // DORMANTE: icono de Reportes Diarios — reactivar junto con la ruta
   AlertTriangle, Clock, ShieldCheck, Package, Truck,
-  UsersRound, ScrollText, Gauge, Bot,
+  UsersRound, ScrollText, Gauge, Bot, Handshake,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange, Fuel,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
@@ -58,6 +58,9 @@ export const NAV: NavSection[] = [
       // import de `Waypoints`. Backend, página, tabla e i18n siguen intactos.
       // { icon: Waypoints,       labelKey: "nav.failureModes",     path: "/failure-modes" },
       { icon: Wrench,          labelKey: "nav.workOrders",       path: "/work-orders" },
+      // Va pegado a Órdenes de Trabajo porque cuelga de ellas: una SS sólo se
+      // abre desde una OT abierta. Esta pantalla es la vista de seguimiento.
+      { icon: Handshake,       labelKey: "nav.serviceRequests",  path: "/service-requests" },
       { icon: Zap,             labelKey: "nav.expressMaintenance", path: "/mantenimiento-express" },
       // DORMANTE — Reportes Diarios: reemplazado por "Medición de Tanques" (M2) a
       // pedido del usuario. La operación diaria (horómetros, consumos) ahora se

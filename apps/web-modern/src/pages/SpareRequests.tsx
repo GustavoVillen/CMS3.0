@@ -521,7 +521,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Prioridad</label>
-                  <select value={priority} onChange={e => setPriority(e.target.value)} disabled={status !== "DRAFT"} className={inputCls}>
+                  <select value={priority} onChange={e => setPriority(e.target.value)} disabled={status !== "DRAFT"} title={"Baja: rutina, sin impacto en la operación.\nMedia: necesaria pero no urgente, se programa en días.\nAlta: afecta la operación sin detenerla, atender lo antes posible.\nCrítica: equipo parado o riesgo de seguridad, atender de inmediato."} className={inputCls}>
                     <option value="LOW">Baja</option>
                     <option value="MEDIUM">Media</option>
                     <option value="HIGH">Alta</option>

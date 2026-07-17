@@ -6,7 +6,7 @@ import {
 import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
-import { useT, useLocale, translate, type TranslationKey } from "../lib/i18n";
+import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";

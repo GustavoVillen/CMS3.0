@@ -59,10 +59,14 @@ function renameCode(code: string): string {
   return `${DST}-${code}`;
 }
 
-/** SS-<vessel>-<YY>-<seq> → { yy, seq }. Devuelve null si no matchea. */
-function parseWoCode(code: string): { yy: string; seq: number } | null {
-  const m = code.match(/^SS-[^-]+-(\d+)-(\d+)$/);
-  return m ? { yy: m[1], seq: parseInt(m[2], 10) } : null;
+/**
+ * <PREFIJO>-<vessel>-<YY>-<seq> → { prefix, yy, seq }. Null si no matchea.
+ * Prefijo-agnóstico (OT-/WO-/SS-): Mercurio migró de SS- a OT- en jul-2026
+ * (ver `scripts/rename-ss-to-ot.ts`) y pueden quedar bases sin migrar.
+ */
+function parseWoCode(code: string): { prefix: string; yy: string; seq: number } | null {
+  const m = code.match(/^(OT|WO|SS)-[^-]+-(\d+)-(\d+)$/);
+  return m ? { prefix: m[1], yy: m[2], seq: parseInt(m[3], 10) } : null;
 }
 
 async function main() {
@@ -153,14 +157,15 @@ async function main() {
   let nWos = 0, skippedAsset = 0, nNotes = 0;
   for (const w of srcWos) {
     const dstAssetId = assetMap.get(w.assetId);
-    if (!dstAssetId) { console.warn(`⚠ SS ${w.workOrderCode}: asset no clonado; se omite`); skippedAsset++; continue; }
+    if (!dstAssetId) { console.warn(`⚠ OT ${w.workOrderCode}: asset no clonado; se omite`); skippedAsset++; continue; }
     const dstPlanId = w.maintenancePlanId ? planMap.get(w.maintenancePlanId) ?? null : null;
 
     const pc = parseWoCode(w.workOrderCode);
-    if (!pc) { console.warn(`⚠ SS ${w.workOrderCode}: código no parseable; se omite`); continue; }
+    if (!pc) { console.warn(`⚠ OT ${w.workOrderCode}: código no parseable; se omite`); continue; }
     const base = baselineMax.get(pc.yy) ?? 0;
     const n = (counter.get(pc.yy) ?? 0) + 1; counter.set(pc.yy, n);
-    const newCode = `SS-${DST}-${pc.yy}-${String(base + n).padStart(4, "0")}`;
+    // Preserva el prefijo de la OT de origen (OT-/WO-/SS-).
+    const newCode = `${pc.prefix}-${DST}-${pc.yy}-${String(base + n).padStart(4, "0")}`;
 
     const data: any = {
       tenantId: tid, vesselCode: DST, assetId: dstAssetId, maintenancePlanId: dstPlanId,

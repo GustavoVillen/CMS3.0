@@ -10,6 +10,7 @@ import { handleAssetRoutes } from "./assets-router";
 import { handleSparesRoutes } from "./spares-router";
 import { handleInspectionsRoutes } from "./inspections-router";
 import { handleMaintenanceRoutes } from "./maintenance-router";
+import { handleServiceRequestsRoutes } from "./service-requests-router";
 import { handleTriggersRoutes } from "./triggers-router";
 import { handleQualityRoutes } from "./quality-router";
 import { handleCatalogsRoutes } from "./catalogs-router";
@@ -47,6 +48,7 @@ export async function handlePmsRoutes(
   if (await handleSparesRoutes(method, url, request, response, env)) return true;
   if (await handleInspectionsRoutes(method, url, request, response, env)) return true;
   if (await handleMaintenanceRoutes(method, url, request, response, env)) return true;
+  if (await handleServiceRequestsRoutes(method, url, request, response, env)) return true;
   if (await handleTriggersRoutes(method, url, request, response, env)) return true;
   if (await handleQualityRoutes(method, url, request, response, env)) return true;
   if (await handleCatalogsRoutes(method, url, request, response, env)) return true;

@@ -109,6 +109,23 @@ export interface WorkOrderSpareUsage {
   unit: string;
 }
 
+/** Repuesto o material PLANIFICADO (recuadros del formulario REGI-OPE-26.3). */
+export interface WorkOrderPlannedItem {
+  kind: "SPARE" | "MATERIAL";
+  description: string;
+  quantity: number;
+  unit: string;
+}
+
+/** Ejecución programada del trabajo (filas de PROGRAMACION DE TRABAJO). */
+export interface WorkOrderScheduleRow {
+  date: Date | null;
+  technician: string;
+  place: string;
+  company: string;
+  time: string;
+}
+
 export interface WorkOrderProgressPhoto {
   id: string;
   fileUrl: string;
@@ -157,6 +174,17 @@ export interface WorkOrderPdfContext {
   /** Ejes de la matriz de riesgo, tomados del plan de mantenimiento vinculado. */
   riskProbability: string | null;
   riskConsequence: string | null;
+  // ── Formulario REGI-OPE-26.3 ──
+  /** REPUESTOS / MATERIALES planificados (WorkOrderItem). */
+  plannedItems: WorkOrderPlannedItem[];
+  /** Filas de PROGRAMACION DE TRABAJO, derivadas de los WorkLog de la OT. */
+  scheduleRows: WorkOrderScheduleRow[];
+  /** Tipos de permiso de trabajo vinculados (recuadro de autorizaciones). */
+  permitTypes: string[];
+  /** Códigos de las SS abiertas desde esta OT (celda "NRO DE SS/SC"). */
+  serviceRequestCodes: string[];
+  /** Item del PDM: taskCode del plan de mantenimiento vinculado. */
+  planTaskCode: string | null;
   /** Selected template key for this tenant ("STANDARD" | "MERCURIO" | future…). */
   templateKey: string;
   /** Tenant slug (used by some templates as fallback header text). */

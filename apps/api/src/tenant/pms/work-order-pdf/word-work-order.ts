@@ -18,9 +18,6 @@ const STATUS_COLOR: Record<string, string> = {
 export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   const { wo, assetLabel, assignedName, createdByName, formMeta, spareUsages, tenant, tenantSlug, vesselName } = ctx;
   const w = wo as any;
-  // Mercurio gestiona las OT como "Solicitudes de Servicio" (SS).
-  const isMercurio = tenantSlug === "mercurio";
-  const woAbbr = isMercurio ? "SS" : "OT";
   const isPlanned = !!w.maintenancePlanId || w.type === "PREVENTIVE";
   const logo = bufferToDataUri(ctx.formLogoBuffer);
 
@@ -33,7 +30,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   // Embarcación / Solicitud Número
   parts.push(docKvRow([
     { label: "EMBARCACION", value: vesselName ?? wo.vesselCode ?? "", labelWidth: "16%", valueWidth: "34%" },
-    { label: "Solicitud Numero:", value: wo.workOrderCode ?? "", labelWidth: "20%", valueWidth: "30%", color: "#1d4ed8" },
+    { label: "Orden Numero:", value: wo.workOrderCode ?? "", labelWidth: "20%", valueWidth: "30%", color: "#1d4ed8" },
   ]));
 
   // Departamento + Fecha
@@ -66,7 +63,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
 
   // Motivo
   parts.push(docSpacer());
-  parts.push(docSection("MOTIVO DE LA SOLICITUD DE SERVICIO"));
+  parts.push(docSection("MOTIVO DE LA ORDEN DE TRABAJO"));
   parts.push(docCheckboxRow(MOTIVOS, isPlanned ? ["PLANIFICADO"] : []));
 
   // Título
@@ -121,7 +118,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   // Resultado de ejecución
   if (w.woResult) {
     parts.push(docKvRow([
-      { label: `Resultado ${woAbbr}`, value: woResultLabel(w.woResult), color: w.woResult === "SATISFACTORY" ? "#166534" : "#991b1b" },
+      { label: "Resultado OT", value: woResultLabel(w.woResult), color: w.woResult === "SATISFACTORY" ? "#166534" : "#991b1b" },
       { label: "Estado", value: statusLabel(w.status ?? ""), color: STATUS_COLOR[w.status ?? ""] },
     ]));
     parts.push(docKvRow([
@@ -141,12 +138,12 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
 
   // Tramitación de la orden (firma digital + nombre + fecha)
   parts.push(docSpacer());
-  parts.push(docSection(isMercurio ? "TRAMITACION DE LA SOLICITUD" : "TRAMITACION DE LA ORDEN"));
+  parts.push(docSection("TRAMITACION DE LA ORDEN"));
   const trCols = [
     { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: w.createdAt, sig: bufferToDataUri(ctx.solicitaSignatureBuffer) },
     { label: "APRUEBA",      name: w.aprobadoByName, date: w.aprobadoAt, sig: bufferToDataUri(ctx.apruebaSignatureBuffer) },
     { label: "AUTORIZA",     name: w.autorizadoByName, date: w.autorizadoAt, sig: bufferToDataUri(ctx.autorizaSignatureBuffer) },
-    { label: "CIERRA LA SS", name: w.executedByName, date: w.completedDate, sig: bufferToDataUri(ctx.cierraSignatureBuffer) },
+    { label: "CIERRA LA OT", name: w.executedByName, date: w.completedDate, sig: bufferToDataUri(ctx.cierraSignatureBuffer) },
   ];
   parts.push(`<table><tr>${trCols.map(c => {
     const img = c.sig ? `<img src="${c.sig}" style="height:72pt;max-width:95%;">` : "";
@@ -191,7 +188,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   }
 
   return wrapAsWordDoc({
-    title: `${woAbbr} ${wo.workOrderCode}`,
+    title: `OT ${wo.workOrderCode}`,
     bodyHtml: parts.join("\n"),
     footerHtml: docControlledFooter(formMeta),
   });

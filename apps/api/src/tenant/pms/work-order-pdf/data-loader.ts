@@ -6,7 +6,11 @@ import { join } from "node:path";
 import type { TenantAccessSession } from "../../auth/session-store";
 import { getTenantWorkOrder } from "../../work-orders/work-orders-service";
 import { getPrismaClient } from "../../../platform/data/prisma-client";
-import { resolveTenantLogo, sanitizePdfText, type WorkOrderPdfContext, type WorkOrderSpareUsage, type WorkOrderProgressPhoto } from "./shared";
+import {
+  resolveTenantLogo, sanitizePdfText,
+  type WorkOrderPdfContext, type WorkOrderSpareUsage, type WorkOrderProgressPhoto,
+  type WorkOrderPlannedItem, type WorkOrderScheduleRow,
+} from "./shared";
 import { resolveTenantForm, type TenantFormType } from "../tenant-forms-service";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "attachments");
@@ -235,6 +239,87 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
+  // ── Formulario REGI-OPE-26.3 ──────────────────────────────────────────────
+  // REPUESTOS / MATERIALES planificados.
+  let plannedItems: WorkOrderPlannedItem[] = [];
+  if (prismaRaw) {
+    try {
+      const rows = await (prismaRaw as any).workOrderItem.findMany({
+        where: { workOrderId: wo.id },
+        orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { kind: true, description: true, quantity: true, unit: true },
+      });
+      plannedItems = rows.map((r: any) => ({
+        kind: r.kind, description: r.description, quantity: r.quantity, unit: r.unit,
+      }));
+    } catch { /* non-blocking */ }
+  }
+
+  // PROGRAMACION DE TRABAJO: el papel pide fecha/técnico/lugar/empresa/horario.
+  // WorkLog tiene fecha, técnico y horas; lugar y empresa salen de la OT
+  // (location / provider), que es de donde el operador los tomaría igual.
+  const scheduleRows: WorkOrderScheduleRow[] = [];
+  if (prismaRaw) {
+    try {
+      const logs = await (prismaRaw as any).workLog.findMany({
+        where: { workOrderId: wo.id, tenantId: (wo as any).tenantId },
+        orderBy: { startedAt: "asc" },
+        select: { startedAt: true, completedAt: true, executedByName: true },
+        take: 6,
+      });
+      for (const l of logs) {
+        const hhmm = (d: Date | null) => d ? new Date(d).toISOString().slice(11, 16) : "";
+        const desde = hhmm(l.startedAt);
+        const hasta = hhmm(l.completedAt);
+        scheduleRows.push({
+          date: l.startedAt ?? null,
+          technician: l.executedByName ?? "",
+          place: (wo as any).location ?? "",
+          company: (wo as any).providerName ?? "",
+          time: desde && hasta ? `${desde} - ${hasta}` : desde,
+        });
+      }
+    } catch { /* non-blocking */ }
+  }
+
+  // Recuadro de autorizaciones (CONFINADO/CALIENTE/ELECTRICO/ALTURA/FRIO):
+  // se deriva de los permisos de trabajo vinculados, no de campos propios.
+  let permitTypes: string[] = [];
+  if (prismaRaw) {
+    try {
+      const permits = await (prismaRaw as any).permitToWork.findMany({
+        where: { workOrderId: wo.id, tenantId: (wo as any).tenantId },
+        select: { type: true },
+      });
+      permitTypes = [...new Set(permits.map((p: any) => String(p.type)))] as string[];
+    } catch { /* non-blocking */ }
+  }
+
+  // Celda "NRO DE SS/SC": las SS abiertas desde esta OT. La SC la maneja otra app.
+  let serviceRequestCodes: string[] = [];
+  if (prismaRaw) {
+    try {
+      const srs = await (prismaRaw as any).serviceRequest.findMany({
+        where: { workOrderId: wo.id, deletedAt: null },
+        orderBy: { serviceRequestCode: "asc" },
+        select: { serviceRequestCode: true },
+      });
+      serviceRequestCodes = srs.map((s: any) => s.serviceRequestCode);
+    } catch { /* non-blocking */ }
+  }
+
+  // ITEM DEL PDM = taskCode del plan vinculado.
+  let planTaskCode: string | null = null;
+  if (prismaRaw && (wo as any).maintenancePlanId) {
+    try {
+      const plan = await (prismaRaw as any).maintenancePlan.findUnique({
+        where: { id: (wo as any).maintenancePlanId },
+        select: { taskCode: true },
+      });
+      planTaskCode = plan?.taskCode ?? null;
+    } catch { /* non-blocking */ }
+  }
+
   return {
     wo,
     assetLabel,
@@ -256,8 +341,16 @@ export async function loadWorkOrderPdfContext(
     progressNotes,
     riskProbability,
     riskConsequence,
-    // El estilo del formulario manda sobre el enum legacy (mismo valor cuando hay back-compat).
-    templateKey: resolvedForm.meta.style ?? templateKey,
+    plannedItems,
+    scheduleRows,
+    permitTypes,
+    serviceRequestCodes,
+    planTaskCode,
+    // `workOrderPdfTemplate` (TenantSetting) manda: es lo que elige el admin y el
+    // único eje con las claves de layout (STANDARD/MERCURIO/MERCURIO_OT).
+    // `FormStyle` sólo distingue el chrome del documento controlado y no tiene
+    // esas claves. Fallback al style por compatibilidad (hoy dan el mismo valor).
+    templateKey: templateKey ?? resolvedForm.meta.style,
     tenantSlug: session.tenantSlug,
     formMeta: resolvedForm.meta,
     formConfig: resolvedForm.config,

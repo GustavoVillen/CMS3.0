@@ -1,7 +1,11 @@
 // Seed idempotente — formularios controlados del tenant Mercurio.
-//   - WORK_ORDER     → REGI-MAN-02.4 "Orden Interna de Trabajo" (estilo MERCURIO)
+//   - WORK_ORDER     → REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025)
 //   - SERVICE_REQUEST→ REGI-LOG-01.3 "Solicitud de servicios" (logo propio LogoMercurio.png)
 //   - Footer editable del documento controlado en TenantSetting.
+//
+// REGI-OPE-26.3 reemplaza a REGI-MAN-02.4 "Orden Interna de Trabajo" (jul-2026).
+// Son documentos distintos: la OT es el trabajo de mantenimiento; la SS es el
+// pedido de un servicio externo que cuelga de una OT abierta.
 //
 // Uso (desde la raiz del repo, DATABASE_URL exportada):
 //   npx tsx scripts/seed-mercurio-forms.ts
@@ -15,17 +19,43 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionStr
 const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const DRY = process.env.DRY === "1";
 
+// Cada documento controlado trae SU pie de firmas (literal del papel).
+const WORK_ORDER_FOOTER = {        // REGI-OPE-26.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Persona Designada en Tierra",
+  approvedBy: "Gerente General",
+};
+const SERVICE_REQUEST_FOOTER = {   // REGI-LOG-01.3
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Asesoria Juridica",
+  approvedBy: "Gerente General",
+};
+
+// Formulario de OT. El orden replica el papel REGI-OPE-26.3.
+const WORK_ORDER_CONFIG = {
+  sections: [
+    "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
+    "request", "task", "spares", "materials", "schedule", "completion",
+    "pending", "risk", "signatures", "riskAnnex",
+  ],
+  footer: WORK_ORDER_FOOTER,
+  departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"],
+  distribution: [],
+  communicationMethods: [],
+  purchaseRequest: [],
+  labels: {},
+};
+
+// Formulario de SS. El orden replica el papel REGI-LOG-01.3 (ver SS-74-M01-2026).
+// `workOrderRef` es el único agregado: la OT de la que cuelga la SS.
 const SERVICE_REQUEST_CONFIG = {
   sections: [
-    "header", "deptDate", "equipment", "equipAssigned", "description", "causes",
-    "purchaseRequest", "tramitacion", "taller", "hojaRuta", "entregaRecepcion",
-    "comments", "generatedBy", "signatures", "communication", "distribution",
+    "header", "deptDate", "assignedTo", "equipment", "workOrderRef",
+    "description", "causes", "purchaseRequest", "tramitacion", "hojaRuta",
+    "taller", "entregaRecepcion", "comments", "signatures",
+    "communication", "distribution",
   ],
-  footer: {
-    preparedBy: "Departamento Tecnico Mercurio",
-    reviewedBy: "Gerente Mantenimiento",
-    approvedBy: "Gerencia General",
-  },
+  footer: SERVICE_REQUEST_FOOTER,
   departments: ["CUBIERTA", "MAQUINAS", "BARCAZA", "OTROS"],
   distribution: ["JMA", "CAP"],
   communicationMethods: ["IMPRESO", "EMAIL", "WHAPP", "OTRO"],
@@ -44,12 +74,12 @@ async function main() {
       type: "WORK_ORDER" as const,
       create: {
         tenantId, type: "WORK_ORDER" as const, style: "MERCURIO" as const,
-        formCode: "REGI-MAN-02.4", title: "Orden Interna de Trabajo", revision: 2,
-        effectiveFrom: "01.05.2025", codePattern: null, enabled: true,
+        formCode: "REGI-OPE-26.3", title: "Orden de trabajo", revision: 0,
+        effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG, enabled: true,
       },
       update: {
-        style: "MERCURIO" as const, formCode: "REGI-MAN-02.4", title: "Orden Interna de Trabajo",
-        revision: 2, effectiveFrom: "01.05.2025",
+        style: "MERCURIO" as const, formCode: "REGI-OPE-26.3", title: "Orden de trabajo",
+        revision: 0, effectiveFrom: "29.12.2025", config: WORK_ORDER_CONFIG,
       },
     },
     {
@@ -58,12 +88,12 @@ async function main() {
         tenantId, type: "SERVICE_REQUEST" as const, style: "MERCURIO" as const,
         formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2,
         effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png",
-        codePattern: "SS-{seq:0000}-{vesselShort}-{year}", config: SERVICE_REQUEST_CONFIG, enabled: true,
+        codePattern: null, config: SERVICE_REQUEST_CONFIG, enabled: true,
       },
       update: {
         style: "MERCURIO" as const, formCode: "REGI-LOG-01.3", title: "Solicitud de servicios",
         revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png",
-        codePattern: "SS-{seq:0000}-{vesselShort}-{year}", config: SERVICE_REQUEST_CONFIG,
+        codePattern: null, config: SERVICE_REQUEST_CONFIG,
       },
     },
   ];

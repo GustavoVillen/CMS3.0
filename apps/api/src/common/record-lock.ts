@@ -15,17 +15,19 @@ import { RouteError } from "../http/route-error";
 
 export type LockableRecordType =
   | "WORK_ORDER"
+  | "SERVICE_REQUEST"
   | "DEFECT"
   | "DEFERRAL"
   | "INSPECTION"
   | "CAPA";
 
 const TERMINAL_STATUSES: Record<LockableRecordType, ReadonlySet<string>> = {
-  WORK_ORDER: new Set(["CLOSED", "CANCELLED"]),
-  DEFECT:     new Set(["RESOLVED", "CLOSED"]),
-  DEFERRAL:   new Set(["CLOSED", "EXPIRED", "REJECTED"]),
-  INSPECTION: new Set(["COMPLETED", "CANCELLED"]),
-  CAPA:       new Set(["VERIFIED_EFFECTIVE", "CLOSED", "CANCELLED"]),
+  WORK_ORDER:      new Set(["CLOSED", "CANCELLED"]),
+  SERVICE_REQUEST: new Set(["COMPLETED", "CANCELLED", "REJECTED"]),
+  DEFECT:          new Set(["RESOLVED", "CLOSED"]),
+  DEFERRAL:        new Set(["CLOSED", "EXPIRED", "REJECTED"]),
+  INSPECTION:      new Set(["COMPLETED", "CANCELLED"]),
+  CAPA:            new Set(["VERIFIED_EFFECTIVE", "CLOSED", "CANCELLED"]),
 };
 
 export function isLockedStatus(type: LockableRecordType, status: string | null | undefined): boolean {

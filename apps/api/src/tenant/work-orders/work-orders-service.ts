@@ -42,14 +42,42 @@ export interface CreateWorkOrderInput {
   consequenceRationale?: string | null;
   department?: WorkOrderDepartment | null;
   providerId?: string | null;
+  /** Empresa tercerizada fuera del catálogo (alternativa a providerId). */
+  providerOther?: string | null;
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
+  // Formulario controlado REGI-OPE-26.3 (ver WoFormFields).
+  voyageNumber?: string | null;
+  requestedByArea?: WorkOrderRequestedByArea | null;
+  assignedToArea?: WorkOrderAssignedToArea | null;
+  systemArea?: WorkOrderSystemArea | null;
+  maintenanceKind?: WorkOrderMaintenanceKind | null;
   // Solo TENANT_ADMIN: abrir la OT en nombre de otro usuario (SOLICITA / createdByUserId).
   createdByUserId?: string | null;
 }
 
 export type WorkOrderDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
+
+// ── Formulario controlado REGI-OPE-26.3 "Orden de trabajo" ───────────────────
+export type WorkOrderRequestedByArea = "CUBIERTA" | "MAQUINAS" | "TECNICA" | "OPS_SSMA";
+export type WorkOrderAssignedToArea  = "TRIPULACION" | "TERCERIZADO" | "TECNICA" | "OPS_SSMA";
+export type WorkOrderSystemArea      = "MAQUINAS" | "RE_CUBIERTA" | "BARCAZAS";
+export type WorkOrderMaintenanceKind =
+  | "PREVENTIVO" | "CORRECTIVO_PROGRAMADO" | "CORRECTIVO_NO_PROGRAMADO" | "PREDICTIVO" | "EMERGENCIA";
+
+/**
+ * El formulario distingue 5 tipos de mantenimiento; `WorkOrderType` sólo 3.
+ * Mantenemos ambos: `type` es el eje que consumen MTTR, el flujo OT→Defecto y
+ * los reportes (filtran por "CORRECTIVE"), así que ensancharlo los rompería en
+ * silencio. Al setear `maintenanceKind` derivamos `type` para que esos
+ * consumidores sigan viendo lo que esperan.
+ */
+export function deriveTypeFromMaintenanceKind(
+  kind: WorkOrderMaintenanceKind,
+): "PREVENTIVE" | "CORRECTIVE" {
+  return kind === "PREVENTIVO" || kind === "PREDICTIVO" ? "PREVENTIVE" : "CORRECTIVE";
+}
 
 export interface UpdateWorkOrderInput {
   assetId?: string;
@@ -82,9 +110,18 @@ export interface UpdateWorkOrderInput {
   // Área / responsable + Mercurio form fields
   department?: WorkOrderDepartment | null;
   providerId?: string | null;
+  providerOther?: string | null;
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
+  // Formulario controlado REGI-OPE-26.3
+  voyageNumber?: string | null;
+  requestedByArea?: WorkOrderRequestedByArea | null;
+  assignedToArea?: WorkOrderAssignedToArea | null;
+  systemArea?: WorkOrderSystemArea | null;
+  maintenanceKind?: WorkOrderMaintenanceKind | null;
+  taskCompleted?: boolean | null;
+  pendingDetail?: string | null;
   // Spare usages — replaces previous ISSUE movements for this WO
   spareUsages?: Array<{ spareId: string; qty: number; unit: string }>;
 }
@@ -326,6 +363,10 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       estimatedHours: true, actualHours: true, taskMasterId: true,
       riskLevel: true, checklistDocUrl: true, consequenceCategory: true,
       department: true, providerId: true, location: true, communicationMethod: true, distribution: true,
+      // Formulario REGI-OPE-26.3 — sólo los campos livianos; `pendingDetail`
+      // es texto largo y queda para el detalle (getTenantWorkOrder).
+      voyageNumber: true, requestedByArea: true, assignedToArea: true,
+      systemArea: true, maintenanceKind: true, taskCompleted: true,
       woResult: true, executedByName: true, supportingDocUrl: true, runningHoursAtExecution: true,
       createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
       deletedAt: true, deletedByUserId: true,
@@ -360,7 +401,9 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
     ...o,
     assetName: assetNameMap.get(o.assetId) ?? null,
     assignedToUserName: userNameMap.get((o as unknown as { assignedToUserId?: string | null }).assignedToUserId ?? "") ?? null,
-    providerName: providerNameMap.get((o as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
+    // Mismo criterio que getTenantWorkOrder: catálogo, o el escrito a mano.
+    providerName: providerNameMap.get((o as unknown as { providerId?: string | null }).providerId ?? "")
+      ?? ((o as unknown as { providerOther?: string | null }).providerOther ?? null),
   }));
 }
 
@@ -388,6 +431,10 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     assetName = asset?.name ?? null;
   } catch { /* non-blocking */ }
 
+  // Nombre de la empresa que hace el trabajo: del catálogo si se eligió de la
+  // lista, o el escrito a mano (providerOther) si no estaba. Al resolverse acá,
+  // todo lo que lee la OT (PDF, "ASIGNADO A", reportes) ve un solo campo y no se
+  // entera de cuál de los dos lo llenó.
   let providerName: string | null = null;
   const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
   if (recProviderId) {
@@ -399,6 +446,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
       providerName = provider?.name ?? null;
     } catch { /* non-blocking */ }
   }
+  providerName = providerName ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
   // Reconstruct spare usages from stock movements scoped to this WO
   const spareUsages: Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }> = [];
@@ -513,7 +561,11 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         assetId,
         maintenancePlanId: null,
         workOrderCode,
-        type: payload.type ?? "PREVENTIVE",
+        // `maintenanceKind` (5 opciones del formulario) manda sobre `type` (3):
+        // así MTTR / OT→Defecto / reportes siguen viendo el eje que esperan.
+        type: payload.maintenanceKind
+          ? deriveTypeFromMaintenanceKind(payload.maintenanceKind)
+          : payload.type ?? "PREVENTIVE",
         status: "PLANNED",
         priority: payload.priority ?? "MEDIUM",
         criticality: payload.criticality ?? "B",
@@ -533,10 +585,20 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         consequenceRationale: normalizeOptionalText(payload.consequenceRationale),
         department: payload.department ?? null,
         // providerId solo aplica cuando el área es PROVEEDOR; en otros casos se descarta.
-        providerId: payload.department === "PROVEEDOR" ? normalizeOptionalText(payload.providerId) : null,
+        // El taller sólo aplica si el trabajo se terceriza: "Asignado a:
+        // TERCERIZADO" (REGI-OPE-26.3) o área PROVEEDOR (formulario anterior).
+        providerId: (payload.assignedToArea === "TERCERIZADO" || payload.department === "PROVEEDOR")
+          ? normalizeOptionalText(payload.providerId)
+          : null,
         location: normalizeOptionalText(payload.location),
         communicationMethod: payload.communicationMethod ?? [],
         distribution: payload.distribution ?? [],
+        // Formulario REGI-OPE-26.3 — nullable, sólo se llenan si vienen.
+        voyageNumber: normalizeOptionalText(payload.voyageNumber),
+        requestedByArea: payload.requestedByArea ?? null,
+        assignedToArea: payload.assignedToArea ?? null,
+        systemArea: payload.systemArea ?? null,
+        maintenanceKind: payload.maintenanceKind ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
       },
@@ -662,17 +724,53 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.actualHours !== undefined) data.actualHours = payload.actualHours ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
-  if (payload.department !== undefined) {
-    data.department = payload.department ?? null;
-    // Cambiar el área a algo distinto de PROVEEDOR limpia el proveedor asociado.
-    if (payload.department !== "PROVEEDOR") data.providerId = null;
+  if (payload.department !== undefined) data.department = payload.department ?? null;
+
+  // ¿El trabajo queda en manos de un tercero? Hay dos ejes según el formulario
+  // del tenant: "Asignado a: TERCERIZADO" (REGI-OPE-26.3) o el área PROVEEDOR
+  // (formulario anterior). El taller sólo se guarda si alguno aplica, y se
+  // limpia si el trabajo deja de estar tercerizado.
+  //
+  // Se evalúa sobre el valor FINAL (lo que viene en el payload o, si no viene,
+  // lo que ya tenía la OT): antes se miraba sólo `payload.department`, y como
+  // los tenants con el formulario nuevo mandan department vacío, el taller se
+  // borraba en cada guardado.
+  const assignedToAreaFinal = payload.assignedToArea !== undefined
+    ? payload.assignedToArea
+    : (current as any).assignedToArea;
+  const departmentFinal = payload.department !== undefined
+    ? payload.department
+    : (current as any).department;
+  const tercerizado = assignedToAreaFinal === "TERCERIZADO" || departmentFinal === "PROVEEDOR";
+
+  // La empresa se elige del catálogo (providerId) O se escribe a mano
+  // (providerOther) — son excluyentes. Y las dos se limpian si el trabajo deja
+  // de estar tercerizado: si no, quedaría una empresa colgada en una OT propia.
+  if (payload.providerId !== undefined) {
+    data.providerId = tercerizado ? normalizeOptionalText(payload.providerId) : null;
+  } else if (!tercerizado) {
+    data.providerId = null;
   }
-  if (payload.providerId !== undefined && data.providerId === undefined) {
-    data.providerId = normalizeOptionalText(payload.providerId);
+  if (payload.providerOther !== undefined) {
+    data.providerOther = tercerizado ? normalizeOptionalText(payload.providerOther) : null;
+  } else if (!tercerizado) {
+    data.providerOther = null;
   }
   if (payload.location !== undefined) data.location = normalizeOptionalText(payload.location);
   if (payload.communicationMethod !== undefined) data.communicationMethod = payload.communicationMethod;
   if (payload.distribution !== undefined) data.distribution = payload.distribution;
+  // ── Formulario REGI-OPE-26.3 ──
+  if (payload.voyageNumber !== undefined) data.voyageNumber = normalizeOptionalText(payload.voyageNumber);
+  if (payload.requestedByArea !== undefined) data.requestedByArea = payload.requestedByArea ?? null;
+  if (payload.assignedToArea !== undefined) data.assignedToArea = payload.assignedToArea ?? null;
+  if (payload.systemArea !== undefined) data.systemArea = payload.systemArea ?? null;
+  if (payload.taskCompleted !== undefined) data.taskCompleted = payload.taskCompleted ?? null;
+  if (payload.pendingDetail !== undefined) data.pendingDetail = normalizeOptionalText(payload.pendingDetail);
+  // Cambiar el tipo del formulario re-deriva `type` (ver deriveTypeFromMaintenanceKind).
+  if (payload.maintenanceKind !== undefined) {
+    data.maintenanceKind = payload.maintenanceKind ?? null;
+    if (payload.maintenanceKind) data.type = deriveTypeFromMaintenanceKind(payload.maintenanceKind);
+  }
 
   const updated = await prisma.workOrder.update({ where: { id: current.id }, data });
 

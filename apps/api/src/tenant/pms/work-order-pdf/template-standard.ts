@@ -18,7 +18,7 @@ const FOOTER_SIZE    = 40 + APPROVAL_BAND_H;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
 
 const APPROVAL_COLS = [
-  { label: "Elaborado:", value: "Barlovento Servicios Profesionales" },
+  { label: "Elaborado:", value: "Mercurio Group" },
   { label: "Revisado:",  value: "Asesoría Jurídica" },
   { label: "Aprobado:",  value: "Gerente General" },
 ];

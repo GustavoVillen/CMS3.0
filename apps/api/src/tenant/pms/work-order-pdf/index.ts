@@ -9,12 +9,17 @@
 import type { WorkOrderPdfContext } from "./shared";
 import { renderStandardWorkOrderPdf } from "./template-standard";
 import { renderMercurioWorkOrderPdf } from "./template-mercurio";
+import { renderMercurioOtPdf } from "./template-mercurio-ot";
 
 export type WorkOrderPdfRenderer = (ctx: WorkOrderPdfContext) => Promise<Buffer>;
 
 export const WO_PDF_TEMPLATES: Record<string, WorkOrderPdfRenderer> = {
   STANDARD: renderStandardWorkOrderPdf,
+  // Formulario viejo de Mercurio (REGI-MAN-02.4). Se conserva para poder volver
+  // atrás: UPDATE "TenantSetting" SET "workOrderPdfTemplate"='MERCURIO'.
   MERCURIO: renderMercurioWorkOrderPdf,
+  // REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025) — el vigente.
+  MERCURIO_OT: renderMercurioOtPdf,
 };
 
 export const WO_PDF_TEMPLATE_KEYS = Object.keys(WO_PDF_TEMPLATES) as Array<keyof typeof WO_PDF_TEMPLATES>;

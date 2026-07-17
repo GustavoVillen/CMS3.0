@@ -15,13 +15,20 @@ export async function downloadDoc(url: string, filename: string): Promise<void> 
     alert("No se pudo generar el documento Word. Intente nuevamente.");
     return;
   }
-  const blob = await res.blob();
+  const buf = await res.arrayBuffer();
+  const blob = new Blob([buf], { type: "application/msword" });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = objectUrl;
-  a.download = filename.endsWith(".doc") ? filename : `${filename}.doc`;
+  a.setAttribute("download", filename.endsWith(".doc") ? filename : `${filename}.doc`);
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  // El anchor se quita y el object URL se revoca DESPUÉS, no en la misma vuelta
+  // del click: Edge descarta el atributo `download` si el anchor desaparece
+  // antes de que arranque la descarga, y el archivo baja sin nombre ni extensión.
+  setTimeout(() => {
+    if (a.parentNode) document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  }, 60_000);
 }

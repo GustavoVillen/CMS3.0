@@ -204,6 +204,10 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
           enabledLocales: tenant.settings.enabledLocales,
           timezone: tenant.settings.timezone,
           currency: tenant.settings.currency,
+          // Faltaba: el front lo usa para saber si el tenant usa el formulario
+          // controlado de Mercurio (campos del form + plantilla del PDF). Sin
+          // esto llegaba null y esos campos no se mostraban nunca.
+          workOrderPdfTemplate: (tenant.settings as any).workOrderPdfTemplate ?? null,
         },
         {
           requestedLocale: locale,

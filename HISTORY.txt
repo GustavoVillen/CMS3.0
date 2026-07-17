@@ -1,5 +1,80 @@
 HISTORY.txt
 
+[2026-07-16] Corrección OT ≠ SS: la Solicitud de Servicio pasa a entidad propia
+Agent: Claude Opus 4.8
+- Contexto: se creía que una Orden de Trabajo (OT) y una Solicitud de Servicio (SS)
+  eran la misma entidad con distinto nombre; para el tenant Mercurio la OT se
+  renombraba a "SS" de forma cosmética. No lo son: la SS es el pedido de un
+  servicio EXTERNO (un taller) que sólo se abre desde una OT abierta (1 OT → N SS).
+- Fase 1: eliminado el vocabulario SS (SS_OVERRIDES/Vocab/useVocab en i18n.tsx,
+  activador en App.tsx, prompt del copiloto, word-work-order). useWoTerms se
+  conserva (traduce OT/WO/OS por idioma). PDF/Word de OT: "Orden Numero",
+  "MOTIVO DE LA ORDEN DE TRABAJO", "CIERRA LA OT", Title `OT <code>`.
+- Fase 2: prefijo de código de Mercurio SS- → OT- (wo-code.ts) + migración de datos
+  `scripts/rename-ss-to-ot.ts` (idempotente, DRY=1): 1297 OT renumeradas en local,
+  StockMovement.notes y FluidSample.notes, TenantForm.codePattern de SERVICE_REQUEST
+  a NULL (el código de la SS pasa a ser natural). NO toca AuditEvent ni Bitacora
+  (audit trail). Correlativo intacto: las queries usan SUBSTRING(code, 4).
+- Fase 5: la SS replica el formulario real REGI-LOG-01.3 (ref: SS-74-M01-2026) y
+  hereda de la OT. Objetivo: pedir un servicio externo desde la OT sin volver a
+  tipear lo que ya está cargada.
+  · HERENCIA en createServiceRequestForWorkOrder: buque, departamento (ASIGNADO A),
+    equipo (del asset de la OT), causas (= la falla de la OT) y taller (si el área
+    de la OT es PROVEEDOR). Lo único que se pide es qué servicio se solicita.
+  · CÓDIGO: SS-<seq>-<BUQUE>-<AÑO> (ej. SS-74-M01-2026) — formato del papel,
+    correlativo por buque y año vía MAX(SPLIT_PART(code,'-',2)) + withUniqueRetry.
+    `TenantForm.codePattern` de SERVICE_REQUEST pasa a null (emitía SS-0074-M01-2026,
+    otro número y otro padding). Corrige de paso que el seed lo re-sembraba.
+  · Schema: purchaseRequestKind (String) → purchaseRequestKinds (String[]) — el papel
+    admite AFECTA SEGURIDAD + AFECTA SERVICIO juntas; + receptionItem/receivedByName/
+    receptionConform (ENTREGA/RECEPCION) + capitanName/jefeMaquinasName (pie).
+  · Template: ASIGNADO A (checkboxes) y EQUIPO O SISTEMA AFECTADO (texto) eran una
+    sola sección mezclada — ahora separadas como en el papel; TRAMITACION pasa a
+    NOMBRE|TRAMITE|APROBACION(SI/NO) con firma incrustada por paso cumplido;
+    ENTREGA/RECEPCION con dato real; firmas del pie = Capitán + Jefe de Máquinas;
+    orden de secciones = el del papel. `generatedBy` se fusiona en `signatures`.
+  · completeServiceRequest exige quién recibe + conformidad (400 si faltan).
+  · Footer POR FORMULARIO (antes uno solo para todos): OT = Mercurio Group /
+    Persona Designada en Tierra / Gerente General; SS = Mercurio Group /
+    Asesoría Jurídica / Gerente General. Quitadas todas las referencias a
+    "Barlovento Servicios Profesionales" (también en template-standard y en el
+    reporte de OT abiertas, donde estaban hardcodeadas de antes).
+  · La fila ORDEN DE TRABAJO es un agregado al papel (implica Rev. 3 del formulario):
+    sin el número impreso no se puede rastrear el servicio hasta su OT.
+
+- Fase 4: formulario controlado de OT REGI-OPE-26.3 "Orden de trabajo" (rev 0,
+  29.12.2025), que REEMPLAZA a REGI-MAN-02.4 "Orden Interna de Trabajo".
+  Schema aditivo (nullable, sin backfill): voyageNumber, requestedByArea,
+  assignedToArea, systemArea, maintenanceKind, taskCompleted, pendingDetail +
+  enums nuevos + tabla WorkOrderItem (REPUESTOS/MATERIALES planificados) +
+  PermitType.COLD_WORK ("FRIO") + WorkOrderPdfTemplate.MERCURIO_OT.
+  · WorkOrderType NO se ensancha: MTTR, OT→Defecto y reportes filtran por
+    type='CORRECTIVE' y romperían en silencio. Las 5 opciones del papel viven en
+    `maintenanceKind` y el service DERIVA `type` (deriveTypeFromMaintenanceKind).
+  · PRIORIDAD sin columna nueva: el papel la expresa como plazo (INMEDIATO/24HS/
+    SEMANA/MES) — es el mismo eje que WorkOrderPriority, sólo cambia la etiqueta.
+  · Autorizaciones (CONFINADO/CALIENTE/ELECTRICO/ALTURA/FRIO) derivadas de los
+    PermitToWork vinculados; "NRO DE SS/SC" = las SS de la OT (la SC es de otra app).
+  · Página 2 del papel (tabla estática de riesgos) NO se implementa: se reemplaza
+    por el bloque de IA (nivel + análisis + LOTO).
+  · Nuevo template data-driven `template-mercurio-ot.ts` + key MERCURIO_OT (la
+    key MERCURIO se conserva → rollback = UPDATE TenantSetting).
+    `templateKey` pasa a salir de workOrderPdfTemplate (antes lo pisaba FormStyle,
+    que no tiene las claves de layout).
+  · FIX preexistente: el login no incluía `workOrderPdfTemplate` en el bootstrap
+    (llegaba null) → los campos del form de Mercurio no se mostraban nunca.
+  · FIX: isMercurio comparaba === "MERCURIO"; ahora startsWith (2 sitios).
+  · UI: `components/work-orders/WoRegiSections.tsx` + `lib/wo-form-catalog.ts`.
+  db push aplicado a cms3; seed-mercurio-forms + provision-tenant actualizados.
+
+- Fase 3 (schema): nuevo modelo ServiceRequest + enum ServiceRequestStatus
+  (DRAFT/SOLICITADA/APROBADA/AUTORIZADA/IN_PROGRESS/COMPLETED/REJECTED/CANCELLED);
+  workOrderId NOT NULL; relación serviceRequests en WorkOrder y Vessel;
+  SERVICE_REQUEST agregado a LockableRecordType (terminales COMPLETED/CANCELLED/
+  REJECTED). Gate duro: IN_PROGRESS sólo desde AUTORIZADA, y autorizar restringido
+  a TENANT_ADMIN (DPA/Director de Operaciones) o FLEET_SUPERINTENDENT
+  (Superintendente técnico). Cambio aditivo; db push aplicado a cms3.
+
 [2026-07-14] Módulo Medición de Tanques por Viaje (Formulario M2)
 Agent: Claude Opus 4.8
 - Schema: nuevos modelos VoyageTankReport + VoyageTankReading + VoyageEngineHours
@@ -15602,3 +15677,355 @@ Agent: Claude Opus 4.7
     - vite build + push a VPS (cambios FE Crew i18n ya desplegados en SQL seed).
     - Crew refactor Option B aún pendiente (schema ya en local, db push no).
 
+
+═══════════════════════════════════════════════════════════════════════════════
+2026-07-17 — SS: hoja de ruta del pedido (híbrida) + tramitación encolumnada
+═══════════════════════════════════════════════════════════════════════════════
+
+  Schema (db push local OK, aditivo, sin pérdida de datos):
+    - ServiceRequest.startedAt / receivedAt (DateTime?): los dos pasos que no
+      dejaban fecha propia (updatedAt cambia con cualquier edición). Los setean
+      startServiceRequest() y completeServiceRequest().
+    - ServiceRequestLog (nuevo): HOJA DE RUTA DEL PEDIDO — sólo las novedades
+      asentadas a mano. Los hitos NO se guardan: se derivan al renderizar.
+    - ServiceRequest.hojaRuta ServiceRequestLog[] (Cascade en hard delete).
+
+  Código:
+    - service-requests/hoja-ruta.ts (nuevo): buildHojaRuta() — ÚNICA fuente de
+      verdad de la mezcla hitos+novedades. La consumen PDF, Word y la pantalla.
+    - service-requests-service.ts: listHojaRuta / addHojaRutaEntry /
+      deleteHojaRutaEntry (borrar = sólo TENANT_ADMIN + auditado).
+      getServiceRequest incluye hojaRuta.
+    - service-requests-router.ts: GET|POST /:id/hoja-ruta, DELETE /:id/hoja-ruta/:logId.
+    - template-service-request.ts: tramitación ENCOLUMNADA (mismo bloque que la
+      OT: firma + nombre + fecha por columna). Rechazo = columna en rojo
+      "NO APROBADA" + motivo debajo (reemplaza las casillas SI/NO del papel).
+      hojaRuta render con buildHojaRuta.
+    - word-service-request.ts: espejo de ambos cambios.
+    - ServiceRequests.tsx: HojaRutaBox (hitos en gris + novedades editables);
+      fix /app/team/members devuelve lista directa, no {items} (el dropdown de
+      la tramitación salía vacío).
+
+  Verificado: typecheck api + web-modern (tsconfig.app.json), vite build,
+    17/17 checks vía API, PDF y pantalla revisados en el navegador.
+
+  Pendiente / a decidir con el cliente:
+    - Rev. 3 del REGI-LOG-01.3: encolumnado sin casillas SI/NO + fila ORDEN DE
+      TRABAJO + título "Detalle del Servicio".
+    - BUG PREEXISTENTE (no corregido, fuera de alcance): fmt() en
+      work-order-pdf/shared.ts formatea sin timeZone → las fechas date-only
+      (openDate, aprobadoAt, novedades con fecha explícita) salen UN DÍA ANTES
+      si el server corre en TZ negativa (AR/PY). Afecta TODOS los PDFs de OT y
+      SS. spare-request-pdf-service.ts ya lo hace bien (timeZone del tenant).
+      Verificar TZ del VPS.
+    - Nada commiteado. Migración SS→OT nunca corrida en VPS.
+
+  ── Mismo día, más tarde: fuera prompt()/confirm() del flujo de SS ──
+    - components/FormModal.tsx (nuevo): cáscara de los modales chicos. z-[60] +
+      useEscapeGuard (pila) → el ESC cierra el de arriba, no el de abajo.
+    - ServiceRequests.tsx: ReceiveServiceModal (ENTREGA/RECEPCION: recibe + ítem
+      + conformidad Sí/No explícita + notas, en UN formulario) y RejectModal
+      (motivo). Antes: 2 prompt() + 1 confirm() encadenados.
+      Los alert() de error → mensaje dentro del modal (actionError).
+      Borrar novedad de hoja de ruta → confirmación inline en la fila.
+    - WorkOrders.tsx: NewServiceRequestModal reemplaza el prompt() de "Nueva SS".
+
+    MOTIVO REAL (no cosmético): con confirm(), "Cancelar" significaba
+    "NO conforme" — el usuario canceló creyendo que abortaba y le quedó una SS
+    completada con el trabajo del taller rechazado (pasó con SS-3-M01-2026 en
+    local). Ahora la conformidad es una elección explícita: sin elegir, no
+    avanza.
+
+  Fuera de alcance (quedan): 3 window.confirm/alert en WorkOrders.tsx, todos del
+    módulo de AVANCES de la OT (confirm.deleteProgress), no del flujo de SS.
+
+  ── Ajustes de UI (SS) ──
+    - ServiceRequests.tsx: header del modal sticky (top-0 z-10 bg-bg). El scroll
+      lo hace la tarjeta (max-h-[90vh] overflow-y-auto), así que basta con sticky.
+    - Botón "Mandar al taller" → "Enviar a Proveedor".
+      OJO incoherencia pendiente: el hito de la HOJA DE RUTA que ESE botón genera
+      sigue diciendo "Enviada al taller <nombre>" (hoja-ruta.ts:51). No se cambió
+      porque se IMPRIME en el documento controlado, justo arriba de la sección
+      "TALLER QUE CONCURRE A REALIZAR EL SERVICIO" (texto del papel REGI-LOG-01.3).
+      Decidir con el cliente: o queda "taller" en el PDF (coherente con el papel)
+      o se unifica a "proveedor" y entra en el paquete de la Rev. 3.
+
+  ── BUG + FIX: "Nueva SS" desde la OT navegaba a /work-orders ──
+    Síntoma: el modal aparecía unos ms y la app saltaba a /work-orders (se cerraba
+    la OT). Reproducido con instrumentación de history en el navegador:
+
+      pushState({eg:4}) → history.back() → pushState({eg:5}) → history.back()
+      → pushState({eg:6}) → pushState({eg:7}) → POPSTATE
+      → pushState({usr,key,idx:null}) → POPSTATE → url=/work-orders  ⚠️
+
+    Causa raíz: FormModal usaba useEscapeGuard. Ese hook hace history.pushState al
+    registrar y history.back() al desregistrar (para que el back de Android cierre
+    el modal). Con StrictMode (doble montaje) el modal anidado genera backs
+    programáticos superpuestos, y EscapeGuardProvider los distingue con UN solo
+    booleano (programmaticBackRef) → el segundo popstate se lee como back del
+    usuario → top.onClose() del guard del modal de OT → closeLink() → /work-orders.
+
+    Fix: FormModal NO usa useEscapeGuard. ESC con listener propio en captura +
+    stopPropagation (le gana al listener global del provider, que es en burbuja).
+    Un diálogo anidado no necesita entrada de historial. Verificado: modal queda
+    abierto, ESC cierra sólo el diálogo, Crear SS funciona, URL intacta.
+
+    DEUDA CONOCIDA (no tocada, no se manifiesta ya): programmaticBackRef es un
+    booleano, no un contador → si alguna vez se anidan dos guards de verdad, el
+    mismo problema vuelve. Está en lib/escape-guard.tsx y lo usan ~20 pantallas.
+
+  ── FormModal: el clic afuera ya no cierra ──
+    Pedido del usuario. Son formularios con datos tipeados: perderlos por un clic
+    al costado es un mal negocio. Se sale por la X o por Cancelar (ESC sigue).
+    El overlay pasa de onClick={onClose} a onClick={stopPropagation}: NO alcanza
+    con sacar el handler, porque el diálogo se monta DENTRO del overlay del modal
+    de SS (que sí cierra al clic afuera) → sin stopPropagation, un clic en el
+    fondo del diálogo cerraría el modal padre.
+
+    Verificado con clic y teclado REALES (page.mouse.click / keyboard.press) en
+    los dos montajes — Nueva SS (dentro de la OT, que es una ruta) y Servicio
+    recibido (dentro del modal de SS):
+      clic afuera → diálogo sigue abierto, padre sigue abierto, URL intacta
+      ESC → cierra sólo el diálogo, padre abierto, URL intacta
+      X / Cancelar → cierran sólo el diálogo
+
+  ── Auto-guardado del bloque REGI-OPE-26.3 (pedido del usuario) ──
+    BUG DE FONDO encontrado y reproducido: useDirtyTracker (WorkOrders.tsx) NO
+    incluía regiForm / priority / plannedItems. Al no verlos, isDirty=false → ESC
+    cerraba el modal SIN ofrecer guardar y el cambio se perdía EN SILENCIO.
+    Reproducido: cambiar "Nro de viaje" → ESC → url=/work-orders, sin preguntar.
+
+    Fix elegido por el usuario: guardado automático (no dirty-tracker).
+    - saveRegiBlock(): PATCH ACOTADO a los campos del bloque (priority, location,
+      providerId, voyage/requestedBy/assignedTo/systemArea/maintenanceKind/
+      pendingDetail/taskCompleted) + sync de items. NO manda el resto del modal:
+      tildar algo no debe subir un título a medio tipear. VERIFICADO: durante una
+      prueba se ensució la descripción de la OT en pantalla y NO llegó al server.
+    - Disparo: useEffect sobre una huella JSON del bloque, debounce 700ms.
+      · regiTouched (ref, se marca en los onChange) → no dispara en la carga inicial.
+      · regiSavedSnapshotRef → no re-guarda si la huella no cambió.
+      · La huella EXCLUYE los ids de los ítems: tras guardar se hace
+        reloadPlannedItems() para recuperar los ids del server; sin excluirlos,
+        ese reload cambiaría la huella y dispararía un bucle. Y sin el reload, el
+        próximo guardado re-POSTearía los ítems nuevos (DUPLICADOS).
+    - WoRegiSections: props saving/saved/error → aviso "✓ Guardado" en el header.
+
+    Verificado en navegador + API: campo → ✓ Guardado, persiste tras recargar,
+    ventana NO se cierra, URL no se mueve; ítem nuevo + 3 auto-guardados → 1 solo
+    ítem en la base (sin duplicados). OT de prueba restaurada.
+
+    NOTA: location/providerId siguen en el dirty-tracker, así que tras
+    auto-guardarlos un ESC puede preguntar "¿guardar?" de más. Es inocuo (ya está
+    guardado; "Descartar" no pierde nada). No se tocó el tracker para no resetear
+    el dirty del resto del formulario.
+
+  ── Regla nueva: una SS sólo se abre desde una OT AUTORIZADA ──
+    Pedido del usuario. Antes alcanzaba con que la OT estuviera abierta
+    (PLANNED/IN_PROGRESS/ON_HOLD); ahora además exige wo.autorizadoAt.
+    Razón: contratar un taller compromete gasto — no puede hacerse para un
+    trabajo que la propia empresa todavía no autorizó. Sin esto, la SS era una
+    ventana para saltear la tramitación de la OT.
+
+    - service-requests-service.ts / createServiceRequestForWorkOrder:
+      409 WO_NOT_AUTHORIZED si !wo.autorizadoAt (después del check de WO_OPEN).
+      Es el gate real: el front sólo evita ofrecer el botón.
+    - WorkOrders.tsx: canOpenServiceRequest exige también autorizadoAt.
+      El mensaje del porqué ahora se muestra SIEMPRE que no se pueda abrir (antes
+      sólo si no había SS previas → una OT con SS y sin botón no se explicaba), y
+      distingue el motivo: "falta aprobarla y autorizarla" / "falta autorizarla"
+      vs "sólo mientras esté abierta".
+
+    Consistente con lo que ya hacía el modal: avances y resultado también se
+    habilitan recién con la OT autorizada (isAuthorized, WorkOrders.tsx:825).
+
+    Verificado (API + navegador): OT sin autorizar → 409 WO_NOT_AUTHORIZED y sin
+    botón "Nueva SS"; OT autorizada → 201 + botón. SS de prueba borrada.
+
+    OJO: la regla aplica AL CREAR. Las SS ya existentes sobre OT no autorizadas
+    NO se tocan (en la base local hay 1: SS-8-M01-2026 ← OT-M01-26-0369). Si en
+    el VPS hubiera casos así, quedan como están — no hay backfill.
+
+  ── Tramitación de la SS = la de la OT (pedido del usuario) ──
+    "En lugar de este tipo de edición de usuario, prefiero el que utiliza la OT."
+    Elegido: TODO el flujo de la OT, no sólo el widget.
+
+    CAMBIO DE REGLA (revierte una decisión previa del propio usuario, confirmada
+    explícitamente): autorizar una SS ahora TAMBIÉN lo puede hacer el Jefe de
+    Máquinas. Antes era sólo tierra (Superintendente / DPA) — así lo había pedido
+    al inicio ("la autorizacion debe ser solo por Superintendente Tecnico o DPA").
+    Ahora canApprove == canAuthorize == los 3 roles, igual que la OT.
+    Se limpiaron todos los "sólo tierra" de comentarios y mensajes (9 lugares).
+
+    - service-requests-service.ts:
+      · canAuthorize += MAINTENANCE_MANAGER.
+      · ApprovalInput { name, onBehalfUserId?, actionDate? } + resolveSigner():
+        sólo TENANT_ADMIN firma por otro / fecha otro día. Elegible = admin, o
+        superintendente/jefe de máquinas A CARGO DE ESE BUQUE (403 si no).
+        Calcado de setWorkOrderApproval de la OT.
+      · approve/authorize toman el payload; el audit de authorize registra
+        onBehalfUserId cuando el firmante != actor.
+      · BORRADOS: updateServiceRequestTramitacion + TramitacionInput (sin uso).
+    - service-requests-router.ts: approve/authorize pasan el body; BORRADA la
+      ruta PATCH /:id/tramitacion.
+    - ServiceRequests.tsx: BORRADOS PersonPicker, TRAM_STEPS, TramForm,
+      RejectModal, saveTramitacion, toDateInput, import Pencil. Tramitación pasa
+      a SÓLO LECTURA (sin "Editar"). Nuevo SsApprovalModal (calcado de
+      ApprovalModal de la OT): select de elegibles con "· (sin firma)" + fecha,
+      sólo para admin; el resto escribe su nombre. Rechazar entra por el mismo
+      modal.
+
+    SE PIERDE (aceptado por el usuario en la pregunta): editar quién SOLICITA y
+    su fecha. La OT no lo tiene. Las SS históricas de papel se cargan por insert
+    directo (ver memoria cargar-ss-standalone-dch), no por esta vía.
+
+    Verificado 8/8 por API: jefe de máquinas aprueba Y autoriza; admin firma por
+    otro con fecha elegida (2026-05-20 respetada); 403 por rol no elegible
+    (Pilotín) y por jefe de OTRO buque (Pedro Pont/M02 sobre SS de M01); un
+    no-admin no puede suplantar ni fechar. En pantalla: sin botón "Editar", modal
+    "Aprobar SS · SS-10-M01-2026 · Control aislación" con desplegable filtrado al
+    M01 (Admin · (sin firma), Jorge Bael, Ronald Silva, Christian Veron, Rene
+    Cano · (sin firma)) + fecha. 10 SS de prueba purgadas; SS-10 restaurada.
+
+  ── CORRECCIÓN (mismo día): el Jefe de Máquinas NO autoriza ──
+    Se revierte el cambio de regla de más arriba. Queda la regla ORIGINAL:
+      Aprueba  → TENANT_ADMIN · FLEET_SUPERINTENDENT · MAINTENANCE_MANAGER
+      Autoriza → TENANT_ADMIN · FLEET_SUPERINTENDENT   (sólo tierra)
+    Motivo: con los 3 roles, un Jefe de Máquinas aprobaba Y autorizaba la misma
+    SS, habilitando solo el gasto con el taller. Se avisó al cerrar y el usuario
+    lo corrigió. La SS es a propósito MÁS ESTRICTA que la OT (trabajo propio) —
+    no unificar.
+
+    Se restauró en los 2 lados + la pieza que impide saltearla por la ventana:
+    - canAuthorize sin MAINTENANCE_MANAGER; comentarios y mensajes de vuelta a
+      "sólo tierra".
+    - resolveSigner vuelve a ser POR PASO: APRUEBA admite al jefe de máquinas del
+      buque, AUTORIZA no. Sin esto un admin podía autorizar "en nombre de" un
+      jefe de máquinas y saltear el gate.
+    - ServiceRequests.tsx: CAN_AUTHORIZE_ROLES sin MAINTENANCE_MANAGER, y el
+      desplegable de SsApprovalModal filtra por `step` (no ofrece lo que el
+      backend va a rechazar con 403).
+
+    Verificado 9/9 por API + navegador:
+      · jefe de máquinas aprueba ✓ / autoriza → 403 ✓
+      · admin autoriza EN NOMBRE del jefe de máquinas → 403 NOT_ELIGIBLE_APPROVER ✓
+      · admin aprueba en nombre del jefe + fecha 2026-05-20 respetada ✓
+      · 403 por rol no elegible (Pilotín) y por jefe de OTRO buque (M02 sobre M01) ✓
+      · no-admin: se ignoran onBehalf y fecha (firma él, hoy) ✓
+      · desplegables: APROBAR ofrece 5 (incluye Christian Veron y Rene Cano);
+        AUTORIZAR ofrece 3 (Admin, Jorge Bael, Ronald Silva) ✓
+    Datos de prueba purgados; SS-10 restaurada a Borrador.
+
+  ── Nueva OT: el TIPO pasa a las 5 del REGI-OPE-26.3 + Inspección ──
+    Pedido del usuario. El modal ofrecía el eje GRUESO (Preventivo / Correctivo /
+    Inspección) mientras el bloque del formulario, más abajo en la misma pantalla,
+    ofrecía el FINO (5). Dos campos parecidos con listas distintas.
+
+    DATO QUE CONDICIONÓ LA DECISIÓN (medido, no supuesto): Mercurio tiene 134 OT
+    de tipo INSPECTION — 124 nacidas de planes y 10 creadas A MANO ("Inspección
+    subacua", "Medición de vibración torsional"). El papel REGI-OPE-26.3 lista 5
+    tipos y NO incluye Inspección. Se ofreció al usuario: sólo las 5 / las 5 +
+    Inspección / consultar a Mercurio. Eligió "las 5 + Inspección" (no perder lo
+    que hoy se usa, aunque el desplegable quede con 6 y el papel muestre 5).
+
+    - CreateWorkOrderModal.tsx: WO_KIND_OPTIONS = WO_MAINTENANCE_KINDS + Inspección.
+      Sólo si isMercurio (tenant.workOrderPdfTemplate empieza con "MERCURIO"); el
+      resto de los clientes sigue con las 3 (verificado: demo=STANDARD).
+      Las 5 viajan como `maintenanceKind` y el BACKEND deriva el type grueso
+      (ya lo hacía: deriveTypeFromMaintenanceKind en createWorkOrder). Inspección
+      viaja como `type` — no tiene equivalente fino.
+      kindFromType(): prefill grueso → opción fina. CORRECTIVE →
+      CORRECTIVO_NO_PROGRAMADO (un correctivo nacido de un defecto no es
+      programado); round-trip verificado, el type resultante no cambia.
+
+    NO se tocó el enum WorkOrderType: el eje grueso sigue siendo el que usan MTTR,
+    OT→Defecto y los reportes (ver el plan: ensancharlo rompía ~7 callsites).
+
+    Verificado 6/6 por API — lo guardado en cada caso:
+      PREVENTIVO → PREVENTIVE   · CORRECTIVO_PROGRAMADO → CORRECTIVE
+      PREDICTIVO → PREVENTIVE   · CORRECTIVO_NO_PROGRAMADO → CORRECTIVE
+      EMERGENCIA → CORRECTIVE   · INSPECTION → INSPECTION (sin kind)
+    En pantalla, el desplegable lista las 6. OT de prueba borradas.
+
+    NOTA: el usuario justificó el pedido con "las SS heredan ese dato de las OT".
+    No es así: REGI-LOG-01.3 no tiene tipo de mantenimiento. La SS hereda de la OT
+    department (vía systemArea), causes y providerId. Se le aclaró.
+
+  ── BUG (regresión propia) + 2 ajustes ──
+    1. BUG "+ Agregar" repuesto: la fila aparecía ~1s y desaparecía. Causa: el
+       auto-guardado del bloque REGI disparaba a los 700ms, no persistía la fila
+       (sin descripción no se guarda) pero IGUAL hacía reloadPlannedItems(), y la
+       recarga pisaba la fila en curso. Fix doble:
+       · la huella del snapshot ahora EXCLUYE ítems sin descripción → agregar una
+         fila vacía ya no dispara guardado (no hay nada que guardar);
+       · el efecto de recarga conserva las filas en curso (sin id y sin
+         descripción) en vez de reemplazar la lista entera.
+       Verificado: fila sigue viva a los 2.5s, se escribe y se guarda (✓ Guardado).
+    2. Sección 5 "Solicitudes de Servicio" ahora va en recuadro propio
+       (bg-cyan-500/5 + border-cyan-500/20 + rounded-2xl p-4), mismo trato que
+       "Tarea concluida" (teal). Pedido del usuario: es una decisión de peso y se
+       leía como nota al pie. Verificado por DOM.
+    3. PDF OT, campo TAREA: los criterios de aceptación ahora van bajo el rótulo
+       "Detalle:" (label "taskDetail", override-able por TenantForm). Antes se
+       pegaban al título y se leía todo corrido. Verificado en el PDF real.
+
+  ── Empresa tercerizada fuera del catálogo (pedido del usuario) ──
+    La SS ya lo resolvía (tallerNotes); la OT sólo tenía providerId.
+
+    OJO NAMING: la columna NO se llama `providerName`. Ese nombre ya lo usa un
+    campo DERIVADO que listTenantWorkOrders / getTenantWorkOrder agregan al leer
+    (el nombre del Provider resuelto por id). Una columna homónima lo pisaría vía
+    `{ ...record, providerName }`. Se llama `providerOther`.
+
+    - schema: WorkOrder.providerOther String? (aditivo, db push OK).
+    - work-orders-service:
+      · getTenantWorkOrder + listTenantWorkOrders: providerName = catálogo ??
+        providerOther. Al resolverlo AHÍ, todo lo que lee la OT (PDF, columna
+        EMPRESA de PROGRAMACION DE TRABAJO, areaText) funciona sin tocarse.
+      · update: providerOther sigue la misma regla que providerId — sólo si es
+        tercerizado, y las DOS se limpian si deja de serlo.
+      · CreateWorkOrderInput / UpdateWorkOrderInput += providerOther.
+    - WoRegiSections: el select suma "Otra empresa (no está en la lista)…" →
+      revela un input de texto. Excluyentes: elegir del catálogo limpia el texto
+      y viceversa. Arranca en "otra" si la OT ya tenía providerOther.
+    - WorkOrders.tsx: cableado + incluido en el auto-guardado (patch acotado y
+      huella del snapshot) y en el "Guardar" grande.
+
+    Verificado 3/3 por API: guarda el nombre a mano; providerName lo resuelve al
+    leer; al dejar de ser tercerizado se limpian ambas. OT restaurada.
+
+    CORRECCIÓN de un diagnóstico previo mío: dije que la columna EMPRESA del PDF
+    estaba SIEMPRE vacía porque el loader leía un campo inexistente. FALSO —
+    getTenantWorkOrder sí resuelve providerName (línea ~429). No había tal bug.
+
+  ── PDF OT: Análisis de Riesgo y LOTO pasan a un ANEXO aparte ──
+    Pedido del usuario. Antes NIVEL + RESULTADO + LOTO iban todos seguidos en la
+    OT; los dos últimos son textos largos que la hacían crecer sin control.
+
+    DATO MEDIDO que definió una decisión: la probabilidad y la consecuencia viven
+    en el PLAN (MaintenancePlan), no en la OT — la OT sólo guarda riskLevel. De
+    1308 OT de Mercurio, sólo 313 pueden RESALTAR su celda; 995 no tienen ejes
+    (92 son correctivas sin plan, y la mayoría de los planes no los tienen
+    cargados). Además sólo 538 tienen riskLevel y 537 análisis/LOTO. Se ofreció
+    al usuario: tabla siempre / sólo cuando se puede marcar / que la OT tenga sus
+    propios ejes. Eligió "imprimir la tabla igual, sin marcar" (la página 2 del
+    papel original era justamente una tabla de riesgos → sirve de referencia).
+
+    - template-mercurio-ot.ts:
+      · `risk` (queda en la OT): NIVEL + matriz SIEMPRE (se le sacó el gate
+        `if (riskProbability || riskConsequence)`; renderRiskMatrix ya dibujaba la
+        grilla sin resaltar cuando faltan los ejes) + nota "Ver adjunto el
+        resultado del Analisis de Riesgo y LOTO." (label riskAnnexNote).
+      · `riskAnnex` (NUEVO): canvas.pageBreak() + banda "ANEXO — ANALISIS DE
+        RIESGO Y LOTO" + identificación (ORDEN DE TRABAJO / UNIDAD / EQUIPO /
+        FECHA) + RESULTADO + LOTO. Lleva identificación propia PORQUE la cabecera
+        del documento controlado sólo se dibuja en la primera página (pageBreak
+        no la repite) y el anexo se entrega suelto. Se imprime siempre, aunque
+        esté vacío: la OT remite a él y el análisis previo es obligatorio.
+    - Orden de secciones: "signatures", "riskAnnex" en tenant-forms-service
+      (default) + seed-mercurio-forms + LA FILA DE TenantForm EN LA BASE (gana
+      sobre el default → sin actualizarla el anexo no se imprimía).
+
+    Verificado en el PDF real (OT-M01-26-0368, 3 páginas):
+      pág. 2 → NIVEL: Medio + matriz completa a color + la nota + firmas
+      pág. 3 → ANEXO identificado (OT-M01-26-0368 · MAO 01 · AIS · 16/7/2026)
+               con el análisis de riesgo y el LOTO completos.

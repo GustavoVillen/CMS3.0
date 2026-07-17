@@ -11,7 +11,7 @@ import {
   type DevTenantStatus,
 } from "../data/dev-tenant-store";
 
-export type WorkOrderPdfTemplateKey = "STANDARD" | "MERCURIO";
+export type WorkOrderPdfTemplateKey = "STANDARD" | "MERCURIO" | "MERCURIO_OT";
 
 export interface PlatformTenantSummary {
   id: string;

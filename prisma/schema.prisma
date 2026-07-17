@@ -147,9 +147,58 @@ enum WorkOrderDepartment {
   OTROS
 }
 
+// ── Formulario controlado de OT (Mercurio REGI-OPE-26.3) ─────────────────────
+// Recuadros de opciones del papel. Son ejes independientes entre sí y de
+// `department`: el formulario separa QUIÉN pide, A QUIÉN se asigna y sobre QUÉ
+// sistema, mientras que `department` es el área responsable del registro.
+
+enum WorkOrderRequestedByArea {
+  CUBIERTA
+  MAQUINAS
+  TECNICA
+  OPS_SSMA
+}
+
+enum WorkOrderAssignedToArea {
+  TRIPULACION
+  TERCERIZADO
+  TECNICA
+  OPS_SSMA
+}
+
+enum WorkOrderSystemArea {
+  MAQUINAS
+  RE_CUBIERTA
+  BARCAZAS
+}
+
+// TIPO DE MANTENIMIENTO del formulario. Es un refinamiento de `WorkOrderType`,
+// no un reemplazo: el enum grueso (PREVENTIVE/CORRECTIVE/INSPECTION) sigue
+// siendo el eje que consumen MTTR, el flujo OT→Defecto y los reportes, y
+// ensancharlo rompería esos consumidores en silencio. El service deriva `type`
+// a partir de este campo; el mapeo 5→3 no tiene inversa, así que no es
+// información redundante.
+enum WorkOrderMaintenanceKind {
+  PREVENTIVO
+  CORRECTIVO_PROGRAMADO
+  CORRECTIVO_NO_PROGRAMADO
+  PREDICTIVO
+  EMERGENCIA
+}
+
+// El formulario pide REPUESTOS y MATERIALES en recuadros separados.
+enum WorkOrderItemKind {
+  SPARE
+  MATERIAL
+}
+
 enum WorkOrderPdfTemplate {
   STANDARD
+  // Formulario viejo de Mercurio. Se conserva para poder volver atrás:
+  // revertir es UPDATE "TenantSetting" SET "workOrderPdfTemplate"='MERCURIO'.
   MERCURIO
+  // REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025) — el formulario vigente.
+  MERCURIO_OT
 }
 
 // ── Tenant-configurable controlled-document forms ─────────────────────────────
@@ -408,6 +457,8 @@ enum PermitType {
   ENCLOSED_SPACE_ENTRY
   WORKING_ALOFT
   ELECTRICAL_ISOLATION
+  // "FRIO" del formulario REGI-OPE-26.3 (trabajo en frío: sin fuentes de ignición).
+  COLD_WORK
 }
 
 enum PermitStatus {
@@ -1127,6 +1178,7 @@ model Vessel {
   assets           Asset[]
   maintenancePlans MaintenancePlan[]
   workOrders       WorkOrder[]
+  serviceRequests  ServiceRequest[]
   defects          Defect[]
   deferrals        Deferral[]
   capaRecords      CapaRecord[]
@@ -1313,9 +1365,25 @@ model WorkOrder {
   // (sin FK forzada, mismo patrón que assignedToUserId; el nombre se resuelve al leer).
   department              WorkOrderDepartment?
   providerId              String?
+  // La empresa tercerizada puede no estar en el catálogo de Providers: ahí se
+  // escribe el nombre a mano. Es alternativo a providerId, no complementario.
+  // NO se llama `providerName`: ese nombre ya lo usa el campo DERIVADO que
+  // getTenantWorkOrder agrega al leer (el nombre resuelto del catálogo), y una
+  // columna homónima lo pisaría. Al leer, providerName = catálogo ?? providerOther.
+  providerOther           String?
   location                String?
   communicationMethod     String[]
   distribution            String[]
+  // ── Formulario controlado REGI-OPE-26.3 "Orden de trabajo" ──────────────────
+  // Campos aditivos, todos nullable: las OT anteriores al formulario siguen
+  // siendo válidas y el PDF cae a los datos que ya tenía.
+  voyageNumber            String?                    // NRO DE VIAJE (texto libre)
+  requestedByArea         WorkOrderRequestedByArea?  // SOLICITADO POR
+  assignedToArea          WorkOrderAssignedToArea?   // ASIGNADO A (área; ≠ assignedToUserId)
+  systemArea              WorkOrderSystemArea?       // SISTEMA
+  maintenanceKind         WorkOrderMaintenanceKind?  // TIPO DE MANTENIMIENTO (deriva `type`)
+  taskCompleted           Boolean?                   // TAREA CONCLUIDA? SI/NO
+  pendingDetail           String?                    // DETALLE DE PENDIENTES (MATERIALES/TAREAS)
   // Result fields
   woResult                String?
   executedByName          String?
@@ -1351,6 +1419,11 @@ model WorkOrder {
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]
   progressNotes       WorkOrderProgressNote[]
+  // Solicitudes de Servicio (pedidos de servicio externo) abiertas desde esta OT.
+  serviceRequests     ServiceRequest[]
+  // REPUESTOS / MATERIALES del formulario (planificados, se cargan al abrir la OT).
+  // Distinto de los repuestos CONSUMIDOS al cerrar, que son StockMovement ISSUE.
+  items               WorkOrderItem[]
 
   @@unique([tenantId, vesselCode, workOrderCode])
   @@index([tenantId])
@@ -1361,6 +1434,162 @@ model WorkOrder {
   @@index([tenantId, assetId])
   // Historial de ejecuciones por plan (modal Historial): listPlanExecutions({ maintenancePlanId }).
   @@index([tenantId, maintenancePlanId])
+}
+
+// REPUESTOS / MATERIALES planificados de una OT (recuadros del formulario
+// REGI-OPE-26.3). Se cargan al abrir la OT, antes de ejecutar.
+//
+// Ojo, hay tres nociones distintas de "repuesto" alrededor de una OT y no hay
+// que confundirlas:
+//   · WorkOrderItem      → lo que se PLANIFICA que hace falta (esto).
+//   · StockMovement ISSUE→ lo que se CONSUMIÓ realmente, al cerrar la OT.
+//   · SpareRequest       → el pedido a compras, módulo aparte (otra app lo maneja).
+// `spareId` es opcional: el formulario se llena a mano y el ítem puede no estar
+// en el catálogo. Que esté deja el enganche listo para integrarlo más adelante.
+model WorkOrderItem {
+  id              String            @id @default(cuid())
+  workOrderId     String
+  kind            WorkOrderItemKind
+  spareId         String?
+  description     String
+  quantity        Float             @default(1)
+  unit            String            @default("ud")
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  createdByUserId String
+  updatedAt       DateTime          @updatedAt
+  updatedByUserId String
+
+  workOrder       WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+}
+
+// ─── Solicitud de Servicio (SS) ───────────────────────────────────────────────
+// Pedido de un servicio EXTERNO (un taller que concurre a bordo). No es sinónimo
+// de OT: una SS sólo se abre desde una OT abierta y siempre queda ligada a ella
+// (1 OT → N SS). Formulario controlado: REGI-LOG-01.3 "Solicitud de servicios".
+//
+// Contratar un tercero compromete gasto, por eso el flujo tiene un gate duro:
+// IN_PROGRESS sólo se alcanza desde AUTORIZADA, y autorizar está restringido a
+// tierra (TENANT_ADMIN = "DPA / Director de Operaciones", FLEET_SUPERINTENDENT =
+// "Superintendente técnico"). Ver service-requests-service.ts.
+
+enum ServiceRequestStatus {
+  DRAFT        // Borrador, editable
+  SOLICITADA   // Enviada para aprobación
+  APROBADA     // Aprobada a bordo (Capitán / Jefe de Máquinas)
+  AUTORIZADA   // Autorizada por tierra (Superintendente / DPA) — habilita el trabajo
+  IN_PROGRESS  // El taller está ejecutando
+  COMPLETED    // Servicio recibido conforme
+  REJECTED     // No aprobada / no autorizada
+  CANCELLED
+}
+
+model ServiceRequest {
+  id                  String               @id @default(cuid())
+  tenantId            String
+  // Denormalizado de la OT: habilita el scope por buque y el código correlativo.
+  vesselCode          String
+  // NOT NULL: no existe SS sin OT. Se valida además que la OT esté abierta.
+  workOrderId         String
+  serviceRequestCode  String               // "SS-<VESSEL>-<YY>-<NNNN>"
+  status              ServiceRequestStatus @default(DRAFT)
+  priority            WorkOrderPriority    @default(MEDIUM)
+  openDate            DateTime
+  title               String?
+  description         String?              // DESCRIPCION DEL SERVICIO
+  causes              String?              // DETALLE DE LAS CAUSAS
+  // TALLER QUE CONCURRE A REALIZAR EL SERVICIO. providerId sin FK forzada (mismo
+  // patrón que WorkOrder.providerId); tallerNotes para talleres fuera del catálogo.
+  providerId          String?
+  tallerNotes         String?
+  // SOLICITUD DE COMPRAS: NORMAL | AFECTA SEGURIDAD | AFECTA SERVICIO.
+  // Múltiple — en el formulario real conviven marcadas "AFECTA SEGURIDAD" y
+  // "AFECTA SERVICIO" (ver SS-74-M01-2026). No es un link a otra entidad: la
+  // Solicitud de Compra la maneja otra app.
+  purchaseRequestKinds String[]
+  department          WorkOrderDepartment?
+  communicationMethod String[]
+  distribution        String[]
+  observations        String?
+  closeNotes          String?
+  cancelReason        String?
+  // ENTREGA / RECEPCION: "si por parte de quien solicitó el servicio hay
+  // conformidad con el trabajo realizado". Se completa al recibir el servicio.
+  receptionItem       String?
+  receivedByName      String?
+  receptionConform    Boolean?
+  // Fechas de los dos pasos que no dejaban rastro propio (updatedAt cambia con
+  // cualquier edición, así que no sirve). Alimentan los hitos de la HOJA DE RUTA.
+  startedAt           DateTime?  // se mandó el trabajo al taller (IN_PROGRESS)
+  receivedAt          DateTime?  // se recibió el servicio (COMPLETED)
+  // Pie del formulario: "Deben firmar y registrarse el Jefe de Máquinas y Capitán".
+  // Texto libre (el formulario admite nombre + cargo, ej. "CAP. WILLIAM RIQUELME").
+  capitanName         String?
+  jefeMaquinasName    String?
+  // Tramitación (Solicita → Aprueba → Autoriza) — espejo de WorkOrder.
+  // El nombre es texto libre (el papel admite "Jefe de Máquinas" a secas) y el
+  // *ByUserId es quien lo hizo en la app: de ahí sale la firma del PDF.
+  // TENANT_ADMIN puede editar nombres y fechas para cargar SS históricas o
+  // corregir un dato mal cargado (ver updateServiceRequestTramitacion).
+  solicitaByName      String?    // si está, gana sobre el nombre del creador
+  aprobadoByName      String?
+  aprobadoByUserId    String?
+  aprobadoAt          DateTime?
+  autorizadoByName    String?
+  autorizadoByUserId  String?
+  autorizadoAt        DateTime?
+  rechazadoByName     String?
+  rechazadoAt         DateTime?
+  rechazoReason       String?
+  createdAt           DateTime             @default(now())
+  createdByUserId     String
+  updatedAt           DateTime             @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel               @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  // Restrict (default): la OT usa soft-delete, un hard delete con SS debe fallar.
+  workOrder           WorkOrder            @relation(fields: [workOrderId], references: [id])
+  hojaRuta            ServiceRequestLog[]
+
+  @@unique([tenantId, vesselCode, serviceRequestCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  // Panel "Solicitudes de Servicio" del modal de la OT.
+  @@index([workOrderId])
+}
+
+/// HOJA DE RUTA DEL PEDIDO (REGI-LOG-01.3): FECHA | NOVEDAD | ASIENTA.
+///
+/// Guarda SÓLO las novedades que alguien asienta a mano (el taller reprogramó,
+/// falta un repuesto, no pudo entrar a sala de máquinas...). Los hitos del
+/// sistema — creada / aprobada / autorizada / enviada al taller / recibida — NO
+/// se guardan acá: se derivan al renderizar de las fechas que ya tiene
+/// ServiceRequest (openDate, aprobadoAt, autorizadoAt, startedAt, receivedAt) y
+/// se mezclan por fecha con estas filas. Duplicarlos abriría la puerta a que la
+/// hoja de ruta contradiga a la tramitación del mismo formulario.
+model ServiceRequestLog {
+  id               String   @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  entryDate        DateTime // FECHA de la novedad (no es la de carga: se puede asentar en diferido)
+  novedad          String   @db.Text
+  // Texto libre, igual que la tramitación: el papel admite "Jefe de Máquinas" a
+  // secas. El userId queda para trazar quién lo cargó en la app.
+  asientaByName    String
+  asientaByUserId  String?
+  createdAt        DateTime @default(now())
+  createdByUserId  String
+  updatedAt        DateTime @updatedAt
+
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([serviceRequestId])
 }
 
 enum WorkOrderProgressKind {

@@ -37,7 +37,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
   const isPlanned = !!(wo as any).maintenancePlanId || (wo as any).type === "PREVENTIVE";
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `SS ${wo.workOrderCode}` } });
+    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end",  () => resolve(Buffer.concat(chunks)));
@@ -96,16 +96,16 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     });
     canvas.y = MARGIN_T + hdrH + SEC_GAP; // ~1cm de separación entre el header y el recuadro
 
-    // ── REMOLCADOR / SOLICITUD NUMERO ───────────────────────────────────────
+    // ── EMBARCACION / ORDEN NUMERO ──────────────────────────────────────────
     const R1_H = 22;
     ensureSpace(R1_H);
     const HALF = Math.floor(W / 2);
     cell(ML, canvas.y, 80, R1_H, "EMBARCACION", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + 80, canvas.y, HALF - 80, R1_H, sanitizePdfText(vesselName ?? wo.vesselCode ?? ""), { fontSize: 9 });
-    cell(ML + HALF, canvas.y, 100, R1_H, "Solicitud Numero:", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
+    cell(ML + HALF, canvas.y, 100, R1_H, "Orden Numero:", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
     cell(ML + HALF + 100, canvas.y, W - HALF - 100, R1_H, sanitizePdfText(wo.workOrderCode ?? ""), { bold: true, fontSize: 9, color: "#1d4ed8" });
     canvas.y += R1_H;
-    canvas.y += GAP_5MM; // 5mm entre Remolcador/Solicitud y Departamento
+    canvas.y += GAP_5MM; // 5mm entre Embarcacion/Orden y Departamento
 
     // ── DEPARTAMENTO + FECHA ────────────────────────────────────────────────
     const R2_H = 18;
@@ -121,7 +121,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     const deptW = Math.floor((W - FECHA_W) / DEPTS.length);
     DEPTS.forEach((d, i) => {
       const dcx = ML + i * deptW + 6, dcy = canvas.y + 6;
-      // Tildar el área asignada a la SS (igual que MOTIVO/PLANIFICADO).
+      // Tildar el área asignada a la OT (igual que MOTIVO/PLANIFICADO).
       if ((wo as any).department === d) drawCheckedBox(dcx, dcy, d);
       else fcheck(dcx, dcy, d);
     });
@@ -165,8 +165,8 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       canvas.y += PLAN_ROW_H;
     }
 
-    // ── MOTIVO DE LA SOLICITUD DE SERVICIO ───────────────────────────────────
-    section("MOTIVO DE LA SOLICITUD DE SERVICIO");
+    // ── MOTIVO DE LA ORDEN DE TRABAJO ────────────────────────────────────────
+    section("MOTIVO DE LA ORDEN DE TRABAJO");
     const MOTIVO_H = 22;
     ensureSpace(MOTIVO_H);
     doc.rect(ML, canvas.y, W, MOTIVO_H).fillColor(WHITE).fill();
@@ -316,7 +316,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: (wo as any).createdAt, sig: ctx.solicitaSignatureBuffer },
       { label: "APRUEBA",      name: (wo as any).aprobadoByName ?? null,     date: (wo as any).aprobadoAt, sig: ctx.apruebaSignatureBuffer },
       { label: "AUTORIZA",     name: (wo as any).autorizadoByName ?? null,   date: (wo as any).autorizadoAt, sig: ctx.autorizaSignatureBuffer },
-      { label: "CIERRA LA SS", name: (wo as any).executedByName ?? null,     date: (wo as any).completedDate, sig: ctx.cierraSignatureBuffer },
+      { label: "CIERRA LA OT", name: (wo as any).executedByName ?? null,     date: (wo as any).completedDate, sig: ctx.cierraSignatureBuffer },
     ];
     const trCW = Math.floor(W / 4);
     trCols.forEach((c, i) => {
