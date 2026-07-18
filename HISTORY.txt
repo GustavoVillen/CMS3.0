@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-07-17] Performance: abrir el detalle de una OT era lento con muchos registros
+Agent: Claude Opus 4.8
+- Causa: getTenantWorkOrder se ejecutaba 3x al abrir el modal (detalle + items +
+  service-requests reusaban la función pesada sólo para chequear scope), sus
+  lecturas iban secuenciales, y la consulta de stockMovement por OT no tenía
+  índice (escaneaba todos los movimientos del tenant).
+- Fix 1 (schema): StockMovement @@index([tenantId, referenceType, referenceId]).
+- Fix 2: nuevo requireWorkOrderScope() liviano (select mínimo) usado por
+  listWorkOrderItems y listWorkOrderServiceRequests en vez de getTenantWorkOrder.
+- Fix 3: asset/provider/stockMovement dentro de getTenantWorkOrder ahora en
+  Promise.all (antes await encadenados).
+
 [2026-07-16] Corrección OT ≠ SS: la Solicitud de Servicio pasa a entidad propia
 Agent: Claude Opus 4.8
 - Contexto: se creía que una Orden de Trabajo (OT) y una Solicitud de Servicio (SS)

@@ -38,6 +38,8 @@ interface ServiceRequest {
   description: string | null;
   causes: string | null;
   providerId: string | null;
+  /** Nombre del taller resuelto del catálogo (providerId). El campo muestra esto o tallerNotes. */
+  providerName?: string | null;
   tallerNotes: string | null;
   /** NORMAL / AFECTA SEGURIDAD / AFECTA SERVICIO — el papel admite varias. */
   purchaseRequestKinds: string[];
@@ -59,7 +61,7 @@ interface ServiceRequest {
   // Pie del formulario
   capitanName: string | null;
   jefeMaquinasName: string | null;
-  workOrder?: { id: string; workOrderCode: string; title: string | null; status: string } | null;
+  workOrder?: { id: string; workOrderCode: string; title: string | null; status: string; assetName?: string | null } | null;
 }
 interface ListResponse { items: ServiceRequest[]; total: number }
 
@@ -682,6 +684,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 bg-bg border-b border-fg/10">
           <div className="min-w-0">
             <p className="font-mono text-sm font-bold text-accent">{sr.serviceRequestCode}</p>
+            {sr.workOrder?.assetName && (
+              <p className="text-sm font-semibold text-fg truncate">{sr.workOrder.assetName}</p>
+            )}
             <p className="text-xs text-text-industrial/60 truncate">{sr.title || sr.description || "—"}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -729,9 +734,13 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
 
           <div>
             <label className={labelCls}>Taller que concurre</label>
+            {/* El taller puede venir del catálogo (providerId → providerName) o
+                como texto libre (tallerNotes). Cuando no hay texto libre se
+                muestra el nombre del catálogo, para no dejar el campo vacío en
+                las SS donde el taller se eligió de la lista. */}
             <input
               className={inputCls}
-              value={tallerNotes}
+              value={tallerNotes || (sr.providerName ?? "")}
               disabled={!editable}
               onChange={e => setTallerNotes(e.target.value)}
               placeholder="Ej. Hidraulica Brasil"

@@ -9,7 +9,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { assertNotLocked } from "../../common/record-lock";
-import { getTenantWorkOrder } from "./work-orders-service";
+import { requireWorkOrderScope } from "./work-orders-service";
 
 export type WorkOrderItemKind = "SPARE" | "MATERIAL";
 
@@ -32,9 +32,14 @@ function ensureCanManage(session: TenantAccessSession) {
   }
 }
 
-/** Resuelve la OT aplicando tenant + vessel scope (404 si no es visible). */
+/**
+ * Resuelve la OT aplicando tenant + vessel scope (404 si no es visible).
+ * Chequeo LIVIANO: estos handlers sólo necesitan id/vesselCode/status, nunca el
+ * detalle completo. Antes reusaban getTenantWorkOrder "por comodidad", lo que
+ * hacía que abrir el modal pagara el costo del detalle 3 veces.
+ */
 async function requireWorkOrder(session: TenantAccessSession, workOrderId: string) {
-  return getTenantWorkOrder(session, workOrderId);
+  return requireWorkOrderScope(session, workOrderId);
 }
 
 export async function listWorkOrderItems(session: TenantAccessSession, workOrderId: string) {

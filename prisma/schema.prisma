@@ -2314,6 +2314,10 @@ model StockMovement {
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([spareId])
+  // Detalle de OT: reconstruye los repuestos consumidos por una OT puntual
+  // (getTenantWorkOrder). Sin este índice la búsqueda escaneaba todos los
+  // movimientos del tenant filtrando referenceType/referenceId en memoria.
+  @@index([tenantId, referenceType, referenceId])
 }
 
 model SpareRequest {

@@ -21,7 +21,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
-import { getTenantWorkOrder } from "../work-orders/work-orders-service";
+import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
 import { buildHojaRuta } from "./hoja-ruta";
 
 // Estados de OT desde los que se puede pedir un servicio externo. DEFERRED queda
@@ -205,11 +205,39 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
   if (filters.workOrderId) where.workOrderId = filters.workOrderId;
   applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
 
-  return (prisma as any).serviceRequest.findMany({
+  const rows = await (prisma as any).serviceRequest.findMany({
     where,
     orderBy: [{ openDate: "desc" }, { serviceRequestCode: "desc" }],
-    include: { workOrder: { select: { id: true, workOrderCode: true, title: true, status: true } } },
+    include: { workOrder: { select: { id: true, workOrderCode: true, title: true, status: true, assetId: true } } },
   });
+
+  // El equipo lo tiene la OT de origen (la SS no guarda assetId propio). Se
+  // resuelve el nombre en lote y se adjunta a workOrder.assetName para que el
+  // modal lo muestre en el header sin un fetch extra.
+  const assetIds = [...new Set(rows.map((r: any) => r.workOrder?.assetId).filter(Boolean))] as string[];
+  // El TALLER QUE CONCURRE puede estar como proveedor del catálogo (providerId)
+  // o como texto libre (tallerNotes). Se resuelve el nombre del catálogo en lote
+  // para que el modal muestre el taller cuando vino elegido de la lista (si no,
+  // el campo queda vacío aunque la hoja de ruta sí lo muestre).
+  const providerIds = [...new Set(rows.map((r: any) => r.providerId).filter(Boolean))] as string[];
+  const [assetRows, providerRows] = await Promise.all([
+    assetIds.length > 0
+      ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    providerIds.length > 0
+      ? (prisma as any).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ]);
+  const assetNameMap = new Map<string, string | null>(assetRows.map((a: any) => [a.id, a.name ?? null]));
+  const providerNameMap = new Map<string, string | null>(providerRows.map((p: any) => [p.id, p.name ?? null]));
+
+  return rows.map((r: any) => ({
+    ...r,
+    providerName: r.providerId ? (providerNameMap.get(r.providerId) ?? null) : null,
+    workOrder: r.workOrder
+      ? { ...r.workOrder, assetName: assetNameMap.get(r.workOrder.assetId) ?? null }
+      : r.workOrder,
+  }));
 }
 
 export async function getServiceRequest(session: TenantAccessSession, id: string) {
@@ -226,7 +254,17 @@ export async function getServiceRequest(session: TenantAccessSession, id: string
       orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
     }),
   ]);
-  return { ...sr, workOrder: wo, hojaRuta };
+  const [asset, provider] = await Promise.all([
+    wo?.assetId
+      ? (prisma as any).asset.findFirst({ where: { id: wo.assetId, tenantId: (sr as any).tenantId }, select: { name: true } })
+      : null,
+    (sr as any).providerId
+      ? (prisma as any).provider.findUnique({ where: { id: (sr as any).providerId }, select: { name: true } })
+      : null,
+  ]);
+  const assetName: string | null = asset?.name ?? null;
+  const providerName: string | null = provider?.name ?? null;
+  return { ...sr, providerName, workOrder: wo ? { ...wo, assetName } : wo, hojaRuta };
 }
 
 /** SS de una OT — panel del modal de OT. */
@@ -234,7 +272,9 @@ export async function listWorkOrderServiceRequests(session: TenantAccessSession,
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   // Resuelve tenant + vessel scope + 404 si la OT no es visible para el usuario.
-  await getTenantWorkOrder(session, workOrderId);
+  // Chequeo LIVIANO: este panel sólo lista las SS, no necesita el detalle de la
+  // OT (evita repetir getTenantWorkOrder al abrir el modal).
+  await requireWorkOrderScope(session, workOrderId);
   const tenantId = await resolveTenantId(session);
   return (prisma as any).serviceRequest.findMany({
     where: { tenantId, workOrderId, deletedAt: null },

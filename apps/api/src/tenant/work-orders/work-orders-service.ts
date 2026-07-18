@@ -407,6 +407,31 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   }));
 }
 
+/**
+ * Chequeo de scope LIVIANO de una OT: tenant + vessel + 404, con `select`
+ * mínimo. Para endpoints que sólo necesitan validar visibilidad/estado y NO el
+ * detalle completo (ítems planificados, SS asociadas, mutaciones). Evita pagar
+ * el costo de getTenantWorkOrder (workLogs + asset + provider + stockMovement +
+ * spare) sólo para autorizar. Devuelve lo justo: id, vesselCode, status.
+ */
+export async function requireWorkOrderScope(session: TenantAccessSession, id: string) {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenantId = await getTenantIdOrThrow(session);
+  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  applyVesselScope(session, where);
+
+  const record = await (prismaRaw as unknown as {
+    workOrder: { findFirst: (a: unknown) => Promise<{ id: string; tenantId: string; vesselCode: string; status: string } | null> };
+  }).workOrder.findFirst({
+    where,
+    select: { id: true, tenantId: true, vesselCode: true, status: true },
+  });
+  if (!record) throw new RouteError(404, "NOT_FOUND", "Work order no encontrada.");
+  return record;
+}
+
 export async function getTenantWorkOrder(session: TenantAccessSession, id: string) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -422,62 +447,72 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
   });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Work order no encontrada.");
 
-  let assetName: string | null = null;
-  try {
-    const asset = await (prismaRaw as unknown as { asset: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).asset.findFirst({
-      where: { id: record.assetId, tenantId },
-      select: { name: true },
-    });
-    assetName = asset?.name ?? null;
-  } catch { /* non-blocking */ }
-
-  // Nombre de la empresa que hace el trabajo: del catálogo si se eligió de la
-  // lista, o el escrito a mano (providerOther) si no estaba. Al resolverse acá,
-  // todo lo que lee la OT (PDF, "ASIGNADO A", reportes) ve un solo campo y no se
-  // entera de cuál de los dos lo llenó.
-  let providerName: string | null = null;
   const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
-  if (recProviderId) {
-    try {
-      const provider = await (prismaRaw as unknown as { provider: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).provider.findFirst({
-        where: { id: recProviderId, tenantId },
-        select: { name: true },
-      });
-      providerName = provider?.name ?? null;
-    } catch { /* non-blocking */ }
-  }
-  providerName = providerName ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
-  // Reconstruct spare usages from stock movements scoped to this WO
-  const spareUsages: Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }> = [];
-  try {
-    const movements = await (prismaRaw as any).stockMovement.findMany({
-      where: { tenantId, referenceType: "WORK_ORDER", referenceId: record.id },
-      select: { spareId: true, quantity: true, unit: true },
-      orderBy: { occurredAt: "asc" },
-    });
-    if (movements.length > 0) {
-      const spareIds = [...new Set(movements.map((m: any) => m.spareId).filter(Boolean))] as string[];
-      const spares = await (prismaRaw as any).spare.findMany({
-        where: { id: { in: spareIds }, tenantId },
-        select: { id: true, sku: true, name: true, criticality: true },
-      });
-      const spareMap = new Map<string, { sku: string; name: string; criticality: string }>(
-        spares.map((s: any) => [s.id, { sku: s.sku, name: s.name, criticality: s.criticality }]),
-      );
-      for (const m of movements as any[]) {
-        const meta = spareMap.get(m.spareId) ?? { sku: m.spareId, name: m.spareId, criticality: "C" };
-        spareUsages.push({
-          spareId: m.spareId,
-          qty: Number(m.quantity),
-          unit: m.unit,
-          sku: meta.sku,
-          name: meta.name,
-          criticality: meta.criticality,
+  // Las tres lecturas auxiliares (asset, provider, movimientos+repuestos) son
+  // independientes entre sí: se resuelven en paralelo para no encadenar RTTs a
+  // la DB. Mismo criterio que ya usa listTenantWorkOrders. Cada bloque conserva
+  // su try/catch para seguir siendo non-blocking.
+  const [assetName, providerFromCatalog, spareUsages] = await Promise.all([
+    (async (): Promise<string | null> => {
+      try {
+        const asset = await (prismaRaw as unknown as { asset: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).asset.findFirst({
+          where: { id: record.assetId, tenantId },
+          select: { name: true },
         });
-      }
-    }
-  } catch { /* non-blocking */ }
+        return asset?.name ?? null;
+      } catch { return null; /* non-blocking */ }
+    })(),
+    // Nombre de la empresa que hace el trabajo: del catálogo si se eligió de la
+    // lista, o el escrito a mano (providerOther) si no estaba. Al resolverse acá,
+    // todo lo que lee la OT (PDF, "ASIGNADO A", reportes) ve un solo campo y no
+    // se entera de cuál de los dos lo llenó.
+    (async (): Promise<string | null> => {
+      if (!recProviderId) return null;
+      try {
+        const provider = await (prismaRaw as unknown as { provider: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).provider.findFirst({
+          where: { id: recProviderId, tenantId },
+          select: { name: true },
+        });
+        return provider?.name ?? null;
+      } catch { return null; /* non-blocking */ }
+    })(),
+    // Reconstruct spare usages from stock movements scoped to this WO
+    (async (): Promise<Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }>> => {
+      const usages: Array<{ spareId: string; qty: number; unit: string; sku: string; name: string; criticality: string }> = [];
+      try {
+        const movements = await (prismaRaw as any).stockMovement.findMany({
+          where: { tenantId, referenceType: "WORK_ORDER", referenceId: record.id },
+          select: { spareId: true, quantity: true, unit: true },
+          orderBy: { occurredAt: "asc" },
+        });
+        if (movements.length > 0) {
+          const spareIds = [...new Set(movements.map((m: any) => m.spareId).filter(Boolean))] as string[];
+          const spares = await (prismaRaw as any).spare.findMany({
+            where: { id: { in: spareIds }, tenantId },
+            select: { id: true, sku: true, name: true, criticality: true },
+          });
+          const spareMap = new Map<string, { sku: string; name: string; criticality: string }>(
+            spares.map((s: any) => [s.id, { sku: s.sku, name: s.name, criticality: s.criticality }]),
+          );
+          for (const m of movements as any[]) {
+            const meta = spareMap.get(m.spareId) ?? { sku: m.spareId, name: m.spareId, criticality: "C" };
+            usages.push({
+              spareId: m.spareId,
+              qty: Number(m.quantity),
+              unit: m.unit,
+              sku: meta.sku,
+              name: meta.name,
+              criticality: meta.criticality,
+            });
+          }
+        }
+      } catch { /* non-blocking */ }
+      return usages;
+    })(),
+  ]);
+
+  const providerName = providerFromCatalog ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
   return { ...record, assetName, providerName, spareUsages };
 }
