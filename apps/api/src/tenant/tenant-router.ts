@@ -498,9 +498,8 @@ export async function handleTenantRoutes(
   if (method === "GET" && url.pathname === "/app/providers") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const records = await listTenantProviders(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-      status:     url.searchParams.get("status"),
-      category:   url.searchParams.get("category"),
+      status:   url.searchParams.get("status"),
+      category: url.searchParams.get("category"),
     });
     sendJson(response, 200, { items: records, total: records.length });
     return true;

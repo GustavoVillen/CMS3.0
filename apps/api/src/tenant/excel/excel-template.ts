@@ -114,7 +114,6 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "longDescription",        header: "longDescription",        required: false, width: 50 },
   ],
   providers: [
-    { key: "vesselCode",    header: "vesselCode *",   required: true,  width: 20 },
     { key: "providerCode",  header: "providerCode *", required: true,  width: 20 },
     { key: "name",          header: "name",           required: false, width: 30 },
     { key: "category",      header: "category",       required: false, width: 20 },

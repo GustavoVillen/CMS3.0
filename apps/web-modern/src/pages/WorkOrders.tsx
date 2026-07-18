@@ -914,11 +914,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   useEffect(() => {
     if (!needsProvider || providers.length > 0) return;
     let cancelled = false;
-    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?vesselCode=${encodeURIComponent(workOrder.vesselCode)}&status=ACTIVE`)
+    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?status=ACTIVE`)
       .then(r => { if (!cancelled) setProviders(r.items ?? []); })
       .catch(() => { if (!cancelled) setProviders([]); });
     return () => { cancelled = true; };
-  }, [needsProvider, providers.length, workOrder.vesselCode]);
+  }, [needsProvider, providers.length]);
 
   function toggleArr(arr: string[], set: (v: string[]) => void, val: string) {
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);

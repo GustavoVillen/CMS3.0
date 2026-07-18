@@ -4,17 +4,13 @@ import { listDevProvidersForTenant } from "../../platform/data/dev-domain-store"
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
-import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface ProviderListFilters {
-  vesselCode?: string | null;
   status?: string | null;
   category?: string | null;
 }
 
 export interface CreateProviderInput {
-  vesselCode: string;
-  providerCode?: string | null;
   name: string;
   category?: string | null;
   status?: "ACTIVE" | "INACTIVE";
@@ -73,7 +69,6 @@ export async function listTenantProviders(session: TenantAccessSession, filters:
   if (!tenant) return [];
 
   const where: Record<string, unknown> = { tenantId: tenant.id, deletedAt: null };
-  applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status)     where.status     = filters.status;
   if (filters.category)   where.category   = filters.category;
 
@@ -95,19 +90,14 @@ export async function createProvider(session: TenantAccessSession, payload: Crea
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
   const tenantId = await getTenantIdOrThrow(session);
-  const vesselCode = normalizeText(payload.vesselCode, "vesselCode").toUpperCase();
 
-  let providerCode = normalizeOptionalText(payload.providerCode);
-  if (!providerCode) {
-    const count = await prisma.provider.count({ where: { tenantId, vesselCode } });
-    providerCode = `PRV-${vesselCode}-${String(count + 1).padStart(4, "0")}`;
-  }
+  const count = await prisma.provider.count({ where: { tenantId } });
+  const providerCode = `PRV-${String(count + 1).padStart(4, "0")}`;
 
   try {
     const created = await prisma.provider.create({
       data: {
         tenantId,
-        vesselCode,
         providerCode,
         name:         normalizeText(payload.name, "name"),
         category:     normalizeOptionalText(payload.category),
@@ -126,12 +116,12 @@ export async function createProvider(session: TenantAccessSession, payload: Crea
       action: "Provider.created",
       entityType: "Provider",
       entityId: created.id,
-      metadata: { providerCode: created.providerCode, name: created.name, vesselCode: created.vesselCode },
+      metadata: { providerCode: created.providerCode, name: created.name },
     });
     return created;
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "P2002") {
-      throw new RouteError(409, "DUPLICATE_CODE", "Ya existe un proveedor con ese código para el vessel.");
+      throw new RouteError(409, "DUPLICATE_CODE", "Ya existe un proveedor con ese código.");
     }
     throw error;
   }
@@ -161,7 +151,7 @@ export async function updateProvider(session: TenantAccessSession, id: string, p
     action: "Provider.updated",
     entityType: "Provider",
     entityId: updated.id,
-    metadata: { providerCode: updated.providerCode, name: updated.name, vesselCode: updated.vesselCode, changes },
+    metadata: { providerCode: updated.providerCode, name: updated.name, changes },
   });
   return updated;
 }

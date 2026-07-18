@@ -1186,7 +1186,6 @@ model Vessel {
   inspectionLogs   InspectionLog[]
   certificates     Certificate[]
   dailyReports     DailyReport[]
-  providers        Provider[]
   spares           Spare[]
   stockMovements   StockMovement[]
   providerEvals    ProviderEvaluation[]
@@ -2218,7 +2217,6 @@ model StockLocation {
 model Provider {
   id               String         @id @default(cuid())
   tenantId         String
-  vesselCode       String
   providerCode     String
   name             String
   category         String?
@@ -2234,14 +2232,12 @@ model Provider {
   deletedAt        DateTime?
   deletedByUserId  String?
 
-  vessel           Vessel                  @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   evaluations      ProviderEvaluation[]
   nonconformities  ProviderNonconformity[]
   inspections      Inspection[]
 
-  @@unique([tenantId, vesselCode, providerCode])
+  @@unique([tenantId, providerCode])
   @@index([tenantId])
-  @@index([tenantId, vesselCode])
 }
 
 model Spare {

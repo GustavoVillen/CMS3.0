@@ -271,6 +271,12 @@ export async function exportModule(
     delete baseWhere.vesselCode;
   }
 
+  // Providers ya no está atado a un vessel (catálogo de tenant) — no tiene
+  // columna vesselCode, así que el scope por vessel no aplica a este módulo.
+  if (module === "providers" && "vesselCode" in baseWhere) {
+    delete baseWhere.vesselCode;
+  }
+
   const records = await fetchRecords(prisma, module, baseWhere, filters);
   return buildWorkbook(module, records);
 }

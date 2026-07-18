@@ -389,7 +389,6 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
     case "providers":
       return {
         tenantId,
-        vesselCode:   d.vesselCode,
         providerCode: d.providerCode,
         name:         d.name ?? null,
         category:     d.category ?? null,

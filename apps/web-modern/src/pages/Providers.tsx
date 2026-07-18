@@ -3,10 +3,8 @@ import { FileSpreadsheet, Maximize2, Minimize2, Plus, Truck } from "lucide-react
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
-import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -16,7 +14,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 // ---------------------------------------------------------------------------
 
 interface Provider {
-  id: string; providerCode: string; name: string; vesselCode: string;
+  id: string; providerCode: string; name: string;
   category: string | null; status: string;
   contactName: string | null; contactEmail: string | null;
   contactPhone: string | null; location: string | null; createdAt: string;
@@ -44,8 +42,6 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
   const t = useT();
   const isNew = provider === null;
 
-  const [vesselCode,    setVesselCode]    = useState(provider?.vesselCode    ?? "");
-  const [providerCode,  setProviderCode]  = useState(provider?.providerCode  ?? "");
   const [name,          setName]          = useState(provider?.name          ?? "");
   const [category,      setCategory]      = useState(provider?.category      ?? "");
   const [status,        setStatus]        = useState(provider?.status        ?? "ACTIVE");
@@ -63,12 +59,8 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
     setSaving(true);
     try {
       if (isNew) {
-        const vessel = vesselCode.trim().toUpperCase();
-        if (!vessel) { setError("Vessel es requerido."); setSaving(false); return; }
         if (!name.trim()) { setError("Nombre es requerido."); setSaving(false); return; }
         const result = await api.post<Provider>("/app/providers", {
-          vesselCode:   vessel,
-          providerCode: providerCode.trim() || null,
           name:         name.trim(),
           category:     category.trim() || null,
           status:       status,
@@ -98,7 +90,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    vesselCode, providerCode, name, category, status,
+    name, category, status,
     contactName, contactEmail, contactPhone, location,
   });
   useEscapeGuard({ isDirty, onSave: handleSave, onClose });
@@ -126,7 +118,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             <Truck className="w-4 h-4 text-accent" />
             <div>
               <h2 className="text-sm font-bold text-fg">{isNew ? "Nuevo Proveedor" : provider.name}</h2>
-              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{provider.providerCode} · Vessel: {provider.vesselCode}</p>}
+              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{provider.providerCode}</p>}
             </div>
             {!isNew && <StatusBadge status={provider.status} />}
           </div>
@@ -141,20 +133,13 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Vessel *</label>
-              {isNew
-                ? <input value={vesselCode} onChange={e => setVesselCode(e.target.value.toUpperCase())} placeholder="VESSEL" className={inputCls} />
-                : <p className="text-sm"><VesselLabel code={provider.vesselCode} className="text-sm" showCode /></p>}
-            </div>
+          {!isNew && (
             <div>
               <label className={labelCls}>Código proveedor</label>
-              {isNew
-                ? <input value={providerCode} onChange={e => setProviderCode(e.target.value.toUpperCase())} placeholder="Auto-generado si vacío" className={inputCls} />
-                : <p className="text-sm font-mono text-fg/60">{provider.providerCode}</p>}
+              <p className="text-sm font-mono text-fg/60">{provider.providerCode}</p>
             </div>
-          </div>
+          )}
+          {isNew && <p className="text-[10px] text-fg/30">El código de proveedor se genera automáticamente al crear.</p>}
 
           <div>
             <label className={labelCls}>Nombre *</label>
@@ -233,8 +218,6 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 export const ProvidersPage: React.FC = () => {
   const t = useT();
 
-  const [vesselInput,  setVesselInput]  = useState("");
-  const [vesselFilter, setVesselFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [catFilter,    setCatFilter]    = useState("");
   const [showExcel,    setShowExcel]    = useState(false);
@@ -242,14 +225,13 @@ export const ProvidersPage: React.FC = () => {
 
   const buildPath = () => {
     const p = new URLSearchParams();
-    if (vesselFilter) p.set("vesselCode", vesselFilter);
-    if (statusFilter) p.set("status",     statusFilter);
-    if (catFilter)    p.set("category",   catFilter);
+    if (statusFilter) p.set("status",   statusFilter);
+    if (catFilter)    p.set("category", catFilter);
     const qs = p.toString();
     return `/app/providers${qs ? `?${qs}` : ""}`;
   };
 
-  const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [vesselFilter, statusFilter, catFilter]);
+  const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [statusFilter, catFilter]);
 
   const handleSaved = (p: Provider) => { reload(); setSelected(p); };
 
@@ -259,7 +241,6 @@ export const ProvidersPage: React.FC = () => {
   const COLUMNS: Column<Provider>[] = [
     { key: "providerCode", header: t("col.code"),     render: r => <span className="font-mono font-bold text-fg text-xs">{r.providerCode}</span> },
     { key: "name",         header: t("col.name"),     render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
-    { key: "vesselCode",   header: t("col.vessel"),   render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "category",     header: t("col.category"), render: r => <span className="text-xs text-fg/60">{r.category ?? "—"}</span> },
     { key: "status",       header: t("col.status"),   render: r => <StatusBadge status={r.status} /> },
     { key: "contactName",  header: "Contacto",        render: r => <span className="text-xs text-fg/70">{r.contactName ?? "—"}</span> },

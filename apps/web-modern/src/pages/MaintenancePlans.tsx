@@ -1135,17 +1135,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     }, 400);
   }, [vesselCode, isNew, plan?.vesselCode]);
 
-  // Proveedores del buque, para cuando el área es PROVEEDOR.
+  // Proveedores del tenant, para cuando el área es PROVEEDOR.
   useEffect(() => {
     if (department !== "PROVEEDOR" || providers.length > 0) return;
-    const vc = isNew ? vesselCode : plan?.vesselCode;
-    if (!vc) return;
     let cancelled = false;
-    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?vesselCode=${encodeURIComponent(vc)}&status=ACTIVE`)
+    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?status=ACTIVE`)
       .then(r => { if (!cancelled) setProviders(r.items ?? []); })
       .catch(() => { if (!cancelled) setProviders([]); });
     return () => { cancelled = true; };
-  }, [department, providers.length, vesselCode, isNew, plan?.vesselCode]);
+  }, [department, providers.length]);
 
   useEffect(() => {
     if (!plan) return;
