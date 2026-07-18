@@ -1,5 +1,8 @@
+// PRIMERO: carga el .env antes de que se inicialice cualquier otro módulo.
+// No reordenar ni mover debajo de los demás imports (ver bootstrap-env.ts).
+import "./config/bootstrap-env";
+
 import { createServer } from "node:http";
-import { loadDotEnvFile } from "./config/load-dotenv";
 import { parseAppEnv } from "./config/env";
 import { sendHtml } from "./http/html-response";
 import { sendJson } from "./http/json-response";
@@ -21,8 +24,6 @@ import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
 import { evictExpiredLockouts } from "./http/login-lockout";
 import { attachUsageTracking } from "./http/usage-tracking-middleware";
 import { purgeOldUsageEvents } from "./tenant/usage/usage-service";
-
-loadDotEnvFile();
 
 const env = parseAppEnv(process.env as Record<string, string | undefined>);
 const port = Number(process.env.PORT || 3105);

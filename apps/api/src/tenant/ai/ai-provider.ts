@@ -6,8 +6,8 @@
  * defectos, MOC, TMSA, fluidos, órdenes de trabajo, permisos, simulacros,
  * planes) de Claude a Gemini sin tocar código.
  *
- * El default es "anthropic": si algo falla con Gemini en producción, se vuelve
- * atrás cambiando una variable, sin deploy.
+ * El default es "gemini": si hiciera falta volver a Claude, se cambia una
+ * variable (AI_PROVIDER=anthropic), sin deploy.
  */
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -17,8 +17,12 @@ export type { AiClient, AiMessageStream } from "./gemini-adapter";
 
 export type AiProvider = "anthropic" | "gemini";
 
+/**
+ * Gemini es el proveedor por defecto (jul 2026): la cuenta de Anthropic ya no
+ * se usa. Anthropic queda disponible como vuelta atrás con AI_PROVIDER=anthropic.
+ */
 export function getAiProvider(): AiProvider {
-  return process.env.AI_PROVIDER?.toLowerCase() === "gemini" ? "gemini" : "anthropic";
+  return process.env.AI_PROVIDER?.toLowerCase() === "anthropic" ? "anthropic" : "gemini";
 }
 
 /**
