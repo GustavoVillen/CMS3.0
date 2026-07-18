@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -8,7 +9,7 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDeferral } from "./deferrals-service";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 // Barrera anti-invención: la IA debe ceñirse a los datos del informe.
 const NO_INVENT = `IMPORTANTE: Basate ÚNICAMENTE en los datos del informe provistos abajo. NO inventes ni asumas plazos, fechas, cantidades ni hechos que no estén explícitos; en particular, NO estimes la duración del aplazamiento — usá EXACTAMENTE la duración y las fechas indicadas en el contexto.`;
@@ -128,11 +129,11 @@ export async function suggestCompensatoryMeasures(
   session: TenantAccessSession,
   input: CompensatoryInput,
 ): Promise<{ text: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
   const { context, vesselCode } = await buildContext(session, input);
@@ -214,11 +215,11 @@ export async function suggestDeferralRisk(
   session: TenantAccessSession,
   input: CompensatoryInput,
 ): Promise<DeferralRiskResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
   const { context, vesselCode } = await buildContext(session, input);

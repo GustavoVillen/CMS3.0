@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -7,7 +8,7 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { EVAL_QUESTIONS, EVALUATOR_AREAS, CHANGE_TYPES } from "./moc-form-catalog";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 // Prompt experto: combina marco regulatorio marítimo (ISM 10.3, TMSA 7, SIRE)
 // con metodologías formales de análisis de riesgo (Bow Tie, HAZID, FMEA).
@@ -160,8 +161,8 @@ export async function suggestRiskAssessment(
   session: TenantAccessSession,
   input: RiskAssessmentInput,
 ): Promise<{ riskAssessment: string; mitigation: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   // Validación mínima — necesitamos al menos categoría y cambio propuesto
   // para que el análisis tenga sentido.
@@ -170,7 +171,7 @@ export async function suggestRiskAssessment(
   }
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 
@@ -329,14 +330,14 @@ Las 24 preguntas de evaluación previa (por número):
 ${EVAL_QUESTIONS.map(q => `${q.n}. ${q.text}`).join("\n")}`;
 
 export async function suggestMocDraft(session: TenantAccessSession, input: MocDraftInput) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
   if (!input.proposedChange?.trim() && !input.reasonForChange?.trim()) {
     throw new RouteError(400, "VALIDATION_ERROR", "Describí al menos el motivo o el cambio propuesto antes de pedir el borrador a la IA.");
   }
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 45_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 

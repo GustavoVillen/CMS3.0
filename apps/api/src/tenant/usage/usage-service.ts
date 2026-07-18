@@ -22,6 +22,16 @@ export const AI_PRICING: Record<string, { in: number; out: number; cacheRead: nu
   // Opus 4.7/4.8: precio oficial vigente $5/$25 (antes estaba mal cargado a $15/$75).
   "claude-opus-4-7":           { in: 5.0,  out: 25.0, cacheRead: 0.50, cacheWrite: 6.25 },
   "claude-opus-4-8":           { in: 5.0,  out: 25.0, cacheRead: 0.50, cacheWrite: 6.25 },
+  // Faltaba: el informe de análisis de fluidos usa sonnet-5 y su gasto se
+  // registraba como USD 0 (aiCostUsd devuelve 0 para modelos desconocidos),
+  // así que no contaba contra el tope mensual del tenant.
+  "claude-sonnet-5":           { in: 3.0,  out: 15.0, cacheRead: 0.30, cacheWrite: 3.75 },
+
+  // Gemini (AI_PROVIDER=gemini). Fuente: https://ai.google.dev/gemini-api/docs/pricing
+  // Gemini cachea implícito y no cobra escritura de caché → cacheWrite = 0.
+  "gemini-3.1-flash-lite":     { in: 0.25, out: 1.50, cacheRead: 0.025, cacheWrite: 0 },
+  "gemini-3.5-flash":          { in: 1.50, out: 9.00, cacheRead: 0.15,  cacheWrite: 0 },
+  "gemini-2.5-flash-lite":     { in: 0.10, out: 0.40, cacheRead: 0.01,  cacheWrite: 0 },
 };
 
 export function aiCostUsd(

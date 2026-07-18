@@ -3,6 +3,7 @@
 // drills-ai-suggestions): timeout, recordAiUsage, model haiku.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -12,7 +13,7 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { getDefect } from "./defects-service";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 const SEVERITY_LABEL: Record<string, string> = {
   CRITICAL: "Critica - riesgo inmediato a seguridad/medio ambiente",
@@ -61,11 +62,11 @@ async function callClaude(
   userContent: string,
   maxTokens: number,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 
@@ -164,11 +165,11 @@ export async function analyzeDefectPhoto(
     throw new RouteError(400, "VALIDATION_ERROR", `Tipo de imagen no soportado: ${mediaType}`);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "defect_photo_analysis";
   const locale = await getTenantAiLocale(session.tenantSlug);
@@ -923,8 +924,8 @@ export async function suggestDefectRca(
   // getDefect ya aplica el scope de tenant/vessel de la sesión — 404 si no existe/no hay acceso.
   const defect = await getDefect(session, defectId);
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
 
   const prisma = getPrismaClient();
@@ -943,7 +944,7 @@ export async function suggestDefectRca(
     ...historyLines,
   ].filter((l): l is string => l != null).join("\n");
 
-  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 45_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
   const feature = "defect_rca_suggestion";

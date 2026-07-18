@@ -3,6 +3,7 @@
 // structured data, and returns it with per-field confidence scores.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
@@ -86,8 +87,8 @@ export async function extractFluidReport(
   session: TenantAccessSession,
   input: ExtractInput,
 ): Promise<ExtractedReport> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   const { buffer, mime } = input;
   if (!buffer || buffer.length === 0) throw new RouteError(400, "EMPTY_FILE", "El archivo está vacío.");
@@ -101,7 +102,7 @@ export async function extractFluidReport(
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
   const base64 = buffer.toString("base64");
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 60_000, maxRetries: 1 });
 
   const contentBlocks: Anthropic.ContentBlockParam[] = [];
   if (isImage) {
@@ -115,7 +116,7 @@ export async function extractFluidReport(
       source: { type: "base64", media_type: "application/pdf", data: base64 },
     } as unknown as Anthropic.ContentBlockParam);
   }
-  const fluidModel = "claude-haiku-4-5-20251001";
+  const fluidModel = AI_MODEL.fast;
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
   const referenceDateInstruction = input.referenceDate

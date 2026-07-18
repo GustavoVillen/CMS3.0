@@ -2,6 +2,7 @@
 // con redacción profesional. Mantiene los hechos, mejora la forma.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -9,7 +10,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 const SYSTEM_PROMPT = `Sos experto en redacción técnica para mantenimiento naval/marítimo.
 
@@ -44,8 +45,8 @@ export async function rewriteDeficiencies(
   session: TenantAccessSession,
   input: RewriteInput,
 ): Promise<RewriteResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   const text = (input.text ?? "").trim();
   if (!text) throw new RouteError(400, "VALIDATION_ERROR", "El texto a reescribir está vacío.");
@@ -59,7 +60,7 @@ export async function rewriteDeficiencies(
   };
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 

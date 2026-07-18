@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage, isAiBudgetAvailable } from "../usage/usage-service";
 import { log } from "../../common/logger";
@@ -231,9 +232,9 @@ export interface GenerateResult {
 export async function generateFluidAiAnalysis(input: GenerateInput): Promise<GenerateResult> {
   const empty: GenerateResult = { aiAnalysis: null, aiAnalysisGeneratedAt: null };
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) {
-    log.warn("[fluid-ai-insights] ANTHROPIC_API_KEY no configurada, skip");
+    log.warn("[fluid-ai-insights] API key de IA no configurada, skip");
     return empty;
   }
 
@@ -343,10 +344,10 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
   // sin fuente exacta; inyectar el listado empujaría a citar "según CIMAC".
   const systemPrompt = SYSTEM_PROMPT_BASE;
 
-  const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 120_000, maxRetries: 1 });
   // Modelo configurable por env (para poder cambiar sin redeploy de código).
   // Default Sonnet 5 (más preciso); Haiku es ~2-3× más rápido y barato.
-  const model = process.env.FLUID_AI_MODEL || "claude-sonnet-5";
+  const model = AI_MODEL.deep;
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(input.tenantSlug);
 

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -7,7 +8,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 const PROMPT_DRILL_SCENARIO = `Sos un instructor experto en simulacros de emergencia marítima, formado en SOLAS, ISPS y MARPOL.
 
@@ -49,11 +50,11 @@ async function callClaude(
   userContent: string,
   maxTokens: number,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
 
   const locale = await getTenantAiLocale(session.tenantSlug);

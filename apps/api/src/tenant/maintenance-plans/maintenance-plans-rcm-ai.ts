@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -6,7 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 const SYSTEM_PROMPT = `Sos experto en RCM (Reliability-Centered Maintenance) aplicado a buques.
 
@@ -66,8 +67,8 @@ export async function suggestPlanConsequence(
   session: TenantAccessSession,
   input: SuggestInput,
 ): Promise<RcmConsequenceResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no está configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
 
   const assetName = (input.assetName ?? "").trim();
   if (!assetName) throw new RouteError(400, "VALIDATION_ERROR", "El nombre del activo es requerido.");
@@ -84,7 +85,7 @@ export async function suggestPlanConsequence(
   };
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
 

@@ -8,6 +8,7 @@
 // La IA NO firma ni cierra el reporte — solo genera el borrador.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -15,7 +16,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 export interface MonthlyDraftInput {
   vesselCode: string;
@@ -233,10 +234,10 @@ export async function generateMonthlyDraft(
   }
 
   // ── Llamada a Claude ──
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 60_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const feature = "monthly_report_draft";
   const locale = await getTenantAiLocale(session.tenantSlug);

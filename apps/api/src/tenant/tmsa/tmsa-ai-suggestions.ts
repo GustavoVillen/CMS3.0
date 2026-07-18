@@ -10,6 +10,7 @@
 // agéntico.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
@@ -18,7 +19,7 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa-service";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = AI_MODEL.fast;
 
 const ASSESSMENT_TOOL: Anthropic.Tool = {
   name: "tmsa_assessment",
@@ -62,8 +63,8 @@ export async function suggestTmsaAssessment(
   const metricKey = String(input.metricKey ?? "").trim();
   if (!vesselCode || !groupKey || !metricKey) throw new RouteError(400, "VALIDATION_ERROR", "Faltan parámetros.");
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY no esta configurada.");
+  const apiKey = aiApiKey();
+  if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
 
   const [evidence, detail] = await Promise.all([
@@ -90,7 +91,7 @@ export async function suggestTmsaAssessment(
     `Muestra de elementos que componen esta métrica (${detail.items.length} en total, mostrando hasta 15):\n${sampleLines}`,
   ].join("\n\n");
 
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
   const feature = "tmsa_assessment_suggestion";

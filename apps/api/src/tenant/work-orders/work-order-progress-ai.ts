@@ -14,6 +14,7 @@
 // el endpoint del usuario (fire-and-forget tras la creación de la nota).
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage, isAiBudgetAvailable } from "../usage/usage-service";
 import { log } from "../../common/logger";
@@ -21,8 +22,8 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 
 // Antes OCR usaba Sonnet 4.6. Haiku 4.5 ya soporta visión y es ~5× más
 // rápido/barato. Si se observa caída de precisión en OCR de fotos, revertir.
-const OCR_MODEL    = "claude-haiku-4-5-20251001";
-const REWRITE_MODEL = "claude-haiku-4-5-20251001";
+const OCR_MODEL    = AI_MODEL.fast;
+const REWRITE_MODEL = AI_MODEL.fast;
 
 const ALLOWED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
@@ -53,9 +54,9 @@ export async function extractTextFromPhoto(
   buffer: Buffer,
   mime: string,
 ): Promise<OcrResult | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) {
-    log.warn("[progress-ai] ANTHROPIC_API_KEY no configurada — OCR omitido");
+    log.warn("[progress-ai] API key de IA no configurada — OCR omitido");
     return null;
   }
   if (!ALLOWED_IMAGE_MIMES.has(mime)) {
@@ -73,7 +74,7 @@ export async function extractTextFromPhoto(
   }
 
   const base64 = buffer.toString("base64");
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
   const locale = await getTenantAiLocale(tenantSlug);
 
@@ -175,7 +176,7 @@ export async function rewriteObservations(
   vesselCode: string | null,
   input: RewriteInput,
 ): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) return null;
 
   // Filtrar y ordenar cronológicamente
@@ -185,7 +186,7 @@ export async function rewriteObservations(
   if (items.length === 0) return "";
   if (!(await isAiBudgetAvailable(tenantId))) return null;
 
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
   const locale = await getTenantAiLocale(tenantSlug);
 
@@ -302,12 +303,12 @@ async function detectSparesFromText(
   text: string,
   spares: SpareCatalogItem[],
 ): Promise<DetectedSpareUsage[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) return [];
   if (!text || !text.trim() || spares.length === 0) return [];
   if (!(await isAiBudgetAvailable(tenantId))) return [];
 
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const started = Date.now();
   const locale = await getTenantAiLocale(tenantSlug);
 

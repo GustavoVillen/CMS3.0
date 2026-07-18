@@ -19,6 +19,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-service";
 import { getActiveTenantAiDocs, getActiveTenantAiDocumentsIndex } from "../ai-documents/ai-documents-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
@@ -1365,9 +1366,9 @@ export async function streamCopilotoChat(
   onChunk: (text: string) => void,
   onActions?: (actions: SuggestedAction[], rawBlock: string) => void,
 ): Promise<void> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) {
-    throw new RouteError(503, "AI_NOT_CONFIGURED", "ANTHROPIC_API_KEY is not configured.");
+    throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   }
 
   if (!req.messages || req.messages.length === 0) {
@@ -1536,7 +1537,7 @@ export async function streamCopilotoChat(
     }
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = createAiClient({ apiKey });
   const systemBlocks: Anthropic.TextBlockParam[] = [...stableSystemBlocks, ...volatileSystemBlocks];
 
   const baseMessages: Anthropic.MessageParam[] = req.messages.map((m, i) => {
@@ -1588,7 +1589,7 @@ export async function streamCopilotoChat(
   // respuesta vacía ("no me responde"). Ahora iteramos hasta MAX_TOOL_ROUNDS
   // rondas CON tools; en la ronda final las desactivamos para forzar una
   // respuesta textual (y evitar loops infinitos).
-  const MODEL = "claude-haiku-4-5-20251001";
+  const MODEL = AI_MODEL.fast;
   const MAX_TOOL_ROUNDS = 3;
 
   let loopMessages: Anthropic.MessageParam[] = baseMessages;
