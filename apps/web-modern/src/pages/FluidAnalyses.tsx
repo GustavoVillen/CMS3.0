@@ -463,6 +463,10 @@ function SampleDetailModal({
 }) {
   const t = useT();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // El horómetro lo corrige quien está frente al equipo, no sólo quien
+  // administra el módulo: lo habilitamos a todo rol salvo el de sólo lectura.
+  const canEditHours = user?.role !== "AUDITOR_READONLY";
   const [sample, setSample]       = useState<FluidSample | null>(null);
   const [loading, setLoading]     = useState(true);
   const [err, setErr]             = useState<string | null>(null);
@@ -527,7 +531,13 @@ function SampleDetailModal({
           <Stat label={t("col.vessel")} value={sample.vesselCode} />
           <Stat label={t("capa.equipment")} value={assetLabel(sample.assetId, assets)} />
           <Stat label={t("fa.sampleDate").replace(" *", "")} value={fmtDate(sample.sampledAt)} />
-          <Stat label={t("fa.statHours")} value={sample.runningHours != null ? String(sample.runningHours) : "—"} />
+          <StatHours
+            label={t("fa.statHours")}
+            sampleId={sample.id}
+            value={sample.runningHours}
+            canEdit={canEditHours}
+            onSaved={updated => { setSample(updated); onChanged(); }}
+          />
           <Stat label={t("fa.statProduct")} value={sample.fluidProduct ?? "—"} />
           <Stat label={t("fa.statLab")} value={sample.labName ?? "—"} />
           <Stat label={t("fa.statLabRef")} value={sample.labReference ?? "—"} />
@@ -713,6 +723,91 @@ async function downloadFluidPdf(sampleId: string, sampleCode: string) {
     a.click();
     URL.revokeObjectURL(url);
   } catch { /* ignore */ }
+}
+
+/**
+ * Igual que <Stat> pero editable in situ. Se usa sólo para el horómetro, que es
+ * el dato que la tripulación corrige más seguido (se carga desde el reporte del
+ * lab y a veces viene mal o vacío). Guarda contra una ruta propia y acotada a
+ * ese campo — ver updateFluidSampleRunningHours en el backend.
+ */
+function StatHours({
+  label, sampleId, value, canEdit, onSaved,
+}: {
+  label: string;
+  sampleId: string;
+  value: number | null;
+  canEdit: boolean;
+  onSaved: (s: FluidSample) => void;
+}) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [err, setErr]         = useState<string | null>(null);
+
+  const open = () => {
+    if (!canEdit) return;
+    setDraft(value != null ? String(value) : "");
+    setErr(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    const raw = draft.trim();
+    const next = raw === "" ? null : Number(raw);
+    if (next !== null && (!Number.isFinite(next) || next < 0)) { setErr(t("fa.hoursInvalid")); return; }
+    if (next === value) { setEditing(false); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      const updated = await api.patch<FluidSample>(`/app/fluid-analyses/${sampleId}/running-hours`, { runningHours: next });
+      onSaved(updated);
+      setEditing(false);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("fa.hoursInvalid"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-fg/10 bg-fg/5 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">{label}</p>
+      {editing ? (
+        <div className="flex items-center gap-1 mt-0.5">
+          <input
+            type="number"
+            min={0}
+            autoFocus
+            value={draft}
+            disabled={saving}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") { e.preventDefault(); void save(); }
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            }}
+            className="w-full bg-transparent border-b border-accent text-xs font-bold text-fg outline-none"
+          />
+          <button onClick={() => void save()} disabled={saving} title={t("common.save")} className="text-accent hover:text-fg shrink-0">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={open}
+          disabled={!canEdit}
+          title={canEdit ? t("fa.hoursEdit") : undefined}
+          className={`group flex items-center gap-1 w-full text-left mt-0.5 ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+        >
+          <span className="text-xs font-bold text-fg truncate">{value != null ? String(value) : "—"}</span>
+          {canEdit && <Edit3 className="w-3 h-3 text-text-industrial/30 opacity-0 group-hover:opacity-100 shrink-0" />}
+        </button>
+      )}
+      {err && <p className="text-[10px] text-red-700 dark:text-red-400 mt-0.5">{err}</p>}
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

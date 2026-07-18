@@ -134,7 +134,8 @@ import {
   deleteTenantAiDocumentVersion, updateTenantAiDocumentVersionContent,
 } from "./ai-documents/ai-documents-service";
 import {
-  listFluidSamples, getFluidSample, createFluidSample, updateFluidSample, deleteFluidSample,
+  listFluidSamples, getFluidSample, createFluidSample, updateFluidSample,
+  updateFluidSampleRunningHours, deleteFluidSample,
   upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold, getAssetFluidTrend,
   regenerateFluidAiAnalysis,
   type FluidType as FluidTypeEnum, type Verdict, type SampleStatus,
@@ -1098,6 +1099,17 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 200, await updateFluidSample(session, id, body));
+    return true;
+  }
+  // Corrección del horómetro: ruta propia porque, a diferencia del PATCH de la
+  // muestra, está abierta a todo rol operativo (ver updateFluidSampleRunningHours).
+  if (method === "PATCH" && /^\/app\/fluid-analyses\/[\w-]+\/running-hours$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { runningHours?: number | string | null };
+    const raw = body?.runningHours;
+    const hours = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+    sendJson(response, 200, await updateFluidSampleRunningHours(session, id, hours));
     return true;
   }
   if (method === "DELETE" && /^\/app\/fluid-analyses\/[\w-]+$/.test(url.pathname)) {

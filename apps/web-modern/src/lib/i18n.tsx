@@ -988,6 +988,8 @@ const dict = {
   "fa.autoGen":           { es: "Generada automáticamente al cerrar una OT.", en: "Automatically generated on WO close.", pt: "Gerada automaticamente ao fechar uma OT." },
   "fa.viewSourceWo":      { es: "Ver OT origen →",                     en: "View source WO →",                    pt: "Ver OT origem →" },
   "fa.statHours":         { es: "Horas",                               en: "Hours",                               pt: "Horas" },
+  "fa.hoursEdit":         { es: "Editar horas",                        en: "Edit hours",                          pt: "Editar horas" },
+  "fa.hoursInvalid":      { es: "Ingresá un número mayor o igual a cero.", en: "Enter a number greater than or equal to zero.", pt: "Informe um número maior ou igual a zero." },
   "fa.statProduct":       { es: "Producto",                            en: "Product",                             pt: "Produto" },
   "fa.statLab":           { es: "Laboratorio",                         en: "Laboratory",                          pt: "Laboratório" },
   "fa.statLabRef":        { es: "Ref. lab",                            en: "Lab ref",                             pt: "Ref. lab" },

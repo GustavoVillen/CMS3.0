@@ -1,5 +1,34 @@
 HISTORY.txt
 
+[2026-07-18] Análisis de fluidos: el horómetro de la muestra se puede editar
+Agent: Claude Opus 4.8
+- Pedido: poder corregir las HORAS desde el detalle de la muestra, y que pueda
+  hacerlo cualquier usuario (no sólo admin/jefe de mantenimiento).
+- Situación previa: no era un tema de permisos — la edición simplemente nunca se
+  construyó. SampleFormModal ya soportaba mode="edit" con runningHours, pero el
+  único lugar que lo instancia (FluidAnalyses.tsx:200) usa mode="create"; el
+  branch de edición era código inalcanzable. Las tarjetas del detalle (<Stat>)
+  son texto plano, sin gate de rol.
+- Decisión de permisos: NO se aflojó ensureAdminOrManager (habría abierto también
+  equipo, fecha de toma, laboratorio y estado). Se agregó una ruta acotada a un
+  solo campo, con su propio guard: todos los roles salvo AUDITOR_READONLY, que es
+  de sólo lectura por definición.
+- Backend: updateFluidSampleRunningHours + ensureCanEditRunningHours en
+  fluid-analyses-service.ts; ruta PATCH /app/fluid-analyses/:id/running-hours en
+  tenant-router.ts (el regex de la ruta genérica termina en $, no la captura).
+  Valida >= 0, acepta null para borrar, y publica audit
+  "FluidSample.runningHoursUpdated" con from/to.
+- Frontend: componente StatHours (misma estética que <Stat>) con edición in situ
+  — Enter o el botón guardan, Esc cancela; refresca el detalle con la fila que
+  devuelve el PATCH y llama onChanged() para la grilla. 2 claves i18n nuevas
+  (fa.hoursEdit, fa.hoursInvalid) en es/en/pt.
+- Verificado contra la API local con los 4 roles: TENANT_ADMIN /
+  MAINTENANCE_MANAGER / TECHNICIAN_OPERATOR → 200; AUDITOR_READONLY → 403;
+  valor negativo → 400; null → borra. Persistencia y audit event confirmados.
+- PENDIENTE (no incluido): upsertFluidResult también escribe runningHours, así
+  que cargar/modificar el resultado después pisa la corrección manual. Ya era así
+  antes, pero ahora que el campo es editable se nota más.
+
 [2026-07-17] Performance: abrir el detalle de una OT era lento con muchos registros
 Agent: Claude Opus 4.8
 - Causa: getTenantWorkOrder se ejecutaba 3x al abrir el modal (detalle + items +

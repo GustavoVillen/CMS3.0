@@ -78,6 +78,17 @@ function ensureAdminOrManager(session: TenantAccessSession): void {
   if (!ok) throw new RouteError(403, "FORBIDDEN", "Sin permiso para gestionar análisis de fluidos.");
 }
 
+/**
+ * El horómetro es un dato de campo: lo lee quien está frente al equipo, no
+ * necesariamente quien administra el módulo. Por eso su corrección se permite a
+ * cualquier rol operativo — todos menos el auditor, que es de sólo lectura.
+ */
+function ensureCanEditRunningHours(session: TenantAccessSession): void {
+  if (session.user.role === "AUDITOR_READONLY") {
+    throw new RouteError(403, "FORBIDDEN", "Sin permiso para editar las horas de la muestra.");
+  }
+}
+
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -331,6 +342,45 @@ export async function updateFluidSample(session: TenantAccessSession, id: string
   if (input.status !== undefined)        data.status        = input.status;
 
   const updated = await (prisma as any).fluidSample.update({ where: { id }, data });
+  return updated;
+}
+
+/**
+ * Corrección puntual del horómetro de la muestra, abierta a todo rol operativo.
+ * Es deliberadamente más acotada que updateFluidSample: toca un solo campo, para
+ * no abrir el resto de la ficha a roles que no la administran.
+ */
+export async function updateFluidSampleRunningHours(
+  session: TenantAccessSession,
+  id: string,
+  runningHours: number | null,
+) {
+  ensureCanEditRunningHours(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const current = await (prisma as any).fluidSample.findFirst({ where: { id, tenantId, deletedAt: null } });
+  if (!current) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  if (runningHours != null && (!Number.isFinite(runningHours) || runningHours < 0)) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Las horas deben ser un número mayor o igual a cero.");
+  }
+
+  const updated = await (prisma as any).fluidSample.update({
+    where: { id },
+    data: { runningHours, updatedByUserId: session.user.id },
+  });
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "FluidSample.runningHoursUpdated",
+    entityType: "FluidSample",
+    entityId: id,
+    metadata: { sampleCode: current.sampleCode, from: current.runningHours, to: runningHours },
+  });
+
   return updated;
 }
 
