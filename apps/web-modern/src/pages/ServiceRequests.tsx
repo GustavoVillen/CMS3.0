@@ -228,6 +228,10 @@ export function ServiceRequestsPage() {
           role={user?.role ?? ""}
           onClose={closeModal}
           onChanged={() => { reload(); closeModal(); }}
+          // Merge, no reemplazo: el PATCH devuelve el registro pelado (sin la
+          // relación `workOrder` que sí trae la lista) y pisarlo entero borraría
+          // el bloque "OT de origen" del modal abierto.
+          onSaved={updated => { reload(); setSelected(prev => (prev ? { ...prev, ...updated } : updated)); }}
         />
       )}
     </div>
@@ -588,17 +592,22 @@ function ReceiveServiceModal({ onClose, onConfirm, busy }: {
 // Modal
 // ---------------------------------------------------------------------------
 
-function ServiceRequestModal({ sr, role, onClose, onChanged }: {
+function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   sr: ServiceRequest;
   role: string;
   onClose: () => void;
+  /** Avanzó el estado: refresca la lista y cierra el modal. */
   onChanged: () => void;
+  /** Se guardaron campos: refresca la lista y el registro, SIN cerrar el modal. */
+  onSaved: (updated: ServiceRequest) => void;
 }) {
   const [busy, setBusy] = useState(false);
   // Errores de acción: van dentro del modal, no en un alert() del navegador.
   const [actionError, setActionError] = useState<string | null>(null);
   // Pasos que piden datos (antes eran prompt()/confirm() nativos).
   const [receiving, setReceiving] = useState(false);
+  // Aviso posterior a "Enviar a Proveedor" (PDF ya generado).
+  const [sentNotice, setSentNotice] = useState(false);
   // Paso de tramitación abierto: cada uno pide quién firma y con qué fecha.
   const [tramita, setTramita] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
   const canApprove = CAN_APPROVE_ROLES.includes(role);
@@ -630,17 +639,19 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
   const toggleCompra = (v: string) =>
     setCompras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
 
+  // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
+  // cerrarlo obligaba a volver a abrir la SS para seguir completándola.
   const save = async () => {
     setSaving(true);
     setActionError(null);
     try {
-      await api.patch(`/app/pms/service-requests/${sr.id}`, {
+      const updated = await api.patch<ServiceRequest>(`/app/pms/service-requests/${sr.id}`, {
         description, causes, tallerNotes,
         purchaseRequestKinds: compras,
         capitanName: capitan,
         jefeMaquinasName: jefeMaq,
       });
-      onChanged();
+      onSaved(updated);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "No se pudieron guardar los cambios.");
     } finally {
@@ -648,8 +659,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
     }
   };
 
-  /** Avanza el estado. Propaga el error: los modales de paso muestran el suyo. */
-  const act = async (path: string, body?: unknown) => {
+  /**
+   * Avanza el estado. Propaga el error: los modales de paso muestran el suyo.
+   * `keepOpen` deja el modal abierto para poder mostrar un aviso posterior
+   * (lo usa "Enviar a Proveedor"); el cierre queda a cargo de quien llama.
+   */
+  const act = async (path: string, body?: unknown, opts?: { keepOpen?: boolean }) => {
     setBusy(true);
     setActionError(null);
     try {
@@ -664,9 +679,26 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
         });
       }
       await api.post(`/app/pms/service-requests/${sr.id}/${path}`, body ?? {});
-      onChanged();
+      if (!opts?.keepOpen) onChanged();
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * "Enviar a Proveedor": primero sale el PDF (es el documento que se le manda
+   * al taller), después se avanza el estado y recién ahí se avisa por dónde
+   * mandarlo. Si el PDF falla no se avanza: no habría qué enviar.
+   */
+  const sendToProvider = async () => {
+    setActionError(null);
+    const pdfOk = await printServiceRequest(sr);
+    if (!pdfOk) return;
+    try {
+      await act("start", undefined, { keepOpen: true });
+      setSentNotice(true);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "No se pudo completar la acción.");
     }
   };
 
@@ -876,7 +908,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
           )}
 
           {sr.status === "AUTORIZADA" && (
-            <button onClick={() => { runAct("start"); }} disabled={busy}
+            <button onClick={() => { void sendToProvider(); }} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50">
               <Play className="w-3.5 h-3.5" /> Enviar a Proveedor
             </button>
@@ -919,6 +951,26 @@ function ServiceRequestModal({ sr, role, onClose, onChanged }: {
           onClose={() => setTramita(null)}
           onDone={() => { setTramita(null); onChanged(); }}
         />
+      )}
+      {sentNotice && (
+        <FormModal
+          title="Solicitud enviada a proveedor"
+          subtitle={sr.serviceRequestCode}
+          onClose={() => { setSentNotice(false); onChanged(); }}
+          footer={
+            <button type="button" onClick={() => { setSentNotice(false); onChanged(); }}
+              className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold">
+              Entendido
+            </button>
+          }
+        >
+          <p className="text-sm text-text-industrial">
+            Enviar al proveedor a través de los canales predeterminados.
+          </p>
+          <p className="text-[11px] text-text-industrial/50">
+            El PDF de la solicitud ya se descargó.
+          </p>
+        </FormModal>
       )}
     </div>
   );

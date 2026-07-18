@@ -74,8 +74,11 @@ function fileSafe(s: string | null | undefined): string {
  * PDF de una Solicitud de Servicio (REGI-LOG-01.3). La SS es una entidad propia
  * que cuelga de una OT — por eso el documento se pide por el id de la SS, no de
  * la OT.
+ *
+ * Devuelve `true` si el PDF se generó y descargó. "Enviar a Proveedor" lo usa
+ * para no avisar que el documento salió cuando en realidad falló.
  */
-export async function printServiceRequest(sr: { id: string; serviceRequestCode: string; title?: string | null }): Promise<void> {
+export async function printServiceRequest(sr: { id: string; serviceRequestCode: string; title?: string | null }): Promise<boolean> {
   const res = await fetch(`/app/pms/service-requests/${sr.id}/pdf`, {
     headers: getAuthHeaders(),
   });
@@ -83,12 +86,13 @@ export async function printServiceRequest(sr: { id: string; serviceRequestCode: 
   if (!res.ok) {
     console.error("Error generando Solicitud de servicios:", res.status, await res.text());
     alert("No se pudo generar la Solicitud de servicios. Intente nuevamente.");
-    return;
+    return false;
   }
 
   // Nombre: "{codigo}-{titulo}.pdf" (ej. SS-74-M01-2026-Reparacion de bomba.pdf).
   const title = fileSafe(sr.title);
   await downloadResponse(res, `${sr.serviceRequestCode}${title ? `-${title}` : ""}.pdf`);
+  return true;
 }
 
 export async function printOpenWorkOrdersReport(vesselCode?: string | null, fileLabel = "OTs-Abiertas"): Promise<void> {
