@@ -895,6 +895,10 @@ function ResultFormModal({
   const [verdict, setVerdict]       = useState<Verdict | "">(sample.result?.verdict ?? "");
   const [summary, setSummary]       = useState(sample.result?.summary ?? "");
   const [receivedAt, setReceivedAt] = useState(sample.result?.receivedAt ? sample.result.receivedAt.slice(0, 10) : new Date().toISOString().slice(0, 10));
+  // Horómetro al momento del muestreo. La IA lo lee del reporte; se guarda en la
+  // muestra y se asienta en la OT de origen ("horas al momento de ejecución").
+  const [runningHours, setRunningHours] = useState(sample.runningHours != null ? String(sample.runningHours) : "");
+  const [runningHoursConf, setRunningHoursConf] = useState<"high" | "medium" | "low" | null>(null);
   const [params, setParams]         = useState<Array<{ key: string; value: string; unit: string; conf: "high" | "medium" | "low" | null }>>(() => {
     const existing = sample.result?.parameters;
     if (!existing) return [{ key: "", value: "", unit: "", conf: null }];
@@ -925,6 +929,12 @@ function ResultFormModal({
       if (extracted.verdict?.value)    setVerdict(extracted.verdict.value);
       if (extracted.summary?.value)    setSummary(extracted.summary.value);
       if (extracted.receivedAt?.value) setReceivedAt(extracted.receivedAt.value);
+      // Horómetro: `!= null` y no truthy — 0 es una lectura válida (equipo nuevo
+      // o recién reacondicionado).
+      if (extracted.runningHours?.value != null) {
+        setRunningHours(String(extracted.runningHours.value));
+        setRunningHoursConf(extracted.runningHours.confidence ?? null);
+      }
 
       const newParams: typeof params = [];
       const extractedParams: Record<string, { value: number | string; unit?: string; confidence: "high" | "medium" | "low" }> = extracted.parameters ?? {};
@@ -1004,9 +1014,13 @@ function ResultFormModal({
         const num = Number(p.value);
         paramObj[k] = { value: Number.isFinite(num) ? num : p.value, unit: p.unit || undefined };
       }
+      // trim() y no falsy: "0" es una lectura válida del horómetro.
+      const hoursText = runningHours.trim();
+      const hoursNum  = Number(hoursText);
       await api.post(`/app/fluid-analyses/${sample.id}/result`, {
         receivedAt, verdict, summary: summary || null,
         parameters: paramObj, reportUrl, reportMime,
+        runningHours: hoursText && Number.isFinite(hoursNum) ? hoursNum : null,
       });
       onSaved();
     } catch (e) {
@@ -1016,7 +1030,7 @@ function ResultFormModal({
 
   // ESC guard
   const resultDirty = useDirtyTracker({
-    verdict, summary, receivedAt, params, reportUrl,
+    verdict, summary, receivedAt, runningHours, params, reportUrl,
   });
   useEscapeGuard({ isDirty: resultDirty, onSave: submit, onClose });
 
@@ -1075,6 +1089,24 @@ function ResultFormModal({
                 {VERDICTS.map(v => <option key={v} value={v}>{VERDICT_STYLES[v].label}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <label className={labelCls + " mb-0"}>{t("fa.runHours")} al momento del muestreo</label>
+              {runningHoursConf && <ConfidenceBadge confidence={runningHoursConf} />}
+            </div>
+            <input
+              type="number" inputMode="numeric" min={0}
+              value={runningHours}
+              onChange={e => { setRunningHours(e.target.value); setRunningHoursConf(null); }}
+              className={inputCls}
+              placeholder="12500"
+            />
+            {sample.sourceWorkOrderId && (
+              <p className="text-[10px] text-text-industrial/40 mt-1">
+                Se asienta en la OT de origen como horas al momento de ejecución (no pisa un valor ya cargado).
+              </p>
+            )}
           </div>
           <div>
             <label className={labelCls}>Resumen / recomendación del lab</label>

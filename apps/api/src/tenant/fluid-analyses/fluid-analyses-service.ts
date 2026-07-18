@@ -60,6 +60,12 @@ export interface CreateResultInput {
   reportUrl?: string | null;
   reportMime?: string | null;
   reportSourceText?: string | null;
+  /**
+   * Horómetro del equipo al momento del muestreo, leído del reporte del lab (la
+   * IA lo extrae y el usuario lo confirma). Se guarda en la muestra y se asienta
+   * en la OT que la originó — ver syncRunningHoursToSourceWorkOrder.
+   */
+  runningHours?: number | null;
 }
 
 export interface UpdateResultInput extends Partial<CreateResultInput> {}
@@ -91,6 +97,19 @@ function normText(v: string | null | undefined): string | null {
   if (v == null) return null;
   const t = String(v).trim();
   return t.length > 0 ? t : null;
+}
+
+/**
+ * Horómetro. `undefined` = el cliente no mandó el campo (no se toca lo guardado);
+ * `null` = lo mandó vacío (se borra). Se acepta 0: un equipo recién instalado o
+ * recién reacondicionado puede muestrearse con el horómetro en cero.
+ */
+function normHours(v: number | null | undefined): number | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
 }
 
 async function nextSampleCode(prisma: any, tenantId: string, vesselCode: string): Promise<string> {
@@ -378,11 +397,27 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
     });
   }
 
-  // Move sample to REPORTED
+  // Move sample to REPORTED. El horómetro leído del reporte se guarda acá:
+  // llega como parte del resultado porque el dato está impreso en el PDF del lab.
+  const runningHours = normHours(input.runningHours);
   await (prisma as any).fluidSample.update({
     where: { id: sampleId },
-    data:  { status: "REPORTED", updatedByUserId: session.user.id },
+    data:  {
+      status: "REPORTED",
+      ...(runningHours !== undefined ? { runningHours } : {}),
+      updatedByUserId: session.user.id,
+    },
   });
+
+  // Asentar el horómetro en la OT que originó la muestra (no bloquea el guardado
+  // del resultado si falla: el dato del análisis ya quedó registrado).
+  if (runningHours != null) {
+    try {
+      await syncRunningHoursToSourceWorkOrder(prisma, session, sample, runningHours);
+    } catch {
+      // Non-fatal — el resultado del análisis se guarda igual.
+    }
+  }
 
   void publishAudit(prisma, {
     tenantId,
@@ -425,6 +460,62 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
   }
 
   return result;
+}
+
+// ── Horómetro del reporte → OT de origen ─────────────────────────────────────
+
+/**
+ * Asienta el horómetro leído del reporte del lab en la OT que generó la muestra,
+ * en "horas del motor al momento de ejecución".
+ *
+ * Reglas de negocio:
+ * - Sólo completa si la OT NO tiene horas cargadas. Un valor puesto por la
+ *   tripulación es un dato humano y no se pisa con una lectura de la IA.
+ * - Cuando la OT viene de un plan se usa updatePlanExecution: es el camino
+ *   sancionado para corregir una ejecución aunque la OT esté CERRADA (las OT de
+ *   muestreo suelen estarlo cuando llega el resultado) y además recalcula
+ *   lastExecution/nextDue del plan — el horómetro real reprograma el plan.
+ * - Si la OT no cuelga de un plan no hay vencimiento que recalcular: se escribe
+ *   sólo el campo.
+ */
+async function syncRunningHoursToSourceWorkOrder(
+  prisma: any,
+  session: TenantAccessSession,
+  sample: { id: string; tenantId: string; sampleCode: string; sourceWorkOrderId: string | null },
+  runningHours: number,
+): Promise<void> {
+  if (!sample.sourceWorkOrderId) return;
+
+  const wo = await prisma.workOrder.findFirst({
+    where: { id: sample.sourceWorkOrderId, tenantId: sample.tenantId, deletedAt: null },
+    select: { id: true, workOrderCode: true, maintenancePlanId: true, runningHoursAtExecution: true },
+  });
+  if (!wo) return;
+  // Dato humano ya cargado: no se pisa.
+  if (wo.runningHoursAtExecution != null) return;
+
+  if (wo.maintenancePlanId) {
+    const { updatePlanExecution } = await import("../maintenance-plans/maintenance-plans-service");
+    await updatePlanExecution(session, wo.maintenancePlanId, wo.id, { runningHoursAtExecution: runningHours });
+  } else {
+    await prisma.workOrder.update({
+      where: { id: wo.id },
+      data:  { runningHoursAtExecution: runningHours, updatedByUserId: session.user.id },
+    });
+  }
+
+  void publishAudit(prisma, {
+    tenantId: sample.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.runningHoursFromFluidReport",
+    entityType: "WorkOrder",
+    entityId: wo.id,
+    metadata: {
+      workOrderCode: wo.workOrderCode,
+      sampleCode: sample.sampleCode,
+      runningHoursAtExecution: runningHours,
+    },
+  });
 }
 
 // ── Auto-create Defect from a critical fluid result ──────────────────────────
