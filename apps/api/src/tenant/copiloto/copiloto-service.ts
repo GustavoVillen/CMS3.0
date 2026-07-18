@@ -86,6 +86,12 @@ RESPONSE STYLE — always apply unless the user explicitly asks for more detail:
 - Guide the user toward the next action when relevant.
 - If the user asks for more detail on a topic, then expand freely.
 
+NEVER SHOW INTERNAL IDs (mandatory):
+- Fields named "id", "assetId", "workOrderId", "vesselId", "planId" and similar contain internal database identifiers (random strings like "cmqo9d2y601clo6l4s403ej0i"). They are MEANINGLESS to the user. NEVER print them in your answer, not even in parentheses, as a label, or to disambiguate.
+- To name a piece of equipment, ALWAYS use the "assetName" field returned by the query_* tools (query_fluid_analyses, query_work_orders, query_maintenance_plans, query_work_logs, query_assets all return it). Example: say "Sistema Hidráulico", never "activo cmqo9d2y601clo6l4s403ej0i".
+- If assetName is null or missing, call query_assets to resolve it. If it still cannot be resolved, say "un equipo sin nombre registrado" — never fall back to printing the raw id.
+- assetId is for tool input only (filtering other query_* calls), never for output.
+
 CODE-TO-NATURAL CONVERSION (mandatory when speaking to the user):
 - Work Order codes follow the format OT-{VESSEL}-{YY}-{SEQ} (e.g. OT-DONCHI-26-0003).
   When mentioning a work order in prose, ALWAYS convert it to natural Spanish:
@@ -395,6 +401,20 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "query_assets",
+    description:
+      "Query the asset/equipment registry (activos, equipos) for the current tenant/vessel. Use this to resolve an equipment NAME the user mentioned ('motor principal babor', 'sistema hidráulico') into its assetId before calling other query_* tools that filter by assetId, or to list the equipment of a vessel with its criticality and status. Returns id, name, assetCode, criticality, status, manufacturer and model.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode:  { type: "string", description: "Filter by vessel code (optional)" },
+        textSearch:  { type: "string", description: "Search across name, assetCode, manufacturer and model (optional)" },
+        criticality: { type: "string", description: "Filter by criticality: A | B | C (optional)" },
+        limit:       { type: "number", description: "Max results to return (default 20, max 50)" },
+      },
+    },
+  },
+  {
     name: "query_spares",
     description:
       "Query the spares (repuestos) catalog for the current tenant/vessel. Use this when the user asks about inventory, stock levels, available parts, critical/low-stock items, parts location, or wants to find a specific spare by name/SKU/part number. Returns current stock derived from StockMovement (sum of receipts minus issues). For 'what's running low' queries, filter by lowStock=true (stock <= reorderPoint).",
@@ -627,6 +647,33 @@ function searchKnowledgeDocs(
   return wrapUntrusted(JSON.stringify(out));
 }
 
+/**
+ * Enriquece filas que traen un assetId crudo (cuid) con el nombre legible del
+ * activo. Sin esto la IA solo ve "cmqo9d2y601clo6l4s403ej0i" y termina
+ * mostrándole al usuario el ID interno de la base — que no significa nada para
+ * él. FluidSample/WorkLog no tienen @relation a Asset (assetId es un String
+ * suelto), así que se resuelve con un findMany + map, igual que los repuestos
+ * en query_work_logs.
+ */
+async function attachAssetNames<T extends { assetId?: string | null }>(
+  prisma: any,
+  tenantId: string,
+  rows: T[],
+): Promise<(T & { assetName: string | null; assetCode: string | null })[]> {
+  const ids = [...new Set(rows.map(r => r.assetId).filter(Boolean))] as string[];
+  const assets = ids.length > 0
+    ? await prisma.asset.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: { id: true, name: true, assetCode: true },
+      })
+    : [];
+  const byId = new Map(assets.map((a: any) => [a.id, a]));
+  return rows.map(r => {
+    const a: any = r.assetId ? byId.get(r.assetId) : null;
+    return { ...r, assetName: a?.name ?? null, assetCode: a?.assetCode ?? null };
+  });
+}
+
 async function executeCopilotTool(
   name: string,
   input: Record<string, unknown>,
@@ -708,8 +755,9 @@ async function executeCopilotTool(
         },
       });
 
+      const namedPlans = await attachAssetNames(prisma, tenantId, rows as any[]);
       return wrapUntrusted(JSON.stringify(
-        rows.length > 0 ? rows : { message: "No maintenance plans found matching the given criteria." },
+        namedPlans.length > 0 ? namedPlans : { message: "No maintenance plans found matching the given criteria." },
       ));
     }
 
@@ -773,8 +821,9 @@ async function executeCopilotTool(
         },
       });
 
+      const namedWos = await attachAssetNames(prisma, tenantId, rows as any[]);
       return wrapUntrusted(JSON.stringify(
-        rows.length > 0 ? rows : { message: "No work orders found matching the given criteria." },
+        namedWos.length > 0 ? namedWos : { message: "No work orders found matching the given criteria." },
       ));
     }
 
@@ -861,8 +910,9 @@ async function executeCopilotTool(
       const filtered = input.verdict
         ? samples.filter((s: any) => s.result?.verdict === input.verdict)
         : samples;
+      const named = await attachAssetNames(prisma, tenantId, filtered);
       return wrapUntrusted(JSON.stringify(
-        filtered.length > 0 ? filtered : { message: "No fluid analyses found." },
+        named.length > 0 ? named : { message: "No fluid analyses found." },
       ));
     }
 
@@ -895,7 +945,49 @@ async function executeCopilotTool(
         }
         return { sampleCode: s.sampleCode, sampledAt: s.sampledAt, runningHours: s.runningHours, fluidType: s.fluidType, verdict: s.result?.verdict ?? null, values };
       });
-      return wrapUntrusted(JSON.stringify(trend.length > 0 ? trend : { message: "No samples for this asset." }));
+      if (trend.length === 0) return wrapUntrusted(JSON.stringify({ message: "No samples for this asset." }));
+      const asset = await (prisma as any).asset.findFirst({
+        where: { id: assetId, tenantId },
+        select: { name: true, assetCode: true },
+      });
+      return wrapUntrusted(JSON.stringify({
+        assetName: asset?.name ?? null,
+        assetCode: asset?.assetCode ?? null,
+        samples: trend,
+      }));
+    }
+
+    if (name === "query_assets") {
+      const assetsLimit = Math.min(Number(input.limit ?? 20), 50);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scopeResult.ok) return scopeResult.reason;
+      if (input.criticality) where.criticality = input.criticality;
+      if (input.textSearch) {
+        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim()).filter(t => t.length >= 3);
+        const fields = ["name", "assetCode", "manufacturer", "model"];
+        if (tokens.length > 0) {
+          where.AND = tokens.map(tok => ({
+            OR: fields.map(f => ({ [f]: { contains: tok, mode: "insensitive" } })),
+          }));
+        } else {
+          where.OR = fields.map(f => ({ [f]: { contains: input.textSearch as string, mode: "insensitive" } }));
+        }
+      }
+
+      const rows = await (prisma as any).asset.findMany({
+        where,
+        take: assetsLimit,
+        orderBy: { name: "asc" },
+        select: {
+          id: true, name: true, assetCode: true, vesselCode: true,
+          criticality: true, status: true, manufacturer: true, model: true,
+        },
+      });
+
+      return wrapUntrusted(JSON.stringify(
+        rows.length > 0 ? rows : { message: "No assets found matching the given criteria." },
+      ));
     }
 
     if (name === "query_spares") {
@@ -1117,8 +1209,9 @@ async function executeCopilotTool(
         consumables: consumablesByLog[l.id] ?? [],
       }));
 
+      const namedLogs = await attachAssetNames(prisma, tenantId, result);
       return wrapUntrusted(JSON.stringify(
-        result.length > 0 ? result : { message: "No work logs / express maintenance records found matching the criteria." },
+        namedLogs.length > 0 ? namedLogs : { message: "No work logs / express maintenance records found matching the criteria." },
       ));
     }
 
