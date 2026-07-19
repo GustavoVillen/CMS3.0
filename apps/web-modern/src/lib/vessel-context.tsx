@@ -6,6 +6,31 @@ interface VesselOption {
   code: string;
   name: string;
   status: string;
+  /** Ej. "Remolcador", "Barcaza Tanque - Rake". Puede faltar en buques viejos. */
+  vesselType?: string | null;
+}
+
+/**
+ * Orden del selector de buques: primero por TIPO de embarcación, después
+ * alfabético dentro de cada tipo. Con una flota de 30+ barcazas, la lista plana
+ * obligaba a leerla entera para encontrar un remolcador.
+ *
+ * Los tipos se ordenan alfabéticamente entre sí. Los buques sin tipo cargado
+ * van al final: son datos incompletos y no deben encabezar la lista.
+ *
+ * `localeCompare` con "es" y numeric para que MGT 2 < MGT 10 (un orden de texto
+ * puro pone MGT 10 antes que MGT 2) y para que las tildes no alteren el orden.
+ */
+function sortVessels(items: VesselOption[]): VesselOption[] {
+  const cmp = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" });
+  return [...items].sort((a, b) => {
+    const ta = (a.vesselType ?? "").trim();
+    const tb = (b.vesselType ?? "").trim();
+    if (!ta !== !tb) return ta ? -1 : 1;   // sin tipo → al final
+    const byType = cmp(ta, tb);
+    if (byType !== 0) return byType;
+    return cmp(a.name ?? a.code, b.name ?? b.code);
+  });
 }
 
 interface VesselContextValue {
@@ -48,7 +73,7 @@ export function VesselProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated) return;
     api.get<{ items: VesselOption[] }>("/app/vessels")
-      .then(data => setVessels(data.items ?? []))
+      .then(data => setVessels(sortVessels(data.items ?? [])))
       .catch(() => {});
   }, [isAuthenticated]);
 

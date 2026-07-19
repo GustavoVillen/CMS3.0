@@ -7,6 +7,22 @@ import { useT } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
 import { NotificationsBell } from "./NotificationsBell";
 
+/**
+ * Parte la lista YA ORDENADA en bloques consecutivos por tipo, conservando el
+ * orden. Los que no tienen tipo quedan en un bloque sin etiqueta (van al final,
+ * ver sortVessels) y se renderizan sueltos, sin encabezado.
+ */
+function groupVesselsByType(vessels: { code: string; name: string; vesselType?: string | null }[]) {
+  const groups: { type: string | null; items: typeof vessels }[] = [];
+  for (const v of vessels) {
+    const type = (v.vesselType ?? "").trim() || null;
+    const last = groups[groups.length - 1];
+    if (last && last.type === type) last.items.push(v);
+    else groups.push({ type, items: [v] });
+  }
+  return groups;
+}
+
 export const Header: React.FC<{ title: string }> = ({ title }) => {
   void title;
   const { user, tenant, logout } = useAuth();
@@ -56,8 +72,18 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
               className="text-xs bg-transparent text-fg focus:outline-none cursor-pointer appearance-none pr-1"
             >
               <option value="">{t("header.allVessels")}</option>
-              {vessels.map(v => (
-                <option key={v.code} value={v.code}>{v.name}</option>
+              {/* La lista ya viene ordenada por tipo y luego alfabética (ver
+                  sortVessels). Se agrupa con <optgroup> para que ese orden se
+                  entienda: con 30+ barcazas, una lista plana no deja ver dónde
+                  empieza y termina cada tipo. */}
+              {groupVesselsByType(vessels).map(g => (
+                g.type
+                  ? (
+                    <optgroup key={g.type} label={g.type}>
+                      {g.items.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                    </optgroup>
+                  )
+                  : g.items.map(v => <option key={v.code} value={v.code}>{v.name}</option>)
               ))}
             </select>
             <ChevronDown className="w-3 h-3 text-fg/40 shrink-0 pointer-events-none" />
