@@ -1558,14 +1558,24 @@ export const DefectsPage: React.FC = () => {
   const severityFilter = (searchParams.get("severity") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
   // Compat: `?defectId=` (por id) → resuelve el código y redirige a `/defects/:code`.
+  //
+  // Este redirector es un PUENTE, no un destino: se resuelve con UNA sola
+  // navegación en `replace`, sin dejar rastro en el historial. Así, un defecto
+  // abierto desde una OT vuelve a esa OT al cerrarse, y no a la lista.
+  //
+  // Antes eran dos pasos (limpiar el param + openLink) y se pisaban entre sí:
+  // openLink conserva la query, así que el `defectId` sobrevivía y se terminaba
+  // en `/defects/:code?defectId=…`, con el efecto volviendo a dispararse.
   const autoDefectId = searchParams.get("defectId");
   useEffect(() => {
     if (!autoDefectId) return;
-    const params = new URLSearchParams(searchParams);
-    params.delete("defectId");
-    setSearchParams(params, { replace: true });
     api.get<Defect>(`/app/pms/defects/${autoDefectId}`)
-      .then(d => openLink(d.defectCode))
+      .then(d => {
+        const params = new URLSearchParams(searchParams);
+        params.delete("defectId");
+        const qs = params.toString();
+        navigate(`/defects/${encodeURIComponent(d.defectCode)}${qs ? `?${qs}` : ""}`, { replace: true });
+      })
       .catch(() => {});
   }, [autoDefectId]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -1059,6 +1059,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   type DefectPrompt = "idle" | "ask" | "creating" | "created" | "declined";
   const [defectPrompt, setDefectPrompt] = useState<DefectPrompt>("idle");
   const [createdDefectCode, setCreatedDefectCode] = useState<string | null>(null);
+  // Se guarda también el id para poder ofrecer el link al defecto recién creado
+  // sin sacar al usuario de la OT.
+  const [createdDefectId, setCreatedDefectId] = useState<string | null>(null);
 
   const handleWoResultChange = (val: string) => {
     const next = woResult === val ? "" : val;
@@ -1067,26 +1070,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     else { setDefectPrompt("idle"); setCreatedDefectCode(null); }
   };
 
-  const openDefectRecord = useCallback(async () => {
-    setDefectPrompt("creating");
-    try {
-      const body = {
-        vesselCode: workOrder.vesselCode,
-        assetId: workOrder.assetId,
-        workOrderId: workOrder.id,
-        classification: "WORK_ORDER_FINDING",
-        severity: "MEDIUM",
-        description: deficienciasText.trim() || observations.trim() || `Deficiencias encontradas en ${woTerms.abbr} ${workOrder.workOrderCode}`,
-      };
-      const res = await api.post<{ id: string; defectCode: string }>("/app/pms/defects", body);
-      setCreatedDefectCode(res.defectCode ?? null);
-      setDefectPrompt("created");
-      navigate(`/defects?defectId=${res.id}`);
-    } catch { setDefectPrompt("ask"); }
-  }, [deficienciasText, observations, workOrder, navigate]);
-
-  // Igual que openDefectRecord pero SIN navegar: se usa en el diálogo post-cierre
-  // para que el usuario pueda registrar el defecto y aún elegir abrir la OT correctiva.
+  /**
+   * Crea el registro de defecto SIN salir de la OT.
+   *
+   * Antes navegaba a /defects apenas se creaba, y eso echaba al usuario del
+   * formulario de cierre que estaba completando — con lo escrito a medias.
+   * Ahora el defecto se crea en segundo plano y el aviso ofrece el link para
+   * ir cuando quiera. Lo usa tanto el prompt del cierre como el diálogo
+   * posterior (donde además hay que poder seguir con la OT correctiva).
+   */
   const createDefectInline = useCallback(async () => {
     setDefectPrompt("creating");
     try {
@@ -1099,6 +1091,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         description: deficienciasText.trim() || observations.trim() || `Deficiencias encontradas en ${woTerms.abbr} ${workOrder.workOrderCode}`,
       });
       setCreatedDefectCode(res.defectCode ?? null);
+      setCreatedDefectId(res.id ?? null);
       setDefectPrompt("created");
     } catch { setDefectPrompt("ask"); }
   }, [deficienciasText, observations, workOrder, woTerms]);
@@ -2631,7 +2624,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 </div>
                 {defectPrompt === "ask" && (
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => { void openDefectRecord(); }}
+                    <button type="button" onClick={() => { void createDefectInline(); }}
                       className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
                       {t("wo.defectPrompt.openRecord")}
                     </button>
@@ -2647,9 +2640,25 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   </div>
                 )}
                 {defectPrompt === "created" && (
-                  <div className="flex items-center gap-2 text-xs text-success-sea font-semibold">
+                  <div className="flex items-center gap-2 text-xs text-success-sea font-semibold flex-wrap">
                     <CheckCheck className="w-3.5 h-3.5 shrink-0" />
-                    {t("wo.defectPrompt.created")}: <span className="font-mono">{createdDefectCode}</span>
+                    {t("wo.defectPrompt.created")}:
+                    {/* El código ES el link: el defecto ya quedó creado sin salir
+                        de la OT, y se entra sólo si el usuario lo decide. Al
+                        cerrar el defecto se vuelve a esta misma OT. */}
+                    {createdDefectId ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/defects?defectId=${createdDefectId}`)}
+                        className="inline-flex items-center gap-1 font-mono text-accent hover:underline"
+                        title="Abrir este registro de defecto"
+                      >
+                        {createdDefectCode}
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <span className="font-mono">{createdDefectCode}</span>
+                    )}
                   </div>
                 )}
                 {defectPrompt === "declined" && (
