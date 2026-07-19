@@ -596,8 +596,18 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                 <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-fg/15 bg-fg/5 text-text-industrial/60 cursor-pointer hover:bg-fg/10 active:bg-fg/15">
                   <FileText className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Adjuntar documento</span>
-                  <span className="text-[10px] text-text-industrial/40 normal-case font-normal">PDF, imagen o gráfico</span>
-                  <input type="file" accept="application/pdf,image/*" className="hidden" onChange={onDocSelect} />
+                  <span className="text-[10px] text-text-industrial/40 normal-case font-normal">PDF, imagen, gráfico o ZIP</span>
+                  {/* ZIP: para adjuntar un informe con sus anexos en un solo
+                      archivo (ej. el reporte del taller con fotos y planos).
+                      Se declaran los tres identificadores porque cada sistema
+                      operativo reporta el .zip de forma distinta y con uno solo
+                      el archivo aparecería en gris en el selector. */}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*,.zip,application/zip,application/x-zip-compressed"
+                    className="hidden"
+                    onChange={onDocSelect}
+                  />
                 </label>
               )}
               <textarea

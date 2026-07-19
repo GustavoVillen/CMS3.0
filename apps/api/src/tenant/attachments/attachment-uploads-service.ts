@@ -25,6 +25,10 @@ const MIME_MAP: Record<string, string> = {
   // Video
   ".mp4":  "video/mp4",
   ".mov":  "video/quicktime",
+  // Comprimidos: un informe de taller suele venir con sus anexos (fotos,
+  // planos) en un solo .zip. Se sirve como descarga, nunca se descomprime ni
+  // se ejecuta nada de adentro.
+  ".zip":  "application/zip",
 };
 
 function entityDir(tenantSlug: string, entityType: string): string {
