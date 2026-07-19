@@ -10,6 +10,9 @@
  *     blanco, executionStatus=FUTURE, status=ACTIVE. El historial heredado se carga
  *     aparte (Excel). Un buque distinto tiene horas de motor propias.
  *   - Idempotente: upsert por (tenantId, vesselCode, code). Re-correr actualiza.
+ *   - SKIP_SPARES=1: no clona repuestos. Para completar sólo planes faltantes en un
+ *     destino que ya opera; el catálogo de repuestos es por buque (stock, ubicaciones,
+ *     proveedores) y clonarlo entero mete decenas de registros en cero.
  *   - SKIP_EXISTING=1: NO toca registros que ya existen en el destino (assets/planes/
  *     spares cuyo código/sku ya está en DST). Sólo crea lo que falta. Útil cuando el
  *     destino ya tiene datos en uso (ej. OTs colgando de un plan) que no se deben pisar
@@ -39,6 +42,7 @@ const SRC = process.env.SRC_VESSEL ?? "M01";
 const DST = process.env.DST_VESSEL ?? "DCH";
 const DRY = process.env.DRY === "1";
 const SKIP_EXISTING = process.env.SKIP_EXISTING === "1";
+const SKIP_SPARES = process.env.SKIP_SPARES === "1";
 
 /** Reemplaza el prefijo de buque del código. M01-... → DCH-... ; M01... → DCH... */
 function renameCode(code: string): string {
@@ -182,7 +186,11 @@ async function main() {
   }
 
   // ── 3) SPARES ────────────────────────────────────────────────────────────────
-  const srcSpares = await prisma.spare.findMany({
+  // SKIP_SPARES=1 → no se tocan los repuestos. Se usa cuando sólo hay que
+  // completar planes faltantes en un destino que ya opera: el catálogo de
+  // repuestos es por buque (stock, ubicaciones, proveedores) y clonarlo entero
+  // mete decenas de registros en cero que después nadie sabe si son reales.
+  const srcSpares = SKIP_SPARES ? [] : await prisma.spare.findMany({
     where: { tenantId: tid, vesselCode: SRC, deletedAt: null },
     orderBy: { sku: "asc" },
   });
