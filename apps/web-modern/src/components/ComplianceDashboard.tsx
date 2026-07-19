@@ -70,10 +70,15 @@ export const ComplianceDashboard: React.FC = () => {
 
   const [scores, setScores] = useState<ComplianceScore[] | null>(null);
   const [loading, setLoading] = useState(true);
-  // En ADMIN la sección viene colapsada y se despliega al clic en el título;
-  // los demás managers la siguen viendo expandida por defecto.
-  const isAdmin = role === "TENANT_ADMIN";
-  const [collapsed, setCollapsed] = useState(isAdmin);
+  // El Dashboard abre con esta sección CERRADA: son decenas de buques y empujaba
+  // todo lo operativo fuera de la pantalla. Se despliega con un clic en el
+  // título.
+  //
+  // Antes esto dependía del rol (`useState(role === "TENANT_ADMIN")`) y NO
+  // funcionaba: el estado inicial se fija en el primer render, cuando el usuario
+  // todavía no cargó y el rol es "" — así que daba false y quedaba abierta
+  // siempre, incluso para el admin.
+  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
     if (!isManager) { setLoading(false); return; }
