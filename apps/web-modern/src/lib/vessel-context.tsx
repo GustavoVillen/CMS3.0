@@ -15,19 +15,30 @@ interface VesselOption {
  * alfabético dentro de cada tipo. Con una flota de 30+ barcazas, la lista plana
  * obligaba a leerla entera para encontrar un remolcador.
  *
- * Los tipos se ordenan alfabéticamente entre sí. Los buques sin tipo cargado
- * van al final: son datos incompletos y no deben encabezar la lista.
+ * El orden ENTRE tipos es de negocio, no alfabético: primero los REMOLCADORES
+ * (las unidades propulsadas, donde se concentra la operación) y después las
+ * barcazas. Alfabéticamente quedaba al revés.
+ *
+ * Los buques sin tipo cargado van al final: es un dato incompleto y no debe
+ * encabezar la lista.
  *
  * `localeCompare` con "es" y numeric para que MGT 2 < MGT 10 (un orden de texto
  * puro pone MGT 10 antes que MGT 2) y para que las tildes no alteren el orden.
  */
+function typeRank(type: string): number {
+  if (!type) return 9;                          // sin tipo → al final
+  if (/remolcador/i.test(type)) return 0;       // remolcadores primero
+  return 1;                                     // el resto (barcazas, etc.)
+}
+
 function sortVessels(items: VesselOption[]): VesselOption[] {
   const cmp = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" });
   return [...items].sort((a, b) => {
     const ta = (a.vesselType ?? "").trim();
     const tb = (b.vesselType ?? "").trim();
-    if (!ta !== !tb) return ta ? -1 : 1;   // sin tipo → al final
-    const byType = cmp(ta, tb);
+    const byRank = typeRank(ta) - typeRank(tb);
+    if (byRank !== 0) return byRank;
+    const byType = cmp(ta, tb);                 // dentro del mismo rango, alfabético
     if (byType !== 0) return byType;
     return cmp(a.name ?? a.code, b.name ?? b.code);
   });
