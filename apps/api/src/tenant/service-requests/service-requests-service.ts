@@ -1,18 +1,32 @@
 // Solicitud de Servicio (SS) — pedido de un servicio EXTERNO (un taller).
 //
-// Regla central del dominio: una SS SÓLO se abre desde una OT abierta Y
-// AUTORIZADA, y queda ligada a ella (1 OT → N SS). Por eso no existe un
-// `createServiceRequest` que reciba vesselCode suelto: el único punto de entrada
-// es `POST /app/pms/work-orders/:id/service-requests`, que resuelve la OT primero.
+// Regla central del dominio: una SS SÓLO se abre desde una OT abierta, y queda
+// ligada a ella (1 OT → N SS). Por eso no existe un `createServiceRequest` que
+// reciba vesselCode suelto: el único punto de entrada es
+// `POST /app/pms/work-orders/:id/service-requests`, que resuelve la OT primero.
 //
 // Flujo: DRAFT → SOLICITADA → APROBADA → AUTORIZADA → IN_PROGRESS → COMPLETED.
-// Contratar un tercero compromete gasto, así que la autorización es un gate duro:
 //   · IN_PROGRESS sólo se alcanza desde AUTORIZADA (409 si no).
-//   · Autorizar es exclusivo de tierra: TENANT_ADMIN ("DPA / Director de
+//   · Autorizar A MANO es exclusivo de tierra: TENANT_ADMIN ("DPA / Director de
 //     Operaciones") o FLEET_SUPERINTENDENT ("Superintendente técnico") — 403 para
 //     el resto, incluido MAINTENANCE_MANAGER ("Capitán / Jefe de Máquinas"), que
-//     sí puede aprobar a bordo. Quien pide el servicio no puede habilitar el
-//     gasto: son dos personas distintas.
+//     sí puede aprobar a bordo.
+//
+// ── ARRASTRE DESDE LA OT (decisión de producto, jul 2026) ────────────────────
+// La SS se puede cargar junto con la OT, antes de que ésta se autorice, y la
+// tramitación de la OT ARRASTRA a la SS: OT aprobada → SS aprobada; OT
+// autorizada → SS autorizada (ver cascadeWorkOrderApprovalToServiceRequests).
+// El arrastre corre en el momento de firmar la OT y alcanza a las SS que
+// existan en ese instante: una SS abierta DESPUÉS, con la OT ya autorizada
+// (durante la ejecución), no tiene ningún paso de OT por delante y por lo tanto
+// recorre su propia tramitación completa. No hace falta ninguna excepción.
+//
+// El arrastre no vuelve a chequear el rol, y no hace falta: autorizar una OT
+// está restringido a los MISMOS roles de tierra que autorizar una SS (ver
+// canAuthorizeWorkOrders en work-orders-service). Quien dispara el arrastre ya
+// tenía atribución para firmar la SS. Si alguna vez se aflojara el gate de la
+// OT, este arrastre se convierte en una puerta trasera al control del gasto:
+// las dos listas tienen que moverse juntas.
 
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
@@ -304,16 +318,11 @@ export async function createServiceRequestForWorkOrder(
       "Una solicitud de servicio sólo puede abrirse desde una orden de trabajo abierta.",
     );
   }
-  // La OT tiene que estar AUTORIZADA. Contratar un taller compromete gasto, y
-  // mal podría hacerse para un trabajo que la propia empresa todavía no aprobó:
-  // sería saltear la tramitación de la OT por la ventana de la SS.
-  if (!(wo as any).autorizadoAt) {
-    throw new RouteError(
-      409,
-      "WO_NOT_AUTHORIZED",
-      "La orden de trabajo debe estar autorizada antes de solicitar un servicio externo.",
-    );
-  }
+  // Antes se exigía que la OT estuviera AUTORIZADA. Se quitó a pedido del
+  // cliente: la SS se carga junto con la OT y viaja con ella (ver el arrastre
+  // en la cabecera). El gate del gasto no desaparece — sigue estando en que la
+  // SS no llega a IN_PROGRESS sin estar AUTORIZADA, y en que mandarla al taller
+  // es siempre una acción manual ("Enviar a Proveedor"), nunca automática.
 
   const vesselCode = String((wo as any).vesselCode);
   const openDate = parseOptionalDate(payload.openDate, "openDate") ?? new Date();
@@ -475,6 +484,106 @@ export async function unsubmitServiceRequest(session: TenantAccessSession, id: s
     where: { id },
     data: { status: "DRAFT", updatedByUserId: session.user.id },
   });
+}
+
+/**
+ * ARRASTRE OT → SS. Lo llama setWorkOrderApproval después de firmar la OT.
+ *
+ * Alcanza sólo a las SS que están DETRÁS del paso firmado; nunca retrocede una
+ * SS ya despachada. El tope duro es AUTORIZADA: mandar el trabajo al taller
+ * (IN_PROGRESS) es siempre manual, con el botón "Enviar a Proveedor", que además
+ * emite el PDF. Por eso IN_PROGRESS y COMPLETED quedan fuera en todos los pasos.
+ *
+ * En RECHAZA se devuelven a SOLICITADA las que este mismo mecanismo pudo haber
+ * adelantado (APROBADA / AUTORIZADA), espejando lo que RECHAZA le hace a la OT.
+ * Las ya despachadas no se tocan: el taller ya está trabajando y revertirlas en
+ * la base no lo desharía — eso se resuelve cancelando la SS a mano.
+ *
+ * No valida rol a propósito: quien pudo firmar la OT arrastra la SS (decisión
+ * de producto). La autorización MANUAL de una SS sigue restringida a tierra.
+ *
+ * Devuelve cuántas SS tocó. No lanza: el que llama lo envuelve en try/catch para
+ * que un problema acá nunca tumbe la tramitación de la OT.
+ */
+export async function cascadeWorkOrderApprovalToServiceRequests(params: {
+  tenantId: string;
+  workOrderId: string;
+  workOrderCode: string;
+  step: "APRUEBA" | "AUTORIZA" | "RECHAZA";
+  /** Nombre estampado en la OT: se replica como firmante de la SS. */
+  signerName: string;
+  signerUserId: string;
+  actionAt: Date;
+  /** Quién operó de verdad (puede diferir del firmante si fue "en nombre de"). */
+  actorUserId: string;
+}): Promise<number> {
+  const prisma = getPrismaClient();
+  if (!prisma) return 0;
+  const prismaRaw = prisma as any;
+  const { tenantId, workOrderId, workOrderCode, step, signerName, signerUserId, actionAt, actorUserId } = params;
+
+  // Estados sobre los que actúa cada paso. Todo lo que no esté acá se ignora.
+  const affected =
+    step === "APRUEBA"  ? ["DRAFT", "SOLICITADA"] :
+    step === "AUTORIZA" ? ["DRAFT", "SOLICITADA", "APROBADA"] :
+                          ["APROBADA", "AUTORIZADA"]; // RECHAZA
+
+  const targets = await prismaRaw.serviceRequest.findMany({
+    where: { tenantId, workOrderId, deletedAt: null, status: { in: affected } },
+    select: { id: true, serviceRequestCode: true, status: true, aprobadoAt: true },
+  });
+  if (targets.length === 0) return 0;
+
+  for (const sr of targets) {
+    let data: Record<string, unknown>;
+    if (step === "APRUEBA") {
+      data = {
+        status: "APROBADA",
+        aprobadoByName: signerName, aprobadoByUserId: signerUserId, aprobadoAt: actionAt,
+        rechazadoByName: null, rechazadoAt: null, rechazoReason: null,
+      };
+    } else if (step === "AUTORIZA") {
+      // Una SS no puede estar autorizada sin estar aprobada: si el arrastre la
+      // saltea (la OT se autorizó sin que la SS pasara por APROBADA), se
+      // completa también la firma de aprobación para no dejar el papel cojo.
+      data = {
+        status: "AUTORIZADA",
+        autorizadoByName: signerName, autorizadoByUserId: signerUserId, autorizadoAt: actionAt,
+        rechazadoByName: null, rechazadoAt: null, rechazoReason: null,
+        ...(sr.aprobadoAt ? {} : { aprobadoByName: signerName, aprobadoByUserId: signerUserId, aprobadoAt: actionAt }),
+      };
+    } else {
+      data = {
+        status: "SOLICITADA",
+        aprobadoByName: null, aprobadoByUserId: null, aprobadoAt: null,
+        autorizadoByName: null, autorizadoByUserId: null, autorizadoAt: null,
+      };
+    }
+
+    await prismaRaw.serviceRequest.update({
+      where: { id: sr.id },
+      data: { ...data, updatedByUserId: actorUserId },
+    });
+
+    // Auditoría propia: sin esto, en la SS aparecería una firma sin ningún
+    // registro de quién ni por qué, porque el acto se hizo sobre la OT.
+    void publishAudit(prismaRaw, {
+      tenantId,
+      actorUserId,
+      action: step === "APRUEBA" ? "ServiceRequest.approved"
+        : step === "AUTORIZA" ? "ServiceRequest.authorized"
+        : "ServiceRequest.approvalReverted",
+      entityType: "ServiceRequest",
+      entityId: sr.id,
+      metadata: {
+        serviceRequestCode: sr.serviceRequestCode,
+        previousStatus: sr.status,
+        cascadedFromWorkOrder: workOrderCode,
+        signerName,
+      },
+    });
+  }
+  return targets.length;
 }
 
 export interface ApprovalInput {

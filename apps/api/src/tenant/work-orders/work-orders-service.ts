@@ -214,6 +214,24 @@ function canOperateWorkOrders(session: TenantAccessSession): boolean {
 }
 
 /**
+ * AUTORIZAR una OT: SÓLO tierra.
+ *   TENANT_ADMIN         = "DPA / Director de Operaciones"
+ *   FLEET_SUPERINTENDENT = "Superintendente técnico"
+ *
+ * Misma lista que `canAuthorize` de las Solicitudes de Servicio, a propósito:
+ * autorizar es siempre un acto de tierra. Queda afuera el MAINTENANCE_MANAGER
+ * ("Capitán / Jefe de Máquinas"), que sí aprueba a bordo, y el
+ * TECHNICIAN_OPERATOR, que puede operar la OT pero no habilitarla.
+ *
+ * Importa además porque autorizar una OT ARRASTRA a sus SS (ver
+ * cascadeWorkOrderApprovalToServiceRequests): si acá entrara alguien de a bordo,
+ * el arrastre habilitaría gasto externo salteando el control de tierra.
+ */
+function canAuthorizeWorkOrders(session: TenantAccessSession): boolean {
+  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"].includes(session.user.role);
+}
+
+/**
  * Crear OT: permitido a TODOS los roles del tenant salvo AUDITOR_READONLY.
  * La creación es un punto de entrada operativo (especialmente desde defectos
  * detectados a bordo); restringirla bloqueaba flujos legítimos.
@@ -1014,6 +1032,14 @@ export async function setWorkOrderApproval(
   payload: { step: "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null; actionDate?: string | Date | null },
 ) {
   ensureCanOperateWorkOrders(session);
+  // Autorizar es de tierra, igual que en la SS (ver canAuthorizeWorkOrders).
+  if (payload.step === "AUTORIZA" && !canAuthorizeWorkOrders(session)) {
+    throw new RouteError(
+      403,
+      "FORBIDDEN",
+      "Autorizar una orden de trabajo es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones.",
+    );
+  }
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -1036,14 +1062,24 @@ export async function setWorkOrderApproval(
         select: { userId: true, role: true, assignedVesselCodes: true },
       });
       if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
-      // Solo puede firmar una aprobación/autorización un ADMIN, o el SUPERINTENDENTE
-      // o el JEFE DE MÁQUINAS (MAINTENANCE_MANAGER) a cargo de esta embarcación
-      // (defensa en profundidad; el front ya filtra la lista).
+      // La elegibilidad depende del PASO. APRUEBA admite al JEFE DE MÁQUINAS
+      // (es a bordo); AUTORIZA no, porque es de tierra. Sin esta distinción un
+      // admin podría autorizar "en nombre de" un jefe de máquinas y saltear el
+      // gate por la ventana. Defensa en profundidad: el front ya filtra la lista.
+      const enElBuque = Array.isArray(membership.assignedVesselCodes)
+        && membership.assignedVesselCodes.includes(current.vesselCode);
       const eligible = membership.role === "TENANT_ADMIN"
-        || ((membership.role === "FLEET_SUPERINTENDENT" || membership.role === "MAINTENANCE_MANAGER")
-            && Array.isArray(membership.assignedVesselCodes)
-            && membership.assignedVesselCodes.includes(current.vesselCode));
-      if (!eligible) throw new RouteError(403, "NOT_ELIGIBLE_APPROVER", "Solo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar/autorizar.");
+        || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
+        || (payload.step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
+      if (!eligible) {
+        throw new RouteError(
+          403,
+          "NOT_ELIGIBLE_APPROVER",
+          payload.step === "APRUEBA"
+            ? "Solo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
+            : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
+        );
+      }
       signerUserId = onBehalf;
     }
     const d = parseOptionalDate(payload.actionDate, "actionDate");
@@ -1090,6 +1126,29 @@ export async function setWorkOrderApproval(
       onBehalfOf: signerUserId !== session.user.id ? signerUserId : undefined,
     },
   });
+
+  // Arrastre a las Solicitudes de Servicio colgadas de esta OT: firmar la OT
+  // firma también sus SS (OT aprobada → SS aprobada; OT autorizada → SS
+  // autorizada; OT rechazada → se revierte lo que el arrastre había adelantado).
+  // Import dinámico para no crear un ciclo: service-requests-service ya importa
+  // de este módulo. En try/catch como el auto-create de muestras: un problema
+  // con las SS no puede tumbar la tramitación de la OT, que ya está guardada.
+  try {
+    const { cascadeWorkOrderApprovalToServiceRequests } = await import("../service-requests/service-requests-service");
+    const touched = await cascadeWorkOrderApprovalToServiceRequests({
+      tenantId:      current.tenantId,
+      workOrderId:   current.id,
+      workOrderCode: current.workOrderCode,
+      step:          payload.step,
+      signerName:    name,
+      signerUserId,
+      actionAt:      payload.step === "RECHAZA" ? now : actionAt,
+      actorUserId:   session.user.id,
+    });
+    if (touched > 0) log.info(`[setWorkOrderApproval] ${payload.step}: ${touched} SS arrastrada(s) de ${current.workOrderCode}`);
+  } catch (err) {
+    log.error("[setWorkOrderApproval] cascade a Solicitudes de Servicio falló", err);
+  }
 
   // Auto-create Sample DRAFT al AUTORIZAR (no al cerrar): así la tripulación ya
   // sabe, desde que la OT se despacha, que debe tomar la muestra durante la

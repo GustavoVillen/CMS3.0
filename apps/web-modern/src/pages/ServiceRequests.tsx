@@ -10,7 +10,7 @@
 // mismo que lo pidió a bordo.
 
 import React, { useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
@@ -358,6 +358,8 @@ const SS_VIEW_FILTERS: Array<{ key: string; label: string; match: (sr: ServiceRe
 export function ServiceRequestsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { key: locationKey } = useLocation();
   const [selected, setSelected] = useState<ServiceRequest | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [search, setSearch] = useState("");
@@ -415,10 +417,14 @@ export function ServiceRequestsPage() {
 
   const closeModal = () => {
     setSelected(null);
-    if (openId) {
-      searchParams.delete("openId");
-      setSearchParams(searchParams, { replace: true });
-    }
+    if (!openId) return; // se abrió clickeando en esta misma pantalla: nada que navegar
+    // Vino por deep-link (típicamente desde el panel de una OT): cerrar debe
+    // devolver a esa pantalla, no dejar al usuario en la lista de SS. Si la SS
+    // fue la primera pantalla de la sesión no hay a dónde volver, así que sólo
+    // se limpia el parámetro. Mismo criterio que useDeepLink.
+    if (locationKey !== "default") { navigate(-1); return; }
+    searchParams.delete("openId");
+    setSearchParams(searchParams, { replace: true });
   };
 
   const columns: Column<ServiceRequest>[] = [

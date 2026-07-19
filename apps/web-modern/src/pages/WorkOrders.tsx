@@ -53,6 +53,20 @@ const SS_STATUS_LABEL: Record<string, string> = {
   AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
   REJECTED: "Rechazada", CANCELLED: "Cancelada",
 };
+// Punto de color de cada SS dentro de la tarjeta del kanban de OT. Mismos
+// colores que las columnas del tablero de SS, para no tener dos códigos.
+const SS_DOT_CLS: Record<string, string> = {
+  DRAFT: "bg-fg/30", SOLICITADA: "bg-yellow-500", APROBADA: "bg-blue-500",
+  AUTORIZADA: "bg-violet-500", IN_PROGRESS: "bg-amber-500", COMPLETED: "bg-emerald-500",
+  REJECTED: "bg-red-500", CANCELLED: "bg-fg/20",
+};
+
+/**
+ * Autorizar es atribución de TIERRA, tanto en la OT como en la SS. Debe
+ * coincidir con canAuthorizeWorkOrders / canAuthorize del backend: si se
+ * aflojara acá, el arrastre OT→SS se volvería una puerta trasera al gasto.
+ */
+const CAN_AUTHORIZE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"];
 const SS_STATUS_COLOR: Record<string, string> = {
   DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
   SOLICITADA: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
@@ -828,6 +842,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const tramitaPhase: "SOLICITADA" | "APROBADA" | "AUTORIZADA" =
     workOrder.autorizadoAt ? "AUTORIZADA" : workOrder.aprobadoAt ? "APROBADA" : "SOLICITADA";
   const isRejected = !!workOrder.rechazadoAt && !workOrder.aprobadoAt;
+  // Autorizar (OT y SS) es sólo de tierra. Debe coincidir con
+  // canAuthorizeWorkOrders del backend.
+  const canAuthorizeWo = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
   // step de tramitación pendiente (abre ApprovalModal). null = cerrado.
   const [tramita, setTramita] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
 
@@ -1299,10 +1316,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     [workOrder.id],
   );
   const linkedServiceRequests = linkedSrData?.items ?? [];
-  // Abierta Y autorizada: pedirle un servicio a un taller compromete gasto, así
-  // que la OT tiene que estar autorizada primero (el backend valida igual).
-  const canOpenServiceRequest =
-    WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status) && !!workOrder.autorizadoAt;
+  // Alcanza con que la OT esté abierta: la SS se carga junto con la OT y la
+  // tramitación de la OT la arrastra (OT aprobada → SS aprobada; OT autorizada →
+  // SS autorizada). Ya no se exige que la OT esté autorizada de antemano.
+  const canOpenServiceRequest = WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status);
   const [creatingSr, setCreatingSr] = useState(false);
   const [newSrOpen, setNewSrOpen] = useState(false);
   // Lo único que no se puede heredar: qué servicio se le pide al tercero. El
@@ -1777,8 +1794,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <div className="flex gap-2">
                     <button
                       type="button"
+                      disabled={tramitaPhase === "APROBADA" && !canAuthorizeWo}
+                      title={tramitaPhase === "APROBADA" && !canAuthorizeWo
+                        ? "Autorizar es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones."
+                        : undefined}
                       onClick={() => setTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
-                      className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                      className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       {tramitaPhase === "SOLICITADA" ? "APROBADA" : "AUTORIZADA"}
                     </button>
@@ -2900,9 +2921,32 @@ function WoStageBadge({ wo }: { wo: WorkOrder }) {
   return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${meta.cls}`}>{meta.label}</span>;
 }
 
-function KanbanCardContent({ wo, deferralMap }: {
+/** SS mostrada dentro de la tarjeta de la OT (sólo lo que entra en una línea). */
+interface SrLite { id: string; serviceRequestCode: string; status: string; workOrderId: string }
+
+/**
+ * Las SS de la OT, en la tarjeta del kanban. Una línea por SS: código + punto de
+ * color. El punto es el que dice de un vistazo si ya está autorizada (violeta en
+ * adelante) o si todavía está esperando firma.
+ */
+function SrChips({ items }: { items: SrLite[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="pt-1.5 mt-0.5 border-t border-fg/10 space-y-1">
+      {items.map(sr => (
+        <div key={sr.id} className="flex items-center gap-1.5" title={`${sr.serviceRequestCode} · ${SS_STATUS_LABEL[sr.status] ?? sr.status}`}>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SS_DOT_CLS[sr.status] ?? "bg-fg/20"}`} />
+          <span className="font-mono text-[9px] text-text-industrial/60 truncate">{sr.serviceRequestCode}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KanbanCardContent({ wo, deferralMap, srs }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  srs: SrLite[];
 }) {
   const now = new Date();
   const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
@@ -2926,13 +2970,15 @@ function KanbanCardContent({ wo, deferralMap }: {
           {deferral && <DeferralStatusBadge status={deferral.status} />}
         </div>
       )}
+      <SrChips items={srs} />
     </>
   );
 }
 
-function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStart }: {
+function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDragStart }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  srs: SrLite[];
   isLoading: boolean;
   draggingId: string | null;
   onOpen: (wo: WorkOrder) => void;
@@ -2966,7 +3012,7 @@ function KanbanCard({ wo, deferralMap, isLoading, draggingId, onOpen, onDragStar
         ${isLoading ? "opacity-60 pointer-events-none" : ""}
         transition-colors`}
     >
-      <KanbanCardContent wo={wo} deferralMap={deferralMap} />
+      <KanbanCardContent wo={wo} deferralMap={deferralMap} srs={srs} />
     </div>
   );
 }
@@ -2986,9 +3032,10 @@ function groupWosByAsset(items: WorkOrder[]): { key: string; label: string; item
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload }: {
+function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload }: {
   items: WorkOrder[];
   deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  srMap: Map<string, SrLite[]>;
   loadingId: string | null;
   loading: boolean;
   onOpen: (wo: WorkOrder) => void;
@@ -2999,6 +3046,9 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "APRUEBA" | "AUTORIZA" } | null>(null);
+  const [dropError, setDropError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const canAuthorize = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
   // Grupos por equipo colapsados (clave `${colId}::${assetKey}`). Default: expandidos.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = useCallback((k: string) => {
@@ -3010,6 +3060,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
   const handleDrop = useCallback((e: React.DragEvent, targetCol: WoStage) => {
     setOverCol(null);
     setDraggingWo(null);
+    setDropError(null);
     draggingWoRef.current = null;
 
     let payload: { id: string; stage: WoStage } | null = null;
@@ -3023,8 +3074,14 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
 
     // Aprobar (Solicitada → Aprobada): pide nombre.
     if (stage === "SOLICITADA" && targetCol === "APROBADA") { setPendingApproval({ wo, step: "APRUEBA" }); return; }
-    // Autorizar (Aprobada → Autorizada): pide nombre. No se puede saltar desde Solicitada.
-    if (stage === "APROBADA" && targetCol === "AUTORIZADA") { setPendingApproval({ wo, step: "AUTORIZA" }); return; }
+    // Autorizar (Aprobada → Autorizada): pide nombre. No se puede saltar desde
+    // Solicitada. Es de tierra: se avisa acá en vez de dejar que el backend
+    // devuelva un 403 sin explicación.
+    if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
+      if (!canAuthorize) { setDropError("Autorizar es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones."); return; }
+      setPendingApproval({ wo, step: "AUTORIZA" });
+      return;
+    }
     // Diferir (cualquier etapa activa → Diferida): flujo de diferimiento existente.
     if (targetCol === "DIFERIDA" && stage !== "DIFERIDA") { setPendingHold(wo); return; }
     // Reanudar (Diferida → etapa activa): vuelve a su etapa de aprobación.
@@ -3036,12 +3093,17 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
       return;
     }
     // Cualquier otro movimiento (ej. salto Solicitada→Autorizada, o retroceso) se ignora.
-  }, [items, onReload]);
+  }, [items, onReload, canAuthorize]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
   return (
     <>
+      {dropError && (
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+          {dropError}
+        </p>
+      )}
       <div className="flex gap-3 pb-4">
         {KANBAN_COLS.map(col => {
           const colItems = items.filter(w => woStage(w) === col.colId);
@@ -3083,6 +3145,7 @@ function KanbanBoard({ items, deferralMap, loadingId, loading, onOpen, onReload 
                               key={wo.id}
                               wo={wo}
                               deferralMap={deferralMap}
+                              srs={srMap.get(wo.id) ?? []}
                               isLoading={loadingId === wo.id}
                               draggingId={draggingWo?.id ?? null}
                               onOpen={onOpen}
@@ -3141,14 +3204,16 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role: string; assignedVesselCodes: string[] }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
-  // Aprobar/autorizar solo lo puede firmar un ADMIN, o el SUPERINTENDENTE o el
-  // JEFE DE MÁQUINAS (MAINTENANCE_MANAGER) a cargo de ESTA embarcación.
-  // El resto del equipo no debe aparecer en el listado.
-  const eligibleApprovers = teamUsers.filter(u =>
-    u.role === "TENANT_ADMIN" ||
-    ((u.role === "FLEET_SUPERINTENDENT" || u.role === "MAINTENANCE_MANAGER") &&
-      (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode)),
-  );
+  // Quién puede firmar depende del PASO: aprobar admite al JEFE DE MÁQUINAS
+  // (es a bordo); autorizar es sólo tierra (admin / superintendente). Mismo
+  // criterio que la SS. El backend valida igual; esto es para no ofrecer un 403.
+  const eligibleApprovers = teamUsers.filter(u => {
+    if (u.role === "TENANT_ADMIN") return true;
+    const enElBuque = (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode);
+    if (u.role === "FLEET_SUPERINTENDENT") return enElBuque;
+    if (u.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
+    return false;
+  });
   // Admin: fecha de la acción (aprobación/autorización). Default hoy.
   const today = new Date().toISOString().slice(0, 10);
   const [actionDate, setActionDate] = useState(today);
@@ -3337,6 +3402,28 @@ export const WorkOrdersPage: React.FC = () => {
         setDeferralMap(map);
       })
       .catch(() => { if (!cancelled) setDeferralMap(new Map()); });
+    return () => { cancelled = true; };
+  }, [data]);
+
+  // Map of workOrderId → SS colgadas de esa OT, para mostrarlas dentro de la
+  // tarjeta del kanban. Una sola llamada al listado (chico, sin paginar) y
+  // agrupado en cliente — mismo criterio que el mapa de diferimientos de arriba.
+  const [srMap, setSrMap] = useState<Map<string, SrLite[]>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    api.get<{ items: SrLite[] }>("/app/pms/service-requests")
+      .then(r => {
+        if (cancelled) return;
+        const map = new Map<string, SrLite[]>();
+        for (const sr of r.items ?? []) {
+          if (!sr.workOrderId) continue;
+          const list = map.get(sr.workOrderId);
+          if (list) list.push(sr); else map.set(sr.workOrderId, [sr]);
+        }
+        for (const list of map.values()) list.sort((a, b) => a.serviceRequestCode.localeCompare(b.serviceRequestCode));
+        setSrMap(map);
+      })
+      .catch(() => { if (!cancelled) setSrMap(new Map()); });
     return () => { cancelled = true; };
   }, [data]);
 
@@ -3567,7 +3654,7 @@ export const WorkOrdersPage: React.FC = () => {
       {viewMode === "list" ? (
         <DataTable columns={columns} data={displayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => openLink(row.workOrderCode)} />
       ) : (
-        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
+        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
       )}
 
       {(showCreate || createPrefill) && (
