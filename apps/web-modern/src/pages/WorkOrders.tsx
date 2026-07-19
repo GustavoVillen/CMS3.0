@@ -972,6 +972,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // campo tras un avance (la IA lo reconsolida) SIN pisar ediciones manuales del
   // usuario: solo se actualiza si el campo sigue igual a este baseline.
   const lastServerObsRef = React.useRef(workOrder.observations ?? workOrder.closeNotes ?? "");
+  // OJO: "Deficiencias encontradas" NO es una columna de la OT — no existe en el
+  // modelo. Es un campo de trabajo cuyo destino es la descripción del registro
+  // de defecto. Por eso arranca vacío y, si se sale del modal, el texto queda
+  // sólo en el defecto (ver el efecto de más abajo, que lo vuelve a traer).
   const [deficienciasText, setDeficienciasText] = useState("");
   const [supportingDocFile, setSupportingDocFile] = useState<File | null>(null);
   const [supportingDocUrl] = useState(workOrder.supportingDocUrl ?? "");
@@ -1069,11 +1073,25 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // vacío como si nunca se hubiera creado nada. También muestra los defectos
   // abiertos en sesiones anteriores.
   const { data: linkedDefectsData, reload: reloadLinkedDefects } =
-    useFetch<{ items: Array<{ id: string; defectCode: string }> }>(
+    useFetch<{ items: Array<{ id: string; defectCode: string; description: string }> }>(
       `/app/pms/defects?workOrderId=${encodeURIComponent(workOrder.id)}`,
       [workOrder.id],
     );
   const linkedDefects = linkedDefectsData?.items ?? [];
+
+  // Repone "Deficiencias encontradas" desde el defecto ya registrado.
+  //
+  // El texto no se guarda en la OT (no hay columna): al crear el defecto pasa a
+  // ser SU descripción. Sin esto, al volver del defecto —o al reabrir la OT— el
+  // campo aparecía vacío y parecía que se había borrado lo escrito.
+  //
+  // Sólo se repone si el campo está vacío: si el usuario ya está escribiendo,
+  // no se le pisa lo suyo.
+  const firstLinkedDefectDescription = linkedDefects[0]?.description ?? "";
+  useEffect(() => {
+    if (!firstLinkedDefectDescription) return;
+    setDeficienciasText(prev => (prev.trim() ? prev : firstLinkedDefectDescription));
+  }, [firstLinkedDefectDescription]);
 
   const handleWoResultChange = (val: string) => {
     const next = woResult === val ? "" : val;
