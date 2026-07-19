@@ -203,6 +203,11 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
       {(sr.title || sr.description) && (
         <p className="text-xs text-fg font-medium line-clamp-2">{sr.title || sr.description}</p>
       )}
+      {sr.workOrder?.assetName && (
+        <p className="text-[10px] text-text-industrial/60 truncate" title={sr.workOrder.assetName}>
+          {sr.workOrder.assetName}
+        </p>
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] text-text-industrial/50">{fmtDate(sr.openDate)}</span>
         {sr.workOrder && (
@@ -451,7 +456,18 @@ export function ServiceRequestsPage() {
     },
     {
       key: "title", header: "Servicio", sortable: true,
-      render: r => <span className="text-xs">{r.title || r.description || "—"}</span>,
+      /* El EQUIPO junto al servicio: sin esto, seis "TOMA DE MUESTRA de Aceite
+         Lubricante" seguidas se leen iguales y hay que abrir cada SS para saber
+         de qué máquina es. El nombre viene resuelto de la OT de origen
+         (workOrder.assetName), la SS no guarda assetId propio. */
+      render: r => (
+        <div className="space-y-0.5">
+          <span className="text-xs">{r.title || r.description || "—"}</span>
+          {r.workOrder?.assetName && (
+            <div className="text-[11px] text-text-industrial/60 truncate">{r.workOrder.assetName}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: "status", header: "Estado", sortable: true,
