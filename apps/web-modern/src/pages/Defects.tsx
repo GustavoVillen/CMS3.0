@@ -18,6 +18,7 @@ import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { useAuth } from "../lib/auth";
 import { RichTextArea } from "../components/RichTextArea";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
@@ -785,7 +786,32 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
 
   const [saving, setSaving]           = useState(false);
   const [closing, setClosing]         = useState(false);
+  const [deleting, setDeleting]       = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Eliminar un defecto es exclusivo del administrador: es destructivo y corta
+  // la trazabilidad de la OT / auditoría que lo originó. Debe coincidir con
+  // canDeleteDefect del backend, que valida igual.
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
+
+  /**
+   * Borra el defecto (lógico) y cierra el modal. Pide confirmación nombrando el
+   * código, para que no se borre otro por error al tener varios abiertos.
+   */
+  const handleDelete = async () => {
+    if (!window.confirm(t("confirm.deleteDefect").replace("{code}", defect.defectCode))) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await api.delete(`/app/pms/defects/${defect.id}`);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "No se pudo eliminar el defecto.");
+    } finally {
+      setDeleting(false);
+    }
+  };
   const [expanded, setExpanded]       = useState(true);
   const [rcaAnalyzing, setRcaAnalyzing]       = useState(false);
   const [rcaAnalysisError, setRcaAnalysisError] = useState<string | null>(null);
@@ -1469,6 +1495,18 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
                 >
                   <GitBranch className="w-3.5 h-3.5" /> Abrir MOC
+                </button>
+              )}
+              {/* Eliminar: SÓLO administrador. El backend ya lo exigía
+                  (ensureCanDeleteDefect) pero no había forma de invocarlo desde
+                  la app. Es borrado lógico: el registro deja de listarse pero la
+                  fila queda, con quién y cuándo lo borró. */}
+              {isAdmin && (
+                <button onClick={() => { void handleDelete(); }} disabled={deleting}
+                  title="Eliminar este registro de defecto (sólo administrador)"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 disabled:opacity-50 transition-all">
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {t("common.delete")}
                 </button>
               )}
             </div>

@@ -569,6 +569,7 @@ const dict = {
   "confirm.deleteItem":         { es: "¿Eliminar este ítem?",                                 en: "Delete this item?",                                  pt: "Excluir este item?" },
   "confirm.deletePhoto":        { es: "¿Eliminar esta foto?",                                 en: "Delete this photo?",                                 pt: "Excluir esta foto?" },
   "confirm.deleteSample":       { es: "¿Eliminar esta muestra?",                              en: "Delete this sample?",                                pt: "Excluir esta amostra?" },
+  "confirm.deleteDefect":       { es: "¿Eliminar el registro de defecto {code}? Deja de listarse en todos lados y la OT o auditoría que lo originó queda sin él.", en: "Delete defect record {code}? It will no longer be listed anywhere, and the WO or audit that originated it will lose the link.", pt: "Excluir o registro de defeito {code}? Deixa de ser listado em todos os lugares e a OT ou auditoria que o originou fica sem ele." },
   "confirm.deleteFinding":      { es: "¿Eliminar este finding?",                              en: "Delete this finding?",                               pt: "Excluir este achado?" },
   "confirm.deleteProgress":     { es: "¿Borrar este avance?",                                 en: "Delete this progress note?",                         pt: "Excluir este avanço?" },
   "confirm.deleteParticipant":  { es: "¿Quitar este participante?",                           en: "Remove this participant?",                           pt: "Remover este participante?" },
