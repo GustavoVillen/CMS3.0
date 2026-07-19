@@ -5,6 +5,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ver campana oculta abajo
 import { NotificationsBell } from "./NotificationsBell";
 
 /**
@@ -112,7 +113,13 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
             : <Moon className="w-4 h-4" />}
         </button>
 
-        <NotificationsBell />
+        {/* Campana de notificaciones — OCULTA por decisión de producto (jul 2026).
+            El módulo sigue completo y funcionando (NotificationsBell.tsx, el
+            servicio y los endpoints); sólo se saca del header. Para reactivarla
+            alcanza con descomentar esta línea: no hay nada más que tocar.
+            Se oculta en vez de borrarse porque la funcionalidad no se descartó,
+            se pospuso. */}
+        {/* <NotificationsBell /> */}
 
         {/* User menu */}
         <div className="relative">
