@@ -2899,15 +2899,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </div>
 
-          {defectPrompt === "created" && createdDefectCode && (
-            <div className="flex items-center gap-2 text-xs text-success-sea font-semibold bg-success-sea/10 border border-success-sea/20 rounded-lg px-3 py-2">
+          {/* Si la OT YA tiene defectos registrados se muestran y no se vuelve a
+              ofrecer registrar. Antes esto miraba `defectPrompt`, que es estado
+              de la ventana y se pierde al reabrirla: un defecto creado en otra
+              sesión no contaba y el diálogo volvía a pedir uno nuevo. */}
+          {linkedDefects.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-success-sea font-semibold bg-success-sea/10 border border-success-sea/20 rounded-lg px-3 py-2 flex-wrap">
               <CheckCheck className="w-3.5 h-3.5 shrink-0" />
-              {t("wo.defectPrompt.created")}: <span className="font-mono">{createdDefectCode}</span>
+              {t("wo.defectPrompt.created")}:
+              {linkedDefects.map(d => <span key={d.id} className="font-mono">{d.defectCode}</span>)}
             </div>
           )}
 
           <div className="space-y-2">
-            {defectPrompt !== "created" && (
+            {linkedDefects.length === 0 && (
               <button
                 type="button"
                 disabled={defectPrompt === "creating"}
