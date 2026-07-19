@@ -1079,6 +1079,7 @@ export async function handleTenantRoutes(
       status:     url.searchParams.get("status")    as SampleStatus | null,
       from:       url.searchParams.get("from"),
       to:         url.searchParams.get("to"),
+      workOrderId: url.searchParams.get("workOrderId"),
     }));
     return true;
   }

@@ -1316,6 +1316,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     [workOrder.id],
   );
   const linkedServiceRequests = linkedSrData?.items ?? [];
+  // Muestra de análisis generada por esta OT. Si existe, la OT es de muestreo y
+  // el código FA se muestra junto a sus SS: es el número que después se busca en
+  // "Muestreos y Análisis". La SS no tiene vínculo propio con la muestra — el
+  // puente es la OT, que es de donde sale la muestra al autorizarse.
+  const { data: linkedSampleData } = useFetch<{ items: Array<{ id: string; sampleCode: string }> }>(
+    `/app/fluid-analyses?workOrderId=${encodeURIComponent(workOrder.id)}`,
+    [workOrder.id],
+  );
+  const linkedSampleCode = linkedSampleData?.items?.[0]?.sampleCode ?? null;
   // Alcanza con que la OT esté abierta: la SS se carga junto con la OT y la
   // tramitación de la OT la arrastra (OT aprobada → SS aprobada; OT autorizada →
   // SS autorizada). Ya no se exige que la OT esté autorizada de antemano.
@@ -2276,13 +2285,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
             {/* El porqué se muestra SIEMPRE que no se pueda abrir una SS, haya o
                 no SS previas: sin esto, la ausencia del botón no se explica sola.
-                Se distingue el motivo: "todavía no autorizada" se resuelve
-                autorizando; "cerrada" ya no tiene vuelta. */}
+                Ya no se exige que la OT esté autorizada (la SS se carga junto
+                con la OT y la tramitación la arrastra); el único motivo que
+                queda es que la OT no esté abierta. */}
             {!canOpenServiceRequest && (
               <p className="text-[11px] text-text-industrial/50 italic">
-                {WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status)
-                  ? `Para solicitar un servicio externo, la ${woTerms.abbr} tiene que estar autorizada. Hoy está ${tramitaPhase === "APROBADA" ? "aprobada, falta autorizarla" : "solicitada, falta aprobarla y autorizarla"}.`
-                  : `Una solicitud de servicio sólo puede abrirse mientras la ${woTerms.abbr} esté abierta.`}
+                Una solicitud de servicio sólo puede abrirse mientras la {woTerms.abbr} esté abierta.
               </p>
             )}
 
@@ -2302,6 +2310,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   >
                     <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
                     <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
+                    {/* Código de la muestra, cuando esta OT generó una. */}
+                    {linkedSampleCode && (
+                      <span
+                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5"
+                        title="Muestra de análisis generada por esta OT"
+                      >
+                        {linkedSampleCode}
+                      </span>
+                    )}
                     <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
                       {SS_STATUS_LABEL[sr.status] ?? sr.status}
                     </span>

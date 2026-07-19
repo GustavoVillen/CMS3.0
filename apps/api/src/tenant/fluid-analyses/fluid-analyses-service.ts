@@ -185,6 +185,8 @@ export interface ListFilters {
   status?: SampleStatus | null;
   from?: string | null;
   to?: string | null;
+  /** Muestras generadas por una OT concreta (panel de SS del modal de OT). */
+  workOrderId?: string | null;
 }
 
 export async function listFluidSamples(session: TenantAccessSession, filters: ListFilters = {}) {
@@ -196,7 +198,8 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
 
   const where: any = { tenantId, deletedAt: null };
   applyAssignedVesselScope(session, where, filters.vesselCode ?? null);
-  if (filters.assetId)    where.assetId    = filters.assetId;
+  if (filters.assetId)     where.assetId           = filters.assetId;
+  if (filters.workOrderId) where.sourceWorkOrderId = filters.workOrderId;
   if (filters.fluidType)  where.fluidType  = filters.fluidType;
   if (filters.status)     where.status     = filters.status;
   if (filters.from || filters.to) {
