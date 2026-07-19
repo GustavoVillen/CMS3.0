@@ -87,6 +87,7 @@ export async function handleQualityRoutes(
       severity: url.searchParams.get("severity"),
       operationalState: url.searchParams.get("operationalState"),
       assetId: url.searchParams.get("assetId"),
+      workOrderId: url.searchParams.get("workOrderId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;

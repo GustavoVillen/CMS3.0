@@ -14,6 +14,8 @@ export interface DefectListFilters {
   severity?: string | null;
   operationalState?: string | null;
   assetId?: string | null;
+  /** Defectos abiertos desde una OT concreta (recuadro DEF del modal de OT). */
+  workOrderId?: string | null;
 }
 
 export interface CreateDefectInput {
@@ -344,6 +346,7 @@ export async function listDefects(session: TenantAccessSession, filters: DefectL
   if (filters.severity) where.severity = filters.severity;
   if (filters.operationalState) where.operationalState = filters.operationalState;
   if (filters.assetId) where.assetId = filters.assetId;
+  if (filters.workOrderId) where.workOrderId = filters.workOrderId;
 
   const items = await defect.findMany({ where, orderBy: { reportedAt: "desc" } });
   // DefectRecord ya tiene workOrderId/classification/sourceType/sourceId, así que los

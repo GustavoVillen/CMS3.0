@@ -1063,6 +1063,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // sin sacar al usuario de la OT.
   const [createdDefectId, setCreatedDefectId] = useState<string | null>(null);
 
+  // Defectos ya vinculados a esta OT, leídos de la base. Es lo que hace que el
+  // código siga visible: el estado de arriba se pierde cada vez que la ventana
+  // se rearma (por ejemplo al volver del defecto), y antes el recuadro aparecía
+  // vacío como si nunca se hubiera creado nada. También muestra los defectos
+  // abiertos en sesiones anteriores.
+  const { data: linkedDefectsData, reload: reloadLinkedDefects } =
+    useFetch<{ items: Array<{ id: string; defectCode: string }> }>(
+      `/app/pms/defects?workOrderId=${encodeURIComponent(workOrder.id)}`,
+      [workOrder.id],
+    );
+  const linkedDefects = linkedDefectsData?.items ?? [];
+
   const handleWoResultChange = (val: string) => {
     const next = woResult === val ? "" : val;
     setWoResult(next);
@@ -1093,8 +1105,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       setCreatedDefectCode(res.defectCode ?? null);
       setCreatedDefectId(res.id ?? null);
       setDefectPrompt("created");
+      reloadLinkedDefects(); // el recuadro lee de la base, no del estado local
     } catch { setDefectPrompt("ask"); }
-  }, [deficienciasText, observations, workOrder, woTerms]);
+  }, [deficienciasText, observations, workOrder, woTerms, reloadLinkedDefects]);
 
   // Prefill de la OT correctiva a partir de la deficiencia de esta SS.
   const buildCorrectivePrefill = useCallback((): WoPrefill => ({
@@ -2632,14 +2645,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               )}
             </div>
 
-            {/* ── Prompt abrir DEF ── */}
-            {woResult === "WITH_DEFICIENCIES" && defectPrompt !== "idle" && (
+            {/* ── Prompt abrir DEF ──
+                Se muestra también cuando la OT YA tiene defectos vinculados
+                aunque el prompt esté "idle": es el caso de volver del defecto o
+                reabrir la OT más tarde. */}
+            {woResult === "WITH_DEFICIENCIES" && (defectPrompt !== "idle" || linkedDefects.length > 0) && (
               <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400 shrink-0" />
-                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">{t("wo.defectPrompt.question")}</p>
-                </div>
-                {defectPrompt === "ask" && (
+                {/* La pregunta sólo tiene sentido mientras no haya ninguno. */}
+                {linkedDefects.length === 0 && (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400 shrink-0" />
+                    <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">{t("wo.defectPrompt.question")}</p>
+                  </div>
+                )}
+                {defectPrompt === "ask" && linkedDefects.length === 0 && (
                   <div className="flex gap-2">
                     <button type="button" onClick={() => { void createDefectInline(); }}
                       className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
@@ -2656,29 +2675,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> {t("wo.defectPrompt.creating")}
                   </div>
                 )}
-                {defectPrompt === "created" && (
+                {/* Los códigos salen de la BASE (linkedDefects), no del estado de
+                    la ventana: al volver del defecto el modal se rearma de cero y
+                    antes el recuadro aparecía vacío, como si nunca se hubiera
+                    creado nada. Así siguen visibles siempre, incluso días después. */}
+                {linkedDefects.length > 0 && (
                   <div className="flex items-center gap-2 text-xs text-success-sea font-semibold flex-wrap">
                     <CheckCheck className="w-3.5 h-3.5 shrink-0" />
                     {t("wo.defectPrompt.created")}:
-                    {/* El código ES el link: el defecto ya quedó creado sin salir
-                        de la OT, y se entra sólo si el usuario lo decide. Al
-                        cerrar el defecto se vuelve a esta misma OT. */}
-                    {createdDefectId ? (
+                    {linkedDefects.map(d => (
                       <button
+                        key={d.id}
                         type="button"
-                        onClick={() => { void saveThenNavigate(`/defects?defectId=${createdDefectId}`); }}
+                        onClick={() => { void saveThenNavigate(`/defects?defectId=${d.id}`); }}
                         className="inline-flex items-center gap-1 font-mono text-accent hover:underline"
                         title="Guarda la OT y abre este registro de defecto"
                       >
-                        {createdDefectCode}
+                        {d.defectCode}
                         <ExternalLink className="w-3 h-3" />
                       </button>
-                    ) : (
-                      <span className="font-mono">{createdDefectCode}</span>
-                    )}
+                    ))}
                   </div>
                 )}
-                {defectPrompt === "declined" && (
+                {defectPrompt === "declined" && linkedDefects.length === 0 && (
                   <p className="text-xs text-text-industrial/40">{t("wo.defectPrompt.declined")}</p>
                 )}
               </div>
