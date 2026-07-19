@@ -1741,11 +1741,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <Wrench className="w-4 h-4 text-accent" />
-            <div>
+          <div className="flex items-center gap-3 min-w-0">
+            <Wrench className="w-4 h-4 text-accent shrink-0" />
+            <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("wo.entityLabel")}</p>
-              <h2 className="text-sm font-bold text-fg font-mono">{workOrder.workOrderCode}</h2>
+              {/* El equipo va SIEMPRE junto al código: sin él hay que bajar hasta
+                  el cuerpo del formulario para saber de qué máquina se trata.
+                  Se muestra el NOMBRE, nunca el id interno: si el nombre no está
+                  resuelto, se omite (un cuid no le dice nada a nadie). */}
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <h2 className="text-sm font-bold text-fg font-mono shrink-0">{workOrder.workOrderCode}</h2>
+                {workOrder.assetName && (
+                  <span className="text-sm text-text-industrial/70 truncate" title={workOrder.assetName}>
+                    · {workOrder.assetName}
+                  </span>
+                )}
+              </div>
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />
           </div>

@@ -540,13 +540,22 @@ function SampleDetailModal({
     );
   }
 
+  // El equipo va en el título: "de qué máquina es esta muestra" es lo primero
+  // que se pregunta, y si no está hay que bajar a buscarlo en el cuerpo.
+  // Se usa el NOMBRE resuelto; si el activo no está en la lista se omite, en
+  // vez de caer al id interno recortado que devuelve assetLabel (un "cmqhe9y1…"
+  // en el título no le dice nada a nadie).
+  const headerAssetName = assets.find(a => a.id === sample.assetId)?.name ?? null;
+
   return (
     <ModalShell
-      title={`${sample.sampleCode} · ${
+      title={[
+        sample.sampleCode,
         sample.kind === "FLUID"
           ? (sample.fluidType ? FLUID_LABELS[sample.fluidType] : "Fluido")
-          : SAMPLE_KIND_LABELS[sample.kind]
-      }`}
+          : SAMPLE_KIND_LABELS[sample.kind],
+        headerAssetName,
+      ].filter(Boolean).join(" · ")}
       onClose={onClose}
       wide
     >
