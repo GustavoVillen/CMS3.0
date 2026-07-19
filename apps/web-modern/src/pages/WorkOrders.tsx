@@ -818,11 +818,10 @@ interface WorkOrderModalProps {
   onClose: () => void;
   onSaved: () => void;
   onOpenAction: (wo: WorkOrder, type: ActionType) => void;
-  onCreateCorrective: (prefill: WoPrefill) => void;
   onReload: () => void;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onCreateCorrective, onReload }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1001,8 +1000,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [usageSearch,    setUsageSearch]    = useState("");
   const [usageDropdown,  setUsageDropdown]  = useState(false);
   const [closingWarning, setClosingWarning] = useState<string | null>(null);
-  // Diálogo posterior al cierre "con deficiencias": ofrece registrar defecto / abrir OT correctiva.
-  const [showDeficiencyFollowup, setShowDeficiencyFollowup] = useState(false);
   // "Guardar" no cierra la ventana: feedback + reset del dirty-tracker.
   const [justSaved, setJustSaved] = useState(false);
   const [saveResetKey, setSaveResetKey] = useState(0);
@@ -1126,22 +1123,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       reloadLinkedDefects(); // el recuadro lee de la base, no del estado local
     } catch { setDefectPrompt("ask"); }
   }, [deficienciasText, observations, workOrder, woTerms, reloadLinkedDefects]);
-
-  // Prefill de la OT correctiva a partir de la deficiencia de esta SS.
-  const buildCorrectivePrefill = useCallback((): WoPrefill => ({
-    source: "wo-deficiency",
-    sourceId: workOrder.id,
-    sourceCode: workOrder.workOrderCode,
-    sourceLabel: t("wo.defFollowup.correctiveSource"),
-    vesselCode: workOrder.vesselCode,
-    assetId: workOrder.assetId,
-    assetName: workOrder.assetName ?? null,
-    type: "CORRECTIVE",
-    priority: workOrder.priority ?? "MEDIUM",
-    criticality: workOrder.criticality ?? "B",
-    title: `${t("wo.defFollowup.correctiveTitlePrefix")} ${workOrder.title ?? workOrder.workOrderCode}`,
-    description: deficienciasText.trim() || observations.trim() || null,
-  }), [workOrder, deficienciasText, observations, t]);
 
   const [saving,          setSaving]         = useState(false);
   const [resuming,        setResuming]       = useState(false);
@@ -1709,13 +1690,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const finishClose = useCallback(async () => {
     // La OT ya se cerró: generamos el PDF (no bloqueante si falla).
     try { await printWorkOrder(workOrder); } catch { /* non-blocking */ }
-    // Cierre "con deficiencias": NO cerramos el modal todavía; mostramos el
-    // diálogo que ofrece registrar el defecto y/o abrir la OT correctiva.
-    if (woResult === "WITH_DEFICIENCIES") {
-      setClosingWarning(null);
-      setShowDeficiencyFollowup(true);
-      return;
-    }
+    // Antes, un cierre "con deficiencias" abría un diálogo ofreciendo registrar
+    // el defecto y/o abrir la OT correctiva. Se quitó por pedido del cliente:
+    // el defecto ya se registra desde el propio formulario de cierre (recuadro
+    // naranja), así que el diálogo repetía un paso ya hecho.
+    setClosingWarning(null);
     onSaved();
     if (isCorrective && defectDetail.trim().length > 0) {
       navigate("/defects", { state: { createDefectFromWo: {
@@ -2885,64 +2864,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       </div>
     )}
 
-    {/* Diálogo post-cierre "con deficiencias": registrar defecto / abrir OT correctiva */}
-    {showDeficiencyFollowup && (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-orange-500/30 rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-fg">{t("wo.defFollowup.title").replace("{abbr}", woTerms.abbr)}</p>
-              <p className="text-xs text-text-industrial/60 mt-0.5">{t("wo.defFollowup.subtitle").replace("{code}", workOrder.workOrderCode)}</p>
-            </div>
-          </div>
-
-          {/* Si la OT YA tiene defectos registrados se muestran y no se vuelve a
-              ofrecer registrar. Antes esto miraba `defectPrompt`, que es estado
-              de la ventana y se pierde al reabrirla: un defecto creado en otra
-              sesión no contaba y el diálogo volvía a pedir uno nuevo. */}
-          {linkedDefects.length > 0 && (
-            <div className="flex items-center gap-2 text-xs text-success-sea font-semibold bg-success-sea/10 border border-success-sea/20 rounded-lg px-3 py-2 flex-wrap">
-              <CheckCheck className="w-3.5 h-3.5 shrink-0" />
-              {t("wo.defectPrompt.created")}:
-              {linkedDefects.map(d => <span key={d.id} className="font-mono">{d.defectCode}</span>)}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {linkedDefects.length === 0 && (
-              <button
-                type="button"
-                disabled={defectPrompt === "creating"}
-                onClick={() => { void createDefectInline(); }}
-                className="w-full py-2 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/25 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5">
-                {defectPrompt === "creating" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                {t("wo.defFollowup.registerDefect")}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => { setShowDeficiencyFollowup(false); onCreateCorrective(buildCorrectivePrefill()); }}
-              className="w-full py-2 rounded-lg bg-accent/15 border border-accent/30 text-accent font-bold text-xs hover:bg-accent/25 transition-all flex items-center justify-center gap-1.5">
-              <Wrench className="w-3.5 h-3.5" />
-              {t("wo.defFollowup.openCorrective").replace("{abbr}", woTerms.abbr)}
-            </button>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="button"
-              onClick={() => { setShowDeficiencyFollowup(false); onSaved(); }}
-              className="px-4 py-1.5 rounded-lg text-xs text-text-industrial/70 hover:bg-fg/5 transition-colors">
-              {t("wo.defFollowup.done")}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
     {/* Modal registrar avance */}
     {showProgressSheet && (
       <ProgressNoteSheet
@@ -3797,7 +3718,6 @@ export const WorkOrdersPage: React.FC = () => {
           onSaved={() => { closeLink(); void reload(); }}
           onReload={() => { void reload(); }}
           onOpenAction={openActionModal}
-          onCreateCorrective={(prefill) => { closeLink(); setCreatePrefill(prefill); void reload(); }}
         />
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
