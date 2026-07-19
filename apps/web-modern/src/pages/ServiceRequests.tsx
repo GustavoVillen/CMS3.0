@@ -11,11 +11,10 @@
 
 import React, { useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2 } from "lucide-react";
+import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { FormModal } from "../components/FormModal";
@@ -134,18 +133,260 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 const cellCls = "bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 
 // ---------------------------------------------------------------------------
+// Tablero Kanban — mismo formato que el de la OT
+// ---------------------------------------------------------------------------
+
+/**
+ * A diferencia de la OT — donde la etapa se DERIVA de las fechas de firma — acá
+ * la columna ES el estado de la SS, así que cada arrastre se traduce directo a
+ * una transición que el backend ya expone.
+ *
+ * Los estados terminales (Completada / Rechazada / Cancelada) no van al tablero,
+ * igual que las OT cerradas: se ven con los chips, que en ese caso pasan solos a
+ * vista lista. La recepción del servicio (En ejecución → Completada) sigue
+ * haciéndose desde el modal porque exige quién recibe y si hubo conformidad —
+ * datos que un arrastre no puede aportar.
+ */
+
+const PRIORITY_LEFT_CLS: Record<string, string> = {
+  CRITICAL: "border-l-2 border-l-red-500",
+  HIGH:     "border-l-2 border-l-orange-500",
+  MEDIUM:   "border-l-2 border-l-yellow-400",
+  LOW:      "border-l-2 border-l-blue-400/60",
+};
+
+type SsStage = "DRAFT" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "IN_PROGRESS" | "HIDDEN";
+
+/** Colores alineados con STATUS_COLORS para que la tarjeta y el badge no se contradigan. */
+const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; label: string; headerCls: string; borderCls: string }> = [
+  { colId: "DRAFT",       label: "Borrador",     headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
+  { colId: "SOLICITADA",  label: "Solicitada",   headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
+  { colId: "APROBADA",    label: "Aprobada",     headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
+  { colId: "AUTORIZADA",  label: "Autorizada",   headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
+  { colId: "IN_PROGRESS", label: "En ejecución", headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
+];
+
+function ssStage(sr: ServiceRequest): SsStage {
+  return SS_KANBAN_COLS.some(c => c.colId === sr.status) ? (sr.status as SsStage) : "HIDDEN";
+}
+
+function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
+  sr: ServiceRequest;
+  busy: boolean;
+  draggingId: string | null;
+  onOpen: (sr: ServiceRequest) => void;
+  onDragStart: (sr: ServiceRequest | null) => void;
+}) {
+  const isDragging = draggingId === sr.id;
+  const prioLeft   = PRIORITY_LEFT_CLS[sr.priority] ?? "border-l-2 border-l-fg/10";
+
+  return (
+    <div
+      draggable={!busy}
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", JSON.stringify({ id: sr.id, stage: ssStage(sr) }));
+        onDragStart(sr);
+      }}
+      onDragEnd={() => onDragStart(null)}
+      onClick={() => !isDragging && !busy && onOpen(sr)}
+      className={`w-full bg-fg/[0.03] border border-fg/10 rounded-xl p-3 space-y-2 select-none cursor-grab
+        ${prioLeft}
+        ${isDragging ? "opacity-30" : "hover:bg-fg/[0.07]"}
+        ${busy ? "opacity-60 pointer-events-none" : ""}
+        transition-colors`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="font-mono font-bold text-fg text-[10px]">{sr.serviceRequestCode}</span>
+        <span className="text-[9px] font-bold text-text-industrial/40 shrink-0">{sr.vesselCode}</span>
+      </div>
+      {(sr.title || sr.description) && (
+        <p className="text-xs text-fg font-medium line-clamp-2">{sr.title || sr.description}</p>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-text-industrial/50">{fmtDate(sr.openDate)}</span>
+        {sr.workOrder && (
+          <span className="font-mono text-[9px] text-text-industrial/40 truncate" title="OT de origen">
+            {sr.workOrder.workOrderCode}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
+  items: ServiceRequest[];
+  role: string;
+  loading: boolean;
+  onOpen: (sr: ServiceRequest) => void;
+  onReload: () => void;
+}) {
+  const [draggingSr, setDraggingSr] = useState<ServiceRequest | null>(null);
+  const [overCol, setOverCol]       = useState<string | null>(null);
+  const [busyId, setBusyId]         = useState<string | null>(null);
+  const [dropError, setDropError]   = useState<string | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<{ sr: ServiceRequest; step: "SOLICITA" | "APRUEBA" | "AUTORIZA" } | null>(null);
+
+  // Mismo criterio que el backend: se chequea acá sólo para explicar el porqué
+  // en vez de dejar que el arrastre termine en un 403 sin mensaje.
+  const canApprove   = CAN_APPROVE_ROLES.includes(role);
+  const canAuthorize = CAN_AUTHORIZE_ROLES.includes(role);
+
+  const run = React.useCallback(async (sr: ServiceRequest, action: "unsubmit" | "start") => {
+    setBusyId(sr.id);
+    try {
+      await api.post(`/app/pms/service-requests/${sr.id}/${action}`, {});
+      onReload();
+    } catch (e) {
+      setDropError(e instanceof Error ? e.message : "No se pudo mover la solicitud.");
+    } finally {
+      setBusyId(null);
+    }
+  }, [onReload]);
+
+  const handleDrop = React.useCallback((e: React.DragEvent, targetCol: Exclude<SsStage, "HIDDEN">) => {
+    setOverCol(null);
+    setDraggingSr(null);
+    setDropError(null);
+
+    let payload: { id: string; stage: SsStage } | null = null;
+    try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { /* noop */ }
+    if (!payload?.id || !payload?.stage) return;
+
+    const { id, stage } = payload;
+    if (stage === targetCol) return;
+    const sr = items.find(x => x.id === id);
+    if (!sr) return;
+
+    // Solicitar (Borrador → Solicitada): pide quién solicita y con qué fecha.
+    if (stage === "DRAFT" && targetCol === "SOLICITADA") { setPendingApproval({ sr, step: "SOLICITA" }); return; }
+    // Volver a borrador para corregir. Sólo desde Solicitada: más adelante ya
+    // hay firmas asentadas y deshacerlas sin registro sería perder la traza.
+    if (stage === "SOLICITADA" && targetCol === "DRAFT") { void run(sr, "unsubmit"); return; }
+    // Aprobar (Solicitada → Aprobada): a bordo, pide quién firma.
+    if (stage === "SOLICITADA" && targetCol === "APROBADA") {
+      if (!canApprove) { setDropError("Tu rol no puede aprobar una solicitud de servicio."); return; }
+      setPendingApproval({ sr, step: "APRUEBA" });
+      return;
+    }
+    // Autorizar (Aprobada → Autorizada): acá se compromete el gasto, es de tierra.
+    if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
+      if (!canAuthorize) { setDropError("Autorizar una solicitud es atribución de tierra (Superintendente / DPA)."); return; }
+      setPendingApproval({ sr, step: "AUTORIZA" });
+      return;
+    }
+    // Mandar al taller (Autorizada → En ejecución).
+    if (stage === "AUTORIZADA" && targetCol === "IN_PROGRESS") { void run(sr, "start"); return; }
+    // Cualquier otro movimiento (saltos de etapa o retrocesos) se ignora.
+  }, [items, canApprove, canAuthorize, run]);
+
+  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
+
+  return (
+    <>
+      {dropError && (
+        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+          {dropError}
+        </p>
+      )}
+      <div className="flex gap-3 pb-4">
+        {SS_KANBAN_COLS.map(col => {
+          const colItems = items.filter(sr => ssStage(sr) === col.colId);
+          const isOver   = overCol === col.colId;
+          return (
+            <div
+              key={col.colId}
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); }}
+              onDragLeave={() => setOverCol(null)}
+              onDrop={e => { e.preventDefault(); handleDrop(e, col.colId); }}
+              className={`flex-1 min-w-0 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
+            >
+              <div className="flex items-center gap-2 px-1 mb-3">
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
+                <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
+              </div>
+              <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
+                {colItems.map(sr => (
+                  <SsKanbanCard
+                    key={sr.id}
+                    sr={sr}
+                    busy={busyId === sr.id}
+                    draggingId={draggingSr?.id ?? null}
+                    onOpen={onOpen}
+                    onDragStart={setDraggingSr}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {pendingApproval && (
+        <SsApprovalModal
+          sr={pendingApproval.sr}
+          step={pendingApproval.step}
+          role={role}
+          onClose={() => setPendingApproval(null)}
+          onDone={() => { setPendingApproval(null); onReload(); }}
+        />
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+
+/**
+ * Chips de situación. La SS no tiene vencimiento ni diferimiento (a diferencia
+ * de la OT), así que en vez de "Vencidas / Diferidas" se filtra por lo único que
+ * la SS sí tiene: en qué punto del trámite está. Los tres últimos son estados
+ * terminales — no van al tablero, así que al elegirlos se pasa a vista lista.
+ */
+const SS_VIEW_FILTERS: Array<{ key: string; label: string; match: (sr: ServiceRequest) => boolean; terminal?: boolean }> = [
+  { key: "",           label: "Todas",        match: () => true },
+  { key: "open",       label: "En trámite",   match: sr => ["DRAFT", "SOLICITADA", "APROBADA", "AUTORIZADA"].includes(sr.status) },
+  { key: "inProgress", label: "En ejecución", match: sr => sr.status === "IN_PROGRESS" },
+  { key: "completed",  label: "Completadas",  match: sr => sr.status === "COMPLETED",  terminal: true },
+  { key: "rejected",   label: "Rechazadas",   match: sr => sr.status === "REJECTED",   terminal: true },
+  { key: "cancelled",  label: "Canceladas",   match: sr => sr.status === "CANCELLED",  terminal: true },
+];
 
 export function ServiceRequestsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [status, setStatus] = useState<string>("");
   const [selected, setSelected] = useState<ServiceRequest | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
+  const [search, setSearch] = useState("");
+  const viewFilter = searchParams.get("view") ?? "";
 
-  const qs = status ? `?status=${status}` : "";
-  const { data, loading, error, reload } = useFetch<ListResponse>(`/app/pms/service-requests${qs}`, [status]);
+  // Se trae todo y se filtra en cliente: el backend no pagina y los chips cruzan
+  // estados, así que un filtro por estado en la query obligaría a refetchear en
+  // cada clic. Mismo criterio que el tablero de OT.
+  const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/service-requests", []);
   const items = data?.items ?? [];
+
+  const visibleItems = React.useMemo(() => {
+    const f = SS_VIEW_FILTERS.find(o => o.key === viewFilter) ?? SS_VIEW_FILTERS[0]!;
+    return items.filter(f.match);
+  }, [items, viewFilter]);
+
+  // El buscador ignora el chip activo: busca en toda la flota y en cualquier
+  // estado, incluidos los terminales.
+  const displayItems = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return visibleItems;
+    return items.filter(sr =>
+      sr.serviceRequestCode.toLowerCase().includes(q) ||
+      (sr.title ?? "").toLowerCase().includes(q) ||
+      (sr.description ?? "").toLowerCase().includes(q) ||
+      sr.vesselCode.toLowerCase().includes(q) ||
+      (sr.workOrder?.workOrderCode ?? "").toLowerCase().includes(q),
+    );
+  }, [items, visibleItems, search]);
 
   // Deep-link desde el panel de la OT: ?openId=<id>
   const openId = searchParams.get("openId");
@@ -198,29 +439,90 @@ export function ServiceRequestsPage() {
   return (
     <div className="space-y-4">
       <PageHeader icon={Handshake} title="Solicitudes de Servicio" total={data?.total} onReload={reload}>
-        <select
-          value={toFilterSelectValue(status)}
-          onChange={e => setStatus(fromFilterSelectValue(e.target.value) ?? "")}
-          className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial"
-        >
-          <option value={FILTER_ALL_VALUE}>Todos los estados</option>
-          {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            title="Vista lista"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("kanban")}
+            title="Vista Kanban"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </PageHeader>
 
       <p className="text-[11px] text-text-industrial/50">
         Una solicitud de servicio se abre desde una orden de trabajo abierta. Para crear una, entrá a la OT correspondiente.
       </p>
 
-      <DataTable
-        columns={columns}
-        data={items}
-        loading={loading}
-        error={error}
-        keyFn={r => r.id}
-        emptyText="Sin solicitudes de servicio"
-        onRowClick={(row: ServiceRequest) => setSelected(row)}
-      />
+      <div className="flex flex-wrap items-center gap-1.5">
+        {SS_VIEW_FILTERS.map(opt => {
+          const active = viewFilter === opt.key;
+          return (
+            <button
+              key={opt.key || "all"}
+              type="button"
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                if (opt.key) params.set("view", opt.key); else params.delete("view");
+                setSearchParams(params, { replace: true });
+                // Los estados terminales no tienen columna en el tablero, así que
+                // al filtrarlos se pasa solo a vista lista (si no, quedaría vacío).
+                if (opt.terminal) setViewMode("list");
+              }}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                active
+                  ? "bg-accent/20 text-accent border-accent/40"
+                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-fg/20 hover:text-text-industrial"
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 ml-auto">
+          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar SS, servicio, buque u OT…"
+            className="w-64 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "list" ? (
+        <DataTable
+          columns={columns}
+          data={displayItems}
+          loading={loading}
+          error={error}
+          keyFn={r => r.id}
+          emptyText="Sin solicitudes de servicio"
+          onRowClick={(row: ServiceRequest) => setSelected(row)}
+        />
+      ) : (
+        <SsKanbanBoard
+          items={displayItems}
+          role={user?.role ?? ""}
+          loading={loading}
+          onOpen={setSelected}
+          onReload={reload}
+        />
+      )}
 
       {selected && (
         <ServiceRequestModal
@@ -249,15 +551,19 @@ export function ServiceRequestsPage() {
  */
 function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   sr: ServiceRequest;
-  step: "APRUEBA" | "AUTORIZA" | "RECHAZA";
+  step: "SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA";
   role: string;
   onClose: () => void;
   onDone: () => void;
 }) {
   const { user } = useAuth();
   const isReject = step === "RECHAZA";
+  const isSolicita = step === "SOLICITA";
   const isAdmin = role === "TENANT_ADMIN";
+  // El desplegable sale de /app/team/members, que es sólo para administradores;
+  // el resto escribe el nombre a mano (normalmente el propio).
   const adminPicker = isAdmin && !isReject;
+  const showDate = isAdmin && !isReject;
 
   const [name, setName] = useState(user?.name ?? "");
   const [onBehalfUserId, setOnBehalfUserId] = useState(user?.id ?? "");
@@ -271,15 +577,25 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   // del buque; y el JEFE DE MÁQUINAS sólo para APROBAR — autorizar es tierra.
   // El backend valida igual (resolveSigner); esto es para no ofrecer un 403.
   const eligibles = (Array.isArray(teamData) ? teamData : []).filter(m => {
+    if (m.role === "AUDITOR_READONLY") return false; // solo-lectura: no pide ni firma
     if (m.role === "TENANT_ADMIN") return true;
     const enElBuque = (m.assignedVesselCodes ?? []).includes(sr.vesselCode);
+    // Solicitar NO es una firma: el pedido lo puede originar cualquiera del
+    // buque (un técnico, el contramaestre), no sólo quienes aprueban.
+    if (isSolicita) return enElBuque;
     if (m.role === "FLEET_SUPERINTENDENT") return enElBuque;
     if (m.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
     return false;
   });
 
-  const title = step === "APRUEBA" ? "Aprobar SS" : step === "AUTORIZA" ? "Autorizar SS" : "Rechazar SS";
-  const verbo = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
+  const title = step === "SOLICITA" ? "Solicitar SS"
+    : step === "APRUEBA" ? "Aprobar SS"
+    : step === "AUTORIZA" ? "Autorizar SS"
+    : "Rechazar SS";
+  const verbo = step === "SOLICITA" ? "solicita"
+    : step === "APRUEBA" ? "aprueba"
+    : step === "AUTORIZA" ? "autoriza"
+    : "rechaza";
 
   const submit = async () => {
     const nombre = name.trim();
@@ -289,6 +605,11 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
     try {
       if (isReject) {
         await api.post(`/app/pms/service-requests/${sr.id}/reject`, { reason: reason.trim() });
+      } else if (isSolicita) {
+        await api.post(`/app/pms/service-requests/${sr.id}/submit`, {
+          name: nombre,
+          actionDate: showDate ? actionDate : undefined,
+        });
       } else {
         const path = step === "APRUEBA" ? "approve" : "authorize";
         await api.post(`/app/pms/service-requests/${sr.id}/${path}`, {
@@ -343,7 +664,8 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
               {eligibles.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
               {eligibles.map(m => (
                 <option key={m.userId} value={m.userId}>
-                  {memberLabel(m)}{!m.hasSignature ? "  ·  (sin firma)" : ""}
+                  {/* La firma sólo importa donde se estampa: solicitar no firma. */}
+                  {memberLabel(m)}{!isSolicita && !m.hasSignature ? "  ·  (sin firma)" : ""}
                 </option>
               ))}
             </select>
@@ -354,10 +676,12 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
         </div>
       )}
 
-      {adminPicker && (
+      {showDate && (
         <div>
           <label className={labelCls}>
-            {step === "APRUEBA" ? "Fecha de aprobación" : "Fecha de autorización"}
+            {step === "SOLICITA" ? "Fecha de solicitud"
+              : step === "APRUEBA" ? "Fecha de aprobación"
+              : "Fecha de autorización"}
           </label>
           <input type="date" className={inputCls} value={actionDate}
             onChange={e => setActionDate(e.target.value)} />
@@ -609,7 +933,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // Aviso posterior a "Enviar a Proveedor" (PDF ya generado).
   const [sentNotice, setSentNotice] = useState(false);
   // Paso de tramitación abierto: cada uno pide quién firma y con qué fecha.
-  const [tramita, setTramita] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+  const [tramita, setTramita] = useState<"SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
   const canApprove = CAN_APPROVE_ROLES.includes(role);
   const canAuthorize = CAN_AUTHORIZE_ROLES.includes(role);
   // Una SS cerrada (completada/cancelada/rechazada) no se edita — el backend
@@ -886,9 +1210,18 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           )}
 
           {sr.status === "DRAFT" && (
-            <button onClick={() => { runAct("submit"); }} disabled={busy}
+            <button onClick={() => { setTramita("SOLICITA"); }} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 disabled:opacity-50">
               <Send className="w-3.5 h-3.5" /> Solicitar
+            </button>
+          )}
+
+          {/* Corregir antes de que la firme nadie. Después de aprobada ya no:
+              habría que rechazar o cancelar, que sí quedan registrados. */}
+          {sr.status === "SOLICITADA" && (
+            <button onClick={() => { runAct("unsubmit"); }} disabled={busy}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+              <Undo2 className="w-3.5 h-3.5" /> Volver a borrador
             </button>
           )}
 

@@ -413,8 +413,25 @@ export async function deleteServiceRequest(session: TenantAccessSession, id: str
 
 // ── Transiciones ─────────────────────────────────────────────────────────────
 
-/** DRAFT → SOLICITADA */
-export async function submitServiceRequest(session: TenantAccessSession, id: string) {
+export interface SubmitInput {
+  /** Quién solicita. Es el nombre que la hoja de ruta imprime en "Solicitud creada". */
+  name?: string | null;
+  /** Fechar la solicitud en otro día (sólo TENANT_ADMIN) — SS de papel o corrección. */
+  actionDate?: string | Date | null;
+}
+
+/**
+ * DRAFT → SOLICITADA
+ *
+ * Registra quién solicita y en qué fecha, igual que los pasos de aprobación.
+ * No hay campos nuevos: "quién" es `solicitaByName` (el que ya consume la hoja
+ * de ruta como fallback del creador) y "cuándo" es `openDate` — la misma fecha
+ * que la hoja imprime como "Solicitud creada".
+ *
+ * Retrasar la fecha queda restringido al TENANT_ADMIN, mismo criterio que
+ * resolveSigner: a bordo se firma con la fecha del día.
+ */
+export async function submitServiceRequest(session: TenantAccessSession, id: string, payload: SubmitInput = {}) {
   ensureCanManage(session);
   const prisma = getPrismaClient()!;
   const current = await getRequestOrThrow(session, id);
@@ -424,9 +441,39 @@ export async function submitServiceRequest(session: TenantAccessSession, id: str
   if (!current.description && !current.title) {
     throw new RouteError(400, "VALIDATION_ERROR", "Describí el servicio antes de enviar la solicitud.");
   }
+  const solicita = normalizeOptionalText(payload.name);
+  const openDate = session.user.role === "TENANT_ADMIN"
+    ? parseOptionalDate(payload.actionDate, "actionDate")
+    : null;
+
   return (prisma as any).serviceRequest.update({
     where: { id },
-    data: { status: "SOLICITADA", updatedByUserId: session.user.id },
+    data: {
+      status: "SOLICITADA",
+      ...(solicita ? { solicitaByName: solicita } : {}),
+      ...(openDate ? { openDate } : {}),
+      updatedByUserId: session.user.id,
+    },
+  });
+}
+
+/**
+ * SOLICITADA → DRAFT — corregir antes de que la firme nadie.
+ *
+ * Sólo desde SOLICITADA a propósito: una vez aprobada hay una firma asentada, y
+ * volver a borrador la borraría sin dejar rastro. Para deshacer después de una
+ * firma están rechazar o cancelar, que sí quedan registrados.
+ */
+export async function unsubmitServiceRequest(session: TenantAccessSession, id: string) {
+  ensureCanManage(session);
+  const prisma = getPrismaClient()!;
+  const current = await getRequestOrThrow(session, id);
+  if (current.status !== "SOLICITADA") {
+    throw new RouteError(409, "INVALID_STATUS", "Sólo se puede volver a borrador una solicitud en estado Solicitada.");
+  }
+  return (prisma as any).serviceRequest.update({
+    where: { id },
+    data: { status: "DRAFT", updatedByUserId: session.user.id },
   });
 }
 

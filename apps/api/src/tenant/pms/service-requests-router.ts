@@ -29,6 +29,7 @@ import {
   rejectServiceRequest,
   startServiceRequest,
   submitServiceRequest,
+  unsubmitServiceRequest,
   updateServiceRequest,
 } from "../service-requests/service-requests-service";
 
@@ -114,9 +115,19 @@ export async function handleServiceRequestsRoutes(
     return true;
   }
 
+  // { name?, actionDate? } — quién solicita y cuándo. La fecha sólo la honra un
+  // TENANT_ADMIN (ver submitServiceRequest).
   if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/submit$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    sendJson(response, 200, await submitServiceRequest(session, id));
+    const body = await readJsonBody(request) as Parameters<typeof submitServiceRequest>[2];
+    sendJson(response, 200, await submitServiceRequest(session, id, body ?? {}));
+    return true;
+  }
+
+  // Volver a borrador para corregir. Sólo desde SOLICITADA: después hay firmas.
+  if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/unsubmit$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, await unsubmitServiceRequest(session, id));
     return true;
   }
 
