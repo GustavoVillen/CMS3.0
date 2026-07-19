@@ -154,7 +154,10 @@ export const FluidAnalysesPage: React.FC = () => {
   const statusParam = (searchParams.get("status") ?? "").trim();
   const [creatingSample, setCreatingSample] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<string>("sampledAt");
+  // Orden por defecto: código descendente (la muestra más nueva primero). Los
+  // códigos son correlativos, así que ordenar por código deja la grilla en el
+  // orden de carga, que es el que espera el usuario al entrar.
+  const [sortKey, setSortKey] = useState<string>("sampleCode");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const handleSort = (key: string) => {

@@ -12,7 +12,7 @@ import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
-import { MyDayPanel } from "../components/MyDayPanel";
+// import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { ComplianceDashboard } from "../components/ComplianceDashboard";
 import { domToPng } from "modern-screenshot";
 
@@ -124,7 +124,9 @@ export const Dashboard: React.FC = () => {
   const rootGap  = "space-y-4";
 
   // useFetch injects vesselCode automatically from VesselContext
-  const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
+  // Comentado junto con FuelConsumptionWidget: sin el widget, la llamada sólo
+  // gastaba un request por carga del Dashboard.
+  // const fuelData = useFetch<{ items: { date: string; liters: number }[] }>("/app/dashboard/fuel-consumption?days=30");
 
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
@@ -310,8 +312,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
       {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
        * (reporte diario, defectos abiertos, AI insights, certs por vencer).
-       * Antes los KPI eran 4 cards sueltas debajo; consolidados acá. */}
-      <MyDayPanel onShowInsights={() => setShowInsights(true)} />
+       * Antes los KPI eran 4 cards sueltas debajo; consolidados acá.
+       *
+       * OCULTO por decisión de producto (2026-07-18, pedido del usuario). Se
+       * deja el componente intacto y sólo se comenta el montaje: para volver a
+       * activarlo, descomentar la línea de abajo y el import de MyDayPanel.
+       * Mismo patrón que los módulos dormantes del Sidebar. */}
+      {/* <MyDayPanel onShowInsights={() => setShowInsights(true)} /> */}
 
       {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
           debajo de "Mi día". Solo se muestra si hay algo pendiente; cada badge
@@ -609,15 +616,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           );
         })()}
 
-        {/* Droplets consumption trend */}
-        <div className="lg:col-span-3">
+        {/* Consumo de combustible (últimos 30 días).
+         * OCULTO por decisión de producto (2026-07-18, pedido del usuario). Se
+         * deja el widget y su endpoint intactos; para reactivarlo, descomentar
+         * este bloque y el useFetch de fuelData más arriba. */}
+        {/* <div className="lg:col-span-3">
           <FuelConsumptionWidget
             data={fuelData.data?.items ?? []}
             loading={fuelData.loading}
             error={fuelData.error}
             vesselName={isVesselScoped ? (selectedVessel?.name ?? "") : t("dashboard.allVessels")}
           />
-        </div>
+        </div> */}
       </div>
 
     </div>

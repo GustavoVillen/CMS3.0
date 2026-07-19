@@ -1,5 +1,23 @@
 HISTORY.txt
 
+[2026-07-18] Dashboard: ocultar "Mi día" y "Consumo de Combustible" + orden por código en Muestreos
+Agent: Claude Opus 4.8
+- Pedido del usuario (decisión de producto, no bug).
+- Dashboard.tsx: se comenta el montaje de <MyDayPanel> (franja "MI DÍA / Vista
+  del buque" con reporte diario, defectos abiertos y AI insights) y el bloque
+  <FuelConsumptionWidget>. Se comenta también el useFetch de fuelData
+  (/app/dashboard/fuel-consumption?days=30): sin el widget sólo gastaba un
+  request por carga.
+- NO se borra nada: componentes, endpoints e i18n quedan intactos. Reactivar =
+  descomentar el montaje + su import. Mismo patrón que los módulos dormantes
+  (RCM/CAPA) del Sidebar.
+- Efecto colateral aceptado: InsightsModal del Dashboard queda inalcanzable
+  (MyDayPanel era el único que seteaba showInsights). Los insights siguen
+  disponibles en /ai-insights.
+- FluidAnalyses.tsx: el orden por defecto de la grilla pasa de sampledAt desc a
+  sampleCode desc. Los códigos son correlativos, así que ordenar por código deja
+  la grilla en orden de carga al entrar.
+
 [2026-07-18] Análisis de fluidos: el horómetro de la muestra se puede editar
 Agent: Claude Opus 4.8
 - Pedido: poder corregir las HORAS desde el detalle de la muestra, y que pueda
