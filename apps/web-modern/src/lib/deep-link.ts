@@ -23,8 +23,14 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 export interface DeepLink {
   /** Código de la ruta (`:code`) ya decodeado, o null si estamos en la lista. */
   code: string | null;
-  /** Navega a `/base/:code` (deja el link en la barra). */
-  open: (code: string) => void;
+  /**
+   * Navega a `/base/:code` (deja el link en la barra).
+   * `replace` sustituye la entrada actual del historial en vez de agregar una:
+   * se usa para los redirectores `?autoCode=`, que son un puente y no un
+   * destino — si quedaran en el historial, al cerrar el detalle se volvería a
+   * ellos y el detalle se reabriría solo.
+   */
+  open: (code: string, opts?: { replace?: boolean }) => void;
   /** Cierra el detalle volviendo a la pantalla anterior (o a `/base`). */
   close: () => void;
 }
@@ -43,7 +49,8 @@ export function useDeepLink(basePath: string): DeepLink {
   };
 
   const open = useCallback(
-    (c: string) => navigate(`${basePath}/${encodeURIComponent(c)}${keepSearch()}`),
+    (c: string, opts?: { replace?: boolean }) =>
+      navigate(`${basePath}/${encodeURIComponent(c)}${keepSearch()}`, { replace: opts?.replace ?? false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [navigate, basePath, search],
   );

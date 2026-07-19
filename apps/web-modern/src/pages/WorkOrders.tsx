@@ -1582,7 +1582,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return () => window.clearTimeout(id);
   }, [regiSnapshot, isMercurio, isEditable, saveRegiBlock]);
 
-  const onSave = useCallback(async () => {
+  /** Devuelve si el guardado salió bien: la tramitación no debe avanzar si falló. */
+  const onSave = useCallback(async (): Promise<boolean> => {
     setSaving(true); setErr(null);
     try {
       const [chkUrl, supUrl] = await Promise.all([
@@ -1596,7 +1597,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       setJustSaved(true);
       window.setTimeout(() => setJustSaved(false), 2500);
       onReload();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
+      return true;
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); return false; }
     finally { setSaving(false); }
   }, [uploadIfNeeded, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder, onReload, t]);
 
@@ -1609,11 +1611,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations,
     supportingDocFileName: supportingDocFile?.name ?? "",
   }, saveResetKey);
+
+  /**
+   * Abre un paso de tramitación GUARDANDO ANTES lo que esté pendiente.
+   *
+   * Dos motivos: la firma tiene que quedar sobre el documento que la persona
+   * está viendo, y el paso recarga la OT desde el servidor — sin guardar, lo
+   * recién tipeado se perdía en silencio. Si el guardado falla no se abre el
+   * paso: no se firma sobre datos que nunca llegaron a la base.
+   */
+  const openTramita = async (step: "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
+    if (isDirty && !(await onSave())) return;
+    setTramita(step);
+  };
+
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   useEscapeGuard({
     enabled: !woClosedReadOnly,
     isDirty,
-    onSave,
+    // onSave ahora devuelve si guardó bien (lo usa la tramitación); el guard
+    // sólo necesita esperar a que termine.
+    onSave: async () => { await onSave(); },
     onClose,
   });
 
@@ -1794,18 +1812,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={tramitaPhase === "APROBADA" && !canAuthorizeWo}
+                      disabled={saving || (tramitaPhase === "APROBADA" && !canAuthorizeWo)}
                       title={tramitaPhase === "APROBADA" && !canAuthorizeWo
                         ? "Autorizar es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones."
                         : undefined}
-                      onClick={() => setTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
+                      onClick={() => openTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
                       className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       {tramitaPhase === "SOLICITADA" ? "APROBADA" : "AUTORIZADA"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTramita("RECHAZA")}
+                      onClick={() => openTramita("RECHAZA")}
                       className="flex-1 py-2 rounded-xl border text-xs font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 transition-colors"
                     >
                       {tramitaPhase === "SOLICITADA" ? "NO APROBADA" : "NO AUTORIZADA"}
@@ -3477,8 +3495,10 @@ export const WorkOrdersPage: React.FC = () => {
   }, []);
 
   // Compatibilidad: `?autoCode=` (badges de plan) → redirige a la ruta deep-link.
+  // `replace`: el `?autoCode=` es un puente, no un destino. Si quedara en el
+  // historial, cerrar la OT volvería a él y la OT se reabriría sola.
   useEffect(() => {
-    if (autoCode) openLink(autoCode);
+    if (autoCode) openLink(autoCode, { replace: true });
   }, [autoCode, openLink]);
 
   // Deep-link: la URL `/work-orders/:code` es la fuente de verdad del detalle.

@@ -1679,7 +1679,11 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <h2 className="text-base font-bold text-fg">
                 {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
               </h2>
-              {!isNew && <StatusBadgeInline plan={plan} onOpenWo={(code) => { onClose(); navigate(`/work-orders?autoCode=${code}`); }} />}
+              {/* Ir a la OT NO cierra antes el plan: cerrar ahora significa
+                  "volver atrás", y hacerlo justo antes de navegar dejaba dos
+                  navegaciones peleando. Basta con navegar — el cambio de ruta
+                  desmonta este modal, y al cerrar la OT se vuelve acá. */}
+              {!isNew && <StatusBadgeInline plan={plan} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />}
             </div>
             <div className="flex items-center gap-1.5">
               {!isNew && <CopyLinkButton />}

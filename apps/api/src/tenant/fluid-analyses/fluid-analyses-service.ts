@@ -217,6 +217,24 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
     ? samples.filter((s: any) => s.result?.verdict === filters.verdict)
     : samples;
 
+  // La muestra sólo guarda el id interno de la OT que la generó. El listado
+  // muestra el CÓDIGO (OT-M02-26-0456), así que se resuelve en lote — una sola
+  // consulta para todas, no una por fila. Mismo patrón que listServiceRequests
+  // con los nombres de equipo y de proveedor.
+  const woIds = [...new Set(filtered.map((s: any) => s.sourceWorkOrderId).filter(Boolean))] as string[];
+  if (woIds.length > 0) {
+    const wos = await (prisma as any).workOrder.findMany({
+      where: { id: { in: woIds }, tenantId },
+      select: { id: true, workOrderCode: true },
+    });
+    const codeOf = new Map(wos.map((w: any) => [w.id, w.workOrderCode]));
+    for (const s of filtered) {
+      s.sourceWorkOrderCode = s.sourceWorkOrderId ? (codeOf.get(s.sourceWorkOrderId) ?? null) : null;
+    }
+  } else {
+    for (const s of filtered) s.sourceWorkOrderCode = null;
+  }
+
   return { items: filtered, total: filtered.length };
 }
 
@@ -367,7 +385,7 @@ export async function updateFluidSampleRunningHours(
     throw new RouteError(400, "VALIDATION_ERROR", "Las horas deben ser un número mayor o igual a cero.");
   }
 
-  const updated = await (prisma as any).fluidSample.update({
+  await (prisma as any).fluidSample.update({
     where: { id },
     data: { runningHours, updatedByUserId: session.user.id },
   });
@@ -381,7 +399,14 @@ export async function updateFluidSampleRunningHours(
     metadata: { sampleCode: current.sampleCode, from: current.runningHours, to: runningHours },
   });
 
-  return updated;
+  // Se devuelve la muestra COMPLETA (con `result`), no lo que devuelve el
+  // update. `fluidSample.update` no incluye la relación, y el detalle del front
+  // reemplaza su estado con esta respuesta: al corregir el horómetro, la muestra
+  // se quedaba sin resultado en pantalla y parecía que se había borrado el
+  // análisis del laboratorio (los datos nunca se tocaron, sólo la copia en
+  // memoria). Reutilizar getFluidSample garantiza además la misma forma que el
+  // GET del detalle, incluida su defensa para traer aiAnalysis.
+  return getFluidSample(session, id);
 }
 
 export async function deleteFluidSample(session: TenantAccessSession, id: string) {

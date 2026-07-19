@@ -987,24 +987,59 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const toggleCompra = (v: string) =>
     setCompras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
 
+  const patchPayload = () => ({
+    description, causes, tallerNotes,
+    purchaseRequestKinds: compras,
+    capitanName: capitan,
+    jefeMaquinasName: jefeMaq,
+  });
+
   // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
   // cerrarlo obligaba a volver a abrir la SS para seguir completándola.
   const save = async () => {
     setSaving(true);
     setActionError(null);
     try {
-      const updated = await api.patch<ServiceRequest>(`/app/pms/service-requests/${sr.id}`, {
-        description, causes, tallerNotes,
-        purchaseRequestKinds: compras,
-        capitanName: capitan,
-        jefeMaquinasName: jefeMaq,
-      });
+      const updated = await api.patch<ServiceRequest>(`/app/pms/service-requests/${sr.id}`, patchPayload());
       onSaved(updated);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "No se pudieron guardar los cambios.");
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * Guarda lo que esté pendiente ANTES de firmar o de mandar al taller.
+   *
+   * Devuelve la SS ya actualizada, o null si el guardado falló — en ese caso el
+   * que llama NO debe avanzar: se estaría firmando (o imprimiendo) sobre datos
+   * que no llegaron a la base.
+   *
+   * El PATCH devuelve el registro pelado, sin la relación `workOrder`; por eso
+   * se mergea sobre `sr` en vez de reemplazarlo, o el PDF y el bloque "OT de
+   * origen" se quedarían sin esos datos.
+   */
+  const saveIfDirty = async (): Promise<ServiceRequest | null> => {
+    if (!dirty) return sr;
+    setSaving(true);
+    setActionError(null);
+    try {
+      const updated = await api.patch<ServiceRequest>(`/app/pms/service-requests/${sr.id}`, patchPayload());
+      const merged = { ...sr, ...updated };
+      onSaved(updated);
+      return merged;
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "No se pudieron guardar los cambios.");
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Abre un paso de tramitación, guardando antes lo que esté sin guardar. */
+  const openTramita = (step: "SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
+    void (async () => { if (await saveIfDirty()) setTramita(step); })();
   };
 
   /**
@@ -1018,14 +1053,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     try {
       // Si hay cambios sin guardar, se guardan antes de avanzar el estado:
       // el paso siguiente (aprobar/autorizar) debe verlos.
-      if (dirty) {
-        await api.patch(`/app/pms/service-requests/${sr.id}`, {
-          description, causes, tallerNotes,
-          purchaseRequestKinds: compras,
-          capitanName: capitan,
-          jefeMaquinasName: jefeMaq,
-        });
-      }
+      if (dirty) await api.patch(`/app/pms/service-requests/${sr.id}`, patchPayload());
       await api.post(`/app/pms/service-requests/${sr.id}/${path}`, body ?? {});
       if (!opts?.keepOpen) onChanged();
     } finally {
@@ -1040,7 +1068,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
    */
   const sendToProvider = async () => {
     setActionError(null);
-    const pdfOk = await printServiceRequest(sr);
+    // Guardar PRIMERO: el PDF es el papel que se le manda al taller, así que
+    // tiene que salir con lo último cargado. Antes se imprimía con `sr` tal
+    // como estaba al abrir el modal y los cambios recién tipeados no salían.
+    const fresh = await saveIfDirty();
+    if (!fresh) return;
+    const pdfOk = await printServiceRequest(fresh);
     if (!pdfOk) return;
     try {
       await act("start", undefined, { keepOpen: true });
@@ -1234,7 +1267,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           )}
 
           {sr.status === "DRAFT" && (
-            <button onClick={() => { setTramita("SOLICITA"); }} disabled={busy}
+            <button onClick={() => openTramita("SOLICITA")} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 disabled:opacity-50">
               <Send className="w-3.5 h-3.5" /> Solicitar
             </button>
@@ -1250,7 +1283,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           )}
 
           {sr.status === "SOLICITADA" && canApprove && (
-            <button onClick={() => { setTramita("APRUEBA"); }} disabled={busy}
+            <button onClick={() => openTramita("APRUEBA")} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-bold hover:bg-blue-500/20 disabled:opacity-50">
               <CheckCheck className="w-3.5 h-3.5" /> Aprobar
             </button>
@@ -1258,7 +1291,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
 
           {/* Gate del gasto: habilita mandar el trabajo al taller */}
           {sr.status === "APROBADA" && canAuthorize && (
-            <button onClick={() => { setTramita("AUTORIZA"); }} disabled={busy}
+            <button onClick={() => openTramita("AUTORIZA")} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-700 dark:text-violet-400 text-xs font-bold hover:bg-violet-500/20 disabled:opacity-50">
               <ShieldCheck className="w-3.5 h-3.5" /> Autorizar
             </button>
@@ -1279,7 +1312,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           )}
 
           {["SOLICITADA", "APROBADA"].includes(sr.status) && (canApprove || canAuthorize) && (
-            <button onClick={() => { setTramita("RECHAZA"); }} disabled={busy}
+            <button onClick={() => openTramita("RECHAZA")} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 disabled:opacity-50">
               <XCircle className="w-3.5 h-3.5" /> Rechazar
             </button>

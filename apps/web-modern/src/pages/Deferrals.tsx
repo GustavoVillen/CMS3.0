@@ -944,8 +944,10 @@ export const DeferralsPage: React.FC = () => {
 
   // Compat: `?autoCode=` → redirige a la ruta deep-link `/deferrals/:code`.
   const autoCode = (searchParams.get("autoCode") ?? "").trim();
+  // `replace`: puente, no destino (ver useDeepLink). Si quedara en el historial,
+  // cerrar el diferimiento volvería acá y se reabriría solo.
   useEffect(() => {
-    if (autoCode) openLink(autoCode);
+    if (autoCode) openLink(autoCode, { replace: true });
   }, [autoCode, openLink]);
 
   const openDetail = useCallback(async (row: Deferral) => {

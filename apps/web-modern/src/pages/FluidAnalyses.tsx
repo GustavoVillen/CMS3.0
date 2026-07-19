@@ -99,6 +99,8 @@ interface FluidSample {
   result: FluidResult | null;
   createdAt: string;
   sourceWorkOrderId: string | null;
+  /** Código de la OT que generó la muestra, resuelto por el backend en el listado. */
+  sourceWorkOrderCode?: string | null;
   sourcePlanId: string | null;
 }
 
@@ -147,6 +149,8 @@ export const FluidAnalysesPage: React.FC = () => {
   const { user } = useAuth();
   const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
 
+  const navigate = useNavigate();
+
   const [filters, setFilters] = useState({ fluidType: "" });
   // Deep-link desde la alerta "sin procesar" del Dashboard: ?status=DRAFT
   // filtra las muestras a ese estado.
@@ -189,7 +193,7 @@ export const FluidAnalysesPage: React.FC = () => {
       if (sortKey === "runningHours"){ av = a.runningHours ?? -1; bv = b.runningHours ?? -1; }
       if (sortKey === "status")      { av = a.status;      bv = b.status; }
       if (sortKey === "verdict")     { av = a.result?.verdict ?? ""; bv = b.result?.verdict ?? ""; }
-      if (sortKey === "report")      { av = a.result?.reportUrl ? 1 : 0; bv = b.result?.reportUrl ? 1 : 0; }
+      if (sortKey === "sourceWo")    { av = a.sourceWorkOrderCode ?? ""; bv = b.sourceWorkOrderCode ?? ""; }
       if (av === null || bv === null) return 0;
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === "asc" ? cmp : -cmp;
@@ -259,7 +263,7 @@ export const FluidAnalysesPage: React.FC = () => {
                 <SortTh label="Horas"     col="runningHours" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
                 <SortTh label="Estado"    col="status"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Veredicto" col="verdict"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Reporte"   col="report"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label="OT origen" col="sourceWo"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>
@@ -282,9 +286,19 @@ export const FluidAnalysesPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-4 py-3">{s.result ? <VerdictBadge verdict={s.result.verdict} /> : <span className="text-text-industrial/30">—</span>}</td>
+                  {/* OT que generó la muestra. Clickeable: lleva a esa OT. El
+                      informe del laboratorio se ve abriendo la muestra. */}
                   <td className="px-4 py-3">
-                    {s.result?.reportUrl
-                      ? <a href={s.result.reportUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-accent hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver</a>
+                    {s.sourceWorkOrderCode
+                      ? (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); navigate(`/work-orders?autoCode=${s.sourceWorkOrderCode}`); }}
+                          className="font-mono text-[11px] text-accent hover:underline"
+                        >
+                          {s.sourceWorkOrderCode}
+                        </button>
+                      )
                       : <span className="text-text-industrial/20">—</span>}
                   </td>
                 </tr>
