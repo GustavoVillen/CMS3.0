@@ -1627,6 +1627,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     setTramita(step);
   };
 
+  /**
+   * Sale de la OT hacia otra pantalla (defecto, SS, muestra) GUARDANDO ANTES.
+   *
+   * Irse del modal descarta lo que esté a medio tipear, y el guard de Escape no
+   * cubre estos links: sólo se dispara al cerrar. Si el guardado falla no se
+   * navega — perder el trabajo por irse a mirar otra cosa es inaceptable.
+   */
+  const saveThenNavigate = async (to: string) => {
+    if (isDirty && !(await onSave())) return;
+    navigate(to);
+  };
+
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   useEscapeGuard({
     enabled: !woClosedReadOnly,
@@ -2307,26 +2319,31 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             {linkedServiceRequests.length > 0 && (
               <div className="space-y-2">
                 {linkedServiceRequests.map(sr => (
-                  <Link
+                  // Fila clickeable en vez de <Link>: hay que guardar la OT antes
+                  // de salir, y un link navega sin darnos la oportunidad. Es un
+                  // <div> y no un <button> porque adentro va otro botón (el
+                  // código FA), y un botón dentro de otro es HTML inválido.
+                  <div
                     key={sr.id}
-                    to={`/service-requests?openId=${sr.id}`}
-                    className="flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
+                    onClick={() => { void saveThenNavigate(`/service-requests?openId=${sr.id}`); }}
+                    title="Guarda la OT y abre esta solicitud de servicio"
+                    className="cursor-pointer flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
                   >
                     <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
                     <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
                     {/* Código de la muestra, cuando esta OT generó una. Abre la
-                        muestra; al cerrarla se vuelve a esta OT. Va dentro de un
-                        <Link>, así que hay que frenar la navegación del padre. */}
+                        muestra; al cerrarla se vuelve a esta OT. Va dentro de la
+                        fila clickeable, así que frena la navegación del padre. */}
                     {linkedSample && (
                       <button
                         type="button"
                         onClick={e => {
                           e.preventDefault();
                           e.stopPropagation();
-                          navigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
+                          void saveThenNavigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
                         }}
                         className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5 hover:bg-cyan-500/20 transition-colors"
-                        title="Ver la muestra de análisis generada por esta OT"
+                        title="Guarda la OT y abre la muestra de análisis generada por ella"
                       >
                         {linkedSample.sampleCode}
                       </button>
@@ -2334,7 +2351,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
                       {SS_STATUS_LABEL[sr.status] ?? sr.status}
                     </span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
@@ -2649,9 +2666,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {createdDefectId ? (
                       <button
                         type="button"
-                        onClick={() => navigate(`/defects?defectId=${createdDefectId}`)}
+                        onClick={() => { void saveThenNavigate(`/defects?defectId=${createdDefectId}`); }}
                         className="inline-flex items-center gap-1 font-mono text-accent hover:underline"
-                        title="Abrir este registro de defecto"
+                        title="Guarda la OT y abre este registro de defecto"
                       >
                         {createdDefectCode}
                         <ExternalLink className="w-3 h-3" />
