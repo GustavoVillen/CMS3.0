@@ -1324,7 +1324,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     `/app/fluid-analyses?workOrderId=${encodeURIComponent(workOrder.id)}`,
     [workOrder.id],
   );
-  const linkedSampleCode = linkedSampleData?.items?.[0]?.sampleCode ?? null;
+  const linkedSample = linkedSampleData?.items?.[0] ?? null;
   // Alcanza con que la OT esté abierta: la SS se carga junto con la OT y la
   // tramitación de la OT la arrastra (OT aprobada → SS aprobada; OT autorizada →
   // SS autorizada). Ya no se exige que la OT esté autorizada de antemano.
@@ -2310,14 +2310,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   >
                     <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
                     <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
-                    {/* Código de la muestra, cuando esta OT generó una. */}
-                    {linkedSampleCode && (
-                      <span
-                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5"
-                        title="Muestra de análisis generada por esta OT"
+                    {/* Código de la muestra, cuando esta OT generó una. Abre la
+                        muestra; al cerrarla se vuelve a esta OT. Va dentro de un
+                        <Link>, así que hay que frenar la navegación del padre. */}
+                    {linkedSample && (
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
+                        }}
+                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5 hover:bg-cyan-500/20 transition-colors"
+                        title="Ver la muestra de análisis generada por esta OT"
                       >
-                        {linkedSampleCode}
-                      </span>
+                        {linkedSample.sampleCode}
+                      </button>
                     )}
                     <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
                       {SS_STATUS_LABEL[sr.status] ?? sr.status}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   CheckCircle2, AlertTriangle, AlertOctagon, Trash2, FileText, TrendingUp,
@@ -154,10 +154,33 @@ export const FluidAnalysesPage: React.FC = () => {
   const [filters, setFilters] = useState({ fluidType: "" });
   // Deep-link desde la alerta "sin procesar" del Dashboard: ?status=DRAFT
   // filtra las muestras a ese estado.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { key: locationKey } = useLocation();
   const statusParam = (searchParams.get("status") ?? "").trim();
   const [creatingSample, setCreatingSample] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+
+  // Deep-link para abrir una muestra desde otra pantalla (hoy: el código FA que
+  // se muestra junto a las SS en el modal de OT): ?openId=<id>.
+  const openIdParam = (searchParams.get("openId") ?? "").trim();
+  useEffect(() => {
+    if (openIdParam) setOpenDetailId(openIdParam);
+  }, [openIdParam]);
+
+  /**
+   * Cerrar el detalle. Si se llegó por deep-link, se vuelve a la pantalla
+   * anterior — la muestra abierta desde una OT vuelve a esa OT. Si la muestra
+   * fue la primera pantalla de la sesión (link pegado) no hay a dónde volver:
+   * sólo se limpia el parámetro. Mismo criterio que useDeepLink y que la SS.
+   */
+  const closeDetail = () => {
+    setOpenDetailId(null);
+    if (!openIdParam) return;
+    if (locationKey !== "default") { navigate(-1); return; }
+    const params = new URLSearchParams(searchParams);
+    params.delete("openId");
+    setSearchParams(params, { replace: true });
+  };
   // Orden por defecto: código descendente (la muestra más nueva primero). Los
   // códigos son correlativos, así que ordenar por código deja la grilla en el
   // orden de carga, que es el que espera el usuario al entrar.
@@ -218,7 +241,7 @@ export const FluidAnalysesPage: React.FC = () => {
           id={openDetailId}
           assets={assetsData?.items ?? []}
           canManage={canManage}
-          onClose={() => setOpenDetailId(null)}
+          onClose={closeDetail}
           onChanged={reload}
         />
       )}
