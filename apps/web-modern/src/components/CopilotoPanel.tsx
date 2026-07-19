@@ -434,7 +434,87 @@ ${html}
 // Markdown renderer (preserve from original)
 // ---------------------------------------------------------------------------
 
-const renderBoldMarkdown = (content: string, keyPrefix: string): React.ReactNode => {
+// ── Códigos de registro citados por el copiloto ──────────────────────────────
+//
+// El copiloto nombra registros por su código ("las muestras FA-M01-0037,
+// FA-M01-0030…"). Antes eran texto muerto: había que copiarlos e ir a buscarlos
+// a mano. Ahora se detectan y se vuelven clickeables.
+//
+// El prefijo identifica el módulo. Sólo se listan los que tienen destino REAL:
+// un código que no sabemos abrir se deja como texto, que es mejor que un link
+// que no lleva a ningún lado.
+//
+// OT/DEF/APL/NM/CAPA se abren por código (ruta /modulo/:code). Muestreos y
+// Solicitudes de Servicio no tienen ruta por código, así que se pasa ?code= y
+// la pantalla lo resuelve contra su lista.
+const CODE_ROUTES: Array<{ prefix: string; path: (code: string) => string }> = [
+  { prefix: "OT-",   path: c => `/work-orders/${encodeURIComponent(c)}` },
+  { prefix: "DEF-",  path: c => `/defects/${encodeURIComponent(c)}` },
+  { prefix: "APL-",  path: c => `/deferrals/${encodeURIComponent(c)}` },
+  { prefix: "NM-",   path: c => `/near-miss/${encodeURIComponent(c)}` },
+  { prefix: "CAPA-", path: c => `/capa/${encodeURIComponent(c)}` },
+  { prefix: "FA-",   path: c => `/fluid-analyses?code=${encodeURIComponent(c)}` },
+  { prefix: "SS-",   path: c => `/service-requests?code=${encodeURIComponent(c)}` },
+];
+
+/**
+ * Captura los códigos, con o sin backticks alrededor (el copiloto suele
+ * escribirlos como `FA-M01-0037`). Los backticks quedan fuera del texto que se
+ * muestra: antes se veían literales porque el renderer no interpreta código
+ * inline.
+ */
+const CODE_REGEX = /`?\b((?:OT|DEF|APL|NM|CAPA|FA|SS)-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b`?/g;
+
+function routeForCode(code: string): string | null {
+  const upper = code.toUpperCase();
+  const hit = CODE_ROUTES.find(r => upper.startsWith(r.prefix));
+  return hit ? hit.path(upper) : null;
+}
+
+/** Trocea un texto plano en nodos, volviendo botón cada código reconocido. */
+const renderRecordCodes = (
+  text: string,
+  keyPrefix: string,
+  onInternalLinkClick: (path: string) => void,
+): React.ReactNode => {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let i = 0;
+  for (const match of text.matchAll(CODE_REGEX)) {
+    const code = match[1]!;
+    const path = routeForCode(code);
+    if (!path) continue;
+    const start = match.index ?? 0;
+    if (start > lastIndex) nodes.push(text.slice(lastIndex, start));
+    nodes.push(
+      <button
+        key={`${keyPrefix}-c-${i}`}
+        type="button"
+        onClick={() => onInternalLinkClick(path)}
+        className="font-mono text-accent hover:underline"
+        title="Abrir este registro"
+      >
+        {code}
+      </button>,
+    );
+    lastIndex = start + match[0].length;
+    i += 1;
+  }
+  if (nodes.length === 0) return text;
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+};
+
+// `onCode` es opcional para no romper llamadas viejas: sin él, los códigos
+// quedan como texto (el comportamiento anterior).
+const renderBoldMarkdown = (
+  content: string,
+  keyPrefix: string,
+  onCode?: (path: string) => void,
+): React.ReactNode => {
+  const codes = (text: string, k: string) =>
+    onCode ? renderRecordCodes(text, k, onCode) : text;
+
   const tokens: React.ReactNode[] = [];
   const boldRegex = /\*\*(.+?)\*\*/g;
   let lastIndex = 0;
@@ -442,14 +522,14 @@ const renderBoldMarkdown = (content: string, keyPrefix: string): React.ReactNode
 
   for (const match of content.matchAll(boldRegex)) {
     const start = match.index ?? 0;
-    if (start > lastIndex) tokens.push(content.slice(lastIndex, start));
-    tokens.push(<strong key={`${keyPrefix}-b-${matchIndex}`}>{match[1]}</strong>);
+    if (start > lastIndex) tokens.push(codes(content.slice(lastIndex, start), `${keyPrefix}-t${matchIndex}`));
+    tokens.push(<strong key={`${keyPrefix}-b-${matchIndex}`}>{codes(match[1]!, `${keyPrefix}-bc${matchIndex}`)}</strong>);
     lastIndex = start + match[0].length;
     matchIndex += 1;
   }
 
-  if (lastIndex < content.length) tokens.push(content.slice(lastIndex));
-  return tokens.length > 0 ? tokens : content;
+  if (lastIndex < content.length) tokens.push(codes(content.slice(lastIndex), `${keyPrefix}-tail`));
+  return tokens.length > 0 ? tokens : codes(content, `${keyPrefix}-only`);
 };
 
 const renderMarkdownLite = (
@@ -465,7 +545,7 @@ const renderMarkdownLite = (
   for (const match of content.matchAll(linkRegex)) {
     const start = match.index ?? 0;
     if (start > lastIndex) {
-      nodes.push(renderBoldMarkdown(content.slice(lastIndex, start), `${keyPrefix}-t-${linkIndex}`));
+      nodes.push(renderBoldMarkdown(content.slice(lastIndex, start), `${keyPrefix}-t-${linkIndex}`, onInternalLinkClick));
     }
     nodes.push(
       <button
@@ -482,9 +562,9 @@ const renderMarkdownLite = (
   }
 
   if (lastIndex < content.length) {
-    nodes.push(renderBoldMarkdown(content.slice(lastIndex), `${keyPrefix}-tail`));
+    nodes.push(renderBoldMarkdown(content.slice(lastIndex), `${keyPrefix}-tail`, onInternalLinkClick));
   }
-  return nodes.length > 0 ? nodes : renderBoldMarkdown(content, `${keyPrefix}-plain`);
+  return nodes.length > 0 ? nodes : renderBoldMarkdown(content, `${keyPrefix}-plain`, onInternalLinkClick);
 };
 
 // ---------------------------------------------------------------------------

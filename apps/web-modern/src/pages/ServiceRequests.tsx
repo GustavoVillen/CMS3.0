@@ -407,6 +407,15 @@ export function ServiceRequestsPage() {
     );
   }, [items, visibleItems, search]);
 
+  // ?code=SS-3-M02-2026 — para links que sólo conocen el CÓDIGO y no el id
+  // interno (típicamente el copiloto, que cita códigos en su respuesta).
+  const codeParam = (searchParams.get("code") ?? "").trim().toUpperCase();
+  React.useEffect(() => {
+    if (!codeParam || !items.length) return;
+    const hit = items.find(sr => sr.serviceRequestCode.toUpperCase() === codeParam);
+    if (hit) setSelected(hit);
+  }, [codeParam, items]);
+
   // Deep-link desde el panel de la OT: ?openId=<id>
   const openId = searchParams.get("openId");
   React.useEffect(() => {

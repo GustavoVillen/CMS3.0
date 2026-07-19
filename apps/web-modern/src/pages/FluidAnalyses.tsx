@@ -197,6 +197,17 @@ export const FluidAnalysesPage: React.FC = () => {
   const path = `/app/fluid-analyses${params.toString() ? "?" + params.toString() : ""}`;
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+
+  // ?code=FA-M01-0037 — para links que sólo conocen el CÓDIGO y no el id
+  // interno (típicamente el copiloto, que cita códigos en su respuesta). Se
+  // resuelve contra la lista ya cargada; no hace falta consultar de nuevo.
+  const codeParam = (searchParams.get("code") ?? "").trim().toUpperCase();
+  useEffect(() => {
+    if (!codeParam) return;
+    const hit = (data?.items ?? []).find(s => s.sampleCode.toUpperCase() === codeParam);
+    if (hit) setOpenDetailId(hit.id);
+  }, [codeParam, data]);
+
   const { data: assetsData } = useFetch<{ items: AssetItem[] }>("/app/assets", []);
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels: contextVessels } = useVesselContext();
