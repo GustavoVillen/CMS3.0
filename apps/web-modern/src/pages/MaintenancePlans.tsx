@@ -2729,6 +2729,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
 
   const userName = user?.name ?? user?.email ?? "";
   const isAdmin = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER";
+  const woTerms = useWoTerms(); // abreviatura de OT del tenant, para el botón Express
 
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
   const statusValue = useCallback((row: MaintenancePlan) => computeStatus(row), []);
@@ -2736,10 +2737,47 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     <StatusBadgeInline plan={row} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />
   ), [navigate]);
 
+  /**
+   * Abre una OT EXPRESS desde la fila del listado: nace autorizada, sin pasar
+   * por aprobación ni autorización. Misma acción que el botón del detalle.
+   */
+  const [expressRowId, setExpressRowId] = useState<string | null>(null);
+  const openExpressFromRow = useCallback(async (row: MaintenancePlan) => {
+    setExpressRowId(row.id);
+    setPageError(null);
+    try {
+      const wo = await api.post<{ workOrderCode: string }>(
+        `/app/pms/maintenance-plans/${row.id}/open-work-order`,
+        { express: true, signerName: userName || null },
+      );
+      reload();
+      navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`);
+    } catch (e) {
+      setPageError(e instanceof ApiError ? e.message : "No se pudo abrir la OT express.");
+    } finally {
+      setExpressRowId(null);
+    }
+  }, [userName, reload, navigate]);
+
   const renderActions = useCallback((row: MaintenancePlan) => {
     if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
     const needsWO = row.triggerResultMode === "AUTO_WO" || row.triggerResultMode === "APPROVAL_WO";
     const hasActiveWo = !!row.activeWorkOrderCode && row.executionStatus === "IN_WINDOW";
+    // "Solo Alerta" → OT Express en vez de Reportar, igual que en el detalle.
+    if (row.triggerResultMode === "DUE_ONLY") {
+      const busy = expressRowId === row.id;
+      return (
+        <button
+          onClick={e => { e.stopPropagation(); void openExpressFromRow(row); }}
+          disabled={busy}
+          title="Abre una OT ya autorizada, sin aprobación ni autorización"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 disabled:opacity-50 transition-all whitespace-nowrap"
+        >
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+          {t("mp.col.executeExpressWO").replace("{abbr}", woTerms.abbr)}
+        </button>
+      );
+    }
     return needsWO ? (
       !hasActiveWo ? (
         <button
@@ -2765,7 +2803,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
         <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
       </button>
     );
-  }, [t]);
+  }, [t, woTerms, expressRowId, openExpressFromRow]);
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
     // ── Col 1: EMBARCACIÓN / TASKID / SFI ──────────────────────────────────

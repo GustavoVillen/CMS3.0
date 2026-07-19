@@ -406,6 +406,8 @@ const dict = {
   "mp.trm.DUE_ONLY":     { es: "Solo Alerta",      en: "Alert only",         pt: "Apenas alerta" },
   // Botón de los planes "Solo Alerta": abre una OT que nace autorizada.
   "mp.modal.openExpressWO": { es: "Abrir {abbr} Express", en: "Open Express {abbr}", pt: "Abrir {abbr} Express" },
+  // Mismo acto desde la fila del listado (columna ACCIONES).
+  "mp.col.executeExpressWO": { es: "EJECUTAR {abbr} EXPRESS", en: "RUN EXPRESS {abbr}", pt: "EXECUTAR {abbr} EXPRESS" },
   "mp.trm.AUTO_WO":      { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.APPROVAL_WO":  { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.CHECKLIST":    { es: "Completar ChkLst", en: "Complete Checklist", pt: "Completar ChkLst" },
