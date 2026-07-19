@@ -1072,7 +1072,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Borrar un plan pide DOS confirmaciones: 0 = cerrado, 1 = "¿estás seguro?",
+  // 2 = el aviso de que es un plan registrado, no una OT. Recién ahí se borra.
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleting,    setDeleting]    = useState(false);
   const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -1426,7 +1428,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     checklistTemplate, samplingFluidType,
   }, saveResetKey);
   useEscapeGuard({
-    enabled: !readOnly && !showExecution && !showPostpone && !confirmDelete && !confirmDuplicateWO,
+    enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
     isDirty: planDirty,
     onSave,
     onClose,
@@ -2135,7 +2137,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               {/* Delete button — only ADMIN or FLEET_SUPERINTENDENT, existing plans only */}
               {!isNew && canDelete && (
                 <button
-                  onClick={() => setConfirmDelete(true)}
+                  onClick={() => setDeleteStep(1)}
                   className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> {t("mp.modal.delete")}
@@ -2385,49 +2387,70 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         );
       })()}
 
-      {confirmDelete && !isNew && (
+      {deleteStep > 0 && !isNew && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
-                <Trash2 className="w-4 h-4 text-red-700 dark:text-red-400" />
+                {deleteStep === 1
+                  ? <Trash2 className="w-4 h-4 text-red-700 dark:text-red-400" />
+                  : <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400" />}
               </div>
               <div>
-                <p className="text-sm font-bold text-fg">{t("mp.modal.deleteTitle")}</p>
+                <p className="text-sm font-bold text-fg">
+                  {deleteStep === 1
+                    ? t("mp.modal.deleteTitle")
+                    : t("mp.modal.deleteTitle2").replace("{wo}", woTerms.abbr)}
+                </p>
                 <p className="text-xs text-text-industrial/70 mt-1">
-                  {t("mp.modal.deleteText1")}{" "}
-                  <span className="font-mono font-bold text-fg">{plan.taskCode}</span> {t("mp.modal.deleteText2")}
+                  {deleteStep === 1 ? (
+                    <>
+                      {t("mp.modal.deleteText1")}{" "}
+                      <span className="font-mono font-bold text-fg">{plan.taskCode}</span> {t("mp.modal.deleteText2")}
+                    </>
+                  ) : (
+                    t("mp.modal.deleteText3")
+                  )}
                 </p>
               </div>
             </div>
             {actionError && <p className="text-xs text-red-700 dark:text-red-400">{actionError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={() => setConfirmDelete(false)}
+                onClick={() => { setDeleteStep(0); setActionError(null); }}
                 className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors"
               >
                 {t("common.cancel")}
               </button>
-              <button
-                disabled={deleting}
-                onClick={async () => {
-                  setDeleting(true);
-                  setActionError(null);
-                  try {
-                    await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
-                    setConfirmDelete(false);
-                    await onSaved();
-                    onClose();
-                  } catch (err) {
-                    setActionError(err instanceof Error ? err.message : t("mp.modal.deleteError"));
-                    setDeleting(false);
-                  }
-                }}
-                className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
-              >
-                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                {t("mp.modal.deleteConfirm")}
-              </button>
+              {deleteStep === 1 ? (
+                <button
+                  onClick={() => setDeleteStep(2)}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 transition-all"
+                >
+                  {t("mp.modal.deleteStep1Confirm")}
+                </button>
+              ) : (
+                <button
+                  disabled={deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    setActionError(null);
+                    try {
+                      await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
+                      setDeleteStep(0);
+                      await onSaved();
+                      onClose();
+                    } catch (err) {
+                      setActionError(err instanceof Error ? err.message : t("mp.modal.deleteError"));
+                      setDeleting(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                >
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {t("mp.modal.deleteConfirm")}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2452,9 +2475,19 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   // semana (incluye recurrencias y planes por horas) para que coincida 1:1 con la curva.
   const weekStartFilter     = (searchParams.get("weekStart")       ?? "").trim();
   const weeksParamFilter    = (searchParams.get("weeks")           ?? "52").trim();
+  // Toggle "VENCIDOS / PRÓX. 7 DÍAS". Vive en la URL — igual que el resto de los
+  // filtros de esta pantalla — para poder mandar el link ya filtrado:
+  //   /maintenance-plans?overdue=1   (alias: ?venc=1)
+  // Combina con los demás params: ?vesselCode=M02&overdue=1 filtra ambas cosas.
+  // La búsqueda de la clave es INSENSIBLE A MAYÚSCULAS a propósito: estos links
+  // se escriben a mano y se mandan por chat, y `?Venc=1` tiene que funcionar
+  // igual que `?venc=1` (URLSearchParams.get sí distingue mayúsculas).
+  const OVERDUE_KEYS = ["overdue", "venc"];
+  const overdueKeysPresent = [...searchParams.keys()].filter(k => OVERDUE_KEYS.includes(k.toLowerCase()));
+  const overdueParam = (overdueKeysPresent.length ? (searchParams.get(overdueKeysPresent[0]!) ?? "") : "").trim().toLowerCase();
+  const overdueOnly  = overdueParam === "1" || overdueParam === "true" || overdueParam === "si";
 
   const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
-  const [overdueOnly,   setOverdueOnly]   = useState(false);
   const [dueXlsxBusy,   setDueXlsxBusy]   = useState(false);
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
@@ -2482,6 +2515,15 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     if (ns) params.set("status", ns); else params.delete("status");
     if (nv) params.set("vesselCode", nv); else params.delete("vesselCode");
     if (ne) params.set("executionStatus", ne); else params.delete("executionStatus");
+    setSearchParams(params, { replace: true });
+  };
+
+  const setOverdueOnly = (on: boolean) => {
+    const params = new URLSearchParams(searchParams);
+    // Al apagar hay que borrar CUALQUIER variante que haya venido en el link
+    // (?venc, ?Venc, ?OVERDUE…), si no el filtro se vuelve a encender solo.
+    for (const k of overdueKeysPresent) params.delete(k);
+    if (on) params.set("overdue", "1");
     setSearchParams(params, { replace: true });
   };
 
@@ -2909,7 +2951,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
         </button>
         {/* Toggle VENCIDOS / PRÓX. */}
         <button
-          onClick={() => setOverdueOnly(o => !o)}
+          onClick={() => setOverdueOnly(!overdueOnly)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
             overdueOnly
               ? "bg-orange-500/20 border-orange-500/40 text-orange-700 dark:text-orange-300"

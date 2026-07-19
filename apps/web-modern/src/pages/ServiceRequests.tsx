@@ -362,6 +362,14 @@ export function ServiceRequestsPage() {
   const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [search, setSearch] = useState("");
   const viewFilter = searchParams.get("view") ?? "";
+  // Deep-link del donut del Dashboard: ?status=IN_PROGRESS (o varios separados
+  // por coma, como REJECTED,CANCELLED). Manda por encima de los chips; tocar
+  // cualquier chip lo limpia.
+  const statusParam = searchParams.get("status");
+  const statusSet = React.useMemo(
+    () => (statusParam ? new Set(statusParam.split(",").map(s => s.trim()).filter(Boolean)) : null),
+    [statusParam],
+  );
 
   // Se trae todo y se filtra en cliente: el backend no pagina y los chips cruzan
   // estados, así que un filtro por estado en la query obligaría a refetchear en
@@ -370,9 +378,18 @@ export function ServiceRequestsPage() {
   const items = data?.items ?? [];
 
   const visibleItems = React.useMemo(() => {
+    if (statusSet) return items.filter(sr => statusSet.has(sr.status));
     const f = SS_VIEW_FILTERS.find(o => o.key === viewFilter) ?? SS_VIEW_FILTERS[0]!;
     return items.filter(f.match);
-  }, [items, viewFilter]);
+  }, [items, viewFilter, statusSet]);
+
+  // Si el estado pedido no tiene columna en el tablero (Completada, Rechazada,
+  // Cancelada), se pasa a lista: si no, el tablero se vería vacío.
+  React.useEffect(() => {
+    if (statusSet && ![...statusSet].some(s => SS_KANBAN_COLS.some(c => c.colId === s))) {
+      setViewMode("list");
+    }
+  }, [statusSet]);
 
   // El buscador ignora el chip activo: busca en toda la flota y en cualquier
   // estado, incluidos los terminales.
@@ -465,13 +482,14 @@ export function ServiceRequestsPage() {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {SS_VIEW_FILTERS.map(opt => {
-          const active = viewFilter === opt.key;
+          const active = !statusSet && viewFilter === opt.key;
           return (
             <button
               key={opt.key || "all"}
               type="button"
               onClick={() => {
                 const params = new URLSearchParams(searchParams);
+                params.delete("status"); // el chip manda sobre el deep-link del dashboard
                 if (opt.key) params.set("view", opt.key); else params.delete("view");
                 setSearchParams(params, { replace: true });
                 // Los estados terminales no tienen columna en el tablero, así que

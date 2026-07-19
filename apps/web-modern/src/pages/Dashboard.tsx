@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
@@ -89,6 +89,10 @@ export const Dashboard: React.FC = () => {
   const defects           = useFetch<ListResponse<Defect>>("/app/defects");
   const certificates      = useFetch<ListResponse<Certificate>>("/app/certificates");
   const deferrals         = useFetch<ListResponse<Deferral>>("/app/pms/deferrals");
+  // Solicitudes de Servicio: la lista es chica (no hay endpoint de resumen como
+  // el de planes) y el conteo por estado se hace en cliente, igual que OT,
+  // diferimientos y repuestos.
+  const serviceRequests   = useFetch<ListResponse<{ id: string; status: string }>>("/app/pms/service-requests");
   const insights          = useFetch<ListResponse<AiInsight>>(insightsPath, [insightsPath]);
   // Todos los repuestos (no solo criticidad A): el widget muestra el estado de
   // stock global — sin stock / bajo reorden / OK — para seguimiento completo.
@@ -210,6 +214,26 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       { key: "FUTURE",         name: t("dashboard.mp.future"),         value: map.FUTURE,         fill: "#06D6A0" },
     ].filter(s => s.value > 0);
   }, [mpSummary.data, t]);
+
+  // Donut de Solicitudes de Servicio, por estado de tramitación. Los colores
+  // son los mismos que las columnas del tablero kanban de SS, para que el
+  // dashboard y la pantalla se lean igual. Rechazadas y Canceladas van juntas:
+  // operativamente son lo mismo (no siguen) y así la leyenda entra en la card.
+  const ssCounts = React.useMemo(() => {
+    const items = serviceRequests.data?.items ?? [];
+    const map: Record<string, number> = {};
+    for (const s of items) map[s.status] = (map[s.status] ?? 0) + 1;
+    return [
+      { key: "DRAFT",       name: t("dashboard.ss.draft"),      value: map.DRAFT ?? 0,       fill: "#64748b" },
+      { key: "SOLICITADA",  name: t("dashboard.ss.solicitada"), value: map.SOLICITADA ?? 0,  fill: "#EAB308" },
+      { key: "APROBADA",    name: t("dashboard.ss.aprobada"),   value: map.APROBADA ?? 0,    fill: "#3B82F6" },
+      { key: "AUTORIZADA",  name: t("dashboard.ss.autorizada"), value: map.AUTORIZADA ?? 0,  fill: "#8B5CF6" },
+      { key: "IN_PROGRESS", name: t("dashboard.ss.inProgress"), value: map.IN_PROGRESS ?? 0, fill: "#F59E0B" },
+      { key: "COMPLETED",   name: t("dashboard.ss.completed"),  value: map.COMPLETED ?? 0,   fill: "#06D6A0" },
+      { key: "REJECTED,CANCELLED", name: t("dashboard.ss.closed"),
+        value: (map.REJECTED ?? 0) + (map.CANCELLED ?? 0), fill: "#EF4444" },
+    ].filter(s => s.value > 0);
+  }, [serviceRequests.data, t]);
 
   const spareReqCounts = React.useMemo(() => {
     const allItems = (spareRequests.data?.items ?? []).flatMap(r => r.items);
@@ -397,6 +421,41 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </div>
               </div>
               <DonutLegend items={statusCounts} onSelect={s => navigate(`/work-orders?view=${s.key}`)} />
+            </div>
+          )}
+        </div>
+
+        {/* Service Requests status chart */}
+        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h2 className="text-xs font-bold text-fg">{t("dashboard.ssTitle")}</h2>
+              <p className="text-[10px] text-text-industrial/40">{t("dashboard.ssSubtitle")}</p>
+            </div>
+            {serviceRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+          </div>
+          {serviceRequests.error ? <ErrorMsg msg={serviceRequests.error} /> : ssCounts.length === 0 && !serviceRequests.loading ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+              <Handshake className="w-6 h-6 text-text-industrial/40" />
+              <p className="text-xs text-text-industrial/40">{t("dashboard.ssEmpty")}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1">
+              <div className={`${chartBox} shrink-0 relative`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={ssCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      {ssCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-bold text-fg">{ssCounts.reduce((a, s) => a + s.value, 0)}</span>
+                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
+                </div>
+              </div>
+              <DonutLegend items={ssCounts} onSelect={s => navigate(`/service-requests?status=${s.key}`)} />
             </div>
           )}
         </div>

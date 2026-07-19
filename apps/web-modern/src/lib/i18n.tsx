@@ -1574,6 +1574,11 @@ const dict = {
   "mp.modal.deleteText2":      { es: "será eliminado.",        en: "will be deleted.",     pt: "será excluído." },
   "mp.modal.deleteConfirm":    { es: "Confirmar eliminación", en: "Confirm deletion",      pt: "Confirmar exclusão" },
   "mp.modal.deleteError":      { es: "Error al eliminar",     en: "Error deleting",        pt: "Erro ao excluir" },
+  // Segunda confirmación: borrar un plan no es lo mismo que cerrar una OT — el
+  // plan es el registro del buque y se lleva su historial. {wo} = abbr de OT.
+  "mp.modal.deleteStep1Confirm": { es: "Sí, continuar",        en: "Yes, continue",         pt: "Sim, continuar" },
+  "mp.modal.deleteTitle2":     { es: "Esto no es una {wo}",   en: "This is not a {wo}",    pt: "Isto não é uma {wo}" },
+  "mp.modal.deleteText3":      { es: "Es un Plan de Mantenimiento registrado del buque, no un trabajo puntual. Al eliminarlo se pierde la tarea y su programación. ¿Seguro que querés eliminarlo?", en: "It is a maintenance plan registered for the vessel, not a one-off job. Deleting it removes the task and its scheduling. Are you sure you want to delete it?", pt: "É um Plano de Manutenção registrado do navio, não um trabalho pontual. Ao excluí-lo, perde-se a tarefa e sua programação. Tem certeza de que deseja excluí-lo?" },
 
   // MaintenancePlans page — columnas + acciones de tabla
   "mp.col.vesselTaskSfi":      { es: "EMBARCACIÓN / TASKID / SFI", en: "VESSEL / TASKID / SFI", pt: "EMBARCAÇÃO / TASKID / SFI" },
@@ -1688,6 +1693,19 @@ const dict = {
   "dashboard.mp.inWindow":     { es: "En Proceso",             en: "In Window",            pt: "Em Andamento" },
   "dashboard.mp.upcoming":     { es: "Próximas",               en: "Upcoming",             pt: "Próximas" },
   "dashboard.mp.future":       { es: "Al Día",                 en: "On Track",             pt: "Em Dia" },
+
+  // Donut de Solicitudes de Servicio — estados de la tramitación de la SS.
+  // Rechazadas y Canceladas van en un solo ítem: operativamente son lo mismo.
+  "dashboard.ssTitle":         { es: "Solicitudes de Servicio", en: "Service Requests",    pt: "Solicitações de Serviço" },
+  "dashboard.ssSubtitle":      { es: "Estado de tramitación",  en: "Approval status",      pt: "Estado de tramitação" },
+  "dashboard.ssEmpty":         { es: "Sin solicitudes",        en: "No requests",          pt: "Sem solicitações" },
+  "dashboard.ss.draft":        { es: "Borrador",               en: "Draft",                pt: "Rascunho" },
+  "dashboard.ss.solicitada":   { es: "Solicitadas",            en: "Requested",            pt: "Solicitadas" },
+  "dashboard.ss.aprobada":     { es: "Aprobadas",              en: "Approved",             pt: "Aprovadas" },
+  "dashboard.ss.autorizada":   { es: "Autorizadas",            en: "Authorized",           pt: "Autorizadas" },
+  "dashboard.ss.inProgress":   { es: "En ejecución",           en: "In Progress",          pt: "Em execução" },
+  "dashboard.ss.completed":    { es: "Completadas",            en: "Completed",            pt: "Concluídas" },
+  "dashboard.ss.closed":       { es: "Rechaz./Cancel.",        en: "Rejected/Cancelled",   pt: "Rejeit./Cancel." },
 
   "dashboard.def.requested":   { es: "Solicitados",            en: "Requested",            pt: "Solicitados" },
   "dashboard.def.underReview": { es: "En Revisión",            en: "Under Review",         pt: "Em Análise" },
