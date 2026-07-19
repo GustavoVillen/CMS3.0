@@ -17,7 +17,7 @@ interface Provider {
   id: string; providerCode: string; name: string;
   category: string | null; status: string;
   contactName: string | null; contactEmail: string | null;
-  contactPhone: string | null; location: string | null; createdAt: string;
+  contactPhone: string | null; location: string | null; notes: string | null; createdAt: string;
 }
 interface ListResponse { items: Provider[]; total: number; }
 
@@ -49,6 +49,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
   const [contactEmail,  setContactEmail]  = useState(provider?.contactEmail  ?? "");
   const [contactPhone,  setContactPhone]  = useState(provider?.contactPhone  ?? "");
   const [location,      setLocation]      = useState(provider?.location      ?? "");
+  const [notes,         setNotes]         = useState(provider?.notes         ?? "");
 
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState<string | null>(null);
@@ -68,6 +69,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
           contactEmail: contactEmail.trim() || null,
           contactPhone: contactPhone.trim() || null,
           location:     location.trim()     || null,
+          notes:        notes.trim()        || null,
         });
         onSaved(result);
       } else {
@@ -80,6 +82,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
           contactEmail: contactEmail.trim() || null,
           contactPhone: contactPhone.trim() || null,
           location:     location.trim()     || null,
+          notes:        notes.trim()        || null,
         });
         onSaved(result);
       }
@@ -91,7 +94,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
   // ESC guard
   const isDirty = useDirtyTracker({
     name, category, status,
-    contactName, contactEmail, contactPhone, location,
+    contactName, contactEmail, contactPhone, location, notes,
   });
   useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
@@ -182,6 +185,17 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
           <div>
             <label className={labelCls}>Ubicación / Dirección</label>
             <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Ciudad, País…" className={inputCls} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Comentarios</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Condiciones acordadas, contactos alternativos, antecedentes…"
+              className={`${inputCls} resize-y min-h-[72px]`}
+            />
           </div>
 
           {!isNew && <p className="text-[10px] text-fg/20">Alta: {fmtDate(provider.createdAt)}</p>}

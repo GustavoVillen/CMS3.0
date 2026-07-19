@@ -2225,6 +2225,9 @@ model Provider {
   contactEmail     String?
   contactPhone     String?
   location         String?
+  // Comentarios libres sobre el proveedor (condiciones, contactos alternativos,
+  // antecedentes). Opcional: los proveedores existentes quedan en null.
+  notes            String?
   createdAt        DateTime       @default(now())
   createdByUserId  String
   updatedAt        DateTime       @updatedAt

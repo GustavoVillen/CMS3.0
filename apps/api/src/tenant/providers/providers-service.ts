@@ -18,6 +18,7 @@ export interface CreateProviderInput {
   contactEmail?: string | null;
   contactPhone?: string | null;
   location?: string | null;
+  notes?: string | null;
 }
 
 export interface UpdateProviderInput {
@@ -28,6 +29,7 @@ export interface UpdateProviderInput {
   contactEmail?: string | null;
   contactPhone?: string | null;
   location?: string | null;
+  notes?: string | null;
 }
 
 function canManage(session: TenantAccessSession): boolean {
@@ -106,6 +108,7 @@ export async function createProvider(session: TenantAccessSession, payload: Crea
         contactEmail: normalizeOptionalText(payload.contactEmail),
         contactPhone: normalizeOptionalText(payload.contactPhone),
         location:     normalizeOptionalText(payload.location),
+        notes:        normalizeOptionalText(payload.notes),
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
       },
@@ -141,6 +144,7 @@ export async function updateProvider(session: TenantAccessSession, id: string, p
   if (payload.contactEmail !== undefined) data.contactEmail = normalizeOptionalText(payload.contactEmail);
   if (payload.contactPhone !== undefined) data.contactPhone = normalizeOptionalText(payload.contactPhone);
   if (payload.location     !== undefined) data.location     = normalizeOptionalText(payload.location);
+  if (payload.notes        !== undefined) data.notes        = normalizeOptionalText(payload.notes);
 
   const updated = await prisma.provider.update({ where: { id: current.id }, data });
   const changedKeys = Object.keys(data).filter(k => k !== "updatedByUserId");
