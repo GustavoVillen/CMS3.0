@@ -404,6 +404,8 @@ const dict = {
   "mp.vesselCode":        { es: "Código de buque",        en: "Vessel code",              pt: "Código da embarcação" },
   "mp.asset":             { es: "Activo",                 en: "Asset",                    pt: "Ativo" },
   "mp.trm.DUE_ONLY":     { es: "Solo Alerta",      en: "Alert only",         pt: "Apenas alerta" },
+  // Botón de los planes "Solo Alerta": abre una OT que nace autorizada.
+  "mp.modal.openExpressWO": { es: "Abrir {abbr} Express", en: "Open Express {abbr}", pt: "Abrir {abbr} Express" },
   "mp.trm.AUTO_WO":      { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.APPROVAL_WO":  { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
   "mp.trm.CHECKLIST":    { es: "Completar ChkLst", en: "Complete Checklist", pt: "Completar ChkLst" },

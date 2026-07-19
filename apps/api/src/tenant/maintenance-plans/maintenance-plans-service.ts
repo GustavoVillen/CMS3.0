@@ -147,6 +147,22 @@ export interface OpenFormalWorkOrderInput {
   // no es admin. Ver openFormalWorkOrder.
   openDate?: string | Date | null;
   createdByUserId?: string | null;
+  /**
+   * OT EXPRESS: nace ya AUTORIZADA, sin pasar por aprobación ni autorización.
+   * Es para los planes en modo "Solo Alerta", donde el trabajo se resuelve en el
+   * momento y la tramitación formal sólo agregaría demora.
+   *
+   * Las tres firmas (solicita / aprueba / autoriza) quedan a nombre de quien
+   * abre la OT: apretar el botón ES el acto de autorizar, y el PDF tiene que
+   * salir con un responsable, no en blanco.
+   *
+   * ⚠️ Es la única vía por la que una OT llega a AUTORIZADA sin pasar por
+   * canAuthorizeWorkOrders (tierra). Decisión de producto explícita: si se
+   * exigiera tierra, el express perdería su razón de ser.
+   */
+  express?: boolean;
+  /** Nombre a estampar en las firmas de la OT express. */
+  signerName?: string | null;
 }
 
 interface RecalculatePlanInput {
@@ -1516,6 +1532,22 @@ export async function openFormalWorkOrder(
     }
   }
 
+  // OT Express: se firma sola a nombre de quien la abre. Sin esto la OT quedaría
+  // AUTORIZADA con las firmas en blanco, que es peor que no tenerla autorizada:
+  // el papel saldría diciendo que alguien la habilitó sin decir quién.
+  const isExpress = payload.express === true;
+  const expressSigner = normalizeOptionalText(payload.signerName) ?? null;
+  const expressStamps = isExpress
+    ? {
+        aprobadoByName:   expressSigner,
+        aprobadoByUserId: woCreatorId,
+        aprobadoAt:       woOpenDate,
+        autorizadoByName:   expressSigner,
+        autorizadoByUserId: woCreatorId,
+        autorizadoAt:       woOpenDate,
+      }
+    : {};
+
   const woTxResult = await prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.create({
       data: {
@@ -1526,6 +1558,7 @@ export async function openFormalWorkOrder(
         workOrderCode,
         type: "PREVENTIVE",
         status: "PLANNED",
+        ...expressStamps,
         priority: payload.priority ?? "MEDIUM",
         openDate: woOpenDate,
         // createdAt alineado a la fecha de apertura: así en el PDF coinciden la
@@ -1579,6 +1612,10 @@ export async function openFormalWorkOrder(
       // Trazabilidad cuando un admin abre en nombre de otro / backdatea.
       onBehalfOf: woCreatorId !== session.user.id ? woCreatorId : undefined,
       openDate: woOpenDate.toISOString(),
+      // Deja explícito que esta OT nació AUTORIZADA sin pasar por la
+      // tramitación: es la excepción y tiene que poder auditarse como tal.
+      express: isExpress || undefined,
+      expressSigner: isExpress ? expressSigner : undefined,
     },
   });
   return woTxResult;

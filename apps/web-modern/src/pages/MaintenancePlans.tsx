@@ -292,7 +292,11 @@ function freqRank(p: MaintenancePlan): number {
 
 const TRIGGER_TYPES = ["MONTHS", "HOURS", "CALENDAR", "RUNNING_HOURS", "CONDITION", "EVENT", "DAY", "WEEK"] as const;
 type TriggerType = (typeof TRIGGER_TYPES)[number];
-const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO", "CHECKLIST", "EXPRESS"] as const;
+// CHECKLIST se quitó de la lista a pedido del cliente: no lo usaba ningún plan
+// (0 de 1101 en producción). El valor sigue existiendo en el enum del schema
+// para no romper datos históricos si alguno apareciera; simplemente ya no se
+// puede elegir al crear o editar.
+const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO", "EXPRESS"] as const;
 // SFI: solo se usa el GRUPO (0-9). Los nombres salen de i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
@@ -1417,6 +1421,29 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const canExecute = !isNew && plan.status !== "INACTIVE" && plan.status !== "DRAFT";
   const canPostpone = !isNew && plan.status !== "INACTIVE" && plan.status !== "DRAFT";
   const needsWO = !isNew && (plan.triggerResultMode === "AUTO_WO" || plan.triggerResultMode === "APPROVAL_WO");
+  // "Solo Alerta": en vez de sólo registrar el resultado, se abre una OT que
+  // nace AUTORIZADA. Es trabajo que se resuelve en el momento y la tramitación
+  // formal sólo agregaría demora.
+  const isExpressMode = !isNew && plan.triggerResultMode === "DUE_ONLY";
+  const [openingExpress, setOpeningExpress] = useState(false);
+
+  const openExpressWorkOrder = async () => {
+    setOpeningExpress(true);
+    setActionError(null);
+    try {
+      const wo = await api.post<{ workOrderCode: string }>(
+        `/app/pms/maintenance-plans/${plan.id}/open-work-order`,
+        { express: true, signerName: userName || null },
+      );
+      onSaved();
+      // Se va derecho a la OT recién creada: el usuario la abrió para trabajar
+      // en ella, no para quedarse en el plan.
+      navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "No se pudo abrir la OT express.");
+      setOpeningExpress(false);
+    }
+  };
 
   // ESC guard
   const planDirty = useDirtyTracker({
@@ -2155,7 +2182,22 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {t("mp.modal.openWO")}</span>
                 </button>
               )}
-              {canExecute && !needsWO && (
+              {/* Solo Alerta → OT Express (nace autorizada). El resto de los
+                  modos sin OT formal sigue con "Reportar Resultado". */}
+              {canExecute && isExpressMode && (
+                <button
+                  onClick={() => { void openExpressWorkOrder(); }}
+                  disabled={openingExpress}
+                  title="Abre una OT ya autorizada, sin pasar por aprobación ni autorización"
+                  className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 disabled:opacity-50 transition-all"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {openingExpress ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                    {t("mp.modal.openExpressWO").replace("{abbr}", woTerms.abbr)}
+                  </span>
+                </button>
+              )}
+              {canExecute && !needsWO && !isExpressMode && (
                 <button
                   onClick={() => setShowExecution(true)}
                   className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/15 transition-all"
