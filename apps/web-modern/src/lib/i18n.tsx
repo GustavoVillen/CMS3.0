@@ -1587,6 +1587,8 @@ const dict = {
   "mp.col.frequency":          { es: "FRECUENCIA (HS / MES)",  en: "FREQUENCY (HRS / MO)",  pt: "FREQUÊNCIA (HS / MÊS)" },
   "mp.col.lastExecution":      { es: "ÚLTIMA EJECUCIÓN",       en: "LAST EXECUTION",        pt: "ÚLTIMA EXECUÇÃO" },
   "mp.col.nextDue":            { es: "PRÓXIMO VENCIMIENTO",    en: "NEXT DUE",              pt: "PRÓXIMO VENCIMENTO" },
+  // Aviso junto al nombre del equipo cuando el activo está OUT_OF_SERVICE.
+  "mp.assetOutOfService":      { es: "Fuera de Uso",           en: "Out of Service",        pt: "Fora de Uso" },
   "mp.col.status":             { es: "STATUS",                 en: "STATUS",                pt: "STATUS" },
   "mp.col.actions":            { es: "ACCIONES",               en: "ACTIONS",               pt: "AÇÕES" },
   "mp.col.accumulated":        { es: "Acum",                   en: "Accum",                 pt: "Acum" },

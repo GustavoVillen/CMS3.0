@@ -2563,6 +2563,19 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   }, [statusFilter, vesselFilter]);
 
   const { data: rawData, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+
+  // Equipos fuera de servicio, para marcarlos en la lista: un plan sobre una
+  // máquina parada se lee distinto (no es lo mismo "vencida" en un equipo en
+  // uso que en uno fuera de servicio). Se piden SÓLO los OUT_OF_SERVICE — son
+  // pocos — en vez de traer el catálogo entero de activos.
+  const { data: oosAssetsData } = useFetch<{ items: Array<{ id: string }> }>(
+    "/app/pms/assets?status=OUT_OF_SERVICE",
+    [],
+  );
+  const oosAssetIds = useMemo(
+    () => new Set((oosAssetsData?.items ?? []).map(a => a.id)),
+    [oosAssetsData],
+  );
   // Vista "Mantenimiento Express": acota TODO (tabla + contadores) a los planes
   // del modo bloqueado. Si no hay lockedResultMode, es la lista normal completa.
   const baseItems = useMemo(() => {
@@ -2742,8 +2755,21 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
       sortValue: row => (row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.title,
       render: row => (
         <div className="flex flex-col gap-0.5">
-          <span className="text-[12px] font-bold text-fg leading-tight line-clamp-1">
-            {(row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.assetId}
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[12px] font-bold text-fg leading-tight line-clamp-1">
+              {(row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.assetId}
+            </span>
+            {/* Equipo fuera de servicio: el plan sigue existiendo y venciendo,
+                pero la máquina está parada. Sin este aviso, una tarea "vencida"
+                sobre un equipo fuera de uso se lee como un incumplimiento. */}
+            {oosAssetIds.has(row.assetId) && (
+              <span
+                className="shrink-0 px-1.5 py-0.5 rounded-md border border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-300 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
+                title="El equipo está fuera de servicio"
+              >
+                {t("mp.assetOutOfService")}
+              </span>
+            )}
           </span>
           <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-2">{row.title}</span>
         </div>
