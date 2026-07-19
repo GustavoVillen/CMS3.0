@@ -1692,9 +1692,18 @@ export const DefectsPage: React.FC = () => {
           : t(`def.class.${originKey}` as Parameters<typeof t>[0]);
         return (
           <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <OriginBadge classification={row.classification} />
-              <span className="font-medium text-fg line-clamp-1">{mainText}</span>
+              <span className="font-medium text-fg whitespace-nowrap">{mainText}</span>
+              {/* El EQUIPO junto a la clasificación: sin esto, todos los
+                  defectos de fluidos se leen igual ("Análisis de fluidos") y hay
+                  que abrir cada uno para saber de qué máquina es. */}
+              {row.assetId && (
+                <>
+                  <span className="text-text-industrial/30 shrink-0">·</span>
+                  <AssetLabel id={row.assetId} className="text-xs text-text-industrial/80 truncate" />
+                </>
+              )}
             </div>
             {row.description && (
               <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>
