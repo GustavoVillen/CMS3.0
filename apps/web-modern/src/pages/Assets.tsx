@@ -54,6 +54,11 @@ interface Vessel {
 // SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
+// El tablero arranca en G1: el grupo 0 se sacó por pedido del armador (jul 2026)
+// para ganar ancho de pantalla. Sus equipos siguen existiendo y se ven en la
+// vista de lista y en el chip G0 — sólo no tienen columna acá.
+const BOARD_GROUP_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
 type SfiTab = "ALL" | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | "NONE" | "ISM";
 const SFI_TABS: { key: SfiTab; label: string }[] = [
   { key: "ALL",  label: "TODOS" },
@@ -111,9 +116,11 @@ function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle }: {
     <button
       type="button"
       onClick={() => onOpen(asset)}
-      className="w-full text-left bg-surface border border-fg/10 rounded-lg p-2 space-y-1
+      className="w-full text-left bg-surface border border-fg/10 rounded-lg px-2 py-1.5
         hover:border-accent/40 hover:bg-fg/[0.03] transition-colors cursor-pointer"
     >
+      {/* El buque no se muestra: ya va como prefijo del código del asset
+          (M01-CR-BR). Repetirlo gastaba un renglón por tarjeta. */}
       <div className="flex items-center gap-1.5">
         <span className="font-mono font-bold text-fg text-[10px] truncate">{asset.assetCode}</span>
         <span className="ml-auto flex items-center gap-1 shrink-0">
@@ -125,15 +132,12 @@ function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle }: {
           <CriticalityDot value={asset.criticality} title={`${critTitle} ${asset.criticality}`} />
         </span>
       </div>
-      <p className="text-xs text-fg font-medium line-clamp-2" title={asset.name}>{asset.name}</p>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[9px] font-bold text-text-industrial/40">{asset.vesselCode}</span>
-        {asset.status !== "OPERATIONAL" && (
-          <span className={`text-[9px] font-bold ${asset.status === "OUT_OF_SERVICE" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
-            {asset.status === "OUT_OF_SERVICE" ? "FUERA DE SERVICIO" : asset.status}
-          </span>
-        )}
-      </div>
+      <p className="text-xs text-fg font-medium line-clamp-2 leading-snug" title={asset.name}>{asset.name}</p>
+      {asset.status !== "OPERATIONAL" && (
+        <span className={`block text-[9px] font-bold ${asset.status === "OUT_OF_SERVICE" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+          {asset.status === "OUT_OF_SERVICE" ? "FUERA DE SERVICIO" : asset.status}
+        </span>
+      )}
     </button>
   );
 }
@@ -171,7 +175,7 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
   // datos incompletos, no una categoría del inventario.
   const noneItems = byGroup.get("NONE") ?? [];
   const cols: { key: number | "NONE"; label: string; name: string }[] = [
-    ...SFI_GROUP_NUMBERS.map(g => ({ key: g as number | "NONE", label: `G${g}`, name: t(`sfi.g.${g}` as Parameters<typeof t>[0]) })),
+    ...BOARD_GROUP_NUMBERS.map(g => ({ key: g as number | "NONE", label: `G${g}`, name: t(`sfi.g.${g}` as Parameters<typeof t>[0]) })),
     ...(noneItems.length > 0 ? [{ key: "NONE" as const, label: "—", name: "Sin grupo SFI" }] : []),
   ];
 
@@ -191,7 +195,7 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
                   {items.length}
                 </span>
               </div>
-              <div className="flex flex-col gap-2 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 330px)" }}>
+              <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 300px)" }}>
                 {items.length === 0 && <p className="text-[10px] text-text-industrial/30 px-1">{t("asset.boardEmptyCol")}</p>}
                 {items.map(a => (
                   <AssetBoardCard
