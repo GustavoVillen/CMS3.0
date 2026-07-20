@@ -3120,7 +3120,11 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
                   : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10 hover:text-fg"
               }`}
             >
-              {tab.key === "ALL" ? t("mp.sfiTab.all") : tab.label}
+              {/* El chip lleva el nombre completo del grupo: "G7" solo no dice
+                  nada si no te sabés la numeración SFI de memoria. */}
+              {tab.key === "ALL"
+                ? t("mp.sfiTab.all")
+                : <>{tab.label} <span className="font-semibold">{t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])}</span></>}
               {count > 0 && (
                 <span className={`ml-1 text-[10px] ${isActive ? "opacity-70" : "text-text-industrial/40"}`}>
                   ({count})
@@ -3129,11 +3133,6 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             </button>
           );
         })}
-        {typeof sfiTab === "number" && (
-          <span className="ml-2 pl-3 border-l border-fg/15 text-xs font-semibold text-fg/70">
-            {t(`sfi.g.${sfiTab}` as Parameters<typeof t>[0])}
-          </span>
-        )}
       </div>
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}

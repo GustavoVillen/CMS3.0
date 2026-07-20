@@ -1583,7 +1583,12 @@ export const AssetsPage: React.FC = () => {
                   : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:text-fg hover:border-fg/20",
               ].join(" ")}
             >
-              {tab.label}{count > 0 && <span className="ml-1.5 opacity-70">({count})</span>}
+              {/* Nombre completo del grupo, igual que en Planes de Mantenimiento:
+                  "G7" solo no dice nada si no te sabés la numeración SFI. */}
+              {tab.key === "ALL"
+                ? tab.label
+                : <>{tab.label} <span className="font-semibold">{t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])}</span></>}
+              {count > 0 && <span className="ml-1.5 opacity-70">({count})</span>}
             </button>
           );
         })}
