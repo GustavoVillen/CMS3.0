@@ -1900,6 +1900,8 @@ const dict = {
   "wo.kanban.autorizada":     { es: "Autorizada",        en: "Authorized",      pt: "Autorizada" },
   "wo.kanban.closed":         { es: "Cerradas",          en: "Closed",          pt: "Fechadas" },
   "wo.filter.all":            { es: "Todas",             en: "All",             pt: "Todas" },
+  "wo.filter.toApprove":      { es: "Para Aprobar",      en: "To Approve",      pt: "Para Aprovar" },
+  "wo.filter.toAuthorize":    { es: "Para Autorizar",    en: "To Authorize",    pt: "Para Autorizar" },
   "wo.filter.open":           { es: "Abiertas",          en: "Open",            pt: "Abertas" },
   "wo.filter.overdue":        { es: "Vencidas",          en: "Overdue",         pt: "Vencidas" },
   "wo.filter.postponed":      { es: "Diferidas",         en: "Deferred",        pt: "Adiadas" },

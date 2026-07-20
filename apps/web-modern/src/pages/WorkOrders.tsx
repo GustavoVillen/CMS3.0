@@ -3487,6 +3487,10 @@ export const WorkOrdersPage: React.FC = () => {
         return s === "REQUESTED" || s === "UNDER_REVIEW";
       });
     }
+    // Pendientes de tramitación: mismas etapas que las columnas del tablero, así
+    // el filtro coincide 1:1 con lo que el usuario ve en Kanban.
+    if (viewFilter === "toApprove")   return items.filter(w => woStage(w) === "SOLICITADA");
+    if (viewFilter === "toAuthorize") return items.filter(w => woStage(w) === "APROBADA");
     if (viewFilter === "overdue")   return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now);
     if (viewFilter === "open")      return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !(!!w.dueDate && parseLocalDate(w.dueDate) < now));
     return items;
@@ -3649,6 +3653,8 @@ export const WorkOrdersPage: React.FC = () => {
       <div className="flex flex-wrap items-center gap-1.5">
         {([
           { key: "",                  labelKey: "wo.filter.all" },
+          { key: "toApprove",         labelKey: "wo.filter.toApprove" },
+          { key: "toAuthorize",       labelKey: "wo.filter.toAuthorize" },
           { key: "open",              labelKey: "wo.filter.open" },
           { key: "overdue",           labelKey: "wo.filter.overdue" },
           { key: "postponed",         labelKey: "wo.filter.postponed" },
