@@ -1652,7 +1652,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   };
 
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     enabled: !woClosedReadOnly,
     isDirty,
     // onSave ahora devuelve si guardó bien (lo usa la tramitación); el guard
@@ -1780,7 +1780,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

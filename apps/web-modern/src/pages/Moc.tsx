@@ -445,7 +445,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas, regi: regiStr });
-  useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -465,7 +465,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           </div>
           <div className="flex items-center gap-1.5">
             {!isNew && <CopyLinkButton />}
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

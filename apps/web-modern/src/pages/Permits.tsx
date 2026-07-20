@@ -384,7 +384,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride });
-  useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? onSave : undefined, onClose });
+  const requestClose = useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? onSave : undefined, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -398,7 +398,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             </div>
             {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         {!isNew && (

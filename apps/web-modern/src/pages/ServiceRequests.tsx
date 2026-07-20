@@ -17,6 +17,7 @@ import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { useEscapeGuard } from "../lib/escape-guard";
 import { FormModal } from "../components/FormModal";
 import { useAuth } from "../lib/auth";
 import { printServiceRequest } from "../lib/print-work-order";
@@ -1034,6 +1035,13 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     }
   };
 
+  // Este modal es largo y se completa por partes; salir sin querer costaba
+  // rehacer la carga. `dirty` ya existía para gatear el botón Guardar, así que
+  // el guardián reusa esa misma señal: sin cambios, cerrar no pregunta nada.
+  // Va después de `save` porque lo recibe como handler del botón "Guardar" del
+  // diálogo.
+  const requestClose = useEscapeGuard({ isDirty: dirty, onSave: save, onClose });
+
   /**
    * Guarda lo que esté pendiente ANTES de firmar o de mandar al taller.
    *
@@ -1115,7 +1123,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestClose}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
         {/* sticky: el formulario es largo — el código, el estado y la X tienen que
             seguir a la vista mientras se scrollea. El scroll lo hace la tarjeta. */}
@@ -1131,7 +1139,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
             <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>
               {STATUS_LABELS[sr.status] ?? sr.status}
             </span>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

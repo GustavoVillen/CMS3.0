@@ -192,7 +192,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, auditType, auditDate, port, country, agency, inspectorName, overallResult, summary, score, reportUrl });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
    <>
@@ -206,7 +206,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
               <h2 className="text-sm font-bold text-fg">{isNew ? t("ea.modal.newTitle") : audit!.auditCode}</h2>
             </div>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">

@@ -308,7 +308,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
     internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays,
     isEquivalent,
   });
-  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -334,7 +334,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.reduce") : t("common.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

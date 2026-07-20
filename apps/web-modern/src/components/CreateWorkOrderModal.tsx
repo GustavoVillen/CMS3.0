@@ -429,7 +429,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     checklistDocFileName: checklistDocFile?.name ?? "",
     onBehalfUserId,
   });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -448,7 +448,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               )}
             </div>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         {/* Body */}

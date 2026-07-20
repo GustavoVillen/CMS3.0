@@ -236,7 +236,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, firstName, lastName, rankId, nationality, passportNumber, signOnDate, notes });
-  useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -251,7 +251,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
             {crew?.status === "SIGNED_OFF" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("crew.status.signedOff")}</span>}
             {crew?.status === "ONBOARD" && <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("crew.status.onboard")}</span>}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6">

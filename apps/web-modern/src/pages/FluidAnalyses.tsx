@@ -428,10 +428,10 @@ function SampleFormModal({
     vesselCode, assetId, fluidType, fluidProduct, sampledAt, runningHours,
     containerCode, labName, labReference, notes,
   });
-  useEscapeGuard({ isDirty, onSave: submit, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: submit, onClose });
 
   return (
-    <ModalShell title={mode === "create" ? t("fa.newSample") : `${t("fa.editSample")} ${sample?.sampleCode}`} onClose={onClose}>
+    <ModalShell title={mode === "create" ? t("fa.newSample") : `${t("fa.editSample")} ${sample?.sampleCode}`} onClose={requestClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -1187,10 +1187,10 @@ function ResultFormModal({
   const resultDirty = useDirtyTracker({
     verdict, summary, receivedAt, runningHours, params, reportUrl,
   });
-  useEscapeGuard({ isDirty: resultDirty, onSave: submit, onClose });
+  const requestClose = useEscapeGuard({ isDirty: resultDirty, onSave: submit, onClose });
 
   return (
-    <ModalShell title={`Cargar resultado · ${sample.sampleCode}`} onClose={onClose} wide>
+    <ModalShell title={`Cargar resultado · ${sample.sampleCode}`} onClose={requestClose} wide>
       <div className="space-y-5">
         {/* Step 1: AI upload */}
         <div

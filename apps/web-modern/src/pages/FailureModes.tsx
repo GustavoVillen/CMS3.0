@@ -174,7 +174,7 @@ const FailureModeDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved })
   };
 
   const isDirty = useDirtyTracker({ vesselCode, assetId, title, failureCause, failureEffect, consequenceCategory, consequenceRationale, detectionMethod, mitigatingPlanId, probability, status });
-  useEscapeGuard({ isDirty, onSave: save, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: save, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
@@ -184,7 +184,7 @@ const FailureModeDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved })
             <h2 className="text-base font-bold text-fg">{isEdit ? "Editar Modo de Falla" : "Nuevo Modo de Falla"}</h2>
             {isEdit && <p className="text-[10px] text-text-industrial/40 font-mono">{initial!.code}</p>}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">

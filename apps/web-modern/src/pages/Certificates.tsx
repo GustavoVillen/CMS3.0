@@ -195,7 +195,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
     certCode, name, vesselCode, authority, issueDate, expiryDate, lastInsp, notes,
     originalSourceLink, originalSourceName, originalSourceMimeOrExt,
   });
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     isDirty,
     onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
     onClose,
@@ -211,7 +211,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
               {isEdit ? "Editar Certificado" : "Nuevo Certificado"}
             </h2>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

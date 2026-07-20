@@ -280,7 +280,7 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
   };
 
   // ESC: cerrar el diálogo (confirmación, sin guardado de registro)
-  useEscapeGuard({ isDirty: false, onClose });
+  const requestClose = useEscapeGuard({ isDirty: false, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -290,7 +290,7 @@ const DemoteDialog: React.FC<DemoteDialogProps> = ({ superintendent, onClose, on
             <h2 className="text-base font-bold text-fg">Remover superintendente</h2>
             <p className="text-xs text-text-industrial/40 mt-0.5">{fullName(superintendent.user)}</p>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4">
           <p className="text-xs text-text-industrial/60">

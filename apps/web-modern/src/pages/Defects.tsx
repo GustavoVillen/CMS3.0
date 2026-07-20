@@ -526,7 +526,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
   const isDirty = useDirtyTracker({
     vesselCode, assetId, classification, description, severity, operationalState, immediateAction,
   });
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     isDirty,
     onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
     onClose,
@@ -541,7 +541,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
             <button type="button" onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
         <form onSubmit={e => { void handleSubmit(e); }} className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -1098,7 +1098,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     rcaPreventiveActions  !== (defect.rcaPreventiveActions  ?? "") ||
     repairType            !== (defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null)
   );
-  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   // "ask-permanent-wo" screen
   if (postSaveStep === "ask-permanent-wo") {
@@ -1107,7 +1107,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
         <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("def.tempRepairTitle")}</h2>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
           <div className="p-6 space-y-3">
             <p className="text-sm text-fg/80">{t("def.tempRepairAsk")}</p>
@@ -1169,7 +1169,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              <ModalCloseButton onClose={onClose} />
+              <ModalCloseButton onClose={requestClose} />
             </div>
           </div>
 

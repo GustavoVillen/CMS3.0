@@ -111,7 +111,7 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -126,7 +126,7 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
           </div>
           <div className="flex items-center gap-1.5">
             {!isNew && <CopyLinkButton />}
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

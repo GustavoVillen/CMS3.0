@@ -166,14 +166,14 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ displayName, email, role });
-  useEscapeGuard({ isDirty, onSave: handleCreate, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: handleCreate, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">Agregar miembro</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         {/* Tabs */}
@@ -510,7 +510,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const drawerDirty = useDirtyTracker({ newRole, email, password });
-  useEscapeGuard({ isDirty: drawerDirty, onSave: handleSaveAll, onClose });
+  const requestClose = useEscapeGuard({ isDirty: drawerDirty, onSave: handleSaveAll, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -523,7 +523,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             )}
             <p className="text-[10px] text-blue-700 dark:text-blue-400 font-semibold">{roleLabels[member.role] ?? member.role}</p>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-5">

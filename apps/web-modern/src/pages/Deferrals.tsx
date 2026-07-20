@@ -133,14 +133,14 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
   }, [compensatoryMeasures, deferralId, onSuccess, reviewNotes, t]);
 
   const isDirty = useDirtyTracker({ reviewNotes });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.review")}</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -200,14 +200,14 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
   }, [approverName, compensatoryMeasures, deferralId, onSuccess, t, targetDate]);
 
   const isDirty = useDirtyTracker({ targetDate, compensatoryMeasures, approverName });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.approve")}</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -273,14 +273,14 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
   }, [deferralId, onSuccess, rejectionReason, rejectorName, t]);
 
   const isDirty = useDirtyTracker({ rejectionReason, rejectorName });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.reject")}</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -332,14 +332,14 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
   }, [closeNotes, deferralId, onSuccess, t]);
 
   const isDirty = useDirtyTracker({ closeNotes });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("def2.close")}</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
@@ -442,7 +442,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     || (riskProbability || "") !== (toUiRiskProbability(deferral.riskProbability) || "")
     || (riskConsequence || "") !== (toUiRiskConsequence(deferral.riskConsequence) || "")
     || riskAnalysisResult !== (deferral.riskAnalysisResult ?? "");
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     enabled: !showReview && !showApprove && !showReject && !showClose && !confirmCancel,
     isDirty: isDeferralDirty,
     onSave: handleSave,
@@ -608,7 +608,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
             <h2 className="text-base font-bold text-fg">{t("page.deferrals")}</h2>
             <div className="flex items-center gap-1.5">
               <CopyLinkButton />
-              <ModalCloseButton onClose={onClose} />
+              <ModalCloseButton onClose={requestClose} />
             </div>
           </div>
           <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">

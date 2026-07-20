@@ -132,7 +132,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
     lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
     incorporationDate, incorporationType, status,
   });
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     isDirty,
     onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
     onClose,
@@ -147,7 +147,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
             <Ship className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold text-fg">{isEdit ? t("vessel.editTitle") : t("vessel.newTitle")}</h2>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-[1fr_7fr] gap-4">

@@ -151,7 +151,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ hours, notes });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -161,7 +161,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ crew, date, vesselCode, initialHo
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("rh.editorHeader")} · {date}</p>
             <h2 className="text-sm font-bold text-fg">{crew.firstName} {crew.lastName} — {crew.rank}</h2>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="p-6 space-y-4">

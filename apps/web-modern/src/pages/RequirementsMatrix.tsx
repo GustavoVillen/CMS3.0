@@ -181,13 +181,13 @@ export const RequirementsMatrixPage: React.FC = () => {
   }
 
   // ESC: cerrar / preguntar guardar en los modales de nuevo ítem / nuevo rango
-  useEscapeGuard({
+  const requestCloseNewItem = useEscapeGuard({
     enabled: showNewItem,
     isDirty: !!(newItem.code || newItem.name || newItem.regulation || newItem.category || newItem.validityYears),
     onSave: () => onCreateItem({ preventDefault: () => {} } as React.FormEvent),
     onClose: () => setShowNewItem(false),
   });
-  useEscapeGuard({
+  const requestCloseNewRank = useEscapeGuard({
     enabled: showNewRank,
     isDirty: !!(newRank.code || newRank.name || newRank.sortOrder),
     onSave: () => onCreateRank({ preventDefault: () => {} } as React.FormEvent),
@@ -345,7 +345,9 @@ export const RequirementsMatrixPage: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-bold uppercase tracking-widest text-fg">{t("rm.createItemTitle")}</h2>
-              <ModalCloseButton onClose={() => !savingNew && setShowNewItem(false)} />
+              {/* El `!savingNew` sigue: mientras se está grabando, la X no
+                  hace nada — cerrar a mitad del POST deja el alta a ciegas. */}
+              <ModalCloseButton onClose={() => !savingNew && requestCloseNewItem()} />
             </div>
 
             <div>
@@ -437,7 +439,7 @@ export const RequirementsMatrixPage: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-bold uppercase tracking-widest text-fg">{t("rm.createRankTitle")}</h2>
-              <ModalCloseButton onClose={() => !savingNewRank && setShowNewRank(false)} />
+              <ModalCloseButton onClose={() => !savingNewRank && requestCloseNewRank()} />
             </div>
 
             <div>

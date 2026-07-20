@@ -30,6 +30,13 @@ interface Guard {
 interface EscapeGuardContextValue {
   register: (g: Omit<Guard, "id">) => number;
   unregister: (id: number) => void;
+  /**
+   * Pide cerrar un guard PUNTUAL (por id), no el tope del stack. Es lo que usa
+   * el botón X: si ese modal tiene cambios abre el diálogo, y si no cierra
+   * derecho. Va por id a propósito — con modales anidados, el tope del stack
+   * puede ser el modal de atrás, y "Descartar" cerraría el equivocado.
+   */
+  requestClose: (id: number) => void;
 }
 
 const EscapeGuardContext = createContext<EscapeGuardContextValue | null>(null);
@@ -85,6 +92,15 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
   const closeDialog = useCallback(() => {
     setDialog({ open: false, guard: null });
     setError(null);
+  }, []);
+
+  // Cierre pedido desde la UI (botón X). Misma decisión que ESC, pero sobre un
+  // guard identificado: con cambios abre el diálogo, sin cambios cierra y listo.
+  const requestClose = useCallback((id: number) => {
+    const guard = stackRef.current.find(g => g.id === id);
+    if (!guard) return;
+    if (guard.isDirty()) setDialog({ open: true, guard });
+    else guard.onClose();
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -184,7 +200,7 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
   }, [closeDialog]);
 
   return (
-    <EscapeGuardContext.Provider value={{ register, unregister }}>
+    <EscapeGuardContext.Provider value={{ register, unregister, requestClose }}>
       {children}
       {dialog.open && (
         <UnsavedChangesDialog
@@ -281,7 +297,7 @@ export function useEscapeGuard(opts: {
   isDirty: boolean;
   onSave?: () => Promise<void> | void;
   onClose: () => void;
-}) {
+}): () => void {
   const ctx = useContext(EscapeGuardContext);
   if (!ctx) throw new Error("useEscapeGuard requires EscapeGuardProvider");
 
@@ -293,6 +309,7 @@ export function useEscapeGuard(opts: {
   onCloseRef.current = opts.onClose;
 
   const enabled = opts.enabled !== false;
+  const idRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -301,8 +318,20 @@ export function useEscapeGuard(opts: {
       onSave: onSaveRef.current ? () => onSaveRef.current!() : undefined,
       onClose: () => onCloseRef.current(),
     });
-    return () => ctx.unregister(id);
+    idRef.current = id;
+    return () => { idRef.current = null; ctx.unregister(id); };
   }, [enabled, ctx]);
+
+  // Cierre para el botón X: aplica la misma regla que ESC (pregunta sólo si
+  // hay cambios) pero sobre ESTE modal, no sobre el tope del stack. Se pasa
+  // como `<ModalCloseButton onClose={requestClose} />`.
+  //
+  // Si el guard no llegó a registrarse (enabled=false, o el efecto todavía no
+  // corrió) cae en el onClose crudo: la X siempre tiene que cerrar.
+  return useCallback(() => {
+    if (idRef.current != null) ctx.requestClose(idRef.current);
+    else onCloseRef.current();
+  }, [ctx]);
 }
 
 // ---------------------------------------------------------------------------

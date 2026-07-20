@@ -347,10 +347,10 @@ function ViewEditVersionModal({
     }
   };
 
-  useEscapeGuard({ isDirty: !!canEdit && dirty, onSave: handleSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: !!canEdit && dirty, onSave: handleSave, onClose });
 
   return (
-    <ModalShell title={version ? `v${version.version} · ${version.status}` : "Cargando…"} onClose={onClose}>
+    <ModalShell title={version ? `v${version.version} · ${version.status}` : "Cargando…"} onClose={requestClose}>
       {loading ? (
         <div className="flex justify-center py-10">
           <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
@@ -429,10 +429,10 @@ function CreateDocumentModal({
     }
   };
 
-  useEscapeGuard({ isDirty: !!(name || description || content), onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
+  const requestClose = useEscapeGuard({ isDirty: !!(name || description || content), onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
 
   return (
-    <ModalShell title="Nuevo documento de IA" onClose={onClose}>
+    <ModalShell title="Nuevo documento de IA" onClose={requestClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Nombre *">
           <input value={name} onChange={(event) => setName(event.target.value)} required className="input-field" />
@@ -498,10 +498,10 @@ function CreateVersionModal({
     }
   };
 
-  useEscapeGuard({ isDirty: !!content, onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
+  const requestClose = useEscapeGuard({ isDirty: !!content, onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent), onClose });
 
   return (
-    <ModalShell title={`Nueva versión · ${document.name}`} onClose={onClose}>
+    <ModalShell title={`Nueva versión · ${document.name}`} onClose={requestClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="rounded-xl border border-fg/10 bg-fg/[0.02] px-4 py-3">
           <p className="text-xs text-text-industrial/40">

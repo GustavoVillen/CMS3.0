@@ -454,7 +454,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
     docFileName: docFile?.name ?? "",
     spareCount: spareUsages.length,
   });
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     enabled: !showPrintConfirm,
     isDirty,
     onSave: handleSave,
@@ -535,7 +535,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
         <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
             <h2 className="text-base font-bold text-fg">{t("mp.exec.savedTitle")}</h2>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
           <div className="p-6 space-y-4">
             <p className="text-sm text-fg/80">{t("mp.exec.printWoQuestion")}</p>
@@ -576,7 +576,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
             <h2 className="text-base font-bold text-fg">{t("mp.exec.reportTitle")}</h2>
             <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -848,7 +848,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
   const isDirty = useDirtyTracker({
     newDueDate, newDueHours, justification, compensatoryMeasures, authorizedBy,
   });
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     isDirty,
     onSave: () => save(false),
     onClose,
@@ -862,7 +862,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
             <h2 className="text-base font-bold text-fg">{t("mp.postpone.title")}</h2>
             <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -1454,7 +1454,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
   }, saveResetKey);
-  useEscapeGuard({
+  const requestClose = useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
     isDirty: planDirty,
     onSave,
@@ -1717,7 +1717,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              <ModalCloseButton onClose={onClose} />
+              <ModalCloseButton onClose={requestClose} />
             </div>
           </div>
 

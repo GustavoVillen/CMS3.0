@@ -132,7 +132,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ completedAt, expiryDate, docUrl, notes });
-  useEscapeGuard({ isDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -159,7 +159,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
               </span>
             )}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-3">
           <div>

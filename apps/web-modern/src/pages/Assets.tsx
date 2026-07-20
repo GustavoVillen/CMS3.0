@@ -1034,7 +1034,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     manufacturer, model, serialNumber, trackDailyReport,
     installationDate, lastOverhaulDate, replacementDate,
   });
-  useEscapeGuard({ isDirty, onSave: onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1045,7 +1045,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">

@@ -254,7 +254,7 @@ const DrillModal: React.FC<{
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, requirementId, scheduledDate, scheduledTime, completedDate, completedTime, scenario, observations, lessonsLearned, participants });
-  useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: !isLocked && isDirty, onSave: isLocked ? undefined : onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -268,7 +268,7 @@ const DrillModal: React.FC<{
             </div>
             {drill && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[drill.status]}`}>{t(STATUS_TKEY[drill.status])}</span>}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -614,7 +614,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
   const [err, setErr] = useState<string | null>(null);
 
   // ESC: cerrar el catálogo (los ítems se guardan individualmente)
-  useEscapeGuard({ isDirty: !!editing, onClose });
+  const requestClose = useEscapeGuard({ isDirty: !!editing, onClose });
 
   const items = data?.items ?? [];
 
@@ -691,7 +691,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
               <h2 className="text-sm font-bold text-fg">{t("drill.catalogTitle")}</h2>
             </div>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">

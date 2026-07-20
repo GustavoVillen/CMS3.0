@@ -96,7 +96,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
     name, category, status,
     contactName, contactEmail, contactPhone, location, notes,
   });
-  useEscapeGuard({ isDirty, onSave: handleSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose });
 
   const handleDelete = async () => {
     if (!provider) return;
@@ -129,7 +129,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
 

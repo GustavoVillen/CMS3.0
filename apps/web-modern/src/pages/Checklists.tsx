@@ -209,7 +209,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   // ESC: en creación pregunta guardar; en ejecución (respuestas autosave) solo cierra
   const isDirty = useDirtyTracker({ templateId, vesselCode, eventDateTime, port, voyageRef, performedBy, signedByName, notes });
-  useEscapeGuard({ isDirty: isCreating && isDirty, onSave: isCreating ? handleCreate : undefined, onClose });
+  const requestClose = useEscapeGuard({ isDirty: isCreating && isDirty, onSave: isCreating ? handleCreate : undefined, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -227,7 +227,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
               </span>
             )}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
@@ -423,7 +423,7 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
   const [editing, setEditing] = useState<Template | null>(null);
 
   // ESC: cerrar el listado de templates
-  useEscapeGuard({ isDirty: false, onClose });
+  const requestClose = useEscapeGuard({ isDirty: false, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -435,7 +435,7 @@ const TemplatesModal: React.FC<{ onClose: () => void; onMocTrigger?: (e: MocTrig
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowNew(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold"><Plus className="w-3.5 h-3.5" /> {t("common.new")}</button>
-            <ModalCloseButton onClose={onClose} />
+            <ModalCloseButton onClose={requestClose} />
           </div>
         </div>
         <div className="overflow-y-auto flex-1 p-6">
@@ -548,14 +548,14 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const editorDirty = useDirtyTracker({ type, name, description, items });
-  useEscapeGuard({ isDirty: editorDirty, onSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: editorDirty, onSave, onClose });
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-3xl max-h-[90vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-sm font-bold text-fg">{isNew ? `${t("common.new")} template` : `${t("common.edit")} template`}</h2>
-          <ModalCloseButton onClose={onClose} />
+          <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
           {!isNew && (
