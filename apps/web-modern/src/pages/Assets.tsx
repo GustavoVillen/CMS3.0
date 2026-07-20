@@ -171,13 +171,18 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
     return <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando equipos...</div>;
   }
 
-  // Los equipos sin grupo SFI sólo tienen columna si existen: es un caso de
-  // datos incompletos, no una categoría del inventario.
-  const noneItems = byGroup.get("NONE") ?? [];
-  const cols: { key: number | "NONE"; label: string; name: string }[] = [
+  // Sólo se muestran los grupos que tienen equipos: una columna vacía no aporta
+  // nada y gasta ancho de pantalla, que es justo lo escaso acá. Como el buque
+  // seleccionado cambia qué grupos tienen equipos, el tablero se reacomoda solo.
+  // (Incluye "sin grupo SFI", que además es un caso de datos incompletos.)
+  const cols = [
     ...BOARD_GROUP_NUMBERS.map(g => ({ key: g as number | "NONE", label: `G${g}`, name: t(`sfi.g.${g}` as Parameters<typeof t>[0]) })),
-    ...(noneItems.length > 0 ? [{ key: "NONE" as const, label: "—", name: "Sin grupo SFI" }] : []),
-  ];
+    { key: "NONE" as const, label: "—", name: "Sin grupo SFI" },
+  ].filter(col => (byGroup.get(col.key)?.length ?? 0) > 0);
+
+  if (cols.length === 0) {
+    return <p className="text-xs text-text-industrial/50 py-8 text-center">{t("empty.assets")}</p>;
+  }
 
   return (
     <div className="overflow-x-auto pb-4">
@@ -196,7 +201,6 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
                 </span>
               </div>
               <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 300px)" }}>
-                {items.length === 0 && <p className="text-[10px] text-text-industrial/30 px-1">{t("asset.boardEmptyCol")}</p>}
                 {items.map(a => (
                   <AssetBoardCard
                     key={a.id}

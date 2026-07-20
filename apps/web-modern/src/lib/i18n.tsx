@@ -621,7 +621,6 @@ const dict = {
   "asset.critRationalePh":      { es: "Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA.", en: "Justification for the criticality level and/or ISM flag. You can generate it automatically with the AI buttons.", pt: "Justificativa do nível de criticidade e/ou flag ISM. Você pode gerá-la automaticamente com os botões IA." },
   "asset.viewList":             { es: "Vista lista",                                          en: "List view",                                          pt: "Visão lista" },
   "asset.viewBoard":            { es: "Inventario por sistema",                               en: "Inventory by system",                                pt: "Inventário por sistema" },
-  "asset.boardEmptyCol":        { es: "Sin equipos",                                          en: "No equipment",                                       pt: "Sem equipamentos" },
   "asset.criticalityOf":        { es: "Criticidad",                                           en: "Criticality",                                        pt: "Criticidade" },
   "asset.expand":               { es: "Ampliar",                                              en: "Expand",                                             pt: "Ampliar" },
   "asset.collapse":             { es: "Reducir",                                              en: "Collapse",                                           pt: "Reduzir" },
