@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FileDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
+import { FileDown, FileSpreadsheet, LayoutGrid, List, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -73,6 +73,142 @@ function sfiTabOfCode(sfiCode: string | null | undefined): SfiTab {
   if (!sfiCode) return "NONE";
   const digit = parseInt(sfiCode.trim()[0] ?? "", 10);
   return Number.isNaN(digit) ? "NONE" : digit as SfiTab;
+}
+
+/**
+ * Criticidad como letra dentro de un círculo, del mismo tamaño que el
+ * ShieldAlert de ISM 10.3 para que los dos íconos de una tarjeta se lean como
+ * un par. A/B/C usan la misma escala de color que el resto del sistema
+ * (rojo → amarillo → neutro).
+ */
+const CRITICALITY_DOT_CLS: Record<string, string> = {
+  A: "border-red-500/40 text-red-700 dark:text-red-400 bg-red-500/10",
+  B: "border-yellow-500/40 text-yellow-700 dark:text-yellow-400 bg-yellow-500/10",
+  C: "border-fg/15 text-text-industrial/50 bg-fg/5",
+};
+
+const CriticalityDot: React.FC<{ value: string | null | undefined; title?: string }> = ({ value, title }) => {
+  const letter = (value ?? "").trim().toUpperCase();
+  if (!letter) return null;
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center justify-center w-4 h-4 shrink-0 rounded-full border text-[9px] font-bold leading-none ${CRITICALITY_DOT_CLS[letter] ?? CRITICALITY_DOT_CLS.C}`}
+    >
+      {letter}
+    </span>
+  );
+};
+
+/** Tarjeta de equipo del tablero. Al hacer clic abre el mismo modal que la lista. */
+function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle }: {
+  asset: Asset;
+  onOpen: (a: Asset) => void;
+  safetyTitle: string;
+  critTitle: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(asset)}
+      className="w-full text-left bg-surface border border-fg/10 rounded-lg p-2 space-y-1
+        hover:border-accent/40 hover:bg-fg/[0.03] transition-colors cursor-pointer"
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono font-bold text-fg text-[10px] truncate">{asset.assetCode}</span>
+        <span className="ml-auto flex items-center gap-1 shrink-0">
+          {asset.isSafetyCritical && (
+            <span title={`${safetyTitle} (ISM 10.3)`} className="inline-flex items-center text-amber-700 dark:text-amber-400">
+              <ShieldAlert className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <CriticalityDot value={asset.criticality} title={`${critTitle} ${asset.criticality}`} />
+        </span>
+      </div>
+      <p className="text-xs text-fg font-medium line-clamp-2" title={asset.name}>{asset.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[9px] font-bold text-text-industrial/40">{asset.vesselCode}</span>
+        {asset.status !== "OPERATIONAL" && (
+          <span className={`text-[9px] font-bold ${asset.status === "OUT_OF_SERVICE" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+            {asset.status === "OUT_OF_SERVICE" ? "FUERA DE SERVICIO" : asset.status}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * Inventario por sistema: una columna por grupo SFI (0-9). Es una lectura del
+ * mismo listado que ya trae la página — respeta los filtros de arriba y no
+ * agrega ninguna consulta. Columnas de ancho fijo con scroll horizontal: con 10
+ * grupos, repartir el ancho en partes iguales deja las tarjetas ilegibles.
+ */
+function AssetsBoard({ assets, loading, onOpen, t }: {
+  assets: Asset[] | null;
+  loading: boolean;
+  onOpen: (a: Asset) => void;
+  t: ReturnType<typeof useT>;
+}) {
+  const byGroup = useMemo(() => {
+    const map = new Map<number | "NONE", Asset[]>();
+    for (const g of SFI_GROUP_NUMBERS) map.set(g, []);
+    map.set("NONE", []);
+    for (const a of assets ?? []) {
+      const tab = sfiTabOfCode(a.sfiCode);
+      const key = tab === "NONE" ? "NONE" : (tab as number);
+      map.get(key)?.push(a);
+    }
+    for (const list of map.values()) list.sort((x, y) => x.name.localeCompare(y.name, "es", { numeric: true }));
+    return map;
+  }, [assets]);
+
+  if (loading && !assets) {
+    return <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando equipos...</div>;
+  }
+
+  // Los equipos sin grupo SFI sólo tienen columna si existen: es un caso de
+  // datos incompletos, no una categoría del inventario.
+  const noneItems = byGroup.get("NONE") ?? [];
+  const cols: { key: number | "NONE"; label: string; name: string }[] = [
+    ...SFI_GROUP_NUMBERS.map(g => ({ key: g as number | "NONE", label: `G${g}`, name: t(`sfi.g.${g}` as Parameters<typeof t>[0]) })),
+    ...(noneItems.length > 0 ? [{ key: "NONE" as const, label: "—", name: "Sin grupo SFI" }] : []),
+  ];
+
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-3 min-w-max">
+        {cols.map(col => {
+          const items = byGroup.get(col.key) ?? [];
+          return (
+            <div key={String(col.key)} className="w-[210px] shrink-0 flex flex-col border-t-2 border-accent/30 pt-2">
+              <div className="flex items-start gap-2 px-1 mb-2">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-accent">{col.label}</span>
+                  <p className="text-[10px] text-text-industrial/60 leading-tight" title={col.name}>{col.name}</p>
+                </div>
+                <span className="ml-auto shrink-0 text-[10px] font-bold text-text-industrial/50 bg-fg/5 rounded-full px-1.5 py-0.5">
+                  {items.length}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 330px)" }}>
+                {items.length === 0 && <p className="text-[10px] text-text-industrial/30 px-1">{t("asset.boardEmptyCol")}</p>}
+                {items.map(a => (
+                  <AssetBoardCard
+                    key={a.id}
+                    asset={a}
+                    onOpen={onOpen}
+                    safetyTitle={t("asset.safetyCritical")}
+                    critTitle={t("asset.criticalityOf")}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function toDateInputValue(value: string | null): string {
@@ -1209,6 +1345,7 @@ export const AssetsPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE" | "ISM">("ALL");
+  const [viewMode, setViewMode] = useState<"list" | "board">("list");
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
@@ -1365,6 +1502,24 @@ export const AssetsPage: React.FC = () => {
       )}
       {deleteTarget && <DeleteAssetModal asset={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={onDeleted} />}
       <PageHeader icon={Settings} title={t("page.assets")} total={filteredAssets?.length ?? data?.total} onReload={reload}>
+        <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            title={t("asset.viewList")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => { setViewMode("board"); if (sfiTab !== "ALL" && sfiTab !== "ISM") setSfiTab("ALL"); }}
+            title={t("asset.viewBoard")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "board" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
@@ -1399,9 +1554,11 @@ export const AssetsPage: React.FC = () => {
         </div>
       </PageHeader>
 
-      {/* SFI group tab bar */}
+      {/* SFI group tab bar — en el tablero los chips de grupo sobran (cada grupo
+          ya es una columna) y elegir uno dejaría nueve columnas vacías. El chip
+          ISM 10.3 sí se mantiene: filtra a lo ancho de todas las columnas. */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {SFI_TABS.map(tab => {
+        {viewMode === "list" && SFI_TABS.map(tab => {
           const count = tab.key === "ALL"
             ? (data?.items.length ?? 0)
             : (tabCounts[String(tab.key)] ?? 0);
@@ -1446,7 +1603,9 @@ export const AssetsPage: React.FC = () => {
       </div>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
-      <DataTable columns={columns} data={filteredAssets} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
+      {viewMode === "list"
+        ? <DataTable columns={columns} data={filteredAssets} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
+        : <AssetsBoard assets={filteredAssets} loading={loading} onOpen={row => { void openEdit(row); }} t={t} />}
     </div>
   );
 };

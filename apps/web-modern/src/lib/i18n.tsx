@@ -382,16 +382,20 @@ const dict = {
   "mp.risk.CRITICAL":     { es: "Crítico",                en: "Critical",                 pt: "Crítico" },
   // SFI subgroup codes (X00–X90)
   // SFI group names (group number → name)
-  "sfi.g.0": { es: "Documentación",                        en: "Documentation",                      pt: "Documentação" },
-  "sfi.g.1": { es: "Casco",                                en: "Hull",                               pt: "Casco" },
-  "sfi.g.2": { es: "Equipo de Carga",                      en: "Cargo Equipment",                    pt: "Equipamento de Carga" },
-  "sfi.g.3": { es: "Equipo de Manipulación de Carga",      en: "Cargo Handling Equipment",           pt: "Equipamento de Manuseio de Carga" },
-  "sfi.g.4": { es: "Equipo de Barco",                      en: "Ship Equipment",                     pt: "Equipamento de Navio" },
-  "sfi.g.5": { es: "Equipo para Tripulación y Pasajeros",  en: "Equipment for Crew and Passengers",  pt: "Equipamento para Tripulação e Passageiros" },
-  "sfi.g.6": { es: "Componentes Principales",              en: "Main Components",                    pt: "Componentes Principais" },
-  "sfi.g.7": { es: "Sistemas para Componentes Principales",en: "Systems for Main Components",        pt: "Sistemas para Componentes Principais" },
-  "sfi.g.8": { es: "Instalaciones Eléctricas",             en: "Electrical Installations",           pt: "Instalações Elétricas" },
-  "sfi.g.9": { es: "Automatización, Control y Monitoreo",  en: "Automation, Control and Monitoring", pt: "Automação, Controle e Monitoramento" },
+  // Nombres operativos definidos por el armador (jul 2026). La NUMERACIÓN sigue
+  // siendo SFI estándar: sólo cambia la etiqueta, ningún equipo cambió de grupo.
+  // El grupo 0 se llamaba "Documentación" pero en la práctica agrupa las
+  // inspecciones y pruebas de sistemas, que es lo que se cargó ahí.
+  "sfi.g.0": { es: "Inspecciones y Pruebas",               en: "Inspections and Tests",              pt: "Inspeções e Testes" },
+  "sfi.g.1": { es: "Casco y Estructuras",                  en: "Hull and Structures",                pt: "Casco e Estruturas" },
+  "sfi.g.2": { es: "Sistemas de Carga",                    en: "Cargo Systems",                      pt: "Sistemas de Carga" },
+  "sfi.g.3": { es: "Sistemas de Amarre y Fondeo",          en: "Mooring and Anchoring Systems",      pt: "Sistemas de Amarração e Fundeio" },
+  "sfi.g.4": { es: "Sistemas de Navegación",               en: "Navigation Systems",                 pt: "Sistemas de Navegação" },
+  "sfi.g.5": { es: "Sistemas de Habitabilidad",            en: "Accommodation Systems",              pt: "Sistemas de Habitabilidade" },
+  "sfi.g.6": { es: "Sistemas de Propulsión y Generación",  en: "Propulsion and Power Generation",    pt: "Sistemas de Propulsão e Geração" },
+  "sfi.g.7": { es: "Sistemas Auxiliares, Bombas y LCI",    en: "Auxiliary Systems, Pumps and FiFi",  pt: "Sistemas Auxiliares, Bombas e LCI" },
+  "sfi.g.8": { es: "Sistemas Eléctricos",                  en: "Electrical Systems",                 pt: "Sistemas Elétricos" },
+  "sfi.g.9": { es: "Sistemas de Automatización y Control", en: "Automation and Control Systems",     pt: "Sistemas de Automação e Controle" },
   "mp.sfiGroup":          { es: "Grupo SFI",              en: "SFI Group",                pt: "Grupo SFI" },
   "mp.selectSfiGroup":    { es: "Seleccionar grupo",      en: "Select group",             pt: "Selecionar grupo" },
   "mp.selectSfiGroupRequired": { es: "Debe seleccionar el grupo SFI.", en: "Must select SFI group.", pt: "Deve selecionar o grupo SFI." },
@@ -615,6 +619,10 @@ const dict = {
   "asset.safetyCritical":       { es: "Equipo crítico para seguridad",                        en: "Safety-critical equipment",                          pt: "Equipamento crítico para segurança" },
   "asset.critRationale":        { es: "Fundamento de Criticidad",                             en: "Criticality Rationale",                              pt: "Fundamento de Criticidade" },
   "asset.critRationalePh":      { es: "Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA.", en: "Justification for the criticality level and/or ISM flag. You can generate it automatically with the AI buttons.", pt: "Justificativa do nível de criticidade e/ou flag ISM. Você pode gerá-la automaticamente com os botões IA." },
+  "asset.viewList":             { es: "Vista lista",                                          en: "List view",                                          pt: "Visão lista" },
+  "asset.viewBoard":            { es: "Inventario por sistema",                               en: "Inventory by system",                                pt: "Inventário por sistema" },
+  "asset.boardEmptyCol":        { es: "Sin equipos",                                          en: "No equipment",                                       pt: "Sem equipamentos" },
+  "asset.criticalityOf":        { es: "Criticidad",                                           en: "Criticality",                                        pt: "Criticidade" },
   "asset.expand":               { es: "Ampliar",                                              en: "Expand",                                             pt: "Ampliar" },
   "asset.collapse":             { es: "Reducir",                                              en: "Collapse",                                           pt: "Reduzir" },
   "asset.history.title":        { es: "Historial de mantenimientos e inspecciones",           en: "Maintenance and inspection history",                 pt: "Histórico de manutenções e inspeções" },
