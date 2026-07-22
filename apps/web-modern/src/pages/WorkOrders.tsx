@@ -3393,7 +3393,19 @@ export const WorkOrdersPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { selectedVesselCode } = useVesselContext();
-  const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
+  // Editar/guardar una OT. Espeja canManageWorkOrders del backend, que incluye
+  // al FLEET_SUPERINTENDENT — acá faltaba, así que al superintendente se le
+  // escondía el botón Guardar aunque la API sí le aceptaba el PATCH.
+  const canManage = user?.role === "TENANT_ADMIN"
+    || user?.role === "FLEET_SUPERINTENDENT"
+    || user?.role === "MAINTENANCE_MANAGER";
+
+  // ABRIR una OT es más amplio que editarla: la puede abrir cualquiera menos el
+  // usuario de solo lectura. Es un punto de entrada operativo — quien detecta
+  // algo a bordo tiene que poder abrir la OT ahí mismo. Espeja
+  // canCreateWorkOrders del backend, que ya lo permitía; el botón estaba
+  // colgado de canManage y escondía la creación a media flota.
+  const canCreate = !!user && user.role !== "AUDITOR_READONLY";
 
   const [searchParams, setSearchParams] = useSearchParams();
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/work-orders");
@@ -3611,7 +3623,7 @@ export const WorkOrdersPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <PageHeader icon={Wrench} title={t("page.workOrders")} total={data?.total} onReload={reload}>
-        {canManage && (
+        {canCreate && (
           <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}
           </button>
