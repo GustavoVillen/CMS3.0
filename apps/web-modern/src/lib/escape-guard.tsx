@@ -343,6 +343,12 @@ export function useEscapeGuard(opts: {
 // Apto para modals que se montan frescos por cada item (key-by-id o render
 // condicional). No apto si el "initial" cambia durante la vida del componente.
 //
+// TRAMPA (ya nos mordió dos veces, en Planes y en Equipos): la foto se saca en
+// el PRIMER render. Si un campo se inicializa vacío con useState y recién se
+// llena en un useEffect, la foto queda con el campo vacío y el formulario nace
+// "sucio" para siempre — al cerrarlo pregunta por cambios que nadie hizo.
+// Todo campo rastreado tiene que salir ya con su valor del useState.
+//
 // Uso:
 //   const isDirty = useDirtyTracker({ name, code, status });
 //   useEscapeGuard({ isDirty, onSave: handleSave, onClose });

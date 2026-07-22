@@ -746,7 +746,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? defaultVesselCode ?? "");
   const [assetCode, setAssetCode] = useState(initial?.assetCode ?? "");
-  const [selectedGroup, setSelectedGroup] = useState("");
+  // Arranca con el grupo del asset, no vacío: el efecto de más abajo lo vuelve
+  // a calcular igual, pero corre después del primer render y useDirtyTracker
+  // saca su foto EN el primer render. Si acá quedaba "", el equipo nacía
+  // "sucio" y cerrarlo preguntaba por cambios que nadie hizo.
+  const [selectedGroup, setSelectedGroup] = useState(() => {
+    const firstDigit = (initial?.sfiCode?.trim() ?? "")[0] ?? "";
+    return /^[0-9]$/.test(firstDigit) ? firstDigit : "";
+  });
   const [name, setName] = useState(initial?.name ?? "");
   const [criticality, setCriticality] = useState(initial?.criticality ?? "B");
   const [criticalityRationale, setCriticalityRationale] = useState(initial?.criticalityRationale ?? "");

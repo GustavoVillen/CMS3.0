@@ -1015,11 +1015,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const isNew = plan === null;
   const readOnly = !isNew && !isAdmin;
 
-  const [vesselCode, setVesselCode] = useState(defaultVesselCode ?? "");
-  const [taskCode, setTaskCode] = useState("");
+  // OJO: estos tres arrancan CON el valor del plan, no vacíos. El efecto de más
+  // abajo igual los vuelve a setear desde `plan`, pero corre después del primer
+  // render — y useDirtyTracker saca su foto EN el primer render. Si acá quedaba
+  // "" y el efecto lo llenaba, el plan nacía "sucio" y cerrarlo preguntaba por
+  // cambios que nadie hizo. Los valores tienen que coincidir con lo que escribe
+  // ese efecto (plan.X ?? ""), no con los defaults, que son sólo para el alta.
+  const [vesselCode, setVesselCode] = useState(plan?.vesselCode ?? defaultVesselCode ?? "");
+  const [taskCode, setTaskCode] = useState(plan?.taskCode ?? "");
   const [taskCodeAuto, setTaskCodeAuto] = useState(true);
   const [loadingCode, setLoadingCode] = useState(false);
-  const [assetId, setAssetId] = useState(defaultAssetId ?? "");
+  const [assetId, setAssetId] = useState(plan ? (plan.assetId ?? "") : (defaultAssetId ?? ""));
   const [assets, setAssets] = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [vessels, setVessels] = useState<{ code: string; name: string }[]>([]);
