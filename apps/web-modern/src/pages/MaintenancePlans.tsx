@@ -2845,27 +2845,40 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
       header: t("mp.col.equipmentTask"),
       className: "w-96",
       sortValue: row => (row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.title,
-      render: row => (
-        <div className="flex flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[12px] font-bold text-fg leading-tight line-clamp-1">
-              {(row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.assetId}
-            </span>
-            {/* Equipo fuera de servicio: el plan sigue existiendo y venciendo,
-                pero la máquina está parada. Sin este aviso, una tarea "vencida"
-                sobre un equipo fuera de uso se lee como un incumplimiento. */}
-            {oosAssetIds.has(row.assetId) && (
-              <span
-                className="shrink-0 px-1.5 py-0.5 rounded-md border border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-300 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
-                title="El equipo está fuera de servicio"
-              >
-                {t("mp.assetOutOfService")}
-              </span>
-            )}
+      render: row => {
+        // Agrupado por equipo: el equipo ya es el título del grupo, así que en
+        // la celda va SOLO la tarea, en negrita. En la lista plana no hay título
+        // de grupo, así que ahí se mantiene equipo (negrita) + tarea debajo.
+        const assetName = (row as MaintenancePlan & { assetName?: string | null }).assetName ?? row.assetId;
+        const oosBadge = oosAssetIds.has(row.assetId) && (
+          // Equipo fuera de servicio: el plan sigue existiendo y venciendo, pero
+          // la máquina está parada. Sin este aviso, una tarea "vencida" sobre un
+          // equipo fuera de uso se lee como un incumplimiento.
+          <span
+            className="shrink-0 px-1.5 py-0.5 rounded-md border border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-300 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
+            title="El equipo está fuera de servicio"
+          >
+            {t("mp.assetOutOfService")}
           </span>
-          <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-2">{row.title}</span>
-        </div>
-      ),
+        );
+        if (groupByEquipment) {
+          return (
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
+              {oosBadge}
+            </span>
+          );
+        }
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-1">{assetName}</span>
+              {oosBadge}
+            </span>
+            <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-2">{row.title}</span>
+          </div>
+        );
+      },
     },
     // ── Col 4: FRECUENCIA ───────────────────────────────────────────────────
     {
@@ -2941,7 +2954,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
       render: row => renderActions(row),
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, vesselNameMap, renderStatus, renderActions]);
+  ], [t, vesselNameMap, renderStatus, renderActions, groupByEquipment, oosAssetIds]);
 
   // ── Agrupación por equipo (lista default) ─────────────────────────────────
   const allGroupKeys = useMemo(
