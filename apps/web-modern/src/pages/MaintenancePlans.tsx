@@ -1041,7 +1041,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
-  const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(plan?.sfiGroupNumber ?? defaultSfiGroupNumber ?? null);
+  // Mismo cuidado que arriba: si hay plan manda el plan, aunque venga en nulo.
+  // Los `default*` son SÓLO para el alta. Si acá se colaba el default del
+  // equipo (al abrir el plan desde la ficha de un equipo) en un plan sin grupo
+  // SFI, el efecto lo devolvía a null y el plan nacía "sucio".
+  const [sfiGroupNumber, setSfiGroupNumber] = useState<number | null>(
+    plan ? (plan.sfiGroupNumber ?? null) : (defaultSfiGroupNumber ?? null),
+  );
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(toUiRiskLevel(plan?.riskLevel));
   const [riskProbability, setRiskProbability] = useState<RiskProbability>(toUiRiskProbability(plan?.riskProbability));
   const [riskConsequence, setRiskConsequence] = useState<RiskConsequence>(toUiRiskConsequence(plan?.riskConsequence));
