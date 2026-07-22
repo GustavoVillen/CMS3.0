@@ -909,8 +909,14 @@ export async function generateUniqueTaskCode(
   const suffix = sfiGroupNumber !== null ? String(sfiGroupNumber) : "PM";
   const prefix = `${vc}-${suffix}`;
 
+  // Se incluyen los BORRADOS a propósito. La restricción de unicidad de la base
+  // (@@unique([tenantId, vesselCode, taskCode])) NO distingue deletedAt: un plan
+  // borrado sigue ocupando su código. Si acá filtráramos `deletedAt: null`, el
+  // generador no vería ese código, lo volvería a proponer y el insert fallaría
+  // con "Ya existe un plan con taskCode ...". Pasó en MGT10 grupo 2, donde 001,
+  // 002 y 003 estaban borrados y seguía sugiriendo 001.
   const existing = await prisma.maintenancePlan.findMany({
-    where: { tenantId, vesselCode: vc, deletedAt: null },
+    where: { tenantId, vesselCode: vc },
     select: { taskCode: true },
   });
 
