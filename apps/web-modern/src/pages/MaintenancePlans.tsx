@@ -2869,13 +2869,15 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             </span>
           );
         }
+        // Lista plana: la TAREA manda (negrita arriba) y el equipo va debajo,
+        // como referencia. Es lo que se lee primero: qué hay que hacer.
         return (
           <div className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-1">{assetName}</span>
+              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
               {oosBadge}
             </span>
-            <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-2">{row.title}</span>
+            <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-1">{assetName}</span>
           </div>
         );
       },
