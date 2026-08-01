@@ -3456,7 +3456,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             plans={data?.items ?? []}
             vesselNameMap={vesselNameMap}
             getStatus={computeStatus}
-            onOpenPlan={code => openLink(code)}
+            onOpenPlan={code => openLink(code, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
           />
         )
       ) : gridView ? (
@@ -3474,7 +3474,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             renderStatus={renderStatus}
             renderActions={renderActions}
             statusValue={statusValue}
-            onOpenDetail={row => openLink(row.taskCode)}
+            onOpenDetail={row => openLink(row.taskCode, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
             emptyText={t("empty.maintenancePlans")}
           />
         )
@@ -3486,7 +3486,10 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           error={error}
           keyFn={row => row.id}
           emptyText={t("empty.maintenancePlans")}
-          onRowClick={row => openLink(row.taskCode)}
+          // Si ya hay un plan activo en la URL (su ventana aún no se dibujó por el
+          // gap de render), reemplazamos en vez de apilar: clickear otro plan
+          // dejaba /A y /B en el historial y cerrar el 2º reabría el 1º.
+          onRowClick={row => openLink(row.taskCode, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
           layoutFixed
           groupBy={planGroupBy}
           collapsedGroups={collapsedGroups}
