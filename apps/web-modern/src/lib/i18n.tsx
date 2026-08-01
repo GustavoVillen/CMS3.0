@@ -530,6 +530,7 @@ const dict = {
   "common.saving":         { es: "Guardando…",          en: "Saving…",            pt: "Salvando…" },
   "common.cancel":         { es: "Cancelar",            en: "Cancel",             pt: "Cancelar" },
   "common.close":          { es: "Cerrar",              en: "Close",              pt: "Fechar" },
+  "common.attention":      { es: "Atención",            en: "Heads up",           pt: "Atenção" },
   "common.create":         { es: "Crear",               en: "Create",             pt: "Criar" },
   "common.edit":           { es: "Editar",              en: "Edit",               pt: "Editar" },
   "common.delete":         { es: "Eliminar",            en: "Delete",             pt: "Excluir" },

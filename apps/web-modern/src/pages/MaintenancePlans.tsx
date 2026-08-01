@@ -46,6 +46,7 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AlertDialog } from "../components/AlertDialog";
 import { PlanHistoryModal } from "../components/PlanHistoryModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { SpareUsageEditor, type SpareLine } from "../components/SpareUsageEditor";
@@ -2421,7 +2422,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               </div>
             )}
 
-            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
+            {/* Los avisos de este formulario van en una ventanita con OK
+                (ver AlertDialog al final del modal): al pie del formulario
+                quedaban fuera de la vista y parecía que el botón no hacía nada. */}
           </fieldset>
 
           {/* Footer — always shows Reportar Ejecución + Postergar for active plans */}
@@ -2762,6 +2765,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             </div>
           </div>
         </div>
+      )}
+
+      {/* Avisos del formulario (validaciones, errores al guardar o al abrir la
+          OT) en una ventanita con OK. Durante el borrado NO: ese diálogo ya
+          muestra su propio mensaje adentro y se duplicaría. */}
+      {actionError && deleteStep === 0 && (
+        <AlertDialog message={actionError} onClose={() => setActionError(null)} />
       )}
     </>
   );
