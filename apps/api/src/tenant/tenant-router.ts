@@ -61,7 +61,7 @@ import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments, registerAttachmentRecord, softDeleteTenantAttachment } from "./attachments/attachments-service";
 import { saveAttachment } from "./attachments/attachment-uploads-service";
 import { listTenantCapas } from "./capa/capa-service";
-import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate } from "./certificates/certificates-service";
+import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate, renewTenantCertificate } from "./certificates/certificates-service";
 import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
 import { listTenantDailyReports, getTenantDailyReport, createTenantDailyReport, updateTenantDailyReport, reopenDailyReport, getFuelConsumptionTrend } from "./daily-reports/daily-reports-service";
 import {
@@ -551,6 +551,7 @@ export async function handleTenantRoutes(
     const records = await listTenantCertificates(session, {
       vesselCode: url.searchParams.get("vesselCode"),
       status:     url.searchParams.get("status"),
+      maintenancePlanId: url.searchParams.get("maintenancePlanId"),
     });
     sendJson(response, 200, { items: records, total: records.length });
     return true;
@@ -585,6 +586,18 @@ export async function handleTenantRoutes(
       sendJson(response, 200, { ok: true });
       return true;
     }
+  }
+
+  // Renovar: archiva la vigencia actual en el historial y deja las fechas nuevas.
+  // Siempre explícito (el certificado lo emite un tercero); ningún cierre de plan
+  // u OT lo dispara solo.
+  if (method === "POST" && /^\/app\/certificates\/[^/]+\/renew$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (!canWriteCertificates(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para renovar certificados.");
+    const body = await readJsonBody<any>(request);
+    sendJson(response, 200, await renewTenantCertificate(session, id, body));
+    return true;
   }
 
   // ── Certificate source file upload ─────────────────────────────────────────

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
@@ -13,6 +14,19 @@ import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+
+interface CertificateRenewal {
+  id: string;
+  previousIssueDate: string;
+  previousExpiryDate: string;
+  previousSourceLink?: string | null;
+  previousSourceName?: string | null;
+  issueDate: string;
+  expiryDate: string;
+  notes?: string | null;
+  createdAt: string;
+  createdByName: string;
+}
 
 interface Certificate {
   id: string;
@@ -26,6 +40,14 @@ interface Certificate {
   lastInspectionDate?: string | null;
   notes?: string | null;
   assetId?: string | null;
+  /** Plan de mantenimiento cuyo servicio renueva este certificado. */
+  maintenancePlanId?: string | null;
+  // Resueltos por la API para no pedir cada equipo/plan por separado.
+  assetName?: string | null;
+  maintenancePlanTaskCode?: string | null;
+  maintenancePlanTitle?: string | null;
+  maintenancePlanLastExecutionDate?: string | null;
+  renewals?: CertificateRenewal[];
   originalSourceLink?: string | null;
   originalSourceName?: string | null;
   originalSourceMimeOrExt?: string | null;
@@ -33,6 +55,22 @@ interface Certificate {
 }
 
 interface ListResponse { items: Certificate[]; total: number; }
+
+/**
+ * El mantenimiento vinculado ya se hizo DESPUÉS de la emisión del certificado:
+ * el proveedor debería haber emitido uno nuevo y todavía no se cargó.
+ *
+ * Se deriva de los datos, sin guardar ningún estado: así el aviso aparece
+ * igual sin importar cómo se cerró el mantenimiento (móvil, express, desde la
+ * OT o por el reporte diario).
+ */
+function isRenewalPending(c: Certificate): boolean {
+  if (!c.maintenancePlanId || !c.maintenancePlanLastExecutionDate) return false;
+  const exec = new Date(c.maintenancePlanLastExecutionDate).getTime();
+  const issued = new Date(c.issueDate).getTime();
+  if (Number.isNaN(exec) || Number.isNaN(issued)) return false;
+  return exec > issued;
+}
 
 function asDateInput(value: string | null | undefined): string {
   if (!value) return "";
@@ -91,7 +129,10 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   const [originalSourceLink, setOriginalSourceLink] = useState(initial?.originalSourceLink ?? "");
   const [originalSourceName, setOriginalSourceName] = useState(initial?.originalSourceName ?? "");
   const [originalSourceMimeOrExt, setOriginalSourceMimeOrExt] = useState(initial?.originalSourceMimeOrExt ?? "");
+  const [assetId, setAssetId]     = useState(initial?.assetId ?? "");
+  const [planId, setPlanId]       = useState(initial?.maintenancePlanId ?? "");
   const [saving, setSaving]       = useState(false);
+  const [showRenew, setShowRenew] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
@@ -99,6 +140,32 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasLink = originalSourceLink.trim() !== "";
   const { data: vesselsData } = useFetch<{ items: { code: string; name: string }[] }>("/app/vessels?limit=200", []);
+
+  // Equipos y planes del buque, para vincular el certificado con el servicio que
+  // lo renueva. Se piden con api.get (no useFetch) para que el selector global de
+  // buque del header no pise el vesselCode del certificado.
+  const [assets, setAssets] = useState<Array<{ id: string; name: string; assetCode?: string | null }>>([]);
+  const [plans, setPlans] = useState<Array<{ id: string; taskCode: string; title: string; assetId?: string | null }>>([]);
+  useEffect(() => {
+    const vc = vesselCode.trim().toUpperCase();
+    if (!vc) { setAssets([]); setPlans([]); return; }
+    let cancelled = false;
+    void Promise.all([
+      api.get<{ items: typeof assets }>(`/app/pms/assets?vesselCode=${encodeURIComponent(vc)}&limit=500`).catch(() => ({ items: [] })),
+      api.get<{ items: typeof plans }>(`/app/pms/maintenance-plans?vesselCode=${encodeURIComponent(vc)}&limit=2000`).catch(() => ({ items: [] })),
+    ]).then(([a, p]) => {
+      if (cancelled) return;
+      setAssets(a.items ?? []);
+      setPlans(p.items ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [vesselCode]);
+
+  // Con equipo elegido se ofrecen sólo sus planes; si no, todos los del buque.
+  const planOptions = useMemo(() => {
+    const list = assetId ? plans.filter(p => p.assetId === assetId) : plans;
+    return [...list].sort((a, b) => a.taskCode.localeCompare(b.taskCode, "es"));
+  }, [plans, assetId]);
 
   const derivedStatus = useMemo(() => {
     const trimmed = expiryDate.trim();
@@ -173,6 +240,8 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
         expiryDate,
         lastInspectionDate: lastInsp || null,
         notes: notes.trim() || null,
+        assetId: assetId || null,
+        maintenancePlanId: planId || null,
         originalSourceLink: originalSourceLink.trim() || null,
         originalSourceName: originalSourceName.trim() || null,
         originalSourceMimeOrExt: originalSourceMimeOrExt.trim() || null,
@@ -193,7 +262,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   // ESC guard
   const isDirty = useDirtyTracker({
     certCode, name, vesselCode, authority, issueDate, expiryDate, lastInsp, notes,
-    originalSourceLink, originalSourceName, originalSourceMimeOrExt,
+    originalSourceLink, originalSourceName, originalSourceMimeOrExt, assetId, planId,
   });
   const requestClose = useEscapeGuard({
     isDirty,
@@ -213,6 +282,20 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           </div>
           <ModalCloseButton onClose={requestClose} />
         </div>
+        {isEdit && initial && isRenewalPending(initial) && (
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+            <p className="text-xs text-yellow-700 dark:text-yellow-400">
+              El mantenimiento <span className="font-bold">{initial.maintenancePlanTaskCode}</span> se ejecutó el{" "}
+              {fmtDate(initial.maintenancePlanLastExecutionDate)} y este certificado sigue con las fechas anteriores.
+            </p>
+            <button
+              type="button" onClick={() => setShowRenew(true)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold hover:brightness-110"
+            >
+              Renovar
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -271,6 +354,46 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
               </span>
             </div>
           </div>
+          {/* Vínculo con el mantenimiento que lo renueva (servicios tercerizados
+              que terminan en un certificado del proveedor, ej. el AIS). */}
+          <div className="rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80">Mantenimiento asociado</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Equipo</label>
+                <select
+                  value={assetId}
+                  onChange={e => { setAssetId(e.target.value); setPlanId(""); }}
+                  disabled={!vesselCode}
+                  className={`${inputCls} disabled:opacity-60`}
+                >
+                  <option value="">— Sin equipo —</option>
+                  {assets.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}{a.assetCode ? ` (${a.assetCode})` : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Se renueva con el plan</label>
+                <select
+                  value={planId}
+                  onChange={e => setPlanId(e.target.value)}
+                  disabled={!vesselCode}
+                  className={`${inputCls} disabled:opacity-60`}
+                >
+                  <option value="">— Ninguno —</option>
+                  {planOptions.map(p => (
+                    <option key={p.id} value={p.id}>{p.taskCode} — {p.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-[11px] text-text-industrial/40 leading-relaxed">
+              Al reportar la ejecución de ese plan, el sistema te va a ofrecer renovar este certificado con
+              las fechas del documento que emita el proveedor.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Archivo original</label>
             <div className="flex items-center gap-2">
@@ -308,8 +431,45 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Notas</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
           </div>
+          {/* Historial de vigencias: lo que antes se perdía al pisar el registro. */}
+          {isEdit && (initial?.renewals?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80">Historial de renovaciones</p>
+              {(initial?.renewals ?? []).map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-[11px] border-b border-fg/5 last:border-0 py-1.5">
+                  <span className="text-text-industrial/70">
+                    {fmtDate(r.previousIssueDate)} → {fmtDate(r.previousExpiryDate)}
+                    <span className="text-text-industrial/30"> · reemplazada por </span>
+                    <span className="text-fg font-medium">{fmtDate(r.issueDate)} → {fmtDate(r.expiryDate)}</span>
+                  </span>
+                  <span className="shrink-0 text-text-industrial/40">
+                    {r.createdByName} · {fmtDate(r.createdAt)}
+                    {r.previousSourceLink && (
+                      <a
+                        href={r.previousSourceLink} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="ml-2 text-accent hover:underline"
+                        title="Abrir el certificado anterior"
+                      >archivo anterior</a>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
+            {isEdit && (
+              <button
+                type="button"
+                onClick={() => setShowRenew(true)}
+                className="mr-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/40 transition-all"
+                title="Cargar una vigencia nueva y archivar la actual"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-accent" /> Renovar
+              </button>
+            )}
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : isEdit ? t("common.saveChanges") : t("common.create")}
@@ -317,6 +477,16 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           </div>
         </form>
       </div>
+
+      {showRenew && initial && (
+        <CertificateRenewalDialog
+          cert={initial}
+          defaultIssueDate={initial.maintenancePlanLastExecutionDate ?? null}
+          maintenancePlanId={initial.maintenancePlanId ?? null}
+          onClose={() => setShowRenew(false)}
+          onRenewed={() => { setShowRenew(false); onSaved(); }}
+        />
+      )}
     </div>
   );
 };
@@ -413,7 +583,23 @@ export const CertificatesPage: React.FC = () => {
 
   const columns: Column<Certificate>[] = useMemo(() => [
     { key: "certificateCode", header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg text-xs">{r.certificateCode}</span> },
-    { key: "name",            header: t("col.name"),      render: r => <span className="font-medium text-fg line-clamp-1">{r.name}</span> },
+    {
+      key: "name", header: t("col.name"),
+      render: r => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium text-fg line-clamp-1">{r.name}</span>
+          {/* El mantenimiento que lo renueva ya se hizo y el certificado sigue viejo. */}
+          {isRenewalPending(r) && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[10px] font-bold text-yellow-700 dark:text-yellow-400"
+              title={`El mantenimiento ${r.maintenancePlanTaskCode ?? ""} se ejecutó el ${fmtDate(r.maintenancePlanLastExecutionDate)} — falta cargar el certificado nuevo`}
+            >
+              <RefreshCw className="w-3 h-3" /> Pendiente de actualizar
+            </span>
+          )}
+        </div>
+      ),
+    },
     { key: "vesselCode",      header: t("col.vessel"),    render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "issuingAuthority",header: t("col.authority"), render: r => <span className="text-text-industrial/80">{r.issuingAuthority}</span> },
     { key: "expiryDate",      header: t("col.expiry"),    render: r => <ExpiryCell date={r.expiryDate} /> },

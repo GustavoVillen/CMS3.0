@@ -16088,3 +16088,4 @@ Agent: Claude Opus 4.7
       pág. 2 → NIVEL: Medio + matriz completa a color + la nota + firmas
       pág. 3 → ANEXO identificado (OT-M01-26-0368 · MAO 01 · AIS · 16/7/2026)
                con el análisis de riesgo y el LOTO completos.
+2026-08-01 — Certificados: Certificate.maintenancePlanId (vinculo con el plan que lo renueva) + modelo CertificateRenewal (historial de vigencias, con snapshot de fechas/archivo anteriores y trazabilidad al plan y al WorkLog). Relacion inversa MaintenancePlan.certificates.

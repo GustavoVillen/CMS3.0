@@ -15,6 +15,7 @@ import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOr
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { useDeepLink } from "../lib/deep-link";
+import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
@@ -819,9 +820,15 @@ interface WorkOrderModalProps {
   onSaved: () => void;
   onOpenAction: (wo: WorkOrder, type: ActionType) => void;
   onReload: () => void;
+  /**
+   * La OT cerró y con ella quedó ejecutado su plan de mantenimiento. Lo maneja
+   * la PÁGINA (no el modal) porque al cerrar la OT este modal se desmonta: si el
+   * plan renueva un certificado, el ofrecimiento tiene que sobrevivir a eso.
+   */
+  onPlanExecuted?: (maintenancePlanId: string, completedAt: string | null) => void;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1738,11 +1745,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       } else {
         await finishClose();
       }
+      // Cerrar la OT deja ejecutado el plan: si ese plan renueva un certificado,
+      // la página ofrece cargarlo (acá no: este modal está por desmontarse).
+      if (workOrder.maintenancePlanId) {
+        onPlanExecuted?.(workOrder.maintenancePlanId, opts?.completedDate || executionDate || null);
+      }
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setClosing(false); }
   }, [woResult, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder,
       executedByName, executionDate, observations,
-      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id]);
+      runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id,
+      workOrder.maintenancePlanId, onPlanExecuted]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
@@ -3410,6 +3423,19 @@ export const WorkOrdersPage: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/work-orders");
+
+  // Al cerrar una OT que viene de un plan, si ese plan renueva un certificado se
+  // ofrece cargar la vigencia nueva. Vive en la página porque el modal de la OT
+  // ya se desmontó. Nunca se actualiza solo: lo confirma el usuario con el
+  // documento del proveedor a la vista.
+  const [certToRenew, setCertToRenew] = useState<{ cert: RenewableCertificate; planId: string; completedAt: string | null } | null>(null);
+  const offerCertificateRenewal = useCallback(async (planId: string, completedAt: string | null) => {
+    try {
+      const r = await api.get<{ items: RenewableCertificate[] }>(`/app/certificates?maintenancePlanId=${encodeURIComponent(planId)}`);
+      const cert = r.items?.[0];
+      if (cert) setCertToRenew({ cert, planId, completedAt });
+    } catch { /* sin certificado vinculado: no molestamos */ }
+  }, []);
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [createPrefill, setCreatePrefill] = useState<WoPrefill | null>(null);
@@ -3737,6 +3763,17 @@ export const WorkOrdersPage: React.FC = () => {
           onSaved={() => { closeLink(); void reload(); }}
           onReload={() => { void reload(); }}
           onOpenAction={openActionModal}
+          onPlanExecuted={(planId, completedAt) => { void offerCertificateRenewal(planId, completedAt); }}
+        />
+      )}
+
+      {certToRenew && (
+        <CertificateRenewalDialog
+          cert={certToRenew.cert}
+          defaultIssueDate={certToRenew.completedAt}
+          maintenancePlanId={certToRenew.planId}
+          onClose={() => setCertToRenew(null)}
+          onRenewed={() => setCertToRenew(null)}
         />
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}

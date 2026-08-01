@@ -47,6 +47,7 @@ import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } fro
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
+import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { PlanHistoryModal } from "../components/PlanHistoryModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { SpareUsageEditor, type SpareLine } from "../components/SpareUsageEditor";
@@ -363,7 +364,8 @@ interface ExecutionModalProps {
   userId: string | null;
   isAdmin: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  /** Recibe la fecha de ejecución: sirve para prellenar la renovación del certificado. */
+  onSuccess: (completedAt?: string) => void;
 }
 
 interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean }
@@ -483,7 +485,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
   };
 
   const handleSave = async () => {
-    if (await doSave()) onSuccess();
+    if (await doSave()) onSuccess(completedAt);
   };
 
   // ESC guard
@@ -532,7 +534,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
       console.error("[PDF] fetch error:", err);
       alert(t("mp.exec.pdfFailed"));
     }
-    onSuccess();
+    onSuccess(completedAt);
   };
 
   const handleOpenDef = async () => {
@@ -556,7 +558,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
         severity: "LOW",
         operationalState: "NORMAL",
       });
-      onSuccess();
+      onSuccess(completedAt);
       navigate(`/defects?defectId=${defect.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("mp.exec.defectFailed"));
@@ -1240,6 +1242,21 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     return () => { cancelled = true; };
   }, [department, providers.length]);
 
+  // Certificado que renueva este mantenimiento (servicios tercerizados que
+  // terminan en un documento del proveedor, ej. el SERVICE del AIS). El vínculo
+  // se define desde /certificates; acá sólo se muestra y se ofrece renovarlo al
+  // reportar la ejecución.
+  const [linkedCert, setLinkedCert] = useState<RenewableCertificate | null>(null);
+  const [renewAfterExec, setRenewAfterExec] = useState<string | null>(null);
+  useEffect(() => {
+    if (!plan?.id) { setLinkedCert(null); return; }
+    let cancelled = false;
+    api.get<{ items: RenewableCertificate[] }>(`/app/certificates?maintenancePlanId=${encodeURIComponent(plan.id)}`)
+      .then(r => { if (!cancelled) setLinkedCert(r.items?.[0] ?? null); })
+      .catch(() => { if (!cancelled) setLinkedCert(null); });
+    return () => { cancelled = true; };
+  }, [plan?.id]);
+
   // Catálogo de repuestos del buque (con stock) para la sección de repuestos previstos.
   useEffect(() => {
     const vc = (vesselCode || plan?.vesselCode || "").trim();
@@ -1878,6 +1895,18 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   navegaciones peleando. Basta con navegar — el cambio de ruta
                   desmonta este modal, y al cerrar la OT se vuelve acá. */}
               {!isNew && <StatusBadgeInline plan={plan} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />}
+              {/* Este servicio termina en un certificado del proveedor. Sólo
+                  informativo: el vínculo se administra desde /certificates. */}
+              {!isNew && linkedCert && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/certificates")}
+                  title="Al reportar la ejecución se ofrece renovar este certificado"
+                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
+                >
+                  <FileText className="w-3 h-3" /> Renueva {linkedCert.certificateCode}
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1.5">
               {!isNew && <CopyLinkButton />}
@@ -2584,7 +2613,24 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           userId={userId}
           isAdmin={isAdmin}
           onClose={() => setShowExecution(false)}
-          onSuccess={() => { setShowExecution(false); void onSaved(); }}
+          // Si este mantenimiento renueva un certificado, se ofrece cargarlo con
+          // la fecha del trabajo. Nunca se toca solo: lo confirma el usuario con
+          // el documento del proveedor a la vista.
+          onSuccess={(completedAt) => {
+            setShowExecution(false);
+            void onSaved();
+            if (linkedCert) setRenewAfterExec(completedAt ?? new Date().toISOString().slice(0, 10));
+          }}
+        />
+      )}
+
+      {renewAfterExec && linkedCert && (
+        <CertificateRenewalDialog
+          cert={linkedCert}
+          defaultIssueDate={renewAfterExec}
+          maintenancePlanId={plan?.id ?? null}
+          onClose={() => setRenewAfterExec(null)}
+          onRenewed={() => { setRenewAfterExec(null); void onSaved(); }}
         />
       )}
       {!isNew && showPostpone && (

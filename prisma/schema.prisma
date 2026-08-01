@@ -1327,6 +1327,7 @@ model MaintenancePlan {
   vessel               Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   taskMaster           TaskMaster?            @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
   workLogs             WorkLog[]
+  certificates         Certificate[]
 
   @@unique([tenantId, vesselCode, taskCode])
   @@index([tenantId])
@@ -1922,13 +1923,61 @@ model Certificate {
   deletedAt           DateTime?
   deletedByUserId     String?
 
+  // Plan de mantenimiento que renueva este certificado. Algunos certificados los
+  // emite un proveedor al terminar un servicio tercerizado (ej. el SERVICE anual
+  // del AIS): al reportar esa ejecución se ofrece renovar el certificado.
+  // Opcional: la enorme mayoría de los certificados no nace de un plan.
+  maintenancePlanId   String?
+
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  maintenancePlan     MaintenancePlan?  @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+  renewals            CertificateRenewal[]
 
   @@unique([tenantId, vesselCode, certificateCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, status])
   @@index([expiryDate])
+  @@index([maintenancePlanId])
+}
+
+/// Historial de vigencias de un certificado. Una fila por renovación, con la
+/// foto de la vigencia que se cierra (fechas y archivo anteriores) y la que
+/// empieza. Antes la renovación se hacía editando la fila del certificado, así
+/// que se perdían las fechas viejas y se pisaba el PDF anterior — inservible
+/// para una auditoría (TMSA / inspección de bandera).
+model CertificateRenewal {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  certificateId        String
+
+  // Vigencia que se cierra (foto previa a la renovación).
+  previousIssueDate    DateTime
+  previousExpiryDate   DateTime
+  previousSourceLink   String?
+  previousSourceName   String?
+
+  // Vigencia que empieza.
+  issueDate            DateTime
+  expiryDate           DateTime
+  lastInspectionDate   DateTime?
+
+  // Qué mantenimiento la originó (si vino de reportar una ejecución).
+  maintenancePlanId    String?
+  workLogId            String?
+
+  notes                String?  @db.Text
+  createdAt            DateTime @default(now())
+  createdByUserId      String
+  createdByName        String
+
+  certificate          Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([certificateId])
+  @@index([maintenancePlanId])
 }
 
 model DailyReport {
