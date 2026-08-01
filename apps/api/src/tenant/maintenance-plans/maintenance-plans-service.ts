@@ -1210,6 +1210,35 @@ export async function updateTenantMaintenancePlan(
   if (payload.lastExecutionDate !== undefined) data.lastExecutionDate = parseOptionalDate(payload.lastExecutionDate, "lastExecutionDate");
   if (payload.lastExecutionHours !== undefined) data.lastExecutionHours = normalizeOptionalNumber(payload.lastExecutionHours, "lastExecutionHours");
 
+  // Editar la ÚLTIMA EJECUCIÓN recalcula el PRÓXIMO VENCIMIENTO según la
+  // frecuencia del plan (ej. última + N meses). Solo si el admin no fijó a mano
+  // el vencimiento en el mismo guardado (payload.nextDue* manda sobre el cálculo).
+  const touchedLastExec = payload.lastExecutionDate !== undefined || payload.lastExecutionHours !== undefined;
+  const overrodeNextDue = payload.nextDueDate !== undefined || payload.nextDueHours !== undefined;
+  if (touchedLastExec && !overrodeNextDue) {
+    const rawLast = (data.lastExecutionDate as Date | null | undefined) ?? current.lastExecutionDate ?? null;
+    // Una fecha "solo día" (del <input type=date>) llega como medianoche UTC.
+    // Sumarle meses con la hora LOCAL del server la corre un día según la zona
+    // horaria (off-by-one entre el preview y lo guardado). Se ancla a mediodía
+    // UTC: así ninguna zona real cruza el límite del día al calcular.
+    const effLastDate = rawLast
+      ? new Date(Date.UTC(rawLast.getUTCFullYear(), rawLast.getUTCMonth(), rawLast.getUTCDate(), 12, 0, 0))
+      : null;
+    if (effLastDate && payload.lastExecutionDate !== undefined) data.lastExecutionDate = effLastDate;
+    const effLastHours = (data.lastExecutionHours as number | null | undefined) ?? current.lastExecutionHours ?? null;
+    const recPlan: RecalculatePlanInput = {
+      triggerType: String(data.triggerType ?? current.triggerType ?? ""),
+      frequencyMonths: (data.frequencyMonths as number | null | undefined) ?? current.frequencyMonths ?? null,
+      frequencyHours: (data.frequencyHours as number | null | undefined) ?? current.frequencyHours ?? null,
+    };
+    // Sin fecha base no hay de dónde calcular un vencimiento por fecha.
+    const rec = effLastDate
+      ? recalculateNextDue(recPlan, effLastDate, effLastHours)
+      : { nextDueDate: null, nextDueHours: effLastHours !== null && recPlan.frequencyHours ? effLastHours + recPlan.frequencyHours : null };
+    data.nextDueDate = rec.nextDueDate;
+    data.nextDueHours = rec.nextDueHours;
+  }
+
   // Auto-calculate nextDueDate if it's still null after updates
   if (!data.nextDueDate && !current.nextDueDate) {
     const tt = String((data.triggerType ?? current.triggerType) || "");

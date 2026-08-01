@@ -1545,6 +1545,7 @@ const dict = {
   "mp.modal.analyzing":        { es: "Analizando...",         en: "Analyzing...",          pt: "Analisando..." },
   "mp.modal.lastExecution":    { es: "Última ejecución",      en: "Last execution",        pt: "Última execução" },
   "mp.modal.nextDueDate":      { es: "Próximo vencimiento",   en: "Next due",              pt: "Próximo vencimento" },
+  "mp.modal.nextDueAuto":      { es: "Calculado según la frecuencia",  en: "Calculated from frequency",  pt: "Calculado pela frequência" },
 
   // Fluid sampling plan — opciones extendidas
   "fluid.plan.engineOil":      { es: "Aceite motor",          en: "Engine oil",            pt: "Óleo de motor" },

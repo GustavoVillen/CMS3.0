@@ -302,11 +302,40 @@ const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO", "EXPRESS"] as const;
 // SFI: solo se usa el GRUPO (0-9). Los nombres salen de i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
+/** Fecha ISO del backend → valor YYYY-MM-DD para un <input type="date">. */
+function toDateInput(v: string | null | undefined): string { return v ? v.slice(0, 10) : ""; }
+
 function needsHours(tt: string) { return tt === "HOURS" || tt === "RUNNING_HOURS"; }
 function needsMonths(tt: string) { return tt === "MONTHS" || tt === "CALENDAR"; }
 function needsDays(tt: string) { return tt === "DAY"; }
 function needsWeeks(tt: string) { return tt === "WEEK"; }
 function needsDateFreq(tt: string) { return needsMonths(tt) || needsDays(tt) || needsWeeks(tt); }
+
+/**
+ * Preview del PRÓXIMO VENCIMIENTO a partir de la última ejecución + la frecuencia.
+ * Espeja recalculateNextDue del backend (fuente autoritativa al guardar); acá es
+ * solo para que el admin vea el resultado en vivo mientras edita.
+ */
+function previewNextDue(
+  tt: string, lastDate: string, lastHours: string, freqMonths: string, freqHours: string,
+): { text: string } | null {
+  const fm = Number(freqMonths) || 0;
+  const fh = Number(freqHours) || 0;
+  if (needsHours(tt)) {
+    const lh = Number(lastHours);
+    if (Number.isFinite(lh) && lastHours.trim() !== "" && fh > 0) return { text: `${(lh + fh).toLocaleString()}h` };
+    return null;
+  }
+  if (!lastDate) return null;
+  const d = new Date(lastDate + "T00:00:00");
+  if (Number.isNaN(d.getTime()) || fm <= 0) return null;
+  const nd = new Date(d);
+  if (needsMonths(tt)) nd.setMonth(nd.getMonth() + fm);
+  else if (needsDays(tt)) nd.setDate(nd.getDate() + fm);
+  else if (needsWeeks(tt)) nd.setDate(nd.getDate() + fm * 7);
+  else return null;
+  return { text: fmtDate(nd.toISOString().slice(0, 10)) ?? "—" };
+}
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
@@ -1074,6 +1103,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [frequencyMonths, setFrequencyMonths] = useState(String(plan?.frequencyMonths ?? ""));
   const [frequencyHours, setFrequencyHours] = useState(String(plan?.frequencyHours ?? ""));
   const [estimatedHours, setEstimatedHours] = useState(String(plan?.estimatedHours ?? ""));
+  // Última ejecución editable por admin (el próximo vencimiento se recalcula).
+  const [lastExecDate, setLastExecDate] = useState(toDateInput(plan?.lastExecutionDate ?? null));
+  const [lastExecHours, setLastExecHours] = useState(String(plan?.lastExecutionHours ?? ""));
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
@@ -1205,6 +1237,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setFrequencyMonths(String(plan.frequencyMonths ?? ""));
     setFrequencyHours(String(plan.frequencyHours ?? ""));
     setEstimatedHours(String(plan.estimatedHours ?? ""));
+    setLastExecDate(toDateInput(plan.lastExecutionDate ?? null));
+    setLastExecHours(String(plan.lastExecutionHours ?? ""));
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
@@ -1449,6 +1483,12 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
+          // Última ejecución editable (admin). El backend recalcula el próximo
+          // vencimiento desde la frecuencia. Solo lo manda el admin.
+          ...(isAdmin ? {
+            lastExecutionDate: needsHours(triggerType) ? undefined : (lastExecDate || null),
+            lastExecutionHours: needsHours(triggerType) ? (lastExecHours ? Number(lastExecHours) : null) : undefined,
+          } : {}),
         });
         savedId = plan.id;
       }
@@ -1500,6 +1540,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
+    lastExecDate, lastExecHours,
   }, saveResetKey);
   const requestClose = useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
@@ -1795,25 +1836,56 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     <p className="text-sm"><VesselLabel code={plan.vesselCode} className="text-sm" showCode /></p>
                   </div>
                 </div>
-                {/* Last / Next execution info */}
+                {/* Last / Next execution info. El ADMIN puede editar la última
+                    ejecución; el próximo vencimiento se calcula solo desde la
+                    frecuencia (preview en vivo; el backend lo confirma al guardar). */}
+                {(() => {
+                  const preview = previewNextDue(triggerType, lastExecDate, lastExecHours, frequencyMonths, frequencyHours);
+                  return (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.lastExecution")}</p>
-                    <p className="text-sm text-fg font-mono">
-                      {needsHours(plan.triggerType)
-                        ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()}h` : "—")
-                        : (fmtDate(plan.lastExecutionDate) ?? "—")}
-                    </p>
+                    {isAdmin ? (
+                      needsHours(triggerType) ? (
+                        <input
+                          type="number" value={lastExecHours}
+                          onChange={e => setLastExecHours(e.target.value)}
+                          placeholder="Horas"
+                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-fg py-0.5 transition-colors"
+                        />
+                      ) : (
+                        <input
+                          type="date" value={lastExecDate}
+                          onChange={e => setLastExecDate(e.target.value)}
+                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-fg py-0.5 transition-colors"
+                        />
+                      )
+                    ) : (
+                      <p className="text-sm text-fg font-mono">
+                        {needsHours(plan.triggerType)
+                          ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()}h` : "—")
+                          : (fmtDate(plan.lastExecutionDate) ?? "—")}
+                      </p>
+                    )}
                   </div>
                   <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.nextDueDate")}</p>
                     <p className="text-sm font-mono text-accent">
-                      {needsHours(plan.triggerType)
-                        ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                        : (fmtDate(plan.nextDueDate) ?? "—")}
+                      {isAdmin
+                        ? (preview?.text ?? (needsHours(plan.triggerType)
+                            ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                            : (fmtDate(plan.nextDueDate) ?? "—")))
+                        : (needsHours(plan.triggerType)
+                            ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                            : (fmtDate(plan.nextDueDate) ?? "—"))}
                     </p>
+                    {isAdmin && preview && (
+                      <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueAuto")}</p>
+                    )}
                   </div>
                 </div>
+                  );
+                })()}
                 <div className="space-y-1.5">
                   {assetId
                     ? <button
