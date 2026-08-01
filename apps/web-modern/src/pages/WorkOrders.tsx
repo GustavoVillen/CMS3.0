@@ -1854,14 +1854,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       onClick={() => openTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
                       className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      {tramitaPhase === "SOLICITADA" ? "APROBADA" : "AUTORIZADA"}
+                      {tramitaPhase === "SOLICITADA" ? "APROBAR" : "AUTORIZAR"}
                     </button>
                     <button
                       type="button"
                       onClick={() => openTramita("RECHAZA")}
                       className="flex-1 py-2 rounded-xl border text-xs font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 transition-colors"
                     >
-                      {tramitaPhase === "SOLICITADA" ? "NO APROBADA" : "NO AUTORIZADA"}
+                      {tramitaPhase === "SOLICITADA" ? "NO APROBAR" : "NO AUTORIZAR"}
                     </button>
                   </div>
                 </>

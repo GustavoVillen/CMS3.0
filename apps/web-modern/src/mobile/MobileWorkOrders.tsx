@@ -853,13 +853,13 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   // ── Detail: TRAMITACIÓN de SS ────────────────────────────────────────────────
   // Para aprobadores (super/admin) con una SS pendiente: muestra secciones 1
   // (Información) y 2 (Plan) en lectura + los botones del paso que corresponde:
-  //  · SOLICITADA → [APROBADA] / [NO APROBADA]   (APRUEBA / RECHAZA)
-  //  · APROBADA   → [AUTORIZADA] / [NO AUTORIZADA] (AUTORIZA / RECHAZA)
+  //  · SOLICITADA → [APROBAR] / [NO APROBAR]   (APRUEBA / RECHAZA)
+  //  · APROBADA   → [AUTORIZAR] / [NO AUTORIZAR] (AUTORIZA / RECHAZA)
   if (view === "detail" && selected && canApproveSS && (isSolicitada(selected) || isAprobada(selected))) {
     const isAuth = isAprobada(selected);
     const positiveStep: "APRUEBA" | "AUTORIZA" = isAuth ? "AUTORIZA" : "APRUEBA";
-    const positiveLabel = isAuth ? "AUTORIZADA" : "APROBADA";
-    const negativeLabel = isAuth ? "NO AUTORIZADA" : "NO APROBADA";
+    const positiveLabel = isAuth ? "AUTORIZAR" : "APROBAR";
+    const negativeLabel = isAuth ? "NO AUTORIZAR" : "NO APROBAR";
     const phaseLabel    = isAuth ? "Aprobada" : "Solicitada";
     const phaseBadgeCls = isAuth
       ? "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20"
