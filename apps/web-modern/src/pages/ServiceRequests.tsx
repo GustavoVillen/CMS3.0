@@ -999,6 +999,21 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [jefeMaq, setJefeMaq] = useState(sr.jefeMaquinasName ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Al abrir, refrescar el ESTADO real de la SS. La lista se carga una sola vez;
+  // una cascada (autorizar la OT arrastra sus SS a AUTORIZADA) pudo haber avanzado
+  // esta SS sin que la lista se enterara. Sin esto, el modal mostraba "Aprobada"
+  // y ofrecía "Autorizar" sobre una SS que la base ya tenía AUTORIZADA → al hacer
+  // clic saltaba "sólo se puede autorizar una solicitud aprobada". Solo refresca
+  // si el estado cambió, para no recargar la lista de más.
+  React.useEffect(() => {
+    let cancelled = false;
+    api.get<ServiceRequest>(`/app/pms/service-requests/${sr.id}`)
+      .then(fresh => { if (!cancelled && fresh.status !== sr.status) onSaved(fresh); })
+      .catch(() => { /* si falla, se queda con lo que trajo la lista */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sr.id]);
+
   // Sólo para gatear el borrado de novedades de la hoja de ruta.
   const isAdmin = role === "TENANT_ADMIN";
 
