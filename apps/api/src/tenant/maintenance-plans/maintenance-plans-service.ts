@@ -1329,6 +1329,11 @@ export async function quickClosePlan(
             description: plan.description,
             taskMasterId: plan.taskMasterId ?? null,
             department: planAny.department ?? null,
+            // ASIGNADO A heredado del área del plan (mismo mapeo que openFormalWorkOrder).
+            assignedToArea:
+              planAny.department === "PROVEEDOR" ? "TERCERIZADO"
+              : (planAny.department === "CUBIERTA" || planAny.department === "MAQUINAS" || planAny.department === "BARCAZA") ? "TRIPULACION"
+              : null,
             // Colapso del proveedor igual que al abrir la OT: único → id, varios → null.
             // (Este cierre rápido NO crea SS, solo hereda el proveedor a la OT ya cerrada.)
             providerId: collapseProviderId(planAny.department === "PROVEEDOR" ? resolvePlanProviderRequests(planAny) : []),
@@ -1644,6 +1649,15 @@ export async function openFormalWorkOrder(
     ? resolvePlanProviderRequests(planAny)
     : [];
   const woProviderId = collapseProviderId(providerRequests);
+
+  // El ÁREA/RESPONSABLE del plan (department) se hereda al "ASIGNADO A" de la OT:
+  //   Proveedor              → Tercerizado (lo hace un tercero)
+  //   Cubierta/Máquinas/Barcaza → Tripulación (lo hace la dotación a bordo)
+  //   Otros / sin área       → sin asignar (queda para que lo defina quien abre)
+  const assignedToArea: "TRIPULACION" | "TERCERIZADO" | null =
+    planAny.department === "PROVEEDOR" ? "TERCERIZADO"
+    : (planAny.department === "CUBIERTA" || planAny.department === "MAQUINAS" || planAny.department === "BARCAZA") ? "TRIPULACION"
+    : null;
   // Import dinámico (mismo criterio que la cascada) para evitar ciclo con el
   // servicio de SS. Se resuelve ANTES de la transacción: si falla, no se abre la OT.
   const { queryMaxServiceRequestSeq, insertServiceRequestForWorkOrderTx } =
@@ -1692,8 +1706,11 @@ export async function openFormalWorkOrder(
           ? (payload.consequenceCategory ?? null)
           : (planAny.consequenceCategory ?? null),
         consequenceRationale: inherit<string>(payload.consequenceRationale, planAny.consequenceRationale),
-        // Área / responsable: se hereda del plan a la OT.
+        // Área / responsable: se hereda del plan a la OT. `department` queda por
+        // compatibilidad; `assignedToArea` es lo que el formulario nuevo muestra
+        // en "ASIGNADO A".
         department: planAny.department ?? null,
+        assignedToArea,
         providerId: woProviderId,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
