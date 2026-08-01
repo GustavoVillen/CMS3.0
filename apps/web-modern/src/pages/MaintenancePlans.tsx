@@ -2055,22 +2055,27 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <div className="space-y-2 mt-1">
                   {providerRequests.map((row, i) => (
                     <div key={i} className="flex items-start gap-2">
-                      <select
-                        value={row.providerId}
-                        onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
-                        className={`${selectCls} w-56 shrink-0`}
-                      >
-                        <option value="">{t("wo.modal.providerSelect")}</option>
-                        {providers.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={row.purpose}
-                        onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
-                        placeholder={t("mp.providerRequests.purposePlaceholder")}
-                        className={`${inputCls} flex-1`}
-                      />
+                      {/* Grilla proveedor + aclaración: cada uno ocupa media fila y
+                          nunca desborda el modal (min-w-0). En pantalla angosta se
+                          apilan. La X queda aparte, sin robar ancho. */}
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                        <select
+                          value={row.providerId}
+                          onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                          className={selectCls}
+                        >
+                          <option value="">{t("wo.modal.providerSelect")}</option>
+                          {providers.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                          ))}
+                        </select>
+                        <input
+                          value={row.purpose}
+                          onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                          placeholder={t("mp.providerRequests.purposePlaceholder")}
+                          className={inputCls}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => setProviderRequests(prev => prev.filter((_, j) => j !== i))}
