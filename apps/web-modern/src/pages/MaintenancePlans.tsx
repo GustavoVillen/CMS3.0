@@ -1144,6 +1144,12 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // y reseteamos el baseline de cambios.
   const [justSaved,   setJustSaved]   = useState(false);
   const [saveResetKey, setSaveResetKey] = useState(0);
+  // La ventana se abre al instante con los datos de la lista y luego se
+  // "hidrata" con el detalle completo (6 campos que la lista no trae). Cuando
+  // eso pasa, hay que RE-CAPTURAR el baseline de cambios: si no, esos campos
+  // pasando de vacío a su valor real dispararían un falso "cambios sin guardar".
+  const [planSyncKey, setPlanSyncKey] = useState(0);
+  const planSyncedRef = useRef(false);
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
@@ -1280,6 +1286,11 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setActionError(null);
     setShowExecution(false);
     setShowPostpone(false);
+    // Primer sync = montaje (baseline ya capturado con los datos de la lista).
+    // Los sucesivos = hidratación del detalle o cambio de plan: re-capturar el
+    // baseline para que los campos recién llegados no cuenten como "cambios".
+    if (planSyncedRef.current) setPlanSyncKey(k => k + 1);
+    else planSyncedRef.current = true;
   }, [plan]);
 
   useCopilotEmitter({
@@ -1584,7 +1595,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
     lastExecDate, lastExecHours, plannedSpares,
-  }, saveResetKey);
+  }, `${saveResetKey}:${planSyncKey}`);
   const requestClose = useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
     isDirty: planDirty,
@@ -2913,15 +2924,24 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     }).length;
   }, [rawData, baseItems]);
 
-  const openEdit = async (row: Pick<MaintenancePlan, "id">) => {
-    setLoadingDetailId(row.id);
+  // `prefetched` = el registro que ya vino en la lista. La lista trae casi todo
+  // el plan (repuestos, proveedores, riesgo, etc.), así que abrimos la ventana
+  // AL INSTANTE con esos datos y sólo completamos en segundo plano los 6 campos
+  // que la lista no incluye (criterios, checklist, LOTO, riesgo-texto…). Sin
+  // esto, abrir esperaba ~0,5s de red (el ida y vuelta del detalle) con la
+  // ventana en blanco. El modal re-captura su baseline de cambios al hidratar.
+  const openEdit = async (row: Pick<MaintenancePlan, "id">, prefetched?: MaintenancePlan) => {
+    if (prefetched) { setEditing(prefetched); setShowModal(true); }
+    else setLoadingDetailId(row.id);
     setPageError(null);
     try {
       const detail = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
       setEditing(detail);
       setShowModal(true);
     } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : t("mp.page.detailLoadError"));
+      // Con datos precargados la ventana ya está abierta y usable: el detalle es
+      // sólo un complemento, así que un fallo de red no la cierra ni molesta.
+      if (!prefetched) setPageError(err instanceof ApiError ? err.message : t("mp.page.detailLoadError"));
     } finally {
       setLoadingDetailId(null);
     }
@@ -2946,13 +2966,13 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     if (!linkCode) { if (editing) { setShowModal(false); setEditing(null); } return; }
     if (editing?.taskCode === linkCode) return;
     const inList = rawData?.items?.find(p => p.taskCode === linkCode);
-    if (inList) { void openEdit(inList); return; }
+    if (inList) { void openEdit(inList, inList); return; } // abre al instante con la fila ya cargada
     // Fuera de los filtros actuales → buscar sin filtro por código.
     setLoadingDetailId("deeplink");
     api.get<{ items: MaintenancePlan[] }>(`/app/pms/maintenance-plans`)
       .then(r => {
         const m = r.items.find(p => p.taskCode === linkCode);
-        if (m) return openEdit(m);
+        if (m) return openEdit(m, m); // la fila de la búsqueda ya trae casi todo → abrir ya
       })
       .catch(() => {})
       .finally(() => setLoadingDetailId(null));
