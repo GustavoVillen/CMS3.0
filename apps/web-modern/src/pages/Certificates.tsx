@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
@@ -588,6 +588,17 @@ export const CertificatesPage: React.FC = () => {
       render: r => (
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium text-fg line-clamp-1">{r.name}</span>
+          {/* Tiene un plan que lo renueva: al ejecutar ese mantenimiento el
+              sistema va a ofrecer cargar la vigencia nueva. */}
+          {r.maintenancePlanId && (
+            <span
+              className="shrink-0 inline-flex"
+              aria-label="Con plan de mantenimiento asociado"
+              title={`Se renueva con el plan ${r.maintenancePlanTaskCode ?? ""}${r.maintenancePlanTitle ? ` — ${r.maintenancePlanTitle}` : ""}`}
+            >
+              <Wrench className="w-3.5 h-3.5 text-accent" />
+            </span>
+          )}
           {/* El mantenimiento que lo renueva ya se hizo y el certificado sigue viejo. */}
           {isRenewalPending(r) && (
             <span
