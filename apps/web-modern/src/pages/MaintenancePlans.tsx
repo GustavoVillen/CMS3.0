@@ -3512,7 +3512,14 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           setRequestMessage={setRequestMessageFromContext}
-          onClose={() => { setShowModal(false); setEditing(null); closeLink(); }}
+          // OJO: NO hacer setEditing(null) acá. Al editar, la URL todavía tiene el
+          // :code cuando se cierra; nulificar `editing` dispara el resolver deep-link,
+          // que —viendo code en la URL pero sin plan— re-abre el modal con un fetch
+          // asíncrono. Con latencia de red ese fetch vuelve DESPUÉS del cierre y la
+          // ventana reaparece (había que cerrarla dos veces). Cerramos con showModal
+          // + closeLink (limpia la URL); el resolver, al quedar sin code, nulifica
+          // `editing` solo. En alta (sin ruta) editing ya es null, así que no cambia.
+          onClose={() => { setShowModal(false); closeLink(); }}
           onSaved={async (savedId) => {
             void reload();
             if (savedId) {
