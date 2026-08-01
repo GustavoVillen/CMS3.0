@@ -451,8 +451,11 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
 
       // FIRMA Y ACLARACION DEL SOLICITANTE / DEL ASIGNADO
       signatures: () => {
-        ensureSpace(72);
-        const H = 62;
+        // Firma al 300%: el recuadro crece para alojar la firma agrandada sin
+        // pisar el nombre / la línea / el rótulo (que se posicionan relativos a H).
+        const SIG_W = 210, SIG_H = 78; // 3× el tamaño anterior (70×26)
+        const H = 116;
+        ensureSpace(H + 10);
         const half = Math.floor(W / 2);
         const boxes: Array<[string, string | null, Buffer | null | undefined]> = [
           ["FIRMA Y ACLARACION DEL SOLICITANTE", ctx.createdByFormName ?? createdByName, ctx.solicitaSignatureBuffer],
@@ -464,7 +467,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
           doc.rect(bx, canvas.y, bw, H).fillColor(WHITE).fill();
           doc.rect(bx, canvas.y, bw, H).strokeColor(BORDER).lineWidth(0.5).stroke();
           if (sig) {
-            try { doc.image(sig, bx + bw / 2 - 35, canvas.y + 6, { fit: [70, 26], align: "center", valign: "center" }); } catch { /* skip */ }
+            try { doc.image(sig, bx + bw / 2 - SIG_W / 2, canvas.y + 6, { fit: [SIG_W, SIG_H], align: "center", valign: "center" }); } catch { /* skip */ }
           }
           if (name) {
             doc.fontSize(8).font("Helvetica").fillColor(BLACK)

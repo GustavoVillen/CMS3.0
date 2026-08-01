@@ -1122,8 +1122,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       setActionError(e instanceof Error ? e.message : "No se pudo completar la acción."));
   };
 
+  // El clic fuera de la ventana NO cierra: el formulario es largo y se completa
+  // por partes, cerrarlo sin querer costaba rehacer la carga. Se cierra solo con
+  // la X o Escape (que sí avisan si hay cambios sin guardar). Por eso el div de
+  // fondo no tiene onClick.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
         {/* sticky: el formulario es largo — el código, el estado y la X tienen que
             seguir a la vista mientras se scrollea. El scroll lo hace la tarjeta. */}
