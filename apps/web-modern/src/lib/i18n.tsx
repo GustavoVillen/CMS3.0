@@ -363,6 +363,8 @@ const dict = {
   "mp.providerRequests.remove":           { es: "Quitar proveedor",               en: "Remove provider",                  pt: "Remover fornecedor" },
   "mp.providerRequests.purposePlaceholder": { es: "¿Para qué se contrata? (obligatorio)", en: "What is it hired for? (required)", pt: "Para que é contratado? (obrigatório)" },
   "mp.providerRequests.purposeRequired":  { es: "Cada proveedor necesita una aclaración de para qué se lo contrata.", en: "Each provider needs a note on what it is hired for.", pt: "Cada fornecedor precisa de uma nota do que é contratado." },
+  "mp.spares.title":  { es: "Repuestos / Materiales previstos", en: "Foreseen spares / materials", pt: "Peças / Materiais previstos" },
+  "mp.spares.hint":   { es: "Se heredan a la OT al abrirla. Los repuestos salen del catálogo (con stock); los materiales se escriben a mano.", en: "Inherited to the WO on open. Spares come from the catalog (with stock); materials are free text.", pt: "Herdados na OT ao abrir. Peças vêm do catálogo (com estoque); materiais são texto livre." },
   "mp.acceptanceCriteria":{ es: "Criterios de aceptación",en: "Acceptance criteria",      pt: "Critérios de aceitação" },
   "mp.loto":              { es: "LOTO",                   en: "LOTO",                     pt: "LOTO" },
   "mp.riskLevel":         { es: "Nivel de riesgo",        en: "Risk level",               pt: "Nivel de risco" },

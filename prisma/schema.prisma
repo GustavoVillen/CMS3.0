@@ -1272,6 +1272,12 @@ model MaintenancePlan {
   // resuelve al leer). providerId se mantiene sincronizado: = el único id cuando hay
   // exactamente uno, null cuando hay varios — para la línea "Proveedor" del PDF.
   providerRequests     Json?
+  // Repuestos/materiales previstos para la tarea: [{ kind: SPARE|MATERIAL,
+  // spareId, description, quantity, unit }]. Al abrir la OT se heredan como
+  // WorkOrderItem (spareId enlaza al catálogo /Spares para mostrar stock). Es
+  // planificación: NO descuenta stock (eso pasa al cerrar la OT). Mismo criterio
+  // suelto/JSON que providerRequests; description guarda el nombre como snapshot.
+  spares               Json?
   acceptanceCriteria   String?
   loto                 String?
   sfiGroupNumber       Int?

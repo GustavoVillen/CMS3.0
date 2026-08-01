@@ -33,6 +33,8 @@ export interface CreateMaintenancePlanInput {
   providerId?: string | null;
   /** Varios proveedores + aclaración (área = PROVEEDOR). Ver PlanProviderRequest. */
   providerRequests?: PlanProviderRequest[] | null;
+  /** Repuestos/materiales previstos. Al abrir la OT se heredan como WorkOrderItem. */
+  spares?: PlanSpare[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -70,6 +72,16 @@ export interface PlanProviderRequest {
   purpose?: string | null;
 }
 
+/** Un repuesto/material previsto del plan. Al abrir la OT se hereda como WorkOrderItem.
+ *  SPARE → spareId apunta al catálogo (para mostrar stock); MATERIAL → texto libre. */
+export interface PlanSpare {
+  kind: "SPARE" | "MATERIAL";
+  spareId?: string | null;
+  description: string;
+  quantity?: number | null;
+  unit?: string | null;
+}
+
 export interface UpdateMaintenancePlanInput {
   taskType?: "MAINTENANCE" | "INSPECTION" | null;
   assetId?: string;
@@ -85,6 +97,8 @@ export interface UpdateMaintenancePlanInput {
   providerId?: string | null;
   /** Varios proveedores + aclaración (área = PROVEEDOR). Ver PlanProviderRequest. */
   providerRequests?: PlanProviderRequest[] | null;
+  /** Repuestos/materiales previstos. Al abrir la OT se heredan como WorkOrderItem. */
+  spares?: PlanSpare[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -391,6 +405,35 @@ export function resolvePlanProviderRequests(plan: {
  *  expresan por las SS) o ninguno. */
 function collapseProviderId(requests: PlanProviderRequest[]): string | null {
   return requests.length === 1 ? requests[0]!.providerId : null;
+}
+
+/** Limpia la lista de repuestos/materiales previstos: descarta filas sin
+ *  descripción, normaliza kind/cantidad/unidad. Devuelve [] si no hay nada válido.
+ *  Tolera JSON malformado (degrada a []), nunca tira error. */
+function normalizePlanSpares(value: unknown): PlanSpare[] {
+  if (!Array.isArray(value)) return [];
+  const out: PlanSpare[] = [];
+  for (const raw of value) {
+    const description = normalizeOptionalText((raw as any)?.description);
+    if (!description) continue;
+    const kind = (raw as any)?.kind === "MATERIAL" ? "MATERIAL" : "SPARE";
+    const qtyRaw = (raw as any)?.quantity;
+    const quantity = typeof qtyRaw === "number" && Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+    out.push({
+      kind,
+      // El spareId solo aplica a SPARE; para MATERIAL siempre null.
+      spareId: kind === "SPARE" ? normalizeOptionalText((raw as any)?.spareId) : null,
+      description,
+      quantity,
+      unit: normalizeOptionalText((raw as any)?.unit) ?? "ud",
+    });
+  }
+  return out;
+}
+
+/** Los repuestos/materiales previstos de un plan (JSON), tolerante a malformado. */
+export function resolvePlanSpares(plan: { spares?: unknown }): PlanSpare[] {
+  return normalizePlanSpares(plan.spares);
 }
 
 function normalizeRiskLevel(value: unknown): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null {
@@ -1062,6 +1105,11 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
         providerId: collapseProviderId(requests),
       };
     })(),
+    // Repuestos/materiales previstos (lista JSON; no descuenta stock).
+    spares: (() => {
+      const list = normalizePlanSpares(payload.spares);
+      return list.length > 0 ? (list as unknown as object) : null;
+    })(),
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
     loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
@@ -1165,6 +1213,10 @@ export async function updateTenantMaintenancePlan(
     } else if (payload.providerId !== undefined) {
       data.providerId = normalizeOptionalText(payload.providerId);
     }
+  }
+  if (payload.spares !== undefined) {
+    const list = normalizePlanSpares(payload.spares);
+    data.spares = list.length > 0 ? list : null;
   }
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
@@ -1376,6 +1428,27 @@ export async function quickClosePlan(
           },
         })
       : null;
+
+    // Repuestos/materiales previstos → WorkOrderItem (si esta vía creó una OT).
+    // Planificación, no consumo (el consumo va por createWorkLogSpareMovements).
+    if (workOrder) {
+      const planSpares = resolvePlanSpares(planAny);
+      if (planSpares.length > 0) {
+        await (tx as any).workOrderItem.createMany({
+          data: planSpares.map((s, i) => ({
+            workOrderId: workOrder.id,
+            kind: s.kind,
+            spareId: s.spareId ?? null,
+            description: s.description,
+            quantity: s.quantity ?? 1,
+            unit: s.unit ?? "ud",
+            sortOrder: i,
+            createdByUserId: session.user.id,
+            updatedByUserId: session.user.id,
+          })),
+        });
+      }
+    }
 
     const workLog = await tx.workLog.create({
       data: {
@@ -1753,6 +1826,26 @@ export async function openFormalWorkOrder(
         updatedByUserId: session.user.id,
       },
     });
+
+    // Repuestos/materiales previstos del plan → WorkOrderItem de la OT. spareId
+    // enlaza al catálogo (para que la OT muestre stock). Es planificación: NO
+    // descuenta stock (eso pasa al cerrar la OT, vía StockMovement).
+    const planSpares = resolvePlanSpares(planAny);
+    if (planSpares.length > 0) {
+      await (tx as any).workOrderItem.createMany({
+        data: planSpares.map((s, i) => ({
+          workOrderId: workOrder.id,
+          kind: s.kind,
+          spareId: s.spareId ?? null,
+          description: s.description,
+          quantity: s.quantity ?? 1,
+          unit: s.unit ?? "ud",
+          sortOrder: i,
+          createdByUserId: woCreatorId,
+          updatedByUserId: woCreatorId,
+        })),
+      });
+    }
 
     // Una SS por proveedor configurado en el plan. Se consulta el MAX del
     // correlativo una vez y se incrementa por cada una (+attempt para reintentar

@@ -1018,7 +1018,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const closeMemberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
 
-  const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number }> }>(
+  const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number; minStock: number; reorderPoint: number }> }>(
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
   );
   const woSpares = sparesData?.items ?? [];
@@ -1512,9 +1512,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       await Promise.all([
         ...original.filter(o => o.id && !kept.has(o.id)).map(o => api.delete(`${base}/${o.id}`)),
         ...plannedItems.filter(i => !i.id && i.description.trim()).map(i =>
-          api.post(base, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+          api.post(base, { kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
         ...plannedItems.filter(i => i.id && i.description.trim()).map(i =>
-          api.patch(`${base}/${i.id}`, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+          api.patch(`${base}/${i.id}`, { kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
       ]);
     }
   }, [title, description, assignedTo, dueDate, openDate, type, priority, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
@@ -1553,9 +1553,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       await Promise.all([
         ...original.filter(o => o.id && !kept.has(o.id)).map(o => api.delete(`${base}/${o.id}`)),
         ...plannedItems.filter(i => !i.id && i.description.trim()).map(i =>
-          api.post(base, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+          api.post(base, { kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
         ...plannedItems.filter(i => i.id && i.description.trim()).map(i =>
-          api.patch(`${base}/${i.id}`, { kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit })),
+          api.patch(`${base}/${i.id}`, { kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
       ]);
       // Recuperar los ids de los ítems recién creados: sin esto, el próximo
       // auto-guardado los volvería a crear (duplicados).
@@ -2010,6 +2010,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
               items={plannedItems}
               onItemsChange={v => { touchRegi(); setPlannedItems(v); }}
+              spares={woSpares}
               priority={priority}
               onPriorityChange={v => { touchRegi(); setPriority(v); }}
               disabled={!isEditable}

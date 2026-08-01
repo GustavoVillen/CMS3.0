@@ -39,6 +39,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
 import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
+import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
@@ -93,6 +94,8 @@ export interface MaintenancePlan {
   providerName?: string | null;
   /** Varios proveedores + aclaración (área = PROVEEDOR). Resuelto por el backend con nombre. */
   providerRequests?: { providerId: string; purpose?: string | null; providerName?: string | null }[] | null;
+  /** Repuestos/materiales previstos. Se heredan a la OT al abrirla. */
+  spares?: { kind: "SPARE" | "MATERIAL"; spareId?: string | null; description: string; quantity?: number | null; unit?: string | null }[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -1080,6 +1083,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     return [];
   });
   const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
+  // Repuestos/materiales previstos (se heredan a la OT). Mismo shape que la OT.
+  const [plannedSpares, setPlannedSpares] = useState<WoPlannedItem[]>(() =>
+    (plan?.spares ?? []).map(s => ({
+      kind: s.kind, spareId: s.spareId ?? null, description: s.description,
+      quantity: s.quantity ?? 1, unit: s.unit ?? "ud",
+    })),
+  );
+  // Catálogo de repuestos del buque con stock (para el desplegable + semáforo).
+  const [spareCatalog, setSpareCatalog] = useState<WoSpareOption[]>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
   // Mismo cuidado que arriba: si hay plan manda el plan, aunque venga en nulo.
@@ -1207,6 +1219,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     return () => { cancelled = true; };
   }, [department, providers.length]);
 
+  // Catálogo de repuestos del buque (con stock) para la sección de repuestos previstos.
+  useEffect(() => {
+    const vc = (vesselCode || plan?.vesselCode || "").trim();
+    if (!vc) { setSpareCatalog([]); return; }
+    let cancelled = false;
+    api.get<{ items: WoSpareOption[] }>(`/app/pms/spares?vesselCode=${encodeURIComponent(vc)}&status=ACTIVE`)
+      .then(r => { if (!cancelled) setSpareCatalog(r.items ?? []); })
+      .catch(() => { if (!cancelled) setSpareCatalog([]); });
+    return () => { cancelled = true; };
+  }, [vesselCode, plan?.vesselCode]);
+
   useEffect(() => {
     if (!plan) return;
     setAssetId(plan.assetId ?? "");
@@ -1223,6 +1246,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           ? [{ providerId: plan.providerId, purpose: "" }]
           : [],
     );
+    setPlannedSpares((plan.spares ?? []).map(s => ({
+      kind: s.kind, spareId: s.spareId ?? null, description: s.description,
+      quantity: s.quantity ?? 1, unit: s.unit ?? "ud",
+    })));
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
@@ -1416,6 +1443,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         providerRequests: cleanProviderRequests,
         providerId: cleanProviderRequests.length === 1 ? cleanProviderRequests[0]!.providerId : null,
       };
+      // Repuestos/materiales previstos: se descartan las filas vacías (repuesto
+      // sin elegir / material sin descripción). El backend normaliza igual.
+      const cleanSpares = plannedSpares
+        .filter(s => s.kind === "SPARE" ? !!s.spareId : !!s.description.trim())
+        .map(s => ({
+          kind: s.kind,
+          spareId: s.kind === "SPARE" ? (s.spareId ?? null) : null,
+          description: s.description.trim(),
+          quantity: Number.isFinite(s.quantity) && s.quantity > 0 ? s.quantity : 1,
+          unit: s.unit.trim() || "ud",
+        }));
 
       let savedId: string;
       if (isNew) {
@@ -1450,6 +1488,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
+          spares: cleanSpares,
         });
         savedId = created.id;
       } else {
@@ -1489,6 +1528,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             lastExecutionDate: needsHours(triggerType) ? undefined : (lastExecDate || null),
             lastExecutionHours: needsHours(triggerType) ? (lastExecHours ? Number(lastExecHours) : null) : undefined,
           } : {}),
+          spares: cleanSpares,
         });
         savedId = plan.id;
       }
@@ -1540,7 +1580,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
-    lastExecDate, lastExecHours,
+    lastExecDate, lastExecHours, plannedSpares,
   }, saveResetKey);
   const requestClose = useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
@@ -2167,6 +2207,20 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* Repuestos / Materiales previstos. Los repuestos salen del catálogo
+                /Spares (con stock); los materiales van a mano. Al abrir la OT se
+                heredan. Es planificación: NO descuenta stock. */}
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("mp.spares.title")}</label>
+              <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
+              <PlannedItemsEditor
+                items={plannedSpares}
+                onChange={setPlannedSpares}
+                spares={spareCatalog}
+                disabled={readOnly}
+              />
             </div>
 
             {/* Responsible + Status */}

@@ -8,26 +8,19 @@
 // fechas, prioridad, riesgo, firmas) ya vive en el modal.
 
 import React from "react";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 import {
   WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS,
   WO_PRIORITY_OPTIONS, type FormOption,
 } from "../../lib/wo-form-catalog";
+import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "./PlannedItemsEditor";
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
-// Igual que inputCls pero SIN `w-full`: en las filas de repuestos/materiales el
-// ancho lo decide el flex. Con `w-full` los tres campos piden el 100% y el de
-// descripción queda aplastado a unos pocos píxeles.
-const cellCls = "bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 
-export interface WoPlannedItem {
-  id?: string;
-  kind: "SPARE" | "MATERIAL";
-  description: string;
-  quantity: number;
-  unit: string;
-}
+// Los recuadros de repuestos/materiales viven en PlannedItemsEditor (compartido
+// con el modal de Plan). Se re-exportan los tipos para no romper importadores.
+export type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
 
 export interface WoRegiForm {
   voyageNumber: string;
@@ -127,7 +120,7 @@ export function WoRegiSections({
   form, onChange, items, onItemsChange, priority, disabled,
   providers, providerId, onProviderChange, location, onLocationChange, onPriorityChange,
   providerOther, onProviderOtherChange,
-  saving, saved, error,
+  saving, saved, error, spares = [],
 }: {
   form: WoRegiForm;
   onChange: (patch: Partial<WoRegiForm>) => void;
@@ -137,6 +130,8 @@ export function WoRegiSections({
   error?: string | null;
   items: WoPlannedItem[];
   onItemsChange: (items: WoPlannedItem[]) => void;
+  /** Catálogo de repuestos del buque con stock (para el desplegable + semáforo). */
+  spares?: WoSpareOption[];
   /** Prioridad de la OT. El papel la nombra como plazo: es el mismo dato. */
   priority: string;
   onPriorityChange: (v: string) => void;
@@ -154,74 +149,6 @@ export function WoRegiSections({
 }) {
   // Arranca en "otra empresa" si la OT ya se guardó con un nombre escrito a mano.
   const [otraEmpresa, setOtraEmpresa] = React.useState(!providerId && !!providerOther);
-
-  const addItem = (kind: "SPARE" | "MATERIAL") =>
-    onItemsChange([...items, { kind, description: "", quantity: 1, unit: "ud" }]);
-  const patchItem = (idx: number, patch: Partial<WoPlannedItem>) =>
-    onItemsChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
-  const removeItem = (idx: number) => onItemsChange(items.filter((_, i) => i !== idx));
-
-  const itemsTable = (kind: "SPARE" | "MATERIAL", title: string) => {
-    const rows = items.map((it, i) => ({ it, i })).filter(r => r.it.kind === kind);
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className={labelCls + " mb-0"}>{title}</p>
-          {!disabled && (
-            <button
-              type="button"
-              onClick={() => addItem(kind)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
-            >
-              <Plus className="w-3 h-3" /> Agregar
-            </button>
-          )}
-        </div>
-        {rows.length === 0 ? (
-          <p className="text-[11px] text-text-industrial/40 italic">Sin {title.toLowerCase()}.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {rows.map(({ it, i }) => (
-              <div key={it.id ?? i} className="flex gap-1.5 items-center">
-                {/* min-w-0 para que el campo pueda encogerse sin empujar a los otros */}
-                <input
-                  className={cellCls + " flex-1 min-w-0"}
-                  placeholder={kind === "SPARE" ? "Ej. Reten de eje 120x150" : "Ej. Grasa marina EP2"}
-                  value={it.description}
-                  disabled={disabled}
-                  onChange={e => patchItem(i, { description: e.target.value })}
-                />
-                <input
-                  type="number" min={0} step="any"
-                  className={cellCls + " w-16 shrink-0 text-center"}
-                  value={it.quantity}
-                  disabled={disabled}
-                  onChange={e => patchItem(i, { quantity: Number(e.target.value) })}
-                />
-                <input
-                  className={cellCls + " w-14 shrink-0 text-center"}
-                  placeholder="ud"
-                  value={it.unit}
-                  disabled={disabled}
-                  onChange={e => patchItem(i, { unit: e.target.value })}
-                />
-                {!disabled && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(i)}
-                    className="shrink-0 p-1.5 rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10"
-                    aria-label="Quitar ítem"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-4 bg-fg/5 border border-fg/10 rounded-2xl p-4">
@@ -325,9 +252,8 @@ export function WoRegiSections({
           onChange={v => onChange({ systemArea: v })} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 border-t border-fg/10 pt-4">
-        {itemsTable("SPARE", "Repuestos")}
-        {itemsTable("MATERIAL", "Materiales")}
+      <div className="border-t border-fg/10 pt-4">
+        <PlannedItemsEditor items={items} onChange={onItemsChange} spares={spares} disabled={disabled} />
       </div>
     </div>
   );
