@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, Loader2, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Loader2, type LucideIcon } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { useVesselContext } from "../lib/vessel-context";
+import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +150,24 @@ export function MaintenanceGanttPage() {
   const [zoom, setZoom] = useState<ZoomKey>("month");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
+  // Planilla de mantenimiento (.xlsx) del buque elegido en el selector del header.
+  const { selectedVesselCode, selectedVessel } = useVesselContext();
+  const [exporting, setExporting] = useState(false);
+  const exportSheet = async () => {
+    if (exporting || !selectedVesselCode) return;
+    setExporting(true);
+    try {
+      await exportMaintenanceSheet({
+        vesselCode: selectedVesselCode,
+        vesselName: selectedVessel?.name ?? selectedVesselCode,
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "No se pudo exportar la planilla.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const pxPerMonth = ZOOMS.find((z) => z.key === zoom)!.px;
 
   function toggleStatus(s: string) {
@@ -278,6 +298,21 @@ export function MaintenanceGanttPage() {
             </button>
           ))}
         </div>
+
+        {/* La planilla es del buque elegido arriba: sin buque no se puede armar. */}
+        <button
+          onClick={() => { void exportSheet(); }}
+          disabled={exporting || !selectedVesselCode}
+          title={selectedVesselCode
+            ? `Exportar la planilla de mantenimiento completa de ${selectedVessel?.name ?? selectedVesselCode} a Excel`
+            : "Elegí un buque en el selector de arriba para exportar su planilla"}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {exporting
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+            : <FileSpreadsheet className="w-3.5 h-3.5" />}
+          {exporting ? "Generando…" : "Planilla Excel"}
+        </button>
 
         <div className="flex-1" />
 
