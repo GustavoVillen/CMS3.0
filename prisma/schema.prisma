@@ -1266,6 +1266,12 @@ model MaintenancePlan {
   // al Provider responsable (sin FK forzada; el nombre se resuelve al leer).
   department           WorkOrderDepartment?
   providerId           String?
+  // Varios proveedores por plan (área = PROVEEDOR), cada uno con la aclaración de
+  // para qué se lo contrata: [{ providerId, purpose }]. Al abrir la OT se crea una
+  // SS por cada entrada. Mismo criterio suelto que providerId (sin FK; el nombre se
+  // resuelve al leer). providerId se mantiene sincronizado: = el único id cuando hay
+  // exactamente uno, null cuando hay varios — para la línea "Proveedor" del PDF.
+  providerRequests     Json?
   acceptanceCriteria   String?
   loto                 String?
   sfiGroupNumber       Int?

@@ -5,6 +5,7 @@ import { workOrderPrefix } from "../../common/wo-code";
 import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { resolveConsumables, createWorkLogSpareMovements } from "../pms/spare-consumption";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
@@ -30,6 +31,8 @@ export interface CreateMaintenancePlanInput {
   responsible?: string | null;
   department?: MaintenancePlanDepartment | null;
   providerId?: string | null;
+  /** Varios proveedores + aclaración (área = PROVEEDOR). Ver PlanProviderRequest. */
+  providerRequests?: PlanProviderRequest[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -60,6 +63,13 @@ export interface CreateMaintenancePlanInput {
 /** Área / responsable de la tarea — mismo set que WorkOrderDepartment. */
 export type MaintenancePlanDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
 
+/** Un proveedor del plan + la aclaración de para qué se lo contrata. Al abrir la OT
+ *  se crea una SS por cada entrada, usando `purpose` como descripción del servicio. */
+export interface PlanProviderRequest {
+  providerId: string;
+  purpose?: string | null;
+}
+
 export interface UpdateMaintenancePlanInput {
   taskType?: "MAINTENANCE" | "INSPECTION" | null;
   assetId?: string;
@@ -73,6 +83,8 @@ export interface UpdateMaintenancePlanInput {
   responsible?: string | null;
   department?: MaintenancePlanDepartment | null;
   providerId?: string | null;
+  /** Varios proveedores + aclaración (área = PROVEEDOR). Ver PlanProviderRequest. */
+  providerRequests?: PlanProviderRequest[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -346,6 +358,39 @@ function normalizeOptionalNumber(value: unknown, field: string): number | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   throw new RouteError(400, "VALIDATION_ERROR", `Valor numérico inválido en ${field}.`);
+}
+
+/** Limpia la lista de proveedores del plan: descarta filas sin providerId y
+ *  recorta/anula la aclaración. Devuelve [] si no hay nada válido. */
+function normalizeProviderRequests(value: unknown): PlanProviderRequest[] {
+  if (!Array.isArray(value)) return [];
+  const out: PlanProviderRequest[] = [];
+  for (const raw of value) {
+    const providerId = normalizeOptionalText((raw as any)?.providerId);
+    if (!providerId) continue;
+    out.push({ providerId, purpose: normalizeOptionalText((raw as any)?.purpose) });
+  }
+  return out;
+}
+
+/** Fuente canónica de "los proveedores de un plan". Prioriza providerRequests;
+ *  si no hay, cae al providerId legacy como lista de 1; si no, lista vacía.
+ *  Tolera JSON malformado (degrada a []), nunca tira error. */
+export function resolvePlanProviderRequests(plan: {
+  providerRequests?: unknown;
+  providerId?: string | null;
+}): PlanProviderRequest[] {
+  const list = normalizeProviderRequests(plan.providerRequests);
+  if (list.length > 0) return list;
+  const legacy = normalizeOptionalText(plan.providerId);
+  return legacy ? [{ providerId: legacy, purpose: null }] : [];
+}
+
+/** providerId denormalizado para la línea "Proveedor" del PDF: el único id
+ *  cuando hay exactamente uno, null cuando hay varios (los proveedores se
+ *  expresan por las SS) o ninguno. */
+function collapseProviderId(requests: PlanProviderRequest[]): string | null {
+  return requests.length === 1 ? requests[0]!.providerId : null;
 }
 
 function normalizeRiskLevel(value: unknown): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null {
@@ -638,8 +683,11 @@ export async function listTenantMaintenancePlans(
     if (!target.has(wo.maintenancePlanId)) target.set(wo.maintenancePlanId, wo.workOrderCode);
   }
 
-  // Resolver nombre del proveedor para los planes con área = PROVEEDOR.
-  const providerIds = [...new Set(plans.map((p) => (p as unknown as { providerId?: string | null }).providerId).filter((v): v is string => !!v))];
+  // Resolver nombre del proveedor para los planes con área = PROVEEDOR. Se juntan
+  // los ids del providerId legacy Y de la lista providerRequests de todos los planes.
+  const providerIds = [...new Set(
+    plans.flatMap((p) => resolvePlanProviderRequests(p as any).map((r) => r.providerId)),
+  )];
   const providerRows = providerIds.length > 0
     ? await (prismaRaw as unknown as { provider: { findMany: (args: unknown) => Promise<{ id: string; name: string | null }[]> } }).provider.findMany({
         where: { id: { in: providerIds }, tenantId },
@@ -675,6 +723,12 @@ export async function listTenantMaintenancePlans(
       activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
       deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
       providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
+      // Lista de proveedores resuelta con nombre, para la UI. Deriva del helper
+      // canónico (providerRequests o el legacy single) → siempre coherente.
+      providerRequests: resolvePlanProviderRequests(p as any).map((r) => ({
+        ...r,
+        providerName: providerNameMap.get(r.providerId) ?? null,
+      })),
       executionStatus: deriveExecutionStatus(p, currentHours),
       projectedDueDate,
     };
@@ -848,19 +902,25 @@ export async function getTenantMaintenancePlan(session: TenantAccessSession, id:
   if (!record) throw new RouteError(404, "NOT_FOUND", "Maintenance plan no encontrado.");
   const workLogs = await loadRecentWorkLogs(prisma.workLog, record.tenantId, record.id);
 
-  let providerName: string | null = null;
-  const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
-  if (recProviderId) {
+  // Resolver nombres de TODOS los proveedores del plan (lista + legacy single) en
+  // un solo findMany, y devolver providerRequests enriquecido para el modal.
+  const requests = resolvePlanProviderRequests(record as any);
+  const reqIds = [...new Set(requests.map((r) => r.providerId))];
+  const nameMap = new Map<string, string | null>();
+  if (reqIds.length > 0) {
     try {
-      const provider = await (prismaRaw as unknown as { provider: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).provider.findFirst({
-        where: { id: recProviderId, tenantId },
-        select: { name: true },
+      const rows = await (prismaRaw as unknown as { provider: { findMany: (a: unknown) => Promise<{ id: string; name: string | null }[]> } }).provider.findMany({
+        where: { id: { in: reqIds }, tenantId },
+        select: { id: true, name: true },
       });
-      providerName = provider?.name ?? null;
+      for (const r of rows) nameMap.set(r.id, r.name ?? null);
     } catch { /* non-blocking */ }
   }
+  const recProviderId = (record as unknown as { providerId?: string | null }).providerId ?? null;
+  const providerName = recProviderId ? (nameMap.get(recProviderId) ?? null) : null;
+  const providerRequestsResolved = requests.map((r) => ({ ...r, providerName: nameMap.get(r.providerId) ?? null }));
 
-  return { ...record, providerName, workLogs };
+  return { ...record, providerName, providerRequests: providerRequestsResolved, workLogs };
 }
 
 // ---------------------------------------------------------------------------
@@ -989,8 +1049,19 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
     responsible: normalizeOptionalText(payload.responsible),
     department: payload.department ?? null,
-    // providerId solo aplica cuando el área es PROVEEDOR; en otros casos se descarta.
-    providerId: payload.department === "PROVEEDOR" ? normalizeOptionalText(payload.providerId) : null,
+    // providers solo aplican cuando el área es PROVEEDOR; en otros casos se
+    // descartan. providerRequests es la lista con aclaración; providerId queda
+    // sincronizado (único → id, varios/ninguno → null) para el PDF.
+    ...(() => {
+      if (payload.department !== "PROVEEDOR") return { providerRequests: null, providerId: null };
+      const requests = payload.providerRequests !== undefined
+        ? normalizeProviderRequests(payload.providerRequests)
+        : resolvePlanProviderRequests({ providerId: payload.providerId });
+      return {
+        providerRequests: requests.length > 0 ? (requests as unknown as object) : null,
+        providerId: collapseProviderId(requests),
+      };
+    })(),
     acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
     loto: normalizeOptionalText(payload.loto),
     sfiGroupNumber,
@@ -1077,13 +1148,23 @@ export async function updateTenantMaintenancePlan(
   if (payload.frequencyMonths !== undefined) data.frequencyMonths = normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths");
   if (payload.estimatedHours !== undefined) data.estimatedHours = normalizeOptionalNumber(payload.estimatedHours, "estimatedHours");
   if (payload.responsible !== undefined) data.responsible = normalizeOptionalText(payload.responsible);
-  if (payload.department !== undefined) {
+  // Área + proveedores. Salir de PROVEEDOR limpia la lista y el providerId. Si el
+  // área es (o sigue siendo) PROVEEDOR, se toma providerRequests cuando viene, y
+  // se sincroniza providerId (único → id, varios → null). Un cliente legacy que
+  // solo manda providerId cae al camino de proveedor único.
+  if (payload.department !== undefined && payload.department !== "PROVEEDOR") {
     data.department = payload.department ?? null;
-    // Cambiar el área a algo distinto de PROVEEDOR limpia el proveedor asociado.
-    if (payload.department !== "PROVEEDOR") data.providerId = null;
-  }
-  if (payload.providerId !== undefined && data.providerId === undefined) {
-    data.providerId = normalizeOptionalText(payload.providerId);
+    data.providerRequests = null;
+    data.providerId = null;
+  } else {
+    if (payload.department !== undefined) data.department = payload.department ?? null;
+    if (payload.providerRequests !== undefined) {
+      const requests = normalizeProviderRequests(payload.providerRequests);
+      data.providerRequests = requests.length > 0 ? requests : null;
+      data.providerId = collapseProviderId(requests);
+    } else if (payload.providerId !== undefined) {
+      data.providerId = normalizeOptionalText(payload.providerId);
+    }
   }
   if (payload.acceptanceCriteria !== undefined) data.acceptanceCriteria = normalizeOptionalText(payload.acceptanceCriteria);
   if (payload.loto !== undefined) data.loto = normalizeOptionalText(payload.loto);
@@ -1248,7 +1329,9 @@ export async function quickClosePlan(
             description: plan.description,
             taskMasterId: plan.taskMasterId ?? null,
             department: planAny.department ?? null,
-            providerId: planAny.providerId ?? null,
+            // Colapso del proveedor igual que al abrir la OT: único → id, varios → null.
+            // (Este cierre rápido NO crea SS, solo hereda el proveedor a la OT ya cerrada.)
+            providerId: collapseProviderId(planAny.department === "PROVEEDOR" ? resolvePlanProviderRequests(planAny) : []),
             // Tramitación automática: aprobada + autorizada por Sistema (sin firma humana).
             aprobadoByName: "Sistema",
             aprobadoAt: completedAt,
@@ -1554,7 +1637,30 @@ export async function openFormalWorkOrder(
       }
     : {};
 
-  const woTxResult = await prisma.$transaction(async (tx) => {
+  // Proveedores del plan → una SS por cada uno al abrir la OT. Solo aplica cuando
+  // el área es PROVEEDOR; la lista sale del helper canónico (providerRequests o el
+  // legacy single). El providerId de la OT se colapsa: único → id, varios → null.
+  const providerRequests = planAny.department === "PROVEEDOR"
+    ? resolvePlanProviderRequests(planAny)
+    : [];
+  const woProviderId = collapseProviderId(providerRequests);
+  // Import dinámico (mismo criterio que la cascada) para evitar ciclo con el
+  // servicio de SS. Se resuelve ANTES de la transacción: si falla, no se abre la OT.
+  const { queryMaxServiceRequestSeq, insertServiceRequestForWorkOrderTx } =
+    providerRequests.length > 0
+      ? await import("../service-requests/service-requests-service")
+      : ({} as typeof import("../service-requests/service-requests-service"));
+  // OT Express → las SS nacen AUTORIZADA, firmadas igual que la OT (la cascada no
+  // corre en Express). OT normal → nacen DRAFT y la cascada las arrastra al aprobar.
+  const ssStatus = isExpress ? "AUTORIZADA" : "DRAFT";
+  const ssStamps = isExpress
+    ? {
+        aprobadoByName: expressSigner, aprobadoByUserId: woCreatorId, aprobadoAt: woOpenDate,
+        autorizadoByName: expressSigner, autorizadoByUserId: woCreatorId, autorizadoAt: woOpenDate,
+      }
+    : {};
+
+  const woTxResult = await withUniqueRetry(async (attempt) => prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.create({
       data: {
         tenantId: plan.tenantId,
@@ -1588,7 +1694,7 @@ export async function openFormalWorkOrder(
         consequenceRationale: inherit<string>(payload.consequenceRationale, planAny.consequenceRationale),
         // Área / responsable: se hereda del plan a la OT.
         department: planAny.department ?? null,
-        providerId: planAny.providerId ?? null,
+        providerId: woProviderId,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
       },
@@ -1602,8 +1708,41 @@ export async function openFormalWorkOrder(
       },
     });
 
+    // Una SS por proveedor configurado en el plan. Se consulta el MAX del
+    // correlativo una vez y se incrementa por cada una (+attempt para reintentar
+    // ante colisión). La descripción del servicio es la aclaración del proveedor;
+    // las causas, la tarea del plan. Atómico con la OT: "OT abierta ⇒ sus SS existen".
+    if (providerRequests.length > 0) {
+      const year = woOpenDate.getFullYear();
+      const seqBase = await queryMaxServiceRequestSeq(tx as any, plan.tenantId, plan.vesselCode, year);
+      for (let i = 0; i < providerRequests.length; i++) {
+        const req = providerRequests[i]!;
+        const servicio = normalizeOptionalText(req.purpose) ?? plan.title;
+        await insertServiceRequestForWorkOrderTx(tx as any, {
+          tenantId: plan.tenantId,
+          vesselCode: plan.vesselCode,
+          workOrderId: workOrder.id,
+          year,
+          openDate: woOpenDate,
+          seqBase,
+          seqOffset: i + attempt,
+          actorUserId: woCreatorId,
+          status: ssStatus,
+          data: {
+            department: "PROVEEDOR",
+            providerId: req.providerId,
+            title: servicio,
+            description: servicio,
+            causes: plan.description ?? plan.title,
+            priority: payload.priority ?? "MEDIUM",
+            ...ssStamps,
+          },
+        });
+      }
+    }
+
     return workOrder;
-  });
+  }));
   void publishAudit(prismaRaw, {
     tenantId: plan.tenantId,
     actorUserId: session.user.id,
@@ -1622,6 +1761,8 @@ export async function openFormalWorkOrder(
       // tramitación: es la excepción y tiene que poder auditarse como tal.
       express: isExpress || undefined,
       expressSigner: isExpress ? expressSigner : undefined,
+      // Cuántas SS se crearon solas (una por proveedor del plan).
+      autoServiceRequests: providerRequests.length || undefined,
     },
   });
   return woTxResult;

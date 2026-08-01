@@ -298,6 +298,68 @@ export async function listWorkOrderServiceRequests(session: TenantAccessSession,
 
 // ── Creación (única vía: desde una OT abierta) ───────────────────────────────
 
+/**
+ * MAX del correlativo de SS para un buque+año (no COUNT: con gaps/soft-deletes
+ * el COUNT no coincide con el máximo real y repite códigos). Corre sobre `client`,
+ * que puede ser el prisma normal o un `tx` de transacción.
+ */
+export async function queryMaxServiceRequestSeq(
+  client: any,
+  tenantId: string,
+  vesselCode: string,
+  year: number,
+): Promise<number> {
+  const rows = (await client.$queryRawUnsafe(
+    `SELECT MAX(CAST(SPLIT_PART("serviceRequestCode", '-', 2) AS INTEGER)) AS max_seq
+       FROM "ServiceRequest"
+      WHERE "tenantId" = $1 AND "vesselCode" = $2
+        AND "serviceRequestCode" ~ ('^SS-[0-9]+-' || $2 || '-' || $3 || '$')
+        AND "deletedAt" IS NULL`,
+    tenantId,
+    vesselCode,
+    String(year),
+  )) as { max_seq: number | null }[];
+  return rows[0]?.max_seq ?? 0;
+}
+
+/**
+ * Inserta UNA ServiceRequest para una OT. Camino único de numeración y creación,
+ * compartido por la carga manual y por la auto-creación al abrir la OT (una SS
+ * por proveedor del plan). El código sale de `seqBase + 1 + seqOffset`, así el
+ * llamador que crea varias en lote consulta el MAX una vez y va incrementando.
+ * `client` puede ser el prisma normal o un `tx`.
+ */
+export async function insertServiceRequestForWorkOrderTx(
+  client: any,
+  ctx: {
+    tenantId: string;
+    vesselCode: string;
+    workOrderId: string;
+    year: number;
+    openDate: Date;
+    seqBase: number;
+    seqOffset: number;
+    actorUserId: string;
+    status?: string;                 // "DRAFT" (default) | "AUTORIZADA"
+    data: Record<string, unknown>;   // department, causes, providerId, title, description, priority, stamps…
+  },
+) {
+  const serviceRequestCode = `SS-${ctx.seqBase + 1 + ctx.seqOffset}-${ctx.vesselCode}-${ctx.year}`;
+  return client.serviceRequest.create({
+    data: {
+      tenantId: ctx.tenantId,
+      vesselCode: ctx.vesselCode,
+      workOrderId: ctx.workOrderId,
+      serviceRequestCode,
+      status: ctx.status ?? "DRAFT",
+      openDate: ctx.openDate,
+      ...ctx.data,
+      createdByUserId: ctx.actorUserId,
+      updatedByUserId: ctx.actorUserId,
+    },
+  });
+}
+
 export async function createServiceRequestForWorkOrder(
   session: TenantAccessSession,
   workOrderId: string,
@@ -347,36 +409,18 @@ export async function createServiceRequestForWorkOrder(
   };
 
   // Formato del documento controlado: SS-<seq>-<BUQUE>-<AÑO> (ej. SS-74-M01-2026).
-  // Correlativo por buque y año, sin padding — así lo numera el cliente.
+  // Correlativo por buque y año, sin padding. Mismo camino que la auto-creación.
   const created = await withUniqueRetry(async (attempt) => {
-    // MAX sobre el correlativo (no COUNT): con gaps o soft-deletes el COUNT no
-    // coincide con el máximo real y repite códigos (P2002). SPLIT_PART toma el
-    // 2º segmento, que es el seq; los vesselCode no llevan guiones.
-    const rows = (await prismaRaw.$queryRawUnsafe(
-      `SELECT MAX(CAST(SPLIT_PART("serviceRequestCode", '-', 2) AS INTEGER)) AS max_seq
-         FROM "ServiceRequest"
-        WHERE "tenantId" = $1 AND "vesselCode" = $2
-          AND "serviceRequestCode" ~ ('^SS-[0-9]+-' || $2 || '-' || $3 || '$')
-          AND "deletedAt" IS NULL`,
-      tenantId,
-      vesselCode,
-      String(year),
-    )) as { max_seq: number | null }[];
-    const maxSeq = rows[0]?.max_seq ?? 0;
-    const serviceRequestCode = `SS-${maxSeq + 1 + attempt}-${vesselCode}-${year}`;
-    return prismaRaw.serviceRequest.create({
+    const maxSeq = await queryMaxServiceRequestSeq(prismaRaw, tenantId, vesselCode, year);
+    return insertServiceRequestForWorkOrderTx(prismaRaw, {
+      tenantId, vesselCode, workOrderId, year, openDate,
+      seqBase: maxSeq, seqOffset: attempt,
+      actorUserId: session.user.id,
+      status: "DRAFT",
       data: {
-        tenantId,
-        vesselCode,
-        workOrderId,
-        serviceRequestCode,
-        status: "DRAFT",
-        openDate,
         ...inherited,
         ...writableFields(payload),
         priority: payload.priority ?? (wo as any).priority ?? "MEDIUM",
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
       },
     });
   });

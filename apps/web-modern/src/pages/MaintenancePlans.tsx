@@ -91,6 +91,8 @@ export interface MaintenancePlan {
   department?: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS" | null;
   providerId?: string | null;
   providerName?: string | null;
+  /** Varios proveedores + aclaración (área = PROVEEDOR). Resuelto por el backend con nombre. */
+  providerRequests?: { providerId: string; purpose?: string | null; providerName?: string | null }[] | null;
   acceptanceCriteria?: string | null;
   loto?: string | null;
   sfiGroupNumber?: number | null;
@@ -1037,7 +1039,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [description, setDescription] = useState(plan?.description ?? "");
   const [responsible, setResponsible] = useState(plan?.responsible ?? "");
   const [department, setDepartment] = useState<string>(plan?.department ?? "");
-  const [providerId, setProviderId] = useState<string>(plan?.providerId ?? "");
+  // Lista de proveedores + aclaración (área = PROVEEDOR). Arranca con el valor del
+  // plan (lista nueva, o el providerId legacy como fila de 1). Vacío = sin filas.
+  // OJO: como el resto de los campos del modal, se inicializa con el valor del plan
+  // para que la "foto" de useDirtyTracker no lo marque como cambio falso.
+  const [providerRequests, setProviderRequests] = useState<{ providerId: string; purpose: string }[]>(() => {
+    if (plan?.providerRequests && plan.providerRequests.length > 0) {
+      return plan.providerRequests.map(r => ({ providerId: r.providerId, purpose: r.purpose ?? "" }));
+    }
+    if (plan?.providerId) return [{ providerId: plan.providerId, purpose: "" }];
+    return [];
+  });
   const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
   const [loto, setLoto] = useState(plan?.loto ?? "");
@@ -1172,7 +1184,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setDescription(plan.description ?? "");
     setResponsible(plan.responsible ?? "");
     setDepartment(plan.department ?? "");
-    setProviderId(plan.providerId ?? "");
+    setProviderRequests(
+      plan.providerRequests && plan.providerRequests.length > 0
+        ? plan.providerRequests.map(r => ({ providerId: r.providerId, purpose: r.purpose ?? "" }))
+        : plan.providerId
+          ? [{ providerId: plan.providerId, purpose: "" }]
+          : [],
+    );
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
@@ -1348,6 +1366,23 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       const freqMonths = needsDateFreq(triggerType) && frequencyMonths ? Number(frequencyMonths) : null;
       const freqHours  = needsHours(triggerType)   && frequencyHours  ? Number(frequencyHours)  : null;
 
+      // Proveedores: solo cuando el área es PROVEEDOR. Se descartan filas sin
+      // proveedor; providerId queda sincronizado (único → id, varios → null).
+      // La aclaración es obligatoria: no se puede dejar un proveedor sin explicar
+      // para qué se lo contrata (sería la descripción de una SS vacía).
+      if (department === "PROVEEDOR" && providerRequests.some(r => r.providerId && !r.purpose.trim())) {
+        setActionError(t("mp.providerRequests.purposeRequired"));
+        setSaving(false);
+        return;
+      }
+      const cleanProviderRequests = department === "PROVEEDOR"
+        ? providerRequests.filter(r => r.providerId).map(r => ({ providerId: r.providerId, purpose: r.purpose.trim() || null }))
+        : [];
+      const providerFields = {
+        providerRequests: cleanProviderRequests,
+        providerId: cleanProviderRequests.length === 1 ? cleanProviderRequests[0]!.providerId : null,
+      };
+
       let savedId: string;
       if (isNew) {
         const created = await api.post<{ id: string }>("/app/pms/maintenance-plans", {
@@ -1359,7 +1394,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
           department: (department as any) || null,
-          providerId: department === "PROVEEDOR" ? (providerId || null) : null,
+          ...providerFields,
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
@@ -1392,7 +1427,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
           department: (department as any) || null,
-          providerId: department === "PROVEEDOR" ? (providerId || null) : null,
+          ...providerFields,
           acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
           loto: normalizeOptionalText(loto),
           sfiGroupNumber,
@@ -1459,7 +1494,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   // ESC guard
   const planDirty = useDirtyTracker({
-    vesselCode, taskCode, assetId, taskType, title, description, responsible, department, providerId,
+    vesselCode, taskCode, assetId, taskType, title, description, responsible, department, providerRequests,
     acceptanceCriteria, loto, sfiGroupNumber,
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
@@ -1662,7 +1697,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         <div class="cell"><div class="cell-label">${t("mp.department")}</div><div class="cell-value">${v(
           department
             ? (department === "PROVEEDOR"
-                ? `${t(`wo.dept.PROVEEDOR` as Parameters<typeof t>[0])} — ${providers.find(p => p.id === providerId)?.name ?? plan.providerName ?? ""}`.trim().replace(/—\s*$/, "").trim()
+                ? `${t(`wo.dept.PROVEEDOR` as Parameters<typeof t>[0])} — ${providerRequests.map(r => providers.find(p => p.id === r.providerId)?.name ?? plan.providerRequests?.find(pr => pr.providerId === r.providerId)?.providerName ?? "").filter(Boolean).join(", ") || plan.providerName || ""}`.trim().replace(/—\s*$/, "").trim()
                 : t(`wo.dept.${department}` as Parameters<typeof t>[0]))
             : "",
         )}</div></div>
@@ -2004,7 +2039,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <div className="flex flex-wrap gap-2">
                 {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
                   <button key={d} type="button"
-                    onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderId(""); }}
+                    onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderRequests([]); }}
                     className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
                       department === d
                         ? "bg-accent text-accent-fg border-accent"
@@ -2013,13 +2048,47 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   >{t(`wo.dept.${d}`)}</button>
                 ))}
               </div>
+              {/* Varios proveedores + aclaración. Al abrir la OT se crea una SS por
+                  fila. La aclaración es obligatoria (se valida al guardar). Un mismo
+                  proveedor puede repetirse (dos trabajos distintos = dos SS). */}
               {department === "PROVEEDOR" && (
-                <select value={providerId} onChange={e => setProviderId(e.target.value)} className={`${selectCls} mt-1`}>
-                  <option value="">{t("wo.modal.providerSelect")}</option>
-                  {providers.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                <div className="space-y-2 mt-1">
+                  {providerRequests.map((row, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <select
+                        value={row.providerId}
+                        onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                        className={`${selectCls} w-56 shrink-0`}
+                      >
+                        <option value="">{t("wo.modal.providerSelect")}</option>
+                        {providers.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                        ))}
+                      </select>
+                      <input
+                        value={row.purpose}
+                        onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                        placeholder={t("mp.providerRequests.purposePlaceholder")}
+                        className={`${inputCls} flex-1`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                        title={t("mp.providerRequests.remove")}
+                        className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
-                </select>
+                  <button
+                    type="button"
+                    onClick={() => setProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+                  </button>
+                </div>
               )}
             </div>
 
