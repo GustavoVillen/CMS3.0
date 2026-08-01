@@ -1590,6 +1590,11 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     isDirty: planDirty,
     onSave,
     onClose,
+    // Al editar un plan existente la URL ya es /maintenance-plans/:code (deep-link):
+    // esa ruta es la marca de historial. Sin skipHistory se agregaba una segunda
+    // marca y había que cerrar el modal dos veces. En alta (isNew) no hay ruta, así
+    // que ahí sí se mantiene la marca para el botón atrás del sistema.
+    skipHistory: !isNew,
   });
 
   async function downloadPdf() {

@@ -25,6 +25,13 @@ interface Guard {
   isDirty: () => boolean;
   onSave?: () => Promise<void> | void;
   onClose: () => void;
+  /**
+   * El modal ya tiene su propia entrada de historial (deep-link `/base/:code`):
+   * el back del sistema la resuelve solo. En ese caso NO pusheamos una entrada
+   * extra — si no, quedarían dos marcas con la misma URL y cerrar sólo borra
+   * una, dejando la otra que reabre el modal (había que cerrarlo dos veces).
+   */
+  skipHistory?: boolean;
 }
 
 interface EscapeGuardContextValue {
@@ -71,8 +78,12 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
     stackRef.current = [...stackRef.current, { ...g, id }];
     // Pushear una entry "guard" al history para que el back button del
     // sistema (Android, iOS swipe) pueda interceptarse y cerrar el guard
-    // en vez de navegar fuera de la app.
-    try { window.history.pushState({ __escapeGuard: id }, ""); } catch { /* noop */ }
+    // en vez de navegar fuera de la app. Los modales deep-link ya tienen su
+    // propia entry (la ruta `/base/:code`): esos pasan skipHistory y no
+    // duplican la marca (ver comentario en Guard.skipHistory).
+    if (!g.skipHistory) {
+      try { window.history.pushState({ __escapeGuard: id }, ""); } catch { /* noop */ }
+    }
     return id;
   }, []);
 
@@ -183,6 +194,11 @@ export function EscapeGuardProvider({ children }: { children: React.ReactNode })
       }
       const top = stackRef.current[stackRef.current.length - 1];
       if (!top) return; // sin guards activos, dejar pasar el back nativo
+      // Modal deep-link: no pusheó entry propia, así que este popstate es el de
+      // su RUTA. Dejamos que el cambio de URL lo cierre (el resolver de la
+      // página desmonta el modal); si acá llamáramos onClose haría otro
+      // navigate(-1) y retrocedería de más.
+      if (top.skipHistory) return;
       if (top.isDirty()) {
         // Abrir dialog y re-pushear para que el próximo back (cancel) funcione.
         setDialog({ open: true, guard: top });
@@ -297,6 +313,12 @@ export function useEscapeGuard(opts: {
   isDirty: boolean;
   onSave?: () => Promise<void> | void;
   onClose: () => void;
+  /**
+   * True cuando el modal ya vive en una ruta deep-link (`/base/:code`): evita
+   * la doble marca de historial que obligaba a cerrar dos veces. Ver
+   * Guard.skipHistory.
+   */
+  skipHistory?: boolean;
 }): () => void {
   const ctx = useContext(EscapeGuardContext);
   if (!ctx) throw new Error("useEscapeGuard requires EscapeGuardProvider");
@@ -317,6 +339,7 @@ export function useEscapeGuard(opts: {
       isDirty: () => dirtyRef.current,
       onSave: onSaveRef.current ? () => onSaveRef.current!() : undefined,
       onClose: () => onCloseRef.current(),
+      skipHistory: opts.skipHistory,
     });
     idRef.current = id;
     return () => { idRef.current = null; ctx.unregister(id); };
