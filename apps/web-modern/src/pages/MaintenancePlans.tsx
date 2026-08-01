@@ -2782,6 +2782,11 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/maintenance-plans");
+  // "Número de turno" de apertura. La ventana se abre al instante con la fila y
+  // el detalle completo llega por un fetch de fondo; si para cuando ese fetch
+  // vuelve el turno ya cambió (cerraste, o abriste otro plan), su resultado se
+  // descarta. Sin esto, un detalle que vuelve tarde reabría/pisaba la ventana.
+  const openTokenRef = useRef(0);
 
   useCopilotEmitter(!editing && !showModal ? { module: "MAINTENANCE_PLANS", screen: "MP_LIST" } : null);
   const { setRequestMessage: setRequestMessageFromContext } = useCopilotScreenContext();
@@ -2931,19 +2936,25 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   // esto, abrir esperaba ~0,5s de red (el ida y vuelta del detalle) con la
   // ventana en blanco. El modal re-captura su baseline de cambios al hidratar.
   const openEdit = async (row: Pick<MaintenancePlan, "id">, prefetched?: MaintenancePlan) => {
+    const myToken = ++openTokenRef.current; // este es el turno vigente
     if (prefetched) { setEditing(prefetched); setShowModal(true); }
     else setLoadingDetailId(row.id);
     setPageError(null);
     try {
       const detail = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
+      // Si mientras cargaba el detalle se cerró o se abrió otro plan, este
+      // resultado ya no corresponde: descartarlo (no reabrir ni pisar).
+      if (openTokenRef.current !== myToken) return;
       setEditing(detail);
       setShowModal(true);
     } catch (err) {
       // Con datos precargados la ventana ya está abierta y usable: el detalle es
       // sólo un complemento, así que un fallo de red no la cierra ni molesta.
-      if (!prefetched) setPageError(err instanceof ApiError ? err.message : t("mp.page.detailLoadError"));
+      if (!prefetched && openTokenRef.current === myToken) {
+        setPageError(err instanceof ApiError ? err.message : t("mp.page.detailLoadError"));
+      }
     } finally {
-      setLoadingDetailId(null);
+      if (openTokenRef.current === myToken) setLoadingDetailId(null);
     }
   };
 
@@ -2963,7 +2974,9 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
 
   // Deep-link: la URL `/maintenance-plans/:code` es la fuente de verdad del detalle.
   useEffect(() => {
-    if (!linkCode) { if (editing) { setShowModal(false); setEditing(null); } return; }
+    // Sin :code en la URL = cerrado. Bumpeamos el turno para invalidar cualquier
+    // detalle en vuelo (que si no reabriría la ventana al volver tarde).
+    if (!linkCode) { if (editing) { openTokenRef.current++; setShowModal(false); setEditing(null); } return; }
     if (editing?.taskCode === linkCode) return;
     const inList = rawData?.items?.find(p => p.taskCode === linkCode);
     if (inList) { void openEdit(inList, inList); return; } // abre al instante con la fila ya cargada
@@ -3539,7 +3552,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           // ventana reaparece (había que cerrarla dos veces). Cerramos con showModal
           // + closeLink (limpia la URL); el resolver, al quedar sin code, nulifica
           // `editing` solo. En alta (sin ruta) editing ya es null, así que no cambia.
-          onClose={() => { setShowModal(false); closeLink(); }}
+          onClose={() => { openTokenRef.current++; setShowModal(false); closeLink(); }}
           onSaved={async (savedId) => {
             void reload();
             if (savedId) {
