@@ -1043,9 +1043,16 @@ export interface MaintenancePlanModalProps {
   lockAsset?: boolean;
   /** Overlay z-index class; raise it when nesting this modal over another (default z-50). */
   overlayZClass?: string;
+  /**
+   * El modal está montado sobre su propia ruta `/maintenance-plans/:code`, o sea
+   * que ESA ruta ya es su marca en el historial. Sólo lo pasa la página de
+   * planes al editar. Donde se usa sin ruta (ficha de Equipos, alta) queda en
+   * false y el guard sí registra su marca, para que el botón atrás lo cierre.
+   */
+  deepLinked?: boolean;
 }
 
-export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1150,6 +1157,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // pasando de vacío a su valor real dispararían un falso "cambios sin guardar".
   const [planSyncKey, setPlanSyncKey] = useState(0);
   const planSyncedRef = useRef(false);
+  /** Último plan volcado al formulario: distingue hidratación de cambio de plan. */
+  const lastSyncedPlanIdRef = useRef<string | null>(null);
+  /** Espejo de planDirty legible dentro del efecto de sync (que no lo tiene en deps). */
+  const planDirtyRef = useRef(false);
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
@@ -1241,6 +1252,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   useEffect(() => {
     if (!plan) return;
+    // La ventana abre con los datos de la lista y ~medio segundo después llega el
+    // detalle completo del mismo plan ("hidratación"). Si el usuario ya empezó a
+    // escribir en ese lapso, reescribir los campos le borraría lo tipeado sin
+    // aviso: en ese caso salteamos la reescritura. Sólo aplica a la hidratación
+    // (mismo plan); si cambia de plan, se reescribe siempre.
+    const hydratingSamePlan = lastSyncedPlanIdRef.current === plan.id;
+    lastSyncedPlanIdRef.current = plan.id;
+    if (hydratingSamePlan && planDirtyRef.current) return;
     setAssetId(plan.assetId ?? "");
     setTaskCode(plan.taskCode ?? "");
     setTaskType(plan.taskType ?? "MAINTENANCE");
@@ -1596,16 +1615,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     checklistTemplate, samplingFluidType,
     lastExecDate, lastExecHours, plannedSpares,
   }, `${saveResetKey}:${planSyncKey}`);
+  planDirtyRef.current = planDirty;
   const requestClose = useEscapeGuard({
     enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
     isDirty: planDirty,
     onSave,
     onClose,
-    // Al editar un plan existente la URL ya es /maintenance-plans/:code (deep-link):
-    // esa ruta es la marca de historial. Sin skipHistory se agregaba una segunda
-    // marca y había que cerrar el modal dos veces. En alta (isNew) no hay ruta, así
-    // que ahí sí se mantiene la marca para el botón atrás del sistema.
-    skipHistory: !isNew,
+    // Con ruta propia, ESA ruta es la marca de historial: registrar otra dejaba
+    // dos marcas iguales y el cierre caía en la copia. Sin ruta (alta, o el modal
+    // abierto desde Equipos) sí se registra, para que el botón atrás lo cierre.
+    skipHistory: !!deepLinked,
   });
 
   async function downloadPdf() {
@@ -2781,7 +2800,8 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
-  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/maintenance-plans");
+  // `close` no se usa: el cierre del plan es determinista (ver onClose del modal).
+  const { code: linkCode, open: openLink } = useDeepLink("/maintenance-plans");
   // "Número de turno" de apertura. La ventana se abre al instante con la fila y
   // el detalle completo llega por un fetch de fondo; si para cuando ese fetch
   // vuelve el turno ya cambió (cerraste, o abriste otro plan), su resultado se
@@ -2958,6 +2978,25 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     }
   };
 
+  /**
+   * Abrir un plan desde una fila de cualquier vista de lista.
+   *
+   * Clickear una fila SÓLO cambiaba la URL, confiando en que el resolver
+   * reaccionara. Si la URL ya apuntaba a ese plan (estado inconsistente: ficha
+   * cerrada pero código todavía en la URL), navegar no cambia nada, el resolver
+   * no corre y el click no hacía NADA — el "hago click y no abre". Y como
+   * clickear OTRO plan sí cambia la URL, ése abría: de ahí que pareciera
+   * aleatorio.
+   *
+   * Ahora, si la URL ya apunta a este plan, lo abrimos directo sin depender de
+   * la navegación. Es también la red de seguridad para cualquier futura
+   * desincronización entre la URL y la ficha.
+   */
+  const openFromRow = (row: MaintenancePlan) => {
+    if (linkCode === row.taskCode) { void openEdit(row, row); return; }
+    openLink(row.taskCode, { replace: window.location.pathname.startsWith("/maintenance-plans/") });
+  };
+
   // Compat: `?openId=` (por id, ej. desde Bitácora) → resuelve el taskCode y
   // redirige a la ruta deep-link `/maintenance-plans/:code`.
   useEffect(() => {
@@ -2967,7 +3006,9 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     params.delete("openId");
     setSearchParams(params, { replace: true });
     api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${openId}`)
-      .then(d => openLink(d.taskCode))
+      // `replace`: el ?openId= es un puente, no un destino. Si quedara en el
+      // historial, cerrar el plan volvería a él y el plan se reabriría solo.
+      .then(d => openLink(d.taskCode, { replace: true }))
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2977,7 +3018,13 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     // Sin :code en la URL = cerrado. Bumpeamos el turno para invalidar cualquier
     // detalle en vuelo (que si no reabriría la ventana al volver tarde).
     if (!linkCode) { if (editing) { openTokenRef.current++; setShowModal(false); setEditing(null); } return; }
-    if (editing?.taskCode === linkCode) return;
+    // Auto-curación: si el plan de la URL ya está cargado pero la ventana quedó
+    // oculta (estado "abierto pero invisible" por alguna carrera), volvemos a
+    // mostrarla en vez de salir en silencio — ese silencio era el "hago click y
+    // no abre". No agregamos showModal a las dependencias a propósito: este
+    // efecto no corre al cerrar (cerrar no toca linkCode/rawData/editing), así
+    // que esto no pelea con el cierre.
+    if (editing?.taskCode === linkCode) { if (!showModal) setShowModal(true); return; }
     const inList = rawData?.items?.find(p => p.taskCode === linkCode);
     if (inList) { void openEdit(inList, inList); return; } // abre al instante con la fila ya cargada
     // Fuera de los filtros actuales → buscar sin filtro por código.
@@ -3456,7 +3503,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             plans={data?.items ?? []}
             vesselNameMap={vesselNameMap}
             getStatus={computeStatus}
-            onOpenPlan={code => openLink(code, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
+            onOpenPlan={code => { const r = rawData?.items?.find(p => p.taskCode === code); if (r) openFromRow(r); else openLink(code, { replace: window.location.pathname.startsWith("/maintenance-plans/") }); }}
           />
         )
       ) : gridView ? (
@@ -3474,7 +3521,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             renderStatus={renderStatus}
             renderActions={renderActions}
             statusValue={statusValue}
-            onOpenDetail={row => openLink(row.taskCode, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
+            onOpenDetail={openFromRow}
             emptyText={t("empty.maintenancePlans")}
           />
         )
@@ -3489,7 +3536,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           // Si ya hay un plan activo en la URL (su ventana aún no se dibujó por el
           // gap de render), reemplazamos en vez de apilar: clickear otro plan
           // dejaba /A y /B en el historial y cerrar el 2º reabría el 1º.
-          onRowClick={row => openLink(row.taskCode, { replace: window.location.pathname.startsWith("/maintenance-plans/") })}
+          onRowClick={openFromRow}
           layoutFixed
           groupBy={planGroupBy}
           collapsedGroups={collapsedGroups}
@@ -3548,14 +3595,24 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           setRequestMessage={setRequestMessageFromContext}
-          // OJO: NO hacer setEditing(null) acá. Al editar, la URL todavía tiene el
-          // :code cuando se cierra; nulificar `editing` dispara el resolver deep-link,
-          // que —viendo code en la URL pero sin plan— re-abre el modal con un fetch
-          // asíncrono. Con latencia de red ese fetch vuelve DESPUÉS del cierre y la
-          // ventana reaparece (había que cerrarla dos veces). Cerramos con showModal
-          // + closeLink (limpia la URL); el resolver, al quedar sin code, nulifica
-          // `editing` solo. En alta (sin ruta) editing ya es null, así que no cambia.
-          onClose={() => { openTokenRef.current++; setShowModal(false); closeLink(); }}
+          deepLinked={!!linkCode}
+          // NO hacer setEditing(null) acá: al quedar `editing` en null con el :code
+          // todavía en la URL, el resolver re-abría el plan con un fetch asíncrono.
+          // Lo nulifica el propio resolver cuando la URL se queda sin code.
+          //
+          // Cierre DETERMINISTA: vamos explícitamente a la lista en vez de hacer
+          // "volver atrás". El back era el corazón de los tres síntomas: si el
+          // historial tenía otra entrada del MISMO plan (la dejaba guardar, o las
+          // marcas de los modales anidados), retroceder caía en la copia y el plan
+          // se reabría (cerrar dos veces) o quedaba "abierto pero invisible" —
+          // estado del que salía reabriéndose al cerrar OTRO plan.
+          // `replace` para no dejar la ficha en el historial: el botón Atrás del
+          // navegador sigue llevando a la pantalla de origen (Gantt, Bitácora…).
+          onClose={() => {
+            openTokenRef.current++;
+            setShowModal(false);
+            if (linkCode) navigate(`/maintenance-plans${window.location.search}`, { replace: true });
+          }}
           onSaved={async (savedId) => {
             void reload();
             if (savedId) {

@@ -43,14 +43,26 @@ export function useDeepLink(basePath: string): DeepLink {
   // Se preservan los query params (filtros de la lista, autoCode se descarta).
   const keepSearch = () => {
     const p = new URLSearchParams(search);
+    // Los redirectores son puentes, no filtros: no deben quedar pegados en la
+    // URL del detalle (si quedan, al recargar/compartir vuelven a disparar la
+    // apertura y duplican la entrada del historial).
     p.delete("autoCode");
+    p.delete("openId");
     const qs = p.toString();
     return qs ? `?${qs}` : "";
   };
 
   const open = useCallback(
-    (c: string, opts?: { replace?: boolean }) =>
-      navigate(`${basePath}/${encodeURIComponent(c)}${keepSearch()}`, { replace: opts?.replace ?? false }),
+    (c: string, opts?: { replace?: boolean }) => {
+      const path = `${basePath}/${encodeURIComponent(c)}`;
+      // Abrir el detalle que YA está en la URL nunca debe apilar una segunda
+      // entrada idéntica: si no, `close()` (que es un back) cae en la copia y el
+      // detalle se reabre — había que cerrarlo dos veces, y el estado quedaba
+      // "abierto pero invisible" (de ahí el "hago click y no abre"). Pasa al
+      // guardar, que re-refleja el mismo código en la URL.
+      const sameUrl = window.location.pathname === path;
+      navigate(`${path}${keepSearch()}`, { replace: opts?.replace ?? sameUrl });
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [navigate, basePath, search],
   );
@@ -74,5 +86,13 @@ export function useDeepLink(basePath: string): DeepLink {
     [navigate, basePath, search, key],
   );
 
-  return { code: code ? decodeURIComponent(code) : null, open, close };
+  // React Router ya decodifica el param; este decode extra es por compatibilidad
+  // con links viejos doblemente codificados. Va en try/catch porque un código con
+  // un '%' suelto (ej. "VALV-50%") lanza URIError y tumbaría toda la pantalla
+  // (pantalla en blanco = "no abre").
+  let decoded: string | null = null;
+  if (code) {
+    try { decoded = decodeURIComponent(code); } catch { decoded = code; }
+  }
+  return { code: decoded, open, close };
 }
