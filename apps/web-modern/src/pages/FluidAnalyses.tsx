@@ -17,6 +17,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { AuthedDocLink } from "../lib/authed-media";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -617,11 +618,15 @@ function SampleDetailModal({
               </div>
             )}
             <ParametersTable parameters={sample.result.parameters} />
+            {/* El archivo va por /app/files/* con Bearer token; un <a href> plano
+                no manda el header y da UPLOADS_GONE. AuthedDocLink lo baja
+                autenticado y lo abre como blob en una pestaña nueva. */}
             {sample.result.reportUrl && (
-              <a href={sample.result.reportUrl} target="_blank" rel="noreferrer"
-                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
-                <FileText className="w-3.5 h-3.5 text-accent" /> {t("fa.viewOrigReport")}
-              </a>
+              <AuthedDocLink
+                src={sample.result.reportUrl}
+                label={t("fa.viewOrigReport")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30"
+              />
             )}
             {canManage && (
               <button onClick={() => setShowResultForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
@@ -1227,7 +1232,7 @@ function ResultFormModal({
           </div>
           {extractError && <p className="text-xs text-red-700 dark:text-red-400">{extractError}</p>}
           {extractNote && <p className="text-[11px] text-text-industrial/60 italic">Nota: {extractNote}</p>}
-          {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer" className="text-xs text-accent inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Ver archivo cargado</a>}
+          {reportUrl && <AuthedDocLink src={reportUrl} label="Ver archivo cargado" className="text-xs text-accent inline-flex items-center gap-1" />}
         </div>
 
         {/* Step 2: form pre-filled */}
