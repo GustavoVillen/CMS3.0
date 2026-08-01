@@ -343,6 +343,9 @@ function previewNextDue(
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
+// Recuadro que agrupa visualmente una sección del formulario del plan.
+const sectionCardCls = "rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-4";
+const sectionTitleCls = "text-[11px] font-bold uppercase tracking-widest text-accent/80";
 const sectionLabelCls = "block font-semibold uppercase tracking-wider px-2 py-1 rounded-sm";
 const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", color: "white", fontSize: "1.2rem" };
 const aiLabelStyle: React.CSSProperties = { backgroundColor: "#0c1f3f", color: "white", fontSize: "1.2rem", borderLeft: "3px solid #3b82f6" };
@@ -2029,9 +2032,12 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
             </div>
 
-            {/* Description */}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.modal.tasksToPerform")}</label>
+            {/* ── Recuadro: TAREAS A REALIZAR ── (tarea + programación) */}
+            <div className={sectionCardCls}>
+              <p className={sectionTitleCls}>{t("mp.modal.tasksToPerform")}</p>
+
+              {/* Description (el título del recuadro ya oficia de rótulo) */}
+              <div className="space-y-1.5">
               <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
             </div>
 
@@ -2100,12 +2106,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 )}
               </div>
             </div>
+            </div>{/* ── fin recuadro TAREAS A REALIZAR ── */}
 
+            {/* ── Recuadro: PLAN DE MUESTREO ── */}
+            <div className={sectionCardCls}>
+              <p className={sectionTitleCls}>
+                {t("mp.modal.samplingLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
+              </p>
             {/* Plan de muestreo — kind primero; si es FLUID, segundo select con el sub-tipo. */}
             <div className="space-y-1.5">
-              <label className={labelCls}>
-                {t("mp.modal.samplingLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
-              </label>
               <select
                 value={samplingKind}
                 onChange={e => {
@@ -2144,10 +2153,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <p className="text-[10px] text-accent/70">{t("mp.modal.samplingHint")}</p>
               )}
             </div>
+            </div>{/* ── fin recuadro PLAN DE MUESTREO ── */}
 
+            {/* ── Recuadro: ÁREA / RESPONSABLE ── */}
+            <div className={sectionCardCls}>
+              <p className={sectionTitleCls}>{t("mp.department")}</p>
             {/* Área / responsable */}
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.department")}</label>
               <div className="flex flex-wrap gap-2">
                 {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
                   <button key={d} type="button"
@@ -2208,13 +2220,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 </div>
               )}
             </div>
+            </div>{/* ── fin recuadro ÁREA / RESPONSABLE ── */}
 
-            {/* Repuestos / Materiales previstos. Los repuestos salen del catálogo
-                /Spares (con stock); los materiales van a mano. Al abrir la OT se
-                heredan. Es planificación: NO descuenta stock. */}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.spares.title")}</label>
-              <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
+            {/* ── Recuadro: REPUESTOS / MATERIALES PREVISTOS ──
+                Los repuestos salen del catálogo /Spares (con stock); los materiales
+                van a mano. Al abrir la OT se heredan. Es planificación: NO descuenta stock. */}
+            <div className={sectionCardCls}>
+              <div className="space-y-0.5">
+                <p className={sectionTitleCls}>{t("mp.spares.title")}</p>
+                <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
+              </div>
               <PlannedItemsEditor
                 items={plannedSpares}
                 onChange={setPlannedSpares}
