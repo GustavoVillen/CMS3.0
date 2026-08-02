@@ -2157,19 +2157,24 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   <option value="MANUAL">{t("mp.modal.windowManual")}</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.modal.leadDays")}</label>
-                <input
-                  type="number" min="0" value={windowLeadDays}
-                  onChange={e => setWindowLeadDays(e.target.value)}
-                  placeholder={windowMode === "AUTO" ? t("mp.modal.leadDaysAuto") : t("mp.modal.leadDaysManualPlaceholder")}
-                  disabled={readOnly || windowMode === "AUTO"}
-                  className={inputCls}
-                />
-                {windowMode === "AUTO" && (
-                  <p className="text-[10px] text-text-industrial/40">{t("mp.modal.leadDaysHint")}</p>
-                )}
-              </div>
+              {/* En AUTO los días los calcula el sistema: el campo no se muestra
+                  (antes quedaba visible pero deshabilitado, ocupando lugar y
+                  haciendo dudar si había que completarlo). La explicación de
+                  cómo se calcula queda junto al selector de modo. */}
+              {windowMode === "AUTO" ? (
+                <p className="text-[10px] text-text-industrial/40 self-end pb-2">{t("mp.modal.leadDaysHint")}</p>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("mp.modal.leadDays")}</label>
+                  <input
+                    type="number" min="0" value={windowLeadDays}
+                    onChange={e => setWindowLeadDays(e.target.value)}
+                    placeholder={t("mp.modal.leadDaysManualPlaceholder")}
+                    disabled={readOnly}
+                    className={inputCls}
+                  />
+                </div>
+              )}
             </div>
             </div>{/* ── fin recuadro TAREAS A REALIZAR ── */}
 
