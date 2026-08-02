@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, 
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
+import { useAuth } from "../lib/auth";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -152,6 +153,7 @@ export function MaintenanceGanttPage() {
 
   // Planilla de mantenimiento (.xlsx) del buque elegido en el selector del header.
   const { selectedVesselCode, selectedVessel } = useVesselContext();
+  const { tenant } = useAuth();
   const [exporting, setExporting] = useState(false);
   const exportSheet = async () => {
     if (exporting || !selectedVesselCode) return;
@@ -160,6 +162,8 @@ export function MaintenanceGanttPage() {
       await exportMaintenanceSheet({
         vesselCode: selectedVesselCode,
         vesselName: selectedVessel?.name ?? selectedVesselCode,
+        // La planilla va a papel/impresión: siempre el logo para fondo blanco.
+        logoUrl: tenant?.logoUrl || tenant?.logoUrlLight || null,
       });
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "No se pudo exportar la planilla.");
