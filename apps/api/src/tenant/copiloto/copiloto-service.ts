@@ -1735,6 +1735,12 @@ export async function streamCopilotoChat(
       const toolUseBlocks = msg.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
+      // Traza de qué tools pidió el modelo en cada ronda (nombre + input).
+      // Permite auditar por qué una respuesta no usó la base documental.
+      console.log(
+        `[copiloto] round ${round} tools:`,
+        JSON.stringify(toolUseBlocks.map(b => ({ name: b.name, input: b.input }))),
+      );
       const toolResults = await Promise.all(
         toolUseBlocks.map(async (block) => ({
           type: "tool_result" as const,
@@ -1756,6 +1762,8 @@ export async function streamCopilotoChat(
       continue;
     }
 
+    // El modelo cerró la respuesta sin pedir tools en esta ronda.
+    console.log(`[copiloto] round ${round} sin tools (stop_reason=${msg.stop_reason})`);
     break;
   }
 
