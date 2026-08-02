@@ -599,34 +599,50 @@ function searchKnowledgeDocs(
   type Hit = { name: string; score: number; excerpt: string };
   const hits: Hit[] = [];
 
+  const HALF = Math.floor(KB_WINDOW / 2);
   for (const d of pool) {
     const lc = d.content.toLowerCase();
-    const positions: number[] = [];
-    let score = 0;
+    // Recolectar matches guardando a qué término pertenece cada posición.
+    const matches: { pos: number; term: string }[] = [];
     for (const term of terms) {
       let idx = lc.indexOf(term);
       let count = 0;
       while (idx !== -1 && count < 6) {
-        positions.push(idx);
-        score++;
+        matches.push({ pos: idx, term });
         idx = lc.indexOf(term, idx + term.length);
         count++;
       }
     }
-    if (score === 0) continue;
+    if (matches.length === 0) continue;
+    const score = matches.length;
 
-    positions.sort((a, b) => a - b);
-    const windows: string[] = [];
-    let lastEnd = -1;
-    for (const p of positions) {
-      const start = Math.max(0, p - Math.floor(KB_WINDOW / 2));
-      if (start <= lastEnd) continue; // saltear ventanas solapadas
-      const end = Math.min(d.content.length, p + Math.floor(KB_WINDOW / 2));
-      windows.push(d.content.slice(start, end).trim());
-      lastEnd = end;
+    // Densidad de cada posición: cuántos términos DISTINTOS caen dentro de la
+    // ventana centrada en ella. Prioriza los pasajes donde varios términos de la
+    // búsqueda coinciden juntos ("Capacidad de Aceite") por sobre apariciones
+    // sueltas de un término común ("aceite" repetido en cada rutina). Sin esto,
+    // ordenar por posición llenaba las 3 ventanas con las primeras apariciones y
+    // el dato específico (línea "Capacidad de Aceite: 55 litros") quedaba afuera.
+    const candidates = matches.map(m => {
+      const distinct = new Set(
+        matches.filter(o => Math.abs(o.pos - m.pos) <= HALF).map(o => o.term),
+      );
+      return { pos: m.pos, density: distinct.size };
+    });
+    // Mayor densidad primero; a igual densidad, orden de aparición.
+    candidates.sort((a, b) => b.density - a.density || a.pos - b.pos);
+
+    const windows: { start: number; text: string }[] = [];
+    for (const c of candidates) {
+      const start = Math.max(0, c.pos - HALF);
+      const end = Math.min(d.content.length, c.pos + HALF);
+      // Saltear si se solapa con una ventana ya elegida (en cualquier orden).
+      if (windows.some(w => start < w.start + KB_WINDOW && w.start < end)) continue;
+      windows.push({ start, text: d.content.slice(start, end).trim() });
       if (windows.length >= 3) break;
     }
-    hits.push({ name: d.name, score, excerpt: windows.join("\n…\n") });
+    // Reordenar por posición para que el extracto lea en orden natural.
+    windows.sort((a, b) => a.start - b.start);
+    hits.push({ name: d.name, score, excerpt: windows.map(w => w.text).join("\n…\n") });
   }
 
   hits.sort((a, b) => b.score - a.score);
@@ -1735,12 +1751,6 @@ export async function streamCopilotoChat(
       const toolUseBlocks = msg.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
-      // Traza de qué tools pidió el modelo en cada ronda (nombre + input).
-      // Permite auditar por qué una respuesta no usó la base documental.
-      console.log(
-        `[copiloto] round ${round} tools:`,
-        JSON.stringify(toolUseBlocks.map(b => ({ name: b.name, input: b.input }))),
-      );
       const toolResults = await Promise.all(
         toolUseBlocks.map(async (block) => ({
           type: "tool_result" as const,
@@ -1762,8 +1772,6 @@ export async function streamCopilotoChat(
       continue;
     }
 
-    // El modelo cerró la respuesta sin pedir tools en esta ronda.
-    console.log(`[copiloto] round ${round} sin tools (stop_reason=${msg.stop_reason})`);
     break;
   }
 
