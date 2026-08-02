@@ -1,4 +1,4 @@
-import type { TenantLoginRequest, TenantLoginResponse, TenantRefreshRequest, TenantRefreshResponse } from "./auth-types";
+import type { RequestOrigin, TenantLoginRequest, TenantLoginResponse, TenantRefreshRequest, TenantRefreshResponse } from "./auth-types";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDevTenantUserByIdentifier } from "../../platform/data/dev-tenant-user-store";
 import { verifyPassword, verifyPasswordOrTimingDummy, hashOpaqueToken } from "../../platform/auth/passwords";
@@ -71,7 +71,11 @@ function loginTenantUserFromDevelopmentFallback(
   };
 }
 
-export async function loginTenantUser(tenantSlug: string, request: TenantLoginRequest): Promise<TenantLoginResponse> {
+export async function loginTenantUser(
+  tenantSlug: string,
+  request: TenantLoginRequest,
+  origin: RequestOrigin = { ipAddress: null, userAgent: null },
+): Promise<TenantLoginResponse> {
   const prisma = getPrismaClient();
   if (!prisma) {
     if (isDevelopmentMode()) {
@@ -147,7 +151,12 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
         action: "TENANT_LOGIN_FAILED",
         entityType: "Tenant",
         entityId: tenant.id,
-        metadata: { tenantSlug: tenant.slug, identifierHash: redactEmail(identifier) },
+        metadata: {
+          tenantSlug: tenant.slug,
+          identifierHash: redactEmail(identifier),
+          ip: origin.ipAddress,
+          userAgent: origin.userAgent,
+        },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
@@ -168,6 +177,8 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
         userId: membership.user.id,
         tenantId: tenant.id,
         refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
+        ipAddress: origin.ipAddress,
+        userAgent: origin.userAgent,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
@@ -178,7 +189,13 @@ export async function loginTenantUser(tenantSlug: string, request: TenantLoginRe
       action: "TENANT_LOGIN_SUCCESS",
       entityType: "User",
       entityId: membership.user.id,
-      metadata: { tenantSlug: tenant.slug, email: membership.user.email, role: membership.role },
+      metadata: {
+        tenantSlug: tenant.slug,
+        email: membership.user.email,
+        role: membership.role,
+        ip: origin.ipAddress,
+        userAgent: origin.userAgent,
+      },
     });
 
     return {

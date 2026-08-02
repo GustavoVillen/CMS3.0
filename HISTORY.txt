@@ -1,5 +1,43 @@
 HISTORY.txt
 
+[2026-08-02] Consola SUPERADMIN: pantalla "Accesos" (quién entra y desde dónde)
+Agent: Claude Opus 5
+- Pedido del usuario: que el SUPERADMIN pueda ver quién está accediendo a la app
+  y desde dónde, con la ubicación mostrada en un mapa.
+- Schema: NUEVO modelo IpGeo (caché de geolocalización por IP: país, ciudad,
+  ISP, lat/lon, isPrivate, failed, TTL 30 días). Ningún modelo existente
+  cambió: RefreshToken y PlatformSession YA tenían las columnas userAgent /
+  ipAddress creadas pero nunca escritas — ahora se llenan.
+- API nuevo: platform/access/ip-geo-service.ts (resuelve IP→lugar contra
+  ipwho.is con caché; las IPs privadas nunca salen a internet; toda falla es
+  silenciosa) y platform/access/platform-access-service.ts (getActiveUsers desde
+  UsageEvent + getLoginHistory desde AuditEvent). http/user-agent.ts con el
+  parser mínimo de User-Agent ("Chrome / Windows").
+- Rutas: GET /platform/access/active y /platform/access/logins, ambas con
+  requirePlatformSuperadmin. Nada visible para usuarios de tenant.
+- Logins: tenant y plataforma ahora guardan ip + userAgent en el RefreshToken /
+  PlatformSession y en el metadata del audit, incluidos los intentos FALLIDOS.
+  Se respeta la redacción de PII existente (redactEmail): en los rechazos la UI
+  muestra el identificador ofuscado marcado con 🔒, no finge ser un email.
+- Front: pages/platform/PlatformAccess.tsx — mapa Leaflet (reusa el patrón de
+  PlatformVesselMap, sin dependencias nuevas) + tabla "Conectados ahora" +
+  "Historial de ingresos" con filtros. Clic en una fila hace zoom al punto.
+  Prioriza el GPS del navegador sobre la estimación por IP y lo marca.
+- BUG DE FONDO CORREGIDO (pre-existente): usage-tracking-middleware leía la IP
+  con getClientIp DESPUÉS de un await (la consulta del tenant), cuando el socket
+  ya podía estar destruido. Resultado: el 100% de los requests de navegadores
+  detrás de un proxy grababa ipAddress = null. Ahora la IP se captura al entrar
+  el request. Verificado: mismo usuario y ruta pasaban de null a ::1.
+- vite.config.ts: se agregó /platform/access al proxy de dev y, de paso,
+  /platform/copilot-questions y /platform/vessel-positions, que faltaban y
+  hacían que esas dos pantallas quedaran vacías en local.
+- PENDIENTE EN LA VPS: poner TRUST_PROXY_HEADERS=1 en el .env de producción. Sin
+  eso, detrás de nginx todos los accesos se graban con la IP del proxy y la
+  ubicación sale vacía. Documentado en .env.example junto con IP_GEO_ENDPOINT.
+- Verificado: tsc api + tsc web (tsconfig.app.json), build del front, endpoints
+  contra datos reales y la pantalla abierta en el navegador (mapa con pines,
+  ingresos y rechazos).
+
 [2026-07-18] Dashboard: ocultar "Mi día" y "Consumo de Combustible" + orden por código en Muestreos
 Agent: Claude Opus 4.8
 - Pedido del usuario (decisión de producto, no bug).

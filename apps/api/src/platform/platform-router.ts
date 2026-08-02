@@ -4,6 +4,8 @@ import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
 import { enforceRateLimit } from "../http/rate-limiter";
 import { RouteError } from "../http/route-error";
+import { getClientIp } from "../http/client-ip";
+import { readUserAgent } from "../http/user-agent";
 import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/platform-route-auth";
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
@@ -29,6 +31,7 @@ import {
   createPlatformUser, getPlatformUser, listPlatformUsers, updatePlatformUser,
 } from "./users/platform-users-service";
 import { listCopilotQuestions } from "./copilot-questions/platform-copilot-questions-service";
+import { getActiveUsers, getLoginHistory } from "./access/platform-access-service";
 
 export async function handlePlatformRoutes(
   method: string,
@@ -42,7 +45,10 @@ export async function handlePlatformRoutes(
   if (method === "POST" && url.pathname === "/platform/auth/login") {
     enforceRateLimit(request, "auth:platform-login", { maxRequests: 10, windowMs: 60_000 });
     const payload = await readJsonBody<{ email: string; password: string }>(request);
-    const result = await loginPlatformUser(payload);
+    const result = await loginPlatformUser(payload, {
+      ipAddress: getClientIp(request),
+      userAgent: readUserAgent(request),
+    });
     registerPlatformAccessSession({
       kind: "platform",
       accessToken: result.session.accessToken,
@@ -284,6 +290,36 @@ export async function handlePlatformRoutes(
       tenantSlug: url.searchParams.get("tenantSlug"),
       userEmail:  url.searchParams.get("userEmail"),
       search:     url.searchParams.get("search"),
+      from: from && !isNaN(from.getTime()) ? from : null,
+      to:   to   && !isNaN(to.getTime())   ? to   : null,
+      limit:  Number(url.searchParams.get("limit")  ?? 200),
+      offset: Number(url.searchParams.get("offset") ?? 0),
+    });
+    sendJson(response, 200, { items, total });
+    return true;
+  }
+
+  // ── Accesos (quién está conectado + historial de ingresos) ─────────────────
+  if (method === "GET" && url.pathname === "/platform/access/active") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const windowMinutes = Number(url.searchParams.get("windowMinutes") ?? 15);
+    const items = await getActiveUsers(Number.isFinite(windowMinutes) ? windowMinutes : 15);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/platform/access/logins") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const fromRaw = url.searchParams.get("from");
+    const toRaw = url.searchParams.get("to");
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    const { items, total } = await getLoginHistory({
+      tenantSlug: url.searchParams.get("tenantSlug"),
+      userEmail:  url.searchParams.get("userEmail"),
+      result:     url.searchParams.get("result"),
       from: from && !isNaN(from.getTime()) ? from : null,
       to:   to   && !isNaN(to.getTime())   ? to   : null,
       limit:  Number(url.searchParams.get("limit")  ?? 200),

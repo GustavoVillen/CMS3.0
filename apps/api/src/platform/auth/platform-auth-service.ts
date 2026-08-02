@@ -1,4 +1,5 @@
 import type { PlatformLoginRequest, PlatformLoginResponse, PlatformRefreshRequest } from "./platform-auth-types";
+import type { RequestOrigin } from "../../tenant/auth/auth-types";
 import { getPrismaClient } from "../data/prisma-client";
 import { getDevPlatformUserByEmail } from "../data/dev-platform-user-store";
 import { RouteError } from "../../http/route-error";
@@ -31,7 +32,10 @@ function loginPlatformUserFromDevelopmentFallback(request: PlatformLoginRequest)
   };
 }
 
-export async function loginPlatformUser(request: PlatformLoginRequest): Promise<PlatformLoginResponse> {
+export async function loginPlatformUser(
+  request: PlatformLoginRequest,
+  origin: RequestOrigin = { ipAddress: null, userAgent: null },
+): Promise<PlatformLoginResponse> {
   const prisma = getPrismaClient();
   if (!prisma) {
     if (isDevelopmentMode()) {
@@ -57,7 +61,12 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
         action: "PLATFORM_LOGIN_FAILED",
         entityType: "PlatformUser",
         entityId: null,
-        metadata: { emailHash: redactEmail(email), reason: user ? "user_inactive" : "user_not_found" },
+        metadata: {
+          emailHash: redactEmail(email),
+          reason: user ? "user_inactive" : "user_not_found",
+          ip: origin.ipAddress,
+          userAgent: origin.userAgent,
+        },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
@@ -68,7 +77,12 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
         action: "PLATFORM_LOGIN_FAILED",
         entityType: "PlatformUser",
         entityId: user.id,
-        metadata: { emailHash: redactEmail(email), reason: "wrong_password" },
+        metadata: {
+          emailHash: redactEmail(email),
+          reason: "wrong_password",
+          ip: origin.ipAddress,
+          userAgent: origin.userAgent,
+        },
       });
       throw new RouteError(401, "AUTH_INVALID_CREDENTIALS", "Invalid credentials.");
     }
@@ -81,6 +95,8 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
       data: {
         platformUserId: user.id,
         refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
+        ipAddress: origin.ipAddress,
+        userAgent: origin.userAgent,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
@@ -90,7 +106,12 @@ export async function loginPlatformUser(request: PlatformLoginRequest): Promise<
       action: "PLATFORM_LOGIN_SUCCESS",
       entityType: "PlatformUser",
       entityId: user.id,
-      metadata: { email: user.email, role: user.role },
+      metadata: {
+        email: user.email,
+        role: user.role,
+        ip: origin.ipAddress,
+        userAgent: origin.userAgent,
+      },
     });
 
     return {

@@ -1124,6 +1124,27 @@ model UsageEvent {
   @@index([createdAt])
 }
 
+// ─── IP Geo (cache) ───────────────────────────────────────────────────────────
+// Traduce la IP de un acceso a un lugar legible (ciudad/país/proveedor) para la
+// consola SUPERADMIN. Es solo caché: cada IP se resuelve una vez contra el
+// servicio externo y se reusa por 30 días. Las IPs privadas nunca salen a
+// internet — se marcan isPrivate y se rotulan "Red local".
+model IpGeo {
+  ip          String   @id
+  countryCode String?                        // "PY" → bandera
+  country     String?                        // "Paraguay"
+  region      String?                        // "Central"
+  city        String?                        // "Asunción"
+  isp         String?                        // "Tigo", "Marlink" → delata enlace satelital
+  latitude    Float?
+  longitude   Float?
+  isPrivate   Boolean  @default(false)       // loopback / LAN: no se consulta afuera
+  failed      Boolean  @default(false)       // el servicio no pudo resolverla
+  resolvedAt  DateTime @default(now())
+
+  @@index([resolvedAt])
+}
+
 // ─── Domain Event (append-only) ───────────────────────────────────────────────
 
 model DomainEvent {

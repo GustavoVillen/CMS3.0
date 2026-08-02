@@ -1,12 +1,13 @@
 import React, { Suspense } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PageLoader } from "./PageLoader";
-import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, MessageCircleQuestion, LogOut, ChevronRight, Map } from "lucide-react";
+import { ShieldCheck, Building2, Users, ScrollText, Activity, MessageSquare, MessageCircleQuestion, LogOut, ChevronRight, Map, Radar } from "lucide-react";
 import { usePlatformAuth } from "../lib/platform-auth";
 
 const NAV = [
   { icon: Building2,    label: "Tenants",        path: "/platform/tenants" },
   { icon: Users,        label: "Platform Users",  path: "/platform/users" },
+  { icon: Radar,        label: "Accesos",         path: "/platform/access" },
   { icon: ScrollText,   label: "Audit Events",    path: "/platform/audit" },
   { icon: Activity,     label: "Consumo IA + Sat", path: "/platform/usage" },
   { icon: MessageCircleQuestion, label: "Preguntas Copiloto", path: "/platform/copilot-questions" },

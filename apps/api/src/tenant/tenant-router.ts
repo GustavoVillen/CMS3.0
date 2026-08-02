@@ -6,6 +6,8 @@ import { readBinaryBody } from "../http/read-binary-body";
 import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-service";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
+import { getClientIp } from "../http/client-ip";
+import { readUserAgent } from "../http/user-agent";
 import { resolveTenantSlugFromRequest } from "./bootstrap/public-bootstrap-route";
 import { loginTenantUser, refreshTenantSession, logoutTenantSession } from "./auth/tenant-auth-service";
 import { registerTenantAccessSession, revokeTenantAccessSession } from "./auth/session-store";
@@ -233,7 +235,10 @@ export async function handleTenantRoutes(
     enforceRateLimit(request, "auth:tenant-login", { maxRequests: 10, windowMs: 60_000 });
     const slug = requireTenantSlug(request, env);
     const payload = await readJsonBody<{ identifier: string; password: string; locale?: string | null }>(request);
-    const result = await loginTenantUser(slug, payload);
+    const result = await loginTenantUser(slug, payload, {
+      ipAddress: getClientIp(request),
+      userAgent: readUserAgent(request),
+    });
     registerTenantAccessSession({
       kind: "tenant",
       tenantSlug: slug,

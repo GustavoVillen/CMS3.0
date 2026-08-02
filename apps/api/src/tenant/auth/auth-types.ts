@@ -10,6 +10,16 @@ export interface TenantRefreshRequest {
   refreshToken: string;
 }
 
+/**
+ * De dónde vino el pedido: lo llena el router desde el request HTTP y se guarda
+ * en el RefreshToken y en el audit del login, para la consola de accesos del
+ * SUPERADMIN. Es informativo — nunca condiciona la autenticación.
+ */
+export interface RequestOrigin {
+  ipAddress: string | null;
+  userAgent: string | null;
+}
+
 export interface TenantSessionUser {
   id: string;
   email: string;

@@ -63,6 +63,14 @@ export function attachUsageTracking(request: IncomingMessage, response: ServerRe
   const bytesIn = readContentLength(request.headers["content-length"]);
   let bytesOut = 0;
 
+  // La IP se captura ACÁ, al entrar el request, y no más tarde: sale de
+  // `request.socket.remoteAddress`, y ese socket se destruye apenas se cierra la
+  // conexión. Como el registro del uso ocurre después de un await (la consulta
+  // del tenant), leerla en ese momento devolvía `null` para todo cliente que no
+  // mantiene la conexión abierta — que es el caso de los navegadores detrás de
+  // un proxy. Los headers no tienen ese problema, pero se toman igual acá.
+  const clientIp = getClientIp(request);
+
   const origWrite = response.write.bind(response);
   const origEnd = response.end.bind(response);
 
@@ -114,7 +122,7 @@ export function attachUsageTracking(request: IncomingMessage, response: ServerRe
           bytesIn,
           bytesOut,
           latencyMs:   Date.now() - startedAt,
-          ipAddress:   getClientIp(request),
+          ipAddress:   clientIp,
           latitude:    readGeoHeader(request.headers["x-geo-lat"]),
           longitude:   readGeoHeader(request.headers["x-geo-long"]),
           userRole:    session.user.role,
