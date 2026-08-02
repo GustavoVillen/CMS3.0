@@ -4,6 +4,7 @@ import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, Refresh
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
+import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { VesselLabel } from "../components/EntityLabels";
@@ -172,6 +173,12 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
     });
     return () => { cancelled = true; };
   }, [vesselCode]);
+
+  // Shape que espera el buscador compartido (código siempre presente).
+  const assetOptions = useMemo(
+    () => assets.map(a => ({ id: a.id, assetCode: a.assetCode ?? "", name: a.name ?? null })),
+    [assets],
+  );
 
   // Con equipo elegido se ofrecen sólo sus planes; si no, todos los del buque.
   const planOptions = useMemo(() => {
@@ -373,17 +380,16 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Equipo</label>
-                <select
+                {/* Mismo buscador con typeahead que el modal de Plan y el de OT:
+                    los buques tienen decenas de equipos y una lista desplegable
+                    obliga a recorrerla a mano. */}
+                <AssetSearchDropdown
+                  assets={assetOptions}
                   value={assetId}
-                  onChange={e => { setAssetId(e.target.value); setPlanId(""); }}
+                  onChange={id => { setAssetId(id); setPlanId(""); }}
                   disabled={!vesselCode}
-                  className={`${inputCls} disabled:opacity-60`}
-                >
-                  <option value="">— Sin equipo —</option>
-                  {assets.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}{a.assetCode ? ` (${a.assetCode})` : ""}</option>
-                  ))}
-                </select>
+                  placeholder="Buscar equipo…"
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Se renueva con el plan</label>
