@@ -66,10 +66,22 @@ interface ListResponse { items: Certificate[]; total: number; }
  */
 function isRenewalPending(c: Certificate): boolean {
   if (!c.maintenancePlanId || !c.maintenancePlanLastExecutionDate) return false;
-  const exec = new Date(c.maintenancePlanLastExecutionDate).getTime();
-  const issued = new Date(c.issueDate).getTime();
-  if (Number.isNaN(exec) || Number.isNaN(issued)) return false;
+  const exec = dayKey(c.maintenancePlanLastExecutionDate);
+  const issued = dayKey(c.issueDate);
+  if (exec === null || issued === null) return false;
+  // Estrictamente POSTERIOR en días. Comparar el instante daba un falso aviso
+  // eterno: las ejecuciones se guardan ancladas al mediodía UTC y las emisiones
+  // a medianoche, así que el MISMO día parecía "después" por 12 horas — y al
+  // renovar volvía a pasar, porque la emisión nueva era otra vez medianoche.
   return exec > issued;
+}
+
+/** Día calendario (UTC) de una fecha, para comparar sin que la hora moleste. */
+function dayKey(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 function asDateInput(value: string | null | undefined): string {
