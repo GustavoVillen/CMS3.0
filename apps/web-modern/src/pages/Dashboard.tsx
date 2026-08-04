@@ -61,7 +61,10 @@ interface LegendItem { key: string; name: string; value: number; fill: string; }
 const DonutLegend: React.FC<{ items: LegendItem[]; onSelect: (item: LegendItem) => void }> = ({ items, onSelect }) => {
   const dense = items.length > 4;
   return (
-    <div className={`w-[112px] flex flex-col ${dense ? "gap-0.5" : "gap-2"}`}>
+    // flex-1 en vez de ancho fijo: la leyenda ocupa lo que sobra de la tarjeta,
+    // así el nombre y el número quedan alineados contra los bordes y no queda
+    // aire muerto a la derecha. min-w-0 es lo que permite que truncate funcione.
+    <div className={`flex-1 min-w-0 flex flex-col ${dense ? "gap-0.5" : "gap-1.5"}`}>
       {items.map(s => (
         <button key={s.key} type="button" onClick={() => onSelect(s)}
           className={`w-full flex items-center gap-1.5 text-left rounded px-1 ${dense ? "py-0" : "py-0.5"} hover:bg-fg/5 transition-colors group`}>
@@ -119,11 +122,13 @@ export const Dashboard: React.FC = () => {
   };
   const [showInsights, setShowInsights] = React.useState(false);
 
-  // Densidad compacta fija (~20% menos) — pensada para pantallas chicas.
-  const cardH    = "h-[184px]";
+  // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
+  // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
+  // tamaño anterior, en pantallas medianas la leyenda quedaba sin lugar.
+  const cardH    = "h-[156px]";
   const cardPad  = "p-3!";
-  const chartBox = "w-[128px] h-[128px]";
-  const donut    = { inner: 35, outer: 58 };
+  const chartBox = "w-[108px] h-[108px]";
+  const donut    = { inner: 29, outer: 49 };
   const gridGap  = "gap-3";
   const rootGap  = "space-y-4";
 
@@ -394,7 +399,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       )}
 
       {/* Main grid */}
-      <div className={`grid grid-cols-1 lg:grid-cols-3 ${gridGap}`}>
+      {/* 4 por fila en escritorio (antes 3): con 3 la tarjeta quedaba mucho más
+          ancha que su contenido y sobraba medio widget vacío a la derecha.
+          Son 8 widgets, así que entran en dos filas justas. */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 ${gridGap}`}>
         {/* WO chart */}
         <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
           <div className="flex items-center justify-between mb-1">
