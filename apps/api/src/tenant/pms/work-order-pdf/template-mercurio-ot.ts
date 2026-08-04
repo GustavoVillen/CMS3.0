@@ -552,10 +552,19 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       },
     };
 
+    // Aire entre secciones: sin esto los recuadros quedan pegados y la barra
+    // azul de una sección parece el pie de la anterior. No va antes de la
+    // primera. Si el hueco no entra, la sección rompe página por su cuenta
+    // (ensureSpace) y el margen superior separa igual.
+    const SECTION_GAP = 6;
     const order = formConfig.sections.length ? formConfig.sections : Object.keys(sections);
+    let drawn = 0;
     for (const id of order) {
       const fn = sections[id];
-      if (fn) fn();
+      if (!fn) continue;
+      if (drawn > 0) canvas.y += SECTION_GAP;
+      fn();
+      drawn++;
     }
 
     drawControlledDocFooter(doc, { meta: formMeta, rightInfo: rightInfo(canvas.page), x: ML, w: W });
