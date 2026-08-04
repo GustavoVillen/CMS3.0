@@ -185,6 +185,28 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     const ITEMS_TABLE_KEEP = 32;
 
     /**
+     * "DET-YT010-AIRF — Elemento filtro de aire": el código es una referencia
+     * de catálogo, no el nombre del repuesto. Va más chico y en gris para que
+     * el ojo caiga primero en la descripción, que es lo que se lee a bordo.
+     */
+    const ITEM_CODE_RE = /^([A-Z0-9][A-Z0-9._/-]{2,})\s+[—–-]\s+(.+)$/;
+
+    /** Celda de DESCRIPCION: separa código y nombre cuando el texto los trae. */
+    function itemDescriptionCell(cx: number, cy: number, cw: number, ch: number, text: string) {
+      const m = ITEM_CODE_RE.exec(text);
+      if (!m) {
+        cell(cx, cy, cw, ch, text, { fontSize: 8 });
+        return;
+      }
+      cell(cx, cy, cw, ch, "", {});
+      doc.font("Helvetica");
+      doc.fontSize(6).fillColor(GRAY)
+        .text(`${m[1]} — `, cx + 5, cy + (ch - 8) / 2 + 1.5, { lineBreak: false, continued: true });
+      doc.fontSize(8).fillColor(BLACK)
+        .text(m[2], { lineBreak: false });
+    }
+
+    /**
      * Tabla DESCRIPCION / CANTIDAD del papel. Recibe las filas ya resueltas
      * porque REPUESTOS y MATERIALES salen de fuentes distintas: los repuestos
      * son los realmente consumidos (movimientos de stock de la OT) y los
@@ -203,7 +225,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       for (let i = 0; i < total; i++) {
         const r = rows[i];
         ensureSpace(H);
-        cell(ML, canvas.y, W - qtyW, H, r ? sanitizePdfText(r.description) : "", { fontSize: 8 });
+        itemDescriptionCell(ML, canvas.y, W - qtyW, H, r ? sanitizePdfText(r.description) : "");
         cell(ML + W - qtyW, canvas.y, qtyW, H, r ? `${r.quantity} ${r.unit}` : "", { fontSize: 8, align: "center" });
         canvas.y += H;
       }
