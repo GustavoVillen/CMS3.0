@@ -134,6 +134,7 @@ import {
   listTenantAiDocuments, getTenantAiDocument, createTenantAiDocument,
   createTenantAiDocumentVersion, activateTenantAiDocumentVersion, archiveTenantAiDocument,
   deleteTenantAiDocumentVersion, updateTenantAiDocumentVersionContent,
+  reopenTenantAiDocumentVersion,
 } from "./ai-documents/ai-documents-service";
 import {
   listFluidSamples, getFluidSample, createFluidSample, updateFluidSample,
@@ -1064,6 +1065,14 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 201, await createTenantAiDocumentVersion(session, documentId, body));
+    return true;
+  }
+  // Volver a edición: la versión activa pasa a DRAFT (sale del contexto de la IA
+  // hasta reactivarla).
+  if (method === "POST" && /^\/app\/ai-documents\/[\w-]+\/versions\/[\w-]+\/reopen$/.test(url.pathname)) {
+    const parts = url.pathname.split("/");
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await reopenTenantAiDocumentVersion(session, parts[3]!, parts[5]!));
     return true;
   }
   if (method === "POST" && /^\/app\/ai-documents\/[\w-]+\/versions\/[\w-]+\/activate$/.test(url.pathname)) {

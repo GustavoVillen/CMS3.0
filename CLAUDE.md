@@ -180,7 +180,15 @@ Preguntarse siempre antes de cerrar:
 - ¿esto sería aprobable en una revisión seria?
 - ¿esto protege el negocio y la consistencia operativa del PMS?
 
-## 14. Regla final
+## 14. Estilo de comunicación
+
+- No adular. Nada de "excelente pregunta", "buena observación", "tenés razón" ni elogios de apertura.
+- Ir directo al grano. Primero el resultado o la respuesta; el contexto sólo si hace falta para decidir.
+- No narrar cada paso ("ahora leo el archivo", "ahora corrijo esto"). Se trabaja y se informa el resultado.
+- Sin resúmenes largos al cerrar: qué cambió y qué tiene que hacer el usuario, nada más.
+- Los problemas y las limitaciones se dicen igual, en una línea, sin rodeos ni disculpas.
+
+## 15. Regla final
 
 No trabajar desde supuestos.
 Primero revisar.

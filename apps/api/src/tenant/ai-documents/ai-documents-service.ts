@@ -257,6 +257,51 @@ export async function activateTenantAiDocumentVersion(
 }
 
 // ---------------------------------------------------------------------------
+// Reopen an ACTIVE version for editing (ACTIVE → DRAFT)
+// ---------------------------------------------------------------------------
+
+/**
+ * Devuelve la versión activa a DRAFT para poder corregirla en el lugar, sin
+ * generar una versión nueva.
+ *
+ * OJO: mientras esté en DRAFT el documento NO entra en el contexto de la IA
+ * (getActiveTenantAiDocs sólo lee ACTIVE). Hay que reactivarla al terminar.
+ */
+export async function reopenTenantAiDocumentVersion(
+  session: TenantAccessSession,
+  documentId: string,
+  versionId: string,
+) {
+  requireAdmin(session);
+
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant not found.");
+
+  const version = await prisma.aiDocumentVersion.findFirst({
+    where: { id: versionId, documentId, tenantId: tenant.id },
+  });
+  if (!version) throw new RouteError(404, "AI_DOCUMENT_VERSION_NOT_FOUND", "Versión no encontrada.");
+  if (version.status !== "ACTIVE") {
+    throw new RouteError(409, "AI_DOCUMENT_VERSION_NOT_ACTIVE", "Sólo se puede volver a edición la versión activa.");
+  }
+
+  const reopened = await prisma.aiDocumentVersion.update({
+    where: { id: versionId },
+    data:  { status: "DRAFT", activatedAt: null, activatedByUserId: null },
+  });
+
+  await prisma.aiDocument.update({
+    where: { id: documentId },
+    data:  { updatedByUserId: session.user.id },
+  });
+
+  return reopened;
+}
+
+// ---------------------------------------------------------------------------
 // Archive (soft-delete) document
 // ---------------------------------------------------------------------------
 

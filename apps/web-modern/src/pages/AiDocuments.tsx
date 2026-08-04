@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, Eye, Save } from "lucide-react";
+import { Bot, Plus, FileText, Archive, Rocket, Layers, Trash2, Eye, Save, Pencil } from "lucide-react";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard } from "../lib/escape-guard";
@@ -150,6 +150,22 @@ function DocumentCard({
     }
   };
 
+  // Vuelve la versión activa a borrador para corregirla en el lugar. Mientras
+  // esté en borrador el copiloto NO lee este documento: por eso se avisa antes.
+  const reopenVersion = async (versionId: string) => {
+    const confirmed = window.confirm(
+      "La versión va a volver a modo edición.\n\nMientras esté en borrador, el copiloto NO va a usar este documento. Acordate de activarla de nuevo al terminar.\n\n¿Continuar?",
+    );
+    if (!confirmed) return;
+    setBusyId(versionId);
+    try {
+      await api.post(`/app/ai-documents/${document.id}/versions/${versionId}/reopen`, {});
+      onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const deleteVersion = async (versionId: string) => {
     const confirmed = window.confirm(t("confirm.deleteDocDraft"));
     if (!confirmed) return;
@@ -257,6 +273,16 @@ function DocumentCard({
                   <Eye className="w-3.5 h-3.5 text-accent" />
                   {isAdmin && version.status === "DRAFT" ? "Ver / Editar" : "Ver"}
                 </button>
+                {isAdmin && version.status === "ACTIVE" && (
+                  <button
+                    onClick={() => reopenVersion(version.id)}
+                    disabled={busyId === version.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 hover:text-fg disabled:opacity-50 transition-all"
+                    title="Pasa la versión a borrador para poder editarla. El copiloto deja de usar este documento hasta que la actives de nuevo."
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-accent" /> Volver a edición
+                  </button>
+                )}
                 {isAdmin && version.status !== "ACTIVE" && (
                   <>
                     <button
