@@ -7,7 +7,12 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+
+// Mismos roles que exige el backend en providers-service.ts (canManage). Si esto
+// se desincroniza, el usuario ve botones que despues terminan en un 403.
+const MANAGE_ROLES = ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +45,8 @@ interface ModalProps {
 
 const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => {
   const t = useT();
+  const { user } = useAuth();
+  const canManage = MANAGE_ROLES.includes(user?.role ?? "");
   const isNew = provider === null;
 
   const [name,          setName]          = useState(provider?.name          ?? "");
@@ -206,7 +213,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
           {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <div>
-              {!isNew && (
+              {!isNew && canManage && (
                 <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-700 dark:text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
                   Eliminar
                 </button>
@@ -214,9 +221,11 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
             </div>
             <div className="flex gap-2">
               <button onClick={onClose} className="px-4 py-1.5 text-xs text-fg/50 hover:text-fg rounded-lg border border-fg/10 hover:border-fg/20 transition-colors">Cerrar</button>
-              <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
-                {saving ? "Guardando…" : (isNew ? "Crear proveedor" : "Guardar")}
-              </button>
+              {canManage && (
+                <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
+                  {saving ? "Guardando…" : (isNew ? "Crear proveedor" : "Guardar")}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -236,6 +245,8 @@ export const ProvidersPage: React.FC = () => {
   const [catFilter,    setCatFilter]    = useState("");
   const [showExcel,    setShowExcel]    = useState(false);
   const [selected,     setSelected]     = useState<Provider | null | "new">(null);
+  const { user } = useAuth();
+  const canManage = MANAGE_ROLES.includes(user?.role ?? "");
 
   const buildPath = () => {
     const p = new URLSearchParams();
@@ -281,10 +292,12 @@ export const ProvidersPage: React.FC = () => {
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
 
-        {/* Create */}
-        <button onClick={() => setSelected("new")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
-          <Plus className="w-3.5 h-3.5" /> Nuevo proveedor
-        </button>
+        {/* Create — solo los roles que el backend deja gestionar proveedores */}
+        {canManage && (
+          <button onClick={() => setSelected("new")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
+            <Plus className="w-3.5 h-3.5" /> Nuevo proveedor
+          </button>
+        )}
       </PageHeader>
 
       <DataTable

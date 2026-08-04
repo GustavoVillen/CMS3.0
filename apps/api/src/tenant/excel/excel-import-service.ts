@@ -116,6 +116,7 @@ export async function confirmImport(
   }
 
   const now = new Date();
+  const keyField = getMatchingKey(module);
 
   for (const row of rows) {
     if (row.action === "SKIP") {
@@ -124,6 +125,25 @@ export async function confirmImport(
     }
 
     try {
+      // El `existingId` viaja al navegador en la previsualización y vuelve en el
+      // confirm: es un dato del cliente, no del servidor. Si se usara tal cual,
+      // un usuario con permiso de importar en su empresa podría mandar el id de
+      // un registro de OTRA empresa y sobrescribirlo. Se vuelve a resolver acá
+      // contra la base, filtrando por tenant — mismo criterio que ya se aplica
+      // al assetId de los planes unas líneas más abajo.
+      if (row.action === "UPDATE" || row.action === "RESTORE_AND_UPDATE") {
+        const keyValue = row.data[keyField];
+        const owned = keyValue
+          ? await findExistingRecord(prisma, module, tenant.id, keyField, String(keyValue))
+          : null;
+        if (!owned) {
+          rejected++;
+          rowErrors.push({ rowNumber: row.rowNumber, error: `No se encontró un registro propio con ${keyField} "${String(keyValue ?? "")}".` });
+          continue;
+        }
+        row.existingId = owned.id;
+      }
+
       if (module === "maintenance_plans") {
         // Strip any assetId that came from the Excel (it may be stale — exported
         // files carry assetId as a dynamic column but the source of truth is
