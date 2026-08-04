@@ -125,7 +125,13 @@ export const Dashboard: React.FC = () => {
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
   // tamaño anterior, en pantallas medianas la leyenda quedaba sin lugar.
-  const cardH    = "h-[156px]";
+  // 172px es el alto que pide el peor caso: Planes de Mantenimiento tiene 6
+  // estados y su leyenda necesita ~158px (encabezado 34 + 6 filas de ~15 +
+  // separaciones + padding 24). Con 156 la última fila ("Al Día") se salía del
+  // recuadro. La dona de 108px tampoco entraba. overflow-hidden es el seguro:
+  // si algún día un módulo suma un estado más, se recorta adentro en vez de
+  // desbordar sobre la tarjeta de al lado.
+  const cardH    = "h-[172px] overflow-hidden";
   const cardPad  = "p-3!";
   const chartBox = "w-[108px] h-[108px]";
   const donut    = { inner: 29, outer: 49 };
