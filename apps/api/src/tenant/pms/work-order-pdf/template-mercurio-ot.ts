@@ -339,15 +339,21 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         cols.forEach(c => { cell(cx, canvas.y, c.w, H, c.l, { bold: true, fontSize: 6.5, bg: LIGHT, color: GRAY, align: "center" }); cx += c.w; });
         canvas.y += H;
         const total = Math.max(scheduleRows.length, 3);
+        const widths = cols.map(c => c.w);
         for (let i = 0; i < total; i++) {
           const r = scheduleRows[i];
-          ensureSpace(H);
           const vals = r
             ? [r.date ? fmt(r.date) : "", r.technician, r.place, r.company, r.time]
             : ["", "", "", "", ""];
+          const texts = vals.map(v => sanitizePdfText(v ?? ""));
+          // Alto variable: un lugar largo ("Asunción KM 1634 Rio Paraguay") no
+          // entraba en 16pt y el texto se montaba sobre el borde de la fila.
+          // Se mide la celda más alta y la fila crece; las vacías siguen en 16.
+          const rowH = canvas.measureCellHeight(texts, widths, { fontSize: 7.5, minHeight: H });
+          ensureSpace(rowH);
           cx = ML;
-          cols.forEach((c, j) => { cell(cx, canvas.y, c.w, H, sanitizePdfText(vals[j] ?? ""), { fontSize: 7.5 }); cx += c.w; });
-          canvas.y += H;
+          cols.forEach((c, j) => { cell(cx, canvas.y, c.w, rowH, texts[j] ?? "", { fontSize: 7.5, wrap: true }); cx += c.w; });
+          canvas.y += rowH;
         }
       },
 

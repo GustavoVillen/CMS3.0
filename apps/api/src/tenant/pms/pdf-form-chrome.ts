@@ -176,6 +176,14 @@ export interface CellOpts {
   bg?: string;
   color?: string;
   noStroke?: boolean;
+  /**
+   * Permite que el texto ocupe varias líneas dentro de la celda, alineado
+   * arriba en vez de centrado. El alto de la celda lo decide quien la dibuja:
+   * usar `measureCellHeight` para calcularlo antes. Sin esto (comportamiento
+   * por defecto) el texto va en una sola línea y se recorta con puntos
+   * suspensivos.
+   */
+  wrap?: boolean;
 }
 
 export interface FormCanvas {
@@ -191,6 +199,15 @@ export interface FormCanvas {
   sectionHeader(title: string, h?: number): void;
   /** Celda con borde/relleno y texto opcional (coordenadas explicitas). */
   cell(cx: number, cy: number, cw: number, ch: number, text: string, opts?: CellOpts): void;
+  /**
+   * Alto necesario para que una fila de tabla muestre el texto completo de
+   * todas sus celdas. Usar junto con `cell(..., { wrap: true })`.
+   */
+  measureCellHeight(
+    texts: string[],
+    widths: number[],
+    opts?: { fontSize?: number; bold?: boolean; minHeight?: number },
+  ): number;
   /** Checkbox con label (coordenadas explicitas). */
   checkbox(cx: number, cy: number, label: string, checked: boolean): void;
   /** Caja de texto con borde, soporta split entre paginas. Devuelve alto del ultimo segmento. */
@@ -284,19 +301,54 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
     y += h;
   }
 
+  /** Padding vertical de las celdas multilínea (arriba y abajo). */
+  const CELL_PAD = 3;
+
+  /**
+   * Alto que necesita una fila de tabla para que entre el texto de TODAS sus
+   * celdas sin cortarse. Mismo criterio que usa el renderer de tablas markdown
+   * más abajo: se mide celda por celda y manda la más alta.
+   */
+  function measureCellHeight(
+    texts: string[],
+    widths: number[],
+    opts: { fontSize?: number; bold?: boolean; minHeight?: number } = {},
+  ): number {
+    const fs = opts.fontSize ?? 9;
+    doc.fontSize(fs).font(opts.bold ? "Helvetica-Bold" : "Helvetica");
+    let maxH = 0;
+    texts.forEach((t, i) => {
+      const w = (widths[i] ?? 0) - 10;
+      if (w <= 0) return;
+      const h = doc.heightOfString(sanitizePdfText(t ?? "") || " ", { width: w });
+      if (h > maxH) maxH = h;
+    });
+    return Math.max(opts.minHeight ?? 0, Math.ceil(maxH) + CELL_PAD * 2);
+  }
+
   function cell(cx: number, cy: number, cw: number, ch: number, text: string, o: CellOpts = {}) {
     if (o.bg) doc.rect(cx, cy, cw, ch).fillColor(o.bg).fill();
     if (!o.noStroke) doc.rect(cx, cy, cw, ch).strokeColor(C.BORDER).lineWidth(0.4).stroke();
     if (text) {
-      doc.fontSize(o.fontSize ?? 9)
+      const fs = o.fontSize ?? 9;
+      doc.fontSize(fs)
         .font(o.bold ? "Helvetica-Bold" : "Helvetica")
-        .fillColor(o.color ?? C.BLACK)
-        .text(text, cx + 5, cy + (ch - (o.fontSize ?? 9)) / 2, {
+        .fillColor(o.color ?? C.BLACK);
+      if (o.wrap) {
+        // Multilínea: arriba y con padding, para que el texto no se monte sobre
+        // el borde inferior. El alto ya viene calculado por el que dibuja.
+        doc.text(text, cx + 5, cy + CELL_PAD, {
+          width: cw - 10,
+          align: o.align ?? "left",
+        });
+      } else {
+        doc.text(text, cx + 5, cy + (ch - fs) / 2, {
           width: cw - 10,
           align: o.align ?? "left",
           lineBreak: false,
           ellipsis: true,
         });
+      }
     }
   }
 
@@ -489,6 +541,7 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
     pageBreak,
     sectionHeader,
     cell,
+    measureCellHeight,
     checkbox,
     textArea,
   };

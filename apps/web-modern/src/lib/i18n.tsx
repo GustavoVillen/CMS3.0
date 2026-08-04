@@ -1389,6 +1389,8 @@ const dict = {
   "wo.modal.executedBy":       { es: "Ejecutado por",          en: "Executed by",          pt: "Executado por" },
   "wo.modal.executedByPlaceholder": { es: "Nombre del ejecutante", en: "Executor name",    pt: "Nome do executor" },
   "wo.modal.executionDate":    { es: "Fecha de ejecución",     en: "Execution date",       pt: "Data de execução" },
+  "wo.modal.startDate":        { es: "Fecha inicio",           en: "Start date",           pt: "Data de início" },
+  "wo.modal.endDate":          { es: "Fecha finalización",     en: "End date",             pt: "Data de conclusão" },
   "wo.modal.runningHours":     { es: "Horas del motor al momento de ejecución", en: "Engine hours at execution time", pt: "Horas do motor no momento da execução" },
   "wo.modal.runningHoursPlaceholder": { es: "ej. 3500",         en: "e.g. 3500",            pt: "ex. 3500" },
   "wo.modal.actualHours":      { es: "Horas reales trabajadas", en: "Actual hours worked",  pt: "Horas reais trabalhadas" },

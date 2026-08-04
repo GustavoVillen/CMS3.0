@@ -1025,6 +1025,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [woResult, setWoResult]             = useState(workOrder.woResult ?? "");
   const [executedByName, setExecutedByName] = useState(workOrder.executedByName ?? "");
   const [executionDate, setExecutionDate]   = useState(toDateInputValue(workOrder.completedDate));
+  // FECHA INICIO del recuadro de Programación de trabajo. El sistema la carga
+  // sola al pasar la OT a ejecución, pero también se escribe a mano: las OT
+  // históricas o las que se cerraron sin pasar por "iniciar" la traían vacía.
+  const [startDate, setStartDate]           = useState(toDateInputValue(workOrder.startDate));
   const [actualHours, setActualHours] = useState(
     workOrder.actualHours != null ? String(workOrder.actualHours) : ""
   );
@@ -1521,6 +1525,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       assignedToUserId: normalizeOptionalText(assignedTo),
       dueDate: dueDate || null,
       openDate: openDate || undefined,
+      startDate: startDate || null,
       type,
       priority: priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
       acceptanceCriteria: normalizeOptionalText(acceptanceCriteria),
@@ -1574,7 +1579,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           api.patch(`${base}/${i.id}`, { kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
       ]);
     }
-  }, [title, description, assignedTo, dueDate, openDate, type, priority, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+  }, [title, description, assignedTo, dueDate, openDate, startDate, type, priority, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, department, providerId, location, commMethod, distribution,
       woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations, spareUsages,
       isMercurio, needsProvider, regiForm, plannedItems, plannedItemsData, workOrder.id]);
@@ -1675,7 +1680,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    title, description, assignedTo, dueDate, openDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    title, description, assignedTo, dueDate, openDate, startDate, type, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale,
     department, providerId, location, commMethod, distribution,
     checklistDocFileName: checklistDocFile?.name ?? "",
@@ -2493,6 +2498,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {isMercurio && (
             <section className="space-y-3">
               <PhaseHeader n={7} label="Programación de trabajo" dotCls="bg-amber-500/15 text-amber-700 dark:text-amber-400" borderCls="border-amber-500/25" />
+              {/* Las dos fechas del encabezado del recuadro en el papel. La de
+                  finalización es la MISMA que "Fecha de ejecución" de la sección
+                  8 (comparten estado): es un solo dato, editable desde los dos
+                  lugares, no una copia. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.startDate")}</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!isEditable} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.endDate")}</label>
+                  <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
+                </div>
+              </div>
               <WoScheduleEditor
                 workOrderId={workOrder.id}
                 canEdit={isResultEditable}
