@@ -318,14 +318,21 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       // ITEMS_TABLE_KEEP = encabezado de columnas (16) + primera fila (16): es
       // lo mínimo que tiene que entrar debajo de la barra para que el título no
       // quede huérfano al pie de la página.
-      // REPUESTOS = lo realmente consumido (movimientos de stock de la OT), no
-      // lo previsto: el papel documenta el trabajo hecho. Los previstos siguen
-      // cargándose en el formulario, pero no son lo que se imprime acá.
+      /**
+       * REPUESTOS: manda lo realmente consumido (movimientos de stock de la
+       * OT), porque el papel de una OT ejecutada documenta el trabajo hecho.
+       *
+       * Si todavía no se consumió nada, se imprimen los PREVISTOS del
+       * formulario: una OT que sale a ejecutarse tiene que llevar la lista de
+       * lo que hay que usar. Sin este respaldo el recuadro salía vacío aunque
+       * la sección 8 estuviera cargada, y no se entendía por qué.
+       */
       spares: () => {
         sectionHeader(label("spares", "REPUESTOS"), 18, ITEMS_TABLE_KEEP);
-        itemsTable(spareUsages.map(s => ({
+        const used = spareUsages.map(s => ({
           description: s.spareName, quantity: s.quantity, unit: s.unit,
-        })));
+        }));
+        itemsTable(used.length > 0 ? used : plannedItems.filter(i => i.kind === "SPARE"));
       },
 
       // MATERIALES no mueven stock (grasa, trapos, sellador…): se imprimen los
