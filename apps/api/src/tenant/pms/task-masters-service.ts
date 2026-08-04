@@ -141,12 +141,19 @@ export async function listTaskMasters(session: TenantAccessSession, filters: Tas
   });
 }
 
-export async function getTaskMaster(id: string) {
+export async function getTaskMaster(session: TenantAccessSession, id: string) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const prisma = taskMastersClient(prismaRaw);
 
-  const record = await prisma.taskMaster.findUnique({ where: { id } });
+  // Mismo alcance que listTaskMasters: los propios del tenant más los globales
+  // (tenantId null). Sin este filtro, el GET devolvía el task master privado de
+  // cualquier otra empresa —procedimiento y criterios de aceptación incluidos—
+  // con sólo conocer el id. El PATCH ya validaba; el GET había quedado afuera.
+  const tenantId = await getTenantIdOrThrow(session);
+  const record = await prisma.taskMaster.findFirst({
+    where: { id, OR: [{ tenantId: null }, { tenantId }] },
+  });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Task master no encontrado.");
   return record;
 }

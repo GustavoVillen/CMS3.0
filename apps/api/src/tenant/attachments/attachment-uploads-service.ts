@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, createReadStream, statSync } from "node:f
 import { join, extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
+import { applySecurityHeaders } from "../../http/security-headers";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "attachments");
 
@@ -79,6 +80,9 @@ export function serveAttachment(
     if (!stat.isFile()) return false;
     const ext = extname(filename).toLowerCase();
     const mime = MIME_MAP[ext] ?? "application/octet-stream";
+    // Igual que en certificados, checklists y análisis de fluidos: sin esto el
+    // adjunto se sirve sin nosniff ni CSP, y se muestra inline.
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "Content-Type": mime,
       "Content-Length": stat.size,

@@ -3,6 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Radar, MapPin, Smartphone, Wifi } from "lucide-react";
 import { platformFetch } from "../../lib/platform-auth";
+import { escapeHtml } from "../../lib/utils";
 import { DataTable, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 
@@ -143,12 +144,6 @@ function spreadOverlaps(users: ActiveUser[]): Array<{ user: ActiveUser; lat: num
   }
 
   return out;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c
-  ));
 }
 
 function buildPopup(u: ActiveUser): string {

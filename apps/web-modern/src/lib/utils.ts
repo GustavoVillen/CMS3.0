@@ -48,6 +48,21 @@ export function parseLocalDate(d: string): Date {
 }
 
 /**
+ * Escapa texto que se va a inyectar como HTML.
+ *
+ * React escapa solo, pero hay lugares donde armamos HTML a mano y el navegador
+ * lo interpreta como tal: los popups y `divIcon` de Leaflet (que por dentro son
+ * innerHTML). Ahí, un nombre de buque o un mail con `<img onerror=...>` se
+ * ejecuta. Todo dato que venga de la base pasa por acá antes de entrar en esos
+ * strings.
+ */
+export function escapeHtml(value: string): string {
+  return String(value).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c
+  ));
+}
+
+/**
  * Repository-wide rule for filter dropdowns:
  * never use <option value=""> directly in native <select>.
  */

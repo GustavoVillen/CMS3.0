@@ -21,6 +21,7 @@ import {
   listTenantMaintenancePlans,
   openFormalWorkOrder,
   postponePlan,
+  previewMergedPlanText,
   quickClosePlan,
   reportExecution,
   updatePlanExecution,
@@ -50,6 +51,17 @@ import {
   listWorkOrderItems,
   updateWorkOrderItem,
 } from "../work-orders/work-order-items-service";
+import {
+  addPlanToWorkOrder,
+  listTenantWorkOrderPlans,
+  removePlanFromWorkOrder,
+} from "../work-orders/work-order-plans-service";
+import {
+  createWorkOrderScheduleEntry,
+  deleteWorkOrderScheduleEntry,
+  listWorkOrderSchedule,
+  updateWorkOrderScheduleEntry,
+} from "../work-orders/work-order-schedule-service";
 import {
   createProgressNote,
   listProgressNotes,
@@ -287,6 +299,19 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  // ANTES del GET por id: "merged-text" no es un id de plan y esa ruta lo
+  // capturaría. Devuelve los textos combinados de varios ítems del PDM para que
+  // el formulario de Nueva OT muestre lo mismo que se va a guardar.
+  if (method === "GET" && url.pathname === "/app/pms/maintenance-plans/merged-text") {
+    const ids = (url.searchParams.get("ids") ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      sendJson(response, 400, { error: { code: "VALIDATION_ERROR", message: "Se requiere al menos un plan." } });
+      return true;
+    }
+    sendJson(response, 200, await previewMergedPlanText(session, ids));
+    return true;
+  }
+
   if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await getTenantMaintenancePlan(session, id));
@@ -442,6 +467,58 @@ export async function handleMaintenanceRoutes(
     if (method === "POST") {
       const body = await readJsonBody(request) as Parameters<typeof createWorkOrderItem>[2];
       sendJson(response, 201, await createWorkOrderItem(session, id, body));
+      return true;
+    }
+  }
+
+  // ── PROGRAMACION DE TRABAJO (una fila por jornada, recuadro del formulario) ─
+  if (/^\/app\/pms\/work-orders\/[^/]+\/schedule$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      const items = await listWorkOrderSchedule(session, id);
+      sendJson(response, 200, { items, total: items.length });
+      return true;
+    }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as Parameters<typeof createWorkOrderScheduleEntry>[2];
+      sendJson(response, 201, await createWorkOrderScheduleEntry(session, id, body));
+      return true;
+    }
+  }
+
+  if (/^\/app\/pms\/work-orders\/[^/]+\/schedule\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const entryId = url.pathname.split("/")[6]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as Parameters<typeof updateWorkOrderScheduleEntry>[3];
+      sendJson(response, 200, await updateWorkOrderScheduleEntry(session, id, entryId, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      sendJson(response, 200, await deleteWorkOrderScheduleEntry(session, id, entryId));
+      return true;
+    }
+  }
+
+  // ── PLANES DEL PDM que ejecuta la OT (uno o varios: parada de astillero) ───
+  if (/^\/app\/pms\/work-orders\/[^/]+\/plans$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      sendJson(response, 200, await listTenantWorkOrderPlans(session, id));
+      return true;
+    }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as { planId?: string };
+      sendJson(response, 201, await addPlanToWorkOrder(session, id, String(body?.planId ?? "")));
+      return true;
+    }
+  }
+
+  if (/^\/app\/pms\/work-orders\/[^/]+\/plans\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const planId = url.pathname.split("/")[6]!;
+    if (method === "DELETE") {
+      sendJson(response, 200, await removePlanFromWorkOrder(session, id, planId));
       return true;
     }
   }

@@ -6,6 +6,7 @@ import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { resolveConsumables, createWorkLogSpareMovements } from "../pms/spare-consumption";
 import { withUniqueRetry } from "../../common/unique-retry";
+import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
@@ -189,6 +190,13 @@ export interface OpenFormalWorkOrderInput {
   express?: boolean;
   /** Nombre a estampar en las firmas de la OT express. */
   signerName?: string | null;
+  /**
+   * Otros planes que ejecuta la MISMA OT (una parada de astillero cubre varios
+   * ítems del PDM). El plan de la URL es el PRINCIPAL: da equipo, título y datos
+   * heredados; estos se suman a la lista y también avanzan al cerrar la OT.
+   * Deben ser del mismo buque; el equipo puede ser distinto.
+   */
+  additionalPlanIds?: string[] | null;
 }
 
 interface RecalculatePlanInput {
@@ -297,6 +305,7 @@ type MaintenancePlanDelegate = {
   findFirst(args: { where: Record<string, unknown>; include?: Record<string, unknown> }): Promise<MaintenancePlanRecord | null>;
   create(args: { data: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
   update(args: { where: { id: string }; data: Record<string, unknown>; include?: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
+  updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
 };
 
 type WorkLogDelegate = {
@@ -705,25 +714,33 @@ export async function listTenantMaintenancePlans(
           );
         })()
       : Promise.resolve([] as { assetId: string; runningHoursTotal: number }[]),
+    // Se consulta por los VÍNCULOS (WorkOrderMaintenancePlan), no por el
+    // maintenancePlanId de la OT: una OT de astillero cubre varios ítems del PDM
+    // y los seis planes tienen que mostrar esa misma OT abierta.
     planIds.length > 0
-      ? (prismaRaw as unknown as { workOrder: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string | null; workOrderCode: string; status: string }[]> } }).workOrder.findMany({
+      ? (prismaRaw as unknown as { workOrderMaintenancePlan: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string; workOrder: { workOrderCode: string; status: string } | null }[]> } }).workOrderMaintenancePlan.findMany({
           // ON_HOLD incluido: una OT diferida no es "activa" (no cuelga de activeWoMap),
           // pero su código debe seguir visible en el plan con marca de diferida.
-          where: { tenantId, maintenancePlanId: { in: planIds }, status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] }, deletedAt: null },
-          select: { maintenancePlanId: true, workOrderCode: true, status: true },
+          where: {
+            tenantId,
+            maintenancePlanId: { in: planIds },
+            workOrder: { status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] }, deletedAt: null },
+          },
+          select: { maintenancePlanId: true, workOrder: { select: { workOrderCode: true, status: true } } },
           orderBy: { createdAt: "desc" as const },
         })
-      : Promise.resolve([] as { maintenancePlanId: string | null; workOrderCode: string; status: string }[]),
+      : Promise.resolve([] as { maintenancePlanId: string; workOrder: { workOrderCode: string; status: string } | null }[]),
   ]);
 
   const assetNameMap = new Map(assetRows.map((a) => [a.id, a.name ?? null]));
   const assetCurrentHoursMap = new Map(currentHoursRows.map((r) => [r.assetId, Number(r.runningHoursTotal)]));
   const activeWoMap = new Map<string, string>();   // OT PLANNED/IN_PROGRESS (activa)
   const deferredWoMap = new Map<string, string>(); // OT ON_HOLD (diferida)
-  for (const wo of activeWos) {
-    if (!wo.maintenancePlanId) continue;
+  for (const link of activeWos) {
+    const wo = link.workOrder;
+    if (!wo) continue;
     const target = wo.status === "ON_HOLD" ? deferredWoMap : activeWoMap;
-    if (!target.has(wo.maintenancePlanId)) target.set(wo.maintenancePlanId, wo.workOrderCode);
+    if (!target.has(link.maintenancePlanId)) target.set(link.maintenancePlanId, wo.workOrderCode);
   }
 
   // Resolver nombre del proveedor para los planes con área = PROVEEDOR. Se juntan
@@ -1187,7 +1204,18 @@ export async function updateTenantMaintenancePlan(
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (payload.taskType !== undefined && payload.taskType !== null) data.taskType = payload.taskType;
-  if (payload.assetId !== undefined && payload.assetId) data.assetId = normalizeRequiredText(payload.assetId, "assetId");
+  // La creación valida que el asset sea del tenant; el update no lo hacía, y
+  // permitía reapuntar un plan propio a un equipo de otra empresa.
+  if (payload.assetId !== undefined && payload.assetId) {
+    const assetId = normalizeRequiredText(payload.assetId, "assetId");
+    const assetCount = await (prismaRaw as any).asset.count({
+      where: { id: assetId, tenantId: (current as any).tenantId, deletedAt: null },
+    });
+    if (assetCount === 0) {
+      throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+    }
+    data.assetId = assetId;
+  }
   if (payload.taskCode !== undefined) data.taskCode = normalizeRequiredText(payload.taskCode, "taskCode").toUpperCase();
   if (payload.title !== undefined) data.title = normalizeRequiredText(payload.title, "title");
   if (payload.description !== undefined) data.description = normalizeOptionalText(payload.description);
@@ -1548,6 +1576,20 @@ export interface UpdatePlanExecutionInput {
   observations?: string | null;
 }
 
+/**
+ * Filtro "OT que ejecuta este plan". Una OT puede cubrir varios ítems del PDM:
+ * el vínculo (WorkOrderMaintenancePlan) es la fuente, y el maintenancePlanId
+ * queda como red de seguridad para OT anteriores a esa tabla.
+ */
+function planExecutionFilter(planId: string): Record<string, unknown> {
+  return {
+    OR: [
+      { maintenancePlanId: planId },
+      { planLinks: { some: { maintenancePlanId: planId } } },
+    ],
+  };
+}
+
 /** Lista las ejecuciones (OTs) de un plan, más recientes primero. Read scope = poder ver el plan. */
 export async function listPlanExecutions(session: TenantAccessSession, planId: string) {
   const prismaRaw = getPrismaClient();
@@ -1558,7 +1600,10 @@ export async function listPlanExecutions(session: TenantAccessSession, planId: s
   const plan = await getTenantMaintenancePlan(session, planId);
 
   const rows = await prisma.workOrder.findMany({
-    where: { tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null },
+    // Una OT que cubre varios ítems del PDM es ejecución de todos ellos: se la
+    // busca por el vínculo, no sólo por el plan principal. El OR mantiene
+    // visibles las OT viejas si algún vínculo faltara.
+    where: { tenantId: plan.tenantId, deletedAt: null, ...planExecutionFilter(plan.id) },
     orderBy: [{ completedDate: "desc" }, { openDate: "desc" }],
     select: {
       id: true, workOrderCode: true, status: true, type: true,
@@ -1594,7 +1639,7 @@ export async function updatePlanExecution(
 
   // La OT debe existir, ser de este tenant y pertenecer a este plan.
   const wo = await prisma.workOrder.findFirst({
-    where: { id: workOrderId, tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null },
+    where: { id: workOrderId, tenantId: plan.tenantId, deletedAt: null, ...planExecutionFilter(plan.id) },
     select: { id: true, workOrderCode: true, status: true, type: true, openDate: true, completedDate: true, executedByName: true, runningHoursAtExecution: true, woResult: true, observations: true },
   });
   if (!wo) throw new RouteError(404, "EXECUTION_NOT_FOUND", "Ejecución no encontrada para este plan.");
@@ -1622,7 +1667,7 @@ export async function updatePlanExecution(
 
     // Refrescar el resumen del plan desde la ejecución más reciente (por fecha).
     const latest = await tx.workOrder.findFirst({
-      where: { tenantId: plan.tenantId, maintenancePlanId: plan.id, deletedAt: null, completedDate: { not: null } },
+      where: { tenantId: plan.tenantId, deletedAt: null, completedDate: { not: null }, ...planExecutionFilter(plan.id) },
       orderBy: { completedDate: "desc" },
       select: { completedDate: true, runningHoursAtExecution: true },
     });
@@ -1683,6 +1728,63 @@ export async function completeChecklistPlan(
   });
 }
 
+/**
+ * Los textos que heredaría una OT abierta sobre estos planes, ya combinados.
+ *
+ * Existe para que el formulario de "Nueva OT" muestre EXACTAMENTE lo que va a
+ * quedar guardado cuando la orden cubre varios ítems del PDM. La regla de
+ * combinación vive en un solo lugar (wo-plan-text): si el front la replicara,
+ * el día que cambie el criterio de riesgo/consecuencia las dos versiones se
+ * separarían sin que nadie se entere.
+ */
+export async function previewMergedPlanText(session: TenantAccessSession, planIds: string[]) {
+  const plans: PlanTextSource[] = [];
+  const raw: MaintenancePlanRecord[] = [];
+  for (const id of planIds) {
+    // Aplica scope tenant/vessel y 404 si el plan no es visible.
+    const plan = await getTenantMaintenancePlan(session, id);
+    plans.push(plan as unknown as PlanTextSource);
+    raw.push(plan as MaintenancePlanRecord);
+  }
+
+  // Talleres a los que va este trabajo, uno por proveedor (misma agrupación que
+  // usa la apertura de la OT: una SS por taller). Sirve para que el formulario
+  // muestre a quién se le va a encargar ANTES de crear la orden.
+  const byProvider = new Map<string, { purposes: string[]; taskCodes: string[] }>();
+  for (const p of raw) {
+    const pAny = p as any;
+    if (pAny.department !== "PROVEEDOR") continue;
+    for (const req of resolvePlanProviderRequests(pAny)) {
+      const entry = byProvider.get(req.providerId) ?? { purposes: [], taskCodes: [] };
+      const purpose = normalizeOptionalText(req.purpose);
+      if (purpose && !entry.purposes.includes(purpose)) entry.purposes.push(purpose);
+      if (!entry.taskCodes.includes(p.taskCode)) entry.taskCodes.push(p.taskCode);
+      byProvider.set(req.providerId, entry);
+    }
+  }
+
+  let providers: Array<{ id: string; name: string; purposes: string[]; taskCodes: string[] }> = [];
+  const providerIds = [...byProvider.keys()];
+  if (providerIds.length > 0) {
+    const prismaRaw = getPrismaClient();
+    const rows = prismaRaw
+      ? await (prismaRaw as any).provider.findMany({
+          where: { id: { in: providerIds }, tenantId: raw[0]!.tenantId },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nameById = new Map<string, string>(rows.map((r: any) => [r.id, r.name]));
+    providers = providerIds.map((id) => ({
+      id,
+      name: nameById.get(id) ?? id,
+      purposes: byProvider.get(id)!.purposes,
+      taskCodes: byProvider.get(id)!.taskCodes,
+    }));
+  }
+
+  return { ...mergePlanTexts(plans), providers };
+}
+
 export async function openFormalWorkOrder(
   session: TenantAccessSession,
   id: string,
@@ -1695,6 +1797,32 @@ export async function openFormalWorkOrder(
   const prisma = maintenanceClient(prismaRaw);
 
   const plan = await getTenantMaintenancePlan(session, id);
+
+  // ── Planes adicionales: la misma OT ejecuta varios ítems del PDM ───────────
+  // Se validan ANTES de abrir nada: si uno es de otro buque o no existe, la OT
+  // no se crea. Mismo buque obligatorio (la OT es de un buque); equipo distinto
+  // permitido — es el caso del astillero.
+  const extraIds = [...new Set(
+    (payload.additionalPlanIds ?? [])
+      .map((v) => normalizeOptionalText(v))
+      .filter((v): v is string => !!v && v !== plan.id),
+  )];
+  const extraPlans: MaintenancePlanRecord[] = [];
+  for (const extraId of extraIds) {
+    // getTenantMaintenancePlan aplica scope tenant/vessel y tira 404 si no se ve.
+    const extra = await getTenantMaintenancePlan(session, extraId);
+    if (extra.vesselCode !== plan.vesselCode) {
+      throw new RouteError(
+        400,
+        "PLAN_OTHER_VESSEL",
+        `El plan ${extra.taskCode} pertenece a otro buque: una orden de trabajo no puede mezclar buques.`,
+      );
+    }
+    extraPlans.push(extra as MaintenancePlanRecord);
+  }
+  // El principal primero: define el orden del ITEM DEL PDM en el PDF.
+  const allPlans = [plan as MaintenancePlanRecord, ...extraPlans];
+
   const workOrderCode = await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode);
 
   // Hereda del plan cuando el payload no lo provee. Si el payload manda
@@ -1706,6 +1834,22 @@ export async function openFormalWorkOrder(
     return (txt as unknown as T) ?? null;
   };
   const planAny = plan as any;
+
+  // Textos combinados de TODOS los ítems del PDM que ejecuta la OT (un bloque
+  // por ítem, encabezado por su código). Con un solo plan devuelve el texto tal
+  // cual, así que el caso normal no cambia.
+  const merged = mergePlanTexts(allPlans as unknown as PlanTextSource[]);
+  /**
+   * Igual que `inherit`, pero cuando la OT cubre varios ítems: si el campo llegó
+   * SIN TOCAR desde el plan principal (el formulario lo trae precargado), se
+   * guarda el texto combinado de todos. Si el usuario lo editó, manda lo suyo.
+   */
+  const inheritMerged = (payloadValue: unknown, primaryValue: unknown, mergedValue: string | null): string | null => {
+    const fromPayload = inherit<string>(payloadValue, primaryValue as string | null);
+    if (extraPlans.length === 0) return fromPayload;
+    const primary = normalizeOptionalText(primaryValue as string | null | undefined);
+    return (fromPayload ?? null) === (primary ?? null) ? mergedValue : fromPayload;
+  };
 
   // Solo TENANT_ADMIN puede registrar una fecha de apertura distinta (backdating)
   // o abrir la OT en nombre de otro usuario (queda como SOLICITA / createdByUserId).
@@ -1744,13 +1888,30 @@ export async function openFormalWorkOrder(
       }
     : {};
 
-  // Proveedores del plan → una SS por cada uno al abrir la OT. Solo aplica cuando
-  // el área es PROVEEDOR; la lista sale del helper canónico (providerRequests o el
-  // legacy single). El providerId de la OT se colapsa: único → id, varios → null.
-  const providerRequests = planAny.department === "PROVEEDOR"
-    ? resolvePlanProviderRequests(planAny)
-    : [];
-  const woProviderId = collapseProviderId(providerRequests);
+  // Proveedores de los planes → SS al abrir la OT. Solo aplica cuando el área es
+  // PROVEEDOR; la lista sale del helper canónico (providerRequests o el legacy
+  // single). El providerId de la OT se colapsa: único → id, varios → null.
+  //
+  // UNA SS POR TALLER, no por ítem del PDM: si seis ítems se le encargan a la
+  // misma empresa, es un solo pedido con seis trabajos adentro — no seis
+  // pedidos. Cada pedido recuerda de qué planes salió para describir el servicio
+  // y las causas (un bloque por ítem, encabezado por su código).
+  const byProvider = new Map<string, Array<{ purpose: string | null; plan: MaintenancePlanRecord }>>();
+  for (const p of allPlans) {
+    const pAny = p as any;
+    if (pAny.department !== "PROVEEDOR") continue;
+    for (const req of resolvePlanProviderRequests(pAny)) {
+      const entries = byProvider.get(req.providerId) ?? [];
+      const purpose = normalizeOptionalText(req.purpose);
+      // Mismo taller, mismo plan y misma aclaración: no se repite.
+      if (entries.some(e => e.plan.id === p.id && (normalizeOptionalText(e.purpose) ?? "") === (purpose ?? ""))) continue;
+      entries.push({ purpose, plan: p });
+      byProvider.set(req.providerId, entries);
+    }
+  }
+  /** Un pedido por taller; `entries` son los ítems del PDM que le tocan. */
+  const providerRequests = [...byProvider.entries()].map(([providerId, entries]) => ({ providerId, entries }));
+  const woProviderId = collapseProviderId(providerRequests.map(r => ({ providerId: r.providerId, purpose: null })));
 
   // El ÁREA/RESPONSABLE del plan (department) se hereda al "ASIGNADO A" de la OT:
   //   Proveedor              → Tercerizado (lo hace un tercero)
@@ -1793,21 +1954,25 @@ export async function openFormalWorkOrder(
         // FECHA y la fecha de la firma de SOLICITA (que se toma de createdAt).
         createdAt: woOpenDate,
         dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
-        title: normalizeOptionalText(payload.title) ?? plan.title,
-        description: normalizeOptionalText(payload.description) ?? plan.description,
+        title: inheritMerged(payload.title, plan.title, merged.title) ?? plan.title,
+        description: inheritMerged(payload.description, planAny.description, merged.description),
         assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
         estimatedHours: payload.estimatedHours !== undefined
           ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")
           : (planAny.estimatedHours ?? null),
         taskMasterId: plan.taskMasterId ?? null,
-        acceptanceCriteria: inherit<string>(payload.acceptanceCriteria, planAny.acceptanceCriteria),
-        loto: inherit<string>(payload.loto, planAny.loto),
-        riskLevel: inherit<string>(payload.riskLevel, planAny.riskLevel),
-        riskAnalysisResult: inherit<string>(payload.riskAnalysisResult, planAny.riskAnalysisResult),
-        consequenceCategory: payload.consequenceCategory !== undefined
-          ? (payload.consequenceCategory ?? null)
-          : (planAny.consequenceCategory ?? null),
-        consequenceRationale: inherit<string>(payload.consequenceRationale, planAny.consequenceRationale),
+        acceptanceCriteria: inheritMerged(payload.acceptanceCriteria, planAny.acceptanceCriteria, merged.acceptanceCriteria),
+        loto: inheritMerged(payload.loto, planAny.loto, merged.loto),
+        riskLevel: inheritMerged(payload.riskLevel, planAny.riskLevel, merged.riskLevel),
+        riskAnalysisResult: inheritMerged(payload.riskAnalysisResult, planAny.riskAnalysisResult, merged.riskAnalysisResult),
+        // Misma regla que inheritMerged, para el enum: si llegó sin tocar desde
+        // el plan principal, se usa la consecuencia MÁS GRAVE de todos los ítems.
+        consequenceCategory: inheritMerged(
+          payload.consequenceCategory === undefined ? undefined : (payload.consequenceCategory ?? ""),
+          planAny.consequenceCategory,
+          merged.consequenceCategory,
+        ),
+        consequenceRationale: inheritMerged(payload.consequenceRationale, planAny.consequenceRationale, merged.consequenceRationale),
         // Área / responsable: se hereda del plan a la OT. `department` queda por
         // compatibilidad; `assignedToArea` es lo que el formulario nuevo muestra
         // en "ASIGNADO A".
@@ -1819,18 +1984,33 @@ export async function openFormalWorkOrder(
       },
     });
 
-    await tx.maintenancePlan.update({
-      where: { id: plan.id },
+    // Lista de planes que ejecuta la OT (el principal primero). Define el orden
+    // del ITEM DEL PDM y es lo que se avanza al cerrar la OT.
+    await (tx as any).workOrderMaintenancePlan.createMany({
+      data: allPlans.map((p, i) => ({
+        tenantId: plan.tenantId,
+        workOrderId: workOrder.id,
+        maintenancePlanId: p.id,
+        sortOrder: i,
+        createdByUserId: woCreatorId,
+      })),
+      skipDuplicates: true,
+    });
+
+    // Todos los planes incluidos pasan a "en ventana": ya tienen OT que los ejecuta.
+    await tx.maintenancePlan.updateMany({
+      where: { id: { in: allPlans.map((p) => p.id) } },
       data: {
         executionStatus: "IN_WINDOW",
         updatedByUserId: session.user.id,
       },
     });
 
-    // Repuestos/materiales previstos del plan → WorkOrderItem de la OT. spareId
-    // enlaza al catálogo (para que la OT muestre stock). Es planificación: NO
-    // descuenta stock (eso pasa al cerrar la OT, vía StockMovement).
-    const planSpares = resolvePlanSpares(planAny);
+    // Repuestos/materiales previstos de los planes → WorkOrderItem de la OT.
+    // spareId enlaza al catálogo (para que la OT muestre stock). Es
+    // planificación: NO descuenta stock (eso pasa al cerrar la OT, vía
+    // StockMovement). Con varios planes se acumulan los de todos, en orden.
+    const planSpares = allPlans.flatMap((p) => resolvePlanSpares(p as any));
     if (planSpares.length > 0) {
       await (tx as any).workOrderItem.createMany({
         data: planSpares.map((s, i) => ({
@@ -1847,16 +2027,24 @@ export async function openFormalWorkOrder(
       });
     }
 
-    // Una SS por proveedor configurado en el plan. Se consulta el MAX del
-    // correlativo una vez y se incrementa por cada una (+attempt para reintentar
-    // ante colisión). La descripción del servicio es la aclaración del proveedor;
-    // las causas, la tarea del plan. Atómico con la OT: "OT abierta ⇒ sus SS existen".
+    // Una SS por TALLER (no por ítem del PDM). Se consulta el MAX del correlativo
+    // una vez y se incrementa por cada una (+attempt para reintentar ante
+    // colisión). Atómico con la OT: "OT abierta ⇒ sus SS existen".
     if (providerRequests.length > 0) {
       const year = woOpenDate.getFullYear();
       const seqBase = await queryMaxServiceRequestSeq(tx as any, plan.tenantId, plan.vesselCode, year);
       for (let i = 0; i < providerRequests.length; i++) {
         const req = providerRequests[i]!;
-        const servicio = normalizeOptionalText(req.purpose) ?? plan.title;
+        // Servicio solicitado y causas: con un solo ítem salen tal cual (como
+        // siempre); con varios, un bloque por ítem encabezado por su código,
+        // para que el taller sepa qué corresponde a qué.
+        const only = req.entries.length === 1 ? req.entries[0]! : null;
+        const servicio = only
+          ? (normalizeOptionalText(only.purpose) ?? only.plan.title)
+          : req.entries.map(e => `${e.plan.taskCode} · ${normalizeOptionalText(e.purpose) ?? e.plan.title}`).join("\n");
+        const causas = only
+          ? (only.plan.description ?? only.plan.title)
+          : req.entries.map(e => `${e.plan.taskCode} · ${e.plan.description ?? e.plan.title}`).join("\n\n");
         await insertServiceRequestForWorkOrderTx(tx as any, {
           tenantId: plan.tenantId,
           vesselCode: plan.vesselCode,
@@ -1872,7 +2060,7 @@ export async function openFormalWorkOrder(
             providerId: req.providerId,
             title: servicio,
             description: servicio,
-            causes: plan.description ?? plan.title,
+            causes: causas,
             priority: payload.priority ?? "MEDIUM",
             ...ssStamps,
           },
@@ -1892,6 +2080,9 @@ export async function openFormalWorkOrder(
       workOrderCode: woTxResult.workOrderCode,
       planTitle: plan.title,
       planId: plan.id,
+      // Los otros ítems del PDM que cubre la misma OT (parada de astillero).
+      additionalPlanIds: extraPlans.length > 0 ? extraPlans.map((p) => p.id) : undefined,
+      additionalTaskCodes: extraPlans.length > 0 ? extraPlans.map((p) => p.taskCode) : undefined,
       vesselCode: plan.vesselCode,
       // Trazabilidad cuando un admin abre en nombre de otro / backdatea.
       onBehalfOf: woCreatorId !== session.user.id ? woCreatorId : undefined,

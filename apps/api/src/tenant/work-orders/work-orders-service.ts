@@ -173,6 +173,7 @@ interface WorkOrderRecord {
 interface MaintenancePlanRecord {
   id: string;
   tenantId: string;
+  assetId: string;
   triggerType: string;
   frequencyMonths: number | null;
   frequencyHours: number | null;
@@ -188,12 +189,19 @@ type WorkOrderDelegate = {
 
 type MaintenancePlanDelegate = {
   findFirst(args: { where: Record<string, unknown> }): Promise<MaintenancePlanRecord | null>;
+  findMany(args: { where: Record<string, unknown> }): Promise<MaintenancePlanRecord[]>;
   update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
+};
+
+// Vínculos OT ↔ planes del PDM que ejecuta (ver WorkOrderMaintenancePlan).
+type WorkOrderPlanLinkDelegate = {
+  findMany(args: { where: Record<string, unknown>; orderBy?: unknown; select?: Record<string, unknown> }): Promise<{ maintenancePlanId: string }[]>;
 };
 
 interface WorkOrdersTx {
   workOrder: WorkOrderDelegate;
   maintenancePlan: MaintenancePlanDelegate;
+  workOrderMaintenancePlan: WorkOrderPlanLinkDelegate;
 }
 
 interface WorkOrdersPrismaClient extends WorkOrdersTx {
@@ -471,7 +479,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
   // independientes entre sí: se resuelven en paralelo para no encadenar RTTs a
   // la DB. Mismo criterio que ya usa listTenantWorkOrders. Cada bloque conserva
   // su try/catch para seguir siendo non-blocking.
-  const [assetName, providerFromCatalog, spareUsages] = await Promise.all([
+  const [assetName, providerFromCatalog, spareUsages, plans] = await Promise.all([
     (async (): Promise<string | null> => {
       try {
         const asset = await (prismaRaw as unknown as { asset: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).asset.findFirst({
@@ -528,11 +536,19 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
       } catch { /* non-blocking */ }
       return usages;
     })(),
+    // Planes del PDM que ejecuta esta OT (uno o varios). Import dinámico para no
+    // cerrar el ciclo con work-order-plans-service, que importa de este módulo.
+    (async () => {
+      try {
+        const { listWorkOrderPlans } = await import("./work-order-plans-service");
+        return await listWorkOrderPlans(prismaRaw, tenantId, record as any);
+      } catch { return []; /* non-blocking */ }
+    })(),
   ]);
 
   const providerName = providerFromCatalog ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
-  return { ...record, assetName, providerName, spareUsages };
+  return { ...record, assetName, providerName, spareUsages, plans };
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {
@@ -1153,34 +1169,43 @@ export async function setWorkOrderApproval(
   // Auto-create Sample DRAFT al AUTORIZAR (no al cerrar): así la tripulación ya
   // sabe, desde que la OT se despacha, que debe tomar la muestra durante la
   // ejecución. Horas/fecha reales se completan al cerrar la OT (ver closeWorkOrder).
-  if (payload.step === "AUTORIZA" && current.maintenancePlanId) {
+  if (payload.step === "AUTORIZA") {
     try {
-      const plan = await (prismaRaw as any).maintenancePlan.findFirst({
-        where: { id: current.maintenancePlanId, tenantId: current.tenantId, deletedAt: null },
-        select: { id: true, samplingKind: true, samplingFluidType: true },
-      });
-      const planKind      = plan?.samplingKind as string | null;
-      const planFluidType = plan?.samplingFluidType as string | null;
-      if (plan && (planKind || planFluidType)) {
+      // Se recorren TODOS los planes de la OT: si la orden cubre varios ítems
+      // del PDM y dos piden muestra, salen dos muestras (una por plan, con su
+      // equipo y su fluido). El dedupe es por OT + plan, no sólo por OT.
+      const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+      const planIds = await listWorkOrderPlanIds(prismaRaw, current);
+      const plans = planIds.length > 0
+        ? await (prismaRaw as any).maintenancePlan.findMany({
+            where: { id: { in: planIds }, tenantId: current.tenantId, deletedAt: null },
+            select: { id: true, assetId: true, samplingKind: true, samplingFluidType: true },
+          })
+        : [];
+      for (const plan of plans) {
+        const planKind      = plan?.samplingKind as string | null;
+        const planFluidType = plan?.samplingFluidType as string | null;
+        if (!planKind && !planFluidType) continue;
         const existing = await (prismaRaw as any).fluidSample.findFirst({
-          where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, deletedAt: null },
+          where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, sourcePlanId: plan.id, deletedAt: null },
           select: { id: true },
         });
-        if (!existing) {
-          await createFluidSampleFromWorkOrder({
-            tenantId:        current.tenantId,
-            vesselCode:      current.vesselCode,
-            assetId:         current.assetId,
-            kind:            (planKind || "FLUID") as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
-            fluidType:       planFluidType as FluidTypeEnum | null,
-            workOrderId:     current.id,
-            workOrderCode:   current.workOrderCode,
-            planId:          plan.id,
-            runningHours:    null,
-            completedAt:     actionAt,
-            createdByUserId: session.user.id,
-          });
-        }
+        if (existing) continue;
+        await createFluidSampleFromWorkOrder({
+          tenantId:        current.tenantId,
+          vesselCode:      current.vesselCode,
+          // El equipo es el DEL PLAN: con varios ítems del PDM cada muestra
+          // corresponde a su propio equipo, no al principal de la OT.
+          assetId:         plan.assetId ?? current.assetId,
+          kind:            (planKind || "FLUID") as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
+          fluidType:       planFluidType as FluidTypeEnum | null,
+          workOrderId:     current.id,
+          workOrderCode:   current.workOrderCode,
+          planId:          plan.id,
+          runningHours:    null,
+          completedAt:     actionAt,
+          createdByUserId: session.user.id,
+        });
       }
     } catch (err) {
       log.error("[setWorkOrderApproval] auto-create Sample failed", err);
@@ -1246,12 +1271,31 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
       },
     });
 
-    if (current.maintenancePlanId) {
-      const plan = await tx.maintenancePlan.findFirst({
-        where: { id: current.maintenancePlanId, tenantId: current.tenantId, deletedAt: null },
+    // Cerrar la OT da por ejecutados TODOS los planes que incluye, no sólo el
+    // principal: una parada de astillero cubre varios ítems del PDM ("1.7 / 1.8
+    // / 1.9 …") y si se avanzara uno solo, los demás seguirían venciendo aunque
+    // el trabajo se hizo. Cada plan recalcula su propio próximo vencimiento con
+    // SU frecuencia.
+    const planLinks = await tx.workOrderMaintenancePlan.findMany({
+      where: { workOrderId: current.id },
+      select: { maintenancePlanId: true },
+    });
+    const planIds = [...new Set([
+      ...(current.maintenancePlanId ? [current.maintenancePlanId] : []),
+      ...planLinks.map((l) => l.maintenancePlanId),
+    ])];
+
+    if (planIds.length > 0) {
+      const plans = await tx.maintenancePlan.findMany({
+        where: { id: { in: planIds }, tenantId: current.tenantId, deletedAt: null },
       });
-      if (plan) {
-        const executionHours = payload.runningHoursAtExecution ?? plan.lastExecutionHours;
+      for (const plan of plans) {
+        // Las horas informadas son las del equipo de LA OT. Un plan de otro
+        // equipo (astillero: válvulas, manifold, LCI…) no puede tomarlas: su
+        // cuentahoras es otro. Ese avanza por fecha y conserva sus horas.
+        const sameAsset = plan.assetId === current.assetId;
+        const reportedHours = sameAsset ? payload.runningHoursAtExecution ?? null : null;
+        const executionHours = reportedHours ?? plan.lastExecutionHours;
         const nextDue = recalculateNextDue(
           {
             triggerType: plan.triggerType,
@@ -1265,7 +1309,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
           where: { id: plan.id },
           data: {
             lastExecutionDate: completedDate,
-            lastExecutionHours: payload.runningHoursAtExecution ?? plan.lastExecutionHours,
+            lastExecutionHours: reportedHours ?? plan.lastExecutionHours,
             nextDueDate: nextDue.nextDueDate,
             nextDueHours: nextDue.nextDueHours,
             executionStatus: "COMPLETED",
@@ -1505,10 +1549,19 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
     log.error("[cancelWorkOrder] failed to auto-close associated deferrals:", err);
   }
 
-  if (current.maintenancePlanId) {
-    void restorePlanAfterWoCancellation(session, current.maintenancePlanId)
-      .catch((err: unknown) => { log.error("[cancelWorkOrder] plan restore failed:", err); });
-  }
+  // Cancelar devuelve a su vencimiento real a TODOS los planes incluidos, no
+  // sólo al principal: ninguno se va a ejecutar por esta OT.
+  void (async () => {
+    try {
+      const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+      const planIds = await listWorkOrderPlanIds(prismaRaw, current);
+      for (const planId of planIds) {
+        await restorePlanAfterWoCancellation(session, planId);
+      }
+    } catch (err) {
+      log.error("[cancelWorkOrder] plan restore failed:", err);
+    }
+  })();
   return cancelled;
 }
 

@@ -14,12 +14,13 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
+import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
+import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
-import { downloadDoc } from "../lib/download-doc";
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -86,6 +87,8 @@ interface LinkedServiceRequest {
   title: string | null;
   description: string | null;
   openDate: string;
+  // Taller al que se le pidió el trabajo (catálogo o escrito a mano).
+  providerName: string | null;
 }
 
 interface LinkedPermit {
@@ -187,6 +190,9 @@ interface WorkOrder {
   location: string | null;
   communicationMethod: string[];
   distribution: string[];
+  // Ítems del PDM que ejecuta la OT. Uno solo en el caso normal; varios cuando
+  // una misma orden cubre una parada de astillero. Solo viene en el DETALLE.
+  plans?: WoPlanRow[];
 }
 
 
@@ -206,6 +212,15 @@ function normalizeOptionalText(value: string): string | null {
 }
 function canEditStatus(status: string): boolean {
   return status === "PLANNED" || status === "IN_PROGRESS" || status === "ON_HOLD";
+}
+
+/**
+ * Alto de un textarea según su contenido. Una OT que cubre varios ítems del PDM
+ * trae un bloque por ítem en tarea / criterios / LOTO / riesgo / RCM: con el
+ * alto fijo de antes se veía sólo el primero y parecía que faltaba el resto.
+ */
+function autoRows(text: string, min: number, max = 12): number {
+  return Math.min(max, Math.max(min, text.split("\n").length));
 }
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
@@ -515,17 +530,28 @@ interface ProgressNote {
 }
 
 const KIND_ICON: Record<string, React.FC<{ className?: string }>> = {
-  TEXT: Type, PHOTO: Camera, VIDEO: VideoIcon, AUDIO: Mic,
+  TEXT: Type, PHOTO: Camera, VIDEO: VideoIcon, AUDIO: Mic, DOCUMENT: FileText,
 };
 const KIND_LABEL: Record<string, string> = {
-  TEXT: "Texto", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio",
+  TEXT: "Texto", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio", DOCUMENT: "Documento",
 };
 
-const ProgressNoteCard: React.FC<{
+/**
+ * Un avance como FILA de grilla, igual que Programación de trabajo: fecha, tipo,
+ * detalle y acciones. Antes cada avance era una tarjeta con la foto o el video a
+ * ancho completo: diez avances ocupaban pantallas enteras y no se podía leer la
+ * secuencia del trabajo de un vistazo. La foto/video queda como miniatura y se
+ * amplía al hacer click (el mismo visor del mosaico).
+ */
+/** Mismo recuadro que las celdas de Programación de trabajo (WoScheduleEditor). */
+const noteCellCls = "w-full bg-transparent border border-fg/10 rounded-md px-1.5 py-0.5 text-[11px] leading-tight text-fg";
+
+const ProgressNoteRow: React.FC<{
   note: ProgressNote;
   onDelete?: () => void;
   onSave?: (text: string) => Promise<void>;
-}> = ({ note, onDelete, onSave }) => {
+  onOpenMedia?: () => void;
+}> = ({ note, onDelete, onSave, onOpenMedia }) => {
   const Icon = KIND_ICON[note.kind] ?? Type;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text ?? "");
@@ -542,65 +568,81 @@ const ProgressNoteCard: React.FC<{
     catch { /* el caller muestra el error */ }
     finally { setSaving(false); }
   };
+  const esVisual = (note.kind === "PHOTO" || note.kind === "VIDEO") && !!note.fileUrl;
+
   return (
-    <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-2">
-      <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
-        <Icon className="w-3 h-3" />
-        <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
-        <span className="ml-auto">{fmtTime(note.createdAt)}</span>
+    <tr className="align-top">
+      <td className="px-1">
+        <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>{fmtTime(note.createdAt)}</div>
+      </td>
+      <td className="px-1">
+        <div className={`${noteCellCls} flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-text-industrial/60`}>
+          <Icon className="w-3 h-3 shrink-0" />{KIND_LABEL[note.kind] ?? note.kind}
+        </div>
+      </td>
+      <td className="px-1">
+        <div className={`${noteCellCls} flex items-start gap-2 min-w-0`}>
+          {esVisual && (
+            <button type="button" onClick={onOpenMedia} title="Ampliar"
+              className="relative shrink-0 w-8 h-8 rounded-md overflow-hidden border border-fg/10 bg-fg/5 hover:border-accent/40 transition-colors">
+              {note.kind === "PHOTO"
+                ? <AuthedImage src={note.fileUrl!} alt="" className="w-full h-full object-cover" />
+                : <>
+                    <AuthedVideo src={note.fileUrl!} className="w-full h-full object-cover" muted />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <VideoIcon className="w-4 h-4 text-white drop-shadow" />
+                    </span>
+                  </>}
+            </button>
+          )}
+          {note.kind === "AUDIO" && note.fileUrl && (
+            <AuthedAudio src={note.fileUrl} controls className="h-7 max-w-[220px]" />
+          )}
+          {note.kind === "DOCUMENT" && note.fileUrl && <AuthedDocLink src={note.fileUrl} />}
+
+          {editing ? (
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <textarea
+                rows={autoRows(draft, 3, 10)}
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                disabled={saving}
+                // Sin borde propio: ya está dentro del recuadro de la celda.
+                className="w-full bg-fg/5 border-0 rounded-md px-1.5 py-1 text-[11px] text-fg leading-relaxed focus:outline-none disabled:opacity-60"
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditing(false)} disabled={saving}
+                  className="px-2 py-1 rounded-lg text-[10px] text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => { void doSave(); }} disabled={saving}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Guardar
+                </button>
+              </div>
+            </div>
+          ) : (
+            note.text && (
+              <p className="flex-1 min-w-0 text-[11px] text-fg/85 whitespace-pre-line leading-tight">{note.text}</p>
+            )
+          )}
+        </div>
+      </td>
+      <td className="px-1 whitespace-nowrap text-right">
         {onSave && !editing && (
           <button type="button" onClick={() => { setDraft(note.text ?? ""); setEditing(true); }}
-            className="p-1 text-text-industrial/40 hover:text-accent transition-colors"
-            title="Editar avance">
+            className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors" title="Editar avance">
             <Pencil className="w-3.5 h-3.5" />
           </button>
         )}
         {onDelete && (
           <button type="button" onClick={onDelete}
-            className="p-1 -mr-1 text-text-industrial/40 hover:text-red-700 dark:text-red-400 transition-colors"
-            title="Borrar avance">
+            className="p-0.5 text-text-industrial/40 hover:text-red-700 dark:hover:text-red-400 transition-colors" title="Borrar avance">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
-      </div>
-      {note.kind === "PHOTO" && note.fileUrl && (
-        <AuthedImage src={note.fileUrl} alt="Foto" className="w-full rounded-lg object-cover max-h-60" />
-      )}
-      {note.kind === "VIDEO" && note.fileUrl && (
-        <AuthedVideo src={note.fileUrl} controls className="w-full rounded-lg max-h-60" />
-      )}
-      {note.kind === "AUDIO" && note.fileUrl && (
-        <AuthedAudio src={note.fileUrl} controls className="w-full" />
-      )}
-      {note.kind === "DOCUMENT" && note.fileUrl && (
-        <AuthedDocLink src={note.fileUrl} />
-      )}
-      {editing ? (
-        <div className="space-y-2">
-          <textarea
-            rows={6}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            disabled={saving}
-            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-xs text-fg leading-relaxed focus:outline-none focus:border-accent/50 disabled:opacity-60"
-          />
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setEditing(false)} disabled={saving}
-              className="px-3 py-1.5 rounded-lg text-[11px] text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">
-              Cancelar
-            </button>
-            <button type="button" onClick={() => { void doSave(); }} disabled={saving}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
-              {saving && <Loader2 className="w-3 h-3 animate-spin" />} Guardar
-            </button>
-          </div>
-        </div>
-      ) : (
-        note.text && (
-          <p className="text-xs text-fg/85 whitespace-pre-line leading-relaxed">{note.text}</p>
-        )
-      )}
-    </div>
+      </td>
+    </tr>
   );
 };
 
@@ -727,15 +769,28 @@ const ProgressNotesPanel: React.FC<{
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
-          {notes.map(n => (
-            <ProgressNoteCard
-              key={n.id}
-              note={n}
-              onDelete={canDelete ? () => { void handleDelete(n.id); } : undefined}
-              onSave={canEdit ? (text) => handleSave(n.id, text) : undefined}
-            />
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] border-separate border-spacing-y-0.5">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-widest text-text-industrial/50">
+                <th className="text-left font-semibold px-1 w-[104px]">Fecha</th>
+                <th className="text-left font-semibold px-1 w-[70px]">Tipo</th>
+                <th className="text-left font-semibold px-1">Detalle</th>
+                <th className="w-[56px]" />
+              </tr>
+            </thead>
+            <tbody>
+              {notes.map(n => (
+                <ProgressNoteRow
+                  key={n.id}
+                  note={n}
+                  onDelete={canDelete ? () => { void handleDelete(n.id); } : undefined}
+                  onSave={canEdit ? (text) => handleSave(n.id, text) : undefined}
+                  onOpenMedia={() => setLightbox(n)}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -840,10 +895,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
 
-  // Tramitación: los avances (5) y el resultado (6) recién se habilitan cuando la
-  // OT está AUTORIZADA. En Solicitada / Aprobada quedan deshabilitados.
+  // Tramitación: los avances (5) y el resultado (6) se habilitan desde que la OT
+  // está APROBADA. La aprobación es la que da luz verde a ejecutar y registrar el
+  // trabajo; la autorización de tierra sigue siendo el paso siguiente, pero ya no
+  // frena la carga de avances/resultado. En SOLICITADA quedan deshabilitados.
   const isAuthorized = !!workOrder.autorizadoAt;
-  const isResultEditable = isEditable && isAuthorized;
+  const isApproved = !!workOrder.aprobadoAt || isAuthorized;
+  const isResultEditable = isEditable && isApproved;
   // Sub-estado de la cadena de aprobación (independiente del status operativo).
   const tramitaPhase: "SOLICITADA" | "APROBADA" | "AUTORIZADA" =
     workOrder.autorizadoAt ? "AUTORIZADA" : workOrder.aprobadoAt ? "APROBADA" : "SOLICITADA";
@@ -1388,16 +1446,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [isEditable, workOrder, title, description, assignedTo, dueDate, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
 
-  // ── Exportación a Word (.doc) ──
-  const [generatingDoc, setGeneratingDoc] = useState(false);
-  const handleGenerateDoc = useCallback(async () => {
-    setGeneratingDoc(true);
-    try {
-      await downloadDoc(`/app/pms/work-orders/${workOrder.id}/doc`, workOrder.workOrderCode);
-    } finally {
-      setGeneratingDoc(false);
-    }
-  }, [workOrder.id, workOrder.workOrderCode]);
+  // La exportación a Word se quitó de la OT: el documento válido es el PDF del
+  // formulario controlado. El endpoint /doc sigue existiendo en el backend.
 
   // Cambio de TIPO (Preventivo/Correctivo/Inspección): auto-guardado inmediato
   // por endpoint dedicado (permiso amplio, cualquier usuario no-auditor), sin
@@ -1853,9 +1903,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               ) : (
                 <>
                   {tramitaPhase === "APROBADA" && (
-                    <p className="text-[11px] text-text-industrial/60">
-                      <span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}
-                    </p>
+                    <>
+                      <p className="text-[11px] text-text-industrial/60">
+                        <span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}
+                      </p>
+                      <p className="text-[11px] text-text-industrial/60 normal-case">{woTerms.abbr} aprobada — avances y resultado habilitados.</p>
+                    </>
                   )}
                   <div className="flex gap-2">
                     <button
@@ -2053,6 +2106,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               hint={fromPlan ? t("wo.modal.planFromPlanHint") : undefined}
             />
 
+            {/* ── Ítems del PDM que ejecuta esta OT (uno o varios) ── */}
+            <WoPlansPanel
+              workOrderId={workOrder.id}
+              vesselCode={workOrder.vesselCode}
+              plans={workOrder.plans ?? []}
+              canEdit={isEditable}
+              // onReload (no onSaved): agregar o quitar un ítem refresca el
+              // listado de fondo, pero NO cierra la ventana de la OT.
+              onChanged={onReload}
+            />
+
             {/* ── Área / responsable ── */}
             {/* En los tenants con el formulario REGI-OPE-26.3 esto vive arriba,
                 en el bloque del formulario: el área son los recuadros del papel
@@ -2090,11 +2154,22 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} onBlur={() => { void analyzeForDeficiency(title, "title"); }} disabled={!isEditable} className={inputCls} placeholder={t("wo.modal.titlePlaceholder")} />
+              {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
+                  título es una línea "CÓDIGO · tarea" por ítem. Con un solo ítem
+                  se ve igual que antes (una fila). */}
+              <textarea
+                rows={Math.min(6, Math.max(1, title.split("\n").length))}
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onBlur={() => { void analyzeForDeficiency(title, "title"); }}
+                disabled={!isEditable}
+                className={`${inputCls} resize-y`}
+                placeholder={t("wo.modal.titlePlaceholder")}
+              />
             </div>
             <div className="space-y-1.5">
               <label className={sectionLabelCls} style={sectionLabelStyle}>{t("wo.modal.task")}</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable} className={`${inputCls} resize-y`} />
+              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable} className={`${inputCls} resize-y`} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -2119,7 +2194,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.acceptanceCriteria")}{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
                   </label>
-                  <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
+                  <textarea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
                 </div>
                 <div className="space-y-1.5">
                   <label
@@ -2130,7 +2205,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.loto")}{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
                   </label>
-                  <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
+                  <textarea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
                 </div>
                 <div className="space-y-1.5">
                   <label
@@ -2160,7 +2235,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 </div>
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
-                  <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
+                  <textarea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
                 </div>
                 <div className="space-y-1.5">
                   <label
@@ -2186,7 +2261,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
                   </select>
                   <textarea
-                    rows={2}
+                    rows={autoRows(consequenceRationale, 2)}
                     value={consequenceRationale}
                     onChange={e => setConsequenceRationale(e.target.value)}
                     disabled={!isEditable || loadingConsequence}
@@ -2355,6 +2430,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   >
                     <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
                     <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
+                    {/* A quién se le pidió: el nombre del taller, no un id. */}
+                    {sr.providerName && (
+                      <span className="shrink-0 max-w-[30%] truncate text-[11px] font-semibold text-fg" title={sr.providerName}>
+                        {sr.providerName}
+                      </span>
+                    )}
                     {/* Código de la muestra, cuando esta OT generó una. Abre la
                         muestra; al cerrarla se vuelve a esta OT. Va dentro de la
                         fila clickeable, así que frena la navegación del padre. */}
@@ -2382,11 +2463,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── Tramitación gate: 5 (Avances) y 6 (Resultado) solo con OT AUTORIZADA ── */}
-          <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isAuthorized ? "opacity-70" : ""}`}>
-          {!isAuthorized && (
+          {/* ── Tramitación gate: 5 (Avances) y 6 (Resultado) desde OT APROBADA ── */}
+          <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isApproved ? "opacity-70" : ""}`}>
+          {!isApproved && (
             <p className="text-[11px] text-text-industrial/50 italic">
-              Los avances y el resultado se habilitan cuando la {woTerms.abbr} esté autorizada.
+              Los avances y el resultado se habilitan cuando la {woTerms.abbr} esté aprobada.
             </p>
           )}
 
@@ -2406,12 +2487,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── 7. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
+          {/* ── 7. PROGRAMACION DE TRABAJO (formulario REGI-OPE-26.3) ──
+              Una fila por jornada. Es lo que imprime el recuadro del papel: antes
+              salía siempre vacío porque no había dónde cargarlo. */}
+          {isMercurio && (
+            <section className="space-y-3">
+              <PhaseHeader n={7} label="Programación de trabajo" dotCls="bg-amber-500/15 text-amber-700 dark:text-amber-400" borderCls="border-amber-500/25" />
+              <WoScheduleEditor
+                workOrderId={workOrder.id}
+                canEdit={isResultEditable}
+                defaultPlace={location || null}
+                defaultCompany={workOrder.providerName ?? providerOther ?? null}
+              />
+            </section>
+          )}
+
+          {/* ── 8. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
               Se completa al terminar el trabajo: va después de los avances y
               antes del resultado. Sección propia porque en el papel también lo es. */}
           {isMercurio && (
             <section className="space-y-3">
-              <PhaseHeader n={7} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
+              <PhaseHeader n={8} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
               <WoRegiClosure
                 form={regiForm}
                 onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
@@ -2420,9 +2516,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── RESULTADO (8 con el formulario de Mercurio, que suma "Tarea concluida") ── */}
+          {/* ── RESULTADO (9 con el formulario de Mercurio, que suma "Programación
+                 de trabajo" y "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={isMercurio ? 8 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 9 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             <div className="space-y-1.5">
@@ -2771,10 +2868,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
               {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
-            </button>
-            <button onClick={() => { void handleGenerateDoc(); }} disabled={generatingDoc}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all">
-              {generatingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generateDoc")}
             </button>
             {workOrder.status === "ON_HOLD" && (
               <button onClick={() => { void handleResume(); }} disabled={resuming}

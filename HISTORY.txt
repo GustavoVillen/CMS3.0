@@ -1,5 +1,190 @@
 HISTORY.txt
 
+[2026-08-03] AVANCES en grilla compacta, como Programación de trabajo
+Agent: Claude Opus 5
+- Pedido del usuario: mismo formato que PROGRAMACION DE TRABAJO, filas compactas.
+- ProgressNoteCard → ProgressNoteRow: cada avance es una FILA (Fecha / Tipo /
+  Detalle / acciones) con el mismo estilo de tabla que WoScheduleEditor. Cuatro
+  avances pasan de ~300px a ~110px.
+- Foto y video dejan de ocupar el ancho completo: van como miniatura de 44px que
+  abre el visor que ya existía para el mosaico. Audio con reproductor chico. El
+  modo mosaico no cambió.
+- Editar el texto sigue en línea: el textarea ocupa la celda Detalle y crece con
+  el contenido (autoRows).
+- De paso: el tipo DOCUMENT no tenía icono ni etiqueta y salía como "DOCUMENT"
+  con el icono de texto; ahora es "Documento" con icono de archivo.
+- Segunda pasada (pedido del usuario): faltaba el RECUADRO de cada celda. Fecha,
+  Tipo y Detalle usan el mismo borde/radio que los inputs de WoScheduleEditor
+  (noteCellCls). Al editar, el textarea va sin borde propio para no duplicarlo.
+- Tercera pasada: filas más comprimidas en LAS DOS tablas (avances y
+  programación): padding py-1→py-0.5, separación entre filas 4px→2px, leading
+  tight, miniatura de foto/video 44→32px. La fila pasa de ~33px a 24px. El
+  cuerpo de texto se mantiene en 11px: comprimir más sería a costa de leerlo.
+
+[2026-08-03] Se quita el botón "Word (.doc)" de la OT
+Agent: Claude Opus 5
+- Pedido del usuario. El documento válido de la OT es el PDF del formulario
+  controlado; la exportación a Word duplicaba la salida sin el formato del
+  papel. Se quitó el botón, su handler y la clave i18n "wo.modal.generateDoc",
+  que quedaba huérfana.
+- NO se tocó el backend: GET /app/pms/work-orders/:id/doc y word-work-order.ts
+  siguen ahí. Volver a poner el botón es una línea. lib/download-doc.ts queda
+  sin uso en el front, pero es infraestructura genérica con endpoint vivo.
+
+[2026-08-03] PROGRAMACION DE TRABAJO: ahora se carga en la OT
+Agent: Claude Opus 5
+- El usuario preguntó dónde se cargaban esas filas del papel. Respuesta: en
+  ningún lado. El PDF las derivaba de los WorkLog, que sólo nacen del
+  Mantenimiento Express y del parte diario, así que en una OT tramitada la tabla
+  salía SIEMPRE vacía. Eligió la opción de hacer la carga de verdad.
+- Schema: NUEVO modelo WorkOrderScheduleEntry (workDate, technician, place,
+  company, timeFrom/timeTo "HH:MM", sortOrder). No se reusó WorkLog a propósito:
+  ese alimenta el historial del equipo, del plan y el consumo de repuestos, y
+  meterle jornadas de OT lo ensuciaría. `place`/`company` van por fila (el
+  formulario los pide por fila) y al agregar una se proponen los de la OT.
+- work-orders/work-order-schedule-service.ts + rutas GET/POST
+  /app/pms/work-orders/:id/schedule y PATCH/DELETE .../schedule/:entryId.
+  El horario se valida como HH:MM para que el papel no salga con basura.
+- PDF: la tabla usa las filas cargadas; si no hay ninguna cae a los WorkLog como
+  antes, así las OT viejas y las express siguen imprimiendo lo mismo.
+- CORREGIDO: "FECHA FINALIZACION" mostraba el VENCIMIENTO de la OT. Con una OT
+  cerrada el papel decía que había terminado en una fecha futura. Ahora muestra
+  la fecha de cierre y, mientras siga abierta, el vencimiento (la prevista).
+- BUG PRE-EXISTENTE CORREGIDO: fmt() del PDF corría un día para atrás TODAS las
+  fechas sin hora (apertura, vencimiento, jornadas). Se guardan como medianoche
+  UTC y se formateaban en hora local (UTC-3). Ahora las fechas sin hora se
+  formatean en UTC; los sellos de tiempo reales siguen en hora local.
+- Front: WoScheduleEditor.tsx — grilla editable con guardado al salir del campo.
+  Sección 7 de la OT (sólo tenants con el formulario REGI-OPE-26.3); "Tarea
+  concluida" pasa a 8 y "Resultado" a 9.
+- Verificado: fila cargada (03/08, Juan Pérez, Astillero La Madrid, CG Services,
+  08:00-17:30) impresa en el PDF con la fecha correcta. OT de prueba revertida.
+
+[2026-08-03] Nueva OT: los talleres se ven debajo de la tarea
+Agent: Claude Opus 5
+- Pedido del usuario: "Si existe un proveedor, o varios (distintos) incluirlos
+  debajo de la tarea".
+- previewMergedPlanText (GET .../merged-text) ahora devuelve además `providers`:
+  un renglón por taller con el nombre resuelto del catálogo, para qué se lo
+  contrata y de qué ítems del PDM sale. Agrupado por proveedor, igual que la
+  creación de SS.
+- El modal de Nueva OT lo muestra en un recuadro debajo de TAREA: "PROVEEDOR"
+  con uno, "PROVEEDORES (n)" con varios, y la aclaración de que al crear la
+  orden se abre una SS por taller.
+- Verificado: un taller (CG Services para los dos ítems de alarmas) y dos
+  talleres distintos (CG Services + CONDOR S.A.C.I). Sin datos de prueba: las
+  dos ventanas se cancelaron sin crear la OT.
+
+[2026-08-03] Una SS por TALLER, no por ítem del PDM
+Agent: Claude Opus 5
+- Pedido del usuario: "Si la SS es a la misma empresa, entonces abrir solo 1 SS".
+  Venía deduplicando por proveedor + aclaración, así que dos ítems al mismo
+  taller con propósitos distintos ("TK Diario" / "Tk Sed") abrían dos SS.
+- openFormalWorkOrder agrupa los pedidos por providerId: una SS por taller, con
+  el servicio y las causas armados como un bloque por ítem ("CÓDIGO · texto").
+  Con un solo ítem el texto sale tal cual, como siempre.
+- Efecto lateral bueno: con varios ítems al MISMO taller, collapseProviderId ya
+  no ve "varios proveedores" y la OT queda con su providerId cargado, así que el
+  recuadro "taller / proveedor" de la OT deja de salir vacío.
+- Verificado: M01-ALARM-TK-02 + M01-ALARM-TK-03 (ambos a CG Services) generaron
+  UNA sola SS-31 con los dos trabajos adentro. OT de prueba borrada.
+
+[2026-08-03] Nueva OT: el formulario muestra los textos combinados reales
+Agent: Claude Opus 5
+- El usuario reportó que "las tareas no se unifican". Estaba mirando la ventana
+  de Nueva OT ANTES de crearla: ahí sólo se unía el título (lo armaba el front
+  con los datos del listado). Tarea, criterios, LOTO, riesgo y RCM mostraban
+  únicamente el plan principal — y criterios/LOTO ni eso, porque el listado de
+  planes recorta esos campos pesados. El backend guardaba bien, pero el usuario
+  juzga por lo que ve, y con razón.
+- GET /app/pms/maintenance-plans/merged-text?ids=a,b,c (previewMergedPlanText):
+  devuelve los ocho campos ya combinados. Se registra ANTES del GET por id, que
+  si no captura "merged-text" como si fuera un id de plan.
+- El modal lo pide al abrirse y reemplaza los campos, salvo los que el usuario
+  ya haya tocado mientras llegaba la respuesta. La regla de combinación queda en
+  un solo lugar (wo-plan-text): replicarla en el front habría hecho que el
+  criterio de riesgo/consecuencia se separara con el tiempo.
+- TAREA: un plan sin descripción propia ahora aporta su TÍTULO cuando la OT
+  tiene varios ítems (muchos planes no cargan descripción y el recuadro quedaba
+  vacío o incompleto). Con un solo ítem no cambia: si no hay descripción, vacío.
+- autoRows también en el modal de Nueva OT: estos campos traen un bloque por
+  ítem y con alto fijo se veía sólo el primero.
+
+[2026-08-03] OT multi-plan: textos combinados por ítem + proveedores visibles
+Agent: Claude Opus 5
+- Pedido del usuario: en una OT con varios ítems del PDM, el título mostraba uno
+  solo. Quiere una línea "CÓDIGO · tarea" por ítem, y lo mismo en tarea,
+  criterios de aceptación, LOTO, nivel de riesgo y RCM. Además: que aparezcan
+  los nombres de los proveedores en la OT.
+- work-orders/wo-plan-text.ts (nuevo): compositor de los textos heredados. Con
+  UN plan devuelve el texto tal cual (el caso normal no cambia). Con varios,
+  un bloque por ítem encabezado por su taskCode. Los dos campos que no son texto
+  libre no se concatenan: nivel de riesgo toma el MÁS ALTO y la consecuencia RCM
+  la MÁS GRAVE (SAFETY > ENVIRONMENTAL > OPERATIONAL > NON_OPERATIONAL) — bajar
+  el riesgo de la OT porque un ítem es benigno sería peligroso.
+- openFormalWorkOrder: `inheritMerged` — si el campo llegó SIN TOCAR desde el
+  plan principal (el formulario lo trae precargado), guarda el texto combinado;
+  si el usuario lo editó, manda lo suyo.
+- Alta/baja de ítems desde la OT: recompone los seis campos, pero SOLO si el
+  valor actual es exactamente el que había armado la lista anterior. Editado a
+  mano ⇒ no se toca.
+- BUG PRE-EXISTENTE CORREGIDO: abrir una OT formal desde la FILA del listado de
+  planes perdía criterios de aceptación, LOTO, análisis de riesgo y
+  justificación RCM. La lista recorta esos campos pesados, el modal los mandaba
+  como null explícito y el backend los tomaba como "borralo". Ahora el modal
+  manda `undefined` cuando el prefill nunca los trajo (keepFromPlan) y el
+  backend hereda del plan.
+- Proveedores: listWorkOrderServiceRequests resuelve providerName por SS y la
+  fila de la OT lo muestra; el PDF y el .doc imprimen PROVEEDOR con los talleres
+  de la OT y de sus SS, sin repetir.
+- BUG INTRODUCIDO Y CORREGIDO EN LA MISMA SESIÓN: el data-loader del PDF pidió
+  `providerOther` a ServiceRequest (campo que no existe ahí); la consulta entera
+  fallaba dentro de un try/catch y dejaba NRO DE SS/SC en blanco.
+- UI: el título pasa de <input> a <textarea> que crece con las líneas, y
+  tarea/criterios/LOTO/riesgo/RCM ajustan alto al contenido (autoRows).
+- Verificado en pantalla con M01-ALARM-TK-02 + M01-ALARM-TK-03 (mismo proveedor,
+  dos SS): título y tarea con las dos líneas, criterios/LOTO/riesgo/RCM con los
+  dos bloques, riesgo MEDIUM (max de LOW y MEDIUM) y RCM ENVIRONMENTAL (más
+  grave que OPERATIONAL). PDF con ITEM DEL PDM, NRO DE SS/SC y PROVEEDOR "CG
+  Services". Cancelar la OT restauró los dos planes. Datos de prueba borrados.
+
+[2026-08-03] Una OT puede ejecutar VARIOS ítems del PDM (parada de astillero)
+Agent: Claude Opus 5
+- Pedido del usuario: "Una OT debe poder incluir varios Planes de Mantenimiento",
+  con el papel REGI-OPE-26.3 de referencia ("ITEM DEL PDM: 1.7 / 1.8 / 1.9 /
+  1.10 / 1.11 / 1.12", EQUIPO con varios equipos). Decisiones confirmadas:
+  planes de EQUIPOS DISTINTOS permitidos, y se arma desde los dos lados
+  (marcando varios en Plan de Mantenimiento y agregando desde la OT abierta).
+- Problema de fondo: la OT tenía UNA casilla de plan. Al cerrarla se avanzaba un
+  solo ítem y los otros cinco seguían venciendo aunque el trabajo se había
+  hecho, y no figuraban en su historial.
+- Schema: NUEVO modelo WorkOrderMaintenancePlan (tenantId, workOrderId,
+  maintenancePlanId, sortOrder) con unique(workOrderId, maintenancePlanId).
+  `WorkOrder.maintenancePlanId` se conserva como PLAN PRINCIPAL — no cambió
+  ningún campo existente. Backfill: 1229 vínculos creados, uno por cada OT que
+  ya tenía plan.
+- Backend: work-orders/work-order-plans-service.ts (nuevo) con la lista
+  canónica de planes de una OT + alta/baja. openFormalWorkOrder acepta
+  additionalPlanIds (valida mismo buque, hereda spares de todos los planes,
+  deduplica las SS de proveedor por proveedor+aclaración). closeWorkOrder avanza
+  TODOS los planes, cada uno con su frecuencia; las horas informadas solo se
+  aplican a los planes del mismo equipo que la OT (los de otro equipo tienen
+  otro cuentahoras y avanzan por fecha). cancelWorkOrder restaura todos.
+  Tarjeta del plan e historial de ejecuciones consultan por el vínculo.
+  Las muestras de fluido al AUTORIZAR se generan por plan (dedupe OT+plan).
+- Rutas nuevas: GET/POST /app/pms/work-orders/:id/plans y DELETE .../plans/:planId.
+  El plan principal no se puede quitar.
+- PDF: ITEM DEL PDM imprime los códigos separados por " / " y EQUIPO lista los
+  equipos de todos los planes incluidos.
+- Front: columna de marcado + barra "Generar una sola OT" en Plan de
+  Mantenimiento; recuadro de ítems incluidos en el modal de Nueva OT; panel
+  "Ítems del PDM" con buscador y quitar dentro de la OT (WoPlansPanel.tsx).
+- Verificado en pantalla: 3 planes de amarre (1/3/6 meses) + 1 de casco de otro
+  equipo en una sola OT; al cerrarla los 4 quedaron ejecutados el 03/08 y con
+  próximo vencimiento 03/09, 03/09, 03/11 y 03/02/2027 respectivamente. El PDF
+  salió con "M01-7-002 / M01-7-003 / M01-7-004 / M01-1-003" y los dos equipos.
+  Datos de prueba revertidos.
+
 [2026-08-02] Consola SUPERADMIN: pantalla "Accesos" (quién entra y desde dónde)
 Agent: Claude Opus 5
 - Pedido del usuario: que el SUPERADMIN pueda ver quién está accediendo a la app

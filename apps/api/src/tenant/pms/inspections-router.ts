@@ -62,7 +62,7 @@ export async function handleInspectionsRoutes(
   if (/^\/app\/pms\/inspection-templates\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "GET") {
-      sendJson(response, 200, await getInspectionTemplate(id));
+      sendJson(response, 200, await getInspectionTemplate(session, id));
       return true;
     }
     if (method === "PATCH") {

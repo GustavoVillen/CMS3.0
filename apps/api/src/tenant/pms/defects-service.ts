@@ -479,8 +479,32 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
   }
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
-  if (payload.assetId !== undefined) data.assetId = normalizeRequiredText(payload.assetId, "assetId");
-  if (payload.workOrderId !== undefined) data.workOrderId = normalizeOptionalText(payload.workOrderId);
+
+  // createDefect valida la pertenencia de assetId y workOrderId; el update no lo
+  // hacía, así que se podía reapuntar un defecto propio a un equipo o a una OT
+  // de otra empresa y después leer su nombre/código en el detalle y en el PDF.
+  if (payload.assetId !== undefined) {
+    const assetId = normalizeRequiredText(payload.assetId, "assetId");
+    const assetCount = await (prismaRaw as any).asset.count({
+      where: { id: assetId, tenantId: (current as any).tenantId, deletedAt: null },
+    });
+    if (assetCount === 0) {
+      throw new RouteError(404, "ASSET_NOT_FOUND", "Asset no encontrado o no pertenece a este tenant.");
+    }
+    data.assetId = assetId;
+  }
+  if (payload.workOrderId !== undefined) {
+    const workOrderId = normalizeOptionalText(payload.workOrderId);
+    if (workOrderId) {
+      const woCount = await (prismaRaw as any).workOrder.count({
+        where: { id: workOrderId, tenantId: (current as any).tenantId, deletedAt: null },
+      });
+      if (woCount === 0) {
+        throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Work order no encontrada o no pertenece a este tenant.");
+      }
+    }
+    data.workOrderId = workOrderId;
+  }
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.severity !== undefined) data.severity = payload.severity;
   if (payload.operationalState !== undefined) data.operationalState = payload.operationalState;

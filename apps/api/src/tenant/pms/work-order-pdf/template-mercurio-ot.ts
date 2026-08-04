@@ -71,7 +71,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
   const {
     wo, assetLabel, vesselName, assetIsSafetyCritical, assignedName, createdByName,
     tenant, formLogoBuffer, formMeta, formConfig, tenantSlug,
-    plannedItems, scheduleRows, permitTypes, serviceRequestCodes, planTaskCode,
+    plannedItems, scheduleRows, permitTypes, serviceRequestCodes, providerNames, planTaskCode,
   } = ctx;
   const w = wo as any;
 
@@ -247,6 +247,11 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         if (assignedName) {
           kvRow([{ label: label("tecnico", "TECNICO"), value: assignedName, lw: 60 }]);
         }
+        // Quién hace el trabajo cuando es tercerizado: el taller de la OT y los
+        // de sus SS. Sin esto el papel decía "TERCERIZADO" sin decir a quién.
+        if (providerNames.length > 0) {
+          kvRow([{ label: label("proveedor", "PROVEEDOR"), value: providerNames.join(", "), lw: 60 }]);
+        }
       },
 
       // PRIORIDAD / TIPO DE MANTENIMIENTO / SISTEMA — los tres uno al lado del
@@ -314,9 +319,13 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         sectionHeader(label("schedule", "PROGRAMACION DE TRABAJO"));
         // "FECHA FINALIZACION" no entra en el ancho de etiqueta por defecto (78):
         // se encimaba con el borde. Ambas columnas usan el ancho de la más larga.
+        // FECHA FINALIZACION es la fecha en que el trabajo TERMINÓ. Antes salía
+        // el vencimiento de la OT: con una OT cerrada el papel decía que había
+        // terminado en una fecha futura. Mientras siga abierta se muestra el
+        // vencimiento, que es la finalización prevista.
         kvRow([
           { label: label("fechaInicio", "FECHA INICIO"), value: w.startDate ? fmt(w.startDate) : "", lw: 104 },
-          { label: label("fechaFin", "FECHA FINALIZACION"), value: w.dueDate ? fmt(w.dueDate) : "", lw: 104 },
+          { label: label("fechaFin", "FECHA FINALIZACION"), value: w.completedDate ? fmt(w.completedDate) : (w.dueDate ? fmt(w.dueDate) : ""), lw: 104 },
         ], 20);
         const H = 16;
         const cols = [

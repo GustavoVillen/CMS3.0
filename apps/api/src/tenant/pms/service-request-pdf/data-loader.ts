@@ -99,7 +99,12 @@ export async function loadServiceRequestPdfContext(
 
     if (sr.providerId) {
       try {
-        const p = await prismaRaw.provider.findUnique({ where: { id: sr.providerId }, select: { name: true } });
+        // Con tenantId, igual que en service-requests-service: el PDF no debe
+        // resolver el nombre de un proveedor de otra empresa.
+        const p = await prismaRaw.provider.findFirst({
+          where: { id: sr.providerId, tenantId: (sr as any).tenantId },
+          select: { name: true },
+        });
         providerName = p?.name ?? null;
       } catch { /* non-blocking */ }
     }

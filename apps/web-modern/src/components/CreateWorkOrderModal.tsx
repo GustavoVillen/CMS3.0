@@ -37,6 +37,12 @@ export interface WoPrefill {
   checklistDocUrl?: string | null;
   loto?: string | null;
   samplingFluidType?: string | null;
+  /**
+   * Otros ítems del PDM que ejecuta la MISMA OT (parada de astillero). El plan
+   * de `sourceId` es el principal: da equipo, título y datos heredados. Al
+   * cerrar la OT avanzan todos. Solo aplica con source = "plan".
+   */
+  additionalPlans?: Array<{ id: string; taskCode: string; title: string; assetName?: string | null }>;
 }
 
 const FLUID_TYPE_KEYS: Record<string, TranslationKey> = {
@@ -48,6 +54,29 @@ const FLUID_TYPE_KEYS: Record<string, TranslationKey> = {
   REFRIGERANT:   "fluid.type.coolant",
   OTHER:         "fluid.type.other",
 };
+
+/**
+ * Valor de un campo que la OT hereda del plan. Vacío + el prefill nunca lo trajo
+ * (`undefined`) ⇒ se manda `undefined`: el backend hereda del plan. Vacío pero
+ * el prefill SÍ lo traía ⇒ el usuario lo borró a propósito, se manda `null`.
+ */
+function keepFromPlan(current: string, prefilled: string | null | undefined): string | null | undefined {
+  const text = current.trim();
+  if (text) return text;
+  return prefilled === undefined ? undefined : null;
+}
+
+/**
+ * Alto de un textarea según su contenido. Con varios ítems del PDM estos campos
+ * traen un bloque por ítem: con el alto fijo de antes se veía sólo el primero y
+ * parecía que faltaba el resto.
+ */
+function autoRows(text: string, min: number, max = 12): number {
+  return Math.min(max, Math.max(min, text.split("\n").length));
+}
+
+/** Taller configurado en los planes de la OT (con para qué se lo contrata). */
+interface PlanProviderPreview { id: string; name: string; purposes: string[]; taskCodes: string[] }
 
 interface Asset { id: string; assetCode: string; name: string; }
 interface Vessel { code: string; name: string; }
@@ -131,7 +160,23 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── PLAN fields ───────────────────────────────────────────────────────────
-  const [title, setTitle]                       = useState(prefill?.title ?? "");
+  // Arranque optimista con lo que trae el listado; el efecto de más abajo pide
+  // al backend los textos combinados reales y los reemplaza.
+  const [title, setTitle] = useState(() => {
+    const extras = prefill?.additionalPlans ?? [];
+    if (extras.length === 0) return prefill?.title ?? "";
+    return [
+      `${prefill!.sourceCode} · ${prefill!.title ?? ""}`.trim(),
+      ...extras.map(p => `${p.taskCode} · ${p.title}`),
+    ].join("\n");
+  });
+  // Valor con el que se abrió el título: sirve para no pisar lo que el usuario
+  // haya escrito mientras llegaban los textos combinados del backend.
+  const titleInitialRef = useRef(title);
+  // Talleres a los que va este trabajo, según los planes. Se muestran debajo de
+  // la tarea: quien abre la OT tiene que ver a quién se le va a encargar antes
+  // de crearla (al guardar se abre una SS por taller).
+  const [planProviders, setPlanProviders] = useState<PlanProviderPreview[]>([]);
   const [description, setDescription]           = useState(prefill?.description ?? "");
   const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
   const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : "");
@@ -143,6 +188,48 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [consequenceRationale, setConsequenceRationale] = useState(prefill?.consequenceRationale ?? "");
   const [estimatedHours, setEstimatedHours] = useState(prefill?.estimatedHours != null ? String(prefill.estimatedHours) : "");
   const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
+
+  /**
+   * Textos heredados de los planes, tal como van a quedar guardados.
+   *
+   * El listado de planes NO trae los campos pesados (criterios, LOTO, análisis
+   * de riesgo, justificación RCM) ni la tarea de los otros ítems, así que el
+   * formulario los mostraba vacíos o sólo con el ítem principal. Se piden al
+   * backend, que es el único que sabe combinarlos (un bloque por ítem, el
+   * riesgo más alto y la consecuencia más grave).
+   *
+   * Sólo pisa un campo si sigue con el valor con el que se abrió la ventana:
+   * si el usuario ya escribió algo mientras llegaba la respuesta, manda lo suyo.
+   */
+  useEffect(() => {
+    if (prefill?.source !== "plan") return;
+    const ids = [prefill.sourceId, ...(prefill.additionalPlans ?? []).map(p => p.id)];
+    let cancelled = false;
+    api.get<{
+      title: string | null; description: string | null; acceptanceCriteria: string | null;
+      loto: string | null; riskLevel: string | null; riskAnalysisResult: string | null;
+      consequenceCategory: string | null; consequenceRationale: string | null;
+      providers: PlanProviderPreview[];
+    }>(`/app/pms/maintenance-plans/merged-text?ids=${ids.map(encodeURIComponent).join(",")}`)
+      .then(m => {
+        if (cancelled) return;
+        setPlanProviders(m.providers ?? []);
+        const keep = (setter: (fn: (prev: string) => string) => void, initial: string, next: string | null) => {
+          setter(prev => (prev === initial ? (next ?? "") : prev));
+        };
+        keep(setTitle, titleInitialRef.current, m.title);
+        keep(setDescription, prefill.description ?? "", m.description);
+        keep(setAcceptanceCriteria, prefill.acceptanceCriteria ?? "", m.acceptanceCriteria);
+        keep(setLoto, prefill.loto ?? "", m.loto);
+        keep(setRiskLevel, prefill.riskLevel ?? "", m.riskLevel);
+        keep(setRiskAnalysisResult, prefill.riskAnalysisResult ?? "", m.riskAnalysisResult);
+        keep(setConsequenceCategory, prefill.consequenceCategory ?? "", m.consequenceCategory);
+        keep(setConsequenceRationale, prefill.consequenceRationale ?? "", m.consequenceRationale);
+      })
+      .catch(() => { /* se queda con lo que trajo el listado */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
@@ -360,16 +447,23 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           description:        description.trim()        || undefined,
           assignedToUserId:   assignedTo.trim()         || undefined,
           dueDate:            dueDate                   || null,
-          acceptanceCriteria: acceptanceCriteria.trim() || null,
-          loto,
+          // Criterios, LOTO, análisis de riesgo y justificación RCM NO vienen en
+          // el listado de planes (son los campos pesados que la lista recorta).
+          // Si el prefill no los trajo, mandar null los borraría al abrir la OT:
+          // se manda undefined = "no opino" y el backend hereda del plan (y con
+          // varios ítems, arma el texto combinado de todos).
+          acceptanceCriteria: keepFromPlan(acceptanceCriteria, prefill.acceptanceCriteria),
+          loto:               keepFromPlan(loto, prefill.loto),
           riskLevel:          riskLevel                 || null,
-          riskAnalysisResult: riskAnalysisResult.trim() || null,
+          riskAnalysisResult: keepFromPlan(riskAnalysisResult, prefill.riskAnalysisResult),
           consequenceCategory: consequenceCategory || null,
-          consequenceRationale: consequenceRationale.trim() || null,
+          consequenceRationale: keepFromPlan(consequenceRationale, prefill.consequenceRationale),
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
           // Solo admin: fecha de apertura y abrir en nombre de otro (SOLICITA).
           openDate:           isAdmin && openDate ? openDate : undefined,
           createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
+          // Otros ítems del PDM que cubre la misma OT.
+          additionalPlanIds:  prefill.additionalPlans?.map(p => p.id),
         });
         woId = created.id;
       } else {
@@ -460,6 +554,28 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
             {prefill ? (
               <div className="space-y-3">
+                {/* Ítems del PDM que cubre esta OT. Solo aparece cuando se
+                    generó una sola orden desde varios planes (astillero). */}
+                {prefill.additionalPlans && prefill.additionalPlans.length > 0 && (
+                  <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                      Ítems del PDM incluidos ({prefill.additionalPlans.length + 1})
+                    </p>
+                    <p className="text-[11px] text-fg">
+                      <span className="font-mono font-bold">{prefill.sourceCode}</span>
+                      <span className="text-text-industrial/60"> · {prefill.title}</span>
+                    </p>
+                    {prefill.additionalPlans.map(p => (
+                      <p key={p.id} className="text-[11px] text-fg">
+                        <span className="font-mono font-bold">{p.taskCode}</span>
+                        <span className="text-text-industrial/60"> · {p.title}{p.assetName ? ` · ${p.assetName}` : ""}</span>
+                      </p>
+                    ))}
+                    <p className="text-[10px] text-text-industrial/50 pt-0.5">
+                      Al cerrar la orden se dan por ejecutados todos estos ítems.
+                    </p>
+                  </div>
+                )}
                 {prefill.assetSelectable && (
                   <div className="space-y-1.5">
                     <label
@@ -611,12 +727,49 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.titleField")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} placeholder={t("wo.modal.titlePlaceholder")} />
+              {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
+                  título es una línea por ítem y en un input se vería sólo la
+                  primera. Con un solo ítem se ve igual que antes (una fila). */}
+              <textarea
+                rows={Math.min(6, Math.max(1, title.split("\n").length))}
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className={`${inputCls} resize-y`}
+                placeholder={t("wo.modal.titlePlaceholder")}
+              />
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.task")}</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} className={`${inputCls} resize-y`} />
+              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} className={`${inputCls} resize-y`} />
             </div>
+
+            {/* Talleres del trabajo. Sale de los planes (área = Proveedor): al
+                crear la OT se abre una solicitud de servicio por cada uno. Va
+                acá, debajo de la tarea, para que se vea a quién se le encarga
+                antes de crear la orden. */}
+            {planProviders.length > 0 && (
+              <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
+                <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                  {planProviders.length === 1 ? "Proveedor" : `Proveedores (${planProviders.length})`}
+                </p>
+                {planProviders.map(p => (
+                  <p key={p.id} className="text-[11px] text-fg">
+                    <span className="font-semibold">{p.name}</span>
+                    {p.purposes.length > 0 && (
+                      <span className="text-text-industrial/60"> · {p.purposes.join(" / ")}</span>
+                    )}
+                    {p.taskCodes.length > 0 && (
+                      <span className="text-text-industrial/45 font-mono"> · {p.taskCodes.join(", ")}</span>
+                    )}
+                  </p>
+                ))}
+                <p className="text-[10px] text-text-industrial/50 pt-0.5">
+                  {planProviders.length === 1
+                    ? "Al crear la orden se abre una solicitud de servicio para este taller."
+                    : "Al crear la orden se abre una solicitud de servicio por taller."}
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.assignee")}</label>
@@ -636,7 +789,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.acceptanceCriteria")}
               </label>
-              <textarea rows={2} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
+              <textarea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
                 disabled={loadingCriteria}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
             </div>
@@ -649,7 +802,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.loto")}
               </label>
-              <textarea rows={2} value={loto} onChange={e => setLoto(e.target.value)}
+              <textarea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
                 disabled={loadingLoto}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
             </div>
@@ -676,7 +829,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
-              <textarea rows={2} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
+              <textarea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
                 disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
             </div>
@@ -703,7 +856,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             {consequenceCategory && (
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
-                <textarea rows={2} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
+                <textarea rows={autoRows(consequenceRationale, 2)} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
                   disabled={loadingConsequence}
                   className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
               </div>

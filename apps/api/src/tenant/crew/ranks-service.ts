@@ -1,4 +1,5 @@
 import type { PrismaClient } from '../../../../../generated/prisma';
+import { RouteError } from '../../http/route-error';
 
 export interface RankRow {
   id: string;
@@ -17,9 +18,16 @@ export async function listRanksByTenant(db: PrismaClient, tenantId: string): Pro
   }) as Promise<RankRow[]>;
 }
 
-export async function getRankById(db: PrismaClient, rankId: string): Promise<RankRow | null> {
-  return db.rankDefinition.findUnique({
-    where: { id: rankId },
+// El rankId llega desde la URL: sin tenantId en el where, cualquier usuario
+// autenticado podía leer, renombrar o borrar el catálogo de rangos de otra
+// empresa conociendo el id. Mismo criterio que training-items-service.
+export async function getRankById(
+  db: PrismaClient,
+  tenantId: string,
+  rankId: string
+): Promise<RankRow | null> {
+  return db.rankDefinition.findFirst({
+    where: { id: rankId, tenantId },
   }) as Promise<RankRow | null>;
 }
 
@@ -54,20 +62,34 @@ export async function createRank(
 
 export async function updateRank(
   db: PrismaClient,
+  tenantId: string,
   rankId: string,
   data: {
     name?: string;
     sortOrder?: number;
   }
 ): Promise<RankRow> {
-  return db.rankDefinition.update({
-    where: { id: rankId },
+  const result = await db.rankDefinition.updateMany({
+    where: { id: rankId, tenantId },
     data,
+  });
+  if (result.count === 0) {
+    throw new RouteError(404, "NOT_FOUND", "Rango no encontrado.");
+  }
+  return db.rankDefinition.findFirst({
+    where: { id: rankId, tenantId },
   }) as Promise<RankRow>;
 }
 
-export async function deleteRank(db: PrismaClient, rankId: string): Promise<void> {
-  await db.rankDefinition.delete({
-    where: { id: rankId },
+export async function deleteRank(
+  db: PrismaClient,
+  tenantId: string,
+  rankId: string
+): Promise<void> {
+  const result = await db.rankDefinition.deleteMany({
+    where: { id: rankId, tenantId },
   });
+  if (result.count === 0) {
+    throw new RouteError(404, "NOT_FOUND", "Rango no encontrado.");
+  }
 }

@@ -16,7 +16,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
-  const { wo, assetLabel, assignedName, createdByName, formMeta, spareUsages, tenant, tenantSlug, vesselName } = ctx;
+  const { wo, assetLabel, assignedName, createdByName, formMeta, spareUsages, tenant, tenantSlug, vesselName, providerNames } = ctx;
   const w = wo as any;
   const isPlanned = !!w.maintenancePlanId || w.type === "PREVENTIVE";
   const logo = bufferToDataUri(ctx.formLogoBuffer);
@@ -39,9 +39,10 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
     { label: "FECHA", value: fmt(wo.openDate), labelWidth: "12%", valueWidth: "18%" },
   ]));
   parts.push(docCheckboxRow(DEPTS, w.department ? [w.department] : []));
-  // Cuando el área es PROVEEDOR, mostrar el proveedor responsable.
-  if (w.department === "PROVEEDOR" && w.providerName) {
-    parts.push(docKvRow([{ label: "PROVEEDOR", value: w.providerName, labelWidth: "20%", valueWidth: "80%" }]));
+  // Los talleres a los que se les pidió el trabajo: el de la OT y los de sus SS.
+  // Antes salía sólo el de la OT, y cuando había varios quedaba en blanco.
+  if (providerNames.length > 0) {
+    parts.push(docKvRow([{ label: "PROVEEDOR", value: providerNames.join(", "), labelWidth: "20%", valueWidth: "80%" }]));
   }
 
   // Equipo afectado (solo el nombre)

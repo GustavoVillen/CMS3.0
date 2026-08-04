@@ -1442,7 +1442,6 @@ const dict = {
 
   // WorkOrderModal — botones del footer
   "wo.modal.generatePdf":      { es: "Generar PDF",            en: "Generate PDF",          pt: "Gerar PDF" },
-  "wo.modal.generateDoc":      { es: "Word (.doc)",            en: "Word (.doc)",           pt: "Word (.doc)" },
   "wo.modal.postpone":         { es: "Diferir OT",             en: "Defer WO",              pt: "Adiar OT" },
   "wo.modal.closeWO":          { es: "Cerrar OT",              en: "Close WO",              pt: "Fechar OS" },
   "wo.modal.cancelWO":         { es: "Cancelar OT",            en: "Cancel WO",             pt: "Cancelar OS" },

@@ -33,6 +33,15 @@
     "@prisma/client": "7.7.0",
     "exceljs": "^4.4.0"
   },
+  "pnpm": {
+    "//": "Overrides de seguridad. exceljs 4.4.0 es la última publicada y arrastra estas versiones vulnerables; no hay upgrade upstream que las resuelva.",
+    "overrides": {
+      "brace-expansion@1": "^1.1.18",
+      "brace-expansion@2": "^2.1.4",
+      "tmp": "^0.2.7",
+      "uuid@8": "^11.1.1"
+    }
+  },
   "engines": {
     "node": ">=20.19.0"
   }

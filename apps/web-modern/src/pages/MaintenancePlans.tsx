@@ -3111,9 +3111,25 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   ), [navigate]);
 
   /**
-   * Abre una OT EXPRESS desde la fila del listado: nace autorizada, sin pasar
-   * por aprobación ni autorización. Misma acción que el botón del detalle.
+   * UNA SOLA OT PARA VARIOS ÍTEMS DEL PDM. Una parada de astillero cubre varios
+   * planes a la vez ("ITEM DEL PDM: 1.7 / 1.8 / 1.9 …"). Se marcan acá y se abre
+   * una única orden: el PRIMERO marcado es el plan principal (da equipo y datos
+   * heredados) y el resto se suman. Todos avanzan al cerrar la OT.
+   *
+   * Se guarda como lista (no Set) porque el orden importa: define cuál es el
+   * principal y en qué orden salen los ítems en el papel.
    */
+  const [bundleIds, setBundleIds] = useState<string[]>([]);
+  const bundlePlans = useMemo(
+    () => bundleIds.map(id => (data?.items ?? []).find(p => p.id === id)).filter((p): p is MaintenancePlan => !!p),
+    [bundleIds, data],
+  );
+  // Una OT es de UN buque: una vez marcado el primero, el resto queda acotado.
+  const bundleVessel = bundlePlans[0]?.vesselCode ?? null;
+  const toggleBundle = useCallback((row: MaintenancePlan) => {
+    setBundleIds(prev => prev.includes(row.id) ? prev.filter(id => id !== row.id) : [...prev, row.id]);
+  }, []);
+
   const [expressRowId, setExpressRowId] = useState<string | null>(null);
   const openExpressFromRow = useCallback(async (row: MaintenancePlan) => {
     setExpressRowId(row.id);
@@ -3179,6 +3195,30 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   }, [t, woTerms, expressRowId, openExpressFromRow]);
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
+    // ── Col 0: marcar para juntar en UNA sola OT (parada de astillero) ──────
+    {
+      key: "bundle",
+      header: "OT",
+      width: "34px",
+      render: row => {
+        const checked = bundleIds.includes(row.id);
+        // Distinto buque que el primero marcado: no se puede juntar en la misma OT.
+        const blocked = !!bundleVessel && bundleVessel !== row.vesselCode && !checked;
+        return (
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={blocked}
+            onClick={e => e.stopPropagation()}
+            onChange={e => { e.stopPropagation(); toggleBundle(row); }}
+            title={blocked
+              ? "Es de otro buque: una orden de trabajo no puede mezclar buques."
+              : "Marcar para incluirlo en una sola OT junto con otros ítems"}
+            className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          />
+        );
+      },
+    },
     // ── Col 1: EMBARCACIÓN / TASKID / SFI ──────────────────────────────────
     {
       key: "vesselCode",
@@ -3317,7 +3357,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
       render: row => renderActions(row),
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, vesselNameMap, renderStatus, renderActions, groupByEquipment, oosAssetIds]);
+  ], [t, vesselNameMap, renderStatus, renderActions, groupByEquipment, oosAssetIds, bundleIds, bundleVessel, toggleBundle]);
 
   // ── Agrupación por equipo (lista default) ─────────────────────────────────
   const allGroupKeys = useMemo(
@@ -3543,6 +3583,35 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
         </div>
       )}
 
+      {/* Barra de "juntar en una sola OT": aparece al marcar ítems del PDM. */}
+      {bundlePlans.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap rounded-xl border border-accent/30 bg-accent/[0.07] px-3 py-2">
+          <span className="text-xs font-bold text-fg">
+            {bundlePlans.length} {bundlePlans.length === 1 ? "ítem marcado" : "ítems marcados"}
+            {bundleVessel ? <span className="text-text-industrial/60 font-normal"> · {vesselNameMap.get(bundleVessel) ?? bundleVessel}</span> : null}
+          </span>
+          <span className="text-[11px] text-text-industrial/60 font-mono truncate max-w-[40%]">
+            {bundlePlans.map(p => p.taskCode).join(" / ")}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setBundleIds([]); }}
+              className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg"
+            >
+              Limpiar
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (bundlePlans[0]) setExecuting(bundlePlans[0]); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 transition-colors"
+            >
+              Generar una sola {woTerms.abbr}
+            </button>
+          </div>
+        </div>
+      )}
+
       {pageError && (
         <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pageError}</p>
       )}
@@ -3631,9 +3700,18 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
             estimatedHours: executing.estimatedHours,
             checklistDocUrl: executing.checklistTemplate,
             samplingFluidType: executing.samplingFluidType,
+            // Los otros ítems marcados van a la MISMA OT. Solo cuando el plan que
+            // se está abriendo es el primero de la selección: abrir otro plan
+            // suelto no debe arrastrar la selección.
+            additionalPlans: bundlePlans[0]?.id === executing.id
+              ? bundlePlans.slice(1).map(p => ({
+                  id: p.id, taskCode: p.taskCode, title: p.title,
+                  assetName: (p as MaintenancePlan & { assetName?: string | null }).assetName ?? null,
+                }))
+              : undefined,
           }}
           onClose={() => setExecuting(null)}
-          onSaved={_woId => { setExecuting(null); void reload(); }}
+          onSaved={_woId => { setExecuting(null); setBundleIds([]); void reload(); }}
         />
       )}
 

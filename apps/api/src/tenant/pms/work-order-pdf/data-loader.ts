@@ -153,7 +153,9 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
-  const assetLabel = sanitizePdfText((wo as any).assetName ?? wo.assetId ?? "—");
+  // EQUIPO del papel. Si la OT cubre varios ítems del PDM de equipos distintos,
+  // se listan todos (ver el bloque de ITEM DEL PDM, más abajo).
+  let assetLabel = sanitizePdfText((wo as any).assetName ?? wo.assetId ?? "—");
 
   // ISM 10.3 — flag safety-critical del activo
   let assetIsSafetyCritical = false;
@@ -261,23 +263,44 @@ export async function loadWorkOrderPdfContext(
   const scheduleRows: WorkOrderScheduleRow[] = [];
   if (prismaRaw) {
     try {
-      const logs = await (prismaRaw as any).workLog.findMany({
-        where: { workOrderId: wo.id, tenantId: (wo as any).tenantId },
-        orderBy: { startedAt: "asc" },
-        select: { startedAt: true, completedAt: true, executedByName: true },
-        take: 6,
+      // Lo cargado en la OT manda (WorkOrderScheduleEntry).
+      const entries = await (prismaRaw as any).workOrderScheduleEntry.findMany({
+        where: { workOrderId: wo.id },
+        orderBy: [{ sortOrder: "asc" }, { workDate: "asc" }, { createdAt: "asc" }],
+        take: 12,
       });
-      for (const l of logs) {
-        const hhmm = (d: Date | null) => d ? new Date(d).toISOString().slice(11, 16) : "";
-        const desde = hhmm(l.startedAt);
-        const hasta = hhmm(l.completedAt);
+      for (const e of entries) {
         scheduleRows.push({
-          date: l.startedAt ?? null,
-          technician: l.executedByName ?? "",
-          place: (wo as any).location ?? "",
-          company: (wo as any).providerName ?? "",
-          time: desde && hasta ? `${desde} - ${hasta}` : desde,
+          date: e.workDate ?? null,
+          technician: e.technician ?? "",
+          place: e.place ?? (wo as any).location ?? "",
+          company: e.company ?? (wo as any).providerName ?? "",
+          time: e.timeFrom && e.timeTo ? `${e.timeFrom} - ${e.timeTo}` : (e.timeFrom ?? e.timeTo ?? ""),
         });
+      }
+
+      // Sin filas cargadas se cae a los WorkLog, como hacía antes: las OT
+      // viejas (y las del Mantenimiento Express, que sí generan WorkLog) siguen
+      // imprimiendo lo mismo de siempre.
+      if (scheduleRows.length === 0) {
+        const logs = await (prismaRaw as any).workLog.findMany({
+          where: { workOrderId: wo.id, tenantId: (wo as any).tenantId },
+          orderBy: { startedAt: "asc" },
+          select: { startedAt: true, completedAt: true, executedByName: true },
+          take: 6,
+        });
+        for (const l of logs) {
+          const hhmm = (d: Date | null) => d ? new Date(d).toISOString().slice(11, 16) : "";
+          const desde = hhmm(l.startedAt);
+          const hasta = hhmm(l.completedAt);
+          scheduleRows.push({
+            date: l.startedAt ?? null,
+            technician: l.executedByName ?? "",
+            place: (wo as any).location ?? "",
+            company: (wo as any).providerName ?? "",
+            time: desde && hasta ? `${desde} - ${hasta}` : desde,
+          });
+        }
       }
     } catch { /* non-blocking */ }
   }
@@ -297,26 +320,68 @@ export async function loadWorkOrderPdfContext(
 
   // Celda "NRO DE SS/SC": las SS abiertas desde esta OT. La SC la maneja otra app.
   let serviceRequestCodes: string[] = [];
+  // Talleres involucrados: el de la OT + los de sus SS, sin repetir.
+  let providerNames: string[] = [];
   if (prismaRaw) {
     try {
       const srs = await (prismaRaw as any).serviceRequest.findMany({
         where: { workOrderId: wo.id, deletedAt: null },
         orderBy: { serviceRequestCode: "asc" },
-        select: { serviceRequestCode: true },
+        // La SS sólo tiene providerId (no hay proveedor escrito a mano acá: eso
+        // es de la OT). Pedir un campo inexistente rompe toda la consulta.
+        select: { serviceRequestCode: true, providerId: true },
       });
       serviceRequestCodes = srs.map((s: any) => s.serviceRequestCode);
+
+      const ids = [...new Set([
+        ...(wo as any).providerId ? [(wo as any).providerId] : [],
+        ...srs.map((s: any) => s.providerId).filter(Boolean),
+      ])] as string[];
+      const catalog = ids.length > 0
+        ? await (prismaRaw as any).provider.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+        : [];
+      const nameById = new Map<string, string>(catalog.map((p: any) => [p.id, p.name]));
+      const names = [
+        (wo as any).providerName ?? ((wo as any).providerId ? nameById.get((wo as any).providerId) : null) ?? (wo as any).providerOther ?? null,
+        ...srs.map((s: any) => (s.providerId ? nameById.get(s.providerId) : null) ?? null),
+      ].filter((n): n is string => !!n && !!String(n).trim());
+      providerNames = [...new Set(names.map((n) => sanitizePdfText(n)))];
     } catch { /* non-blocking */ }
   }
 
-  // ITEM DEL PDM = taskCode del plan vinculado.
+  // ITEM DEL PDM = taskCode de los planes vinculados. Una OT de astillero cubre
+  // varios ítems ("1.7 / 1.8 / 1.9 …") y el papel los lista todos, en el orden
+  // en que se agregaron a la orden.
   let planTaskCode: string | null = null;
-  if (prismaRaw && (wo as any).maintenancePlanId) {
+  if (prismaRaw) {
     try {
-      const plan = await (prismaRaw as any).maintenancePlan.findUnique({
-        where: { id: (wo as any).maintenancePlanId },
-        select: { taskCode: true },
-      });
-      planTaskCode = plan?.taskCode ?? null;
+      const { listWorkOrderPlanIds } = await import("../../work-orders/work-order-plans-service");
+      const planIds = await listWorkOrderPlanIds(prismaRaw, wo as any);
+      if (planIds.length > 0) {
+        const plans = await (prismaRaw as any).maintenancePlan.findMany({
+          where: { id: { in: planIds } },
+          select: { id: true, taskCode: true, assetId: true },
+        });
+        const byId = new Map<string, { taskCode: string; assetId: string }>(plans.map((p: any) => [p.id, p]));
+        const ordered = planIds.map((id) => byId.get(id)).filter((p): p is { taskCode: string; assetId: string } => !!p);
+        const codes = ordered.map((p) => p.taskCode);
+        planTaskCode = codes.length > 0 ? codes.join(" / ") : null;
+
+        // EQUIPO: los equipos de todos los planes incluidos, sin repetir y
+        // empezando por el de la OT. Con un solo plan queda igual que antes.
+        const assetIds = [...new Set(ordered.map((p) => p.assetId).filter(Boolean))];
+        if (assetIds.length > 1 || (assetIds.length === 1 && assetIds[0] !== wo.assetId)) {
+          const assets = await (prismaRaw as any).asset.findMany({
+            where: { id: { in: [...new Set([wo.assetId, ...assetIds])] } },
+            select: { id: true, name: true },
+          });
+          const nameById = new Map<string, string>(assets.map((a: any) => [a.id, a.name ?? a.id]));
+          const labels = [wo.assetId, ...assetIds]
+            .filter((id, i, arr) => !!id && arr.indexOf(id) === i)
+            .map((id) => nameById.get(id) ?? id);
+          if (labels.length > 0) assetLabel = sanitizePdfText(labels.join(", "));
+        }
+      }
     } catch { /* non-blocking */ }
   }
 
@@ -345,6 +410,7 @@ export async function loadWorkOrderPdfContext(
     scheduleRows,
     permitTypes,
     serviceRequestCodes,
+    providerNames,
     planTaskCode,
     // `workOrderPdfTemplate` (TenantSetting) manda: es lo que elige el admin y el
     // único eje con las claves de layout (STANDARD/MERCURIO/MERCURIO_OT).

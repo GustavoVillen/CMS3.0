@@ -192,15 +192,20 @@ export async function listInspectionTemplates(session: TenantAccessSession, filt
   });
 }
 
-export async function getInspectionTemplate(id: string) {
+export async function getInspectionTemplate(session: TenantAccessSession, id: string) {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   if (!hasInspectionTemplateDelegate(prisma)) {
     throw new RouteError(503, "INSPECTION_MODEL_UNAVAILABLE", "Modelo de plantillas de inspección no disponible en Prisma.");
   }
 
-  const record = await templateDelegate(prisma).findUnique({
-    where: { id },
+  // Mismo alcance que listInspectionTemplates: propias del tenant + globales.
+  // Sin el filtro, el GET exponía la plantilla completa de otra empresa (título,
+  // criterios y todos los ítems del checklist) con sólo conocer el id. El PATCH
+  // ya lo validaba; el GET había quedado afuera.
+  const tenantId = await resolveTenantId(session);
+  const record = await templateDelegate(prisma).findFirst({
+    where: { id, OR: [{ tenantId: null }, { tenantId }] },
     include: { checklistItems: { orderBy: { sortOrder: "asc" } } },
   });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Template no encontrado.");

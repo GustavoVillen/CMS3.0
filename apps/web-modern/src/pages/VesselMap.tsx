@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../lib/api";
+import { escapeHtml } from "../lib/utils";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -76,20 +77,22 @@ export function VesselMapPage() {
       const reportDate = pos.userEmail ? new Date(pos.userEmail).toLocaleDateString() : fmtAge(pos.seenAt);
       const label = L.divIcon({
         className: "",
+        // El icono sale del paquete (ya importado arriba), no de unpkg: una CDN
+        // externa es una dependencia de terceros dentro de la sesión del usuario.
         html: `
           <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
-            <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png" style="width:16px;height:26px;flex-shrink:0"/>
+            <img src="${markerIcon}" style="width:16px;height:26px;flex-shrink:0"/>
             <span style="background:rgba(10,20,40,0.85);color:#e2e8f0;font-size:11px;font-weight:700;
               padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);
-              font-family:monospace;letter-spacing:0.03em">${pos.vesselName}</span>
+              font-family:monospace;letter-spacing:0.03em">${escapeHtml(pos.vesselName)}</span>
           </div>`,
         iconAnchor: [8, 26],
       });
       const popup = `
         <div style="font-family:monospace;font-size:13px;line-height:1.7">
-          <strong style="font-size:15px">🚢 ${pos.vesselName}</strong>
-          <span style="color:#888;font-size:11px"> (${pos.vesselCode})</span><br/>
-          <span style="color:#888;font-size:11px">Último reporte: ${reportDate}</span><br/>
+          <strong style="font-size:15px">🚢 ${escapeHtml(pos.vesselName)}</strong>
+          <span style="color:#888;font-size:11px"> (${escapeHtml(pos.vesselCode)})</span><br/>
+          <span style="color:#888;font-size:11px">Último reporte: ${escapeHtml(reportDate)}</span><br/>
           <span style="color:#888;font-size:11px">${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)}</span>
         </div>`;
       L.marker([pos.latitude, pos.longitude], { icon: label }).addTo(map).bindPopup(popup);

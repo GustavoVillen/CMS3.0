@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from "node:crypto";
+import { isDevelopmentMode } from "../../common/runtime-mode";
 
 const PASSWORD_KEYLEN = 64;
 
@@ -10,7 +11,11 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, storedHash: string): boolean {
   if (storedHash.startsWith("plain$")) {
-    if (process.env.NODE_ENV === "production") return false;
+    // Los hashes "plain$" sólo existen en los stores en memoria de desarrollo.
+    // Allow-list sobre "development", no deny-list sobre "production": con
+    // NODE_ENV sin definir o mal escrito, la versión anterior aceptaba la
+    // comparación en texto plano. Mismo criterio que runtime-mode.ts y env.ts.
+    if (!isDevelopmentMode()) return false;
     return storedHash.slice("plain$".length) === password;
   }
 

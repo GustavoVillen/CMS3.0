@@ -1,4 +1,6 @@
 import type { TenantRole } from "@cms3/shared-types";
+import { isDevelopmentMode } from "../../common/runtime-mode";
+import { RouteError } from "../../http/route-error";
 
 export interface DevVesselRecord {
   tenantSlug: string;
@@ -2467,11 +2469,36 @@ function canViewVessel(
   return assignedVesselCodes.includes(vesselCode);
 }
 
+/**
+ * Los registros de este módulo son datos de DEMOSTRACIÓN. Los servicios los
+ * devuelven cuando `getPrismaClient()` da null — que ocurre tanto si no hay
+ * DATABASE_URL como si el pool de Postgres falló una vez (`dbReachable`).
+ *
+ * Fuera de desarrollo eso es un problema de integridad, no una comodidad: un
+ * corte momentáneo de base dejaba al sistema mostrando certificados, repuestos
+ * y equipos inventados, con apariencia normal y sin ningún aviso, hasta
+ * reiniciar la API. En un PMS que sostiene auditorías TMSA/clase, la tripulación
+ * puede decidir sobre datos falsos y un auditor puede ver evidencia inexistente.
+ *
+ * Fail-closed, igual que el resto del código: sólo con NODE_ENV=development
+ * explícito. En cualquier otro entorno (incluido "unknown") se responde 503,
+ * que es lo que ya hacen los servicios de autenticación y el de auditoría.
+ */
+function assertDevFixturesAllowed(): void {
+  if (isDevelopmentMode()) return;
+  throw new RouteError(
+    503,
+    "DATABASE_UNAVAILABLE",
+    "Base de datos no disponible. Reintentá en unos minutos.",
+  );
+}
+
 export function listDevVesselsForTenant(
   tenantSlug: string,
   role: TenantRole,
   assignedVesselCodes: string[],
 ): DevVesselRecord[] {
+  assertDevFixturesAllowed();
   return DEV_VESSELS.filter(
     (item) => item.tenantSlug === tenantSlug && canViewVessel(role, assignedVesselCodes, item.code),
   );
@@ -2483,6 +2510,7 @@ export function listDevAssetsForTenant(
   assignedVesselCodes: string[],
   vesselCode?: string | null,
 ): DevAssetRecord[] {
+  assertDevFixturesAllowed();
   return DEV_ASSETS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2502,6 +2530,7 @@ export function listDevMaintenancePlansForTenant(
   } = {},
 ): (DevMaintenancePlanRecord & { assetName: string | null })[] {
   const assetMap = new Map(DEV_ASSETS.map(a => [a.id, a.name ?? null]));
+  assertDevFixturesAllowed();
   return DEV_MAINTENANCE_PLANS
     .filter((item) => {
       if (item.tenantSlug !== tenantSlug) return false;
@@ -2525,6 +2554,7 @@ export function listDevWorkOrdersForTenant(
   } = {},
 ): (DevWorkOrderRecord & { assetName: string | null; assignedToUserName: string | null })[] {
   const assetMap = new Map(DEV_ASSETS.map(a => [a.id, a.name ?? null]));
+  assertDevFixturesAllowed();
   return DEV_WORK_ORDERS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2545,6 +2575,7 @@ export function listDevDefectsForTenant(
     severity?: string | null;
   } = {},
 ): DevDefectRecord[] {
+  assertDevFixturesAllowed();
   return DEV_DEFECTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2565,6 +2596,7 @@ export function listDevDeferralsForTenant(
     sourceType?: string | null;
   } = {},
 ): DevDeferralRecord[] {
+  assertDevFixturesAllowed();
   return DEV_DEFERRALS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2586,6 +2618,7 @@ export function listDevCapasForTenant(
     sourceType?: string | null;
   } = {},
 ): DevCapaRecord[] {
+  assertDevFixturesAllowed();
   return DEV_CAPAS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2607,6 +2640,7 @@ export function listDevSparesForTenant(
     criticality?: string | null;
   } = {},
 ): DevSpareRecord[] {
+  assertDevFixturesAllowed();
   return DEV_SPARES.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2627,6 +2661,7 @@ export function listDevProvidersForTenant(
     category?: string | null;
   } = {},
 ): DevProviderRecord[] {
+  assertDevFixturesAllowed();
   return DEV_PROVIDERS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2647,6 +2682,7 @@ export function listDevSpareOrdersForTenant(
     priority?: string | null;
   } = {},
 ): DevSpareOrderRecord[] {
+  assertDevFixturesAllowed();
   return DEV_SPARE_ORDERS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2668,6 +2704,7 @@ export function listDevInspectionsForTenant(
     type?: string | null;
   } = {},
 ): DevInspectionRecord[] {
+  assertDevFixturesAllowed();
   return DEV_INSPECTIONS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2688,6 +2725,7 @@ export function listDevCertificatesForTenant(
     status?: string | null;
   } = {},
 ): DevCertificateRecord[] {
+  assertDevFixturesAllowed();
   return DEV_CERTIFICATES.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2707,6 +2745,7 @@ export function listDevDailyReportsForTenant(
     reportDate?: string | null;
   } = {},
 ): DevDailyReportRecord[] {
+  assertDevFixturesAllowed();
   return DEV_DAILY_REPORTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2727,6 +2766,7 @@ export function listDevAttachmentsForTenant(
     targetType?: string | null;
   } = {},
 ): DevAttachmentRecord[] {
+  assertDevFixturesAllowed();
   return DEV_ATTACHMENTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2748,6 +2788,7 @@ export function listDevInspectionLogsForTenant(
     severity?: string | null;
   } = {},
 ): DevInspectionLogRecord[] {
+  assertDevFixturesAllowed();
   return DEV_INSPECTION_LOGS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2769,6 +2810,7 @@ export function listDevStockMovementsForTenant(
     spareId?: string | null;
   } = {},
 ): DevStockMovementRecord[] {
+  assertDevFixturesAllowed();
   return DEV_STOCK_MOVEMENTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2789,6 +2831,7 @@ export function listDevProviderEvaluationsForTenant(
     rating?: string | null;
   } = {},
 ): DevProviderEvaluationRecord[] {
+  assertDevFixturesAllowed();
   return DEV_PROVIDER_EVALUATIONS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;
@@ -2809,6 +2852,7 @@ export function listDevProviderNonconformitiesForTenant(
     severity?: string | null;
   } = {},
 ): DevProviderNonconformityRecord[] {
+  assertDevFixturesAllowed();
   return DEV_PROVIDER_NONCONFORMITIES.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
@@ -2827,6 +2871,7 @@ export function listDevAiInsightsForTenant(
     targetType?: string | null;
   } = {},
 ): DevAiInsightRecord[] {
+  assertDevFixturesAllowed();
   return DEV_AI_INSIGHTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (filters.vesselCode && item.vesselCode !== filters.vesselCode) return false;
@@ -2847,6 +2892,7 @@ export function listDevDomainEventsForTenant(
     eventType?: string | null;
   } = {},
 ): DevDomainEventRecord[] {
+  assertDevFixturesAllowed();
   return DEV_DOMAIN_EVENTS.filter((item) => {
     if (item.tenantSlug !== tenantSlug) return false;
     if (!canViewVessel(role, assignedVesselCodes, item.vesselCode)) return false;

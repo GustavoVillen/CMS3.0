@@ -19,7 +19,17 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionStr
 const SLUG     = (process.env.TENANT_SLUG || "mercurio").toLowerCase();
 const NAME     = process.env.TENANT_NAME || "Mercurio Group Naviera";
 const EMAIL    = process.env.ADMIN_EMAIL || "admin@mercurio.com";
-const PASSWORD = process.env.ADMIN_PASSWORD || "Mercurio2026";
+
+// Sin default: este script crea un TENANT_ADMIN en producción. Un fallback fijo
+// significa que olvidarse la variable deja una cuenta con la contraseña escrita
+// en el repositorio, y el script termina sin avisar nada.
+const PASSWORD = process.env.ADMIN_PASSWORD;
+if (!PASSWORD || PASSWORD.length < 12) {
+  throw new Error(
+    "ADMIN_PASSWORD es obligatorio (mínimo 12 caracteres). Ejemplo:\n" +
+    "  ADMIN_PASSWORD='<contraseña-fuerte>' npx tsx scripts/provision-tenant.ts",
+  );
+}
 const TZ       = process.env.TZ_NAME || "America/Asuncion";
 const CURRENCY = process.env.CURRENCY || "PYG";
 

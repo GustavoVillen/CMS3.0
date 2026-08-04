@@ -16,9 +16,13 @@ const prisma = new PrismaClient({ adapter } as any);
 const SYSTEM_USER = "system";
 const now = new Date();
 
-// Contraseña de las cuentas admin sembradas. Configurable por env; si no se
-// setea, usa un default de DEMO (nunca debe usarse en producción).
-const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Mercurio26";
+// Contraseña de las cuentas admin sembradas. El default de DEMO sólo se usa
+// cuando NODE_ENV es explícitamente "development"; en cualquier otro entorno
+// (incluido NODE_ENV sin definir) hay que pasar SEED_ADMIN_PASSWORD.
+const IS_DEVELOPMENT = String(process.env.NODE_ENV || "").trim().toLowerCase() === "development";
+const DEMO_PASSWORD = "Mercurio26";
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || (IS_DEVELOPMENT ? DEMO_PASSWORD : "");
+const USING_DEMO_PASSWORD = SEED_ADMIN_PASSWORD === DEMO_PASSWORD && !process.env.SEED_ADMIN_PASSWORD;
 
 async function main(): Promise<void> {
   // Guarda: no sembrar credenciales de demo contra una base de producción por
@@ -26,6 +30,13 @@ async function main(): Promise<void> {
   if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "1") {
     throw new Error(
       "Seed bloqueado en NODE_ENV=production. Setear SEED_ALLOW_PRODUCTION=1 y SEED_ADMIN_PASSWORD para permitirlo explícitamente.",
+    );
+  }
+
+  if (!SEED_ADMIN_PASSWORD) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD es obligatorio fuera de NODE_ENV=development.\n" +
+      "  SEED_ADMIN_PASSWORD='<contraseña-fuerte>' pnpm db:seed",
     );
   }
 
@@ -90,8 +101,13 @@ async function main(): Promise<void> {
   const tid = demoTenant.id;
   const uid = tenantUser.id;
 
-  process.stdout.write("Platform user: admin@localhost / Mercurio26\n");
-  process.stdout.write("Tenant user: admin@demo.local / Mercurio26\n");
+  // Sólo se imprime la contraseña cuando es la de demo. Si vino por
+  // SEED_ADMIN_PASSWORD no se muestra: quedaría en la consola y en los logs
+  // del deploy. (Antes se imprimía "Mercurio26" fijo, que además mentía
+  // cuando se sembraba con otra contraseña.)
+  const shown = USING_DEMO_PASSWORD ? DEMO_PASSWORD : "(la definida en SEED_ADMIN_PASSWORD)";
+  process.stdout.write(`Platform user: admin@localhost / ${shown}\n`);
+  process.stdout.write(`Tenant user: admin@demo.local / ${shown}\n`);
 
   // ── Demo operational data (non-critical — wrapped in try/catch) ────────────
   try {

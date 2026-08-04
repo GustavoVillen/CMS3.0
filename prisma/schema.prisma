@@ -1349,6 +1349,7 @@ model MaintenancePlan {
   taskMaster           TaskMaster?            @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
   workLogs             WorkLog[]
   certificates         Certificate[]
+  workOrderLinks       WorkOrderMaintenancePlan[]
 
   @@unique([tenantId, vesselCode, taskCode])
   @@index([tenantId])
@@ -1457,6 +1458,10 @@ model WorkOrder {
   // REPUESTOS / MATERIALES del formulario (planificados, se cargan al abrir la OT).
   // Distinto de los repuestos CONSUMIDOS al cerrar, que son StockMovement ISSUE.
   items               WorkOrderItem[]
+  // Planes de mantenimiento que ejecuta esta OT (ver WorkOrderMaintenancePlan).
+  planLinks           WorkOrderMaintenancePlan[]
+  // PROGRAMACION DE TRABAJO del formulario (ver WorkOrderScheduleEntry).
+  scheduleEntries     WorkOrderScheduleEntry[]
 
   @@unique([tenantId, vesselCode, workOrderCode])
   @@index([tenantId])
@@ -1467,6 +1472,68 @@ model WorkOrder {
   @@index([tenantId, assetId])
   // Historial de ejecuciones por plan (modal Historial): listPlanExecutions({ maintenancePlanId }).
   @@index([tenantId, maintenancePlanId])
+}
+
+// PLANES DE MANTENIMIENTO que ejecuta una OT. Una parada de astillero cubre
+// varios ítems del PDM en una sola orden (ej. "ITEM DEL PDM: 1.7 / 1.8 / 1.9 …"),
+// incluso de equipos distintos (válvulas PV, manifold, LCI…). Sin esta tabla,
+// cerrar esa OT daba por ejecutado UN solo ítem y los demás seguían venciendo.
+//
+// `WorkOrder.maintenancePlanId` se conserva como PLAN PRINCIPAL — es el que da
+// equipo, título y datos heredados a la OT, y lo que ya leen PDF/daily reports/
+// certificados. Esta tabla es la lista COMPLETA e incluye también al principal,
+// así todo lo que necesita "los planes de esta OT" consulta un solo lugar.
+model WorkOrderMaintenancePlan {
+  id                String   @id @default(cuid())
+  tenantId          String
+  workOrderId       String
+  maintenancePlanId String
+  // Orden de aparición (el principal es 0). Define el orden del ITEM DEL PDM.
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  createdByUserId   String
+
+  workOrder         WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  maintenancePlan   MaintenancePlan @relation(fields: [maintenancePlanId], references: [id], onDelete: Cascade)
+
+  @@unique([workOrderId, maintenancePlanId])
+  @@index([tenantId, maintenancePlanId])
+  @@index([workOrderId])
+}
+
+// PROGRAMACION DE TRABAJO de una OT (recuadro del formulario REGI-OPE-26.3):
+// una fila por jornada, con quién la hizo, dónde, para qué empresa y en qué
+// horario. Se carga durante la ejecución.
+//
+// NO se usa WorkLog para esto: el WorkLog es el registro de mantenimiento que
+// alimenta el historial del equipo, el del plan y el consumo de repuestos.
+// Meter ahí las jornadas de una OT ensuciaría ese historial con filas que no
+// son ejecuciones de un plan. Esto es sólo el recuadro del papel.
+//
+// `place` y `company` se guardan por fila (el formulario los pide por fila) y
+// al agregar una se proponen los de la OT, que es el caso normal.
+model WorkOrderScheduleEntry {
+  id              String    @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  workDate        DateTime?
+  technician      String?
+  place           String?
+  company         String?
+  // Horario de la jornada, "HH:MM". Texto y no DateTime: es una hora del día
+  // suelta, sin fecha ni zona horaria, y así sale igual en el papel.
+  timeFrom        String?
+  timeTo          String?
+  sortOrder       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String
+
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([tenantId, workOrderId])
 }
 
 // REPUESTOS / MATERIALES planificados de una OT (recuadros del formulario

@@ -184,6 +184,22 @@ async function getRequestOrThrow(session: TenantAccessSession, id: string) {
   return sr;
 }
 
+/**
+ * El providerId llega en el body y se guarda como FK. Sin validar pertenencia,
+ * una SS podía quedar apuntando al proveedor de otra empresa. Mismo patrón que
+ * ya usan createDefect y la creación de planes con assetId.
+ */
+async function assertProviderInTenant(prisma: unknown, tenantId: string, providerId: unknown): Promise<void> {
+  const id = normalizeOptionalText(providerId);
+  if (!id) return;
+  const count = await (prisma as any).provider.count({
+    where: { id, tenantId, deletedAt: null },
+  });
+  if (count === 0) {
+    throw new RouteError(404, "PROVIDER_NOT_FOUND", "Proveedor no encontrado o no pertenece a este tenant.");
+  }
+}
+
 /** Campos editables comunes a create/update. */
 function writableFields(payload: CreateServiceRequestInput) {
   const comm = normalizeStringArray(payload.communicationMethod);
@@ -272,8 +288,14 @@ export async function getServiceRequest(session: TenantAccessSession, id: string
     wo?.assetId
       ? (prisma as any).asset.findFirst({ where: { id: wo.assetId, tenantId: (sr as any).tenantId }, select: { name: true } })
       : null,
+    // findFirst con tenantId, no findUnique por id suelto: igual que el asset de
+    // arriba. Así, aunque una SS quedara apuntando a un proveedor de otra
+    // empresa, el nombre no se filtra.
     (sr as any).providerId
-      ? (prisma as any).provider.findUnique({ where: { id: (sr as any).providerId }, select: { name: true } })
+      ? (prisma as any).provider.findFirst({
+          where: { id: (sr as any).providerId, tenantId: (sr as any).tenantId },
+          select: { name: true },
+        })
       : null,
   ]);
   const assetName: string | null = asset?.name ?? null;
@@ -290,10 +312,26 @@ export async function listWorkOrderServiceRequests(session: TenantAccessSession,
   // OT (evita repetir getTenantWorkOrder al abrir el modal).
   await requireWorkOrderScope(session, workOrderId);
   const tenantId = await resolveTenantId(session);
-  return (prisma as any).serviceRequest.findMany({
+  const rows = await (prisma as any).serviceRequest.findMany({
     where: { tenantId, workOrderId, deletedAt: null },
     orderBy: { serviceRequestCode: "asc" },
   });
+
+  // Nombre del taller de cada SS: la OT tiene que mostrar A QUIÉN se le pidió el
+  // trabajo, no un id. La SS siempre apunta al catálogo (no hay proveedor
+  // escrito a mano en la SS, a diferencia de la OT).
+  const providerIds = [...new Set(rows.map((r: any) => r.providerId).filter(Boolean))] as string[];
+  const providers = providerIds.length > 0
+    ? await (prisma as any).provider.findMany({
+        where: { id: { in: providerIds }, tenantId },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map<string, string>(providers.map((p: any) => [p.id, p.name]));
+  return rows.map((r: any) => ({
+    ...r,
+    providerName: (r.providerId ? nameById.get(r.providerId) : null) ?? null,
+  }));
 }
 
 // ── Creación (única vía: desde una OT abierta) ───────────────────────────────
@@ -408,6 +446,8 @@ export async function createServiceRequestForWorkOrder(
     providerId: payload.providerId ?? (wo as any).providerId ?? null,
   };
 
+  await assertProviderInTenant(prismaRaw, tenantId, inherited.providerId);
+
   // Formato del documento controlado: SS-<seq>-<BUQUE>-<AÑO> (ej. SS-74-M01-2026).
   // Correlativo por buque y año, sin padding. Mismo camino que la auto-creación.
   const created = await withUniqueRetry(async (attempt) => {
@@ -444,6 +484,10 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
   const prisma = getPrismaClient()!;
   const current = await getRequestOrThrow(session, id);
   assertNotLocked("SERVICE_REQUEST", current.status);
+
+  if (payload.providerId !== undefined) {
+    await assertProviderInTenant(prisma, (current as any).tenantId, payload.providerId);
+  }
 
   return (prisma as any).serviceRequest.update({
     where: { id },
@@ -890,7 +934,10 @@ export async function listHojaRuta(session: TenantAccessSession, id: string) {
       orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
     }),
     sr.providerId
-      ? (prisma as any).provider.findUnique({ where: { id: sr.providerId }, select: { name: true } })
+      ? (prisma as any).provider.findFirst({
+          where: { id: sr.providerId, tenantId: (sr as any).tenantId },
+          select: { name: true },
+        })
       : null,
     sr.createdByUserId
       ? (prisma as any).user.findUnique({

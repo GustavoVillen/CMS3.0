@@ -11,7 +11,16 @@ export type { ControlledDocMeta, FormConfig };
 
 export function fmt(d: Date | string | null | undefined): string {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-AR");
+  const date = new Date(d);
+  // Las fechas SIN hora (apertura, vencimiento, jornadas: lo que el usuario
+  // eligió en un calendario) se guardan como medianoche UTC. Formatearlas en
+  // hora local las corría un día para atrás y el papel salía con la fecha
+  // equivocada. Cuando la hora es 00:00 UTC se formatea en UTC; los sellos de
+  // tiempo reales (cierre, firmas) siguen en hora local, que es lo correcto.
+  const esFechaSola =
+    date.getUTCHours() === 0 && date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+  return date.toLocaleDateString("es-AR", esFechaSola ? { timeZone: "UTC" } : undefined);
 }
 
 export function fmtDateTime(d: Date | string | null | undefined): string {
@@ -183,7 +192,12 @@ export interface WorkOrderPdfContext {
   permitTypes: string[];
   /** Códigos de las SS abiertas desde esta OT (celda "NRO DE SS/SC"). */
   serviceRequestCodes: string[];
-  /** Item del PDM: taskCode del plan de mantenimiento vinculado. */
+  /**
+   * Talleres a los que se les pidió el trabajo: el proveedor de la OT y los de
+   * sus SS, sin repetir. El papel tiene que decir QUIÉN lo hace, no un id.
+   */
+  providerNames: string[];
+  /** Item del PDM: taskCode de los planes vinculados, separados por " / ". */
   planTaskCode: string | null;
   /** Selected template key for this tenant ("STANDARD" | "MERCURIO" | future…). */
   templateKey: string;

@@ -348,7 +348,15 @@ export async function updateFinding(session: TenantAccessSession, auditId: strin
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "DB no disponible.");
   // Verifica acceso al audit (y obtiene tenantId para validar ownership de la OT)
-  const audit = await getExternalAudit(session, auditId) as unknown as { tenantId: string };
+  const audit = await getExternalAudit(session, auditId) as unknown as {
+    tenantId: string; findings: Array<{ id: string }>;
+  };
+  // Validar el audit no alcanza: el findingId viene suelto en la URL. Sin este
+  // chequeo se podía editar el hallazgo de otra auditoría (u otra empresa)
+  // pasando un auditId propio. Mismo criterio que promoteFindingToDefect.
+  if (!audit.findings.some(f => f.id === findingId)) {
+    throw new RouteError(404, "NOT_FOUND", "Finding no encontrado en esta auditoría.");
+  }
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (input.workOrderId !== undefined) {
     const workOrderId = normOpt(input.workOrderId);
@@ -378,7 +386,12 @@ export async function deleteFinding(session: TenantAccessSession, auditId: strin
   ensureCanWrite(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "DB no disponible.");
-  await getExternalAudit(session, auditId);
+  const audit = await getExternalAudit(session, auditId) as unknown as { findings: Array<{ id: string }> };
+  // El findingId llega suelto en la URL: sin verificar que pertenezca a esta
+  // auditoría se podía borrar el hallazgo de otra empresa.
+  if (!audit.findings.some(f => f.id === findingId)) {
+    throw new RouteError(404, "NOT_FOUND", "Finding no encontrado en esta auditoría.");
+  }
   await (prisma as unknown as { externalAuditFinding: { delete(a: unknown): Promise<unknown> } })
     .externalAuditFinding.delete({ where: { id: findingId } });
 }

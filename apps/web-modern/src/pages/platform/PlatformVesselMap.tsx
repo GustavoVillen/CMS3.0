@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../../lib/api";
+import { escapeHtml } from "../../lib/utils";
 
 // Fix Leaflet's broken default icon paths when bundled with Vite
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -86,10 +87,10 @@ export function PlatformVesselMapPage() {
       const age = fmtAge(pos.seenAt);
       const popup = `
         <div style="font-family:monospace;font-size:13px;line-height:1.6">
-          <strong style="font-size:15px">🚢 ${pos.vesselCode}</strong><br/>
-          <span style="color:#888">${pos.tenantSlug}</span><br/>
-          <span>${pos.userEmail}</span><br/>
-          <span style="color:#666;font-size:11px">${age}</span><br/>
+          <strong style="font-size:15px">🚢 ${escapeHtml(pos.vesselCode)}</strong><br/>
+          <span style="color:#888">${escapeHtml(pos.tenantSlug)}</span><br/>
+          <span>${escapeHtml(pos.userEmail)}</span><br/>
+          <span style="color:#666;font-size:11px">${escapeHtml(age)}</span><br/>
           <span style="color:#666;font-size:11px">${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)}</span>
         </div>
       `;
