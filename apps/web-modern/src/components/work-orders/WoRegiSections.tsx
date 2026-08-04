@@ -13,7 +13,7 @@ import {
   WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS,
   WO_PRIORITY_OPTIONS, type FormOption,
 } from "../../lib/wo-form-catalog";
-import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "./PlannedItemsEditor";
+import type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
@@ -116,11 +116,14 @@ function OptionRow({ options, value, onChange, disabled }: {
 /** Valor centinela del select: "la empresa no está en el catálogo". */
 const OTRA = "__OTRA__";
 
+// Los repuestos y materiales previstos ya NO viven acá: tienen sección propia
+// numerada en el modal de la OT, entre "Programación de trabajo" y "Tarea
+// concluida". Estaban al pie de este bloque, sin título, y no se encontraban.
 export function WoRegiSections({
-  form, onChange, items, onItemsChange, priority, disabled,
+  form, onChange, priority, disabled,
   providers, providerId, onProviderChange, location, onLocationChange, onPriorityChange,
   providerOther, onProviderOtherChange,
-  saving, saved, error, spares = [],
+  saving, saved, error,
 }: {
   form: WoRegiForm;
   onChange: (patch: Partial<WoRegiForm>) => void;
@@ -128,10 +131,6 @@ export function WoRegiSections({
   saving?: boolean;
   saved?: boolean;
   error?: string | null;
-  items: WoPlannedItem[];
-  onItemsChange: (items: WoPlannedItem[]) => void;
-  /** Catálogo de repuestos del buque con stock (para el desplegable + semáforo). */
-  spares?: WoSpareOption[];
   /** Prioridad de la OT. El papel la nombra como plazo: es el mismo dato. */
   priority: string;
   onPriorityChange: (v: string) => void;
@@ -252,9 +251,6 @@ export function WoRegiSections({
           onChange={v => onChange({ systemArea: v })} />
       </div>
 
-      <div className="border-t border-fg/10 pt-4">
-        <PlannedItemsEditor items={items} onChange={onItemsChange} spares={spares} disabled={disabled} />
-      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
+import { PlannedItemsEditor } from "../components/work-orders/PlannedItemsEditor";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { useDeepLink } from "../lib/deep-link";
@@ -2079,9 +2080,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <WoRegiSections
               form={regiForm}
               onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
-              items={plannedItems}
-              onItemsChange={v => { touchRegi(); setPlannedItems(v); }}
-              spares={woSpares}
               priority={priority}
               onPriorityChange={v => { touchRegi(); setPriority(v); }}
               disabled={!isEditable}
@@ -2521,12 +2519,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── 8. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
+          {/* ── 8. REPUESTOS Y MATERIALES PREVISTOS (formulario REGI-OPE-26.3) ──
+              Antes vivía al pie del bloque de opciones del formulario, sin
+              título propio: nadie lo encontraba. Sección propia, acá, porque es
+              lo que se planifica antes de ejecutar el trabajo. Lo realmente
+              consumido se carga en RESULTADO ("Repuestos utilizados"). */}
+          {isMercurio && (
+            <section className="space-y-3">
+              <PhaseHeader n={8} label="Repuestos y materiales" dotCls="bg-orange-500/15 text-orange-700 dark:text-orange-400" borderCls="border-orange-500/25" />
+              <PlannedItemsEditor
+                items={plannedItems}
+                onChange={v => { touchRegi(); setPlannedItems(v); }}
+                spares={woSpares}
+                disabled={!isEditable}
+              />
+            </section>
+          )}
+
+          {/* ── 9. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
               Se completa al terminar el trabajo: va después de los avances y
               antes del resultado. Sección propia porque en el papel también lo es. */}
           {isMercurio && (
             <section className="space-y-3">
-              <PhaseHeader n={8} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
+              <PhaseHeader n={9} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
               <WoRegiClosure
                 form={regiForm}
                 onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
@@ -2535,10 +2550,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── RESULTADO (9 con el formulario de Mercurio, que suma "Programación
-                 de trabajo" y "Tarea concluida") ── */}
+          {/* ── RESULTADO (10 con el formulario de Mercurio, que suma
+                 "Programación de trabajo", "Repuestos y materiales" y
+                 "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={isMercurio ? 9 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 10 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             <div className="space-y-1.5">
