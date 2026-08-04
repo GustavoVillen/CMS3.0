@@ -72,6 +72,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     wo, assetLabel, vesselName, assetIsSafetyCritical, assignedName, createdByName,
     tenant, formLogoBuffer, formMeta, formConfig, tenantSlug,
     plannedItems, scheduleRows, permitTypes, serviceRequestCodes, providerNames, planTaskCode,
+    spareUsages,
   } = ctx;
   const w = wo as any;
 
@@ -180,11 +181,21 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       canvas.y += h;
     }
 
-    function itemsTable(kind: "SPARE" | "MATERIAL", minRows = 3) {
-      const rows = plannedItems.filter(i => i.kind === kind);
+    /** Encabezado de columnas + primera fila de las tablas de items. */
+    const ITEMS_TABLE_KEEP = 32;
+
+    /**
+     * Tabla DESCRIPCION / CANTIDAD del papel. Recibe las filas ya resueltas
+     * porque REPUESTOS y MATERIALES salen de fuentes distintas: los repuestos
+     * son los realmente consumidos (movimientos de stock de la OT) y los
+     * materiales, los previstos en el formulario (no mueven stock).
+     */
+    function itemsTable(rows: Array<{ description: string; quantity: number; unit: string }>, minRows = 3) {
       const H = 16;
       const qtyW = 90;
-      ensureSpace(H);
+      // El encabezado de columnas nunca queda solo al pie: se reserva también
+      // el alto de la primera fila.
+      ensureSpace(H * 2);
       cell(ML, canvas.y, W - qtyW, H, "DESCRIPCION", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
       cell(ML + W - qtyW, canvas.y, qtyW, H, "CANTIDAD", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
       canvas.y += H;
@@ -237,12 +248,12 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       },
 
       requestedBy: () => {
-        sectionHeader(label("requestedBy", "SOLICITADO POR"));
+        sectionHeader(label("requestedBy", "SOLICITADO POR"), 18, 20);
         optionsRow(REQUESTED_BY, w.requestedByArea ? [String(w.requestedByArea)] : []);
       },
 
       assignedTo: () => {
-        sectionHeader(label("assignedTo", "ASIGNADO A"));
+        sectionHeader(label("assignedTo", "ASIGNADO A"), 18, 20);
         optionsRow(ASSIGNED_TO, w.assignedToArea ? [String(w.assignedToArea)] : []);
         if (assignedName) {
           kvRow([{ label: label("tecnico", "TECNICO"), value: assignedName, lw: 60 }]);
@@ -275,7 +286,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       // "Completo correctamente la autorizacion de trabajo correspondiente a las
       // tareas de:" — se tilda con los permisos de trabajo vinculados a la OT.
       permits: () => {
-        sectionHeader(label("permits", "AUTORIZACION DE TRABAJO"));
+        sectionHeader(label("permits", "AUTORIZACION DE TRABAJO"), 18, 16);
         ensureSpace(16);
         doc.fontSize(7).font("Helvetica").fillColor(GRAY)
           .text("Completo correctamente la autorizacion de trabajo correspondiente a las tareas de:",
@@ -285,7 +296,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       },
 
       request: () => {
-        sectionHeader(label("request", "SOLICITUD / FALLA"));
+        sectionHeader(label("request", "SOLICITUD / FALLA"), 18, 44);
         ensureSpace(44);
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(w.description ?? ""), 44);
       },
@@ -295,7 +306,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       // recuadro, pero el segundo lleva rótulo: sin él se leían como un bloque
       // corrido y no se distinguía la tarea de su detalle.
       task: () => {
-        sectionHeader(label("task", "TAREA"));
+        sectionHeader(label("task", "TAREA"), 18, 40);
         ensureSpace(40);
         const tarea = [
           w.title,
@@ -304,19 +315,32 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(tarea), 40);
       },
 
+      // ITEMS_TABLE_KEEP = encabezado de columnas (16) + primera fila (16): es
+      // lo mínimo que tiene que entrar debajo de la barra para que el título no
+      // quede huérfano al pie de la página.
+      // REPUESTOS = lo realmente consumido (movimientos de stock de la OT), no
+      // lo previsto: el papel documenta el trabajo hecho. Los previstos siguen
+      // cargándose en el formulario, pero no son lo que se imprime acá.
       spares: () => {
-        sectionHeader(label("spares", "REPUESTOS"));
-        itemsTable("SPARE");
+        sectionHeader(label("spares", "REPUESTOS"), 18, ITEMS_TABLE_KEEP);
+        itemsTable(spareUsages.map(s => ({
+          description: s.spareName, quantity: s.quantity, unit: s.unit,
+        })));
       },
 
+      // MATERIALES no mueven stock (grasa, trapos, sellador…): se imprimen los
+      // cargados en el formulario.
       materials: () => {
-        sectionHeader(label("materials", "MATERIALES"));
-        itemsTable("MATERIAL");
+        sectionHeader(label("materials", "MATERIALES"), 18, ITEMS_TABLE_KEEP);
+        itemsTable(plannedItems.filter(i => i.kind === "MATERIAL"));
       },
 
       // PROGRAMACION DE TRABAJO: fechas + filas fecha/técnico/lugar/empresa/horario
       schedule: () => {
-        sectionHeader(label("schedule", "PROGRAMACION DE TRABAJO"));
+        // Debajo de la barra van: fila de fechas (20) + encabezado de columnas
+        // (16) + primera jornada (16). Si no entra todo, la sección arranca en
+        // la página siguiente en vez de partirse.
+        sectionHeader(label("schedule", "PROGRAMACION DE TRABAJO"), 18, 52);
         // "FECHA FINALIZACION" no entra en el ancho de etiqueta por defecto (78):
         // se encimaba con el borde. Ambas columnas usan el ancho de la más larga.
         // FECHA FINALIZACION es la fecha en que el trabajo TERMINÓ. Antes salía
@@ -334,7 +358,9 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         ];
         const usedW = cols.reduce((a, c) => a + c.w, 0);
         cols.push({ l: "HORARIO", w: W - usedW });
-        ensureSpace(H);
+        // Igual que en las tablas de items: el encabezado de columnas no se
+        // dibuja si no entra también la primera jornada debajo.
+        ensureSpace(H * 2);
         let cx = ML;
         cols.forEach(c => { cell(cx, canvas.y, c.w, H, c.l, { bold: true, fontSize: 6.5, bg: LIGHT, color: GRAY, align: "center" }); cx += c.w; });
         canvas.y += H;
@@ -385,7 +411,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       },
 
       pending: () => {
-        sectionHeader(label("pending", "DETALLE DE PENDIENTES (MATERIALES/TAREAS)"));
+        sectionHeader(label("pending", "DETALLE DE PENDIENTES (MATERIALES/TAREAS)"), 18, 44);
         ensureSpace(44);
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(w.pendingDetail ?? ""), 44);
       },
@@ -402,7 +428,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
        * limpia. Hoy sólo ~313 de 1308 OT pueden resaltar su celda.
        */
       risk: () => {
-        sectionHeader(label("risk", "NIVEL DE RIESGO"));
+        sectionHeader(label("risk", "NIVEL DE RIESGO"), 18, 20);
         ensureSpace(20);
         kvRow([{ label: "NIVEL", value: riskLabel(w.riskLevel), lw: 60 }]);
         renderRiskMatrix(doc, canvas, ML, W, ctx.riskProbability, ctx.riskConsequence);
@@ -455,11 +481,11 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         }
         canvas.y += 6;
 
-        sectionHeader(label("riskResult", "RESULTADO DEL ANALISIS DE RIESGO"));
+        sectionHeader(label("riskResult", "RESULTADO DEL ANALISIS DE RIESGO"), 18, 44);
         ensureSpace(44);
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(w.riskAnalysisResult ?? ""), 44);
 
-        sectionHeader(label("loto", "LOTO (LOCKOUT / TAGOUT)"));
+        sectionHeader(label("loto", "LOTO (LOCKOUT / TAGOUT)"), 18, 32);
         ensureSpace(32);
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(w.loto ?? ""), 32);
       },

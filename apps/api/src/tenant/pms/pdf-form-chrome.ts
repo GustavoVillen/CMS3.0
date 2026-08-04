@@ -195,8 +195,12 @@ export interface FormCanvas {
   ensureSpace(h: number): void;
   /** Cierra footer de la pagina actual y agrega una nueva (cursor a marginT). */
   pageBreak(): void;
-  /** Barra de seccion azul marino con titulo. Avanza el cursor. */
-  sectionHeader(title: string, h?: number): void;
+  /**
+   * Barra de seccion azul marino con titulo. Avanza el cursor.
+   * `keepWith`: alto de lo que va justo despues (encabezado de columnas +
+   * primera fila). Si no entra junto, la barra pasa a la pagina siguiente.
+   */
+  sectionHeader(title: string, h?: number, keepWith?: number): void;
   /** Celda con borde/relleno y texto opcional (coordenadas explicitas). */
   cell(cx: number, cy: number, cw: number, ch: number, text: string, opts?: CellOpts): void;
   /**
@@ -292,8 +296,17 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
     if (y + h > CONTENT_BOTTOM) pageBreak();
   }
 
-  function sectionHeader(title: string, h = 18) {
-    ensureSpace(h + 2);
+  /**
+   * Barra de sección.
+   *
+   * `keepWith` es el alto de lo que viene INMEDIATAMENTE después (encabezado de
+   * columnas + primera fila, típicamente). Si no entra junto con la barra en lo
+   * que queda de página, se pasa todo a la siguiente. Sin esto, la barra
+   * "REPUESTOS" quedaba al pie de una página y su tabla arrancaba en la
+   * siguiente, como un título huérfano.
+   */
+  function sectionHeader(title: string, h = 18, keepWith = 0) {
+    ensureSpace(h + 2 + keepWith);
     doc.rect(ML, y, W, h).fillColor(C.NAVY).fill();
     doc.rect(ML, y, W, h).strokeColor(C.NAVY).lineWidth(0.5).stroke();
     doc.fontSize(8).font("Helvetica-Bold").fillColor(C.WHITE)
