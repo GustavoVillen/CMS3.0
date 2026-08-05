@@ -100,8 +100,20 @@ export interface UpdateServiceRequestInput extends CreateServiceRequestInput {
   autorizadoByName?: string | null;
 }
 
-/** Los tres nombres de la tramitación, que sólo el admin puede corregir. */
-const SIGNATURE_NAME_FIELDS = ["solicitaByName", "aprobadoByName", "autorizadoByName"] as const;
+/**
+ * Los tres nombres de la tramitación, que sólo el admin puede corregir, y cómo
+ * se sabe que ese paso YA SE CUMPLIÓ.
+ *
+ * Corregir es reemplazar una firma existente, no crearla: si el paso no pasó, no
+ * hay nada que corregir. Sin este chequeo, un PATCH podría dejar asentado "quién
+ * autorizó" en una SS que nadie autorizó — exactamente el registro que una
+ * auditoría busca. La tramitación sólo la avanzan submit/approve/authorize.
+ */
+const SIGNATURE_NAME_FIELDS = {
+  solicitaByName:   { step: "Solicita", done: (sr: any) => sr.status !== "DRAFT" },
+  aprobadoByName:   { step: "Aprueba",  done: (sr: any) => !!sr.aprobadoAt },
+  autorizadoByName: { step: "Autoriza", done: (sr: any) => !!sr.autorizadoAt },
+} as const;
 
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 // No hay sistema de permisos en el proyecto: son checks ad-hoc por servicio
@@ -508,10 +520,18 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
   // corrige el admin y nadie más. Se auditan aparte porque tocarlos no es editar
   // un campo del formulario, es reescribir una firma.
   const signatures: Record<string, string | null> = {};
-  for (const field of SIGNATURE_NAME_FIELDS) {
-    if (payload[field] === undefined) continue;
-    const value = normalizeOptionalText(payload[field]);
+  for (const [field, rule] of Object.entries(SIGNATURE_NAME_FIELDS)) {
+    const incoming = (payload as Record<string, unknown>)[field];
+    if (incoming === undefined) continue;
+    const value = normalizeOptionalText(incoming);
     if (value === ((current as any)[field] ?? null)) continue;
+    if (!rule.done(current)) {
+      throw new RouteError(
+        409,
+        "STEP_NOT_REACHED",
+        `No se puede asentar quién ${rule.step.toLowerCase()} una solicitud que todavía no llegó a ese paso.`,
+      );
+    }
     signatures[field] = value;
   }
   if (Object.keys(signatures).length > 0 && session.user.role !== "TENANT_ADMIN") {

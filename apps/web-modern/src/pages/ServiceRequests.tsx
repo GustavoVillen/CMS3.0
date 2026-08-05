@@ -130,6 +130,32 @@ interface HojaRutaRow {
 const memberLabel = (m: TeamMember) =>
   m.formName?.trim() || `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || "(sin nombre)";
 
+/**
+ * Quién puede figurar en cada paso de la tramitación. Un ADMIN siempre; el
+ * SUPERINTENDENTE sólo si está a cargo del buque de la SS; el JEFE DE MÁQUINAS
+ * sólo para APROBAR — autorizar es atribución de tierra. Solicitar no es una
+ * firma: el pedido lo puede originar cualquiera del buque.
+ *
+ * Misma regla que valida el backend en resolveSigner. Se comparte entre el modal
+ * de firma y la corrección de nombres del admin: dos copias divergiendo serían
+ * un desplegable ofreciendo gente que el backend después rechaza.
+ */
+function eligibleSigners(
+  members: TeamMember[],
+  step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
+  vesselCode: string,
+): TeamMember[] {
+  return members.filter(m => {
+    if (m.role === "AUDITOR_READONLY") return false; // solo-lectura: no pide ni firma
+    if (m.role === "TENANT_ADMIN") return true;
+    const enElBuque = (m.assignedVesselCodes ?? []).includes(vesselCode);
+    if (step === "SOLICITA") return enElBuque;
+    if (m.role === "FLEET_SUPERINTENDENT") return enElBuque;
+    if (m.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
+    return false;
+  });
+}
+
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
@@ -628,20 +654,10 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   const [error, setError] = useState<string | null>(null);
 
   const { data: teamData } = useFetch<TeamMember[]>(adminPicker ? "/app/team/members" : null, [adminPicker]);
-  // Quién puede firmar ESTE paso: un ADMIN siempre; el SUPERINTENDENTE a cargo
-  // del buque; y el JEFE DE MÁQUINAS sólo para APROBAR — autorizar es tierra.
   // El backend valida igual (resolveSigner); esto es para no ofrecer un 403.
-  const eligibles = (Array.isArray(teamData) ? teamData : []).filter(m => {
-    if (m.role === "AUDITOR_READONLY") return false; // solo-lectura: no pide ni firma
-    if (m.role === "TENANT_ADMIN") return true;
-    const enElBuque = (m.assignedVesselCodes ?? []).includes(sr.vesselCode);
-    // Solicitar NO es una firma: el pedido lo puede originar cualquiera del
-    // buque (un técnico, el contramaestre), no sólo quienes aprueban.
-    if (isSolicita) return enElBuque;
-    if (m.role === "FLEET_SUPERINTENDENT") return enElBuque;
-    if (m.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
-    return false;
-  });
+  const eligibles = step === "RECHAZA"
+    ? []
+    : eligibleSigners(Array.isArray(teamData) ? teamData : [], step, sr.vesselCode);
 
   const title = step === "SOLICITA" ? "Solicitar SS"
     : step === "APRUEBA" ? "Aprobar SS"
@@ -1133,6 +1149,22 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [firmaSolicita, setFirmaSolicita] = useState(sr.solicitaByName ?? "");
   const [firmaAprueba, setFirmaAprueba] = useState(sr.aprobadoByName ?? "");
   const [firmaAutoriza, setFirmaAutoriza] = useState(sr.autorizadoByName ?? "");
+  // Un paso sólo se corrige si YA PASÓ. No se puede escribir quién aprueba una
+  // SS que nadie aprobó: eso no sería una corrección, sería inventar una firma.
+  // Solicitar se da por cumplido cuando la SS salió de borrador; los otros dos,
+  // cuando quedó su fecha.
+  const solicitaDone = sr.status !== "DRAFT";
+  const apruebaDone = !!sr.aprobadoAt;
+  const autorizaDone = !!sr.autorizadoAt;
+  // `role` alcanza para decidir si mostrar los desplegables; `isAdmin` se define
+  // más abajo y este bloque necesita el valor antes, para el fetch del equipo.
+  const puedeCorregirFirmas = role === "TENANT_ADMIN" && editable
+    && (solicitaDone || apruebaDone || autorizaDone);
+  // Tripulación elegible por paso. /app/team/members es de administración: sólo
+  // se pide cuando hay algo que corregir.
+  const { data: teamData } = useFetch<TeamMember[]>(
+    puedeCorregirFirmas ? "/app/team/members" : null, [puedeCorregirFirmas]);
+  const team = Array.isArray(teamData) ? teamData : [];
 
   // TALLER QUE CONCURRE — se elige del catálogo de proveedores (mismo patrón que
   // el "Tercerizado" del formulario REGI-OPE-26.3 en la OT). Escribirlo a mano
@@ -1176,12 +1208,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     capitan !== (sr.capitanName ?? "") ||
     jefeMaq !== (sr.jefeMaquinasName ?? "") ||
     compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|") ||
-    // Sólo cuentan si el usuario es admin: para el resto los campos ni se
-    // muestran, y un dirty fantasma dejaría el botón Guardar siempre encendido.
-    (isAdmin && (
-      firmaSolicita !== (sr.solicitaByName ?? "") ||
-      firmaAprueba !== (sr.aprobadoByName ?? "") ||
-      firmaAutoriza !== (sr.autorizadoByName ?? "")
+    // Sólo cuentan los desplegables que de verdad se muestran (admin + paso ya
+    // cumplido). Si no, un dirty fantasma dejaría Guardar siempre encendido.
+    (puedeCorregirFirmas && (
+      (solicitaDone && firmaSolicita !== (sr.solicitaByName ?? "")) ||
+      (apruebaDone && firmaAprueba !== (sr.aprobadoByName ?? "")) ||
+      (autorizaDone && firmaAutoriza !== (sr.autorizadoByName ?? ""))
     ));
 
   const toggleCompra = (v: string) =>
@@ -1197,13 +1229,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     purchaseRequestKinds: compras,
     capitanName: capitan,
     jefeMaquinasName: jefeMaq,
-    // Las firmas viajan sólo si el que edita es admin: mandarlas desde otro rol
-    // haría que el backend devuelva 403 y se pierda todo el resto del guardado.
-    ...(isAdmin ? {
-      solicitaByName: firmaSolicita,
-      aprobadoByName: firmaAprueba,
-      autorizadoByName: firmaAutoriza,
-    } : {}),
+    // Las firmas viajan sólo si el que edita es admin Y el paso ya se cumplió:
+    // mandarlas de más haría que el backend devuelva 403/409 y se pierda todo el
+    // resto del guardado.
+    ...(puedeCorregirFirmas && solicitaDone ? { solicitaByName: firmaSolicita } : {}),
+    ...(puedeCorregirFirmas && apruebaDone ? { aprobadoByName: firmaAprueba } : {}),
+    ...(puedeCorregirFirmas && autorizaDone ? { autorizadoByName: firmaAutoriza } : {}),
   });
 
   // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
@@ -1449,25 +1480,33 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
               pone el paso real. */}
           <div className="rounded-xl border border-fg/10 p-3 space-y-2">
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold">Tramitación</p>
-            {isAdmin && editable ? (
-              <>
-                <EditableRow label="Solicita" value={firmaSolicita} onChange={setFirmaSolicita}
-                  at={sr.openDate} placeholder="Ej. J.M. CRISTHIAN VERON" />
-                <EditableRow label="Aprueba" value={firmaAprueba} onChange={setFirmaAprueba}
-                  at={sr.aprobadoAt} placeholder="Ej. CAP. WILLIAM RIQUELME" />
-                <EditableRow label="Autoriza" value={firmaAutoriza} onChange={setFirmaAutoriza}
-                  at={sr.autorizadoAt} placeholder="Ej. SUP. TEC. ..." />
-                <p className="text-[10px] text-text-industrial/40 italic">
-                  Corrección administrativa: escribir un nombre no aprueba ni autoriza la
-                  solicitud, sólo deja asentado quién firmó el formulario.
-                </p>
-              </>
+            {puedeCorregirFirmas && solicitaDone ? (
+              <SignerRow label="Solicita" value={firmaSolicita} onChange={setFirmaSolicita}
+                at={sr.openDate} options={eligibleSigners(team, "SOLICITA", sr.vesselCode)} />
             ) : (
-              <>
-                <Row label="Solicita" name={sr.solicitaByName ?? "—"} at={sr.openDate} />
-                <Row label="Aprueba" name={sr.aprobadoByName} at={sr.aprobadoAt} />
-                <Row label="Autoriza" name={sr.autorizadoByName} at={sr.autorizadoAt} />
-              </>
+              <Row label="Solicita" name={sr.solicitaByName} at={sr.openDate} />
+            )}
+
+            {puedeCorregirFirmas && apruebaDone ? (
+              <SignerRow label="Aprueba" value={firmaAprueba} onChange={setFirmaAprueba}
+                at={sr.aprobadoAt} options={eligibleSigners(team, "APRUEBA", sr.vesselCode)} />
+            ) : (
+              <Row label="Aprueba" name={sr.aprobadoByName} at={sr.aprobadoAt} />
+            )}
+
+            {puedeCorregirFirmas && autorizaDone ? (
+              <SignerRow label="Autoriza" value={firmaAutoriza} onChange={setFirmaAutoriza}
+                at={sr.autorizadoAt} options={eligibleSigners(team, "AUTORIZA", sr.vesselCode)} />
+            ) : (
+              <Row label="Autoriza" name={sr.autorizadoByName} at={sr.autorizadoAt} />
+            )}
+
+            {puedeCorregirFirmas && (
+              <p className="text-[10px] text-text-industrial/40 italic">
+                Corrección administrativa: cambiar el nombre no aprueba ni autoriza la
+                solicitud, sólo deja asentado quién firmó el formulario. Los pasos que
+                todavía no se cumplieron no se editan.
+              </p>
             )}
 
             {sr.status === "REJECTED" && sr.rechazoReason && (
@@ -1700,26 +1739,36 @@ function Row({ label, name, at }: { label: string; name: string | null; at: stri
 }
 
 /**
- * Misma fila de la tramitación pero con el nombre editable — sólo para el admin.
- * La FECHA sigue siendo de sólo lectura a propósito: la estampa el paso real
+ * Misma fila de la tramitación pero con el nombre elegible de la tripulación —
+ * sólo para el admin y sólo sobre un paso YA CUMPLIDO (ver `done` en el modal).
+ *
+ * Es un desplegable, no texto libre: el que figura firmando tiene que ser
+ * alguien del equipo habilitado para ese paso. Si el nombre guardado no está
+ * entre los elegibles (cargó una SS de papel, o esa persona ya no está en la
+ * empresa) se conserva como opción propia para no borrarlo sin querer.
+ *
+ * La FECHA es de sólo lectura a propósito: la estampa el paso real
  * (Solicitar / Aprobar / Autorizar), no se escribe a mano acá.
  */
-function EditableRow({ label, value, onChange, at, placeholder }: {
+function SignerRow({ label, value, onChange, at, options }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   at: string | null;
-  placeholder: string;
+  options: TeamMember[];
 }) {
+  const names = options.map(memberLabel);
+  const huerfano = value && !names.includes(value) ? value : null;
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
-      <input
-        className={cellCls + " flex-1 min-w-0"}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
+      <select className={cellCls + " flex-1 min-w-0"} value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">— sin asignar —</option>
+        {huerfano && <option value={huerfano}>{huerfano}</option>}
+        {options.map(m => (
+          <option key={m.userId} value={memberLabel(m)}>{memberLabel(m)}</option>
+        ))}
+      </select>
       <span className="w-16 shrink-0 text-right text-text-industrial/40">{at ? fmtDate(at) : ""}</span>
     </div>
   );
