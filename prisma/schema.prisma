@@ -1634,6 +1634,12 @@ model ServiceRequest {
   // TENANT_ADMIN puede editar nombres y fechas para cargar SS históricas o
   // corregir un dato mal cargado (ver updateServiceRequestTramitacion).
   solicitaByName      String?    // si está, gana sobre el nombre del creador
+  // Quién solicita, como usuario. Faltaba: el PDF caía a la firma del CREADOR
+  // del registro y estampaba la firma de otra persona debajo del nombre del
+  // solicitante (bug real en SS-112-M01-2026, ago 2026). Null en las SS
+  // anteriores y en las de papel: sin usuario no hay firma que estampar, y la
+  // línea sale en blanco para firmar a mano.
+  solicitaByUserId    String?
   aprobadoByName      String?
   aprobadoByUserId    String?
   aprobadoAt          DateTime?

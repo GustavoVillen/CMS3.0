@@ -47,6 +47,8 @@ interface ServiceRequest {
   purchaseRequestKinds: string[];
   /** Nombre de quien solicita, editable por el admin (gana sobre el creador). */
   solicitaByName: string | null;
+  /** Usuario de quien solicita: de ahí sale la firma del PDF. */
+  solicitaByUserId: string | null;
   createdByUserId: string | null;
   aprobadoByName: string | null;
   aprobadoAt: string | null;
@@ -679,6 +681,10 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
       } else if (isSolicita) {
         await api.post(`/app/pms/service-requests/${sr.id}/submit`, {
           name: nombre,
+          // Va el USUARIO además del nombre: de ahí sale la firma del PDF. Sin
+          // esto el documento estampaba la firma de quien creó el registro
+          // debajo del nombre del solicitante.
+          onBehalfUserId: adminPicker ? (onBehalfUserId || undefined) : undefined,
           actionDate: showDate ? actionDate : undefined,
         });
       } else {
@@ -1146,9 +1152,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // verificar): son la firma de quién pidió, aprobó y autorizó el gasto. Se
   // corrigen para que el registro coincida con el formulario de papel; cambiar
   // el nombre NO avanza el estado ni pone la fecha.
-  const [firmaSolicita, setFirmaSolicita] = useState(sr.solicitaByName ?? "");
-  const [firmaAprueba, setFirmaAprueba] = useState(sr.aprobadoByName ?? "");
-  const [firmaAutoriza, setFirmaAutoriza] = useState(sr.autorizadoByName ?? "");
+  const [firmaSolicita, setFirmaSolicita] = useState(
+    { name: sr.solicitaByName ?? "", userId: sr.solicitaByUserId ?? "" });
+  const [firmaAprueba, setFirmaAprueba] = useState(
+    { name: sr.aprobadoByName ?? "", userId: sr.aprobadoByUserId ?? "" });
+  const [firmaAutoriza, setFirmaAutoriza] = useState(
+    { name: sr.autorizadoByName ?? "", userId: sr.autorizadoByUserId ?? "" });
   // Un paso sólo se corrige si YA PASÓ. No se puede escribir quién aprueba una
   // SS que nadie aprobó: eso no sería una corrección, sería inventar una firma.
   // Solicitar se da por cumplido cuando la SS salió de borrador; los otros dos,
@@ -1211,9 +1220,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     // Sólo cuentan los desplegables que de verdad se muestran (admin + paso ya
     // cumplido). Si no, un dirty fantasma dejaría Guardar siempre encendido.
     (puedeCorregirFirmas && (
-      (solicitaDone && firmaSolicita !== (sr.solicitaByName ?? "")) ||
-      (apruebaDone && firmaAprueba !== (sr.aprobadoByName ?? "")) ||
-      (autorizaDone && firmaAutoriza !== (sr.autorizadoByName ?? ""))
+      (solicitaDone && firmaSolicita.userId !== (sr.solicitaByUserId ?? "")) ||
+      (apruebaDone && firmaAprueba.userId !== (sr.aprobadoByUserId ?? "")) ||
+      (autorizaDone && firmaAutoriza.userId !== (sr.autorizadoByUserId ?? ""))
     ));
 
   const toggleCompra = (v: string) =>
@@ -1232,9 +1241,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     // Las firmas viajan sólo si el que edita es admin Y el paso ya se cumplió:
     // mandarlas de más haría que el backend devuelva 403/409 y se pierda todo el
     // resto del guardado.
-    ...(puedeCorregirFirmas && solicitaDone ? { solicitaByName: firmaSolicita } : {}),
-    ...(puedeCorregirFirmas && apruebaDone ? { aprobadoByName: firmaAprueba } : {}),
-    ...(puedeCorregirFirmas && autorizaDone ? { autorizadoByName: firmaAutoriza } : {}),
+    ...(puedeCorregirFirmas && solicitaDone
+      ? { solicitaByName: firmaSolicita.name, solicitaByUserId: firmaSolicita.userId } : {}),
+    ...(puedeCorregirFirmas && apruebaDone
+      ? { aprobadoByName: firmaAprueba.name, aprobadoByUserId: firmaAprueba.userId } : {}),
+    ...(puedeCorregirFirmas && autorizaDone
+      ? { autorizadoByName: firmaAutoriza.name, autorizadoByUserId: firmaAutoriza.userId } : {}),
   });
 
   // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
@@ -1752,21 +1764,39 @@ function Row({ label, name, at }: { label: string; name: string | null; at: stri
  */
 function SignerRow({ label, value, onChange, at, options }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
+  /** Nombre y usuario van juntos: el usuario es el que le da la firma al PDF. */
+  value: { name: string; userId: string };
+  onChange: (v: { name: string; userId: string }) => void;
   at: string | null;
   options: TeamMember[];
 }) {
-  const names = options.map(memberLabel);
-  const huerfano = value && !names.includes(value) ? value : null;
+  // El select se maneja por userId, no por nombre: dos personas pueden llamarse
+  // igual, y el nombre suelto no alcanza para saber de quién es la firma.
+  const HUERFANO = "__HUERFANO__";
+  const enLista = options.some(m => m.userId === value.userId);
+  const huerfano = !enLista && value.name ? value.name : null;
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
-      <select className={cellCls + " flex-1 min-w-0"} value={value} onChange={e => onChange(e.target.value)}>
+      <select
+        className={cellCls + " flex-1 min-w-0"}
+        value={enLista ? value.userId : (huerfano ? HUERFANO : "")}
+        onChange={e => {
+          const uid = e.target.value;
+          if (uid === HUERFANO) return; // no se re-elige: es el nombre que ya estaba
+          const m = options.find(x => x.userId === uid);
+          onChange(m ? { name: memberLabel(m), userId: m.userId } : { name: "", userId: "" });
+        }}
+      >
         <option value="">— sin asignar —</option>
-        {huerfano && <option value={huerfano}>{huerfano}</option>}
+        {/* Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
+            empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
+            pone firma: no hay a quién buscársela. */}
+        {huerfano && <option value={HUERFANO}>{huerfano}  ·  (sin firma)</option>}
         {options.map(m => (
-          <option key={m.userId} value={memberLabel(m)}>{memberLabel(m)}</option>
+          <option key={m.userId} value={m.userId}>
+            {memberLabel(m)}{m.hasSignature ? "" : "  ·  (sin firma)"}
+          </option>
         ))}
       </select>
       <span className="w-16 shrink-0 text-right text-text-industrial/40">{at ? fmtDate(at) : ""}</span>

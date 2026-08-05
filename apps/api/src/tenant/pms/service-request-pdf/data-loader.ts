@@ -79,12 +79,38 @@ export async function loadServiceRequestPdfContext(
   let apruebaSignatureBuffer: Buffer | null = null;
   let autorizaSignatureBuffer: Buffer | null = null;
 
-  /** Firma del usuario, sólo si el paso ya ocurrió. */
-  const firmaDe = async (userId: string | null | undefined): Promise<Buffer | null> => {
+  /**
+   * Firma del usuario, y SÓLO si es de la persona cuyo nombre imprime el
+   * recuadro.
+   *
+   * El chequeo del nombre no es paranoia: este PDF es un documento controlado y
+   * estampar la firma de alguien debajo del nombre de otro es atribuirle una
+   * conformidad que no dio. Pasó de verdad — el paso SOLICITA no guardaba a su
+   * usuario y caía a la firma de quien había creado el registro
+   * (SS-112-M01-2026, ago 2026). Sin usuario o con nombre que no coincide, la
+   * línea sale en blanco para firmar a mano, que es lo correcto.
+   */
+  const norm = (s: unknown) =>
+    typeof s === "string" ? s.trim().replace(/\s+/g, " ").toLocaleLowerCase() : "";
+
+  const firmaDe = async (
+    userId: string | null | undefined,
+    nombreImpreso?: string | null,
+  ): Promise<Buffer | null> => {
     if (!prismaRaw || !userId) return null;
     try {
-      const u = await prismaRaw.user.findUnique({ where: { id: userId }, select: { signatureUrl: true } });
-      return signatureBuffer(u?.signatureUrl);
+      const u = await prismaRaw.user.findUnique({
+        where: { id: userId },
+        select: { signatureUrl: true, firstName: true, lastName: true, formName: true },
+      });
+      if (!u) return null;
+      // El nombre guardado puede ser el del formulario o "nombre apellido": el
+      // desplegable ofrece uno u otro según lo que tenga cargado el usuario.
+      if (nombreImpreso) {
+        const candidatos = [u.formName, `${u.firstName ?? ""} ${u.lastName ?? ""}`].map(norm);
+        if (!candidatos.includes(norm(nombreImpreso))) return null;
+      }
+      return signatureBuffer(u.signatureUrl);
     } catch { return null; }
   };
 
@@ -142,9 +168,17 @@ export async function loadServiceRequestPdfContext(
 
     // Firmas de la tramitación: cada paso lleva la de quien lo ejecutó, y sólo
     // si el paso ya ocurrió (aprobadoAt / autorizadoAt).
-    solicitaSignatureBuffer = await firmaDe(sr.createdByUserId);
-    apruebaSignatureBuffer  = sr.aprobadoAt   ? await firmaDe(sr.aprobadoByUserId)   : null;
-    autorizaSignatureBuffer = sr.autorizadoAt ? await firmaDe(sr.autorizadoByUserId) : null;
+    //
+    // SOLICITA sale de solicitaByUserId. Las SS anteriores a ese campo lo tienen
+    // en null: ahí se cae al creador, pero sólo si el nombre impreso es el suyo
+    // — es lo que evita repetir el bug de la firma ajena.
+    const solicitaNombre = sr.solicitaByName ?? createdByFormName ?? createdByName;
+    solicitaSignatureBuffer = sr.status !== "DRAFT"
+      ? (await firmaDe(sr.solicitaByUserId, solicitaNombre)
+        ?? await firmaDe(sr.createdByUserId, solicitaNombre))
+      : null;
+    apruebaSignatureBuffer  = sr.aprobadoAt   ? await firmaDe(sr.aprobadoByUserId, sr.aprobadoByName)     : null;
+    autorizaSignatureBuffer = sr.autorizadoAt ? await firmaDe(sr.autorizadoByUserId, sr.autorizadoByName) : null;
   }
 
   return {

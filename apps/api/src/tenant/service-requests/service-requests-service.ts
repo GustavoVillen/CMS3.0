@@ -95,25 +95,31 @@ export interface UpdateServiceRequestInput extends CreateServiceRequestInput {
   // Cambiar el nombre NO avanza el estado ni estampa la fecha: la tramitación la
   // siguen moviendo Solicitar / Aprobar / Autorizar. Esto sólo dice quién firmó
   // en el formulario de papel.
+  // El nombre viaja siempre con SU usuario: es el que le da la firma al PDF. Si
+  // el nombre cambia y el usuario no, el documento controlado termina mostrando
+  // la firma de una persona debajo del nombre de otra.
   solicitaByName?: string | null;
+  solicitaByUserId?: string | null;
   aprobadoByName?: string | null;
+  aprobadoByUserId?: string | null;
   autorizadoByName?: string | null;
+  autorizadoByUserId?: string | null;
 }
 
 /**
- * Los tres nombres de la tramitación, que sólo el admin puede corregir, y cómo
- * se sabe que ese paso YA SE CUMPLIÓ.
+ * Los tres pasos de la tramitación que sólo el admin puede corregir: qué campos
+ * los representan y cómo se sabe que ese paso YA SE CUMPLIÓ.
  *
  * Corregir es reemplazar una firma existente, no crearla: si el paso no pasó, no
  * hay nada que corregir. Sin este chequeo, un PATCH podría dejar asentado "quién
  * autorizó" en una SS que nadie autorizó — exactamente el registro que una
  * auditoría busca. La tramitación sólo la avanzan submit/approve/authorize.
  */
-const SIGNATURE_NAME_FIELDS = {
-  solicitaByName:   { step: "Solicita", done: (sr: any) => sr.status !== "DRAFT" },
-  aprobadoByName:   { step: "Aprueba",  done: (sr: any) => !!sr.aprobadoAt },
-  autorizadoByName: { step: "Autoriza", done: (sr: any) => !!sr.autorizadoAt },
-} as const;
+const SIGNATURE_STEPS = [
+  { step: "SOLICITA", label: "solicita", nameField: "solicitaByName",   idField: "solicitaByUserId",   done: (sr: any) => sr.status !== "DRAFT" },
+  { step: "APRUEBA",  label: "aprueba",  nameField: "aprobadoByName",   idField: "aprobadoByUserId",   done: (sr: any) => !!sr.aprobadoAt },
+  { step: "AUTORIZA", label: "autoriza", nameField: "autorizadoByName", idField: "autorizadoByUserId", done: (sr: any) => !!sr.autorizadoAt },
+] as const;
 
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 // No hay sistema de permisos en el proyecto: son checks ad-hoc por servicio
@@ -519,27 +525,41 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
   // Los nombres de la tramitación son la evidencia de quién firmó cada paso: los
   // corrige el admin y nadie más. Se auditan aparte porque tocarlos no es editar
   // un campo del formulario, es reescribir una firma.
-  const signatures: Record<string, string | null> = {};
-  for (const [field, rule] of Object.entries(SIGNATURE_NAME_FIELDS)) {
-    const incoming = (payload as Record<string, unknown>)[field];
-    if (incoming === undefined) continue;
-    const value = normalizeOptionalText(incoming);
-    if (value === ((current as any)[field] ?? null)) continue;
-    if (!rule.done(current)) {
-      throw new RouteError(
-        409,
-        "STEP_NOT_REACHED",
-        `No se puede asentar quién ${rule.step.toLowerCase()} una solicitud que todavía no llegó a ese paso.`,
-      );
-    }
-    signatures[field] = value;
-  }
-  if (Object.keys(signatures).length > 0 && session.user.role !== "TENANT_ADMIN") {
+  const body = payload as Record<string, unknown>;
+  // El gate de rol va ANTES de mirar los valores: quien no es admin no debe poder
+  // ni sondear qué firmas hay o quién es elegible probando errores distintos.
+  const tocaFirmas = SIGNATURE_STEPS.some(
+    r => body[r.nameField] !== undefined || body[r.idField] !== undefined);
+  if (tocaFirmas && session.user.role !== "TENANT_ADMIN") {
     throw new RouteError(
       403,
       "FORBIDDEN",
       "Sólo un administrador puede corregir los nombres de la tramitación.",
     );
+  }
+
+  const signatures: Record<string, string | null> = {};
+  for (const rule of SIGNATURE_STEPS) {
+    if (body[rule.nameField] === undefined) continue;
+    const nombre = normalizeOptionalText(body[rule.nameField]);
+    // El usuario acompaña al nombre. Si el cliente manda sólo el nombre, el
+    // usuario queda en null a propósito: mejor una línea en blanco para firmar a
+    // mano que la firma de otra persona.
+    const userId = normalizeOptionalText(body[rule.idField]);
+    const mismoNombre = nombre === ((current as any)[rule.nameField] ?? null);
+    const mismoUserId = userId === ((current as any)[rule.idField] ?? null);
+    if (mismoNombre && mismoUserId) continue;
+
+    if (!rule.done(current)) {
+      throw new RouteError(
+        409,
+        "STEP_NOT_REACHED",
+        `No se puede asentar quién ${rule.label} una solicitud que todavía no llegó a ese paso.`,
+      );
+    }
+    if (userId) await assertSignerEligible(current, rule.step, userId);
+    signatures[rule.nameField] = nombre;
+    signatures[rule.idField] = userId;
   }
 
   const updated = await (prisma as any).serviceRequest.update({
@@ -586,6 +606,12 @@ export async function deleteServiceRequest(session: TenantAccessSession, id: str
 export interface SubmitInput {
   /** Quién solicita. Es el nombre que la hoja de ruta imprime en "Solicitud creada". */
   name?: string | null;
+  /**
+   * Quién solicita, como usuario. De ahí sale la firma del PDF. Sólo lo manda un
+   * TENANT_ADMIN, que es el único que elige a otra persona; el resto solicita en
+   * nombre propio.
+   */
+  onBehalfUserId?: string | null;
   /** Fechar la solicitud en otro día (sólo TENANT_ADMIN) — SS de papel o corrección. */
   actionDate?: string | Date | null;
 }
@@ -616,11 +642,24 @@ export async function submitServiceRequest(session: TenantAccessSession, id: str
     ? parseOptionalDate(payload.actionDate, "actionDate")
     : null;
 
+  // QUIÉN solicita, como usuario: de ahí sale la firma del PDF. Sólo el admin
+  // elige a otro; el resto solicita en nombre propio. Sin esto el PDF estampaba
+  // la firma de quien CREÓ el registro debajo del nombre del solicitante.
+  let solicitaByUserId: string = session.user.id;
+  if (session.user.role === "TENANT_ADMIN") {
+    const onBehalf = normalizeOptionalText(payload.onBehalfUserId);
+    if (onBehalf && onBehalf !== session.user.id) {
+      await assertSignerEligible(current, "SOLICITA", onBehalf);
+      solicitaByUserId = onBehalf;
+    }
+  }
+
   return (prisma as any).serviceRequest.update({
     where: { id },
     data: {
       status: "SOLICITADA",
       ...(solicita ? { solicitaByName: solicita } : {}),
+      solicitaByUserId,
       ...(openDate ? { openDate } : {}),
       updatedByUserId: session.user.id,
     },
@@ -770,6 +809,49 @@ export interface ApprovalInput {
  * Defensa en profundidad: el front ya ofrece sólo los elegibles de cada paso,
  * pero el que decide es esto.
  */
+/**
+ * ¿Puede esta persona figurar en ESTE paso? Tira si no.
+ *
+ * Un admin firma por cualquiera; el superintendente sólo si está a cargo de ESTE
+ * buque; el jefe de máquinas, además, sólo puede APROBAR. SOLICITAR no es una
+ * firma de autoridad: lo origina cualquiera embarcado (un técnico, el
+ * contramaestre), pero nunca el auditor externo, que es de sólo lectura.
+ *
+ * Lo comparten firmar (resolveSigner), solicitar y la corrección de nombres del
+ * admin: si cada uno tuviera su copia, aflojar una sería una puerta trasera.
+ */
+async function assertSignerEligible(
+  current: Record<string, any>,
+  step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
+  userId: string,
+): Promise<void> {
+  const prisma = getPrismaClient()!;
+  const membership = await (prisma as any).tenantMembership.findFirst({
+    where: { tenantId: current.tenantId, userId },
+    select: { userId: true, role: true, assignedVesselCodes: true },
+  });
+  if (!membership) {
+    throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
+  }
+  const enElBuque = Array.isArray(membership.assignedVesselCodes)
+    && membership.assignedVesselCodes.includes(current.vesselCode);
+  const eligible = membership.role === "TENANT_ADMIN"
+    || (step === "SOLICITA" && enElBuque && membership.role !== "AUDITOR_READONLY")
+    || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
+    || (step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
+  if (!eligible) {
+    throw new RouteError(
+      403,
+      "NOT_ELIGIBLE_APPROVER",
+      step === "SOLICITA"
+        ? "Quien solicita tiene que estar asignado a este buque."
+        : step === "APRUEBA"
+          ? "Sólo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
+          : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
+    );
+  }
+}
+
 async function resolveSigner(
   session: TenantAccessSession,
   current: Record<string, any>,
@@ -780,32 +862,9 @@ async function resolveSigner(
   let actionAt = new Date();
   if (session.user.role !== "TENANT_ADMIN") return { signerUserId, actionAt };
 
-  const prisma = getPrismaClient()!;
   const onBehalf = normalizeOptionalText(payload.onBehalfUserId);
   if (onBehalf && onBehalf !== session.user.id) {
-    const membership = await (prisma as any).tenantMembership.findFirst({
-      where: { tenantId: current.tenantId, userId: onBehalf },
-      select: { userId: true, role: true, assignedVesselCodes: true },
-    });
-    if (!membership) {
-      throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
-    }
-    // Un admin firma por cualquiera; el superintendente sólo si está a cargo de
-    // ESTE buque; el jefe de máquinas, además, sólo puede APROBAR.
-    const enElBuque = Array.isArray(membership.assignedVesselCodes)
-      && membership.assignedVesselCodes.includes(current.vesselCode);
-    const eligible = membership.role === "TENANT_ADMIN"
-      || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
-      || (step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
-    if (!eligible) {
-      throw new RouteError(
-        403,
-        "NOT_ELIGIBLE_APPROVER",
-        step === "APRUEBA"
-          ? "Sólo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
-          : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
-      );
-    }
+    await assertSignerEligible(current, step, onBehalf);
     signerUserId = onBehalf;
   }
   const d = parseOptionalDate(payload.actionDate, "actionDate");
