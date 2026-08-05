@@ -1,8 +1,9 @@
 // Solicitudes de Servicio (SS) — pedidos de servicio externo (un taller).
 //
-// Una SS SÓLO se abre desde una OT abierta, así que esta pantalla NO tiene botón
-// "Nueva SS": es una vista de seguimiento (compras / superintendencia). Para
-// crear una, hay que entrar a la OT correspondiente.
+// Una SS SÓLO se abre desde una OT (viva: planificada, en curso, en espera o
+// diferida), así que esta pantalla NO tiene botón "Nueva SS": es una vista de
+// seguimiento (compras / superintendencia). Para crear una, hay que entrar a la
+// OT correspondiente.
 //
 // Flujo: Borrador → Solicitada → Aprobada → Autorizada → En ejecución → Completada.
 // Autorizar está restringido a tierra (Superintendente técnico / DPA): es el
@@ -11,7 +12,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2 } from "lucide-react";
+import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2, Ban } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
@@ -19,6 +20,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { FormModal } from "../components/FormModal";
+import { AlertDialog } from "../components/AlertDialog";
 import { useAuth } from "../lib/auth";
 import { printServiceRequest } from "../lib/print-work-order";
 
@@ -95,6 +97,9 @@ const CAN_APPROVE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_
 
 /** Estados terminales: la SS ya no se edita (mismo criterio que record-lock). */
 const LOCKED_STATUSES = ["COMPLETED", "CANCELLED", "REJECTED"];
+
+/** Valor centinela del select de taller: "no está en el catálogo". */
+const OTRO_TALLER = "__OTRO__";
 
 /** SOLICITUD DE COMPRAS del formulario — se pueden marcar varias. */
 const PURCHASE_KINDS = ["NORMAL", "AFECTA SEGURIDAD", "AFECTA SERVICIO"];
@@ -962,6 +967,124 @@ function ReceiveServiceModal({ onClose, onConfirm, busy }: {
   );
 }
 
+/**
+ * CANCELAR una SS. El pedido se da de baja pero el registro queda con su motivo:
+ * es lo contrario de Eliminar. Sirve en cualquier estado vivo —incluso ya
+ * autorizada o en el taller—, porque un servicio se cae también después de
+ * firmado (el buque zarpó, el taller no vino, se resolvió a bordo).
+ *
+ * "Cancelar" y no "anular": es la palabra que ya usa el estado CANCELLED en los
+ * chips y en la etiqueta de la SS. Dos palabras para lo mismo confunden.
+ *
+ * El motivo se exige acá aunque el backend lo acepte vacío: una SS cancelada sin
+ * explicación no le sirve a nadie en una auditoría.
+ */
+function CancelServiceRequestModal({ code, busy, onClose, onConfirm }: {
+  code: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [alerta, setAlerta] = useState<string | null>(null);
+
+  const confirmar = async () => {
+    if (!motivo.trim()) { setAlerta("Indicá el motivo de la cancelación."); return; }
+    try {
+      await onConfirm(motivo.trim());
+    } catch (e) {
+      setAlerta(e instanceof Error ? e.message : "No se pudo cancelar la solicitud.");
+    }
+  };
+
+  return (
+    <>
+      <FormModal
+        title="Cancelar solicitud"
+        subtitle={code}
+        onClose={onClose}
+        footer={
+          <>
+            <button type="button" onClick={onClose}
+              className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] text-text-industrial/60">
+              Volver
+            </button>
+            <button type="button" onClick={() => { void confirmar(); }} disabled={busy}
+              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold disabled:opacity-50">
+              {busy ? "Cancelando…" : "Cancelar solicitud"}
+            </button>
+          </>
+        }
+      >
+        <p className="text-[11px] text-text-industrial/60">
+          La solicitud queda cancelada y deja de tramitarse. El registro no se borra: sigue
+          visible con el motivo, para que quede el antecedente.
+        </p>
+        <div>
+          <label className={labelCls}>Motivo de la cancelación</label>
+          <textarea className={inputCls + " min-h-[64px] resize-y"} value={motivo} autoFocus
+            onChange={e => setMotivo(e.target.value)}
+            placeholder="Ej. El trabajo se resolvió a bordo, no hace falta el taller" />
+        </div>
+      </FormModal>
+      {alerta && <AlertDialog message={alerta} onClose={() => setAlerta(null)} />}
+    </>
+  );
+}
+
+/**
+ * ELIMINAR una SS. Sólo en borrador: es deshacer una carga equivocada, no un
+ * paso del flujo. Una vez solicitada hay firmas de por medio y lo que
+ * corresponde es cancelarla (queda el antecedente).
+ */
+function DeleteServiceRequestModal({ code, busy, onClose, onConfirm }: {
+  code: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [alerta, setAlerta] = useState<string | null>(null);
+
+  const confirmar = async () => {
+    try {
+      await onConfirm();
+    } catch (e) {
+      setAlerta(e instanceof Error ? e.message : "No se pudo eliminar la solicitud.");
+    }
+  };
+
+  return (
+    <>
+      <FormModal
+        title="Eliminar solicitud"
+        subtitle={code}
+        onClose={onClose}
+        footer={
+          <>
+            <button type="button" onClick={onClose}
+              className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] text-text-industrial/60">
+              Volver
+            </button>
+            <button type="button" onClick={() => { void confirmar(); }} disabled={busy}
+              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold disabled:opacity-50">
+              {busy ? "Eliminando…" : "Eliminar"}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-industrial/80">
+          Se elimina el borrador <span className="font-mono font-bold">{code}</span> y deja de
+          aparecer en la lista. No se puede deshacer.
+        </p>
+        <p className="text-[11px] text-text-industrial/50">
+          Si la solicitud ya se tramitó, en vez de eliminarla cancelala: así queda el antecedente.
+        </p>
+      </FormModal>
+      {alerta && <AlertDialog message={alerta} onClose={() => setAlerta(null)} />}
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Modal
 // ---------------------------------------------------------------------------
@@ -982,6 +1105,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [receiving, setReceiving] = useState(false);
   // Aviso posterior a "Enviar a Proveedor" (PDF ya generado).
   const [sentNotice, setSentNotice] = useState(false);
+  // Bajas: anular (queda el registro) o eliminar el borrador (no queda nada).
+  const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // Paso de tramitación abierto: cada uno pide quién firma y con qué fecha.
   const [tramita, setTramita] = useState<"SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
   const canApprove = CAN_APPROVE_ROLES.includes(role);
@@ -994,10 +1120,27 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [description, setDescription] = useState(sr.description ?? "");
   const [causes, setCauses] = useState(sr.causes ?? "");
   const [tallerNotes, setTallerNotes] = useState(sr.tallerNotes ?? "");
+  const [providerId, setProviderId] = useState(sr.providerId ?? "");
   const [compras, setCompras] = useState<string[]>(sr.purchaseRequestKinds ?? []);
   const [capitan, setCapitan] = useState(sr.capitanName ?? "");
   const [jefeMaq, setJefeMaq] = useState(sr.jefeMaquinasName ?? "");
   const [saving, setSaving] = useState(false);
+
+  // TALLER QUE CONCURRE — se elige del catálogo de proveedores (mismo patrón que
+  // el "Tercerizado" del formulario REGI-OPE-26.3 en la OT). Escribirlo a mano
+  // dejaba el dato suelto: no se podía filtrar por taller ni evaluar al
+  // proveedor. El texto libre sigue existiendo para el taller que todavía no
+  // está en el catálogo, pero ahora es la excepción y no la única opción.
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
+  // Arranca en "otra empresa" si la SS ya se guardó con un nombre escrito a mano.
+  const [otroTaller, setOtroTaller] = useState(!sr.providerId && !!sr.tallerNotes);
+  React.useEffect(() => {
+    let cancelled = false;
+    api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?status=ACTIVE`)
+      .then(r => { if (!cancelled) setProviders(r.items ?? []); })
+      .catch(() => { if (!cancelled) setProviders([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Al abrir, refrescar el ESTADO real de la SS. La lista se carga una sola vez;
   // una cascada (autorizar la OT arrastra sus SS a AUTORIZADA) pudo haber avanzado
@@ -1021,6 +1164,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     description !== (sr.description ?? "") ||
     causes !== (sr.causes ?? "") ||
     tallerNotes !== (sr.tallerNotes ?? "") ||
+    providerId !== (sr.providerId ?? "") ||
     capitan !== (sr.capitanName ?? "") ||
     jefeMaq !== (sr.jefeMaquinasName ?? "") ||
     compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|");
@@ -1028,8 +1172,13 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const toggleCompra = (v: string) =>
     setCompras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
 
+  // providerId y tallerNotes son excluyentes: el taller sale del catálogo o se
+  // escribe a mano, nunca las dos cosas. Se manda el par completo (uno con
+  // valor, el otro vacío) para que cambiar de opción borre la anterior.
   const patchPayload = () => ({
-    description, causes, tallerNotes,
+    description, causes,
+    tallerNotes: otroTaller ? tallerNotes : "",
+    providerId: otroTaller ? "" : providerId,
     purchaseRequestKinds: compras,
     capitanName: capitan,
     jefeMaquinasName: jefeMaq,
@@ -1131,6 +1280,21 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     }
   };
 
+  /**
+   * Eliminar el borrador. No pasa por `act`: es un DELETE y no hay nada que
+   * guardar antes — lo que esté a medio tipear se va con el registro.
+   */
+  const removeDraft = async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.delete(`/app/pms/service-requests/${sr.id}`);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /** Los botones del modal muestran el error acá; los de paso, en su propio modal. */
   const runAct = (path: string, body?: unknown) => {
     void act(path, body).catch(e =>
@@ -1199,17 +1363,36 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
 
           <div>
             <label className={labelCls}>Taller que concurre</label>
-            {/* El taller puede venir del catálogo (providerId → providerName) o
-                como texto libre (tallerNotes). Cuando no hay texto libre se
-                muestra el nombre del catálogo, para no dejar el campo vacío en
-                las SS donde el taller se eligió de la lista. */}
-            <input
+            {/* Se elige del catálogo de proveedores (providerId). El texto libre
+                (tallerNotes) queda para el taller que todavía no está cargado:
+                el resto del sistema —PDF incluido— lo trata igual. */}
+            <select
               className={inputCls}
-              value={tallerNotes || (sr.providerName ?? "")}
+              value={otroTaller ? OTRO_TALLER : providerId}
               disabled={!editable}
-              onChange={e => setTallerNotes(e.target.value)}
-              placeholder="Ej. Hidraulica Brasil"
-            />
+              onChange={e => {
+                if (e.target.value === OTRO_TALLER) { setOtroTaller(true); setProviderId(""); return; }
+                setOtroTaller(false);
+                setTallerNotes("");
+                setProviderId(e.target.value);
+              }}
+            >
+              <option value="">Seleccionar taller / proveedor…</option>
+              {providers.map(p => (
+                <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+              ))}
+              <option value={OTRO_TALLER}>Otro taller (no está en la lista)…</option>
+            </select>
+            {otroTaller && (
+              <input
+                className={inputCls + " mt-2"}
+                value={tallerNotes}
+                disabled={!editable}
+                onChange={e => setTallerNotes(e.target.value)}
+                placeholder="Ej. Hidraulica Brasil"
+                autoFocus
+              />
+            )}
           </div>
 
           {/* SOLICITUD DE COMPRAS — admite varias marcadas a la vez, como el papel */}
@@ -1369,6 +1552,26 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
               <XCircle className="w-3.5 h-3.5" /> Rechazar
             </button>
           )}
+
+          {/* Bajas, separadas del flujo normal: se van a la derecha para no
+              quedar al lado de "Solicitar" / "Aprobar" y clickearse por error.
+              Eliminar sólo existe en borrador; después, lo que corresponde es
+              cancelar (deja el antecedente con su motivo). */}
+          <div className="ml-auto flex flex-wrap gap-2">
+            {sr.status === "DRAFT" && (
+              <button onClick={() => setDeleting(true)} disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial/60 hover:text-red-600 hover:border-red-500/30 disabled:opacity-50">
+                <Trash2 className="w-3.5 h-3.5" /> Eliminar
+              </button>
+            )}
+
+            {editable && (
+              <button onClick={() => setCancelling(true)} disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial/60 hover:text-red-600 hover:border-red-500/30 disabled:opacity-50">
+                <Ban className="w-3.5 h-3.5" /> Cancelar SS
+              </button>
+            )}
+          </div>
         </div>
 
         {actionError && (
@@ -1383,6 +1586,22 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           busy={busy}
           onClose={() => setReceiving(false)}
           onConfirm={async v => { await act("complete", v); setReceiving(false); }}
+        />
+      )}
+      {cancelling && (
+        <CancelServiceRequestModal
+          code={sr.serviceRequestCode}
+          busy={busy}
+          onClose={() => setCancelling(false)}
+          onConfirm={async reason => { await act("cancel", { reason }); setCancelling(false); }}
+        />
+      )}
+      {deleting && (
+        <DeleteServiceRequestModal
+          code={sr.serviceRequestCode}
+          busy={busy}
+          onClose={() => setDeleting(false)}
+          onConfirm={async () => { await removeDraft(); setDeleting(false); }}
         />
       )}
       {tramita && (

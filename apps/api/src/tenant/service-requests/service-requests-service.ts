@@ -38,12 +38,12 @@ import { assertNotLocked } from "../../common/record-lock";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
 import { buildHojaRuta } from "./hoja-ruta";
 
-// Estados de OT desde los que se puede pedir un servicio externo. DEFERRED queda
-// fuera a propósito: el trabajo se postergó formalmente. assertNotLocked() no
-// alcanza acá — sólo bloquea CLOSED/CANCELLED y dejaría pasar DEFERRED.
-// Además de estar abierta, la OT tiene que estar AUTORIZADA (ver
-// createServiceRequestForWorkOrder).
-const WO_OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD"];
+// Estados de OT desde los que se puede pedir un servicio externo. DEFERRED entra
+// a pedido del cliente: diferir el trabajo no impide gestionar el servicio del
+// taller — de hecho muchas veces la OT se difiere JUSTAMENTE porque el trabajo
+// depende de un tercero, y esa gestión hay que poder arrancarla igual. Sólo
+// quedan afuera CLOSED y CANCELLED: ahí la OT ya no admite trabajo nuevo.
+const WO_OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
 /**
  * DEPARTAMENTO de la SS (Cubierta/Máquinas/Barcaza/Otros) a partir del SISTEMA
@@ -415,7 +415,7 @@ export async function createServiceRequestForWorkOrder(
     throw new RouteError(
       409,
       "WO_NOT_OPEN",
-      "Una solicitud de servicio sólo puede abrirse desde una orden de trabajo abierta.",
+      "Una solicitud de servicio no puede abrirse desde una orden de trabajo cerrada o cancelada.",
     );
   }
   // Antes se exigía que la OT estuviera AUTORIZADA. Se quitó a pedido del

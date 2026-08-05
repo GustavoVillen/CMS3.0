@@ -48,8 +48,10 @@ const PTW_STATUS_COLOR: Record<string, string> = {
 // ── Solicitudes de Servicio (SS) vinculadas ──
 // Una SS es el pedido de un servicio externo (un taller) que cuelga de una OT
 // abierta. No es un sinónimo de OT: es una entidad aparte con su propio flujo.
-// Sólo se puede abrir mientras la OT esté viva (no diferida/cerrada/cancelada).
-const WO_OPEN_STATUSES_FOR_SS = ["PLANNED", "IN_PROGRESS", "ON_HOLD"];
+// Sólo se puede abrir mientras la OT esté viva (no cerrada/cancelada). Una OT
+// DIFERIDA sí admite SS: muchas veces se difiere porque el trabajo depende de un
+// taller externo, y esa gestión tiene que poder arrancar igual.
+const WO_OPEN_STATUSES_FOR_SS = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
 const SS_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Borrador", SOLICITADA: "Solicitada", APROBADA: "Aprobada",
@@ -2367,8 +2369,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </section>
 
           {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
-          {/* Una SS es el pedido de un servicio externo (un taller). Sólo se abre
-              desde una OT abierta, por eso el botón depende del estado de la OT. */}
+          {/* Una SS es el pedido de un servicio externo (un taller). No se abre
+              desde una OT cerrada o cancelada, por eso el botón depende del
+              estado de la OT. Una OT diferida sí admite SS. */}
           <section className="space-y-3">
             <PhaseHeader
               n={5}
@@ -2408,7 +2411,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 queda es que la OT no esté abierta. */}
             {!canOpenServiceRequest && (
               <p className="text-[11px] text-text-industrial/50 italic">
-                Una solicitud de servicio sólo puede abrirse mientras la {woTerms.abbr} esté abierta.
+                Una solicitud de servicio no puede abrirse desde una {woTerms.abbr} cerrada o cancelada.
               </p>
             )}
 
