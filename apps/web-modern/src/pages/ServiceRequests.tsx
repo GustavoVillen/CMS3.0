@@ -1126,6 +1126,14 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [jefeMaq, setJefeMaq] = useState(sr.jefeMaquinasName ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Nombres de la TRAMITACION. Sólo el admin los edita (el backend lo vuelve a
+  // verificar): son la firma de quién pidió, aprobó y autorizó el gasto. Se
+  // corrigen para que el registro coincida con el formulario de papel; cambiar
+  // el nombre NO avanza el estado ni pone la fecha.
+  const [firmaSolicita, setFirmaSolicita] = useState(sr.solicitaByName ?? "");
+  const [firmaAprueba, setFirmaAprueba] = useState(sr.aprobadoByName ?? "");
+  const [firmaAutoriza, setFirmaAutoriza] = useState(sr.autorizadoByName ?? "");
+
   // TALLER QUE CONCURRE — se elige del catálogo de proveedores (mismo patrón que
   // el "Tercerizado" del formulario REGI-OPE-26.3 en la OT). Escribirlo a mano
   // dejaba el dato suelto: no se podía filtrar por taller ni evaluar al
@@ -1167,7 +1175,14 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     providerId !== (sr.providerId ?? "") ||
     capitan !== (sr.capitanName ?? "") ||
     jefeMaq !== (sr.jefeMaquinasName ?? "") ||
-    compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|");
+    compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|") ||
+    // Sólo cuentan si el usuario es admin: para el resto los campos ni se
+    // muestran, y un dirty fantasma dejaría el botón Guardar siempre encendido.
+    (isAdmin && (
+      firmaSolicita !== (sr.solicitaByName ?? "") ||
+      firmaAprueba !== (sr.aprobadoByName ?? "") ||
+      firmaAutoriza !== (sr.autorizadoByName ?? "")
+    ));
 
   const toggleCompra = (v: string) =>
     setCompras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -1182,6 +1197,13 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
     purchaseRequestKinds: compras,
     capitanName: capitan,
     jefeMaquinasName: jefeMaq,
+    // Las firmas viajan sólo si el que edita es admin: mandarlas desde otro rol
+    // haría que el backend devuelva 403 y se pierda todo el resto del guardado.
+    ...(isAdmin ? {
+      solicitaByName: firmaSolicita,
+      aprobadoByName: firmaAprueba,
+      autorizadoByName: firmaAutoriza,
+    } : {}),
   });
 
   // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
@@ -1419,14 +1441,34 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
             </div>
           </div>
 
-          {/* TRAMITACION — sólo lectura, igual que en la OT: cada paso se registra
-              al aprobar/autorizar, y ahí mismo el admin elige quién firma y con
-              qué fecha (ver ApprovalModal). No hay edición posterior. */}
+          {/* TRAMITACION. Cada paso se registra al solicitar/aprobar/autorizar, y
+              ahí mismo el admin elige quién firma y con qué fecha (ver
+              ApprovalModal). Además, el ADMIN puede corregir los nombres acá:
+              hace falta cuando la SS se carga desde el papel y los que firmaron
+              no son los que operaron el sistema. Las FECHAS no se editan: las
+              pone el paso real. */}
           <div className="rounded-xl border border-fg/10 p-3 space-y-2">
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold">Tramitación</p>
-            <Row label="Solicita" name={sr.solicitaByName ?? "—"} at={sr.openDate} />
-            <Row label="Aprueba" name={sr.aprobadoByName} at={sr.aprobadoAt} />
-            <Row label="Autoriza" name={sr.autorizadoByName} at={sr.autorizadoAt} />
+            {isAdmin && editable ? (
+              <>
+                <EditableRow label="Solicita" value={firmaSolicita} onChange={setFirmaSolicita}
+                  at={sr.openDate} placeholder="Ej. J.M. CRISTHIAN VERON" />
+                <EditableRow label="Aprueba" value={firmaAprueba} onChange={setFirmaAprueba}
+                  at={sr.aprobadoAt} placeholder="Ej. CAP. WILLIAM RIQUELME" />
+                <EditableRow label="Autoriza" value={firmaAutoriza} onChange={setFirmaAutoriza}
+                  at={sr.autorizadoAt} placeholder="Ej. SUP. TEC. ..." />
+                <p className="text-[10px] text-text-industrial/40 italic">
+                  Corrección administrativa: escribir un nombre no aprueba ni autoriza la
+                  solicitud, sólo deja asentado quién firmó el formulario.
+                </p>
+              </>
+            ) : (
+              <>
+                <Row label="Solicita" name={sr.solicitaByName ?? "—"} at={sr.openDate} />
+                <Row label="Aprueba" name={sr.aprobadoByName} at={sr.aprobadoAt} />
+                <Row label="Autoriza" name={sr.autorizadoByName} at={sr.autorizadoAt} />
+              </>
+            )}
 
             {sr.status === "REJECTED" && sr.rechazoReason && (
               <p className="text-[11px] text-red-600 dark:text-red-400">Rechazada: {sr.rechazoReason}</p>
@@ -1653,6 +1695,32 @@ function Row({ label, name, at }: { label: string; name: string | null; at: stri
       <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
       <span className="flex-1 min-w-0 truncate text-text-industrial">{name || "—"}</span>
       <span className="shrink-0 text-text-industrial/40">{at ? fmtDate(at) : ""}</span>
+    </div>
+  );
+}
+
+/**
+ * Misma fila de la tramitación pero con el nombre editable — sólo para el admin.
+ * La FECHA sigue siendo de sólo lectura a propósito: la estampa el paso real
+ * (Solicitar / Aprobar / Autorizar), no se escribe a mano acá.
+ */
+function EditableRow({ label, value, onChange, at, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  at: string | null;
+  placeholder: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-[11px]">
+      <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
+      <input
+        className={cellCls + " flex-1 min-w-0"}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <span className="w-16 shrink-0 text-right text-text-industrial/40">{at ? fmtDate(at) : ""}</span>
     </div>
   );
 }

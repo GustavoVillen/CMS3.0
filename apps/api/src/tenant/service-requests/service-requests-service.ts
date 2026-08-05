@@ -86,7 +86,22 @@ export interface CreateServiceRequestInput {
   jefeMaquinasName?: string | null;
 }
 
-export interface UpdateServiceRequestInput extends CreateServiceRequestInput {}
+export interface UpdateServiceRequestInput extends CreateServiceRequestInput {
+  // ── Nombres de la TRAMITACION ──
+  // Corrección administrativa de quién figura en cada paso del papel. SÓLO
+  // TENANT_ADMIN (ver updateServiceRequest): son la evidencia de quién pidió,
+  // quién aprobó y quién comprometió el gasto con el tercero.
+  //
+  // Cambiar el nombre NO avanza el estado ni estampa la fecha: la tramitación la
+  // siguen moviendo Solicitar / Aprobar / Autorizar. Esto sólo dice quién firmó
+  // en el formulario de papel.
+  solicitaByName?: string | null;
+  aprobadoByName?: string | null;
+  autorizadoByName?: string | null;
+}
+
+/** Los tres nombres de la tramitación, que sólo el admin puede corregir. */
+const SIGNATURE_NAME_FIELDS = ["solicitaByName", "aprobadoByName", "autorizadoByName"] as const;
 
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 // No hay sistema de permisos en el proyecto: son checks ad-hoc por servicio
@@ -489,10 +504,48 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
     await assertProviderInTenant(prisma, (current as any).tenantId, payload.providerId);
   }
 
-  return (prisma as any).serviceRequest.update({
+  // Los nombres de la tramitación son la evidencia de quién firmó cada paso: los
+  // corrige el admin y nadie más. Se auditan aparte porque tocarlos no es editar
+  // un campo del formulario, es reescribir una firma.
+  const signatures: Record<string, string | null> = {};
+  for (const field of SIGNATURE_NAME_FIELDS) {
+    if (payload[field] === undefined) continue;
+    const value = normalizeOptionalText(payload[field]);
+    if (value === ((current as any)[field] ?? null)) continue;
+    signatures[field] = value;
+  }
+  if (Object.keys(signatures).length > 0 && session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(
+      403,
+      "FORBIDDEN",
+      "Sólo un administrador puede corregir los nombres de la tramitación.",
+    );
+  }
+
+  const updated = await (prisma as any).serviceRequest.update({
     where: { id },
-    data: { ...writableFields(payload), updatedByUserId: session.user.id },
+    data: { ...writableFields(payload), ...signatures, updatedByUserId: session.user.id },
   });
+
+  if (Object.keys(signatures).length > 0) {
+    void publishAudit(prisma as any, {
+      tenantId: (current as any).tenantId,
+      actorUserId: session.user.id,
+      action: "SERVICE_REQUEST_SIGNATURES_EDITED",
+      entityType: "ServiceRequest",
+      entityId: id,
+      metadata: {
+        serviceRequestCode: (current as any).serviceRequestCode,
+        // Antes y después de cada nombre tocado: sin esto la auditoría dice que
+        // algo cambió pero no qué decía la firma original.
+        changes: Object.fromEntries(
+          Object.entries(signatures).map(([f, to]) => [f, { from: (current as any)[f] ?? null, to }]),
+        ),
+      },
+    });
+  }
+
+  return updated;
 }
 
 export async function deleteServiceRequest(session: TenantAccessSession, id: string) {
