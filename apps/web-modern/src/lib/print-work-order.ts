@@ -78,7 +78,9 @@ function fileSafe(s: string | null | undefined): string {
  * Devuelve `true` si el PDF se generó y descargó. "Enviar a Proveedor" lo usa
  * para no avisar que el documento salió cuando en realidad falló.
  */
-export async function printServiceRequest(sr: { id: string; serviceRequestCode: string; title?: string | null }): Promise<boolean> {
+export async function printServiceRequest(
+  sr: { id: string; serviceRequestCode: string; title?: string | null; description?: string | null },
+): Promise<boolean> {
   const res = await fetch(`/app/pms/service-requests/${sr.id}/pdf`, {
     headers: getAuthHeaders(),
   });
@@ -89,8 +91,10 @@ export async function printServiceRequest(sr: { id: string; serviceRequestCode: 
     return false;
   }
 
-  // Nombre: "{codigo}-{titulo}.pdf" (ej. SS-74-M01-2026-Reparacion de bomba.pdf).
-  const title = fileSafe(sr.title);
+  // Nombre: "{codigo}-{servicio}.pdf" (ej. SS-74-M01-2026-Reparacion de bomba.pdf).
+  // El servicio es la DESCRIPCIÓN, igual que en pantalla y adentro del PDF;
+  // `sr.title` quedó congelado con el nombre que tenía la OT al crear la SS.
+  const title = fileSafe(sr.description || sr.title);
   await downloadResponse(res, `${sr.serviceRequestCode}${title ? `-${title}` : ""}.pdf`);
   return true;
 }

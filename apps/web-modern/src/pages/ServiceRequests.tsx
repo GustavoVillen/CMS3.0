@@ -100,6 +100,21 @@ const CAN_APPROVE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_
 /** Estados terminales: la SS ya no se edita (mismo criterio que record-lock). */
 const LOCKED_STATUSES = ["COMPLETED", "CANCELLED", "REJECTED"];
 
+/**
+ * Cómo se nombra una SS en pantalla: SIEMPRE la DESCRIPCIÓN DEL SERVICIO, que es
+ * el único campo que el usuario edita.
+ *
+ * `title` se copia de la OT al crear la SS y después queda congelado: si se
+ * edita la descripción (o se renombra la OT), la pantalla mostraba el texto
+ * viejo mientras el formulario y el PDF mostraban el nuevo. El PDF ya usaba este
+ * mismo orden (`description ?? title`); la pantalla no.
+ *
+ * `title` queda de reserva para las SS antiguas que puedan tener la descripción
+ * vacía.
+ */
+const srServicio = (sr: { title: string | null; description: string | null }) =>
+  sr.description || sr.title || "";
+
 /** Valor centinela del select de taller: "no está en el catálogo". */
 const OTRO_TALLER = "__OTRO__";
 
@@ -234,8 +249,8 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
         <span className="font-mono font-bold text-fg text-[10px]">{sr.serviceRequestCode}</span>
         <span className="text-[9px] font-bold text-text-industrial/40 shrink-0">{sr.vesselCode}</span>
       </div>
-      {(sr.title || sr.description) && (
-        <p className="text-xs text-fg font-medium line-clamp-2">{sr.title || sr.description}</p>
+      {srServicio(sr) && (
+        <p className="text-xs text-fg font-medium line-clamp-2">{srServicio(sr)}</p>
       )}
       {sr.workOrder?.assetName && (
         <p className="text-[10px] text-text-industrial/60 truncate" title={sr.workOrder.assetName}>
@@ -496,7 +511,7 @@ export function ServiceRequestsPage() {
          (workOrder.assetName), la SS no guarda assetId propio. */
       render: r => (
         <div className="space-y-0.5">
-          <span className="text-xs">{r.title || r.description || "—"}</span>
+          <span className="text-xs">{srServicio(r) || "—"}</span>
           {r.workOrder?.assetName && (
             <div className="text-[11px] text-text-industrial/60 truncate">{r.workOrder.assetName}</div>
           )}
@@ -706,7 +721,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   return (
     <FormModal
       title={title}
-      subtitle={`${sr.serviceRequestCode} · ${sr.title || sr.description || ""}`}
+      subtitle={`${sr.serviceRequestCode} · ${srServicio(sr)}`}
       onClose={onClose}
       error={error}
       footer={
@@ -1381,7 +1396,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
             {sr.workOrder?.assetName && (
               <p className="text-sm font-semibold text-fg truncate">{sr.workOrder.assetName}</p>
             )}
-            <p className="text-xs text-text-industrial/60 truncate">{sr.title || sr.description || "—"}</p>
+            {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
+                DEL SERVICIO son el mismo dato, no pueden decir cosas distintas. */}
+            <p className="text-xs text-text-industrial/60 truncate">{description || sr.title || "—"}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>

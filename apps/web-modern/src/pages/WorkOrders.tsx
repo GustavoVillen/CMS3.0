@@ -2435,7 +2435,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     className="cursor-pointer flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
                   >
                     <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
-                    <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.title || sr.description || "—"}</span>
+                    {/* La DESCRIPCIÓN manda: `title` se copia de la OT al crear la
+                        SS y queda congelado, así que muestra el texto viejo si
+                        después se edita la SS o se renombra la OT. */}
+                    <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.description || sr.title || "—"}</span>
                     {/* A quién se le pidió: el nombre del taller, no un id. */}
                     {sr.providerName && (
                       <span className="shrink-0 max-w-[30%] truncate text-[11px] font-semibold text-fg" title={sr.providerName}>
