@@ -1,5 +1,21 @@
 HISTORY.txt
 
+[2026-08-11] Permiso de trabajo: el PDF imprimía otra hora (+3) y un garabato
+Agent: Claude Opus 5
+- Reporte del usuario: se carga 08:00–18:00 y el PDF sale 11:00–21:00.
+- Causa: el proceso de la API corre en UTC. El navegador muestra la hora local
+  del buque, pero el PDF la formateaba con la hora del servidor: +3 en Paraguay.
+  Un permiso se firma y se cuelga a bordo, así que la hora TIENE que ser la de
+  abordo. Ahora se formatea con TenantSetting.timezone (mercurio =
+  America/Asuncion), con fallback a la hora del proceso si la zona está mal
+  cargada, para no tumbar el PDF por eso.
+- El símbolo raro entre las dos fechas de VALIDEZ era una flecha "→": la fuente
+  del PDF (Helvetica/WinAnsi) no la tiene. Reemplazada por "hasta".
+- Verificado con PTW-HW-M01-26-0002: pantalla 1:08 a. m. y PDF 1:08 a. m. (antes
+  4:08). VALIDEZ imprime "… hasta …". Datos de prueba revertidos.
+- PENDIENTE (mismo defecto, no tocado): el PDF de Medición de Tanques imprime
+  fecha y hora del reporte con la hora del servidor.
+
 [2026-08-03] AVANCES en grilla compacta, como Programación de trabajo
 Agent: Claude Opus 5
 - Pedido del usuario: mismo formato que PROGRAMACION DE TRABAJO, filas compactas.

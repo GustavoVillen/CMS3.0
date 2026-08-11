@@ -10,10 +10,6 @@ import { buildPermitChecklist } from "../../common/regulations/maritime";
  * (no basta con el registro electrónico). Diseñado A4, formato clásico de PTW marítimo.
  */
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-}
 function val(v: string | null | undefined): string {
   return v?.trim() ? String(v).trim() : "—";
 }
@@ -91,14 +87,16 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
   // Tenant logo
   let tenantLogoBuffer: Buffer | null = null;
   let tenantName: string | undefined;
+  let tenantTz: string | null = null;
   const prisma = getPrismaClient();
   if (prisma) {
     try {
       const tenantRow = await (prisma as any).tenant.findUnique({
         where: { slug: session.tenantSlug },
-        select: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true } } },
+        select: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, timezone: true } } },
       });
       tenantName = tenantRow?.settings?.displayName;
+      tenantTz = tenantRow?.settings?.timezone ?? null;
       tenantLogoBuffer = await resolveTenantLogo(
         session.tenantSlug,
         tenantRow?.settings?.logoUrl,
@@ -106,6 +104,28 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
       );
     } catch { /* non-blocking */ }
   }
+
+  /**
+   * Fecha y hora EN LA ZONA HORARIA DE LA EMPRESA.
+   *
+   * El servidor corre en UTC: formatear con la hora del proceso hacía que un
+   * permiso cargado de 08:00 a 18:00 saliera impreso de 11:00 a 21:00. El
+   * permiso se firma y se cuelga en el buque: la hora tiene que ser la de
+   * abordo, no la del servidor.
+   */
+  const fmt = (d: Date | string | null | undefined): string => {
+    if (!d) return "—";
+    const date = new Date(d);
+    try {
+      return date.toLocaleString("es-AR", {
+        dateStyle: "short", timeStyle: "short",
+        ...(tenantTz ? { timeZone: tenantTz } : {}),
+      });
+    } catch {
+      // Zona horaria mal cargada en la empresa: no se rompe el PDF por eso.
+      return date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+    }
+  };
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 40, info: { Title: permit.permitCode } });
@@ -203,7 +223,9 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     row("Inicio planeado", fmt(permit.plannedStart));
     row("Fin planeado", fmt(permit.plannedEnd));
     if (permit.validFrom || permit.validTo) {
-      row("Validez", `${fmt(permit.validFrom)}  →  ${fmt(permit.validTo)}`);
+      // "hasta" y no una flecha: la fuente del PDF (Helvetica/WinAnsi) no tiene
+      // el carácter → y salía un garabato en el papel.
+      row("Validez", `${fmt(permit.validFrom)}  hasta  ${fmt(permit.validTo)}`);
     }
 
     sectionTitle("Descripción del trabajo");
@@ -332,7 +354,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     // inferior es 40 → contenido 40..801). y=790 deja 11pt de respiro y NO
     // dispara la auto-paginación de pdfkit que ocurría con y=815.
     doc.fontSize(7).fillColor("#94a3b8")
-      .text(`Generado ${new Date().toLocaleString("es-AR")}  ·  ${permit.permitCode}`, 40, 790, { width: 515, align: "center" });
+      .text(`Generado ${fmt(new Date())}  ·  ${permit.permitCode}`, 40, 790, { width: 515, align: "center" });
 
     doc.end();
   });
