@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevAssetsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 
@@ -80,7 +81,7 @@ interface AssetRecord {
 }
 
 function canManageAssets(session: TenantAccessSession): boolean {
-  return session.user.role === "TENANT_ADMIN" || session.user.role === "FLEET_SUPERINTENDENT" || session.user.role === "MAINTENANCE_MANAGER";
+  return hasPermission(session, "asset.manage");
 }
 
 function ensureCanManageAssets(session: TenantAccessSession): void {

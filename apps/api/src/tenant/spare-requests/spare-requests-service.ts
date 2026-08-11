@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 export interface SpareRequestListFilters {
@@ -30,7 +31,7 @@ function canManage(session: TenantAccessSession): boolean {
 }
 
 function canApprove(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "FLEET_SUPERINTENDENT"].includes(session.user.role);
+  return hasPermission(session, "spareRequest.approve");
 }
 
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {

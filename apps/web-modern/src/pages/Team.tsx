@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, UserMinus, UserPlus, Users } from "lucide-react";
+import { Anchor, Check, Copy, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, UserMinus, UserPlus, Users } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -8,6 +8,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { RolePermissionsModal } from "../components/RolePermissionsModal";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 
@@ -50,6 +51,7 @@ const ALL_ROLES = [
   "TECHNICIAN_OPERATOR",
   "INSPECTOR_COMPLIANCE",
   "PROCUREMENT_STORE",
+  "HSE_MANAGER",
   "AUDITOR_READONLY",
 ];
 
@@ -62,6 +64,7 @@ const ROLE_LABEL_KEYS: Record<string, TranslationKey> = {
   TECHNICIAN_OPERATOR:  "role.technicianOperator",
   INSPECTOR_COMPLIANCE: "role.inspectorCompliance",
   PROCUREMENT_STORE:    "role.procurementStore",
+  HSE_MANAGER:          "role.hseManager",
   AUDITOR_READONLY:     "role.auditorReadonly",
 };
 
@@ -86,6 +89,7 @@ const ROLE_COLORS: Record<string, string> = {
   TECHNICIAN_OPERATOR:  "text-text-industrial/70",
   INSPECTOR_COMPLIANCE: "text-text-industrial/70",
   PROCUREMENT_STORE:    "text-text-industrial/70",
+  HSE_MANAGER:          "text-text-industrial/70",
   AUDITOR_READONLY:     "text-text-industrial/40",
 };
 
@@ -686,6 +690,7 @@ export const TeamPage: React.FC = () => {
   const roleLabels = useRoleLabels();
   const { user } = useAuth();
   const [showAdd, setShowAdd]       = useState(false);
+  const [showPerms, setShowPerms]   = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [reloadCount, setReloadCount] = useState(0);
 
@@ -739,13 +744,22 @@ export const TeamPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Users} title={t("page.team")} total={members.length} onReload={triggerReload}>
         {user?.role === "TENANT_ADMIN" && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110 transition-all"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Agregar
-          </button>
+          <>
+            <button
+              onClick={() => setShowPerms(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial text-xs font-bold hover:text-fg hover:border-accent/40 transition-all"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {t("team.rolePermissions")}
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110 transition-all"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Agregar
+            </button>
+          </>
         )}
       </PageHeader>
 
@@ -763,6 +777,10 @@ export const TeamPage: React.FC = () => {
 
       {showAdd && (
         <AddMemberModal onClose={() => setShowAdd(false)} onAdded={triggerReload} />
+      )}
+
+      {showPerms && (
+        <RolePermissionsModal roleLabels={roleLabels} onClose={() => setShowPerms(false)} />
       )}
 
       {editMember && (

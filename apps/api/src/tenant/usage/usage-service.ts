@@ -13,7 +13,9 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { getCachedTenantBySlug } from "../tenant-cache";
 
-// ── AI pricing (USD per million tokens) — hardcoded, updated when Anthropic changes prices ──
+// ── AI pricing (USD per million tokens) — hardcoded, updated cuando cambian los
+// precios de Anthropic o de Gemini. El tope mensual por tenant sale de esta tabla,
+// así que un modelo que falte acá se cobra al precio de respaldo (ver más abajo).
 // Source: https://www.anthropic.com/pricing  (last reviewed 2026-06-24)
 // cacheRead = 0.1x input ; cacheWrite (5min TTL) = 1.25x input.
 export const AI_PRICING: Record<string, { in: number; out: number; cacheRead: number; cacheWrite: number }> = {
@@ -34,6 +36,27 @@ export const AI_PRICING: Record<string, { in: number; out: number; cacheRead: nu
   "gemini-2.5-flash-lite":     { in: 0.10, out: 0.40, cacheRead: 0.01,  cacheWrite: 0 },
 };
 
+/**
+ * Precio de respaldo para un modelo que no está en AI_PRICING: el más caro de la
+ * tabla en cada concepto. Antes un modelo desconocido costaba USD 0, así que su
+ * gasto no contaba contra el tope mensual y la IA quedaba sin freno — ya pasó con
+ * claude-sonnet-5. Pasa igual si se escribe mal GEMINI_MODEL_FAST/DEEP en el .env
+ * o si se estrena un modelo sin cargarlo acá. Cobrar de más es recuperable
+ * (se corrige la tabla); cobrar cero deja el tope inservible.
+ */
+const FALLBACK_PRICING = (() => {
+  const rows = Object.values(AI_PRICING);
+  return {
+    in:         Math.max(...rows.map((p) => p.in)),
+    out:        Math.max(...rows.map((p) => p.out)),
+    cacheRead:  Math.max(...rows.map((p) => p.cacheRead)),
+    cacheWrite: Math.max(...rows.map((p) => p.cacheWrite)),
+  };
+})();
+
+/** Un aviso por modelo desconocido, no uno por llamada. */
+const warnedUnknownModels = new Set<string>();
+
 export function aiCostUsd(
   model: string,
   inputTokens: number,
@@ -41,8 +64,18 @@ export function aiCostUsd(
   cacheReadTokens: number = 0,
   cacheCreationTokens: number = 0,
 ): number {
-  const p = AI_PRICING[model];
-  if (!p) return 0;
+  let p = AI_PRICING[model];
+  if (!p) {
+    p = FALLBACK_PRICING;
+    if (model && !warnedUnknownModels.has(model)) {
+      warnedUnknownModels.add(model);
+      console.warn(
+        `[usage] Modelo de IA sin precio cargado: "${model}". Se cobra al precio de ` +
+        `respaldo (el más caro de la tabla) para que cuente contra el tope mensual. ` +
+        `Cargalo en AI_PRICING (usage-service.ts) con su precio real.`,
+      );
+    }
+  }
   return (
     (inputTokens / 1_000_000) * p.in +
     (outputTokens / 1_000_000) * p.out +

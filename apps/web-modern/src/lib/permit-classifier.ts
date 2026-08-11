@@ -17,7 +17,9 @@
  * pero el texto sugiere riesgo (ej. "trabajo en tanque #3").
  */
 
-export type PermitType = "HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION";
+export type PermitType =
+  | "HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION"
+  | "COLD_WORK" | "UNDERWATER_WORK";
 
 export interface PermitMatch {
   type: PermitType;
@@ -80,6 +82,17 @@ const KEYWORDS: Record<PermitType, string[]> = {
     "loto", "lock-out", "lockout",
     "aislamiento eléctrico", "aislamiento electrico",
   ],
+  UNDERWATER_WORK: [
+    "buceo", "buzo", "buzos",
+    "submarino", "subacuático", "subacuatico", "subaqua",
+    "obra viva",
+    "hélice", "helice",
+    "casco sumergido",
+    "toma de mar",
+  ],
+  // El trabajo en frío es el caso general (todo lo que no tiene fuente de
+  // ignición): sugerirlo por palabras clave dispararía en casi cualquier tarea.
+  COLD_WORK: [],
 };
 
 export function suggestPermitTypesFromText(rawText: string): PermitMatch[] {
@@ -101,4 +114,6 @@ export const PERMIT_TYPE_LABEL: Record<PermitType, string> = {
   ENCLOSED_SPACE_ENTRY: "Espacio confinado",
   WORKING_ALOFT: "Trabajo en altura",
   ELECTRICAL_ISOLATION: "Aislamiento eléctrico",
+  COLD_WORK: "Trabajo en frío",
+  UNDERWATER_WORK: "Trabajo subacuático",
 };

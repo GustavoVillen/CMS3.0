@@ -11,7 +11,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -551,14 +551,11 @@ const DeleteConfirm: React.FC<{ cert: Certificate; onClose: () => void; onDelete
 export const CertificatesPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
+  const can = useCan();
   const isAdmin = user?.role === "TENANT_ADMIN";
-  // Cualquier rol operativo puede crear/editar certificados (subir
-  // archivos renovados). Borrar sigue siendo solo admin.
-  const canWrite = isAdmin
-    || user?.role === "FLEET_SUPERINTENDENT"
-    || user?.role === "MAINTENANCE_MANAGER"
-    || user?.role === "TECHNICIAN_OPERATOR"
-    || user?.role === "INSPECTOR_COMPLIANCE";
+  // Quién crea/edita certificados (subir archivos renovados) se configura en
+  // Equipo → Permisos por rol. Borrar sigue siendo solo admin.
+  const canWrite = can("certificate.manage");
   const [searchParams, setSearchParams] = useSearchParams();
 
   const statusFilter = (searchParams.get("status") ?? "").trim();

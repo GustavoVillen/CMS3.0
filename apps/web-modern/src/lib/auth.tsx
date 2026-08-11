@@ -9,6 +9,13 @@ export interface AuthUser {
   identifier?: string;
   role: string;
   assignedVesselCodes: string[];
+  /**
+   * Autorizaciones efectivas del rol (Equipo → Permisos por rol). Vienen del
+   * login y se refrescan al montar la app, así un cambio del admin llega sin
+   * que el usuario tenga que volver a entrar. El servidor valida igual: esto
+   * sólo decide qué botones se muestran.
+   */
+  permissions?: string[];
 }
 
 export interface AuthTenant {
@@ -93,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const res = await api.post<{
         session: { accessToken: string; refreshToken: string };
-        user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[] };
+        user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[]; permissions?: string[] };
         bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null; workOrderPdfTemplate?: string | null } };
       }>("/app/auth/login", { identifier, password });
 
@@ -111,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           identifier,
           role: u.role,
           assignedVesselCodes: u.assignedVesselCodes ?? [],
+          permissions: u.permissions ?? [],
         },
         tenant: {
           id: "",
@@ -151,6 +159,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearFetchCache(); // evita exponer datos cacheados al siguiente login
   }, []);
 
+  // Refresca las autorizaciones del rol al abrir la app: si el admin cambió la
+  // matriz mientras el usuario estaba logueado, el menú y los botones se ponen
+  // al día sin obligarlo a volver a entrar. Silencioso: si falla, se sigue
+  // usando lo que vino del login (y el servidor valida igual).
+  useEffect(() => {
+    if (!state.token) return;
+    let cancelled = false;
+    api.get<{ mine?: string[] }>("/app/tenant/role-permissions")
+      .then(res => {
+        if (cancelled || !Array.isArray(res?.mine)) return;
+        setState(prev => {
+          if (!prev.user) return prev;
+          const mine = res.mine as string[];
+          const current = prev.user.permissions ?? [];
+          if (current.length === mine.length && current.every(p => mine.includes(p))) return prev;
+          const next = { ...prev, user: { ...prev.user, permissions: mine } };
+          localStorage.setItem("gpms_auth", JSON.stringify(next));
+          return next;
+        });
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [state.token]);
+
   // Auto-logout on 401 only after refresh attempt has failed (api.ts handles refresh)
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -170,4 +202,20 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+/**
+ * ¿El usuario tiene esta autorización? Se usa para mostrar/ocultar botones de
+ * acción (aprobar, autorizar, eliminar). La regla real la aplica el servidor.
+ *
+ *   const can = useCan();
+ *   {can("permit.authorize") && <button>Aprobar</button>}
+ */
+export function useCan(): (permission: string) => boolean {
+  const { user } = useAuth();
+  const permissions = user?.permissions;
+  return useCallback(
+    (permission: string) => !!permissions?.includes(permission),
+    [permissions],
+  );
 }

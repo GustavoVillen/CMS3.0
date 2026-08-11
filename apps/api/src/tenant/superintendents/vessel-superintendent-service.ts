@@ -263,7 +263,7 @@ export async function demoteSuperintendent(session: TenantAccessSession, userId:
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
-  const VALID_ROLES = ["MAINTENANCE_MANAGER", "TECHNICIAN_OPERATOR", "INSPECTOR_COMPLIANCE", "PROCUREMENT_STORE", "AUDITOR_READONLY"];
+  const VALID_ROLES = ["MAINTENANCE_MANAGER", "TECHNICIAN_OPERATOR", "INSPECTOR_COMPLIANCE", "PROCUREMENT_STORE", "HSE_MANAGER", "AUDITOR_READONLY"];
   if (!VALID_ROLES.includes(newRole)) {
     throw new RouteError(400, "INVALID_ROLE", `Rol inválido. Opciones: ${VALID_ROLES.join(", ")}`);
   }

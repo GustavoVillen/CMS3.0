@@ -3,6 +3,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 const TEMPLATE_TYPES = [
@@ -69,7 +70,7 @@ function ensureCanWrite(s: TenantAccessSession) {
   if (!canWrite(s)) throw new RouteError(403, "FORBIDDEN", "Solo-lectura no puede gestionar checklists.");
 }
 function canManageTemplates(s: TenantAccessSession): boolean {
-  return s.user.role === "TENANT_ADMIN" || s.user.role === "FLEET_SUPERINTENDENT" || s.user.role === "MAINTENANCE_MANAGER";
+  return hasPermission(s, "checklist.manageTemplates");
 }
 function ensureCanManageTemplates(s: TenantAccessSession) {
   if (!canManageTemplates(s)) throw new RouteError(403, "FORBIDDEN", "No autorizado para editar templates.");

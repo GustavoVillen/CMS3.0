@@ -33,6 +33,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
+import { hasPermission } from "../auth/role-permissions";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
@@ -132,7 +133,7 @@ function canManage(session: TenantAccessSession): boolean {
 
 /** Aprobar a bordo: incluye al Capitán / Jefe de Máquinas. */
 function canApprove(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(session.user.role);
+  return hasPermission(session, "sr.approve");
 }
 
 /**
@@ -146,7 +147,7 @@ function canApprove(session: TenantAccessSession): boolean {
  * propio) — no unificar con ella.
  */
 function canAuthorize(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"].includes(session.user.role);
+  return hasPermission(session, "sr.authorize");
 }
 
 function ensureCanManage(session: TenantAccessSession) {

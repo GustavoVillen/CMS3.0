@@ -3,6 +3,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { hashOpaqueToken } from "../../platform/auth/passwords";
 import { RouteError } from "../../http/route-error";
+import { ensurePermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import {
   listDevInvitations,
@@ -17,15 +18,14 @@ const VALID_ROLES = [
   "TECHNICIAN_OPERATOR",
   "INSPECTOR_COMPLIANCE",
   "PROCUREMENT_STORE",
+  "HSE_MANAGER",
   "AUDITOR_READONLY",
 ] as const;
 
 type TenantRole = typeof VALID_ROLES[number];
 
 function ensureAdmin(session: TenantAccessSession) {
-  if (session.user.role !== "TENANT_ADMIN") {
-    throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden gestionar miembros del equipo.");
-  }
+  ensurePermission(session, "team.manage", "Solo administradores pueden gestionar miembros del equipo.");
 }
 
 async function getTenantId(prisma: NonNullable<ReturnType<typeof getPrismaClient>>, slug: string): Promise<string> {

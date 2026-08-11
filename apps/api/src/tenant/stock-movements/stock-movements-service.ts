@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevStockMovementsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 
 export interface StockMovementListFilters {
   vesselCode?: string | null;
@@ -23,7 +24,7 @@ export interface CreateStockMovementInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"].includes(session.user.role);
+  return hasPermission(session, "stock.manage");
 }
 
 function normalizeText(value: unknown, field: string): string {

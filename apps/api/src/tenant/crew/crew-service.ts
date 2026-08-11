@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
@@ -34,15 +35,10 @@ export interface CrewWriteInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  const r = session.user.role;
   // TECHNICIAN_OPERATOR a bordo (típicamente capitán/jefe) registra
   // embarques/desembarques y datos del tripulante. INSPECTOR_COMPLIANCE
   // también — debe poder corregir datos durante una auditoría.
-  return r === "TENANT_ADMIN"
-      || r === "FLEET_SUPERINTENDENT"
-      || r === "MAINTENANCE_MANAGER"
-      || r === "TECHNICIAN_OPERATOR"
-      || r === "INSPECTOR_COMPLIANCE";
+  return hasPermission(session, "crew.manage");
 }
 
 function ensureCanManage(session: TenantAccessSession) {

@@ -48,6 +48,11 @@ enum TenantRole {
   INSPECTOR_COMPLIANCE
   PROCUREMENT_STORE
   AUDITOR_READONLY
+  // Jefe SSMA (Seguridad, Salud y Medio Ambiente). Perfil de seguridad: autoriza
+  // permisos de trabajo, lleva near miss, simulacros, auditorias externas y
+  // checklists. No autoriza OT ni toca planes/repuestos por defecto — pero todo
+  // eso es configurable desde Equipo → Permisos por rol.
+  HSE_MANAGER
 }
 
 enum AuditActorType {
@@ -211,6 +216,14 @@ enum TenantFormType {
   SERVICE_REQUEST
   MAINTENANCE_PLAN
   DEFERRAL
+  // Permisos de trabajo: un formulario controlado por tipo de permiso, porque
+  // cada uno tiene su propio codigo, titulo y revision (Mercurio REGI-SYE-01.4..01.9).
+  PERMIT_ENCLOSED_SPACE
+  PERMIT_HOT_WORK
+  PERMIT_COLD_WORK
+  PERMIT_ALOFT
+  PERMIT_ELECTRICAL
+  PERMIT_UNDERWATER
   // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
 }
 
@@ -459,6 +472,8 @@ enum PermitType {
   ELECTRICAL_ISOLATION
   // "FRIO" del formulario REGI-OPE-26.3 (trabajo en frío: sin fuentes de ignición).
   COLD_WORK
+  // Trabajo subacuático / buceo — formulario REGI-SYE-01.9 de Mercurio.
+  UNDERWATER_WORK
 }
 
 enum PermitStatus {
@@ -841,6 +856,11 @@ model TenantSetting {
   // Satellite link cost (USD per MB) — used to estimate communication cost per user/vessel
   satelliteUsdPerMbIn       Float @default(0)
   satelliteUsdPerMbOut      Float @default(0)
+  // Autorizaciones por rol configuradas por el admin. Forma: { [role]: string[] }
+  // con las claves del catalogo de `tenant/auth/role-permissions.ts`. Se guarda
+  // SOLO lo que el admin cambio; null / rol ausente => se usan los defaults del
+  // codigo (mismo criterio que hiddenNavPaths: lo nuevo aparece sin reconfigurar).
+  rolePermissions           Json?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

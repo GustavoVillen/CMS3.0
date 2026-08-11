@@ -2,10 +2,11 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
+  Snowflake, Waves,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -17,7 +18,9 @@ import { useT, type TranslationKey } from "../lib/i18n";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type PermitType = "HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION";
+type PermitType =
+  | "HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION"
+  | "COLD_WORK" | "UNDERWATER_WORK";
 type PermitStatus = "DRAFT" | "REQUESTED" | "APPROVED" | "REJECTED" | "ACTIVE" | "CLOSED" | "CANCELLED";
 type ParticipantRole = "PERFORMER" | "FIRE_WATCH" | "STAND_BY" | "ATTENDANT" | "SUPERVISOR";
 type GasVerdict = "PASS" | "FAIL";
@@ -86,6 +89,8 @@ const TYPE_TKEY: Record<PermitType, TranslationKey> = {
   ENCLOSED_SPACE_ENTRY: "pm.type.enclosedSpace",
   WORKING_ALOFT: "pm.type.workingAloft",
   ELECTRICAL_ISOLATION: "pm.type.electricalIso",
+  COLD_WORK: "pm.type.coldWork",
+  UNDERWATER_WORK: "pm.type.underwater",
 };
 
 const TYPE_ICON: Record<PermitType, React.FC<{ className?: string }>> = {
@@ -93,6 +98,8 @@ const TYPE_ICON: Record<PermitType, React.FC<{ className?: string }>> = {
   ENCLOSED_SPACE_ENTRY: Wind,
   WORKING_ALOFT: ArrowUp,
   ELECTRICAL_ISOLATION: Zap,
+  COLD_WORK: Snowflake,
+  UNDERWATER_WORK: Waves,
 };
 
 const STATUS_TKEY: Record<PermitStatus, TranslationKey> = {
@@ -162,8 +169,10 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
+  const can = useCan();
   const isAdmin = user?.role === "TENANT_ADMIN";
-  const canApprove = isAdmin || user?.role === "FLEET_SUPERINTENDENT";
+  // "Autorizar permisos de trabajo" — se configura en Equipo → Permisos por rol.
+  const canApprove = can("permit.authorize");
   const isNew = !permit;
 
   const isTerminal = permit && ["CLOSED", "CANCELLED", "REJECTED"].includes(permit.status);

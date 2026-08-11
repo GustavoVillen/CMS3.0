@@ -20,7 +20,7 @@ import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
@@ -3539,14 +3539,12 @@ export const WorkOrdersPage: React.FC = () => {
   const t = useT();
   const woTerms = useWoTerms();
   const { user } = useAuth();
+  const can = useCan();
   const navigate = useNavigate();
   const { selectedVesselCode } = useVesselContext();
-  // Editar/guardar una OT. Espeja canManageWorkOrders del backend, que incluye
-  // al FLEET_SUPERINTENDENT — acá faltaba, así que al superintendente se le
-  // escondía el botón Guardar aunque la API sí le aceptaba el PATCH.
-  const canManage = user?.role === "TENANT_ADMIN"
-    || user?.role === "FLEET_SUPERINTENDENT"
-    || user?.role === "MAINTENANCE_MANAGER";
+  // Editar/guardar una OT. Espeja canManageWorkOrders del backend: quién la
+  // tiene se configura en Equipo → Permisos por rol.
+  const canManage = can("wo.manage");
 
   // ABRIR una OT es más amplio que editarla: la puede abrir cualquiera menos el
   // usuario de solo lectura. Es un punto de entrada operativo — quien detecta

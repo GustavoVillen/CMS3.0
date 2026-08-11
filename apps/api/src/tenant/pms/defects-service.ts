@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { createCapaInternal } from "./capa-service";
@@ -126,12 +127,7 @@ function defectsClient(prisma: NonNullable<ReturnType<typeof getPrismaClient>>):
 }
 
 function canWriteDefects(session: TenantAccessSession): boolean {
-  return (
-    session.user.role === "TENANT_ADMIN" ||
-    session.user.role === "MAINTENANCE_MANAGER" ||
-    session.user.role === "TECHNICIAN_OPERATOR" ||
-    session.user.role === "INSPECTOR_COMPLIANCE"
-  );
+  return hasPermission(session, "defect.write");
 }
 
 /**
@@ -148,7 +144,7 @@ function canCloseDefect(session: TenantAccessSession): boolean {
 }
 
 function canDeleteDefect(session: TenantAccessSession): boolean {
-  return session.user.role === "TENANT_ADMIN";
+  return hasPermission(session, "defect.delete");
 }
 
 function ensureCanWriteDefects(session: TenantAccessSession) {

@@ -1,109 +1,18 @@
 import PDFDocument from "pdfkit";
-import type { TenantAccessSession } from "../auth/session-store";
-import { getPermit } from "./permits-service";
-import { getPrismaClient } from "../../platform/data/prisma-client";
-import { resolveTenantLogo } from "../pms/pdf-helpers";
-import { buildPermitChecklist } from "../../common/regulations/maritime";
+import { buildPermitChecklist } from "../../../common/regulations/maritime";
+import {
+  val, PERMIT_TYPE_LABEL as TYPE_LABEL, PERMIT_STATUS_LABEL as STATUS_LABEL,
+  PERMIT_ROLE_LABEL as ROLE_LABEL, type PermitPdfContext,
+} from "./shared";
 
 /**
- * PDF imprimible para Permit to Work. SOLAS/class lo exigen impreso y firmado a bordo
- * (no basta con el registro electrónico). Diseñado A4, formato clásico de PTW marítimo.
+ * PDF imprimible para Permit to Work. SOLAS/class lo exigen impreso y firmado a
+ * bordo (no basta con el registro electrónico). Diseñado A4, formato clásico de
+ * PTW marítimo. Es el formato por defecto: los tenants con documento controlado
+ * propio (Mercurio) usan template-mercurio.ts.
  */
-
-function val(v: string | null | undefined): string {
-  return v?.trim() ? String(v).trim() : "—";
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  HOT_WORK: "TRABAJO EN CALIENTE",
-  ENCLOSED_SPACE_ENTRY: "ENTRADA A ESPACIO CONFINADO",
-  WORKING_ALOFT: "TRABAJO EN ALTURA",
-  ELECTRICAL_ISOLATION: "AISLAMIENTO ELÉCTRICO",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "BORRADOR",
-  REQUESTED: "SOLICITADO",
-  APPROVED: "APROBADO",
-  REJECTED: "RECHAZADO",
-  ACTIVE: "ACTIVO",
-  CLOSED: "CERRADO",
-  CANCELLED: "CANCELADO",
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  PERFORMER: "Ejecutante",
-  FIRE_WATCH: "Vigía de fuego",
-  STAND_BY: "Stand-by",
-  ATTENDANT: "Atendente",
-  SUPERVISOR: "Supervisor",
-};
-
-interface GasTest {
-  testedAt: Date;
-  testedByName: string;
-  location: string | null;
-  o2Pct: number | null;
-  lelPct: number | null;
-  h2sPpm: number | null;
-  coPpm: number | null;
-  verdict: string;
-  notes: string | null;
-}
-interface Participant {
-  name: string;
-  role: string;
-}
-interface Permit {
-  id: string;
-  permitCode: string;
-  vesselCode: string;
-  type: string;
-  status: string;
-  location: string;
-  description: string;
-  plannedStart: Date;
-  plannedEnd: Date;
-  validFrom: Date | null;
-  validTo: Date | null;
-  hazardsIdentified: string | null;
-  controlMeasures: string | null;
-  ppeRequired: string | null;
-  details: Record<string, unknown> | null;
-  requestedAt: Date | null;
-  approvedAt: Date | null;
-  activatedAt: Date | null;
-  closedAt: Date | null;
-  closeNotes: string | null;
-  rejectionReason: string | null;
-  cancelReason: string | null;
-  gasTests: GasTest[];
-  participants: Participant[];
-}
-
-export async function buildPermitPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
-  const permit = await getPermit(session, id) as unknown as Permit;
-
-  // Tenant logo
-  let tenantLogoBuffer: Buffer | null = null;
-  let tenantName: string | undefined;
-  let tenantTz: string | null = null;
-  const prisma = getPrismaClient();
-  if (prisma) {
-    try {
-      const tenantRow = await (prisma as any).tenant.findUnique({
-        where: { slug: session.tenantSlug },
-        select: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, timezone: true } } },
-      });
-      tenantName = tenantRow?.settings?.displayName;
-      tenantTz = tenantRow?.settings?.timezone ?? null;
-      tenantLogoBuffer = await resolveTenantLogo(
-        session.tenantSlug,
-        tenantRow?.settings?.logoUrl,
-        tenantRow?.settings?.logoUrlLight,
-      );
-    } catch { /* non-blocking */ }
-  }
+export async function renderStandardPermitPdf(ctx: PermitPdfContext): Promise<Buffer> {
+  const { permit, tenantName, tenantLogoBuffer, tz } = ctx;
 
   /**
    * Fecha y hora EN LA ZONA HORARIA DE LA EMPRESA.
@@ -119,7 +28,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     try {
       return date.toLocaleString("es-AR", {
         dateStyle: "short", timeStyle: "short",
-        ...(tenantTz ? { timeZone: tenantTz } : {}),
+        ...(tz ? { timeZone: tz } : {}),
       });
     } catch {
       // Zona horaria mal cargada en la empresa: no se rompe el PDF por eso.
@@ -166,7 +75,6 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     //   - contenido 40..770  (BOTTOM_Y)
     //   - sigBoxes y footer cabe en 770..801 si vinimos sin paginar
     //   - footer al final en y=790
-    const A4_H = 841.89;
     const TOP_Y = 40;
     const BOTTOM_Y = 770; // mi cap de contenido — deja 31pt para footer/sigs
     let y = 125;
@@ -218,7 +126,7 @@ export async function buildPermitPdf(session: TenantAccessSession, id: string): 
     }
 
     sectionTitle("Identificación");
-    row("Vessel", permit.vesselCode);
+    row("Vessel", ctx.vesselName);
     row("Ubicación", val(permit.location));
     row("Inicio planeado", fmt(permit.plannedStart));
     row("Fin planeado", fmt(permit.plannedEnd));

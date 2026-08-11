@@ -1,12 +1,13 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import type { SpareRequestStatus } from "../../../../../generated/prisma";
 
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"].includes(session.user.role);
+  return hasPermission(session, "spare.manage");
 }
 
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {

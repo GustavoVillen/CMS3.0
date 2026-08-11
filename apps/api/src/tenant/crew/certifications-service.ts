@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 // Documentos personales del tripulante. Los cursos/entrenamientos regulatorios
@@ -23,8 +24,7 @@ export interface CertificationWriteInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  const r = session.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT" || r === "MAINTENANCE_MANAGER";
+  return hasPermission(session, "crewCert.manage");
 }
 
 function ensureCanManage(session: TenantAccessSession) {

@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevProvidersForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 
@@ -33,7 +34,7 @@ export interface UpdateProviderInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE"].includes(session.user.role);
+  return hasPermission(session, "provider.manage");
 }
 
 function normalizeText(value: unknown, field: string): string {

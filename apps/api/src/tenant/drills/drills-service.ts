@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
@@ -67,8 +68,7 @@ export interface DrillMatrixCell {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function canManage(session: TenantAccessSession): boolean {
-  const r = session.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT" || r === "MAINTENANCE_MANAGER";
+  return hasPermission(session, "drill.manage");
 }
 
 function ensureCanManage(session: TenantAccessSession) {

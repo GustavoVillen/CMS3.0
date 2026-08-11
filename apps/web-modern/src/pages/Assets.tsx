@@ -10,7 +10,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
@@ -592,8 +592,9 @@ const PlanTaskTypeBadge: React.FC<{ type: string }> = ({ type }) => {
 const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
   const t = useT();
   const { user } = useAuth();
+  const can = useCan();
   const role = user?.role;
-  const canManage = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
+  const canManage = can("asset.manage");
   const canDelete = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT";
 
   const { data, loading, error, reload } = useFetch<{ items: MaintenancePlan[] }>(

@@ -3,6 +3,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 const CATEGORIES = ["EQUIPMENT_CHANGE", "PROCEDURE_CHANGE", "ORGANIZATIONAL", "TEMPORARY", "SOFTWARE_FIRMWARE", "OTHER"] as const;
@@ -121,8 +122,7 @@ function canCreate(s: TenantAccessSession): boolean {
   return s.user.role !== "AUDITOR_READONLY";
 }
 function canApprove(s: TenantAccessSession): boolean {
-  const r = s.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT";
+  return hasPermission(s, "moc.approve");
 }
 function ensureCanCreate(s: TenantAccessSession) {
   if (!canCreate(s)) throw new RouteError(403, "FORBIDDEN", "Solo-lectura no puede crear MOC.");

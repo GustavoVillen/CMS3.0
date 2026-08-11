@@ -9,7 +9,8 @@ export type TenantRole =
   | "TECHNICIAN_OPERATOR"
   | "INSPECTOR_COMPLIANCE"
   | "PROCUREMENT_STORE"
-  | "AUDITOR_READONLY";
+  | "AUDITOR_READONLY"
+  | "HSE_MANAGER";
 
 export type TenantResolutionKind = "tenant" | "platform" | "unresolved";
 

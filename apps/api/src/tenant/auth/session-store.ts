@@ -14,6 +14,14 @@ export interface TenantAccessSession {
     role: TenantRole;
     assignedVesselCodes: string[];
     locale: LocaleCode;
+    /**
+     * Autorizaciones efectivas del rol (catalogo de `role-permissions.ts`).
+     * Se calculan al loguear/refrescar y se refrescan en vivo cuando el admin
+     * guarda la matriz, para que los gates de los services sean sincronicos.
+     * Opcional: los tokens emitidos antes de este cambio no la traen y el
+     * chequeo cae a los defaults del rol.
+     */
+    permissions?: string[];
   };
 }
 
@@ -73,6 +81,26 @@ export function evictExpiredSessions(): void {
   for (const [token, s] of platformSessions) {
     if (new Date(s.accessTokenExpiresAt).getTime() <= now) platformSessions.delete(token);
   }
+}
+
+/**
+ * Reaplica la matriz de autorizaciones a TODAS las sesiones vivas del tenant.
+ * Se llama cuando el admin guarda Permisos por rol: el cambio impacta en la
+ * proxima accion del usuario, sin obligarlo a volver a loguearse.
+ */
+export function refreshTenantSessionPermissions(
+  tenantSlug: string,
+  matrix: Record<string, string[]>,
+): number {
+  let updated = 0;
+  for (const session of tenantSessions.values()) {
+    if (session.tenantSlug !== tenantSlug) continue;
+    const next = matrix[session.user.role];
+    if (!next) continue;
+    session.user.permissions = [...next];
+    updated += 1;
+  }
+  return updated;
 }
 
 /** Logout: borra el access token del Map en memoria. */

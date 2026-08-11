@@ -4,6 +4,8 @@ import { sendJson } from "../http/json-response";
 import { readJsonBody } from "../http/read-json-body";
 import { readBinaryBody } from "../http/read-binary-body";
 import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-service";
+import { getRolePermissions, setRolePermissions } from "./settings/role-permissions-config-service";
+import { hasPermission, resolvePermissionsForRole } from "./auth/role-permissions";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
 import { getClientIp } from "../http/client-ip";
@@ -123,7 +125,7 @@ import {
 } from "./permits/permits-service";
 import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-service";
 import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
-import { buildPermitPdf } from "./permits/permit-pdf-service";
+import { buildPermitPdfDocument } from "./permits/permit-pdf";
 import { getPermitsSummary } from "./permits/permits-summary-service";
 import { suggestPermitHazards, suggestPermitControls, suggestPermitPpe } from "./permits/permits-ai-suggestions";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
@@ -151,8 +153,9 @@ import { handleTeamRoutes } from "./team/team-router";
 import { handleProfileRoutes } from "./profile/profile-router";
 import { listTenantAuditLog, type AuditLogItem } from "./audit/audit-log-service";
 import ExcelJS from "exceljs";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "../common/tenant-time";
 
-async function buildAuditExcel(items: AuditLogItem[]): Promise<Buffer> {
+async function buildAuditExcel(items: AuditLogItem[], tenantSlug: string): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "CMS3.0";
   const sheet = workbook.addWorksheet("Bitácora");
@@ -187,11 +190,14 @@ async function buildAuditExcel(items: AuditLogItem[]): Promise<Buffer> {
     return typeof t === "string" ? t.trim() : "";
   };
 
+  // Hora de la empresa: el servidor corre en UTC y la planilla salía con
+  // horas que no coinciden con lo que se ve en pantalla.
+  const { tz: auditTz, locale: auditLocale } = await resolveTenantTime(tenantSlug);
   for (const item of items) {
     const d = new Date(item.createdAt);
     sheet.addRow({
-      fecha:      d.toLocaleDateString("es-AR"),
-      hora:       d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+      fecha:      fmtDateTz(d, auditTz, auditLocale),
+      hora:       fmtTimeTz(d, auditTz, auditLocale),
       tipo:       item.entityType,
       referencia: refCode(item.metadata),
       vessel:     typeof item.metadata?.vesselCode === "string" ? item.metadata.vesselCode : "",
@@ -220,7 +226,7 @@ function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
  * Borrar sigue siendo solo TENANT_ADMIN (audit trail de compliance).
  */
 function canWriteCertificates(session: import("./auth/session-store").TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER", "TECHNICIAN_OPERATOR", "INSPECTOR_COMPLIANCE"].includes(session.user.role);
+  return hasPermission(session, "certificate.manage");
 }
 
 export async function handleTenantRoutes(
@@ -240,15 +246,19 @@ export async function handleTenantRoutes(
       ipAddress: getClientIp(request),
       userAgent: readUserAgent(request),
     });
+    // Autorizaciones efectivas del rol: viajan en la sesión (gates sincrónicos
+    // en los services) y en la respuesta (la UI gatea sus botones con esto).
+    const permissions = await resolvePermissionsForRole(slug, result.user.role);
+    const user = { ...result.user, permissions };
     registerTenantAccessSession({
       kind: "tenant",
       tenantSlug: slug,
       accessToken: result.session.accessToken,
       refreshToken: result.session.refreshToken,
       accessTokenExpiresAt: result.session.accessTokenExpiresAt,
-      user: result.user,
+      user,
     });
-    sendJson(response, 200, result);
+    sendJson(response, 200, { ...result, user });
     return true;
   }
 
@@ -285,6 +295,7 @@ export async function handleTenantRoutes(
                   role: membership.role,
                   assignedVesselCodes: membership.assignedVesselCodes,
                   locale: membership.user.preferredLocale ?? "es",
+                  permissions: await resolvePermissionsForRole(slug, membership.role),
                 },
               });
             }
@@ -2351,11 +2362,10 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[3]!;
-    const permit = await getPermit(session, id) as unknown as { permitCode: string };
-    const buffer = await buildPermitPdf(session, id);
+    const { buffer, fileName } = await buildPermitPdfDocument(session, id);
     response.writeHead(200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${permit.permitCode}.pdf"`,
+      "Content-Disposition": `attachment; filename="${fileName}.pdf"`,
       "Content-Length": buffer.length,
     });
     response.end(buffer);
@@ -2491,7 +2501,7 @@ export async function handleTenantRoutes(
     const from = url.searchParams.get("from") ?? undefined;
     const to = url.searchParams.get("to") ?? undefined;
     const { items } = await listTenantAuditLog(session, { entityType, from, to, limit: 5000 });
-    const buffer = await buildAuditExcel(items);
+    const buffer = await buildAuditExcel(items, session.tenantSlug);
     response.writeHead(200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="bitacora_${new Date().toISOString().slice(0, 10)}.xlsx"`,
@@ -2517,6 +2527,25 @@ export async function handleTenantRoutes(
     const body = await readJsonBody(request) as { hiddenNavPaths?: unknown };
     const hiddenNavPaths = await setHiddenNavPaths(session, body?.hiddenNavPaths);
     sendJson(response, 200, { hiddenNavPaths });
+    return true;
+  }
+
+  // ── Permisos por rol (tenant-wide) ────────────────────────────────────────
+  // GET: cualquier usuario autenticado — la UI necesita saber qué puede hacer.
+  if (method === "GET" && url.pathname === "/app/tenant/role-permissions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getRolePermissions(session));
+    return true;
+  }
+
+  // PATCH: solo TENANT_ADMIN puede cambiar quién autoriza qué.
+  if (method === "PATCH" && url.pathname === "/app/tenant/role-permissions") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden configurar los permisos por rol.");
+    }
+    const body = await readJsonBody(request) as { rolePermissions?: unknown };
+    sendJson(response, 200, await setRolePermissions(session, body?.rolePermissions));
     return true;
   }
 

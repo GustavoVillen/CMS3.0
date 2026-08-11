@@ -1,11 +1,18 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
 
-const PERMIT_TYPES = ["HOT_WORK", "ENCLOSED_SPACE_ENTRY", "WORKING_ALOFT", "ELECTRICAL_ISOLATION"] as const;
+// Los seis formularios de permiso del sistema de gestión (REGI-SYE-01.4 .. 01.9).
+// COLD_WORK existía en el schema pero no acá: no se podía emitir un permiso de
+// trabajo en frío ni el formulario 01.6 que le corresponde.
+const PERMIT_TYPES = [
+  "HOT_WORK", "ENCLOSED_SPACE_ENTRY", "WORKING_ALOFT", "ELECTRICAL_ISOLATION",
+  "COLD_WORK", "UNDERWATER_WORK",
+] as const;
 type PermitType = typeof PERMIT_TYPES[number];
 
 const TERMINAL_STATUSES = new Set(["CLOSED", "CANCELLED", "REJECTED"]);
@@ -38,13 +45,11 @@ export interface PermitWriteInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  const r = session.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT" || r === "MAINTENANCE_MANAGER" || r === "TECHNICIAN_OPERATOR";
+  return hasPermission(session, "permit.manage");
 }
+/** "Autorizar Permisos de Trabajo" — tilde configurable en Equipo → Permisos por rol. */
 function canApprove(session: TenantAccessSession): boolean {
-  const r = session.user.role;
-  // Capitán/Jefe Máq lo hacen en buque; en plataforma lo mapeamos a TENANT_ADMIN / FLEET_SUPERINTENDENT.
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT";
+  return hasPermission(session, "permit.authorize");
 }
 function ensureCanManage(session: TenantAccessSession) {
   if (!canManage(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para gestionar permisos.");
@@ -163,9 +168,14 @@ async function generatePermitCode(
 ): Promise<string> {
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
+  // Un prefijo por tipo. COLD_WORK caía en el "EI" del aislamiento eléctrico:
+  // el correlativo se cuenta por tipo, así que dos tipos con el mismo prefijo
+  // podían emitir el MISMO permitCode y chocar contra el unique del schema.
   const prefix = type === "HOT_WORK" ? "HW"
     : type === "ENCLOSED_SPACE_ENTRY" ? "ES"
     : type === "WORKING_ALOFT" ? "WA"
+    : type === "COLD_WORK" ? "CW"
+    : type === "UNDERWATER_WORK" ? "UW"
     : "EI";
   const count = await permitClient(prisma).permitToWork.count({
     where: { tenantId, vesselCode, type, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },

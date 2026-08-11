@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { workOrderPrefix } from "../../common/wo-code";
 import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
@@ -337,10 +338,10 @@ function maintenanceClient(prisma: NonNullable<ReturnType<typeof getPrismaClient
 }
 
 function canManagePlans(session: TenantAccessSession): boolean {
-  const role = session.user.role;
   // Admin (gestión total) + Superintendente técnico (define planes desde
   // oficina) + Capitán/Jefe de Máquinas (ajusta planes desde el buque).
-  return role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
+  // Configurable en Equipo → Permisos por rol.
+  return hasPermission(session, "plan.manage");
 }
 
 export function ensureCanManagePlans(session: TenantAccessSession) {
@@ -352,11 +353,7 @@ export function ensureCanManagePlans(session: TenantAccessSession) {
 // Abrir una OT desde un plan no modifica el plan — es una acción operativa.
 // Los técnicos a bordo y los managers de mantenimiento pueden hacerlo.
 function canOpenWorkOrderFromPlan(session: TenantAccessSession): boolean {
-  const role = session.user.role;
-  return role === "TENANT_ADMIN"
-    || role === "FLEET_SUPERINTENDENT"
-    || role === "MAINTENANCE_MANAGER"
-    || role === "TECHNICIAN_OPERATOR";
+  return hasPermission(session, "wo.manage") || hasPermission(session, "wo.operate");
 }
 
 function ensureCanOpenWorkOrderFromPlan(session: TenantAccessSession) {

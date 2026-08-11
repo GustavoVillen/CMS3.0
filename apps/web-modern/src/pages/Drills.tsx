@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
@@ -832,7 +832,8 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
 export const DrillsPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
-  const canConfigure = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER" || user?.role === "FLEET_SUPERINTENDENT";
+  const can = useCan();
+  const canConfigure = can("drill.manage");
 
   const [filter, setFilter] = useState<"upcoming" | "completed" | "all">("upcoming");
 

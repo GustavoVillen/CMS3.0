@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevWorkOrdersForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { workOrderPrefix } from "../../common/wo-code";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
@@ -219,11 +220,11 @@ function workOrdersClient(prisma: NonNullable<ReturnType<typeof getPrismaClient>
 }
 
 function canManageWorkOrders(session: TenantAccessSession): boolean {
-  return session.user.role === "TENANT_ADMIN" || session.user.role === "FLEET_SUPERINTENDENT" || session.user.role === "MAINTENANCE_MANAGER";
+  return hasPermission(session, "wo.manage");
 }
 
 function canOperateWorkOrders(session: TenantAccessSession): boolean {
-  return canManageWorkOrders(session) || session.user.role === "TECHNICIAN_OPERATOR";
+  return canManageWorkOrders(session) || hasPermission(session, "wo.operate");
 }
 
 /**
@@ -241,7 +242,7 @@ function canOperateWorkOrders(session: TenantAccessSession): boolean {
  * el arrastre habilitaría gasto externo salteando el control de tierra.
  */
 function canAuthorizeWorkOrders(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"].includes(session.user.role);
+  return hasPermission(session, "wo.authorize");
 }
 
 /**

@@ -15,7 +15,11 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { resolveTenantLogo } from "./pdf-helpers";
 import type { ControlledDocMeta } from "./pdf-form-chrome";
 
-export type TenantFormType = "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN" | "DEFERRAL";
+export type TenantFormType =
+  | "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN" | "DEFERRAL"
+  // Un formulario controlado por tipo de permiso de trabajo (REGI-SYE-01.4..01.9).
+  | "PERMIT_ENCLOSED_SPACE" | "PERMIT_HOT_WORK" | "PERMIT_COLD_WORK"
+  | "PERMIT_ALOFT" | "PERMIT_ELECTRICAL" | "PERMIT_UNDERWATER";
 
 const PUBLIC_DIR = join(process.cwd(), "..", "web-modern", "public");
 
@@ -64,6 +68,11 @@ const SERVICE_REQUEST_FOOTER: FormFooterDefaults = {   // REGI-LOG-01.3
   reviewedBy: "Asesoria Juridica",
   approvedBy: "Gerente General",
 };
+const PERMIT_FOOTER: FormFooterDefaults = {            // REGI-SYE-01.4 .. 01.9
+  preparedBy: "Mercurio Group",
+  reviewedBy: "Persona Designada en Tierra",
+  approvedBy: "Gerente General",
+};
 
 // Orden e identificadores replican el papel REGI-LOG-01.3 (ver SS-74-M01-2026).
 // `workOrderRef` es el único agregado: imprime la OT de la que cuelga la SS —
@@ -86,6 +95,50 @@ const SERVICE_REQUEST_CONFIG: FormConfig = {
 const EMPTY_CONFIG: FormConfig = {
   sections: [], departments: [], distribution: [], communicationMethods: [], purchaseRequest: [], labels: {},
 };
+
+// ── Permisos de trabajo (REGI-SYE-01.4 .. 01.9) ──────────────────────────────
+// El orden de `sections` replica el papel de cada formulario. Los ids los
+// resuelve el catalogo de secciones de permits/permit-pdf/template-mercurio.ts.
+// `departments` es la lista del recuadro DEPARTAMENTO del encabezado.
+const PERMIT_DEPARTMENTS = ["CUBIERTA", "MAQUINAS", "SERVICIOS", "OTRO"];
+
+function permitConfig(sections: string[]): FormConfig {
+  return { sections, departments: PERMIT_DEPARTMENTS, distribution: [], communicationMethods: [], purchaseRequest: [], labels: {} };
+}
+
+// REGI-SYE-01.4 — formato distinto al resto: texto tipo IMO con secciones 1/2/3,
+// notas al pie y registro de ingresos, sin recuadro de resolucion ni de EPP.
+const PERMIT_ENCLOSED_SPACE_SECTIONS = [
+  "vesselHeader", "esGeneral", "esSection1", "esSection2", "esSignatures",
+  "esSection3", "esNotes", "esEntryLog", "generatedBy",
+];
+const PERMIT_HOT_WORK_SECTIONS = [
+  "vesselHeader", "workKindHotCold", "motiveZone", "adjacentAreas", "sketch",
+  "performers", "supervisors", "gasTesters", "gasEquipment", "gasResults",
+  "considerations", "ppe", "resolution", "validity", "specialComments",
+  "completion", "additionalComments", "generatedBy",
+];
+const PERMIT_COLD_WORK_SECTIONS = [
+  "vesselHeader", "motiveZone", "adjacentAreas",
+  "performers", "supervisors", "gasTesters", "gasEquipment",
+  "ppe", "resolution", "validity", "specialComments",
+  "completion", "additionalComments", "generatedBy",
+];
+const PERMIT_ALOFT_SECTIONS = [
+  "vesselHeaderShort", "shipStatus", "workKindMaint", "motiveHeight", "tools", "sketch",
+  "performers", "supervisors", "considerations", "ppe", "resolution", "validity",
+  "specialComments", "completion", "additionalComments", "generatedBy",
+];
+const PERMIT_ELECTRICAL_SECTIONS = [
+  "vesselHeaderShort", "shipStatus", "affectedEquipment", "workKindMaint", "motiveHeight",
+  "tools", "sketch", "performers", "supervisors", "ppe", "resolution", "validity",
+  "specialComments", "completion", "additionalComments", "generatedBy",
+];
+const PERMIT_UNDERWATER_SECTIONS = [
+  "vesselHeaderShort", "shipStatus", "affectedEquipment", "sketch",
+  "performers", "supervisors", "considerations", "ppe", "resolution", "validity",
+  "specialComments", "completion", "additionalComments", "generatedBy",
+];
 
 // Formulario de OT REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025).
 // El orden de `sections` replica el papel. Las listas de opciones de los
@@ -159,6 +212,82 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     footer: MERCURIO_FOOTER,
     config: EMPTY_CONFIG,
   },
+
+  // Permisos de trabajo — rev 3, vigentes desde 29.12.2025. Style STANDARD por
+  // defecto: solo los tenants con estilo de documento Mercurio (o con fila
+  // TenantForm propia) reciben el formulario controlado; el resto sigue con el
+  // PDF generico de permisos.
+  // El codigo del documento es el permitCode que ya emite permits-service.
+  PERMIT_ENCLOSED_SPACE: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.4",
+    title: "Ingreso a espacio confinado",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_ENCLOSED_SPACE_SECTIONS),
+  },
+  PERMIT_HOT_WORK: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.5",
+    title: "Trabajo en caliente",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_HOT_WORK_SECTIONS),
+  },
+  PERMIT_COLD_WORK: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.6",
+    title: "Trabajo en frio",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_COLD_WORK_SECTIONS),
+  },
+  PERMIT_ALOFT: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.7",
+    title: "Permiso de Trabajo en Altura",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_ALOFT_SECTIONS),
+  },
+  PERMIT_ELECTRICAL: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.8",
+    title: "Permiso de Trabajo en Electrico",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_ELECTRICAL_SECTIONS),
+  },
+  PERMIT_UNDERWATER: {
+    style: "STANDARD",
+    formCode: "REGI-SYE-01.9",
+    title: "Permiso de trabajo subaqua",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
+    codePattern: null,
+    footer: PERMIT_FOOTER,
+    config: permitConfig(PERMIT_UNDERWATER_SECTIONS),
+  },
+};
+
+/** Formulario controlado que corresponde a cada tipo de permiso de trabajo. */
+export const PERMIT_FORM_TYPE_BY_PERMIT_TYPE: Record<string, TenantFormType> = {
+  ENCLOSED_SPACE_ENTRY: "PERMIT_ENCLOSED_SPACE",
+  HOT_WORK:             "PERMIT_HOT_WORK",
+  COLD_WORK:            "PERMIT_COLD_WORK",
+  WORKING_ALOFT:        "PERMIT_ALOFT",
+  ELECTRICAL_ISOLATION: "PERMIT_ELECTRICAL",
+  UNDERWATER_WORK:      "PERMIT_UNDERWATER",
 };
 
 export interface ResolvedTenantForm {
@@ -234,21 +363,37 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
   // Estilo: fila > (legacy enum del tenant) > default.
   // El Plan de mantenimiento sigue el estilo de documento del tenant (mismo
   // signal que la OT): así un tenant Mercurio recibe el formato controlado.
+  const rawLegacy = settings?.workOrderPdfTemplate as string | undefined;
   const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN" || type === "DEFERRAL")
-    ? (settings?.workOrderPdfTemplate as string | undefined)
-    : undefined;
+    ? rawLegacy
+    // Los permisos siguen el mismo signal, pero normalizado: MERCURIO_OT es una
+    // plantilla de OT, no un FormStyle — para los permisos cualquier variante
+    // Mercurio significa "documento controlado".
+    : type.startsWith("PERMIT_")
+      ? (rawLegacy?.startsWith("MERCURIO") ? "MERCURIO" : rawLegacy)
+      : undefined;
   const style = (form?.style ?? legacyStyle ?? def.style) as "STANDARD" | "MERCURIO";
 
   const cfgFooter = (form?.config?.footer && typeof form.config.footer === "object") ? form.config.footer : {};
+  // Los permisos de trabajo traen impreso SU pie de firmas (Elaborado: Mercurio
+  // Group / Revisado: Persona Designada en Tierra / Aprobado: Gerente General):
+  // el pie genérico del tenant no debe pisarlo. La fila TenantForm sí puede.
+  const tenantFooter = type.startsWith("PERMIT_")
+    ? { preparedBy: undefined, reviewedBy: undefined, approvedBy: undefined }
+    : {
+      preparedBy: settings?.controlledDocPreparedBy as string | undefined,
+      reviewedBy: settings?.controlledDocReviewedBy as string | undefined,
+      approvedBy: settings?.controlledDocApprovedBy as string | undefined,
+    };
   const meta: ControlledDocMeta = {
     style,
     formCode: form?.formCode ?? def.formCode,
     title: form?.title ?? def.title,
     revision: form?.revision ?? def.revision,
     effectiveFrom: form?.effectiveFrom ?? def.effectiveFrom,
-    preparedBy: cfgFooter.preparedBy ?? settings?.controlledDocPreparedBy ?? def.footer.preparedBy,
-    reviewedBy: cfgFooter.reviewedBy ?? settings?.controlledDocReviewedBy ?? def.footer.reviewedBy,
-    approvedBy: cfgFooter.approvedBy ?? settings?.controlledDocApprovedBy ?? def.footer.approvedBy,
+    preparedBy: cfgFooter.preparedBy ?? tenantFooter.preparedBy ?? def.footer.preparedBy,
+    reviewedBy: cfgFooter.reviewedBy ?? tenantFooter.reviewedBy ?? def.footer.reviewedBy,
+    approvedBy: cfgFooter.approvedBy ?? tenantFooter.approvedBy ?? def.footer.approvedBy,
   };
 
   const config = mergeConfig(def.config, form?.config);

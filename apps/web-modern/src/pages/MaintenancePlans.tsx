@@ -30,7 +30,7 @@ import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { downloadAuthedFile } from "../lib/authed-media";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
@@ -2833,6 +2833,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ lockedResultMode }) => {
   const t = useT();
   const { user } = useAuth();
+  const can = useCan();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -3101,7 +3102,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   }, [linkCode, rawData, editing]);
 
   const userName = user?.name ?? user?.email ?? "";
-  const isAdmin = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER";
+  const isAdmin = can("plan.manage");
   const woTerms = useWoTerms(); // abreviatura de OT del tenant, para el botón Express
 
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
@@ -3720,7 +3721,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           plan={reporting}
           userName={userName}
           userId={user?.id ?? null}
-          isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
+          isAdmin={can("plan.manage")}
           onClose={() => setReporting(null)}
           onSuccess={() => { setReporting(null); void reload(); }}
         />
@@ -3731,7 +3732,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           plan={editing}
           userId={user?.id ?? null}
           userName={userName}
-          isAdmin={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT" || user?.role === "MAINTENANCE_MANAGER"}
+          isAdmin={can("plan.manage")}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           setRequestMessage={setRequestMessageFromContext}
           deepLinked={!!linkCode}

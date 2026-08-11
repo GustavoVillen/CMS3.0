@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { getPermitForRelatedWrite } from "./permits-service";
 
@@ -14,8 +15,7 @@ export interface ParticipantWriteInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  const r = session.user.role;
-  return r === "TENANT_ADMIN" || r === "FLEET_SUPERINTENDENT" || r === "MAINTENANCE_MANAGER" || r === "TECHNICIAN_OPERATOR";
+  return hasPermission(session, "permit.manage");
 }
 
 function normalizeRequired(value: unknown, field: string): string {

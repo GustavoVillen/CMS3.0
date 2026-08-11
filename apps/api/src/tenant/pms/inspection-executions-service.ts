@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { hasPermission } from "../auth/role-permissions";
 import { createCapaInternal } from "./capa-service";
 import { log } from "../../common/logger";
 
@@ -172,7 +173,7 @@ function hasInspectionDelegates(prisma: InspectionPrismaClient): prisma is Inspe
 }
 
 function canWriteExecutions(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER", "INSPECTOR_COMPLIANCE"].includes(session.user.role);
+  return hasPermission(session, "inspection.execute");
 }
 
 function normalizeRequiredText(value: unknown, field: string): string {

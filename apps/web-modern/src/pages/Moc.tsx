@@ -6,7 +6,7 @@ import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon,
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -194,8 +194,9 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
   const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
+  const can = useCan();
   const isNew = !moc;
-  const canApprove = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT";
+  const canApprove = can("moc.approve");
   const isAdmin = user?.role === "TENANT_ADMIN";
 
   // Inicialización: si hay moc → editar; si hay prefill → prefill; si no → defaults.
