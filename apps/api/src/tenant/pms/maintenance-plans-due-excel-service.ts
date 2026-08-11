@@ -12,6 +12,7 @@ import ExcelJS from "exceljs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listTenantMaintenancePlans } from "../maintenance-plans/maintenance-plans-service";
+import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
 
 // Estados que entran al reporte.
 const INCLUDED_STATUSES = new Set(["OVERDUE", "DUE", "IN_WINDOW", "NEVER_EXECUTED"]);
@@ -51,8 +52,8 @@ function formatFrequency(frequencyMonths: number | null, frequencyHours: number 
   return triggerType ?? "—";
 }
 
-function formatDue(nextDueDate: unknown, nextDueHours: number | null): string {
-  if (nextDueDate) return new Date(nextDueDate as string).toLocaleDateString("es-AR");
+function formatDue(nextDueDate: unknown, nextDueHours: number | null, fmt: (d: Date | string | null | undefined) => string): string {
+  if (nextDueDate) return fmt(nextDueDate as string);
   if (nextDueHours != null) return `${nextDueHours.toLocaleString("es-AR")} hs`;
   return "—";
 }
@@ -68,6 +69,10 @@ export async function buildDueSoonPlansXlsx(
   session: TenantAccessSession,
   options: { vesselCode?: string | null } = {},
 ): Promise<Buffer> {
+  // La fecha de vencimiento es una fecha de calendario: formateada en la hora
+  // del servidor se corría un día para atrás.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const items = await listTenantMaintenancePlans(session, { vesselCode: options.vesselCode ?? null });
   const due = items
     .map((p) => ({ p, status: computePlanStatus(p) }))
@@ -123,7 +128,7 @@ export async function buildDueSoonPlansXlsx(
       tarea:       p.title,
       tareas:      (p.description ?? "").trim() || "—",
       frecuencia:  formatFrequency(p.frequencyMonths ?? null, p.frequencyHours ?? null, p.triggerType),
-      vencimiento: formatDue((p as { nextDueDate?: unknown }).nextDueDate, p.nextDueHours ?? null),
+      vencimiento: formatDue((p as { nextDueDate?: unknown }).nextDueDate, p.nextDueHours ?? null, fmt),
     });
   }
 

@@ -9,6 +9,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 import { getSpareConsumptionReport, type SpareConsumptionFilters } from "./spare-reports-service";
+import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
 
 const PW       = 595.28;
 const PAGE_H   = 841.89;
@@ -30,17 +31,15 @@ const MONTH_NAMES = [
   "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE",
 ];
 
-function fmtDate(d: Date | string | null): string {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "";
-  return dt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 export async function buildSpareConsumptionPdf(
   session: TenantAccessSession,
   filters: SpareConsumptionFilters,
 ): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDate = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const report = await getSpareConsumptionReport(session, filters);
 
   let tenantName: string | null = null;

@@ -11,7 +11,7 @@
 // ya tienen sembrados los tenants — no renombrarlos sin migrar TenantForm.config.
 
 import PDFDocument from "pdfkit";
-import { fmt, val, sanitizePdfText, departmentLabel, PAGE_H } from "../work-order-pdf/shared";
+import { makeFormatters, val, sanitizePdfText, departmentLabel, PAGE_H } from "../work-order-pdf/shared";
 import { buildHojaRuta } from "../../service-requests/hoja-ruta";
 import type { ServiceRequestPdfContext } from "./shared";
 import {
@@ -29,6 +29,8 @@ const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
 export async function renderServiceRequestPdf(ctx: ServiceRequestPdfContext): Promise<Buffer> {
   const { sr, wo, assetLabel, assetIsSafetyCritical, assignedName, createdByName, providerName, tenant, formLogoBuffer, formMeta, formConfig, tenantSlug } = ctx;
+  // Todas las fechas del papel, en la hora de la empresa (ver common/tenant-time).
+  const { fmt } = makeFormatters(ctx.tz, ctx.locale);
   const docCode = ctx.docCode || "";
 
   const department: string | null = sr.department ?? null;

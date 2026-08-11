@@ -12,6 +12,7 @@ import { log } from "../../common/logger";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getDrill } from "./drills-service";
 import { getTenantAiLocale, type AiLocale } from "../ai/ai-locale";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
 type DrillStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 
@@ -164,13 +165,8 @@ const I18N: Record<AiLocale, {
 };
 
 
-function fmt(d: Date | string | null | undefined, dateLocale: string): string {
-  if (!d) return "-";
-  try {
-    return new Date(d).toLocaleDateString(dateLocale);
-  } catch {
-    return "-";
-  }
+function fmt(d: Date | string | null | undefined, dateLocale: string, tz: string): string {
+  return fmtDateTz(d, tz, dateLocale, "-");
 }
 
 /**
@@ -241,6 +237,8 @@ async function loadParticipants(
 }
 
 export async function buildDrillPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas en la hora de la EMPRESA (el servidor corre en UTC).
+  const { tz } = await resolveTenantTime(session.tenantSlug);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
@@ -266,7 +264,7 @@ export async function buildDrillPdf(session: TenantAccessSession, id: string): P
   const locale = await getTenantAiLocale(session.tenantSlug);
 
   try {
-    return await renderPdf({ tenantName, drill, participants, locale });
+    return await renderPdf({ tenantName, drill, participants, locale, tz });
   } catch (err) {
     log.error("[buildDrillPdf] render failed:", err);
     throw new RouteError(500, "PDF_RENDER_FAILED", err instanceof Error ? err.message : "No se pudo generar el PDF.");
@@ -278,8 +276,10 @@ function renderPdf(ctx: {
   drill: DrillRow;
   participants: Array<{ firstName: string | null; lastName: string | null; rank: string | null }>;
   locale: AiLocale;
+  /** Zona horaria de la empresa: las fechas del papel salen con esa hora. */
+  tz: string;
 }): Promise<Buffer> {
-  const { tenantName, drill, participants, locale } = ctx;
+  const { tenantName, drill, participants, locale, tz } = ctx;
   const L = I18N[locale];
 
   return new Promise<Buffer>((resolve, reject) => {
@@ -347,7 +347,7 @@ function renderPdf(ctx: {
     const reqTitle = drill.requirement?.title ?? "-";
     const statusLbl = L.status[drill.status as DrillStatus] ?? drill.status;
     rowPair(L.type, reqTitle, L.statusLabel, statusLbl);
-    rowPair(L.schedDate, fmt(drill.scheduledDate, L.dateFormatLocale), L.doneDate, fmt(drill.completedDate, L.dateFormatLocale));
+    rowPair(L.schedDate, fmt(drill.scheduledDate, L.dateFormatLocale, tz), L.doneDate, fmt(drill.completedDate, L.dateFormatLocale, tz));
 
     // ── Referencia normativa ──
     y += 6;
@@ -487,7 +487,7 @@ function renderPdf(ctx: {
     setFont(7, false);
     doc.fillColor(gray)
       .text(
-        sanitize(`${L.generated}: ${new Date().toLocaleString(L.dateFormatLocale)}   -   ${drill.drillCode}   -   ${tenantName}`),
+        sanitize(`${L.generated}: ${fmtDateTimeTz(new Date(), tz, L.dateFormatLocale)}   -   ${drill.drillCode}   -   ${tenantName}`),
         ML, footerY, { width: W, align: "center" }
       );
 

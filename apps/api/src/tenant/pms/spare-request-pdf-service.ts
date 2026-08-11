@@ -5,10 +5,12 @@ import { getSpareRequest } from "../spare-requests/spare-requests-service";
 import { listRequestItems } from "../spare-requests/spare-request-items-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "./pdf-helpers";
+import { fmtDate as fmtDateTz } from "../../common/tenant-time";
 
+// Delegado al helper común: además de la zona horaria aplica la regla de
+// fecha-sola (una fecha de calendario no se convierte, si no se corre un día).
 function fmt(d: Date | string | null | undefined, tz = "UTC", locale = "es-AR"): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString(locale, { timeZone: tz, day: "2-digit", month: "2-digit", year: "numeric" });
+  return fmtDateTz(d, tz, locale);
 }
 
 function val(v: string | null | undefined): string {

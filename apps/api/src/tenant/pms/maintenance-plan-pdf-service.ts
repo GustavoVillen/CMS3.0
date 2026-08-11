@@ -8,12 +8,8 @@ import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, splitTextIntoPageSegment
 import { resolveTenantForm } from "./tenant-forms-service";
 import { renderMercurioMaintenancePlanPdf } from "./maintenance-plan-pdf-mercurio";
 import { areaText } from "./work-order-pdf/shared";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: unknown): string {
-  if (!d) return "—";
-  const dt = new Date(d as string);
-  return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("es-AR");
-}
 
 function val(v: unknown): string {
   const s = String(v ?? "").trim();
@@ -84,6 +80,11 @@ const FONT_REGULAR = dejavuRegular ? "DejaVuSans" : "Helvetica";
 const FONT_BOLD    = dejavuBold    ? "DejaVuSans-Bold" : "Helvetica-Bold";
 
 export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const plan = await getTenantMaintenancePlan(session, id);
   const p = plan as Record<string, unknown>;
 
@@ -121,7 +122,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
             where: { id: m[1], tenantId: tenantDbId },
             select: { reportDate: true },
           });
-          if (dr?.reportDate) ref = `Reporte Diario del ${new Date(dr.reportDate).toLocaleDateString("es-AR")}`;
+          if (dr?.reportDate) ref = `Reporte Diario del ${fmt(dr.reportDate)}`;
         } catch { /* non-blocking */ }
         lastLog.notes = `Registrado desde ${ref}`;
       }
@@ -152,6 +153,8 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       assetName,
       assetIsSafetyCritical,
       lastLog,
+      tz,
+      locale,
     });
   }
 
@@ -601,7 +604,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     doc.fontSize(13).font(FONT_BOLD).fillColor(navy)
       .text(val(p["taskCode"]), ML + 14, y + 28, { width: titleW });
     doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML + 14, y + 48, { width: titleW });
+      .text(`Generado: ${fmtDateTime(new Date())}`, ML + 14, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();

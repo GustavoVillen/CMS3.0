@@ -4,11 +4,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getFluidSample } from "./fluid-analyses-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments, sanitizePdfText, renderInlineBoldText } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-AR");
-}
 
 function val(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -41,6 +38,11 @@ const FOOTER_SIZE    = 40;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
 
 export async function buildFluidAnalysisPdf(session: TenantAccessSession, sampleId: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const sample = await getFluidSample(session, sampleId);
 
   const prisma = getPrismaClient();
@@ -332,7 +334,7 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
     doc.fontSize(12).font("Helvetica-Bold").fillColor(navy)
       .text(sample.sampleCode, metaX, y + 10, { width: metaW, align: "right" });
     doc.fontSize(7.5).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, metaX, y + 38, { width: metaW, align: "right" });
+      .text(`Generado: ${fmtDateTime(new Date())}`, metaX, y + 38, { width: metaW, align: "right" });
 
     y += 64;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();

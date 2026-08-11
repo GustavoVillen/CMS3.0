@@ -5,13 +5,8 @@ import { getTenantSpare } from "../spares/spares-service";
 import { getOnHandQty, getReservedMapFromCalc } from "./stock-calc-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, renderLabeledTextBox, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-AR");
-}
 
 function val(v: string | null | undefined): string {
   return v?.trim() || "—";
@@ -82,6 +77,11 @@ interface MovementRow {
 }
 
 export async function buildSparePdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const spare = (await getTenantSpare(session, id)) as unknown as SpareForPdf;
 
   // Stock real desde el ledger de movimientos (la app ignora Spare.currentStock).
@@ -176,7 +176,7 @@ export async function buildSparePdf(session: TenantAccessSession, id: string): P
     doc.fontSize(13).font("Helvetica-Bold").fillColor(black)
       .text(sanitizePdfText(`${spare.sku}  ·  ${spare.name}`), ML, y + 30, { width: titleW });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML, y + 48, { width: titleW });
+      .text(`Generado: ${fmtDateTime(new Date())}`, ML, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();

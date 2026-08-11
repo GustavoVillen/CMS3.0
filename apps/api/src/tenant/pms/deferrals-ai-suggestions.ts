@@ -8,6 +8,7 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDeferral } from "./deferrals-service";
+import { fmtDate as fmtDateTz } from "../../common/tenant-time";
 
 const MODEL = AI_MODEL.fast;
 
@@ -39,10 +40,10 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   WORK_ORDER: "Orden de trabajo", DEFECT: "Defecto", MAINTENANCE_PLAN: "Plan de mantenimiento",
 };
 
-function fmtDateEs(d: string | Date | null | undefined): string {
-  if (!d) return "no especificada";
-  const dt = new Date(d);
-  return isNaN(dt.getTime()) ? "no especificada" : dt.toLocaleDateString("es-AR");
+// Fechas del prompt: en la hora de la empresa, para que la IA razone sobre las
+// mismas fechas que ve el usuario en pantalla.
+function fmtDateEs(d: string | Date | null | undefined, tz = "UTC"): string {
+  return fmtDateTz(d, tz, "es-AR", "no especificada");
 }
 
 function durationLabel(from: string | Date | null | undefined, to: string | Date | null | undefined): string {

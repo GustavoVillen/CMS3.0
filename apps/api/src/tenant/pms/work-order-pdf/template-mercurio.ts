@@ -7,7 +7,7 @@
 
 import PDFDocument from "pdfkit";
 import {
-  fmt, val, statusLabel, priorityLabel, riskLabel, woResultLabel,
+  makeFormatters, val, statusLabel, priorityLabel, riskLabel, woResultLabel,
   STATUS_COLOR, PRIORITY_COLOR, sanitizePdfText, PAGE_H,
   type WorkOrderPdfContext,
 } from "./shared";
@@ -27,6 +27,8 @@ const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
 export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
   const { wo, assetLabel, vesselName, assetIsSafetyCritical, assignedName, createdByName, tenant, formLogoBuffer, formMeta, spareUsages, tenantSlug } = ctx;
+  // Todas las fechas del papel, en la hora de la empresa (ver common/tenant-time).
+  const { fmt, fmtDateTime } = makeFormatters(ctx.tz, ctx.locale);
 
   // Checkboxes ahora interactivos (AcroForm): se tildan desde el visor PDF, sin
   // pre-marcado del sistema. Solo se usan las etiquetas de cada grupo.
@@ -212,9 +214,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
       section("REGISTRO DE AVANCES");
       const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio" };
       for (const n of ctx.progressNotes) {
-        const ts = new Date(n.createdAt).toLocaleString("es-AR", {
-          day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
-        });
+        const ts = fmtDateTime(n.createdAt);
         const head = `${ts}  ·  ${KIND_LBL[n.kind] ?? n.kind}`;
         const body = n.text && n.text.trim()
           ? n.text.trim()
@@ -400,10 +400,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
               .text("[Imagen no disponible]", x + 8, canvas.y + imgH / 2 - 4, { width: cellW - 16, align: "center" });
           }
           const captionY = canvas.y + imgH + 4;
-          const tsLabel = new Date(foto.createdAt).toLocaleString("es-AR", {
-            day: "2-digit", month: "2-digit", year: "2-digit",
-            hour: "2-digit", minute: "2-digit",
-          });
+          const tsLabel = fmtDateTime(foto.createdAt);
           doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
             .text(tsLabel, x, captionY, { width: cellW, lineBreak: false });
           if (foto.text) {

@@ -3,29 +3,26 @@
 // Pure helpers — no Prisma, no I/O.
 
 export { sanitizePdfText, resolveTenantLogo, LOGO_PATH } from "../pdf-helpers";
+import { fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../../common/tenant-time";
 import type { ControlledDocMeta } from "../pdf-form-chrome";
 import type { FormConfig } from "../tenant-forms-service";
 export type { ControlledDocMeta, FormConfig };
 
 // ── Format helpers ───────────────────────────────────────────────────────────
 
-export function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  const date = new Date(d);
-  // Las fechas SIN hora (apertura, vencimiento, jornadas: lo que el usuario
-  // eligió en un calendario) se guardan como medianoche UTC. Formatearlas en
-  // hora local las corría un día para atrás y el papel salía con la fecha
-  // equivocada. Cuando la hora es 00:00 UTC se formatea en UTC; los sellos de
-  // tiempo reales (cierre, firmas) siguen en hora local, que es lo correcto.
-  const esFechaSola =
-    date.getUTCHours() === 0 && date.getUTCMinutes() === 0 &&
-    date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
-  return date.toLocaleDateString("es-AR", esFechaSola ? { timeZone: "UTC" } : undefined);
-}
-
-export function fmtDateTime(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleString("es-AR");
+/**
+ * Formateadores del documento, atados a la zona horaria de la EMPRESA.
+ *
+ * No hay un `fmt` suelto a propósito: sin zona horaria el papel salía con la
+ * hora del servidor (UTC), no con la de a bordo. Cada plantilla arranca con
+ * `const { fmt, fmtDateTime } = makeFormatters(tz, locale);` y el compilador
+ * avisa si alguien se la olvida. La regla de fecha-sola vive en common/tenant-time.
+ */
+export function makeFormatters(tz: string, locale: string) {
+  return {
+    fmt: (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale),
+    fmtDateTime: (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale),
+  };
 }
 
 export function val(v: string | null | undefined): string {
@@ -203,6 +200,10 @@ export interface WorkOrderPdfContext {
   templateKey: string;
   /** Tenant slug (used by some templates as fallback header text). */
   tenantSlug: string;
+  /** Zona horaria de la empresa: TODA fecha/hora del papel se formatea con ella. */
+  tz: string;
+  /** Locale del documento, según el idioma de la empresa. */
+  locale: string;
   /** Metadatos del documento controlado (numero, revision, footer…) resueltos por tenant. */
   formMeta: ControlledDocMeta;
   /** Config de secciones/opciones/etiquetas del formulario resuelta por tenant. */

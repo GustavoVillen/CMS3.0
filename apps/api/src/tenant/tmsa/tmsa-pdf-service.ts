@@ -11,10 +11,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getTmsaMaintenanceEvidence, type TmsaStatus, type TmsaMetric } from "./tmsa-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date): string {
-  return new Date(d).toLocaleDateString("es-AR");
-}
 
 const GROUP_TITLE: Record<string, string> = {
   pmsCoverage:        "Cobertura del PMS",
@@ -71,6 +69,11 @@ export async function buildTmsaMaintenancePdf(
   session: TenantAccessSession,
   vesselCode: string | null,
 ): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const { items } = await getTmsaMaintenanceEvidence(session, vesselCode);
 
   let tenantName: string | null = null;
@@ -124,7 +127,7 @@ export async function buildTmsaMaintenancePdf(
     doc.fontSize(11).font("Helvetica").fillColor(gray)
       .text("Reliability & Maintenance Standards", ML, y + 28, { width: titleW });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`${tenantName ?? session.tenantSlug} · Generado: ${new Date().toLocaleString("es-AR")}`, ML, y + 46, { width: titleW });
+      .text(`${tenantName ?? session.tenantSlug} · Generado: ${fmtDateTime(new Date())}`, ML, y + 46, { width: titleW });
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
     y += 14;

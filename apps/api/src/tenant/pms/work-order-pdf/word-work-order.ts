@@ -1,7 +1,7 @@
 // Work Order → Word (.doc). Espejo HTML de template-mercurio.ts.
 // Recibe el mismo WorkOrderPdfContext que el PDF y devuelve un Buffer .doc.
 
-import { fmt, val, statusLabel, priorityLabel, riskLabel, woResultLabel, type WorkOrderPdfContext } from "./shared";
+import { makeFormatters, val, statusLabel, priorityLabel, riskLabel, woResultLabel, type WorkOrderPdfContext } from "./shared";
 import {
   wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
   docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer,
@@ -17,6 +17,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   const { wo, assetLabel, assignedName, createdByName, formMeta, spareUsages, tenant, tenantSlug, vesselName, providerNames } = ctx;
+  // Todas las fechas del documento, en la hora de la empresa (ver common/tenant-time).
+  const { fmt, fmtDateTime } = makeFormatters(ctx.tz, ctx.locale);
   const w = wo as any;
   const isPlanned = !!w.maintenancePlanId || w.type === "PREVENTIVE";
   const logo = bufferToDataUri(ctx.formLogoBuffer);
@@ -92,7 +94,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
     parts.push(docSection("REGISTRO DE AVANCES"));
     const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio" };
     const rows = ctx.progressNotes.map(n => {
-      const ts = new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const ts = fmtDateTime(n.createdAt);
       const body = n.text && n.text.trim() ? n.text.trim()
         : (n.kind === "PHOTO" ? "[Foto adjunta]" : n.kind === "VIDEO" ? "[Video adjunto]" : n.kind === "AUDIO" ? "[Audio adjunto]" : "—");
       return [`${ts} · ${KIND_LBL[n.kind] ?? n.kind}`, body];
@@ -176,7 +178,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
     parts.push(docSection("ANEXO FOTOGRAFICO"));
     const cells = fotos.map(f => {
       const uri = bufferToDataUri(f.buffer);
-      const ts = new Date(f.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const ts = fmtDateTime(f.createdAt);
       const cap = `${ts}${f.text ? " · " + esc(f.text) : ""}`;
       return `<td style="width:50%;text-align:center;vertical-align:top;">${uri ? `<img src="${uri}" style="max-width:100%;max-height:220pt;">` : "[Imagen no disponible]"}<br><span style="font-size:7pt;color:#6B7280;">${cap}</span></td>`;
     });

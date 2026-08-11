@@ -8,6 +8,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getSidebarCounts } from "../sidebar/sidebar-counts-service";
 import { getMaintenanceWorkloadProjection } from "../maintenance-plans/maintenance-plans-service";
+import { resolveTenantTime, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
 function esc(s: string): string {
   return s
@@ -18,7 +19,7 @@ function esc(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function htmlShell(title: string, body: string): string {
+function htmlShell(title: string, body: string, generado: string): string {
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -58,7 +59,7 @@ function htmlShell(title: string, body: string): string {
 </head>
 <body>
 ${body}
-<div class="footer">Generado por Copilot Management System — ${esc(new Date().toLocaleString("es-AR"))}</div>
+<div class="footer">Generado por Copilot Management System — ${esc(generado)}</div>
 </body>
 </html>`;
 }
@@ -101,6 +102,8 @@ export async function buildDashboardHtml(
   session: TenantAccessSession,
   vesselCode: string | null,
 ): Promise<string> {
+  // Sello de generación en la hora de la EMPRESA (el servidor corre en UTC).
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const counts = await getSidebarCounts(session, vesselCode) as unknown as Record<string, number>;
 
   const scopeLabel = vesselCode
@@ -119,7 +122,7 @@ export async function buildDashboardHtml(
 
   const body = `
 <h1>Dashboard — ${esc(session.tenantSlug)}</h1>
-<div class="sub">${scopeLabel} · Generado ${esc(new Date().toLocaleString("es-AR"))}</div>
+<div class="sub">${scopeLabel} · Generado ${esc(fmtDateTimeTz(new Date(), tz, locale))}</div>
 
 <h2>Acciones requeridas</h2>
 <div class="kpi-grid">
@@ -131,7 +134,7 @@ export async function buildDashboardHtml(
   Para datos actualizados en vivo, abrir la aplicación.
 </p>
 `;
-  return htmlShell(`Dashboard — ${session.tenantSlug}`, body);
+  return htmlShell(`Dashboard — ${session.tenantSlug}`, body, fmtDateTimeTz(new Date(), tz, locale));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,6 +202,8 @@ export async function buildWorkloadHtml(
   vesselCode: string | null,
   weeks: number,
 ): Promise<string> {
+  // Sello de generación en la hora de la EMPRESA (el servidor corre en UTC).
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const proj = await getMaintenanceWorkloadProjection(session, { vesselCode, weeks }) as unknown as {
     weeks: Array<{ weekStart: string; taskCount: number; dateBased: number; hoursBased: number; laborHours: number }>;
     totalPlans: number;
@@ -226,7 +231,7 @@ export async function buildWorkloadHtml(
 
   const body = `
 <h1>Carga de Mantenimiento</h1>
-<div class="sub">${scopeLabel} · Ventana ${weeks} semanas · Generado ${esc(new Date().toLocaleString("es-AR"))}</div>
+<div class="sub">${scopeLabel} · Ventana ${weeks} semanas · Generado ${esc(fmtDateTimeTz(new Date(), tz, locale))}</div>
 
 <h2>Resumen</h2>
 <div class="kpi-grid">
@@ -262,5 +267,5 @@ export async function buildWorkloadHtml(
   </tbody>
 </table>
 `;
-  return htmlShell(`Carga de Mantenimiento — ${session.tenantSlug}`, body);
+  return htmlShell(`Carga de Mantenimiento — ${session.tenantSlug}`, body, fmtDateTimeTz(new Date(), tz, locale));
 }

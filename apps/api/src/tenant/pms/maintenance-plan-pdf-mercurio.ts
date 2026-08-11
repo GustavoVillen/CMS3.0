@@ -8,6 +8,7 @@
 
 import PDFDocument from "pdfkit";
 import { sanitizePdfText } from "./pdf-helpers";
+import { fmtDate as fmtDateTz } from "../../common/tenant-time";
 import { areaText } from "./work-order-pdf/shared";
 import {
   FORM_COLORS, FOOTER_H, PAGE_H,
@@ -40,6 +41,9 @@ export interface MercurioMaintenancePlanData {
     result: string; executedByName: string; completedAt: Date | null;
     runningHoursAtExecution: number | null; notes: string | null;
   } | null;
+  /** Zona horaria y locale de la empresa: las fechas del papel salen con esa hora. */
+  tz: string;
+  locale: string;
 }
 
 const RISK_LEVEL_LABEL: Record<string, string> = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto", CRITICAL: "Crítico" };
@@ -49,11 +53,6 @@ function val(v: unknown): string {
   const s = String(v ?? "").trim();
   return s || "—";
 }
-function fmtDate(d: unknown): string {
-  if (!d) return "—";
-  const dt = new Date(d as string);
-  return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("es-AR");
-}
 function frequencyLabel(p: Record<string, unknown>): string {
   const parts: string[] = [];
   if (p["frequencyMonths"] != null) parts.push(`${p["frequencyMonths"]} meses`);
@@ -62,7 +61,8 @@ function frequencyLabel(p: Record<string, unknown>): string {
 }
 
 export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenancePlanData): Promise<Buffer> {
-  const { meta, logoBuffer, tenantName, plan: p, assetName, assetIsSafetyCritical, lastLog } = data;
+  const { meta, logoBuffer, tenantName, plan: p, assetName, assetIsSafetyCritical, lastLog, tz, locale } = data;
+  const fmtDate = (d: unknown) => fmtDateTz(d as string | null | undefined, tz, locale);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `Plan ${val(p["taskCode"])}` } });

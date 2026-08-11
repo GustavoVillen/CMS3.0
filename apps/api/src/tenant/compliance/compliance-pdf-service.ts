@@ -8,11 +8,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getComplianceScores } from "./compliance-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-AR");
-}
 
 const LABEL_TEXT: Record<string, string> = {
   EXCELLENT: "Excelente",
@@ -44,6 +41,11 @@ export async function buildCompliancePdf(
   session: TenantAccessSession,
   vesselCode: string | null,
 ): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const { items: scores } = await getComplianceScores(session, vesselCode);
 
   // Tenant logo + display name
@@ -117,7 +119,7 @@ export async function buildCompliancePdf(
     doc.fontSize(13).font("Helvetica-Bold").fillColor(black)
       .text(vesselCode ? `${tenantName ?? ""} — ${vesselCode}` : (tenantName ?? "Flota completa"), ML, y + 30, { width: titleW });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML, y + 48, { width: titleW });
+      .text(`Generado: ${fmtDateTime(new Date())}`, ML, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();

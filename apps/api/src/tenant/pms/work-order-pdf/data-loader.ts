@@ -12,6 +12,7 @@ import {
   type WorkOrderPlannedItem, type WorkOrderScheduleRow,
 } from "./shared";
 import { resolveTenantForm, type TenantFormType } from "../tenant-forms-service";
+import { resolveTenantTime } from "../../../common/tenant-time";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "attachments");
 
@@ -418,6 +419,7 @@ export async function loadWorkOrderPdfContext(
     // esas claves. Fallback al style por compatibilidad (hoy dan el mismo valor).
     templateKey: templateKey ?? resolvedForm.meta.style,
     tenantSlug: session.tenantSlug,
+    ...(await resolveTenantTime(session.tenantSlug)),
     formMeta: resolvedForm.meta,
     formConfig: resolvedForm.config,
     formLogoBuffer: resolvedForm.logoBuffer ?? tenantLogoBuffer,

@@ -12,6 +12,7 @@ import { log } from "../../common/logger";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getVoyageTankReportFull } from "./voyage-tank-reports-integration-service";
 import { resolveTenantLogo, sanitizePdfText } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
 function val(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -34,18 +35,15 @@ function fmtHrs(v: number | null | undefined): string {
   return v.toLocaleString("es-AR");
 }
 
-function fmtDateTime(value: string | Date | null | undefined): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
 
 // ── Helpers de cálculo (duplicados en el frontend; fórmula trivial) ──
 const netInitial = (t: any) => (t.volumeTotalLtsInitial ?? 0) - (t.volumeWaterLtsInitial ?? 0);
 const netFinal   = (t: any) => (t.volumeTotalLtsFinal ?? 0) - (t.volumeWaterLtsFinal ?? 0);
 
 export async function buildVoyageTankReportPdf(session: TenantAccessSession, reportId: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
@@ -67,15 +65,16 @@ export async function buildVoyageTankReportPdf(session: TenantAccessSession, rep
   const logoBuffer = await resolveTenantLogo(session.tenantSlug, tenantRow?.settings?.logoUrl, tenantRow?.settings?.logoUrlLight);
 
   try {
-    return await renderPdf({ tenantName, vesselName, logoBuffer, report });
+    return await renderPdf({ tenantName, vesselName, logoBuffer, report, tz, locale });
   } catch (err) {
     log.error("[buildVoyageTankReportPdf] render failed:", err);
     throw new RouteError(500, "PDF_RENDER_FAILED", err instanceof Error ? err.message : "No se pudo generar el PDF.");
   }
 }
 
-function renderPdf(ctx: { tenantName: string; vesselName: string; logoBuffer: Buffer | null; report: any }): Promise<Buffer> {
-  const { tenantName, vesselName, logoBuffer, report } = ctx;
+function renderPdf(ctx: { tenantName: string; vesselName: string; logoBuffer: Buffer | null; report: any; tz: string; locale: string }): Promise<Buffer> {
+  const { tenantName, vesselName, logoBuffer, report, tz, locale } = ctx;
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
 
   return new Promise<Buffer>((resolve, reject) => {
     // Apaisado para reproducir el M2 de papel (dos paneles Inicial/Final).

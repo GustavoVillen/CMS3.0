@@ -25,6 +25,10 @@ export interface CachedTenant {
     logoUrlLight: string | null;
     defaultLocale: string | null;
     enabledLocales: string[] | null;
+    // Zona horaria de la empresa (ej. "America/Asuncion"). La usan TODOS los
+    // documentos: el servidor corre en UTC y sin esto los papeles salían con la
+    // hora del servidor, no con la de a bordo.
+    timezone: string | null;
   } | null;
 }
 
@@ -49,7 +53,7 @@ export async function getCachedTenantBySlug(slug: string): Promise<CachedTenant 
     select: {
       id: true,
       slug: true,
-      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, defaultLocale: true, enabledLocales: true } },
+      settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, defaultLocale: true, enabledLocales: true, timezone: true } },
     },
   });
 
@@ -64,6 +68,7 @@ export async function getCachedTenantBySlug(slug: string): Promise<CachedTenant 
               logoUrlLight: row.settings.logoUrlLight,
               defaultLocale: row.settings.defaultLocale ?? null,
               enabledLocales: (row.settings.enabledLocales as string[] | null) ?? null,
+              timezone: (row.settings as { timezone?: string | null }).timezone ?? null,
             }
           : null,
       }

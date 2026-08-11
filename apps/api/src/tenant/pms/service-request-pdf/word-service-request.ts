@@ -1,7 +1,7 @@
 // Solicitud de servicios → Word (.doc). Espejo HTML de template-service-request.ts.
 // Recorre ctx.formConfig.sections (orden e inclusión = data del tenant).
 
-import { fmt, val, departmentLabel } from "../work-order-pdf/shared";
+import { makeFormatters, val, departmentLabel } from "../work-order-pdf/shared";
 import { buildHojaRuta } from "../../service-requests/hoja-ruta";
 import type { ServiceRequestPdfContext } from "./shared";
 import {
@@ -11,6 +11,8 @@ import {
 
 export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
   const { sr, wo, assetLabel, assignedName, createdByName, providerName, tenant, formLogoBuffer, formMeta, formConfig, tenantSlug } = ctx;
+  // Todas las fechas del documento, en la hora de la empresa (ver common/tenant-time).
+  const { fmt } = makeFormatters(ctx.tz, ctx.locale);
   const docCode = ctx.docCode || "";
   const department: string | null = sr.department ?? null;
   const commMethods: string[] = sr.communicationMethod ?? [];

@@ -7,6 +7,7 @@ import { getServiceRequest } from "../../service-requests/service-requests-servi
 import { resolveTenantLogo } from "../pdf-helpers";
 import { sanitizePdfText } from "../work-order-pdf/shared";
 import { resolveTenantForm } from "../tenant-forms-service";
+import { resolveTenantTime } from "../../../common/tenant-time";
 import type { ServiceRequestPdfContext, ServiceRequestPdfTenantInfo } from "./shared";
 
 /** Firma del usuario como Buffer, sólo si es un data-URI base64. */
@@ -198,6 +199,7 @@ export async function loadServiceRequestPdfContext(
     assignedSignatureBuffer,
     tenant,
     tenantSlug: session.tenantSlug,
+    ...(await resolveTenantTime(session.tenantSlug)),
     formMeta: resolvedForm.meta,
     formConfig: resolvedForm.config,
     formLogoBuffer,

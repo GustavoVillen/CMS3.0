@@ -6,13 +6,8 @@ import { listTenantWorkOrders } from "../work-orders/work-orders-service";
 import { listTenantMaintenancePlans } from "../maintenance-plans/maintenance-plans-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, renderLabeledTextBox, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-AR");
-}
 
 function val(v: string | null | undefined): string {
   return v?.trim() || "—";
@@ -70,7 +65,7 @@ function planFreqSortKey(p: PlanRow): number {
   return Number.POSITIVE_INFINITY;
 }
 
-function fmtPlanNextDue(p: PlanRow): string {
+function fmtPlanNextDue(p: PlanRow, fmt: (d: Date | string | null | undefined) => string): string {
   if (p.nextDueHours != null) return `${Number(p.nextDueHours).toLocaleString("es-AR")} h`;
   if (p.nextDueDate) return fmt(p.nextDueDate);
   return "—";
@@ -126,6 +121,11 @@ interface PlanRow {
 }
 
 export async function buildAssetPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas del documento en la hora de la EMPRESA: el servidor corre en UTC y
+  // sin esto el papel salía con la fecha del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
   const asset = (await getTenantAsset(session, id)) as unknown as AssetForPdf;
 
   // Historial de mantenimientos/inspecciones (órdenes de trabajo del asset).
@@ -209,7 +209,7 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
     doc.fontSize(13).font("Helvetica-Bold").fillColor(black)
       .text(sanitizePdfText(`${asset.assetCode}  ·  ${asset.name}`), ML, y + 30, { width: titleW });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML, y + 48, { width: titleW });
+      .text(`Generado: ${fmtDateTime(new Date())}`, ML, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
@@ -354,7 +354,7 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
       { text: PLAN_TYPE_LABEL[p.taskType] ?? p.taskType, color: black },
       { text: val(p.title), color: "#334155" },
       { text: fmtPlanFreq(p), color: gray },
-      { text: fmtPlanNextDue(p), color: "#0369a1" },
+      { text: fmtPlanNextDue(p, fmt), color: "#0369a1" },
       { text: PLAN_STATUS_LABEL[p.executionStatus ?? ""] ?? (p.executionStatus ?? "—"), color: PLAN_STATUS_COLOR[p.executionStatus ?? ""] ?? black, bold: true },
     ]);
     renderTable("PLAN DE MANTENIMIENTO", planCols, planRows, "Este equipo aún no tiene tareas de mantenimiento.");

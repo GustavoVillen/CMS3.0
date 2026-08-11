@@ -1,5 +1,35 @@
 HISTORY.txt
 
+[2026-08-11] TODOS los documentos: fecha y hora en la hora de la empresa
+Agent: Claude Opus 5
+- Pedido del usuario tras el fix del permiso: corregir lo mismo en todos los
+  formularios y que SIEMPRE se use la hora local, incluidas las fechas solas.
+- common/tenant-time.ts (nuevo): única fuente de la verdad. Dos reglas:
+  · SELLO DE TIEMPO (firma, cierre, "generado") → zona horaria de la EMPRESA.
+  · FECHA SOLA elegida en un calendario (apertura, vencimiento, jornada) → se
+    guarda como medianoche UTC y representa un día del almanaque: se formatea en
+    UTC. Convertirla a hora local la corría al día anterior.
+  La distinción es por el valor (00:00:00.000 UTC = fecha sola). Zona horaria
+  mal cargada ⇒ no rompe el documento, cae a la hora del proceso.
+- tenant-cache: ahora cachea `timezone` (5 min), así resolverla es gratis.
+- work-order-pdf/shared: se eliminó el `fmt` suelto y se expone
+  `makeFormatters(tz, locale)`. Sin zona horaria ya no compila: el compilador
+  avisa si una plantilla nueva se la olvida. tz/locale viajan en el contexto.
+- Barrido (21 archivos): OT (3 plantillas + Word), SS (PDF + Word), planes
+  (estándar y Mercurio), equipos, repuestos (ficha, consumo, inventario,
+  solicitud), defectos, diferimientos, CAPA, muestras, MOC, TMSA, compliance,
+  simulacros, partes diarios, medición de tanques, OTs abiertas, Excel de planes
+  próximos a vencer, dashboards HTML, nota del parte diario y el prompt de IA de
+  diferimientos.
+- Efecto visible: las fechas pasan de "17/7/26" a "17/07/2026" (formato uniforme
+  en todos los documentos).
+- Verificado: fecha sola 03/08 imprime 03/08 (antes 02/08); sello 11:00Z imprime
+  08:00 en Asunción; zona inválida no rompe. PDF de OT real: FECHA 17/07/2026.
+- FUERA DE ESTE COMMIT: la exportación a Excel de Auditoría (tenant-router.ts)
+  tiene el mismo arreglo aplicado en el working tree, pero ese archivo está
+  mezclado con el trabajo EN CURSO del usuario (permisos por rol); va cuando él
+  commitee lo suyo.
+
 [2026-08-11] Permiso de trabajo: el PDF imprimía otra hora (+3) y un garabato
 Agent: Claude Opus 5
 - Reporte del usuario: se carga 08:00–18:00 y el PDF sale 11:00–21:00.

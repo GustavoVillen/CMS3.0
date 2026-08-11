@@ -8,16 +8,9 @@ import { hasMarkdownTable, renderMarkdownBlocks } from "./pdf-markdown";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { drawControlledDocHeader, drawControlledDocFooter, FOOTER_H } from "./pdf-form-chrome";
 import { renderRiskMatrixPdf } from "./risk-matrix-pdf";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-AR");
-}
 
-function fmtDateTime(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleString("es-AR");
-}
 
 function val(v: string | null | undefined): string {
   return v?.trim() || "—";
@@ -54,6 +47,11 @@ const MARGIN_V      = Math.round(1.5 * CM);
 const FOOTER_SIZE   = 40;
 
 export async function buildDeferralPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
   const deferral = await getDeferral(session, id);
 
   // Resolve vessel name + source code + label + task description

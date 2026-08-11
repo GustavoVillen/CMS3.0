@@ -4,6 +4,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getMoc } from "./moc-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, renderLabeledTextBox } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
 import {
   EVAL_GROUPS, EVAL_QUESTIONS, EFFECTIVENESS_QUESTIONS, EVALUATOR_AREAS,
   CHANGE_TYPES, LOCATION_TYPES, DURATION_LABELS, YESNO_LABELS, RISK_LABELS,
@@ -11,10 +12,6 @@ import {
 
 // ─── Helpers de texto ─────────────────────────────────────────────────────────
 
-function fmt(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-AR");
-}
 function val(v: string | null | undefined): string {
   return v?.trim() || "—";
 }
@@ -70,6 +67,10 @@ const FOOTER_SIZE = 30;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
 
 export async function buildMocPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const moc = await getMoc(session, id) as unknown as MocRecord;
 
   let tenantLogoBuffer: Buffer | null = null;

@@ -40,6 +40,10 @@ export interface ServiceRequestPdfContext {
   autorizaSignatureBuffer: Buffer | null;
   tenant: ServiceRequestPdfTenantInfo | null;
   tenantSlug: string;
+  /** Zona horaria de la empresa: TODA fecha/hora del papel se formatea con ella. */
+  tz: string;
+  /** Locale del documento, según el idioma de la empresa. */
+  locale: string;
   formMeta: ControlledDocMeta;
   formConfig: FormConfig;
   formLogoBuffer: Buffer | null;

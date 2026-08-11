@@ -16,6 +16,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getDailyReportWithSubEntities } from "./daily-report-integration-service";
 import { nearestCity } from "./nearest-city";
 import { resolveTenantLogo } from "../pms/pdf-helpers";
+import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
 function sanitize(s: string | null | undefined): string {
   if (s === null || s === undefined) return "";
@@ -41,19 +42,7 @@ function val(v: unknown): string {
   return sanitize(String(v));
 }
 
-function fmtDate(value: string | Date | null | undefined): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toISOString().slice(0, 10);
-}
 
-function fmtDateTime(value: string | Date | null | undefined): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
 
 function fmtCoord(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
@@ -61,6 +50,9 @@ function fmtCoord(value: number | null | undefined): string {
 }
 
 export async function buildDailyReportPdf(session: TenantAccessSession, reportId: string): Promise<Buffer> {
+  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
+  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
@@ -79,15 +71,17 @@ export async function buildDailyReportPdf(session: TenantAccessSession, reportId
   const logoBuffer = await resolveTenantLogo(session.tenantSlug, tenantRow?.settings?.logoUrl, tenantRow?.settings?.logoUrlLight);
 
   try {
-    return await renderPdf({ tenantName, vesselName, logoBuffer, report });
+    return await renderPdf({ tenantName, vesselName, logoBuffer, report, tz, locale });
   } catch (err) {
     log.error("[buildDailyReportPdf] render failed:", err);
     throw new RouteError(500, "PDF_RENDER_FAILED", err instanceof Error ? err.message : "No se pudo generar el PDF.");
   }
 }
 
-function renderPdf(ctx: { tenantName: string; vesselName: string; logoBuffer: Buffer | null; report: any }): Promise<Buffer> {
-  const { tenantName, vesselName, logoBuffer, report } = ctx;
+function renderPdf(ctx: { tenantName: string; vesselName: string; logoBuffer: Buffer | null; report: any; tz: string; locale: string }): Promise<Buffer> {
+  const { tenantName, vesselName, logoBuffer, report, tz, locale } = ctx;
+  const fmtDate = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
+  const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({

@@ -5,7 +5,7 @@
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import {
-  fmt, val, typeLabel, statusLabel, priorityLabel, riskLabel, woResultLabel,
+  makeFormatters, val, typeLabel, statusLabel, priorityLabel, riskLabel, woResultLabel,
   STATUS_COLOR, PRIORITY_COLOR, LOGO_PATH, PAGE_H, sanitizePdfText, areaText,
   type WorkOrderPdfContext,
 } from "./shared";
@@ -25,6 +25,8 @@ const APPROVAL_COLS = [
 
 export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Promise<Buffer> {
   const { wo, assetLabel, assetIsSafetyCritical, assignedName, tenantLogoBuffer } = ctx;
+  // Todas las fechas del papel, en la hora de la empresa (ver common/tenant-time).
+  const { fmt, fmtDateTime } = makeFormatters(ctx.tz, ctx.locale);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });
@@ -311,7 +313,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     doc.fontSize(13).font("Helvetica-Bold").fillColor(navy)
       .text(wo.workOrderCode, ML + 14, y + 30, { width: titleW });
     doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString("es-AR")}`, ML + 14, y + 48, { width: titleW });
+      .text(`Generado: ${fmtDateTime(new Date())}`, ML + 14, y + 48, { width: titleW });
 
     y += HEADER_H + 8;
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
@@ -444,10 +446,7 @@ export async function renderStandardWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
           }
           // Caption: timestamp + texto
           const captionY = y + imgH + 4;
-          const tsLabel = new Date(foto.createdAt).toLocaleString("es-AR", {
-            day: "2-digit", month: "2-digit", year: "2-digit",
-            hour: "2-digit", minute: "2-digit",
-          });
+          const tsLabel = fmtDateTime(foto.createdAt);
           doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
             .text(tsLabel, x, captionY, { width: cellW, lineBreak: false });
           if (foto.text) {

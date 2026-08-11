@@ -14,7 +14,7 @@
 
 import PDFDocument from "pdfkit";
 import {
-  fmt, val, statusLabel, riskLabel, woResultLabel, sanitizePdfText, PAGE_H,
+  makeFormatters, val, statusLabel, riskLabel, woResultLabel, sanitizePdfText, PAGE_H,
   type WorkOrderPdfContext,
 } from "./shared";
 import {
@@ -75,6 +75,8 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     spareUsages,
   } = ctx;
   const w = wo as any;
+  // Todas las fechas del papel, en la hora de la empresa (ver common/tenant-time).
+  const { fmt } = makeFormatters(ctx.tz, ctx.locale);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `OT ${wo.workOrderCode}` } });

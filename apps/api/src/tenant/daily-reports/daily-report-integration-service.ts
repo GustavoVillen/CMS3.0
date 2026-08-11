@@ -14,6 +14,7 @@ import { RouteError } from "../../http/route-error";
 import { computeNextDueDate, computeNextDueHours } from "../pms/execution-windows-service";
 import { refreshExecutionStatuses } from "../pms/execution-windows-service";
 import { log } from "../../common/logger";
+import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
 
 export interface IntegrationResult {
   updatedRunningHoursCount: number;
@@ -44,6 +45,10 @@ export async function confirmAndIntegrateDailyReport(
   reportId: string,
 ): Promise<IntegrationResult> {
   ensureCanConfirm(session);
+
+  // La nota que queda en el registro de trabajo lleva la fecha del parte: en la
+  // hora de la empresa, para que coincida con la que se ve en pantalla.
+  const { tz: reportTz, locale: reportLocale } = await resolveTenantTime(session.tenantSlug);
 
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -187,7 +192,7 @@ export async function confirmAndIntegrateDailyReport(
         executedByUserId: session.user.id,
         followUpRequired: entry.followUpRequired,
         createdByUserId: session.user.id,
-        notes: `Registrado desde Reporte Diario del ${completedAt.toLocaleDateString("es-AR")}`,
+        notes: `Registrado desde Reporte Diario del ${fmtDateTz(completedAt, reportTz, reportLocale)}`,
       },
     });
 
