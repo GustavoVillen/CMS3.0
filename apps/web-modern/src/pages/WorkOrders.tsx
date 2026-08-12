@@ -1201,6 +1201,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [closing,         setClosing]        = useState(false);
   const [err,             setErr]            = useState<string | null>(null);
   const [expanded,        setExpanded]       = useState(true);
+  const [loadingTask, setLoadingTask] = useState(false);
   const [loadingCriteria, setLoadingCriteria] = useState(false);
   const [loadingLoto,     setLoadingLoto]    = useState(false);
   const [loadingRisk,     setLoadingRisk]    = useState(false);
@@ -1274,6 +1275,26 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     if (fields.riskLevel          !== undefined && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(fields.riskLevel))
       setRiskLevel(fields.riskLevel);
   } : null);
+
+  // Clic en el rótulo TAREA: la IA arma la lista de tareas desde el equipo y el
+  // título. Si el campo ya tiene texto se lo manda y devuelve la lista completa
+  // con lo escrito integrado (por eso reemplaza en vez de agregar).
+  const handleTaskClick = useCallback(async () => {
+    if (!isEditable || loadingTask) return;
+    const base = (title || "").trim();
+    if (!base) return;
+    setLoadingTask(true);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-task", {
+        assetLabel: workOrder.assetName ?? null,
+        taskDesc: base,
+        existingTasks: description.trim() || null,
+      });
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setDescription(sugerido);
+    } catch { /* el campo queda como estaba */ }
+    finally { setLoadingTask(false); }
+  }, [isEditable, loadingTask, workOrder.assetName, title, description]);
 
   const handleAcceptanceCriteriaClick = useCallback(async () => {
     if (!isEditable || loadingCriteria) return;
@@ -2173,8 +2194,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               />
             </div>
             <div className="space-y-1.5">
-              <label className={sectionLabelCls} style={sectionLabelStyle}>{t("wo.modal.task")}</label>
-              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable} className={`${inputCls} resize-y`} />
+              <label
+                onClick={handleTaskClick}
+                title={!isEditable ? undefined : !title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")}
+                className={`${sectionLabelCls} flex items-center gap-2 ${isEditable && title.trim() ? `cursor-pointer ${loadingTask ? "opacity-70 animate-pulse" : ""}` : ""}`}
+                style={sectionLabelStyle}
+              >
+                {isEditable && (loadingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />)}
+                {t("wo.modal.task")}
+                {loadingTask && <span className="text-[10px] normal-case font-normal">{t("common.analyzing")}</span>}
+              </label>
+              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable || loadingTask} className={`${inputCls} resize-y`} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
