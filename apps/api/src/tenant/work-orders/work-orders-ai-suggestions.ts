@@ -19,6 +19,23 @@ REGLAS DE CONCISIÓN:
 
 Responde ÚNICAMENTE con los bullets, en texto plano, sin introducción, sin numeración, sin explicación adicional.`;
 
+const PROMPT_TASK = `Sos experto en mantenimiento de máquinas navales. A partir del equipo y del título de la orden de trabajo, escribí las tareas concretas que hay que ejecutar.
+
+REGLAS:
+- Incluí TODAS las tareas que el trabajo requiera, sin límite de cantidad. No recortes por brevedad: si el mantenimiento son veinte pasos, van los veinte.
+- Ordenalas en la secuencia real de ejecución (preparación → intervención → pruebas → cierre).
+- Cada tarea en una sola línea como bullet "- ", empezando con un verbo en infinitivo. Ej: "- Drenar el aceite usado del cárter".
+- Específicas del equipo indicado: nombrá componentes, valores o consumibles cuando corresponda. Nada de generalidades como "revisar el equipo".
+- No incluyas criterios de aceptación, LOTO, EPP ni análisis de riesgo: eso se completa en sus propios campos.
+- Si el título es demasiado vago para deducir las tareas, sugerí las del mantenimiento típico de ese equipo.
+
+SI VIENE "Tareas ya cargadas":
+- Son las que el usuario ya escribió. Devolvé la lista COMPLETA y definitiva: las de él MÁS las que falten, integradas en una sola redacción ordenada.
+- Conservá el contenido técnico de las suyas (valores, marcas, cantidades, referencias). Podés mejorar la redacción o ubicarlas en el orden correcto, pero NO las elimines ni les cambies el sentido.
+- Fusioná duplicados: si una suya y una tuya son la misma tarea, dejá una sola.
+
+Responde ÚNICAMENTE con los bullets, en texto plano, sin introducción, sin numeración, sin explicación adicional.`;
+
 const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí el procedimiento de seguridad para esta tarea.
 
 ESTRUCTURA FIJA — usá EXACTAMENTE estas 3 secciones con sus encabezados:
@@ -117,6 +134,11 @@ interface BaseInput {
   taskDesc?: string | null;
 }
 
+interface TaskInput extends BaseInput {
+  /** Lo que el usuario ya escribió en Tarea: la IA sólo agrega lo que falta. */
+  existingTasks?: string | null;
+}
+
 interface LotoInput extends BaseInput {
   acceptanceCriteria?: string | null;
 }
@@ -205,6 +227,22 @@ async function callClaude(
     .map(b => b.text)
     .join("\n")
     .trim();
+}
+
+export async function suggestTaskSteps(
+  session: TenantAccessSession,
+  input: TaskInput,
+): Promise<{ text: string }> {
+  const text = await callClaude(
+    session,
+    "wo_task_steps_suggestion",
+    PROMPT_TASK,
+    buildContext(input, { "Tareas ya cargadas": input.existingTasks }),
+    // Sin tope de tareas: un mantenimiento mayor puede ser una lista larga y
+    // cortarla a la mitad es peor que no sugerirla.
+    4096,
+  );
+  return { text };
 }
 
 export async function suggestAcceptanceCriteria(

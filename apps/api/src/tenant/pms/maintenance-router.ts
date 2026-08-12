@@ -71,6 +71,7 @@ import {
 import { createWorkLog, listWorkLogs } from "./work-logs-service";
 import {
   suggestAcceptanceCriteria,
+  suggestTaskSteps,
   suggestLoto,
   suggestRisk,
   suggestAsset,
@@ -352,6 +353,14 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && url.pathname === "/app/pms/work-orders") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantWorkOrder>[1];
     sendJson(response, 201, await createTenantWorkOrder(session, body));
+    return true;
+  }
+
+  // Sugerir las tareas a ejecutar a partir del equipo y el titulo de la OT.
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-task") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; existingTasks?: string }>(request);
+    sendJson(response, 200, await suggestTaskSteps(session, body));
     return true;
   }
 

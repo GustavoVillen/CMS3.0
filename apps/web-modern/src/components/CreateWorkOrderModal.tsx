@@ -235,6 +235,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [err, setErr]       = useState<string | null>(null);
 
   // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo / Consecuencia ──
+  const [loadingTask,        setLoadingTask]        = useState(false);
   const [loadingCriteria,    setLoadingCriteria]    = useState(false);
   const [loadingLoto,        setLoadingLoto]        = useState(false);
   const [loadingRisk,        setLoadingRisk]        = useState(false);
@@ -249,6 +250,38 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     ?? assets.find(a => a.id === assetId)?.name
     ?? null;
   const aiTaskDesc = description.trim() || title.trim() || null;
+
+  // Sugerir las tareas a ejecutar. A diferencia del resto de las sugerencias,
+  // ésta parte del TÍTULO (la tarea todavía está vacía: es lo que se completa).
+  // Si ya hay texto escrito no se pisa: se agrega debajo.
+  const handleTaskClick = useCallback(async () => {
+    if (loadingTask) return;
+    const base = title.trim();
+    if (!base) {
+      setErr(t("wo.ai.completeTitleFirstError"));
+      return;
+    }
+    setLoadingTask(true);
+    setErr(null);
+    try {
+      const yaEscrito = description.trim();
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-task", {
+        assetLabel: aiAssetLabel,
+        taskDesc: base,
+        existingTasks: yaEscrito || null,
+      });
+      // Reemplaza, no agrega: cuando ya había tareas la IA devuelve la lista
+      // completa con las del usuario integradas, así no quedan duplicadas ni
+      // desordenadas.
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setDescription(sugerido);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-task] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.taskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingTask(false); }
+  }, [loadingTask, aiAssetLabel, title, description, t]);
 
   const handleCriteriaClick = useCallback(async () => {
     if (loadingCriteria) return;
@@ -739,8 +772,19 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.task")}</label>
-              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} className={`${inputCls} resize-y`} />
+              {/* Clic en el rótulo = la IA propone las tareas a partir del
+                  equipo y el título (mismo gesto que Criterios / LOTO / Riesgo). */}
+              <label
+                onClick={handleTaskClick}
+                title={!title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${title.trim() ? `hover:text-fg cursor-pointer ${loadingTask ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
+              >
+                {loadingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("wo.modal.task")}
+              </label>
+              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
+                disabled={loadingTask}
+                className={`${inputCls} resize-y`} />
             </div>
 
             {/* Talleres del trabajo. Sale de los planes (área = Proveedor): al
