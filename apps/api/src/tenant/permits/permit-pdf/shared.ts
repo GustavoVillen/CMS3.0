@@ -108,3 +108,34 @@ export const PERMIT_ROLE_LABEL: Record<string, string> = {
 export function isAuthorized(status: string): boolean {
   return status === "APPROVED" || status === "ACTIVE" || status === "CLOSED";
 }
+
+/**
+ * Datos del permiso ya resueltos para el formulario, compartidos por el PDF y
+ * el Word: los dos documentos son el MISMO formulario y no pueden divergir.
+ */
+export function derivePermitFields(permit: PermitRecord) {
+  // Ventana autorizada: al aprobar, el sistema cae a la ventana planificada.
+  const validFrom = permit.validFrom ?? permit.plannedStart;
+  const validTo   = permit.validTo   ?? permit.plannedEnd;
+
+  // Quién ejecuta y quién supervisa. Los roles de apoyo (vigía, stand-by,
+  // atendente) van con los ejecutantes, aclarando el rol: el papel no tiene
+  // recuadro propio para ellos y perderlos sería perder información real.
+  const supervisors = permit.participants.filter(p => p.role === "SUPERVISOR").map(p => p.name);
+  const performers  = permit.participants
+    .filter(p => p.role !== "SUPERVISOR")
+    .map(p => (p.role === "PERFORMER" ? p.name : `${p.name} (${PERMIT_ROLE_LABEL[p.role] ?? p.role})`));
+
+  const lastGas: PermitGasTest | null = permit.gasTests[0] ?? null; // vienen desc por testedAt
+  const gasTesters = Array.from(new Set(permit.gasTests.map(g => g.testedByName).filter(Boolean)));
+
+  /** Lectura del último gas test para una fila del formulario. */
+  const gasReading = (key: "o2" | "lel" | "h2s" | "co" | null): string => {
+    if (!key || !lastGas) return "";
+    const v = key === "o2" ? lastGas.o2Pct : key === "lel" ? lastGas.lelPct : key === "h2s" ? lastGas.h2sPpm : lastGas.coPpm;
+    if (v === null || v === undefined) return "";
+    return key === "o2" ? v.toFixed(1) : key === "lel" ? v.toFixed(2) : v.toFixed(0);
+  };
+
+  return { validFrom, validTo, supervisors, performers, lastGas, gasTesters, gasReading };
+}

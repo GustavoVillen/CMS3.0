@@ -4,7 +4,7 @@
 import { makeFormatters, val, statusLabel, priorityLabel, riskLabel, woResultLabel, type WorkOrderPdfContext } from "./shared";
 import {
   wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
-  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer,
+  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize,
 } from "../doc-export";
 
 const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"];
@@ -26,7 +26,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   const parts: string[] = [];
 
   // Cabecera
-  parts.push(docControlledHeader(formMeta, logo, tenant?.name ?? tenantSlug.toUpperCase()));
+  parts.push(docControlledHeader(formMeta, logo, tenant?.name ?? tenantSlug.toUpperCase(), imagePixelSize(ctx.formLogoBuffer)));
   parts.push(docSpacer());
 
   // Embarcación / Solicitud Número

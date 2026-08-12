@@ -28,8 +28,8 @@ import {
   ES_GAS_BLOCK_NOTE, ES_GAS_READINGS, ES_GAS_BLOCK_FOOTNOTE,
 } from "./mercurio-permit-forms";
 import {
-  blank, isAuthorized, PERMIT_ROLE_LABEL, PERMIT_STATUS_LABEL,
-  type PermitPdfContext, type PermitGasTest,
+  blank, isAuthorized, derivePermitFields, PERMIT_STATUS_LABEL,
+  type PermitPdfContext,
 } from "./shared";
 
 const PW       = 595.28;
@@ -66,26 +66,9 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
     }
   };
 
-  // Ventana autorizada: al aprobar, el sistema cae a la ventana planificada.
-  const validFrom = permit.validFrom ?? permit.plannedStart;
-  const validTo   = permit.validTo   ?? permit.plannedEnd;
-
-  // Quién ejecuta y quién supervisa. Los roles de apoyo (vigía, stand-by,
-  // atendente) van con los ejecutantes, aclarando el rol: el papel no tiene
-  // recuadro propio para ellos y perderlos sería perder información real.
-  const supervisors = permit.participants.filter(p => p.role === "SUPERVISOR");
-  const performers  = permit.participants
-    .filter(p => p.role !== "SUPERVISOR")
-    .map(p => (p.role === "PERFORMER" ? p.name : `${p.name} (${PERMIT_ROLE_LABEL[p.role] ?? p.role})`));
-
-  const lastGas: PermitGasTest | null = permit.gasTests[0] ?? null; // vienen desc por testedAt
-  const gasTesters = Array.from(new Set(permit.gasTests.map(g => g.testedByName).filter(Boolean)));
-  const gasReading = (key: "o2" | "lel" | "h2s" | "co" | null): string => {
-    if (!key || !lastGas) return "";
-    const v = key === "o2" ? lastGas.o2Pct : key === "lel" ? lastGas.lelPct : key === "h2s" ? lastGas.h2sPpm : lastGas.coPpm;
-    if (v === null || v === undefined) return "";
-    return key === "o2" ? v.toFixed(1) : key === "lel" ? v.toFixed(2) : v.toFixed(0);
-  };
+  // Datos del formulario compartidos con el Word (ver derivePermitFields).
+  const { validFrom, validTo, supervisors, performers, lastGas, gasTesters, gasReading } =
+    derivePermitFields(permit);
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `${formMeta.formCode} ${permit.permitCode}` } });
@@ -435,7 +418,7 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
         canvas.y += 6;
       },
       supervisors: () => {
-        peopleBlock(label("supervisors", "QUIEN SUPERVISARA EL TRABAJO"), supervisors.map(s => s.name), 2);
+        peopleBlock(label("supervisors", "QUIEN SUPERVISARA EL TRABAJO"), supervisors, 2);
         canvas.y += 6;
       },
       gasTesters: () => {
@@ -586,7 +569,7 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
         // papel se firman a bordo, por eso la firma va en blanco.
         signerRows([
           { role: "INSPECTOR", name: isAuthorized(permit.status) ? (ctx.approvedByName ?? "") : "" },
-          { role: "SUPERVISOR", name: supervisors[0]?.name ?? "" },
+          { role: "SUPERVISOR", name: supervisors[0] ?? "" },
         ]);
         canvas.y += 6;
       },

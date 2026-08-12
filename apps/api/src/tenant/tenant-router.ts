@@ -125,7 +125,8 @@ import {
 } from "./permits/permits-service";
 import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-service";
 import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
-import { buildPermitPdfDocument } from "./permits/permit-pdf";
+import { buildPermitPdfDocument, buildPermitWordDocument } from "./permits/permit-pdf";
+import { serveDoc } from "./pms/doc-export";
 import { getPermitsSummary } from "./permits/permits-summary-service";
 import { suggestPermitHazards, suggestPermitControls, suggestPermitPpe } from "./permits/permits-ai-suggestions";
 import { isValidModule, canImport, canExport } from "./excel/excel-permissions";
@@ -2369,6 +2370,15 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    return true;
+  }
+  // Mismo formulario en Word: el permiso se completa y se firma a bordo.
+  if (method === "GET" && /^\/app\/permits\/[^/]+\/doc$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[3]!;
+    const { buffer, fileName } = await buildPermitWordDocument(session, id);
+    serveDoc(response, buffer, fileName);
     return true;
   }
   if (method === "POST" && /^\/app\/permits\/[^/]+\/request$/.test(url.pathname)) {

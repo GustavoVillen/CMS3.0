@@ -6,7 +6,7 @@ import { buildHojaRuta } from "../../service-requests/hoja-ruta";
 import type { ServiceRequestPdfContext } from "./shared";
 import {
   wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
-  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer,
+  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize,
 } from "../doc-export";
 
 export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
@@ -110,7 +110,7 @@ export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
 
   const order = formConfig.sections.length ? formConfig.sections : Object.keys(sections);
   const parts: string[] = [];
-  parts.push(docControlledHeader(formMeta, logo, tenant?.name ?? tenantSlug.toUpperCase()));
+  parts.push(docControlledHeader(formMeta, logo, tenant?.name ?? tenantSlug.toUpperCase(), imagePixelSize(formLogoBuffer)));
   parts.push(docSpacer());
   for (const id of order) {
     const fn = sections[id];

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
-  Snowflake, Waves,
+  Snowflake, Waves, FileDown,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -359,9 +359,14 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
     if (!reason || reason.trim().length < 5) return;
     void callAction("reopen", { reason: reason.trim() });
   };
-  const onDownloadPdf = useCallback(async () => {
+  /**
+   * Descarga el permiso como PDF (para imprimir y firmar) o como Word (para
+   * completarlo antes). El nombre del archivo lo decide el servidor: con
+   * documento controlado lleva adelante el código del formulario.
+   */
+  const onDownload = useCallback(async (kind: "pdf" | "doc") => {
     if (!permit) return;
-    // Bajamos el PDF vía fetch + blob — window.open no carga el header
+    // Bajamos el archivo vía fetch + blob — window.open no carga el header
     // X-Tenant-Slug que el SPA usa para resolver tenant, y devolvería
     // TENANT_UNRESOLVED en una tab nueva.
     setSaving(true); setErr(null);
@@ -372,20 +377,23 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       if (token) headers["Authorization"] = `Bearer ${token}`;
       if (slug)  headers["X-Tenant-Slug"] = slug;
 
-      const res = await fetch(`/app/permits/${permit.id}/pdf`, { headers });
+      const res = await fetch(`/app/permits/${permit.id}/${kind}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = `${permit.permitCode}.pdf`;
+      a.download = named || `${permit.permitCode}.${kind === "pdf" ? "pdf" : "doc"}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      setErr(e instanceof Error ? `No se pudo generar el PDF (${e.message}).` : "No se pudo generar el PDF.");
+      const what = kind === "pdf" ? "el PDF" : "el documento Word";
+      setErr(e instanceof Error ? `No se pudo generar ${what} (${e.message}).` : `No se pudo generar ${what}.`);
     } finally {
       setSaving(false);
     }
@@ -566,9 +574,15 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
           <div className="flex gap-2 flex-wrap">
             {!isNew && (
-              <button onClick={() => { void onDownloadPdf(); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
-                <FileText className="w-3.5 h-3.5" /> PDF
-              </button>
+              <>
+                <button onClick={() => { void onDownload("pdf"); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+                  <FileText className="w-3.5 h-3.5" /> PDF
+                </button>
+                {/* El mismo formulario, editable: se completa en Word y se imprime. */}
+                <button onClick={() => { void onDownload("doc"); }} disabled={saving} title={t("pm.wordHint")} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
+                  <FileDown className="w-3.5 h-3.5" /> Word
+                </button>
+              </>
             )}
             {!isNew && permit?.status === "DRAFT" && (
               <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">{t("common.requestApproval")}</button>

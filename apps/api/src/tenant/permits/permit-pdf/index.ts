@@ -10,14 +10,22 @@ import type { TenantAccessSession } from "../../auth/session-store";
 import { loadPermitPdfContext } from "./data-loader";
 import { renderStandardPermitPdf } from "./template-standard";
 import { renderMercurioPermitPdf } from "./template-mercurio";
+import { renderMercurioPermitDoc, renderStandardPermitDoc } from "./word-permit";
 import type { PermitPdfContext } from "./shared";
 
 export type PermitPdfRenderer = (ctx: PermitPdfContext) => Promise<Buffer>;
+export type PermitDocRenderer = (ctx: PermitPdfContext) => Buffer;
 
 export const PERMIT_PDF_TEMPLATES: Record<string, PermitPdfRenderer> = {
   STANDARD: renderStandardPermitPdf,
   // Formularios controlados REGI-SYE-01.4 .. 01.9 de Mercurio.
   MERCURIO: renderMercurioPermitPdf,
+};
+
+/** Mismos formularios, en Word editable. Espejo del mapa de arriba. */
+export const PERMIT_DOC_TEMPLATES: Record<string, PermitDocRenderer> = {
+  STANDARD: renderStandardPermitDoc,
+  MERCURIO: renderMercurioPermitDoc,
 };
 
 export interface PermitPdfDocument {
@@ -41,6 +49,18 @@ export async function buildPermitPdfDocument(session: TenantAccessSession, id: s
 
 export async function buildPermitPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   return (await buildPermitPdfDocument(session, id)).buffer;
+}
+
+/**
+ * El mismo formulario en Word (.doc), editable: a bordo se completan las
+ * casillas y las firmas antes de imprimir.
+ */
+export async function buildPermitWordDocument(session: TenantAccessSession, id: string): Promise<PermitPdfDocument> {
+  const ctx = await loadPermitPdfContext(session, id);
+  const render = PERMIT_DOC_TEMPLATES[ctx.formMeta.style] ?? renderStandardPermitDoc;
+  const buffer = render(ctx);
+  const code = ctx.formMeta.style === "MERCURIO" ? ctx.formMeta.formCode : "";
+  return { buffer, fileName: code ? `${code} - ${ctx.permit.permitCode}` : ctx.permit.permitCode };
 }
 
 export { loadPermitPdfContext } from "./data-loader";

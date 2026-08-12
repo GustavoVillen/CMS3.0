@@ -34,6 +34,49 @@ export function bufferToDataUri(buf: Buffer | null | undefined): string | null {
   return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
+/**
+ * Tamaño en píxeles de un PNG (chunk IHDR) o JPEG (marcadores SOFn).
+ *
+ * Word ignora `max-width` y `height:auto`: hay que darle ancho Y alto explícitos.
+ * Sin conocer la proporción real, un logo casi cuadrado metido en una caja
+ * apaisada sale estirado. Devuelve null si no se puede determinar.
+ */
+export function imagePixelSize(buf: Buffer | null | undefined): { w: number; h: number } | null {
+  if (!buf || buf.length < 24) return null;
+  // PNG: 8 bytes de firma + chunk IHDR (largo 4 + tipo 4 + ancho 4 + alto 4).
+  if (buf[0] === 0x89 && buf.toString("ascii", 1, 4) === "PNG") {
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  // JPEG: recorrer segmentos hasta un SOF (0xC0..0xCF, salvo C4/C8/CC).
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const marker = buf[i + 1];
+      const len = buf.readUInt16BE(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + len;
+    }
+  }
+  return null;
+}
+
+/**
+ * Ancho/alto en cm para que la imagen entre en la caja respetando su proporción.
+ * Sin tamaño conocido, cae a la caja completa (comportamiento anterior).
+ */
+export function fitLogoBox(
+  size: { w: number; h: number } | null,
+  boxWcm = 3.5,
+  boxHcm = 2,
+): { wcm: number; hcm: number } {
+  if (!size || size.w <= 0 || size.h <= 0) return { wcm: boxWcm, hcm: boxHcm };
+  const scale = Math.min(boxWcm / size.w, boxHcm / size.h);
+  return { wcm: +(size.w * scale).toFixed(2), hcm: +(size.h * scale).toFixed(2) };
+}
+
 // ── Wrapper Word ─────────────────────────────────────────────────────────────
 export interface WordDocOptions {
   title: string;
@@ -93,10 +136,18 @@ export function serveDoc(response: ServerResponse, buffer: Buffer, filename: str
 // ── Helpers de chrome (HTML) ─────────────────────────────────────────────────
 
 /** Cabecera del documento controlado: logo + código + título + caja Revisión/Desde/Página/Controlado. */
-export function docControlledHeader(meta: ControlledDocMeta, logoDataUri: string | null, tenantName: string): string {
-  // Word ignora max-width/height: hay que dar ancho/alto explícitos. Logo 3,5cm × 2cm.
+export function docControlledHeader(
+  meta: ControlledDocMeta,
+  logoDataUri: string | null,
+  tenantName: string,
+  /** Tamaño real del logo en píxeles: sin él la imagen se estira a la caja. */
+  logoSize?: { w: number; h: number } | null,
+): string {
+  // Word ignora max-width/height: hay que dar ancho/alto explícitos. El logo
+  // entra en una caja de 3,5cm × 2cm respetando su proporción.
+  const { wcm, hcm } = fitLogoBox(logoSize ?? null);
   const logoCell = logoDataUri
-    ? `<img src="${logoDataUri}" width="132" height="76" style="width:3.5cm;height:2cm;" alt="logo">`
+    ? `<img src="${logoDataUri}" width="${Math.round(wcm * 37.8)}" height="${Math.round(hcm * 37.8)}" style="width:${wcm}cm;height:${hcm}cm;" alt="logo">`
     : `<b style="color:${NAVY};font-size:8pt;">${esc(tenantName)}</b>`;
   return `<table>
   <tr>
