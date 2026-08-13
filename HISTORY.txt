@@ -1,5 +1,28 @@
 HISTORY.txt
 
+[2026-08-13] La SS se puede bajar en Word (.docx de verdad)
+Agent: Claude Opus 5
+- Pedido del usuario: un botón para guardar la SS como .docx de MS Word.
+- Ya existía un export a Word, pero como .doc (HTML que Word abre). Renombrarlo
+  a .docx no sirve: Word avisa que "el formato y la extensión no coinciden".
+- pms/docx-export.ts (nuevo): arma el contenedor OOXML (ZIP con
+  [Content_Types].xml, rels, document.xml y el HTML como `altChunk`). Word
+  convierte el altChunk a contenido nativo al abrir. Se eligió altChunk y no
+  reimplementar el formulario en OOXML: el formulario tiene 29 tablas, logo y
+  firmas, y a mano saldría peor y más frágil.
+  ⚠ LIMITACIÓN: altChunk lo resuelve MS Word (y Word Online). Google Docs y
+  LibreOffice pueden mostrarlo vacío. El PDF sigue siendo el documento oficial.
+- doc-export: `wrapAsWordDoc` se parte en `buildWordHtml` (string) + el wrapper;
+  el .doc y el .docx comparten exactamente el mismo HTML.
+- Ruta nueva GET /app/pms/service-requests/:id/docx (la de /doc queda).
+- Front: botón "Word (.docx)" al lado de PDF en la ventana de la SS +
+  lib/download-docx.ts (MIME y extensión tienen que coincidir o Word protesta).
+- DEPENDENCIA NUEVA: `jszip` en apps/api. El deploy necesita `pnpm install` en
+  el VPS antes de reiniciar — la receta habitual no lo incluye.
+- Verificado de punta a punta: el endpoint devuelve 32 KB con el MIME correcto,
+  el ZIP tiene las 5 partes y todos los XML parsean, y MS Word lo ABRE (2
+  páginas, 29 tablas, 180 palabras) sin advertencias.
+
 [2026-08-11] TODOS los documentos: fecha y hora en la hora de la empresa
 Agent: Claude Opus 5
 - Pedido del usuario tras el fix del permiso: corregir lo mismo en todos los

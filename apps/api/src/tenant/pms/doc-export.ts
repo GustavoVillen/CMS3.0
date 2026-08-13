@@ -85,7 +85,12 @@ export interface WordDocOptions {
   footerHtml?: string;
 }
 
+/** El .doc es HTML; el .docx lo reusa adentro del contenedor OOXML (ver docx-export). */
 export function wrapAsWordDoc(opts: WordDocOptions): Buffer {
+  return Buffer.from(buildWordHtml(opts), "utf-8");
+}
+
+export function buildWordHtml(opts: WordDocOptions): string {
   const footerBlock = opts.footerHtml
     ? `<div style="mso-element:footer" id="f1">${opts.footerHtml}</div>`
     : "";
@@ -119,7 +124,7 @@ ${footerBlock}
 </div>
 </body>
 </html>`;
-  return Buffer.from(html, "utf-8");
+  return html;
 }
 
 // ── Servir como .doc ─────────────────────────────────────────────────────────

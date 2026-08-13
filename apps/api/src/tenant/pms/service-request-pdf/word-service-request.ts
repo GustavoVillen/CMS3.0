@@ -5,11 +5,16 @@ import { makeFormatters, val, departmentLabel } from "../work-order-pdf/shared";
 import { buildHojaRuta } from "../../service-requests/hoja-ruta";
 import type { ServiceRequestPdfContext } from "./shared";
 import {
-  wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
+  buildWordHtml, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
   docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize,
 } from "../doc-export";
 
 export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
+  return Buffer.from(renderServiceRequestHtml(ctx), "utf-8");
+}
+
+/** El mismo documento como HTML: lo usa el .doc y también el contenedor .docx. */
+export function renderServiceRequestHtml(ctx: ServiceRequestPdfContext): string {
   const { sr, wo, assetLabel, assignedName, createdByName, providerName, tenant, formLogoBuffer, formMeta, formConfig, tenantSlug } = ctx;
   // Todas las fechas del documento, en la hora de la empresa (ver common/tenant-time).
   const { fmt } = makeFormatters(ctx.tz, ctx.locale);
@@ -117,7 +122,7 @@ export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
     if (fn) parts.push(fn());
   }
 
-  return wrapAsWordDoc({
+  return buildWordHtml({
     title: `Solicitud ${docCode}`,
     bodyHtml: parts.join("\n"),
     footerHtml: docControlledFooter(formMeta),

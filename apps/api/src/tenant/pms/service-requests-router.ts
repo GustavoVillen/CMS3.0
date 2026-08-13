@@ -13,8 +13,9 @@ import { RouteError } from "../../http/route-error";
 import { enforceRateLimit } from "../../http/rate-limiter";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
-import { buildServiceRequestPdf, buildServiceRequestDoc } from "./service-request-pdf";
+import { buildServiceRequestPdf, buildServiceRequestDoc, buildServiceRequestDocx } from "./service-request-pdf";
 import { serveDoc } from "./doc-export";
+import { serveDocx } from "./docx-export";
 import {
   addHojaRutaEntry,
   approveServiceRequest,
@@ -74,6 +75,15 @@ export async function handleServiceRequestsRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    return true;
+  }
+
+  // .docx real (contenedor OOXML). El .doc de abajo queda por compatibilidad.
+  if (method === "GET" && /^\/app\/pms\/service-requests\/[^/]+\/docx$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const sr = await getServiceRequest(session, id);
+    serveDocx(response, await buildServiceRequestDocx(session, id), String((sr as any).serviceRequestCode));
     return true;
   }
 

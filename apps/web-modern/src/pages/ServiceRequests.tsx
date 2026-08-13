@@ -23,6 +23,7 @@ import { FormModal } from "../components/FormModal";
 import { AlertDialog } from "../components/AlertDialog";
 import { useAuth } from "../lib/auth";
 import { printServiceRequest } from "../lib/print-work-order";
+import { downloadDocx } from "../lib/download-docx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1163,6 +1164,18 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [jefeMaq, setJefeMaq] = useState(sr.jefeMaquinasName ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Descarga de la copia editable en Word (.docx).
+  const [bajandoWord, setBajandoWord] = useState(false);
+  const descargarWord = async () => {
+    setBajandoWord(true);
+    try {
+      const ok = await downloadDocx(`/app/pms/service-requests/${sr.id}/docx`, sr.serviceRequestCode);
+      if (!ok) setActionError("No se pudo generar el documento Word. Intentá de nuevo.");
+    } finally {
+      setBajandoWord(false);
+    }
+  };
+
   // Nombres de la TRAMITACION. Sólo el admin los edita (el backend lo vuelve a
   // verificar): son la firma de quién pidió, aprobó y autorizó el gasto. Se
   // corrigen para que el registro coincida con el formulario de papel; cambiar
@@ -1602,6 +1615,16 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30"
           >
             <FileDown className="w-3.5 h-3.5" /> PDF
+          </button>
+
+          {/* Copia editable en Word. El PDF sigue siendo el documento oficial:
+              esto es para retocar el pedido antes de mandárselo al taller. */}
+          <button
+            onClick={() => { void descargarWord(); }}
+            disabled={bajandoWord}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50"
+          >
+            {bajandoWord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Word (.docx)
           </button>
 
           {editable && (
