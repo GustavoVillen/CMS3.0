@@ -6,6 +6,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
@@ -1011,7 +1012,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // ── Plan fields ──
   const [title, setTitle]                   = useState(workOrder.title ?? "");
   const [description, setDescription]       = useState(workOrder.description ?? "");
-  const [assignedTo, setAssignedTo]         = useState(workOrder.assignedToUserName ?? workOrder.assignedToUserId ?? "");
+  // Guarda el ID del usuario (el desplegable resuelve el nombre). En OT viejas
+  // este campo trae el nombre tipeado a mano y se conserva tal cual.
+  const [assignedTo, setAssignedTo]         = useState(workOrder.assignedToUserId ?? "");
   const [dueDate, setDueDate]               = useState(toDateInputValue(workOrder.dueDate));
   const [openDate, setOpenDate]             = useState(toDateInputValue(workOrder.openDate));
   const [type, setType]                     = useState(workOrder.type);
@@ -2209,7 +2212,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.assignee")}</label>
-                <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("wo.modal.assigneePlaceholder")} />
+                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
               </div>
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.dueDate")}</label>

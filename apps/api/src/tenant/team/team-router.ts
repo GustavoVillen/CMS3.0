@@ -10,6 +10,7 @@ import {
   createDirectMember,
   deleteMember,
   listPendingInvitations,
+  listTeamDirectory,
   listTeamMembers,
   setMemberPassword,
   syncMemberVessels,
@@ -40,6 +41,13 @@ export async function handleTeamRoutes(
   if (method === "GET" && url.pathname === "/app/team/members") {
     const withSignatures = url.searchParams.get("withSignatures") === "1";
     sendJson(response, 200, await listTeamMembers(session, { withSignatures }));
+    return true;
+  }
+
+  // GET /app/team/directory — id + nombre para los desplegables de responsable.
+  // Abierto a cualquier usuario del tenant (ver listTeamDirectory).
+  if (method === "GET" && url.pathname === "/app/team/directory") {
+    sendJson(response, 200, await listTeamDirectory(session));
     return true;
   }
 

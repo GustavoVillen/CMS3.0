@@ -7,6 +7,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { WO_MAINTENANCE_KINDS } from "../lib/wo-form-catalog";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
+import { AssigneeSelect } from "./AssigneeSelect";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -817,7 +818,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.assignee")}</label>
-                <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className={inputCls} placeholder={t("wo.modal.assigneePlaceholder")} />
+                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} className={inputCls} />
               </div>
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.dueDate")}</label>

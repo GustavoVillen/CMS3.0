@@ -418,15 +418,17 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
     userIds.length > 0
-      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
-      : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null }[]),
+      ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; formName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, formName: true } })
+      : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null; formName: string | null }[]),
     providerIds.length > 0
       ? (prismaRaw as unknown as { provider: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string | null }[]),
   ]);
 
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
-  const userNameMap  = new Map(userRows.map(u => [u.id, [u.firstName, u.lastName].filter(Boolean).join(" ") || null]));
+  // Mismo criterio que el desplegable de responsable (team-service.listTeamDirectory):
+  // el nombre para formularios manda, si no nombre y apellido.
+  const userNameMap  = new Map(userRows.map(u => [u.id, u.formName?.trim() || [u.firstName, u.lastName].filter(Boolean).join(" ") || null]));
   const providerNameMap = new Map(providerRows.map(p => [p.id, p.name ?? null]));
 
   return orders.map(o => ({

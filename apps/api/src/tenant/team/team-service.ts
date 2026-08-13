@@ -113,6 +113,59 @@ export async function listTeamMembers(
   }));
 }
 
+// ─── Directorio liviano (desplegables de "responsable") ────────────────────────
+
+/**
+ * id + nombre de los usuarios del tenant, nada más.
+ *
+ * A diferencia de listTeamMembers —que es de administración y devuelve email,
+ * rol, buques y firmas— esto lo puede leer CUALQUIER usuario del tenant: son los
+ * nombres de sus propios compañeros y hacen falta para elegir el responsable de
+ * una OT desde el buque, donde nadie es TENANT_ADMIN.
+ *
+ * Quedan afuera los usuarios dados de baja o suspendidos: no se le puede asignar
+ * trabajo a alguien que ya no está.
+ */
+export async function listTeamDirectory(
+  session: TenantAccessSession,
+): Promise<{ userId: string; name: string }[]> {
+  const prisma = getPrismaClient();
+
+  if (!prisma) {
+    const { listDevTenantUsers } = await import("../../platform/data/dev-tenant-user-store");
+    const users: DevTenantUserRecord[] = listDevTenantUsers({ tenantSlug: session.tenantSlug });
+    return users
+      .filter(u => u.membershipStatus !== "REVOKED" && u.membershipStatus !== "SUSPENDED")
+      .map(u => ({ userId: u.id, name: displayName(u.firstName, u.lastName, null, u.email) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const tenantId = await getTenantId(prisma, session.tenantSlug);
+  const memberships = await (prisma as any).tenantMembership.findMany({
+    where: { tenantId, status: { notIn: ["REVOKED", "SUSPENDED"] } },
+    include: { user: { select: { id: true, firstName: true, lastName: true, formName: true, email: true, status: true } } },
+  });
+
+  return memberships
+    .filter((m: any) => m.user?.status !== "SUSPENDED")
+    .map((m: any) => ({
+      userId: m.userId,
+      name: displayName(m.user.firstName, m.user.lastName, m.user.formName, m.user.email),
+    }))
+    .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
+}
+
+/** Nombre visible: el de formularios si lo cargaron, si no nombre y apellido. */
+function displayName(
+  firstName: string | null,
+  lastName: string | null,
+  formName: string | null,
+  email: string,
+): string {
+  const full = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return (formName?.trim() || full || email.split("@")[0] || email).trim();
+}
+
 // ─── Update Member Profile (nombre para formularios + firma) ────────────────────
 
 export async function updateMemberProfile(

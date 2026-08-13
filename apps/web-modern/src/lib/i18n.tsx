@@ -1261,6 +1261,7 @@ const dict = {
   "wo.modal.task":             { es: "Tarea",                  en: "Task",                 pt: "Tarefa" },
   "wo.modal.assignee":         { es: "Responsable",            en: "Assignee",             pt: "Responsável" },
   "wo.modal.assigneePlaceholder": { es: "Nombre del responsable", en: "Assignee name",      pt: "Nome do responsável" },
+  "wo.modal.assigneeNone":     { es: "— Sin responsable —",     en: "— Unassigned —",       pt: "— Sem responsável —" },
   "wo.modal.acceptanceCriteria": { es: "Criterios de aceptación", en: "Acceptance criteria", pt: "Critérios de aceitação" },
   "wo.modal.acceptancePlaceholder": { es: "Condiciones que deben cumplirse para dar la tarea por completada", en: "Conditions that must be met to complete the task", pt: "Condições que devem ser cumpridas para concluir a tarefa" },
   "wo.modal.loto":             { es: "LOTO",                   en: "LOTO",                 pt: "LOTO" },
