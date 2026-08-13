@@ -182,8 +182,12 @@ export async function renderServiceRequestPdf(ctx: ServiceRequestPdfContext): Pr
           // El nombre editado por el admin gana sobre el del usuario que la creó.
           { rol: "SOLICITA", nombre: sr.solicitaByName ?? ctx.createdByFormName ?? createdByName,
             fecha: sr.openDate, sig: ctx.solicitaSignatureBuffer },
-          { rol: "APRUEBA",  nombre: sr.aprobadoByName ?? null,   fecha: sr.aprobadoAt,   sig: ctx.apruebaSignatureBuffer },
-          { rol: "AUTORIZA", nombre: sr.autorizadoByName ?? null, fecha: sr.autorizadoAt, sig: ctx.autorizaSignatureBuffer },
+          // APRUEBA y AUTORIZA salen SIEMPRE en blanco (decision del cliente,
+          // ago 2026): se firman a mano sobre el papel. El sistema sigue
+          // registrando quien aprobo/autorizo y cuando — esa trazabilidad vive
+          // en la app y en la HOJA DE RUTA, no en este bloque de firmas.
+          { rol: "APRUEBA",  nombre: null, fecha: null, sig: null },
+          { rol: "AUTORIZA", nombre: null, fecha: null, sig: null },
         ];
 
         const SIG_H = 110;
@@ -204,10 +208,14 @@ export async function renderServiceRequestPdf(ctx: ServiceRequestPdfContext): Pr
           }
           // Línea de firma + nombre + fecha.
           doc.moveTo(bx + 8, canvas.y + 88).lineTo(bx + bw - 8, canvas.y + 88).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
-          doc.fontSize(8).font("Helvetica").fillColor(BLACK)
-            .text(sanitizePdfText(c.nombre ?? "—"), bx + 5, canvas.y + 90, { width: bw - 10, align: "center", lineBreak: false, ellipsis: true });
-          doc.fontSize(6).font("Helvetica").fillColor(GRAY)
-            .text(c.fecha ? fmt(c.fecha as Date) : "", bx + 5, canvas.y + 100, { width: bw - 10, align: "center", lineBreak: false });
+          if (c.nombre) {
+            doc.fontSize(8).font("Helvetica").fillColor(BLACK)
+              .text(sanitizePdfText(c.nombre), bx + 5, canvas.y + 90, { width: bw - 10, align: "center", lineBreak: false, ellipsis: true });
+          }
+          if (c.fecha) {
+            doc.fontSize(6).font("Helvetica").fillColor(GRAY)
+              .text(fmt(c.fecha as Date), bx + 5, canvas.y + 100, { width: bw - 10, align: "center", lineBreak: false });
+          }
         });
         canvas.y += SIG_H;
 

@@ -59,8 +59,10 @@ export function renderServiceRequestHtml(ctx: ServiceRequestPdfContext): string 
         // El nombre editado por el admin gana sobre el del usuario que la creó.
         { rol: "SOLICITA", nombre: sr.solicitaByName ?? ctx.createdByFormName ?? createdByName ?? null,
           fecha: sr.openDate, sig: ctx.solicitaSignatureBuffer },
-        { rol: "APRUEBA",  nombre: sr.aprobadoByName ?? null,   fecha: sr.aprobadoAt,   sig: ctx.apruebaSignatureBuffer },
-        { rol: "AUTORIZA", nombre: sr.autorizadoByName ?? null, fecha: sr.autorizadoAt, sig: ctx.autorizaSignatureBuffer },
+        // Espejo del PDF: APRUEBA y AUTORIZA van SIEMPRE en blanco, se firman
+        // a mano. El sistema sigue registrando quien y cuando (app + hoja de ruta).
+        { rol: "APRUEBA",  nombre: null, fecha: null, sig: null },
+        { rol: "AUTORIZA", nombre: null, fecha: null, sig: null },
       ];
       const celda = (c: (typeof cols)[number]) => {
         const noAqui = rechazadaEn === c.rol;
@@ -69,7 +71,7 @@ export function renderServiceRequestHtml(ctx: ServiceRequestPdfContext): string 
           `<span style="font-size:7pt;${noAqui ? "color:#b91c1c;" : "color:#666666;"}"><b>${noAqui ? `${c.rol} — NO APROBADA` : c.rol}</b></span><br>` +
           (sigUri ? `<img src="${sigUri}" style="height:44pt;"><br>` : `<br><br><br>`) +
           `_____________________<br>` +
-          `<span style="font-size:8pt;">${esc(c.nombre ?? "—")}</span><br>` +
+          `<span style="font-size:8pt;">${c.nombre ? esc(c.nombre) : "&nbsp;"}</span><br>` +
           `<span style="font-size:6pt;" class="muted">${c.fecha ? fmt(c.fecha as Date) : ""}</span>` +
           `</td>`;
       };
