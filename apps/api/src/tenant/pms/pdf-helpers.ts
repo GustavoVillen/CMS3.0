@@ -33,6 +33,14 @@ export function sanitizePdfText(s: string, opts: { keepMarkdown?: boolean } = {}
       .replace(/\*([^*\n]+)\*/g, "$1");
   }
   return t
+    // Caracteres de control. PDFKit + fuentes WinAnsi NO manejan el TAB: lo
+    // dibuja como glifos basura y se come las letras vecinas (texto pegado
+    // desde Word/Excel con columnas tabuladas salia ilegible en el PDF).
+    // El \n se conserva: es el separador de lineas de los text areas.
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, " ")
+    .replace(/\t/g, "   ")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ")
     // Mathematical comparison operators — \uXXXX escapes only, no literal Unicode chars
     .replace(/[≥≧⩾]/g, ">=")   // ≥ ≧ ⩾
     .replace(/[≤≦⩽]/g, "<=")   // ≤ ≦ ⩽
