@@ -1,5 +1,36 @@
 HISTORY.txt
 
+[2026-08-14] El permiso de trabajo guarda el scan del permiso firmado
+Agent: Claude Opus 5
+- Pedido del usuario: poder cargar el scan del permiso como elemento
+  respaldatorio. El permiso se emite acá, se imprime, se firma en papel a bordo
+  y ese papel —la evidencia que pide una auditoría TMSA/SIRE— no volvía nunca
+  al sistema.
+- Pestaña "Respaldos" en la ventana del permiso, al lado de Participantes y Gas
+  Tests, con el contador de archivos. Varios archivos por permiso (el scan, más
+  anexos: fotos, hojas extra). PDF/JPG/PNG/WEBP/Word, hasta 50 MB c/u.
+- DECISIÓN: se puede adjuntar en CUALQUIER estado del permiso, incluso CLOSED o
+  CANCELLED. Gatearlo por los estados editables (DRAFT/REQUESTED) como el resto
+  del formulario dejaría afuera el caso real: el papel firmado vuelve DESPUÉS de
+  aprobar y cerrar.
+- Permisos: sube y borra quien tenga `permit.manage`; el resto lista y descarga.
+  Borrado lógico (deletedAt + quién) y eventos de auditoría
+  Permit.attachmentAdded / Permit.attachmentDeleted.
+- Se reusó la infraestructura de adjuntos que ya existía en vez de agregar
+  campos al permiso: un solo valor nuevo en el enum AttachmentTarget
+  (WORK_PERMIT) y cero columnas nuevas en PermitToWork. Los archivos se guardan
+  con saveAttachment y se sirven autenticados por /app/files/* (por eso la UI
+  usa AuthedDocLink y no un <a href> plano, que devuelve 410).
+- permits/permit-attachments-service.ts (nuevo) + 3 rutas en tenant-router:
+  GET/POST /app/permits/:id/attachments y DELETE .../attachments/:attId.
+  attachment-uploads-service expone `mimeTypeForFilename` para no duplicar la
+  tabla de extensiones.
+- DEPLOY: toca schema (db push + prisma generate) y frontend (build web). No
+  agrega dependencias.
+- Verificado contra la base real: subir a un permiso CANCELADO funciona, un
+  .exe se rechaza, AUDITOR_READONLY lista pero no sube, un usuario de otro
+  buque no ve los respaldos, y el borrado deja la fila con deletedAt.
+
 [2026-08-13] La SS se puede bajar en Word (.docx de verdad)
 Agent: Claude Opus 5
 - Pedido del usuario: un botón para guardar la SS como .docx de MS Word.

@@ -1123,6 +1123,8 @@ const dict = {
   "common.tryRemoveFilter": { es: "Probá quitar el filtro de categoría.", en: "Try removing the category filter.", pt: "Tente remover o filtro de categoria." },
   "common.noCrewOnboard":   { es: "Sin tripulación ONBOARD.",          en: "No crew ONBOARD.",                    pt: "Sem tripulação ONBOARD." },
   "common.remove":          { es: "Quitar",                            en: "Remove",                              pt: "Remover" },
+  "common.view":            { es: "Ver",                               en: "View",                                pt: "Ver" },
+  "common.download":        { es: "Descargar",                         en: "Download",                            pt: "Baixar" },
 
   // Spares
   "sp.newSpareTitle":       { es: "Nuevo Repuesto",                    en: "New Spare",                           pt: "Nova Peça" },
@@ -1225,6 +1227,16 @@ const dict = {
   "pm.status.cancelled":     { es: "Cancelado",             en: "Cancelled",                pt: "Cancelado" },
   "pm.newPermit":            { es: "Nuevo permiso",         en: "New permit",               pt: "Nova permissão" },
   "pm.tabGasTests":          { es: "Gas Tests",             en: "Gas Tests",                pt: "Gas Tests" },
+
+  // Respaldos del permiso: el scan del permiso firmado en papel y sus anexos
+  "pm.tabAttachments":       { es: "Respaldos",             en: "Evidence",                 pt: "Comprovantes" },
+  "pm.attachScan":           { es: "Adjuntar scan",         en: "Attach scan",              pt: "Anexar digitalização" },
+  "pm.attachHint":           { es: "Subí el scan del permiso firmado en papel y cualquier anexo (fotos, hojas adicionales). Se puede adjuntar en cualquier estado del permiso, también después de cerrarlo. Formatos: PDF, JPG, PNG, WEBP, Word. Hasta 50 MB por archivo.", en: "Upload the scan of the signed paper permit and any annex (photos, extra sheets). Can be attached in any permit status, including after closing. Formats: PDF, JPG, PNG, WEBP, Word. Up to 50 MB per file.", pt: "Envie a digitalização da permissão assinada em papel e qualquer anexo (fotos, folhas adicionais). Pode ser anexado em qualquer status da permissão, inclusive após o fechamento. Formatos: PDF, JPG, PNG, WEBP, Word. Até 50 MB por arquivo." },
+  "pm.noAttachments":        { es: "Sin respaldos adjuntos", en: "No evidence attached",    pt: "Sem comprovantes anexados" },
+  "pm.attachUploading":      { es: "Subiendo archivo…",     en: "Uploading file…",          pt: "Enviando arquivo…" },
+  "pm.attachUploadError":    { es: "No se pudo subir el archivo.", en: "Could not upload the file.", pt: "Não foi possível enviar o arquivo." },
+  "pm.attachDeleteConfirm":  { es: "¿Quitar este respaldo del permiso?", en: "Remove this evidence from the permit?", pt: "Remover este comprovante da permissão?" },
+  "pm.attachUploadedBy":     { es: "Subido por",            en: "Uploaded by",              pt: "Enviado por" },
 
   // Labels (status display)
   "label.approvedBy":           { es: "Aprobado por",                           en: "Approved by",                            pt: "Aprovado por" },

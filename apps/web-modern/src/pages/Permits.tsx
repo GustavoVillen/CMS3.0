@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
-  Snowflake, Waves, FileDown,
+  Snowflake, Waves, FileDown, Paperclip, Download, Trash2,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -10,6 +10,8 @@ import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AlertDialog } from "../components/AlertDialog";
+import { AuthedDocLink, downloadAuthedFile } from "../lib/authed-media";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
@@ -71,6 +73,17 @@ interface Permit {
   cancelReason: string | null;
   gasTests: GasTest[];
   participants: Participant[];
+}
+
+/** Respaldo del permiso: el scan del permiso firmado en papel, o un anexo. */
+interface PermitAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  uploadedAt: string;
+  uploadedByName: string | null;
 }
 
 interface CrewItem {
@@ -190,7 +203,17 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   const [ppe, setPpe]                 = useState(permit?.ppeRequired ?? "");
   const [alarmOverride, setAlarmOverride] = useState(permit?.alarmOverride ?? false);
 
-  const [tab, setTab] = useState<"details" | "participants" | "gas">("details");
+  const [tab, setTab] = useState<"details" | "participants" | "gas" | "attachments">("details");
+
+  // Respaldos: el scan del permiso firmado vuelve después de aprobar/cerrar, así
+  // que la lista se carga siempre que el permiso exista, sin importar el estado.
+  const { data: attachmentsData, reload: reloadAttachments } = useFetch<{ items: PermitAttachment[] }>(
+    permit ? `/app/permits/${permit.id}/attachments` : null,
+    [permit?.id],
+  );
+  const attachments = attachmentsData?.items ?? [];
+  const canManagePermits = can("permit.manage");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -425,6 +448,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             {permit!.type === "ENCLOSED_SPACE_ENTRY" && (
               <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabGasTests")} ({permit!.gasTests.length})</button>
             )}
+            <button onClick={() => setTab("attachments")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "attachments" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabAttachments")} ({attachments.length})</button>
           </div>
         )}
 
@@ -569,6 +593,15 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           {!isNew && tab === "gas" && permit && permit.type === "ENCLOSED_SPACE_ENTRY" && (
             <GasTestsTab permit={permit} canEdit={!isTerminal} onChanged={onSaved} />
           )}
+
+          {!isNew && tab === "attachments" && permit && (
+            <AttachmentsTab
+              permitId={permit.id}
+              items={attachments}
+              canEdit={canManagePermits}
+              onChanged={reloadAttachments}
+            />
+          )}
         </div>
 
         <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
@@ -707,6 +740,128 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
                 <p className="text-[10px] text-text-industrial/40">{ROLE_LABEL[p.role]}</p>
               </div>
               {canEdit && <button onClick={() => { void onDelete(p.id); }} className="text-[10px] text-red-700 dark:text-red-400 hover:underline">Quitar</button>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Attachments Tab (respaldos) ─────────────────────────────────────────────
+//
+// El permiso se imprime, se firma en papel a bordo y se escanea: ese scan es la
+// evidencia que pide una auditoría. Se puede adjuntar en cualquier estado del
+// permiso —incluso cerrado—, porque el papel firmado vuelve después.
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const AttachmentsTab: React.FC<{
+  permitId: string;
+  items: PermitAttachment[];
+  canEdit: boolean;
+  onChanged: () => void;
+}> = ({ permitId, items, canEdit, onChanged }) => {
+  const t = useT();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [alertMsg, setAlertMsg]   = useState<string | null>(null);
+
+  const onPickFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Limpiamos el input para poder re-elegir el mismo archivo si hizo falta.
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      await api.upload(`/app/permits/${permitId}/attachments`, file);
+      onChanged();
+    } catch (err) {
+      setAlertMsg(err instanceof ApiError ? err.message : t("pm.attachUploadError"));
+    } finally {
+      setUploading(false);
+    }
+  }, [permitId, onChanged, t]);
+
+  const onDelete = useCallback(async (att: PermitAttachment) => {
+    if (!confirm(t("pm.attachDeleteConfirm"))) return;
+    try {
+      await api.delete(`/app/permits/${permitId}/attachments/${att.id}`);
+      onChanged();
+    } catch (err) {
+      setAlertMsg(err instanceof ApiError ? err.message : t("error.delete"));
+    }
+  }, [permitId, onChanged, t]);
+
+  return (
+    <div className="space-y-3">
+      {alertMsg && <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />}
+
+      <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 text-[11px] text-text-industrial/70 leading-snug">
+        {t("pm.attachHint")}
+      </div>
+
+      {canEdit && (
+        <div className="flex justify-end">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+            className="hidden"
+            onChange={e => { void onPickFile(e); }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 disabled:opacity-50"
+          >
+            {uploading
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("pm.attachUploading")}</>
+              : <><Plus className="w-3.5 h-3.5" /> {t("pm.attachScan")}</>}
+          </button>
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <div className="text-center py-10 text-text-industrial/30 text-sm">{t("pm.noAttachments")}</div>
+      ) : (
+        <div className="divide-y divide-fg/5">
+          {items.map(att => (
+            <div key={att.id} className="py-2.5 flex items-center gap-3">
+              <Paperclip className="w-3.5 h-3.5 text-accent shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-fg truncate">{att.filename}</p>
+                <p className="text-[10px] text-text-industrial/40">
+                  {fmtSize(att.sizeBytes)} · {t("pm.attachUploadedBy")} {att.uploadedByName ?? "—"} · {fmtDateTime(att.uploadedAt)}
+                </p>
+              </div>
+              {/* Los uploads se sirven por /app/files/* con Bearer token: un <a href>
+                  plano no manda el header y devuelve 410. */}
+              <AuthedDocLink
+                src={att.url}
+                label={t("common.view")}
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] text-text-industrial hover:border-accent/30"
+              />
+              <button
+                onClick={() => { void downloadAuthedFile(att.url, att.filename); }}
+                title={t("common.download")}
+                className="shrink-0 p-1.5 rounded-lg text-text-industrial/50 hover:text-accent hover:bg-fg/5"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              {canEdit && (
+                <button
+                  onClick={() => { void onDelete(att); }}
+                  title={t("common.remove")}
+                  className="shrink-0 p-1.5 rounded-lg text-red-700/70 dark:text-red-400/70 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
         </div>

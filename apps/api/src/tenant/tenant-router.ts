@@ -125,6 +125,7 @@ import {
 } from "./permits/permits-service";
 import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-service";
 import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
+import { listPermitAttachments, uploadPermitAttachment, deletePermitAttachment } from "./permits/permit-attachments-service";
 import { buildPermitPdfDocument, buildPermitWordDocument } from "./permits/permit-pdf";
 import { serveDoc } from "./pms/doc-export";
 import { getPermitsSummary } from "./permits/permits-summary-service";
@@ -2467,6 +2468,33 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const parts = url.pathname.split("/");
     await deleteParticipant(session, parts[3]!, parts[5]!);
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
+  // Respaldos del permiso: el scan del permiso firmado en papel y sus anexos.
+  // Se puede subir en cualquier estado — el papel firmado vuelve después de
+  // aprobar/activar/cerrar, no mientras el permiso todavía es editable.
+  if (method === "GET" && /^\/app\/permits\/[^/]+\/attachments$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const items = await listPermitAttachments(session, permitId);
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/attachments$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const permitId = url.pathname.split("/")[3]!;
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "archivo");
+    const buffer = await readBinaryBody(request);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    sendJson(response, 201, await uploadPermitAttachment(session, permitId, originalName, buffer));
+    return true;
+  }
+  if (method === "DELETE" && /^\/app\/permits\/[^/]+\/attachments\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/");
+    await deletePermitAttachment(session, parts[3]!, parts[5]!);
     sendJson(response, 200, { ok: true });
     return true;
   }

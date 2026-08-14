@@ -32,6 +32,11 @@ const MIME_MAP: Record<string, string> = {
   ".zip":  "application/zip",
 };
 
+/** MIME según la extensión del nombre original. Los tipos aceptados son los de MIME_MAP. */
+export function mimeTypeForFilename(originalName: string): string {
+  return MIME_MAP[extname(originalName).toLowerCase()] ?? "application/octet-stream";
+}
+
 function entityDir(tenantSlug: string, entityType: string): string {
   const dir = join(UPLOADS_ROOT, tenantSlug, entityType.toLowerCase());
   mkdirSync(dir, { recursive: true });

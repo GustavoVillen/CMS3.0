@@ -582,6 +582,8 @@ enum AttachmentTarget {
   SPARE_ORDER
   INSPECTION_EXECUTION
   WORK_LOG
+  // Scan del permiso de trabajo firmado en papel (evidencia TMSA/SIRE).
+  WORK_PERMIT
 }
 
 enum AttachmentStatus {
