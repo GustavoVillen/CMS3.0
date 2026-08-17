@@ -62,7 +62,7 @@ interface PlanSpec {
 }
 
 /** Ficha del activo a corregir cuando el plan en papel la contradice. */
-interface AssetFix { asset: string; manufacturer?: string; model?: string }
+interface AssetFix { asset: string; manufacturer?: string; model?: string; name?: string }
 
 interface Lote {
   titulo: string;
@@ -201,7 +201,10 @@ async function main() {
     console.log("\nFICHA DE ACTIVOS A CORREGIR");
     for (const f of lote.assetFixes) {
       const a = byCode.get(f.asset);
-      console.log(`  ${f.asset}: ${a?.manufacturer ?? "-"} ${a?.model ?? ""} → ${f.manufacturer ?? a?.manufacturer} ${f.model ?? a?.model}`);
+      if (f.name) console.log(`  ${f.asset}: nombre "${a?.name}" → "${f.name}"`);
+      if (f.manufacturer || f.model) {
+        console.log(`  ${f.asset}: ${a?.manufacturer ?? "-"} ${a?.model ?? ""} → ${f.manufacturer ?? a?.manufacturer} ${f.model ?? a?.model}`);
+      }
     }
   }
 
@@ -225,6 +228,7 @@ async function main() {
     const data: any = {};
     if (f.manufacturer) data.manufacturer = f.manufacturer;
     if (f.model) data.model = f.model;
+    if (f.name) data.name = f.name;
     if (Object.keys(data).length) {
       await prisma.asset.update({ where: { id: byCode.get(f.asset).id }, data });
       nFix++;

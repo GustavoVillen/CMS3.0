@@ -66,7 +66,19 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
       intercambiador, acople torsional, adición de aceite) conservan tarea y frecuencia;
       sólo se les completó área y responsable.
       Las 8 tareas DIARIO de las líneas de eje quedan para el plan consolidado del cierre.
-- [ ] Tanda 3 — MOTORES_GENERADORES
+- [x] **Tanda 3 — MOTORES_GENERADORES** (2026-08-17). Los 3 grupos: 36 corregidos +
+      18 creados = 46 planes, todos con IA. Fichas corregidas de Cummins 4BTA3-G1 a
+      **Cummins N855** (por eso sus planes listaban 4 inyectores y el papel tiene 6).
+      El **N03 de emergencia** es el activo `LTE-MA-PTO`, que figuraba como "Motor Auxiliar
+      Puerto": Gustavo confirmó que es el mismo equipo y se renombró a "Motor Generador N°3
+      de Emergencia" (y `LTE-ALT-PTO` a "Alternador N°3 de Emergencia"). Sus frecuencias son
+      propias: corre 127 h en total, así que el service es ANUAL y no cada 400 h.
+      Sin par: "CONTROL 2: Medición gases escape / inyectores / alternador" (3000 h) en los
+      tres, e "Inspección SEMANAL" en el de emergencia.
+      Se unificaron dos pares de filas del papel en una tarea cada uno, por describir el
+      mismo trabajo en el mismo momento y con los mismos datos: "cambio de aceite" +
+      "cambio de filtro de aceite", e "inyector N°1..N°6" + "cambio de inyectores y control
+      de avance de inyección".
 - [ ] Tanda 4 — PLANTA_ELECTRICA (requiere crear los 6 transformadores)
 - [ ] Tanda 5 — CIRCUITO_DE_COMBUSTIBLE
 - [ ] Tanda 6 — NAV-COM
@@ -90,7 +102,15 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
 
 ## Resuelto
 
+- **Generador N03 = `LTE-MA-PTO`** (2026-08-17). Ver tanda 3.
 - **Bug de la IA** (commit `3673549`, deployado 2026-08-17): el texto sugerido salía con los
   corchetes de la plantilla del prompt. Se reescribieron los prompts y se agregó
   `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
   trabajo y diferimientos.
+
+## Suelto, para preguntar al cierre
+
+- Los generadores N01 y N02 siguen llamándose "Motor Auxiliar #1" y "#2" mientras el N03
+  quedó como "Motor Generador N°3 de Emergencia". El papel los llama "Motor Generador N01
+  (Babor)" y "N02 (Estribor)". Conviene unificar el criterio de nombres, pero no se tocó
+  porque no estaba pedido.
