@@ -218,6 +218,10 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "inventorySnapshotAt",
     "createdByUserId", "updatedByUserId", "deletedAt", "deletedByUserId",
   ],
+  asset_hours: [
+    "sourceRecordId", "assetId",
+    "createdByUserId", "updatedByUserId", "updatedAt",
+  ],
 };
 
 function sortDynamicKeys(module: ExcelModule, keys: string[]): string[] {
@@ -403,6 +407,34 @@ async function fetchRecords(
         vesselCode:   r.crew?.vesselCode  ?? null,
         crew: undefined, // no exportar el objeto anidado
       }));
+    }
+
+    case "asset_hours": {
+      // Lecturas de horómetro (Horas de Equipos). El nombre y código del equipo
+      // se resuelven aparte para que la planilla se lea sin ids.
+      // Las lecturas no tienen borrado lógico: una lectura mal cargada se corrige
+      // sobreescribiéndola, así que hay que sacar el deletedAt del where heredado.
+      delete where.deletedAt;
+      const rows = await (prisma as any).assetHoursReading.findMany({
+        where,
+        orderBy: [{ readingDate: "desc" }, { vesselCode: "asc" }],
+      }) as any[];
+      const assetIds = [...new Set(rows.map((r) => r.assetId).filter(Boolean))];
+      const assets = assetIds.length
+        ? await (prisma as any).asset.findMany({
+            where: { id: { in: assetIds }, tenantId: where.tenantId as string },
+            select: { id: true, assetCode: true, name: true },
+          }) as any[]
+        : [];
+      const assetMap = new Map(assets.map((a) => [a.id, a]));
+      return rows.map((r) => {
+        const a = assetMap.get(r.assetId) as any;
+        return {
+          ...r,
+          assetCode: a?.assetCode ?? null,
+          assetName: a?.name ?? null,
+        };
+      });
     }
 
     case "crew_rest_hours": {

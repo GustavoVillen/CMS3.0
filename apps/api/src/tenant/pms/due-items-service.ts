@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { log } from "../../common/logger";
+import { loadCurrentHoursNumberByAsset } from "../asset-hours/asset-hours-service";
 
 export interface DueItemsFilters {
   vesselCode?: string | null;
@@ -34,20 +35,6 @@ interface MaintenancePlanRecord {
   lastExecutionDate?: Date | null;
   lastExecutionHours?: number | null;
   deletedAt: Date | null;
-}
-
-interface DailyEquipmentHoursRow {
-  assetId: string | null;
-  runningHoursTotal: number | null;
-  createdAt: Date;
-}
-
-interface DailyEquipmentHoursDelegate {
-  findMany(args: {
-    where: Record<string, unknown>;
-    orderBy?: unknown;
-    select?: Record<string, boolean>;
-  }): Promise<DailyEquipmentHoursRow[]>;
 }
 
 interface MaintenancePlanDelegate {
@@ -142,34 +129,6 @@ function deriveExecutionStatus(
   return "FUTURE";
 }
 
-async function loadCurrentHoursByAsset(
-  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
-  tenantId: string,
-  assetIds: string[],
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  if (assetIds.length === 0) return map;
-  try {
-    const delegate = (prismaRaw as unknown as { dailyEquipmentHours: DailyEquipmentHoursDelegate }).dailyEquipmentHours;
-    const rows = await delegate.findMany({
-      where: {
-        tenantId,
-        assetId: { in: assetIds },
-        runningHoursTotal: { not: null },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { assetId: true, runningHoursTotal: true, createdAt: true },
-    });
-    for (const row of rows) {
-      if (!row.assetId || row.runningHoursTotal == null) continue;
-      if (!map.has(row.assetId)) map.set(row.assetId, row.runningHoursTotal);
-    }
-  } catch (err) {
-    log.error("[due-items] current hours load failed:", err);
-  }
-  return map;
-}
-
 async function resolveTenantId(session: TenantAccessSession): Promise<string | null> {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) return null;
@@ -251,7 +210,7 @@ export async function listDueItems(session: TenantAccessSession, filters: DueIte
   }
 
   const assetIds = Array.from(new Set(raw.map((p) => p.assetId).filter(Boolean)));
-  const currentHoursByAsset = await loadCurrentHoursByAsset(prismaRaw, tenantId, assetIds);
+  const currentHoursByAsset = await loadCurrentHoursNumberByAsset(prismaRaw, tenantId, assetIds);
 
   const computed = raw.map((item) => ({
     ...item,

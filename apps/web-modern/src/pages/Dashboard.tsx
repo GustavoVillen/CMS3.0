@@ -14,6 +14,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { ComplianceDashboard } from "../components/ComplianceDashboard";
+import { AssetHoursQuickCard } from "../components/AssetHoursQuickCard";
 import { domToPng } from "modern-screenshot";
 
 // ---------------------------------------------------------------------------
@@ -400,6 +401,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
         );
       })()}
+
+      {/* Carga de horómetros del buque seleccionado. Va acá, antes de la grilla de
+          widgets: las horas mandan el vencimiento de los planes por horas, y si no
+          se cargan el plan no vence. Se muestra sólo con un buque seleccionado. */}
+      <AssetHoursQuickCard />
 
       {/* AI Insights modal */}
       {showInsights && (

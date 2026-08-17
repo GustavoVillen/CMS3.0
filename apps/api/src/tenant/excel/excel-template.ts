@@ -164,6 +164,16 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "status",            header: "status",            required: false, width: 16 },
     { key: "notes",             header: "notes",             required: false, width: 36 },
   ],
+  asset_hours: [
+    { key: "vesselCode",   header: "vesselCode",   required: false, width: 14 },
+    { key: "assetCode",    header: "assetCode",    required: false, width: 18 },
+    { key: "assetName",    header: "assetName",    required: false, width: 32 },
+    { key: "readingDate",  header: "readingDate",  required: false, width: 14 },
+    { key: "runningHours", header: "runningHours", required: false, width: 14 },
+    { key: "source",       header: "source",       required: false, width: 20 },
+    { key: "note",         header: "note",         required: false, width: 36 },
+    { key: "createdAt",    header: "createdAt",    required: false, width: 20 },
+  ],
   crew_rest_hours: [
     { key: "crewCode",       header: "crewCode",       required: false, width: 16 },
     { key: "crewFullName",   header: "crewFullName",   required: false, width: 28 },

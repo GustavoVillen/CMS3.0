@@ -25,6 +25,7 @@ export const VALID_MODULES = [
   "defects",
   "daily_reports",
   "monthly_reports",
+  "asset_hours",              // Lecturas de horómetro (Horas de Equipos)
 ] as const;
 
 export type ExcelModule = (typeof VALID_MODULES)[number];
@@ -53,6 +54,7 @@ const IMPORT_ROLES: Record<ExcelModule, string[]> = {
   defects:             [],
   daily_reports:       [],
   monthly_reports:     [],
+  asset_hours:         [],
 };
 
 const EXPORT_ROLES: Record<ExcelModule, string[]> = {
@@ -82,6 +84,8 @@ const EXPORT_ROLES: Record<ExcelModule, string[]> = {
   defects:             ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "FLEET_SUPERINTENDENT", "AUDITOR_READONLY"],
   daily_reports:       ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "FLEET_SUPERINTENDENT", "AUDITOR_READONLY"],
   monthly_reports:     ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "FLEET_SUPERINTENDENT", "AUDITOR_READONLY"],
+  // El tripulante es quien carga los horómetros: también puede bajarse la planilla.
+  asset_hours:         ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "FLEET_SUPERINTENDENT", "TECHNICIAN_OPERATOR", "AUDITOR_READONLY"],
 };
 
 export function isValidModule(module: string): module is ExcelModule {

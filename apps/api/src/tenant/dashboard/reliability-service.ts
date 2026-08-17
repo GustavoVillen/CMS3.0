@@ -1,5 +1,6 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { loadOperatingHoursDelta } from "../asset-hours/asset-hours-service";
 
 // ---------------------------------------------------------------------------
 // KPIs de confiabilidad — MTBF / MTTR / Disponibilidad por activo (o agrupado).
@@ -202,27 +203,10 @@ export async function getReliabilityKpis(
   const failuresByAsset = new Map<string, number>();
   for (const d of defects) failuresByAsset.set(d.assetId, (failuresByAsset.get(d.assetId) ?? 0) + 1);
 
-  // 3) Horas de operación medidas por activo (delta runningHoursTotal en el período)
-  const placeholders = assetIds.map((_, i) => `$${i + 1}`).join(", ");
-  const tenantPh = `$${assetIds.length + 1}`;
-  const fromPh = `$${assetIds.length + 2}`;
-  const toPh = `$${assetIds.length + 3}`;
-  const opHoursRows = await prismaRaw.$queryRawUnsafe<{ assetId: string; oph: number }[]>(
-    `SELECT "assetId", (MAX("runningHoursTotal") - MIN("runningHoursTotal"))::float AS oph
-     FROM "DailyEquipmentHours"
-     WHERE "assetId" IN (${placeholders})
-       AND "tenantId" = ${tenantPh}
-       AND "runningHoursTotal" IS NOT NULL
-       AND "createdAt" >= ${fromPh} AND "createdAt" <= ${toPh}
-     GROUP BY "assetId"
-     HAVING COUNT(*) >= 2`,
-    ...assetIds, tenantId, from, to,
-  );
-  const opHoursByAsset = new Map<string, number>();
-  for (const r of opHoursRows) {
-    const v = Number(r.oph);
-    if (isFinite(v) && v > 0) opHoursByAsset.set(r.assetId, v);
-  }
+  // 3) Horas de operación medidas por activo: delta de horómetro en el período,
+  //    sobre las lecturas de tenant/asset-hours y filtrando por readingDate (el día
+  //    al que corresponden las horas), no por cuándo se tipearon.
+  const opHoursByAsset = await loadOperatingHoursDelta(prismaRaw, tenantId, assetIds, from, to);
 
   // 4) Reparaciones = OT correctivas cerradas del activo → duración por activo
   const workOrders = await db.workOrder.findMany({

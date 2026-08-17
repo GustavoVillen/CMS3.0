@@ -104,6 +104,15 @@ enum AssetStatus {
   OUT_OF_SERVICE
 }
 
+/// De dónde salió una lectura de horómetro (AssetHoursReading). MANUAL = planilla
+/// "Horas de Equipos"; VOYAGE_TANK_REPORT = M2 al enviarse; DAILY_REPORT = renglón de
+/// horas del Reporte Diario (módulo dormante, sigue vivo en la vista móvil).
+enum HoursReadingSource {
+  MANUAL
+  VOYAGE_TANK_REPORT
+  DAILY_REPORT
+}
+
 enum MaintenancePlanTrigger {
   HOURS
   MONTHS
@@ -1285,10 +1294,50 @@ model Asset {
   parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children         Asset[]          @relation("AssetHierarchy")
   inspectionExecs  InspectionExecution[]
+  hoursReadings    AssetHoursReading[]
 
   @@unique([tenantId, vesselCode, assetCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
+}
+
+/// Lectura de horómetro de un equipo. ÚNICA fuente de verdad de las "horas actuales":
+/// todo lo que muestre o calcule horas (ficha del equipo, planes por horas, mapa del plan,
+/// ítems por vencer, confiabilidad) lee de acá vía `tenant/asset-hours/asset-hours-service`.
+///
+/// Se alimenta de tres vías, todas por el mismo escritor (`recordHoursReadings`):
+/// la planilla "Horas de Equipos" (MANUAL), el M2 al enviarse (VOYAGE_TANK_REPORT) y el
+/// renglón de horas del Reporte Diario (DAILY_REPORT).
+///
+/// `readingDate` es el día AL QUE CORRESPONDEN las horas, no cuándo se tipearon: ordenar
+/// por `createdAt` hacía que corregir un reporte viejo pisara las horas actuales.
+/// `DailyEquipmentHours` y `VoyageEngineHours` siguen guardando lo suyo (consumos, horas
+/// inicial/final del tramo); esta tabla no los reemplaza.
+model AssetHoursReading {
+  id              String             @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  assetId         String
+  readingDate     DateTime           @db.Date
+  runningHours    Float
+  source          HoursReadingSource
+  /// Id del M2 / Reporte Diario que originó la lectura. Null en las manuales.
+  sourceRecordId  String?
+  /// Justificación cuando la lectura no sigue la progresión normal (horómetro
+  /// reemplazado, corrección de carga).
+  note            String?
+  createdAt       DateTime           @default(now())
+  createdByUserId String
+  updatedAt       DateTime           @updatedAt
+  updatedByUserId String?
+
+  asset           Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  /// Hace idempotente la carga: recargar el mismo día por la misma vía actualiza,
+  /// no duplica. Distintos orígenes pueden coexistir en la misma fecha.
+  @@unique([tenantId, assetId, readingDate, source])
+  @@index([tenantId, assetId, readingDate])
+  @@index([tenantId, vesselCode, readingDate])
 }
 
 model MaintenancePlan {

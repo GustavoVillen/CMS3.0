@@ -7,6 +7,7 @@ import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import { deleteTenantMaintenancePlan } from "../maintenance-plans/maintenance-plans-service";
 import { handleInstrumentRoutes } from "../instruments/instruments-router";
 import { handleAssetRoutes } from "./assets-router";
+import { handleAssetHoursRoutes } from "../asset-hours/asset-hours-router";
 import { handleSparesRoutes } from "./spares-router";
 import { handleInspectionsRoutes } from "./inspections-router";
 import { handleMaintenanceRoutes } from "./maintenance-router";
@@ -45,6 +46,7 @@ export async function handlePmsRoutes(
 
   if (await handleInstrumentRoutes(method, url, request, response, env)) return true;
   if (await handleAssetRoutes(method, url, request, response, env)) return true;
+  if (await handleAssetHoursRoutes(method, url, request, response, env)) return true;
   if (await handleSparesRoutes(method, url, request, response, env)) return true;
   if (await handleInspectionsRoutes(method, url, request, response, env)) return true;
   if (await handleMaintenanceRoutes(method, url, request, response, env)) return true;

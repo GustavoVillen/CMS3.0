@@ -40,6 +40,7 @@ const MATCHING_KEY: Record<ExcelModule, string> = {
   defects:             "defectCode",
   daily_reports:       "id",
   monthly_reports:     "id",
+  asset_hours:         "id",
 };
 
 const HEADER_ALIASES: Record<string, string> = {

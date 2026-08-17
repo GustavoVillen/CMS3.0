@@ -35,6 +35,9 @@ interface Asset {
   trackDailyReport: boolean;
   isSafetyCritical: boolean;
   currentHours: number | null;
+  /** Fecha (YYYY-MM-DD) y origen de la última lectura de horómetro. */
+  currentHoursDate?: string | null;
+  currentHoursSource?: string | null;
   equipmentClassId: string | null;
   parentAssetId: string | null;
   createdAt: string;
@@ -744,6 +747,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
     [initial?.id ?? ""],
   );
   const currentHours = assetDetail?.currentHours ?? initial?.currentHours ?? null;
+  // Fecha y origen de esa lectura: sin la fecha, un horómetro viejo se lee como si
+  // fuera de hoy. Las lecturas se cargan en la pantalla "Horas de Equipos" o llegan
+  // solas desde el M2.
+  const currentHoursDate = assetDetail?.currentHoursDate ?? initial?.currentHoursDate ?? null;
+  const currentHoursSource = assetDetail?.currentHoursSource ?? initial?.currentHoursSource ?? null;
 
   const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? defaultVesselCode ?? "");
   const [assetCode, setAssetCode] = useState(initial?.assetCode ?? "");
@@ -1199,13 +1207,21 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 className="w-4 h-4 rounded accent-accent shrink-0"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-fg font-medium">Reporte diario</p>
-                <p className="text-xs text-text-industrial/50">Incluir en horas de equipo del reporte diario</p>
+                <p className="text-sm text-fg font-medium">{t("asset.hoursTracking")}</p>
+                <p className="text-xs text-text-industrial/50">{t("asset.hoursTrackingHint")}</p>
               </div>
               {currentHours != null && (
                 <div className="shrink-0 text-right">
-                  <p className="text-[10px] text-text-industrial/40 uppercase tracking-wider">Hs. acumuladas</p>
+                  <p className="text-[10px] text-text-industrial/40 uppercase tracking-wider">{t("asset.accumulatedHours")}</p>
                   <p className="font-mono text-base font-bold text-accent leading-tight">{Number(currentHours).toLocaleString()}h</p>
+                  {currentHoursDate && (
+                    <p className="text-[10px] text-text-industrial/40 leading-tight">
+                      {currentHoursDate}
+                      {currentHoursSource === "MANUAL" ? ` · ${t("assetHours.source.manual")}`
+                        : currentHoursSource === "VOYAGE_TANK_REPORT" ? ` · ${t("assetHours.source.voyage")}`
+                        : currentHoursSource === "DAILY_REPORT" ? ` · ${t("assetHours.source.daily")}` : ""}
+                    </p>
+                  )}
                 </div>
               )}
             </label>

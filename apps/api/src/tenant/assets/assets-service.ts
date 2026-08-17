@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
+import { loadCurrentHoursByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 
 export interface AssetListFilters {
   vesselCode?: string | null;
@@ -77,7 +78,11 @@ interface AssetRecord {
   updatedAt: Date;
   updatedByUserId: string;
   deletedAt: Date | null;
+  /** Última lectura de horómetro (AssetHoursReading). Ver tenant/asset-hours. */
   currentHours: number | null;
+  /** Fecha (YYYY-MM-DD) y origen de esa lectura, para que la UI muestre de cuándo es. */
+  currentHoursDate?: string | null;
+  currentHoursSource?: string | null;
 }
 
 function canManageAssets(session: TenantAccessSession): boolean {
@@ -195,18 +200,23 @@ export async function listTenantAssets(session: TenantAccessSession, filters: As
   if (filters.trackDailyReport != null) addParam("trackDailyReport", filters.trackDailyReport);
   if (filters.isSafetyCritical != null) addParam("isSafetyCritical", filters.isSafetyCritical);
 
-  return prisma.$queryRawUnsafe<AssetRecord[]>(
-    `SELECT a.*, (
-      SELECT deh."runningHoursTotal"
-      FROM "DailyEquipmentHours" deh
-      WHERE deh."assetId" = a."id"
-        AND deh."runningHoursTotal" IS NOT NULL
-      ORDER BY deh."createdAt" DESC
-      LIMIT 1
-    ) AS "currentHours"
-    FROM "Asset" a WHERE ${conditions.join(" AND ")} ORDER BY a."vesselCode" ASC, a."assetCode" ASC`,
+  const rows = await prisma.$queryRawUnsafe<AssetRecord[]>(
+    `SELECT a.* FROM "Asset" a WHERE ${conditions.join(" AND ")} ORDER BY a."vesselCode" ASC, a."assetCode" ASC`,
     ...params,
   );
+
+  // Las horas actuales salen de AssetHoursReading vía el módulo asset-hours (única
+  // fuente: planilla manual + M2 + reporte diario), no de un subquery propio.
+  const currentMap = await loadCurrentHoursByAsset(prisma, tenant.id, rows.map((r) => r.id));
+  return rows.map((row) => {
+    const current = currentMap.get(row.id) ?? null;
+    return {
+      ...row,
+      currentHours: current?.runningHours ?? null,
+      currentHoursDate: current?.readingDate ?? null,
+      currentHoursSource: current?.source ?? null,
+    };
+  });
 }
 
 export async function getTenantAsset(session: TenantAccessSession, id: string): Promise<AssetRecord> {
@@ -222,20 +232,19 @@ export async function getTenantAsset(session: TenantAccessSession, id: string): 
   if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
 
   const rows = await prisma.$queryRawUnsafe<AssetRecord[]>(
-    `SELECT a.*, (
-      SELECT deh."runningHoursTotal"
-      FROM "DailyEquipmentHours" deh
-      WHERE deh."assetId" = a."id"
-        AND deh."runningHoursTotal" IS NOT NULL
-      ORDER BY deh."createdAt" DESC
-      LIMIT 1
-    ) AS "currentHours"
-    FROM "Asset" a
-    WHERE a."id" = $1 AND a."tenantId" = $2 AND a."deletedAt" IS NULL LIMIT 1`,
+    `SELECT a.* FROM "Asset" a
+     WHERE a."id" = $1 AND a."tenantId" = $2 AND a."deletedAt" IS NULL LIMIT 1`,
     id, tenantId,
   );
   if (!rows.length) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
-  return rows[0];
+
+  const current = await loadCurrentHoursForAsset(prisma, tenantId, id);
+  return {
+    ...rows[0]!,
+    currentHours: current?.runningHours ?? null,
+    currentHoursDate: current?.readingDate ?? null,
+    currentHoursSource: current?.source ?? null,
+  };
 }
 
 export async function createTenantAsset(session: TenantAccessSession, payload: CreateAssetInput): Promise<AssetRecord> {

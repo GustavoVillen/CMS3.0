@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { deriveExecutionStatus } from "../maintenance-plans/maintenance-plans-service";
+import { loadCurrentHoursNumberByAsset } from "../asset-hours/asset-hours-service";
 
 // ---------------------------------------------------------------------------
 // Mapa del Plan — cómo está ESTRUCTURADO el plan de mantenimiento de un buque.
@@ -322,28 +323,10 @@ export async function getPlanMap(
   const assetById = new Map(assets.map(a => [a.id, a]));
 
   // Horómetro actual de cada equipo: sin esto los planes por horas de marcha se
-  // evaluarían contra 0 y saldrían todos vencidos. Misma consulta que usa la
-  // pantalla de Planes (última lectura por equipo), acotada por tenant.
+  // evaluarían contra 0 y saldrían todos vencidos. Misma fuente que el resto del
+  // sistema (tenant/asset-hours: planilla manual + M2 + reporte diario).
   const assetIds = [...new Set(plans.map(p => p.assetId))];
-  const currentHoursByAsset = new Map<string, number>();
-  if (assetIds.length > 0) {
-    const placeholders = assetIds.map((_, i) => `$${i + 1}`).join(", ");
-    const rows = await (prismaRaw as unknown as {
-      $queryRawUnsafe<T>(sql: string, ...params: unknown[]): Promise<T>;
-    }).$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
-      `SELECT "assetId", "runningHoursTotal"
-       FROM (
-         SELECT "assetId", "runningHoursTotal",
-                ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
-         FROM "DailyEquipmentHours"
-         WHERE "assetId" IN (${placeholders})
-           AND "tenantId" = $${assetIds.length + 1}
-           AND "runningHoursTotal" IS NOT NULL
-       ) sub WHERE rn = 1`,
-      ...assetIds, tenantId,
-    );
-    for (const r of rows) currentHoursByAsset.set(r.assetId, Number(r.runningHoursTotal));
-  }
+  const currentHoursByAsset = await loadCurrentHoursNumberByAsset(prismaRaw, tenantId, assetIds);
 
   // ── Agregación estructural: grupo SFI → familia → equipo ────────────────────
   interface SysAcc {

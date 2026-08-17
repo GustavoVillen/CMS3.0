@@ -38,6 +38,7 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "wo.operate",               group: "maintenance", labelKey: "perm.woOperate" },
   { key: "plan.manage",              group: "maintenance", labelKey: "perm.planManage" },
   { key: "asset.manage",             group: "maintenance", labelKey: "perm.assetManage" },
+  { key: "assetHours.write",         group: "maintenance", labelKey: "perm.assetHoursWrite" },
   { key: "defect.write",             group: "maintenance", labelKey: "perm.defectWrite" },
   { key: "defect.delete",            group: "maintenance", labelKey: "perm.defectDelete" },
   // Solicitudes y compras
@@ -99,7 +100,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
 
   // Superintendente tecnico (tierra): autoriza OT y SS, aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
-    "wo.authorize", "wo.manage", "wo.operate", "plan.manage", "asset.manage",
+    "wo.authorize", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
     "sr.approve", "sr.authorize", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",
     "inspection.execute", "checklist.manageTemplates",
@@ -108,15 +109,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
 
   // Capitan / Jefe de Maquinas (a bordo): aprueba a bordo, NO autoriza.
   MAINTENANCE_MANAGER: [
-    "wo.manage", "wo.operate", "plan.manage", "asset.manage", "defect.write",
+    "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write",
     "sr.approve", "spareRequest.approve", "spare.manage", "stock.manage", "provider.manage",
     "permit.manage", "externalAudit.manage", "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",
   ],
 
-  // Tripulante: opera la OT, no la habilita.
+  // Tripulante: opera la OT, no la habilita. Carga horómetros (es quien los lee a bordo).
   TECHNICIAN_OPERATOR: [
-    "wo.operate", "defect.write", "permit.manage", "crew.manage", "certificate.manage",
+    "wo.operate", "assetHours.write", "defect.write", "permit.manage", "crew.manage", "certificate.manage",
   ],
 
   INSPECTOR_COMPLIANCE: [

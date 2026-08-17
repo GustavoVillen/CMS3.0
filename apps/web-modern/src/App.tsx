@@ -56,6 +56,7 @@ const VesselSuperintendentsPage = React.lazy(() => import("./pages/VesselSuperin
 const TeamPage = React.lazy(() => import("./pages/Team").then(m => ({ default: m.TeamPage })));
 const DailyReportsPage = React.lazy(() => import("./pages/DailyReports").then(m => ({ default: m.DailyReportsPage })));
 const VoyageTankReportsPage = React.lazy(() => import("./pages/VoyageTankReports").then(m => ({ default: m.VoyageTankReportsPage })));
+const AssetHoursPage = React.lazy(() => import("./pages/AssetHours").then(m => ({ default: m.AssetHoursPage })));
 const DeferralsPage = React.lazy(() => import("./pages/Deferrals").then(m => ({ default: m.DeferralsPage })));
 // DORMANTE — CAPA: módulo oculto de la entrega (simplificación). Reactivar descomentando
 // esta línea y las rutas /capa de abajo, + el ítem del Sidebar, + el flag CAPA_AUTO_CREATE.
@@ -238,6 +239,7 @@ export default function App() {
               <Route path="/work-orders/:code" element={<WorkOrdersPage />} />
               <Route path="/daily-reports"     element={<DailyReportsPage />} />
               <Route path="/voyage-tank-reports" element={<VoyageTankReportsPage />} />
+              <Route path="/asset-hours" element={<AssetHoursPage />} />
               <Route path="/defects"           element={<DefectsPage />} />
               <Route path="/defects/:code"     element={<DefectsPage />} />
               <Route path="/deferrals"         element={<DeferralsPage />} />

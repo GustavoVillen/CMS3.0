@@ -7,6 +7,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { refreshExecutionStatuses } from "../pms/execution-windows-service";
 import { log } from "../../common/logger";
+import { recordHoursReadings } from "../asset-hours/asset-hours-service";
 
 function scopedWhere(session: TenantAccessSession, tenantId: string, id: string): Record<string, unknown> {
   const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
@@ -138,15 +139,11 @@ export async function upsertVoyageEngineHours(session: TenantAccessSession, repo
 }
 
 /**
- * Integra los horómetros del M2 al PMS (avance de planes de mantenimiento por
- * horas). Antes esto lo hacía el Reporte Diario al confirmarse; ahora corre al
- * marcar el M2 como SUBMITTED. Usa `hoursFinal` como lectura acumulada actual
- * de cada motor (equivalente a runningHoursTotal del reporte diario):
- *   - bootstrap: si un plan HOURS/RUNNING_HOURS del asset no tiene nextDueHours,
- *     lo siembra (base = lastExecutionHours ?? hoursFinal) + frequencyHours.
- *   - avance: refresca windowOpenHours cuando la lectura se acerca al vencimiento.
- * Luego recalcula executionStatus de los planes del tenant (misma fn que el
- * reporte diario). Réplica de daily-report-integration-service (Steps 1-2).
+ * Integra los horómetros del M2 al PMS al marcarlo SUBMITTED. `hoursFinal` es la
+ * lectura acumulada de cada motor: se asienta como AssetHoursReading (única fuente
+ * de "horas actuales" del equipo) por el escritor de tenant/asset-hours, que además
+ * avanza los planes HOURS/RUNNING_HOURS del equipo. Después recalcula el
+ * executionStatus de los planes del tenant.
  */
 export async function integrateVoyageTankReportHours(
   session: TenantAccessSession,
@@ -164,44 +161,32 @@ export async function integrateVoyageTankReportHours(
   });
   if (!report) throw new RouteError(404, "NOT_FOUND", "Medición no encontrada.");
 
-  const vesselCode = report.vesselCode;
   const engineRows = (report.engineHours ?? []) as Array<{ assetId: string | null; hoursFinal: number | null }>;
+
+  // Las horas finales del M2 se registran como lecturas de horómetro: son la fuente
+  // viva de "horas actuales" del equipo (el Reporte Diario está dormante). El escritor
+  // único también avanza los planes por horas, así que no se duplica esa lógica acá.
+  const readingDate = (report.dateEnd ?? report.reportDateTime ?? report.createdAt)
+    .toISOString().slice(0, 10);
+
   let updatedRunningHoursCount = 0;
-
-  for (const e of engineRows) {
-    if (!e.assetId || e.hoursFinal == null) continue;
-    const currentHours = e.hoursFinal;
-
-    const plans = await (prisma as any).maintenancePlan.findMany({
-      where: {
-        tenantId: tenant.id,
-        vesselCode,
-        assetId: e.assetId,
-        triggerType: { in: ["HOURS", "RUNNING_HOURS"] },
-        deletedAt: null,
-        status: { not: "INACTIVE" },
+  try {
+    const result = await recordHoursReadings(
+      session,
+      engineRows
+        .filter((e) => e.assetId && e.hoursFinal != null)
+        .map((e) => ({ assetId: e.assetId!, runningHours: e.hoursFinal!, readingDate })),
+      {
+        source: "VOYAGE_TANK_REPORT",
+        sourceRecordId: reportId,
+        // El permiso ya lo validó el envío del M2; quien puede enviarlo puede
+        // asentar sus horómetros.
+        skipPermissionCheck: true,
       },
-    });
-
-    for (const plan of plans) {
-      if (!plan.frequencyHours || plan.frequencyHours <= 0) continue;
-      const updates: Record<string, unknown> = {};
-
-      if (plan.nextDueHours == null) {
-        // Bootstrap: nunca se le seteó vencimiento por horas.
-        const baseHours = plan.lastExecutionHours ?? currentHours;
-        updates.nextDueHours = baseHours + plan.frequencyHours;
-        updates.windowOpenHours = (baseHours + plan.frequencyHours) - plan.frequencyHours * 0.1;
-      } else if (currentHours > plan.nextDueHours - plan.frequencyHours * 0.5) {
-        // Se acerca al vencimiento: refrescar la apertura de ventana.
-        updates.windowOpenHours = plan.nextDueHours - plan.frequencyHours * 0.1;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await (prisma as any).maintenancePlan.update({ where: { id: plan.id }, data: updates });
-        updatedRunningHoursCount++;
-      }
-    }
+    );
+    updatedRunningHoursCount = result.plansTouched;
+  } catch (err) {
+    log.error("[voyage-tank integrate] registro de horómetros falló:", err);
   }
 
   // Recalcular executionStatus del tenant con la lectura máxima (mismo patrón daily).

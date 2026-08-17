@@ -8,6 +8,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { resolveConsumables, createWorkLogSpareMovements } from "../pms/spare-consumption";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
+import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
@@ -686,35 +687,16 @@ export async function listTenantMaintenancePlans(
   const assetIds = [...new Set(plans.map((p) => p.assetId))];
 
   // Fetch asset names, current hours, and active WO codes in parallel
-  const [assetRows, currentHoursRows, activeWos] = await Promise.all([
+  const [assetRows, assetCurrentHoursMap, activeWos] = await Promise.all([
     assetIds.length > 0
       ? (prismaRaw as unknown as { asset: { findMany: (args: unknown) => Promise<{ id: string; name: string | null }[]> } }).asset.findMany({
           where: { id: { in: assetIds }, tenantId },
           select: { id: true, name: true },
         })
       : Promise.resolve([] as { id: string; name: string | null }[]),
-    assetIds.length > 0
-      ? (() => {
-          // Window function (ROW_NUMBER OVER PARTITION) has no direct Prisma ORM
-          // equivalent. Kept as raw but explicitly scoped by tenantId for defense
-          // in depth (M-02). assetIds come from a tenant-scoped findMany above
-          // so the implicit scope was already correct, but explicit > implicit.
-          const placeholders = assetIds.map((_: string, i: number) => `$${i + 1}`).join(", ");
-          const tenantPlaceholder = `$${assetIds.length + 1}`;
-          return prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
-            `SELECT "assetId", "runningHoursTotal"
-             FROM (
-               SELECT "assetId", "runningHoursTotal",
-                      ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
-               FROM "DailyEquipmentHours"
-               WHERE "assetId" IN (${placeholders})
-                 AND "tenantId" = ${tenantPlaceholder}
-                 AND "runningHoursTotal" IS NOT NULL
-             ) sub WHERE rn = 1`,
-            ...assetIds, tenantId,
-          );
-        })()
-      : Promise.resolve([] as { assetId: string; runningHoursTotal: number }[]),
+    // Horas actuales: única fuente en tenant/asset-hours (planilla manual + M2 +
+    // reporte diario), ordenadas por la fecha de la lectura y no por cuándo se tipeó.
+    loadCurrentHoursNumberByAsset(prismaRaw, tenantId, assetIds),
     // Se consulta por los VÍNCULOS (WorkOrderMaintenancePlan), no por el
     // maintenancePlanId de la OT: una OT de astillero cubre varios ítems del PDM
     // y los seis planes tienen que mostrar esa misma OT abierta.
@@ -734,7 +716,6 @@ export async function listTenantMaintenancePlans(
   ]);
 
   const assetNameMap = new Map(assetRows.map((a) => [a.id, a.name ?? null]));
-  const assetCurrentHoursMap = new Map(currentHoursRows.map((r) => [r.assetId, Number(r.runningHoursTotal)]));
   const activeWoMap = new Map<string, string>();   // OT PLANNED/IN_PROGRESS (activa)
   const deferredWoMap = new Map<string, string>(); // OT ON_HOLD (diferida)
   for (const link of activeWos) {
@@ -876,24 +857,7 @@ export async function getTenantMaintenancePlansSummary(
 
   // Latest running hours per asset (only needed when any plan is hours-based).
   const hoursPlanAssetIds = [...new Set(plans.filter(p => p.nextDueHours != null).map(p => p.assetId))];
-  let assetCurrentHoursMap = new Map<string, number>();
-  if (hoursPlanAssetIds.length > 0) {
-    const placeholders = hoursPlanAssetIds.map((_: string, i: number) => `$${i + 1}`).join(", ");
-    const tenantPlaceholder = `$${hoursPlanAssetIds.length + 1}`;
-    const rows = await prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
-      `SELECT "assetId", "runningHoursTotal"
-       FROM (
-         SELECT "assetId", "runningHoursTotal",
-                ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
-         FROM "DailyEquipmentHours"
-         WHERE "assetId" IN (${placeholders})
-           AND "tenantId" = ${tenantPlaceholder}
-           AND "runningHoursTotal" IS NOT NULL
-       ) sub WHERE rn = 1`,
-      ...hoursPlanAssetIds, tenantId,
-    );
-    assetCurrentHoursMap = new Map(rows.map(r => [r.assetId, Number(r.runningHoursTotal)]));
-  }
+  const assetCurrentHoursMap = await loadCurrentHoursNumberByAsset(prismaRaw, tenantId, hoursPlanAssetIds);
 
   for (const p of plans) {
     const status = deriveDashboardStatus({
@@ -2287,13 +2251,8 @@ export async function restorePlanAfterWoCancellation(
   // siempre en "FUTURE" (mismo patrón que listTenantMaintenancePlans/deriveDashboardStatus).
   let currentHours: number | null = null;
   if (plan.nextDueHours != null) {
-    const rows = await prismaRaw.$queryRawUnsafe<{ runningHoursTotal: number }[]>(
-      `SELECT "runningHoursTotal" FROM "DailyEquipmentHours"
-       WHERE "assetId" = $1 AND "tenantId" = $2 AND "runningHoursTotal" IS NOT NULL
-       ORDER BY "createdAt" DESC LIMIT 1`,
-      plan.assetId, plan.tenantId,
-    );
-    currentHours = rows[0]?.runningHoursTotal != null ? Number(rows[0].runningHoursTotal) : null;
+    const current = await loadCurrentHoursForAsset(prismaRaw, plan.tenantId, plan.assetId);
+    currentHours = current?.runningHours ?? null;
   }
 
   // Re-derive status ignoring the IN_WINDOW override (WO no longer active)
@@ -2423,9 +2382,14 @@ function isDateTrigger(triggerType: string): boolean {
 
 /**
  * Promedio de horas de marcha por día calendario, por asset, en base a los
- * últimos HOURS_HISTORY_WINDOW_DAYS días de DailyEquipmentHours. Usado para
- * traducir un vencimiento por horas (nextDueHours) a una fecha proyectada
- * estimada — tanto para la curva de carga de trabajo como para el Gantt.
+ * últimos HOURS_HISTORY_WINDOW_DAYS días de lecturas de horómetro
+ * (AssetHoursReading — ver tenant/asset-hours). Usado para traducir un
+ * vencimiento por horas (nextDueHours) a una fecha proyectada estimada — tanto
+ * para la curva de carga de trabajo como para el Gantt.
+ *
+ * El período se mide por `readingDate` (el día al que corresponden las horas) y no
+ * por createdAt: con createdAt, cargar hoy el historial de un año daba dayDiff≈0
+ * y el promedio se descartaba.
  */
 async function loadAvgHoursPerDayMap(
   prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
@@ -2447,15 +2411,14 @@ async function loadAvgHoursPerDayMap(
     maxAt: Date;
   }[]>(
     `SELECT "assetId",
-            MIN("runningHoursTotal")::float AS "minHours",
-            MAX("runningHoursTotal")::float AS "maxHours",
-            MIN("createdAt") AS "minAt",
-            MAX("createdAt") AS "maxAt"
-     FROM "DailyEquipmentHours"
+            MIN("runningHours")::float AS "minHours",
+            MAX("runningHours")::float AS "maxHours",
+            MIN("readingDate") AS "minAt",
+            MAX("readingDate") AS "maxAt"
+     FROM "AssetHoursReading"
      WHERE "assetId" IN (${placeholders})
        AND "tenantId" = ${tenantPlaceholder}
-       AND "runningHoursTotal" IS NOT NULL
-       AND "createdAt" >= ${sincePlaceholder}
+       AND "readingDate" >= ${sincePlaceholder}
      GROUP BY "assetId"`,
     ...assetIds, tenantId, sinceDate,
   );
@@ -2559,26 +2522,7 @@ export async function getMaintenanceWorkloadProjection(
     ...new Set(plans.filter(p => isHoursTrigger(p.triggerType)).map(p => p.assetId)),
   ];
 
-  const currentHoursMap = new Map<string, number>();
-
-  if (hoursPlanAssetIds.length > 0) {
-    // Latest runningHoursTotal por asset
-    const placeholders = hoursPlanAssetIds.map((_, i) => `$${i + 1}`).join(", ");
-    const tenantPlaceholder = `$${hoursPlanAssetIds.length + 1}`;
-    const currentRows = await prismaRaw.$queryRawUnsafe<{ assetId: string; runningHoursTotal: number }[]>(
-      `SELECT "assetId", "runningHoursTotal"
-       FROM (
-         SELECT "assetId", "runningHoursTotal",
-                ROW_NUMBER() OVER (PARTITION BY "assetId" ORDER BY "createdAt" DESC) AS rn
-         FROM "DailyEquipmentHours"
-         WHERE "assetId" IN (${placeholders})
-           AND "tenantId" = ${tenantPlaceholder}
-           AND "runningHoursTotal" IS NOT NULL
-       ) sub WHERE rn = 1`,
-      ...hoursPlanAssetIds, tenantId,
-    );
-    for (const r of currentRows) currentHoursMap.set(r.assetId, Number(r.runningHoursTotal));
-  }
+  const currentHoursMap = await loadCurrentHoursNumberByAsset(prismaRaw, tenantId, hoursPlanAssetIds);
 
   // Promedio horas/día por asset usando últimos N días
   const avgHoursPerDayMap = await loadAvgHoursPerDayMap(prismaRaw, tenantId, hoursPlanAssetIds, today);

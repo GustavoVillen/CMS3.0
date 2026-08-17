@@ -15,6 +15,8 @@ import { computeNextDueDate, computeNextDueHours } from "../pms/execution-window
 import { refreshExecutionStatuses } from "../pms/execution-windows-service";
 import { log } from "../../common/logger";
 import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
+import { recordHoursReadings, ensureCanWriteAssetHours } from "../asset-hours/asset-hours-service";
+import { applyAssignedVesselScope } from "../auth/vessel-scope";
 
 export interface IntegrationResult {
   updatedRunningHoursCount: number;
@@ -87,48 +89,25 @@ export async function confirmAndIntegrateDailyReport(
     equipmentLabel: string;
   }>;
 
-  for (const entry of equipmentHoursEntries) {
-    if (!entry.assetId || entry.runningHoursTotal == null) continue;
-
-    const currentHours = entry.runningHoursTotal;
-
-    const hoursTriggerPlans = await (prisma as any).maintenancePlan.findMany({
-      where: {
-        tenantId: tenant.id,
-        vesselCode,
-        assetId: entry.assetId,
-        triggerType: { in: ["HOURS", "RUNNING_HOURS"] },
-        deletedAt: null,
-        status: { not: "INACTIVE" },
-      },
-    });
-
-    for (const plan of hoursTriggerPlans) {
-      const updates: Record<string, unknown> = {};
-
-      if (plan.frequencyHours && plan.frequencyHours > 0) {
-        if (!plan.nextDueHours || currentHours > plan.nextDueHours - plan.frequencyHours * 0.5) {
-          if (!plan.nextDueHours) {
-            updates.nextDueHours = currentHours + plan.frequencyHours;
-          }
-
-          const windowOpenHours = plan.nextDueHours
-            ? plan.nextDueHours - plan.frequencyHours * 0.1
-            : null;
-          if (windowOpenHours != null) {
-            updates.windowOpenHours = windowOpenHours;
-          }
-        }
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await (prisma as any).maintenancePlan.update({
-          where: { id: plan.id },
-          data: updates,
-        });
-        result.updatedRunningHoursCount++;
-      }
-    }
+  // Las horas del parte se asientan como lecturas de horómetro (única fuente de
+  // "horas actuales" del equipo) y el escritor de tenant/asset-hours avanza los
+  // planes por horas. Antes esta lógica estaba duplicada acá y en el M2.
+  const reportReadingDate = (report.reportDate as Date | null) ?? (report.createdAt as Date);
+  try {
+    const recorded = await recordHoursReadings(
+      session,
+      equipmentHoursEntries
+        .filter((e) => e.assetId && e.runningHoursTotal != null)
+        .map((e) => ({
+          assetId: e.assetId!,
+          runningHours: e.runningHoursTotal!,
+          readingDate: reportReadingDate.toISOString().slice(0, 10),
+        })),
+      { source: "DAILY_REPORT", sourceRecordId: reportId, skipPermissionCheck: true },
+    );
+    result.updatedRunningHoursCount = recorded.plansTouched;
+  } catch (err) {
+    log.error("[daily-report integrate] registro de horómetros falló:", err);
   }
 
   // ── Step 2: Recalculate all execution statuses for the vessel ─────────────
@@ -400,15 +379,21 @@ export async function upsertDailyEquipmentHours(
     remarks?: string | null;
   }>,
 ) {
+  // Escribir horas es una operación de carga, no de lectura: exige permiso y que el
+  // reporte sea de un buque del usuario. Sin estos dos controles, cualquier usuario
+  // autenticado (incluido AUDITOR_READONLY) podía escribir horas de cualquier buque
+  // del tenant con sólo conocer el id del reporte.
+  ensureCanWriteAssetHours(session);
+
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
   const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
   if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
 
-  const report = await (prisma as any).dailyReport.findFirst({
-    where: { id: reportId, tenantId: tenant.id, deletedAt: null },
-  });
+  const reportWhere: Record<string, unknown> = { id: reportId, tenantId: tenant.id, deletedAt: null };
+  applyAssignedVesselScope(session, reportWhere);
+  const report = await (prisma as any).dailyReport.findFirst({ where: reportWhere });
   if (!report) throw new RouteError(404, "NOT_FOUND", "Reporte no encontrado.");
 
   await (prisma as any).dailyEquipmentHours.deleteMany({ where: { dailyReportId: reportId } });
@@ -430,35 +415,25 @@ export async function upsertDailyEquipmentHours(
         remarks: entry.remarks ?? null,
       },
     }));
-
-    // Bootstrap nextDueHours on hour-based plans that don't have it set yet
-    if (entry.assetId && entry.runningHoursTotal != null) {
-      try {
-        const plans = await (prisma as any).maintenancePlan.findMany({
-          where: {
-            tenantId: tenant.id,
-            vesselCode: report.vesselCode,
-            assetId: entry.assetId,
-            triggerType: { in: ["HOURS", "RUNNING_HOURS"] },
-            nextDueHours: null,
-            deletedAt: null,
-          },
-        });
-        for (const plan of plans) {
-          if (!plan.frequencyHours || plan.frequencyHours <= 0) continue;
-          const baseHours = plan.lastExecutionHours ?? entry.runningHoursTotal;
-          const nextDueHours = baseHours + plan.frequencyHours;
-          const windowOpenHours = nextDueHours - plan.frequencyHours * 0.1;
-          await (prisma as any).maintenancePlan.update({
-            where: { id: plan.id },
-            data: { nextDueHours, windowOpenHours },
-          });
-        }
-      } catch (err) {
-        log.error("[daily-hours] nextDueHours bootstrap failed:", err);
-      }
-    }
   }
+
+  // Las horas cargadas quedan asentadas como lecturas de horómetro (fecha = día del
+  // parte), que es lo que el resto del sistema lee como "horas actuales". El escritor
+  // único también avanza/siembra los planes por horas del equipo.
+  const readingDate = ((report.reportDate as Date | null) ?? (report.createdAt as Date))
+    .toISOString().slice(0, 10);
+  try {
+    await recordHoursReadings(
+      session,
+      entries
+        .filter((e) => e.assetId && e.runningHoursTotal != null)
+        .map((e) => ({ assetId: e.assetId!, runningHours: e.runningHoursTotal!, readingDate })),
+      { source: "DAILY_REPORT", sourceRecordId: reportId, skipPermissionCheck: true },
+    );
+  } catch (err) {
+    log.error("[daily-hours] registro de lecturas falló:", err);
+  }
+
   return results;
 }
 

@@ -6,6 +6,7 @@ import {
   UsersRound, ScrollText, Gauge, Bot, Handshake,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange, Fuel,
+  Timer,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -69,6 +70,9 @@ export const NAV: NavSection[] = [
       // por link directo / móvil). Reactivar: descomentar la línea de abajo.
       // { icon: FileText,        labelKey: "nav.dailyReports",     path: "/daily-reports" },
       { icon: Fuel,            labelKey: "nav.voyageTankReports", path: "/voyage-tank-reports" },
+      // Pegado a Medición de Tanques porque comparten el dato: el M2 asienta los
+      // horómetros al enviarse y esta pantalla es la carga/corrección manual.
+      { icon: Timer,           labelKey: "nav.assetHours",       path: "/asset-hours" },
       { icon: FileBarChart,    labelKey: "nav.monthlyReports",   path: "/reports" },
       { icon: AlertTriangle,   labelKey: "nav.defects",          path: "/defects" },
       { icon: ScrollText,      labelKey: "nav.bitacora",         path: "/bitacora",

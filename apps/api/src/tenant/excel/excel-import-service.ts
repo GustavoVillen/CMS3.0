@@ -241,6 +241,7 @@ async function findExistingRecord(
     case "defects":
     case "daily_reports":
     case "monthly_reports":
+    case "asset_hours":
       return null;
   }
 }
@@ -450,6 +451,7 @@ function buildModelData(module: ExcelModule, rowData: Record<string, unknown>, t
     case "defects":
     case "daily_reports":
     case "monthly_reports":
+    case "asset_hours":
       return { tenantId };
   }
 }
