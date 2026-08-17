@@ -6,6 +6,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { cleanAiText } from "../ai/ai-text";
 
 const MODEL = AI_MODEL.fast;
 
@@ -41,13 +42,16 @@ const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí 
 ESTRUCTURA FIJA — usá EXACTAMENTE estas 3 secciones con sus encabezados:
 
 LOTO:
-- [punto de aislación 1 — máximo 5 puntos]
+- un bullet por punto de aislación, máximo 5
 
 INSTRUMENTOS NECESARIOS:
-- [instrumento/herramienta 1 — máximo 5 ítems]
+- un bullet por instrumento o herramienta, máximo 5
 
 EQUIPOS DE PROTECCIÓN PERSONAL NECESARIOS:
-- [EPP 1 — máximo 5 ítems]
+- un bullet por EPP, máximo 5
+
+Escribí el contenido real en cada bullet: no repitas estas indicaciones ni encierres el
+texto entre corchetes.
 
 REGLAS DE CONCISIÓN:
 - Solo los ítems CRÍTICOS, no listado exhaustivo.
@@ -222,11 +226,12 @@ async function callClaude(
     });
   })().catch(() => { /* swallow */ });
 
-  return response.content
+  const raw = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map(b => b.text)
     .join("\n")
     .trim();
+  return cleanAiText(raw);
 }
 
 export async function suggestTaskSteps(

@@ -6,6 +6,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { cleanAiText } from "../ai/ai-text";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getDeferral } from "./deferrals-service";
 import { fmtDate as fmtDateTz } from "../../common/tenant-time";
@@ -175,11 +176,11 @@ export async function suggestCompensatoryMeasures(
     });
   })().catch(() => { /* swallow */ });
 
-  const text = response.content
+  const text = cleanAiText(response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map(b => b.text)
     .join("\n")
-    .trim();
+    .trim());
 
   return { text };
 }
@@ -200,8 +201,9 @@ NIVEL: LOW|MEDIUM|HIGH|CRITICAL
 PROBABILIDAD: LIKELY|PROBABLE|UNLIKELY|RARE
 CONSECUENCIA: FATALITY|MAJOR|MINOR|NEGLIGIBLE
 
-- [riesgo/consecuencia principal de seguir operando → disparador a vigilar]
-- [...]
+Cada bullet con el formato "- riesgo/consecuencia principal de seguir operando → disparador
+a vigilar". Escribí el contenido real: no repitas estas indicaciones ni encierres el texto
+entre corchetes.
 
 NO hagas preguntas: con la información provista alcanza para una evaluación razonable.`;
 
@@ -261,11 +263,11 @@ export async function suggestDeferralRisk(
     });
   })().catch(() => { /* swallow */ });
 
-  const raw = response.content
+  const raw = cleanAiText(response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map(b => b.text)
     .join("\n")
-    .trim();
+    .trim());
 
   const levelMatch = raw.match(/^NIVEL:\s*(LOW|MEDIUM|HIGH|CRITICAL)/im);
   const level = (levelMatch?.[1] ?? "").toUpperCase() as DeferralRiskResult["level"];

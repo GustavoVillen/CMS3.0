@@ -7,6 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { cleanAiText } from "../ai/ai-text";
 
 const MODEL = AI_MODEL.fast;
 
@@ -21,11 +22,10 @@ REGLAS DE CONCISIÓN (importante):
 - Sin redundancia, sin obviedades, sin explicaciones largas.
 - Herramientas: solo las específicas o de medición relevantes (no genéricas como trapos, guantes o llaves comunes); máximo 6.
 
-Usá exactamente este formato (sin introducción ni explicación adicional):
-[criterios de aceptación]
-
-HERRAMIENTAS E INSTRUMENTOS NECESARIOS:
-[lista de herramientas e instrumentos]`;
+Usá exactamente este formato (sin introducción ni explicación adicional): primero los
+criterios de aceptación, un bullet por línea; después una línea en blanco; después el
+encabezado "HERRAMIENTAS E INSTRUMENTOS NECESARIOS:" y debajo la lista, un bullet por línea.
+Escribí el contenido real: no repitas estas indicaciones ni las encierres entre corchetes.`;
 
 const PROMPT_LOTO = `Sos experto en mantenimiento de máquinas navales. Definí los procedimientos LOTO (Lockout/Tagout) específicos para esta tarea: qué energías deben bloquearse, en qué orden, y qué verificaciones de seguridad se requieren antes de iniciar y al finalizar el trabajo. No incluyas listado de EPP ni equipos de protección personal.
 
@@ -83,13 +83,10 @@ NIVEL: LOW|MEDIUM|HIGH|CRITICAL
 PROBABILIDAD: LIKELY|PROBABLE|UNLIKELY|RARE
 CONSECUENCIA: FATALITY|MAJOR|MINOR|NEGLIGIBLE
 
-- [peligro principal 1 → control clave]
-- [peligro principal 2 → control clave]
-(3 a 5 bullets cortos)
-
-EQUIPOS DE PPE:
-- [EPP específico 1]
-- [EPP específico 2]`;
+Después de esas tres líneas, de 3 a 5 bullets cortos con el formato
+"- peligro principal → control clave"; después el encabezado "EQUIPOS DE PPE:" y debajo el
+EPP específico, un bullet por línea. Escribí el contenido real: no repitas estas
+indicaciones ni encierres el texto entre corchetes.`;
 
 interface BaseInput {
   assetLabel?: string | null;
@@ -188,11 +185,12 @@ async function callClaude(
     });
   })().catch(() => { /* swallow */ });
 
-  return response.content
+  const raw = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map(b => b.text)
     .join("\n")
     .trim();
+  return cleanAiText(raw);
 }
 
 export async function suggestPlanAcceptanceCriteria(
