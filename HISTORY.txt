@@ -43,6 +43,14 @@ Agent: Claude Opus 5
   estimado por calendario cuando no hay dos lecturas en el período).
 - Deploy: db push + prisma generate + scripts/backfill-asset-hours-readings.ts
   (idempotente; migró 26 lecturas en producción: 22 del reporte diario + 4 del M2).
+- Segunda pasada (mismo día, pedido del usuario): el bloque ancho arriba del
+  Dashboard pasó a ser UNA TARJETA MÁS de la grilla, con el formato de Órdenes de
+  Trabajo (dona + leyenda clickeable: al día / lectura atrasada / sin lecturas).
+  Queda octava, así que completa la segunda fila de cuatro sin desplazar a las
+  demás. Se resalta en rojo sólo si hay equipos SIN NINGUNA lectura (su plan por
+  horas no puede vencer nunca); una lectura atrasada va en naranja, sin alarma.
+  La carga rápida no se perdió: el botón abre <AssetHoursQuickModal> con la
+  planilla compacta — no entra en los 172px de alto fijo del widget.
 
 [2026-08-17] Mapa del Plan: el plan de mantenimiento de un buque de un pantallazo
 Agent: Claude Opus 5
