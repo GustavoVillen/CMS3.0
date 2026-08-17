@@ -64,10 +64,21 @@ interface PlanSpec {
 /** Ficha del activo a corregir cuando el plan en papel la contradice. */
 interface AssetFix { asset: string; manufacturer?: string; model?: string; name?: string }
 
+/** Equipo que esta en el plan en papel pero todavia no existe como activo. */
+interface AssetNew {
+  assetCode: string;
+  name: string;
+  sfiCode?: string;
+  criticality?: "A" | "B" | "C";
+  manufacturer?: string;
+  model?: string;
+}
+
 interface Lote {
   titulo: string;
   planes: PlanSpec[];
   assetFixes?: AssetFix[];
+  assetCreates?: AssetNew[];
 }
 
 /** Sufijo numerico del taskCode: LTE-MP-BR-01 -> "01", LTE-CR-#3-08 -> "08". */
@@ -94,12 +105,50 @@ async function main() {
   });
   if (!user) throw new Error(`Usuario ${USER_LEGACY_ID} no encontrado`);
 
+  // Activos que toca este lote: los de los planes, mas los que solo vienen a que
+  // se les corrija la ficha (p. ej. unificar el nombre de equipos hermanos).
   const assetCodes = [...new Set(specs.map(s => s.asset))];
-  const assets = await prisma.asset.findMany({
-    where: { tenantId, vesselCode: VESSEL, assetCode: { in: assetCodes }, deletedAt: null },
-    select: { id: true, assetCode: true, name: true, sfiCode: true, manufacturer: true, model: true },
+  const todosLosCodes = [...new Set([...assetCodes, ...(lote.assetFixes ?? []).map(f => f.asset)])];
+  const SEL = { id: true, assetCode: true, name: true, sfiCode: true, manufacturer: true, model: true };
+
+  // Alta de los equipos del plan en papel que todavia no existen como activo.
+  // Idempotente: si ya estan, no se crea nada.
+  const declarados = lote.assetCreates ?? [];
+  const yaExisten = new Set((await prisma.asset.findMany({
+    where: { tenantId, vesselCode: VESSEL, assetCode: { in: declarados.map(a => a.assetCode) } },
+    select: { assetCode: true },
+  })).map((a: any) => a.assetCode));
+  const nuevos = declarados.filter(a => !yaExisten.has(a.assetCode));
+
+  if (nuevos.length && !DRY) {
+    await prisma.asset.createMany({
+      data: nuevos.map(a => ({
+        tenantId, vesselCode: VESSEL,
+        assetCode: a.assetCode, name: a.name,
+        sfiCode: a.sfiCode ?? null,
+        criticality: a.criticality ?? "B",
+        manufacturer: a.manufacturer ?? null,
+        model: a.model ?? null,
+        createdByUserId: user.id, updatedByUserId: user.id,
+      })),
+    });
+  }
+
+  const todos = await prisma.asset.findMany({
+    where: { tenantId, vesselCode: VESSEL, assetCode: { in: todosLosCodes }, deletedAt: null },
+    select: SEL,
   });
-  const byCode = new Map<string, any>(assets.map((a: any) => [a.assetCode, a]));
+  // Los planes solo se buscan y escriben sobre los activos del lote; los que
+  // vinieron unicamente por assetFixes no aportan planes.
+  const assets = todos.filter((a: any) => assetCodes.includes(a.assetCode));
+  const byCode = new Map<string, any>(todos.map((a: any) => [a.assetCode, a]));
+  // En DRY los nuevos no llegaron a crearse: se simulan para poder previsualizar
+  // sus planes sin escribir nada.
+  if (DRY) {
+    for (const a of nuevos) {
+      byCode.set(a.assetCode, { id: `(nuevo:${a.assetCode})`, assetCode: a.assetCode, name: a.name, sfiCode: a.sfiCode ?? null });
+    }
+  }
   const faltantes = assetCodes.filter(c => !byCode.has(c));
   if (faltantes.length) throw new Error(`Activos inexistentes en ${VESSEL}: ${faltantes.join(", ")}`);
 
@@ -157,6 +206,12 @@ async function main() {
   console.log(`── ${lote.titulo} ──`);
   console.log(`Buque ${VESSEL} · usuario ${user.firstName}`);
   console.log(`Corrige ${updates.length} · crea ${creates.length} · deja sin tocar ${sinPar.length}\n`);
+
+  if (nuevos.length) {
+    console.log("ACTIVOS NUEVOS (no existian en el sistema)");
+    for (const a of nuevos) console.log(`  ${a.assetCode.padEnd(16)} SFI ${a.sfiCode ?? "-"}  crit ${a.criticality ?? "B"}  ${a.name}`);
+    console.log("");
+  }
 
   console.log("CAMBIOS DE FRECUENCIA");
   let cambios = 0;
@@ -235,7 +290,7 @@ async function main() {
     }
   }
 
-  console.log(`\nOK — ${updates.length} corregidos, ${nNew} creados, ${normaliza.length} con area/responsable completados, ${nFix} fichas de activo ajustadas.`);
+  console.log(`\nOK — ${nuevos.length} activos dados de alta, ${updates.length} planes corregidos, ${nNew} creados, ${normaliza.length} con area/responsable completados, ${nFix} fichas de activo ajustadas.`);
   console.log(`Respaldo previo: scripts/_tmp-backup-${basename(src, ".json")}.json`);
 }
 

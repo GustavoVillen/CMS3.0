@@ -47,7 +47,10 @@ fecha de última ejecución ni de vencimiento (sólo 12 de 207).
 |---|---|
 | `scripts/_tmp-parse-lte-plana.py` | Normaliza las 12 hojas del Excel a `_tmp-lte-plana.json` |
 | `scripts/_tmp-gen-lte-mp-plans.py` | Genera los 60 planes de motores → `_tmp-lte-mp-plans.json` |
+| `scripts/_tmp_lte_common.py` | **Módulo común**: parseo de fechas y horas de la planilla, `resolver_horas`, `resolver_fechas` |
 | `scripts/_tmp-gen-lte-cajas.py` | Genera los 20 planes de cajas → `_tmp-lte-cajas-plans.json` |
+| `scripts/_tmp-gen-lte-mmaa.py` | Genera los 42 planes de generadores → `_tmp-lte-mmaa-plans.json` |
+| `scripts/_tmp-gen-lte-electrica.py` | Genera los 26 planes de planta eléctrica → `_tmp-lte-electrica-plans.json` |
 | `scripts/load-lte-plan-motores.ts` | Aplica los planes de motores (fue la tanda 1; el genérico lo reemplaza) |
 | `scripts/load-lte-plan.ts` | **Cargador genérico de todas las tandas.** Recibe el JSON del lote (DRY=1 previsualiza) |
 | `scripts/load-lte-plan-ia.ts` | Completa criterios/LOTO/riesgo/RCM con IA. `CLEAN=1` sólo limpia, `FORCE=1` regenera |
@@ -79,7 +82,15 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
       mismo trabajo en el mismo momento y con los mismos datos: "cambio de aceite" +
       "cambio de filtro de aceite", e "inyector N°1..N°6" + "cambio de inyectores y control
       de avance de inyección".
-- [ ] Tanda 4 — PLANTA_ELECTRICA (requiere crear los 6 transformadores)
+- [x] **Tanda 4 — PLANTA_ELECTRICA** (2026-08-17). 5 corregidos + 21 creados = 26 planes,
+      todos con IA. Se dieron de alta los **6 transformadores 380/220** (`LTE-TRAFO-01..06`,
+      SFI 800, criticidad B), que no existían como activo.
+      **Nombres unificados** (pedido de Gustavo): `LTE-MA-#1/#2` → "Motor Generador N°1 Babor"
+      y "N°2 Estribor"; `LTE-ALT-BR/ER` → "Alternador N°1 Babor" y "N°2 Estribor".
+      Sin par: rodamientos (renovación 60 m y sellados 20 000 h) y verificación de diodos/AVR
+      en los tres alternadores.
+      ⚠ Esta hoja usa **otro layout de columnas**: el vencimiento está en la columna 6, no en
+      la 7 como en las hojas de motores, y "Recorrido Actual" (col 5) es la última ejecución.
 - [ ] Tanda 5 — CIRCUITO_DE_COMBUSTIBLE
 - [ ] Tanda 6 — NAV-COM
 - [ ] Tanda 7 — BOMBAS_ELECTRICAS
@@ -99,6 +110,11 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
   "Jefe de Maquinas" **sin tilde**. El cargador genérico lo normaliza.
 - Después de cada tanda conviene correr `CLEAN=1 load-lte-plan-ia.ts <activos>`: los planes
   que ya tenían IA de antes arrastran los corchetes del bug viejo.
+- **Las columnas cambian de hoja en hoja.** Verificar siempre el encabezado antes de
+  escribir el generador: en motores el vencimiento está en la columna 7; en planta eléctrica
+  y las demás, en la 6, con "Recorrido Actual" (col 5) como última ejecución.
+- Al correr la pasada de IA, incluir **todos** los activos tocados, no sólo los que tienen
+  planes nuevos (se escapó `LTE-ALT-PTO` en la tanda 4).
 
 ## Resuelto
 
@@ -108,9 +124,6 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
   `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
   trabajo y diferimientos.
 
-## Suelto, para preguntar al cierre
+## Estado de la base (tras la tanda 4)
 
-- Los generadores N01 y N02 siguen llamándose "Motor Auxiliar #1" y "#2" mientras el N03
-  quedó como "Motor Generador N°3 de Emergencia". El papel los llama "Motor Generador N01
-  (Babor)" y "N02 (Estribor)". Conviene unificar el criterio de nombres, pero no se tocó
-  porque no estaba pedido.
+274 planes y 76 activos en el LTE.
