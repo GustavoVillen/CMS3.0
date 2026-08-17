@@ -51,6 +51,10 @@ fecha de última ejecución ni de vencimiento (sólo 12 de 207).
 | `scripts/_tmp-gen-lte-cajas.py` | Genera los 20 planes de cajas → `_tmp-lte-cajas-plans.json` |
 | `scripts/_tmp-gen-lte-mmaa.py` | Genera los 42 planes de generadores → `_tmp-lte-mmaa-plans.json` |
 | `scripts/_tmp-gen-lte-electrica.py` | Genera los 26 planes de planta eléctrica → `_tmp-lte-electrica-plans.json` |
+| `scripts/_tmp_lte_tareas.py` | Catálogo de tareas que se repiten en todo el plan (códigos 30-49) |
+| `scripts/_tmp-gen-lte-hoja.py` | **Generador genérico** de las hojas de equipos. `python ... <NOMBRE_HOJA>` |
+| `scripts/_tmp-audit-lte.ts` | Auditoría: planes incompletos y restos de plantilla (sin args = buque entero) |
+| `scripts/_tmp-lte-rutinas.json` | Acumulador de las tareas DIARIO/SEMANAL/15 DÍAS apartadas para el cierre |
 | `scripts/load-lte-plan-motores.ts` | Aplica los planes de motores (fue la tanda 1; el genérico lo reemplaza) |
 | `scripts/load-lte-plan.ts` | **Cargador genérico de todas las tandas.** Recibe el JSON del lote (DRY=1 previsualiza) |
 | `scripts/load-lte-plan-ia.ts` | Completa criterios/LOTO/riesgo/RCM con IA. `CLEAN=1` sólo limpia, `FORCE=1` regenera |
@@ -91,7 +95,13 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
       en los tres alternadores.
       ⚠ Esta hoja usa **otro layout de columnas**: el vencimiento está en la columna 6, no en
       la 7 como en las hojas de motores, y "Recorrido Actual" (col 5) es la última ejecución.
-- [ ] Tanda 5 — CIRCUITO_DE_COMBUSTIBLE
+- [x] **Tanda 5 — CIRCUITO_DE_COMBUSTIBLE** (2026-08-17). 2 corregidos + 10 creados = 12
+      planes, todos con IA. Se dio de alta `LTE-EB-TRASV-AUX` "Bomba Trasvase de Combustible
+      Auxiliar". La toma de muestra de calidad del combustible es "con cada embarque" →
+      quedó como plan por EVENTO (sin vencimiento automático), colgada de la tubería de
+      embarque. 2 rutinas semanales apartadas.
+      **Desde esta tanda el generador es genérico** (`_tmp-gen-lte-hoja.py`), configurable
+      por hoja: cubre las 7 hojas de equipos que quedan.
 - [ ] Tanda 6 — NAV-COM
 - [ ] Tanda 7 — BOMBAS_ELECTRICAS
 - [ ] Tanda 8 — COMPRESOR-A_A-TIFON
@@ -124,6 +134,9 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
   `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
   trabajo y diferimientos.
 
-## Estado de la base (tras la tanda 4)
+## Estado de la base (tras la tanda 5)
 
-274 planes y 76 activos en el LTE.
+284 planes y 77 activos en el LTE. La auditoría global da **88 planes incompletos** (sin
+IA o sin área): son los de las hojas que faltan procesar más los sobrantes de clase que
+nunca tuvieron IA. Al cierre hay que decidir si se les corre la IA también.
+Restos de plantilla: 0 en todo el buque (se limpiaron con `CLEAN=1 ... --todos`).

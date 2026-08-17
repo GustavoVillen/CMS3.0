@@ -14,7 +14,9 @@
  *
  * Uso (en el VPS):
  *   npx tsx scripts/load-lte-plan-ia.ts LTE-MP-#1 LTE-MP-#2 LTE-MP-#3 LTE-MP-#4
+ *   npx tsx scripts/load-lte-plan-ia.ts --todos          # todo el buque
  *   FORCE=1 npx tsx scripts/load-lte-plan-ia.ts LTE-MP-#1
+ *   CLEAN=1 npx tsx scripts/load-lte-plan-ia.ts --todos  # solo sanear, sin IA
  */
 import "../apps/api/src/config/bootstrap-env";
 
@@ -75,8 +77,12 @@ function buildSession(user: any): any {
 }
 
 async function main() {
-  const assetCodes = process.argv.slice(2);
-  if (!assetCodes.length) throw new Error("Indicar al menos un assetCode. Ej: LTE-MP-#1");
+  const argv = process.argv.slice(2);
+  const TODOS = argv.includes("--todos");
+  const assetCodes = argv.filter(a => a !== "--todos");
+  if (!assetCodes.length && !TODOS) {
+    throw new Error("Indicar al menos un assetCode (ej. LTE-MP-#1) o --todos para el buque entero.");
+  }
 
   const tenant = await prisma.tenant.findFirst({ where: { slug: TENANT_SLUG }, select: { id: true } });
   const tenantId = tenant.id;
@@ -88,7 +94,10 @@ async function main() {
   const session = buildSession(user);
 
   const assets = await prisma.asset.findMany({
-    where: { tenantId, vesselCode: VESSEL, assetCode: { in: assetCodes }, deletedAt: null },
+    where: {
+      tenantId, vesselCode: VESSEL, deletedAt: null,
+      ...(TODOS ? {} : { assetCode: { in: assetCodes } }),
+    },
     select: { id: true, assetCode: true, name: true, sfiCode: true, manufacturer: true, model: true },
   });
   const assetById = new Map<string, any>(assets.map((a: any) => [a.id, a]));
