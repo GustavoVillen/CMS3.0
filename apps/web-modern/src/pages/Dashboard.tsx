@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
@@ -14,7 +14,8 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { ComplianceDashboard } from "../components/ComplianceDashboard";
-import { AssetHoursQuickCard } from "../components/AssetHoursQuickCard";
+import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
+import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
 import { domToPng } from "modern-screenshot";
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,14 @@ export const Dashboard: React.FC = () => {
   const oosAssets         = useFetch<ListResponse<{ id: string; assetCode: string; name: string; vesselCode: string; criticality: string }>>("/app/pms/assets?status=OUT_OF_SERVICE");
   // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
   const pendingCounts     = useFetch<PendingCounts>("/app/dashboard/sidebar-counts");
+  // Lecturas de horómetro del buque seleccionado (widget "Horas de Equipos").
+  // Sólo con buque elegido: la planilla de horas es siempre por buque. useFetch
+  // inyecta el vesselCode del contexto, así que el path no lo lleva.
+  const hoursDate         = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const assetHours        = useFetch<HoursSheet>(
+    selectedVesselCode ? `/app/pms/asset-hours?date=${hoursDate}` : null,
+    [selectedVesselCode, hoursDate],
+  );
   const navigate     = useNavigate();
   const t            = useT();
   const locale       = useLocale();
@@ -122,6 +131,7 @@ export const Dashboard: React.FC = () => {
     itemStyle: { color: isDark ? "#E0E1DD" : "#1A1D24" },
   };
   const [showInsights, setShowInsights] = React.useState(false);
+  const [showHoursEntry, setShowHoursEntry] = React.useState(false);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -215,6 +225,24 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // Donut chart: maintenance plans by execution status — counts come directly
   // from /app/dashboard/mp-summary (server-side computation). ~50 bytes vs
   // 755 KB of the full plan list.
+  // Estado de las lecturas de horómetro: al día / atrasada (más de STALE_DAYS) /
+  // nunca cargada. Mismos colores que el resto de los widgets (verde al día,
+  // naranja por vencer, gris sin datos).
+  const hoursCounts = React.useMemo(() => {
+    const rows = assetHours.data?.rows ?? [];
+    let ok = 0, stale = 0, never = 0;
+    for (const r of rows) {
+      if (r.daysSinceReading == null) never++;
+      else if (r.daysSinceReading > STALE_DAYS) stale++;
+      else ok++;
+    }
+    return [
+      { key: "OK",     name: t("dashboard.hours.upToDate"), value: ok,    fill: "#06D6A0" },
+      { key: "STALE",  name: t("dashboard.hours.stale"),    value: stale, fill: "#F97316" },
+      { key: "NEVER",  name: t("dashboard.hours.never"),    value: never, fill: "#64748b" },
+    ].filter(s => s.value > 0);
+  }, [assetHours.data, t]);
+
   const mpStatusCounts = React.useMemo(() => {
     const map = mpSummary.data?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
     return [
@@ -402,10 +430,16 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         );
       })()}
 
-      {/* Carga de horómetros del buque seleccionado. Va acá, antes de la grilla de
-          widgets: las horas mandan el vencimiento de los planes por horas, y si no
-          se cargan el plan no vence. Se muestra sólo con un buque seleccionado. */}
-      <AssetHoursQuickCard />
+      {/* Carga rápida de horómetros (desde el widget "Horas de Equipos"). */}
+      {showHoursEntry && assetHours.data && (
+        <AssetHoursQuickModal
+          sheet={assetHours.data}
+          readingDate={hoursDate}
+          vesselName={selectedVessel?.name ?? null}
+          onSaved={() => { void assetHours.reload(); }}
+          onClose={() => setShowHoursEntry(false)}
+        />
+      )}
 
       {/* AI Insights modal */}
       {showInsights && (
@@ -421,7 +455,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       {/* Main grid */}
       {/* 4 por fila en escritorio (antes 3): con 3 la tarjeta quedaba mucho más
           ancha que su contenido y sobraba medio widget vacío a la derecha.
-          Son 8 widgets, así que entran en dos filas justas. */}
+          Son 8 widgets (el último es Horas de Equipos), así que entran en dos
+          filas justas. Al sumar o quitar uno, revisar que la grilla no quede
+          coja. */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 ${gridGap}`}>
         {/* WO chart */}
         <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
@@ -682,6 +718,74 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           )}
         </div>
+
+        {/* Horas de equipos — estado de las lecturas de horómetro del buque.
+            Va como widget más de la grilla (completa la segunda fila de 4 sin
+            desplazar a los demás). Importa porque los planes por horas vencen
+            contra estas lecturas: si nadie carga, el plan no vence nunca.
+            El botón abre la planilla de carga en modal — una planilla no entra
+            en el alto fijo de la tarjeta. */}
+        {(() => {
+          // Se resalta igual que Planes vencidos, pero sólo por equipos que nunca
+          // tuvieron lectura: una lectura atrasada es rutina, un equipo sin ninguna
+          // lectura significa que su plan por horas no puede vencer nunca.
+          const hoursAlert = (hoursCounts.find(s => s.key === "NEVER")?.value ?? 0) > 0;
+          const hoursStyle: React.CSSProperties | undefined = hoursAlert
+            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
+            : undefined;
+          return (
+            <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={hoursStyle}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="min-w-0">
+                  <h2 className="text-xs font-bold text-fg">{t("assetHours.pageTitle")}</h2>
+                  <p className="text-[10px] text-text-industrial/40 truncate">{t("dashboard.hoursSubtitle")}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {assetHours.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+                  {assetHours.data?.canWrite && (
+                    <button
+                      type="button"
+                      onClick={() => setShowHoursEntry(true)}
+                      title={t("assetHours.loadHours")}
+                      className="px-2 py-1 rounded-lg bg-accent/10 border border-accent/30 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
+                    >
+                      {t("assetHours.loadHours")}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {!selectedVesselCode ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+                  <Gauge className="w-6 h-6 text-text-industrial/40" />
+                  <p className="text-xs text-text-industrial/40 text-center px-2">{t("dashboard.hoursPickVessel")}</p>
+                </div>
+              ) : assetHours.error ? <ErrorMsg msg={assetHours.error} /> : hoursCounts.length === 0 && !assetHours.loading ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
+                  <Gauge className="w-6 h-6 text-text-industrial/40" />
+                  <p className="text-xs text-text-industrial/40 text-center px-2">{t("assetHours.empty")}</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-1">
+                  <div className={`${chartBox} shrink-0 relative`}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={hoursCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                          {hoursCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                        </Pie>
+                        <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-xl font-bold text-fg">{hoursCounts.reduce((a, s) => a + s.value, 0)}</span>
+                      <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
+                    </div>
+                  </div>
+                  <DonutLegend items={hoursCounts} onSelect={() => navigate("/asset-hours")} />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Inactive vessels — compact alert strip */}
         {(() => {

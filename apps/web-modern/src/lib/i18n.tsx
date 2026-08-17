@@ -1775,6 +1775,11 @@ const dict = {
   "dashboard.criticalSparesEmpty":{ es: "Sin repuestos registrados", en: "No spares registered", pt: "Sem sobressalentes registrados" },
   "dashboard.spareReqTitle":   { es: "Solicitudes de Repuestos", en: "Spare Requests",     pt: "Solicitações de Sobressalentes" },
   "dashboard.spareReqSubtitle":{ es: "Ítems por estado de recepción", en: "Items by receipt status", pt: "Itens por status de recebimento" },
+  "dashboard.hoursSubtitle":  { es: "Estado de las lecturas",       en: "Reading status",            pt: "Status das leituras" },
+  "dashboard.hoursPickVessel":{ es: "Elegí un buque para ver sus horas", en: "Pick a vessel to see its hours", pt: "Escolha uma embarcação para ver suas horas" },
+  "dashboard.hours.upToDate": { es: "Al día",                       en: "Up to date",                pt: "Em dia" },
+  "dashboard.hours.stale":    { es: "Lectura atrasada",             en: "Reading overdue",           pt: "Leitura atrasada" },
+  "dashboard.hours.never":    { es: "Sin lecturas",                 en: "No readings",               pt: "Sem leituras" },
   "dashboard.spareReqEmpty":   { es: "Sin solicitudes registradas", en: "No requests registered", pt: "Sem solicitações registradas" },
 
   // Dashboard — chart segment names
