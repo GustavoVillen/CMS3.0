@@ -102,10 +102,22 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
       embarque. 2 rutinas semanales apartadas.
       **Desde esta tanda el generador es genérico** (`_tmp-gen-lte-hoja.py`), configurable
       por hoja: cubre las 7 hojas de equipos que quedan.
-- [ ] Tanda 6 — NAV-COM
-- [ ] Tanda 7 — BOMBAS_ELECTRICAS
-- [ ] Tanda 8 — COMPRESOR-A_A-TIFON
-- [ ] Tanda 9 — SISTEMA_HIDRAULICO
+- [x] **Tanda 6 — NAV-COM** (2026-08-17). 9 corregidos + 3 creados = 12 planes, todos con IA.
+      Activos nuevos: `LTE-BAROMETRO`, `LTE-ECO-BR`, `LTE-ECO-ER`. Se cargaron los modelos que
+      el papel declara (Samyung SI-30, Danforth, Furuno 1715 / M1934 BB / LS-4100, Icom IC-M412).
+      El magnetrón del radar de babor figuraba de **2 KW** y el papel dice **6 KW**: corregido.
+      Los VHF pasaron de 12 a 60 meses (el papel dice 5 años).
+      ⚠ Estructura propia: sin fila de encabezado, cada equipo ocupa 2-3 filas y sólo la
+      primera trae frecuencia y fechas → script aparte, `_tmp-gen-lte-navcom.py`.
+- [x] **Tanda 7 — BOMBAS_ELECTRICAS** (2026-08-17). 5 corregidos + 24 creados = 29 planes.
+      Activos nuevos: `LTE-EB-INC-AUX`, `LTE-EB-ESPUMA`. Las dos bombas de agua potable
+      comparten texto en la planilla y son dos equipos: el generador las reparte por orden.
+- [x] **Tanda 8 — COMPRESOR-A_A-TIFON** (2026-08-17). 2 corregidos + 18 creados = 20 planes.
+      Activo nuevo: `LTE-CHILLER`. Mapeo asumido: "COMPRESOR" del papel = `LTE-COMP-NK40`,
+      "EQUIPO TIFON" = `LTE-COMP-PITO`.
+- [x] **Tanda 9 — SISTEMA_HIDRAULICO** (2026-08-17). 2 corregidos + 6 creados = 8 planes.
+      Activos nuevos: `LTE-SERVO-1` y `LTE-SERVO-2`. El "Motor Electrico" de la hoja se
+      mapeó a `LTE-CENT-HID` (es el que acciona la central hidráulica).
 - [ ] Tanda 10 — VENTILADORES/EXTRACTORES/OTROS
 - [ ] Tanda 11 — CABRESTANTES
 - [ ] Tanda 12 — SEPARADOR / PLANTA PTE
@@ -134,9 +146,10 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
   `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
   trabajo y diferimientos.
 
-## Estado de la base (tras la tanda 5)
+## Estado de la base (tras la tanda 9)
 
-284 planes y 77 activos en el LTE. La auditoría global da **88 planes incompletos** (sin
-IA o sin área): son los de las hojas que faltan procesar más los sobrantes de clase que
-nunca tuvieron IA. Al cierre hay que decidir si se les corre la IA también.
-Restos de plantilla: 0 en todo el buque (se limpiaron con `CLEAN=1 ... --todos`).
+335 planes y 85 activos en el LTE. Auditoría global: **56 planes incompletos** (sin IA o sin
+área) — son los de las 3 hojas que faltan más los sobrantes de clase que nunca tuvieron esos
+campos. Al cierre hay que decidir si se les corre la IA también.
+Restos de plantilla: 0 en todo el buque.
+Rutinas apartadas hasta ahora: 10 (3 diarias, 2 semanales, 5 quincenales).
