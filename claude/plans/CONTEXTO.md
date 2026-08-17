@@ -1,4 +1,11 @@
-# Actualización del Plan de Mantenimiento del LATERE (LTE) — en curso
+# Alineación de los planes de mantenimiento con las planillas de a bordo
+
+Dos buques del tenant `mercurio`: **LATERE (LTE)** — terminado — y
+**DON CHICUETO (DCH)** — en curso. Mismos criterios en los dos.
+
+---
+
+# LATERE (LTE) — TERMINADO
 
 **Objetivo:** que el plan cargado en el VPS (PlanB) refleje el plan en papel del buque
 (PlanA = `MisDocs/LTE/Mantenimiento/PLAN DE MANT. LTE - JULIO.xlsx`, 12 hojas, ~341 tareas).
@@ -173,3 +180,71 @@ motobomba EGA portátil). Pendiente de decisión de Gustavo si se les corre la I
 (`LTE-ELEV-02` prueba de peso, `LTE-1-002/003` inspecciones de casco con responsable
 "3er Oficial Cubierta"). El criterio "área = MÁQUINAS" se aplicó sólo a los activos de las
 hojas de máquinas; no forzar los de cubierta.
+
+
+---
+
+# DON CHICUETO (DCH) — en curso
+
+**Fuente:** `MisDocs/DCH/Mantenimiento/07- PMP DON CHICUETO - JULIO.xlsm`
+(20 hojas, **369 tareas**). Estado inicial: 170 planes sobre 80 activos.
+
+## Diferencias con el LATERE
+
+- **El plan del DCH es uniforme**: todas las hojas tienen la misma fila de encabezado
+  (`TRABAJO A RELIZAR` / `ULTIMO TRABAJO` / `PROXIMO TRABAJO` / `FRECUENCIA`) y la columna
+  anterior al trabajo nombra el componente o el equipo. Un solo generador cubre las 20 hojas:
+  `scripts/_tmp-gen-dch-hoja.py`.
+- **No hay tareas diarias, semanales ni quincenales.** La frecuencia mínima es mensual
+  (99 tareas). No hacen falta planes consolidados de rutina.
+- El último y el próximo trabajo vienen como fecha o como horas en las **mismas** columnas,
+  según la frecuencia de la tarea.
+- El papel usa `0` en "último trabajo" para *nunca ejecutado*: se carga sin última ejecución.
+- Frecuencias propias: `Mensual`, `Trimestral`, `Semestral`, `Anual`, `6 Años / Dique Seco`
+  (= 72 meses), además de `N MESES` y horas.
+
+## Decisiones acordadas con Gustavo (2026-08-17)
+
+1. **Motores principales**: figuran como Volvo Penta D16 MH y el plan en papel no cuadra
+   con ese motor (turbosoplante, colector de escape, botadores hidráulicos, cojinetes de
+   bancada, recorrido completo a 40 000 h, 39 501 horas de servicio). Gustavo decidió
+   **dejar la ficha como está** y anotarlo en el informe final.
+2. **Bombas que el papel trata de a pares** (agua potable BR y ER, refrigeración de motores
+   auxiliares popa y proa): **duplicar** las tareas en cada bomba, para que cada equipo lleve
+   su propio historial.
+3. **Guinches y pluma**: crearlos como activos propios.
+
+## Scripts (genéricos, sirven para los dos buques)
+
+| Archivo | Qué hace |
+|---|---|
+| `scripts/load-vessel-plan.ts` | Cargador. El buque sale del campo `vessel` del lote; el autor, de `USUARIO_POR_BUQUE` |
+| `scripts/load-vessel-plan-ia.ts` | Pasada de IA. `--buque=DCH`, `--todos`, `CLEAN=1`, `FORCE=1` |
+| `scripts/_tmp-audit-vessel.ts` | Auditoría. `--buque=DCH` + activos opcionales |
+| `scripts/_tmp-gen-dch-hoja.py` | Generador de lote por hoja del DCH |
+
+⚠ El jefe de máquinas del DCH es **OSCAR-DUARTE** (Oscar Duarte), no un usuario "MAQUINAS…"
+como en el LATERE (MAQUINASLATERE).
+
+## Fichas equivocadas detectadas en el DCH
+
+| Equipo | En el sistema | Dice el papel |
+|---|---|---|
+| Radar de Babor | Furuno 1715 | **Samyung SMR 3700**, magnetrón 4 KW |
+| Radar de Estribor | Furuno M1934 BB | **Furuno FAR 2117BB** (principal), magnetrón 12 KW |
+| AIS | Samyung SI-30 | **Emtrak A-200** |
+| Motores principales | Volvo Penta D16 MH | no cuadra (ver decisión 1) |
+
+## Estado
+
+- [x] **Tanda 1 — MM.PP Bb. y MM.PP Eb.** (2026-08-17). 16 corregidos + 38 creados = 54;
+      61 planes en total sobre los dos motores, todos con IA.
+      Sin par: "Mantenimiento CADA 2000 HS" en ambos, "Recorrido completo cada 42000 HS" y
+      las adiciones de aceite/refrigerante por evento.
+- [ ] MM.AA. Nº1 Bb / Nº2 Eb. / Nº3 Puerto
+- [ ] CAJAS · ALTERNADORES · COMPRESORES Y BOTELLONES
+- [ ] SIST DE GOBIERNO · LINEA DE EJE Y HELICE · CABRESTANTE
+- [ ] BOMBAS (69 tareas, 12 bombas) · CTRAL HIDRAULICA guinche-pluma
+- [ ] MOTOR LANCHA · ENGRASE · TOMAS DE MAR · TERMOTANQUES · AIRE ACOND. CENTRAL
+- [ ] EQUIPOS CRITICOS (22 tareas) · EQ NAVEGACION
+- [ ] Informe final
