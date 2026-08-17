@@ -1,5 +1,49 @@
 HISTORY.txt
 
+[2026-08-17] Horas de equipos: una sola fuente, y una planilla para cargarlas
+Agent: Claude Opus 5
+- Pedido del usuario: que las horas de los equipos no queden congeladas y sean
+  fáciles de actualizar, también desde el Dashboard.
+- Causa raíz: las "horas actuales" salían del último renglón de
+  DailyEquipmentHours (Reporte Diario), módulo DORMANTE. La carga viva de
+  horómetros es el M2 (VoyageEngineHours), que escribía en otra tabla y sólo
+  empujaba ventanas de planes. La tripulación cargaba horas todos los días y esas
+  horas nunca llegaban al equipo → los planes por horas dejaban de vencer.
+- Modelo nuevo AssetHoursReading (readingDate @db.Date, runningHours, source,
+  sourceRecordId, note, autor) + enum HoursReadingSource. Unique
+  (tenantId, assetId, readingDate, source) ⇒ carga idempotente. Las dos tablas
+  viejas NO se tocan: siguen guardando consumos y horas del tramo.
+- Módulo nuevo tenant/asset-hours: loadCurrentHoursByAsset (reemplaza SEIS copias
+  del mismo query en assets, maintenance-plans ×3, plan-map y due-items),
+  recordHoursReadings (escritor único) y advanceHoursPlansForAsset (unifica las
+  DOS copias del avance de planes por horas: daily-report-integration Step 1 y
+  voyage-tank-reports-integration). Al unificar se quedó con el criterio del M2,
+  que respeta lastExecutionHours en el bootstrap.
+- Tres vías escriben por el mismo service: planilla manual (MANUAL), M2 al pasar
+  a SUBMITTED (VOYAGE_TANK_REPORT, fecha = dateEnd ?? reportDateTime ?? createdAt)
+  y renglón del Reporte Diario / móvil (DAILY_REPORT, fecha = reportDate).
+  Empate de fecha entre orígenes: manual > M2 > reporte diario.
+- Pantalla /asset-hours (Vista Planilla: guardado por lote, orden por columna,
+  columnas ajustables persistidas, días sin lectura en ámbar a los 7, historial
+  por equipo, export Excel módulo asset_hours) + tarjeta de carga rápida en el
+  Dashboard, ambas sobre <AssetHoursGrid>. Horas menores a la última lectura o
+  saltos > 24 h/día: aviso en ventanita, el usuario confirma y entra con nota.
+- Permiso nuevo assetHours.write (FLEET_SUPERINTENDENT, MAINTENANCE_MANAGER,
+  TECHNICIAN_OPERATOR por defecto). OJO: los tenants con matriz propia guardada
+  NO reciben claves nuevas — en producción hubo que agregarlo por SQL a los tres
+  roles de mercurio (ver memoria vps-deploy).
+- BUGS corregidos: (1) la "última lectura" se elegía por createdAt, así que editar
+  un reporte viejo (que borra y recrea sus renglones) pisaba las horas actuales
+  — en producción M01 Motor Auxiliar Babor mostraba 63.016 h del 12/06 cuando la
+  lectura real era 63.223 h del 01/07; (2) PUT /app/daily-reports/:id/equipment-hours
+  no validaba rol ni vessel scope: cualquier autenticado, incluso AUDITOR_READONLY,
+  escribía horas de cualquier buque del tenant; (3) Confiabilidad medía el delta de
+  horas por createdAt y atribuía todo el histórico al período consultado (ahora
+  filtra por readingDate: reporta menos "horas medidas" pero reales, y cae al
+  estimado por calendario cuando no hay dos lecturas en el período).
+- Deploy: db push + prisma generate + scripts/backfill-asset-hours-readings.ts
+  (idempotente; migró 26 lecturas en producción: 22 del reporte diario + 4 del M2).
+
 [2026-08-17] Mapa del Plan: el plan de mantenimiento de un buque de un pantallazo
 Agent: Claude Opus 5
 - Pedido del usuario: ver cómo está armado el plan de un buque sin leer la lista
