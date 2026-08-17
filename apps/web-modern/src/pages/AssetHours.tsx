@@ -7,7 +7,7 @@
 // esta pantalla cubre el resto: corregir una lectura, equipos que no son motores y
 // buques que no usan el M2.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gauge, Loader2, Plus, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
@@ -56,6 +56,12 @@ export const AssetHoursPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vessels]);
 
+  // useT() devuelve una función NUEVA en cada render, así que no puede ir en las
+  // dependencias de `reload`: con `useEffect(..., [reload])` cada carga provocaba
+  // otra carga (bucle infinito de requests y spinner eterno). Se accede por ref.
+  const tRef = useRef(t);
+  tRef.current = t;
+
   const reload = useCallback(async () => {
     if (!vesselCode) { setSheet(null); return; }
     setLoading(true);
@@ -65,11 +71,11 @@ export const AssetHoursPage: React.FC = () => {
       setSheet(await api.get<HoursSheet>(`/app/pms/asset-hours?${qs.toString()}`));
     } catch (err) {
       setSheet(null);
-      setError(err instanceof ApiError ? err.message : t("assetHours.loadFailed"));
+      setError(err instanceof ApiError ? err.message : tRef.current("assetHours.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [vesselCode, readingDate, includeUntracked, t]);
+  }, [vesselCode, readingDate, includeUntracked]);
 
   useEffect(() => { void reload(); }, [reload]);
 
