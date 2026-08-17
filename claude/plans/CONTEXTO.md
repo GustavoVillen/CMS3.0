@@ -184,7 +184,7 @@ hojas de máquinas; no forzar los de cubierta.
 
 ---
 
-# DON CHICUETO (DCH) — en curso
+# DON CHICUETO (DCH) — TERMINADO
 
 **Fuente:** `MisDocs/DCH/Mantenimiento/07- PMP DON CHICUETO - JULIO.xlsm`
 (20 hojas, **369 tareas**). Estado inicial: 170 planes sobre 80 activos.
@@ -235,16 +235,30 @@ como en el LATERE (MAQUINASLATERE).
 | AIS | Samyung SI-30 | **Emtrak A-200** |
 | Motores principales | Volvo Penta D16 MH | no cuadra (ver decisión 1) |
 
-## Estado
+## Estado final
 
-- [x] **Tanda 1 — MM.PP Bb. y MM.PP Eb.** (2026-08-17). 16 corregidos + 38 creados = 54;
-      61 planes en total sobre los dos motores, todos con IA.
-      Sin par: "Mantenimiento CADA 2000 HS" en ambos, "Recorrido completo cada 42000 HS" y
-      las adiciones de aceite/refrigerante por evento.
-- [ ] MM.AA. Nº1 Bb / Nº2 Eb. / Nº3 Puerto
-- [ ] CAJAS · ALTERNADORES · COMPRESORES Y BOTELLONES
-- [ ] SIST DE GOBIERNO · LINEA DE EJE Y HELICE · CABRESTANTE
-- [ ] BOMBAS (69 tareas, 12 bombas) · CTRAL HIDRAULICA guinche-pluma
-- [ ] MOTOR LANCHA · ENGRASE · TOMAS DE MAR · TERMOTANQUES · AIRE ACOND. CENTRAL
-- [ ] EQUIPOS CRITICOS (22 tareas) · EQ NAVEGACION
-- [ ] Informe final
+**Las 20 hojas cargadas** (2026-08-17). 485 planes sobre 86 activos; **369 salen del papel**,
+116 quedaron sin par. **485 con análisis de IA completo, 0 incompletos, 0 restos de plantilla.**
+Activos dados de alta: `DCH-COMP-1`, `DCH-COMP-2`, `DCH-GUINCHE-ER`, `DCH-GUINCHE-BR`,
+`DCH-PLUMA`, `DCH-CABR-POPA`.
+140 planes figuran vencidos: la planilla se actualizó el 28 de junio y tiene 99 tareas
+mensuales, casi todas vencidas en julio. Es la foto real, no un problema de la carga.
+
+Informe: https://claude.ai/code/artifact/4d3d942f-e785-474b-b0b1-61684dcb2a6b
+
+## ⚠ Trampa que costó tres hojas: los planes borrados reservan el taskCode
+
+El unique de `MaintenancePlan` es `(tenantId, vesselCode, taskCode)` y **no excluye
+`deletedAt`**: un plan dado de baja sigue ocupando su código. El DCH tiene **71 planes
+borrados** del clon anterior (limpieza del 19-jul), así que `createMany` fallaba entero con
+`Unique constraint failed` en alternadores y dos motores auxiliares.
+`load-vessel-plan.ts` ahora consulta **todos** los taskCodes del buque (borrados incluidos) y
+corre el sufijo hasta uno libre, avisando en el reporte. Cinco planes quedaron con código
+corrido (`DCH-MA-BR-2` en vez de `DCH-MA-BR-01`).
+
+## Otro aprendizaje: no pisar responsables con contenido propio
+
+Al normalizar área/responsable se pisaron dos responsables que no eran "Jefe de Máquinas":
+`DCH-8-001` (Electricista) y `DCH-ELEV-02` (Proveedor Externo Calificado). Se restauraron.
+`_tmp-normaliza-area.ts` ahora sólo unifica la variante sin tilde y respeta el resto; los de
+cubierta (3er Oficial) van a área CUBIERTA.

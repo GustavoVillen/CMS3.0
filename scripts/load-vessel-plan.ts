@@ -168,11 +168,20 @@ async function main() {
   });
   writeFileSync(`scripts/_tmp-backup-${basename(src, ".json")}.json`, JSON.stringify(existing, null, 1));
 
+  // El taskCode es unico por BUQUE y el indice no excluye los borrados: un plan
+  // dado de baja sigue reservando su codigo. El DCH tiene 71 planes borrados del
+  // clon anterior, asi que hay que esquivarlos al crear o el insert falla entero.
+  const ocupados = new Set<string>((await prisma.maintenancePlan.findMany({
+    where: { tenantId, vesselCode: VESSEL },
+    select: { taskCode: true },
+  })).map((p: any) => p.taskCode));
+
   const plans = new Map<string, any>();
   for (const p of existing) plans.set(`${p.assetId}|${codeSuffix(p.taskCode)}`, p);
 
   const creates: any[] = [];
   const updates: { plan: any; data: any; spec: PlanSpec }[] = [];
+  const reCodificados: { asset: string; de: string; a: string; title: string }[] = [];
 
   for (const s of specs) {
     const asset = byCode.get(s.asset)!;
@@ -197,10 +206,19 @@ async function main() {
       updatedByUserId: user.id,
     };
     const found = plans.get(`${asset.id}|${s.code}`);
-    if (found) updates.push({ plan: found, data, spec: s });
-    else creates.push({
+    if (found) {
+      updates.push({ plan: found, data, spec: s });
+      continue;
+    }
+    // Codigo libre: se corre el sufijo hasta uno que no este tomado por un plan
+    // vivo ni por uno borrado (ver `ocupados`).
+    let code = s.code;
+    while (ocupados.has(`${s.asset}-${code}`)) code = String(Number(code) + 1);
+    ocupados.add(`${s.asset}-${code}`);
+    if (code !== s.code) reCodificados.push({ asset: s.asset, de: s.code, a: code, title: s.title });
+    creates.push({
       ...data, tenantId, vesselCode: VESSEL, assetId: asset.id,
-      taskCode: `${s.asset}-${s.code}`, createdByUserId: user.id,
+      taskCode: `${s.asset}-${code}`, createdByUserId: user.id,
     });
   }
 
@@ -255,6 +273,13 @@ async function main() {
       console.log(`  ${assetById.get(p.assetId)?.assetCode.padEnd(12)} ${p.taskCode.padEnd(18)} ${f.padStart(8)}  ${p.title}`);
     }
     console.log(`  → a ${normaliza.length} de ellos se les completa area/responsable`);
+  }
+
+  if (reCodificados.length) {
+    console.log("\nCODIGOS CORRIDOS (el original lo reservaba un plan dado de baja)");
+    for (const r of reCodificados) {
+      console.log(`  ${r.asset}-${r.de} → ${r.asset}-${r.a}   ${r.title.slice(0, 60)}`);
+    }
   }
 
   const notas = specs.filter(s => s.nota);
