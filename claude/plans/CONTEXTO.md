@@ -118,10 +118,22 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
 - [x] **Tanda 9 — SISTEMA_HIDRAULICO** (2026-08-17). 2 corregidos + 6 creados = 8 planes.
       Activos nuevos: `LTE-SERVO-1` y `LTE-SERVO-2`. El "Motor Electrico" de la hoja se
       mapeó a `LTE-CENT-HID` (es el que acciona la central hidráulica).
-- [ ] Tanda 10 — VENTILADORES/EXTRACTORES/OTROS
-- [ ] Tanda 11 — CABRESTANTES
-- [ ] Tanda 12 — SEPARADOR / PLANTA PTE
-- [ ] Cierre — planes consolidados DIARIO / SEMANAL / 15 DÍAS + informe final
+- [x] **Tanda 10 — VENTILADORES/EXTRACTORES/OTROS** (2026-08-17). 3 corregidos + 10 creados.
+      Activos nuevos: `LTE-APAREJO-PLUMA`, `LTE-TERMOTANQUE`, `LTE-EXTR-COCINA`.
+- [x] **Tanda 11 — CABRESTANTES** (2026-08-17). 2 corregidos + 9 creados. Activos nuevos:
+      `LTE-CABR-POPA-BR`, `LTE-CABR-POPA-ER`, `LTE-MOLINETE`.
+- [x] **Tanda 12 — SEPARADOR / PLANTA PTE** (2026-08-17). 1 corregido + 5 creados. Activo
+      nuevo: `LTE-SEPARADOR`. El "Control aislación de motor eléctrico" de la planta PTE es
+      la misma tarea que la hoja de ventiladores llama "Toma de Aislación": el papel la
+      repite en dos hojas y se unificó en un solo plan.
+- [x] **Cierre — RUTINAS CONSOLIDADAS** (2026-08-17). Gustavo pidió **unir las diarias con
+      las semanales**, así que quedaron **2** planes en vez de 3, colgados de
+      `LTE-6-ED-001` (Equipos de Máquinas en General):
+      - `LTE-6-ED-001-90` **RUTINA SEMANAL DE MÁQUINAS** — trigger WEEK, 1 semana, 39 tareas
+        (las 33 diarias van marcadas "(diaria)" para no perder el dato).
+      - `LTE-6-ED-001-91` **RUTINA QUINCENAL DE MÁQUINAS** — trigger DAY, 15 días, 14 tareas.
+      El sistema soporta WEEK y DAY: usan `frequencyMonths` como nº de semanas / de días
+      (ver `advanceDateOccurrence` y `recalculateNextDue`).
 
 ## Aprendizajes de las primeras tandas
 
@@ -146,10 +158,18 @@ Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup
   `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
   trabajo y diferimientos.
 
-## Estado de la base (tras la tanda 9)
+## Estado final
 
-335 planes y 85 activos en el LTE. Auditoría global: **56 planes incompletos** (sin IA o sin
-área) — son los de las 3 hojas que faltan más los sobrantes de clase que nunca tuvieron esos
-campos. Al cierre hay que decidir si se les corre la IA también.
-Restos de plantilla: 0 en todo el buque.
-Rutinas apartadas hasta ahora: 10 (3 diarias, 2 semanales, 5 quincenales).
+**361 planes sobre 92 activos.** 201 planes salen del plan en papel; 22 activos se dieron de
+alta. 334 planes tienen los cuatro campos de análisis completos.
+Restos de plantilla: 0. Rutinas consolidadas: 53 tareas (33 diarias, 6 semanales, 14 quincenales).
+
+**Quedan 27 planes sin análisis de IA**: todos sobrantes de clase o estatutarios que no
+figuran en el plan de máquinas en papel (hélices, purificadora, botellones de aire, split,
+filtros de toma de mar, CO2, bombas de sanidad/lodos/prelubricación/refrigeración de bocinas,
+motobomba EGA portátil). Pendiente de decisión de Gustavo si se les corre la IA.
+
+⚠ **Ojo con el área**: algunos planes del buque son de **CUBIERTA**, no de máquinas
+(`LTE-ELEV-02` prueba de peso, `LTE-1-002/003` inspecciones de casco con responsable
+"3er Oficial Cubierta"). El criterio "área = MÁQUINAS" se aplicó sólo a los activos de las
+hojas de máquinas; no forzar los de cubierta.
