@@ -211,7 +211,11 @@ interface RecalculateResult {
   nextDueHours: number | null;
 }
 
-function deriveExecutionStatus(
+// Exportada para que el Mapa del Plan (dashboard/plan-map-service) muestre el
+// MISMO estado que la pantalla de Planes. El campo `executionStatus` guardado se
+// queda viejo (un plan COMPLETED cuya fecha ya pasó está vencido), así que el
+// estado real se deriva acá y no se lee de la columna.
+export function deriveExecutionStatus(
   plan: Pick<MaintenancePlanRecord, "executionStatus" | "nextDueDate" | "nextDueHours" | "triggerType">,
   currentHours?: number | null,
 ): string {

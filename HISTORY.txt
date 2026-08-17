@@ -1,5 +1,46 @@
 HISTORY.txt
 
+[2026-08-17] Mapa del Plan: el plan de mantenimiento de un buque de un pantallazo
+Agent: Claude Opus 5
+- Pedido del usuario: ver cómo está armado el plan de un buque sin leer la lista
+  fila por fila (el LATERE tiene 207 tareas), y entrar desde un botón en el
+  Dashboard.
+- Pantalla nueva /plan-map. NO duplica MaintenanceWorkload ni MaintenanceGantt
+  (que están dormantes y siguen así): esas muestran CUÁNDO cae el trabajo; esta
+  muestra CÓMO está estructurado el plan.
+- Cinco bloques: KPIs, mapa (grupo SFI → familia de equipos → equipo), ritmo de
+  frecuencias (calendario y horas de marcha), carga anual de horas-hombre con
+  selector de horas de marcha, y estado de vencimiento.
+- Cada ficha de equipo lleva un borde izquierdo con el semáforo de vencimiento
+  (vencido / por vencer / en ejecución / al día / sin programar) y se pinta con
+  el PEOR estado de sus tareas. El globo al pasar el puntero lista las tareas
+  con un punto de estado cada una.
+- El estado NO se lee de la columna executionStatus, que se queda vieja: se
+  reusa deriveExecutionStatus() de maintenance-plans-service (que pasó a estar
+  exportada) para mostrar lo mismo que la pantalla de Planes, y se lee el
+  horómetro de cada equipo — sin eso, todo plan por horas de marcha se compara
+  contra 0 y sale vencido.
+- "Sin programar" es su propio estado: un plan sin fecha ni horómetro de
+  referencia no vence nunca, no está "al día". En MAO 01 son 42 de 301.
+- Riesgo BAJO cuenta como riesgo EVALUADO (antes caía en "sin evaluar").
+- El servicio manda las familias como clave (mainEngines, pumps…) y el frontend
+  las traduce: nada de español viajando desde el backend. Los patrones que
+  clasifican leen el nombre del equipo en español, que es como están cargados
+  los datos; un tenant con nombres en inglés vería casi todo en "Otros equipos".
+- Peso: el select no trae `description` (los checklists son el 90% del registro).
+  Payload real del LATERE 16,6 KB. Dos consultas de un solo buque más la del
+  horómetro. La pantalla exige buque elegido: sin eso no dispara nada.
+- dashboard/plan-map-service.ts (nuevo) + 1 ruta GET /app/dashboard/plan-map.
+  Usa el helper compartido applyAssignedVesselScope (no una cuarta copia local).
+  Sin guarda de rol: leer planes ya sólo pide sesión de tenant + alcance de buque.
+- DEPLOY: backend + frontend (build web, gateado con tsc). NO toca schema, no
+  agrega dependencias.
+- Verificado contra la base real con MAO 01: 301 tareas, 125 inspecciones,
+  56/61 equipos, 234 sin riesgo, 1.146 trabajos/año y 2.294 h-h coinciden con
+  SQL directo; el semáforo (97/7/6/149/42) se recalculó aparte en SQL y da
+  idéntico. Aislamiento probado: el usuario de MAO 02 pidiendo M01 o DCH recibe
+  vacío, y un admin de Mercurio pidiendo un buque del tenant demo también.
+
 [2026-08-14] El permiso de trabajo guarda el scan del permiso firmado
 Agent: Claude Opus 5
 - Pedido del usuario: poder cargar el scan del permiso como elemento

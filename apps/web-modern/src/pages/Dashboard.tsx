@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
@@ -332,7 +332,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           sección de compliance no se renderiza (no-manager / sin scores). */}
       <div className="relative min-h-[34px]">
         <ComplianceDashboard />
-        <div className="absolute top-0 right-0" data-export-exclude="true">
+        <div className="absolute top-0 right-0 flex items-center gap-2" data-export-exclude="true">
+          <button
+            onClick={() => navigate("/plan-map")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+            title={t("dashboard.planMapTitle")}
+          >
+            <MapIcon className="w-3.5 h-3.5 text-accent" />
+            {t("dashboard.planMap")}
+          </button>
           <button
             onClick={() => { void exportDashboardHtml(); }}
             disabled={exporting}
