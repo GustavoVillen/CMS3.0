@@ -1178,6 +1178,10 @@ export async function setWorkOrderApproval(
   // Auto-create Sample DRAFT al AUTORIZAR (no al cerrar): así la tripulación ya
   // sabe, desde que la OT se despacha, que debe tomar la muestra durante la
   // ejecución. Horas/fecha reales se completan al cerrar la OT (ver closeWorkOrder).
+  // Se devuelven las muestras creadas para que el frontend le avise al usuario
+  // (popup) que se generó el registro de análisis — si no, quedaba invisible
+  // hasta que alguien entrara a Análisis de Fluidos a buscarlo.
+  const createdFluidSamples: Array<{ id: string; sampleCode: string; kind: string }> = [];
   if (payload.step === "AUTORIZA") {
     try {
       // Se recorren TODOS los planes de la OT: si la orden cubre varios ítems
@@ -1200,7 +1204,7 @@ export async function setWorkOrderApproval(
           select: { id: true },
         });
         if (existing) continue;
-        await createFluidSampleFromWorkOrder({
+        const created = await createFluidSampleFromWorkOrder({
           tenantId:        current.tenantId,
           vesselCode:      current.vesselCode,
           // El equipo es el DEL PLAN: con varios ítems del PDM cada muestra
@@ -1215,13 +1219,14 @@ export async function setWorkOrderApproval(
           completedAt:     actionAt,
           createdByUserId: session.user.id,
         });
+        if (created) createdFluidSamples.push({ ...created, kind: planKind || "FLUID" });
       }
     } catch (err) {
       log.error("[setWorkOrderApproval] auto-create Sample failed", err);
     }
   }
 
-  return updated;
+  return { ...updated, createdFluidSamples };
 }
 
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
@@ -1243,6 +1248,13 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
   if (!payload.woResult) throw new RouteError(400, "VALIDATION_ERROR", "El resultado de la OT es requerido.");
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
+  // Anclaje a mediodía UTC para el recálculo de vencimientos (mismo fix que
+  // updateTenantMaintenancePlan): la fecha "solo día" llega como medianoche UTC
+  // y addMonths suma con la hora LOCAL del server — sin anclar, el próximo
+  // vencimiento puede quedar corrido un día según la zona horaria del proceso.
+  const completedDateAnchored = new Date(Date.UTC(
+    completedDate.getUTCFullYear(), completedDate.getUTCMonth(), completedDate.getUTCDate(), 12, 0, 0,
+  ));
 
   // Solo TENANT_ADMIN puede cerrar en nombre de otro: la firma de CIERRA del PDF
   // se toma de ESE usuario (updatedByUserId → cierraSignatureBuffer). El actor
@@ -1311,13 +1323,13 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             frequencyMonths: plan.frequencyMonths,
             frequencyHours: plan.frequencyHours,
           },
-          completedDate,
+          completedDateAnchored,
           executionHours,
         );
         await tx.maintenancePlan.update({
           where: { id: plan.id },
           data: {
-            lastExecutionDate: completedDate,
+            lastExecutionDate: completedDateAnchored,
             lastExecutionHours: reportedHours ?? plan.lastExecutionHours,
             nextDueDate: nextDue.nextDueDate,
             nextDueHours: nextDue.nextDueHours,
@@ -1332,14 +1344,22 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
   });
   let failedMovements: string[] = [];
   if (payload.spareUsages !== undefined) {
-    const result = await applySpareUsagesToWo(
-      prismaRaw,
-      { id: current.id, tenantId: current.tenantId, vesselCode: current.vesselCode, workOrderCode: current.workOrderCode },
-      payload.spareUsages,
-      completedDate,
-      session.user.id,
-    );
-    failedMovements = result.failedMovements;
+    // La OT ya quedó CLOSED en la transacción de arriba: un fallo acá no debe
+    // devolver 500 (el usuario creería que el cierre no se aplicó). Se reportan
+    // los repuestos no registrados en failedMovements y se sigue.
+    try {
+      const result = await applySpareUsagesToWo(
+        prismaRaw,
+        { id: current.id, tenantId: current.tenantId, vesselCode: current.vesselCode, workOrderCode: current.workOrderCode },
+        payload.spareUsages,
+        completedDate,
+        session.user.id,
+      );
+      failedMovements = result.failedMovements;
+    } catch (err) {
+      log.error("[closeWorkOrder] applySpareUsagesToWo failed after close", current.workOrderCode, err);
+      failedMovements = payload.spareUsages.map((u) => u.spareId).filter(Boolean);
+    }
   }
 
   void publishAudit(prismaRaw, {

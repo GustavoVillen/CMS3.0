@@ -7,7 +7,7 @@ import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provi
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { FLUID_TYPES, type FluidType } from "./fluid-analyses-service";
-import { getPrismaClient } from "../../platform/data/prisma-client";
+import { suggestAssetByFuzzyText } from "../ai/asset-fuzzy-match";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
@@ -192,7 +192,7 @@ export async function extractFluidReport(
 
   // Fuzzy match against tenant assets
   if (result.assetReferenceText.value) {
-    result.assetIdSuggestion = await suggestAsset(session, input.vesselCode ?? null, result.assetReferenceText.value);
+    result.assetIdSuggestion = await suggestAssetByFuzzyText(session, input.vesselCode ?? null, result.assetReferenceText.value);
   }
 
   return result;
@@ -248,49 +248,3 @@ function normDate(v: unknown): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-// Fuzzy match the asset reference text against tenant assets (and maybe vessel-scoped)
-async function suggestAsset(
-  session: TenantAccessSession,
-  vesselCode: string | null,
-  referenceText: string,
-): Promise<ExtractedReport["assetIdSuggestion"]> {
-  const prisma = getPrismaClient();
-  if (!prisma) return null;
-  const tenant = await (prisma as any).tenant.findUnique({ where: { slug: session.tenantSlug } });
-  if (!tenant) return null;
-
-  const where: any = { tenantId: tenant.id, deletedAt: null };
-  if (vesselCode) where.vesselCode = vesselCode;
-  const assets: Array<{ id: string; name: string | null; assetCode: string | null }> = await (prisma as any).asset.findMany({
-    where, select: { id: true, name: true, assetCode: true }, take: 500,
-  });
-
-  const ref = normalize(referenceText);
-  let best: { id: string; name: string; score: number } | null = null;
-  for (const a of assets) {
-    const candidate = `${a.name ?? ""} ${a.assetCode ?? ""}`;
-    const cand = normalize(candidate);
-    const score = jaccard(ref, cand);
-    if (!best || score > best.score) best = { id: a.id, name: a.name ?? a.assetCode ?? a.id, score };
-  }
-  // Threshold 0.5: requiere al menos 50% de tokens compartidos (Jaccard).
-  // El 0.25 anterior era muy permisivo — "Motor Port" matchea con "Pump Motor"
-  // por compartir 1 token. Un match falso en fluid analyses lleva a registrar
-  // el análisis contra el activo equivocado.
-  if (best && best.score >= 0.5) return best;
-  return null;
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function jaccard(a: string, b: string): number {
-  const A = new Set(a.split(" ").filter(Boolean));
-  const B = new Set(b.split(" ").filter(Boolean));
-  if (A.size === 0 && B.size === 0) return 0;
-  let inter = 0;
-  for (const t of A) if (B.has(t)) inter++;
-  const union = A.size + B.size - inter;
-  return union === 0 ? 0 : inter / union;
-}

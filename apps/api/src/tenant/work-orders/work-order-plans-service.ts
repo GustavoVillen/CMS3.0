@@ -15,6 +15,9 @@ import { assertNotLocked } from "../../common/record-lock";
 import { requireWorkOrderScope } from "./work-orders-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { mergePlanTexts, type PlanTextSource } from "./wo-plan-text";
+import { hasPermission } from "../auth/role-permissions";
+import { resolvePlanProviderRequests } from "../maintenance-plans/maintenance-plans-service";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface WorkOrderPlanRow {
   id: string;             // id del plan
@@ -27,8 +30,11 @@ export interface WorkOrderPlanRow {
 
 type AnyPrisma = NonNullable<ReturnType<typeof getPrismaClient>>;
 
+// Mismo criterio que openFormalWorkOrder (maintenance-plans-service.ts): vincular/
+// desvincular un item del PDM de una OT es lo que la acredita al cerrarla, asi que
+// exige el mismo permiso operativo, no solo excluir al rol solo-lectura.
 function ensureCanManage(session: TenantAccessSession) {
-  if (session.user.role === "AUDITOR_READONLY") {
+  if (!hasPermission(session, "wo.manage") && !hasPermission(session, "wo.operate")) {
     throw new RouteError(403, "FORBIDDEN", "No autorizado para editar los planes de la orden de trabajo.");
   }
 }
@@ -176,6 +182,84 @@ async function recomposeWorkOrderText(
   });
 }
 
+/**
+ * Asegura la(s) Solicitud(es) de Servicio de un plan recién sumado a una OT,
+ * mismo mecanismo que usa openFormalWorkOrder al abrir la OT desde el plan
+ * (una SS por taller, nunca por ítem). Sólo aplica si el plan es de taller
+ * (department = PROVEEDOR). Si la OT ya tiene una SS abierta a ese mismo
+ * proveedor — porque otro plan sumado antes ya la creó — se le agrega este
+ * ítem en vez de duplicarla.
+ *
+ * `providerOverride` permite mandarla a un taller distinto del que trae
+ * configurado el plan (ad hoc, sólo para esta OT — no toca el plan). Clave =
+ * providerId original del plan, valor = providerId elegido por el usuario.
+ */
+async function ensureServiceRequestsForPlan(
+  prismaRaw: AnyPrisma,
+  session: TenantAccessSession,
+  wo: { id: string; tenantId: string; vesselCode: string },
+  plan: { id: string; taskCode: string; title: string; description?: string | null; department?: string | null; providerId?: string | null; providerRequests?: unknown },
+  providerOverride?: Record<string, string>,
+) {
+  if (plan.department !== "PROVEEDOR") return;
+  let requests = resolvePlanProviderRequests(plan as any);
+  if (requests.length === 0) return;
+  if (providerOverride) {
+    requests = requests.map(r => ({ ...r, providerId: providerOverride[r.providerId] ?? r.providerId }));
+  }
+
+  const { queryMaxServiceRequestSeq, insertServiceRequestForWorkOrderTx } =
+    await import("../service-requests/service-requests-service");
+
+  const servicio = plan.title;
+  const causaBlock = `${plan.taskCode} · ${plan.description ?? plan.title}`;
+
+  await withUniqueRetry(async (attempt) => {
+    const year = new Date().getFullYear();
+    let seqOffset = 0;
+    for (const req of requests) {
+      const existingSS = await (prismaRaw as any).serviceRequest.findFirst({
+        where: { workOrderId: wo.id, providerId: req.providerId, department: "PROVEEDOR", deletedAt: null },
+      });
+      if (existingSS) {
+        // Ya hay una SS para este taller en esta OT (de otro plan sumado
+        // antes): se le agrega el ítem nuevo, no se duplica el pedido.
+        if (!(existingSS.causes ?? "").includes(plan.taskCode)) {
+          await (prismaRaw as any).serviceRequest.update({
+            where: { id: existingSS.id },
+            data: {
+              causes: existingSS.causes ? `${existingSS.causes}\n\n${causaBlock}` : causaBlock,
+              description: existingSS.description ? `${existingSS.description}\n${plan.taskCode} · ${servicio}` : servicio,
+              updatedByUserId: session.user.id,
+            },
+          });
+        }
+        continue;
+      }
+      const seqBase = await queryMaxServiceRequestSeq(prismaRaw, wo.tenantId, wo.vesselCode, year);
+      await insertServiceRequestForWorkOrderTx(prismaRaw, {
+        tenantId: wo.tenantId,
+        vesselCode: wo.vesselCode,
+        workOrderId: wo.id,
+        year,
+        openDate: new Date(),
+        seqBase,
+        seqOffset: seqOffset + attempt,
+        actorUserId: session.user.id,
+        data: {
+          department: "PROVEEDOR",
+          providerId: req.providerId,
+          title: servicio,
+          description: servicio,
+          causes: causaBlock,
+          priority: "MEDIUM",
+        },
+      });
+      seqOffset++;
+    }
+  });
+}
+
 // ── Endpoints ────────────────────────────────────────────────────────────────
 
 export async function listTenantWorkOrderPlans(session: TenantAccessSession, workOrderId: string) {
@@ -195,7 +279,13 @@ export async function listTenantWorkOrderPlans(session: TenantAccessSession, wor
  * rompería el scope por vessel de todo lo que cuelga (historial, vencimientos).
  * El equipo SÍ puede ser distinto — es justamente el caso de astillero.
  */
-export async function addPlanToWorkOrder(session: TenantAccessSession, workOrderId: string, planId: string) {
+export async function addPlanToWorkOrder(
+  session: TenantAccessSession,
+  workOrderId: string,
+  planId: string,
+  /** Taller elegido por el usuario en vez del que trae el plan (ad hoc, sólo esta OT). Clave = providerId original. */
+  providerOverride?: Record<string, string>,
+) {
   ensureCanManage(session);
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -205,7 +295,10 @@ export async function addPlanToWorkOrder(session: TenantAccessSession, workOrder
 
   const plan = await (prismaRaw as any).maintenancePlan.findFirst({
     where: { id: planId, tenantId: wo.tenantId, deletedAt: null },
-    select: { id: true, taskCode: true, title: true, vesselCode: true },
+    select: {
+      id: true, taskCode: true, title: true, description: true, vesselCode: true,
+      estimatedHours: true, department: true, providerId: true, providerRequests: true,
+    },
   });
   if (!plan) throw new RouteError(404, "PLAN_NOT_FOUND", "Plan de mantenimiento no encontrado.");
   if (plan.vesselCode !== wo.vesselCode) {
@@ -249,6 +342,53 @@ export async function addPlanToWorkOrder(session: TenantAccessSession, workOrder
     where: { id: planId },
     data: { executionStatus: "IN_WINDOW", updatedByUserId: session.user.id },
   });
+
+  // Horas estimadas, área/responsable y proveedor: mismo criterio "no pisar
+  // lo que ya tiene" que recomposeWorkOrderText — sólo completan lo que la OT
+  // todavía no tiene definido (una OT libre normalmente arranca sin nada de
+  // esto, así que en la práctica siempre hereda del plan que se vincula).
+  {
+    const currentWo = await (prismaRaw as any).workOrder.findFirst({
+      where: { id: wo.id }, select: { estimatedHours: true, department: true, assignedToArea: true, providerId: true },
+    });
+    if (currentWo) {
+      const data: Record<string, unknown> = {};
+      if (currentWo.estimatedHours == null && plan.estimatedHours != null) {
+        data.estimatedHours = plan.estimatedHours;
+      }
+      if (!currentWo.department && plan.department) {
+        data.department = plan.department;
+        // Mismo mapeo que openFormalWorkOrder: PROVEEDOR → Tercerizado,
+        // dotación propia → Tripulación.
+        data.assignedToArea =
+          plan.department === "PROVEEDOR" ? "TERCERIZADO"
+          : (plan.department === "CUBIERTA" || plan.department === "MAQUINAS" || plan.department === "BARCAZA") ? "TRIPULACION"
+          : null;
+      }
+      if (!currentWo.providerId && plan.department === "PROVEEDOR") {
+        const requests = resolvePlanProviderRequests(plan as any);
+        // Igual que collapseProviderId en openFormalWorkOrder: si el plan
+        // resuelve a un único taller, ese es el proveedor de la OT; si
+        // resuelve a varios, se deja sin definir (ambiguo).
+        if (requests.length === 1) {
+          const providerId = requests[0]!.providerId;
+          data.providerId = providerOverride?.[providerId] ?? providerId;
+        }
+      }
+      if (Object.keys(data).length > 0) {
+        await (prismaRaw as any).workOrder.update({
+          where: { id: wo.id },
+          data: { ...data, updatedByUserId: session.user.id },
+        });
+      }
+    }
+  }
+
+  // Si el plan es de taller (PROVEEDOR), asegura la SS — mismo mecanismo que
+  // abrir la OT desde el plan (una SS por taller). Si la OT ya tiene una SS
+  // abierta a ese mismo proveedor (por otro plan sumado antes), se agrega el
+  // ítem nuevo a esa SS en vez de duplicarla.
+  await ensureServiceRequestsForPlan(prismaRaw, session, wo, plan, providerOverride);
 
   void publishAudit(prismaRaw, {
     tenantId: wo.tenantId,

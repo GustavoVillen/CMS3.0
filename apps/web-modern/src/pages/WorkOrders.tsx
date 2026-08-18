@@ -6,6 +6,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AlertDialog } from "../components/AlertDialog";
 import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
@@ -3413,12 +3414,18 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   onSuccess: () => void;
 }) {
   const { user } = useAuth();
+  const t = useT();
   const woTerms = useWoTerms();
   const isReject = step === "RECHAZA";
   const [name, setName] = useState(user?.name ?? "");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Códigos de Análisis de Fluidos que se auto-generaron al autorizar (si la
+  // OT cubre un ítem del plan de toma de muestra). Se avisa antes de cerrar
+  // esta ventana: si no, el registro nuevo queda invisible hasta que alguien
+  // entre a Análisis de Fluidos a buscarlo por su cuenta.
+  const [createdSampleCodes, setCreatedSampleCodes] = useState<string[] | null>(null);
 
   // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario (no en RECHAZA):
   // se elige de una lista y la firma del PDF se toma de ESE usuario.
@@ -3468,11 +3475,22 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
     if (isReject && !trimmedReason) { setError("Ingresá el motivo del rechazo."); return; }
     setSaving(true); setError(null);
     try {
-      await api.post(`/app/pms/work-orders/${workOrder.id}/approval`, {
-        step, name: trimmed, reason: isReject ? trimmedReason : undefined,
-        onBehalfUserId: adminPicker && onBehalfUserId ? onBehalfUserId : undefined,
-        actionDate: adminPicker && actionDate ? actionDate : undefined,
-      });
+      const res = await api.post<{ createdFluidSamples?: { sampleCode: string }[] }>(
+        `/app/pms/work-orders/${workOrder.id}/approval`,
+        {
+          step, name: trimmed, reason: isReject ? trimmedReason : undefined,
+          onBehalfUserId: adminPicker && onBehalfUserId ? onBehalfUserId : undefined,
+          actionDate: adminPicker && actionDate ? actionDate : undefined,
+        },
+      );
+      const codes = (res.createdFluidSamples ?? []).map(s => s.sampleCode);
+      if (codes.length > 0) {
+        // Avisa antes de cerrar: onSuccess() se dispara recién cuando el
+        // usuario reconoce el aviso (ver AlertDialog más abajo).
+        setSaving(false);
+        setCreatedSampleCodes(codes);
+        return;
+      }
       onSuccess();
     } catch {
       setSaving(false);
@@ -3562,6 +3580,18 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
           </button>
         </div>
       </div>
+
+      {createdSampleCodes && (
+        <AlertDialog
+          title={t("wo.ai.fluidSampleCreatedTitle")}
+          message={
+            (createdSampleCodes.length === 1 ? t("wo.ai.fluidSampleCreatedOne") : t("wo.ai.fluidSampleCreatedMany"))
+              .replace("{code}", createdSampleCodes.join(", "))
+              .replace("{section}", t("page.fluidAnalyses"))
+          }
+          onClose={() => { setCreatedSampleCodes(null); onSuccess(); }}
+        />
+      )}
     </div>
   );
 }
@@ -3717,14 +3747,22 @@ export const WorkOrdersPage: React.FC = () => {
     );
   }, [search, visibleItems, data]);
 
+  // Guard contra clicks rápidos entre dos OT: si mientras cargaba el detalle de
+  // A se pidió B, la respuesta de A llega tarde y se descarta (mismo patrón
+  // openTokenRef que MaintenancePlans).
+  const openTokenRef = useRef(0);
   const openDetail = useCallback(async (row: WorkOrder) => {
+    const token = ++openTokenRef.current;
     setDetailLoadingId(row.id);
     setTableActionError(null);
     try {
       const detailed = await api.get<WorkOrder>(`/app/pms/work-orders/${row.id}`);
+      if (openTokenRef.current !== token) return;
       setEditing(detailed);
-    } catch { setEditing(row); }
-    finally { setDetailLoadingId(null); }
+    } catch {
+      if (openTokenRef.current === token) setEditing(row);
+    }
+    finally { if (openTokenRef.current === token) setDetailLoadingId(null); }
   }, []);
 
   // Compatibilidad: `?autoCode=` (badges de plan) → redirige a la ruta deep-link.

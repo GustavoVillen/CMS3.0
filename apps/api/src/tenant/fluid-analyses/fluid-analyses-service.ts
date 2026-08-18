@@ -367,6 +367,56 @@ export async function updateFluidSample(session: TenantAccessSession, id: string
 }
 
 /**
+ * Vincula una muestra ya creada a la OT (y el plan) que se abrió a partir de
+ * ella — flujo "escaneé el resultado y el sistema abrió la OT sola". Función
+ * dedicada, separada de updateFluidSample: valida que la OT sea del mismo
+ * equipo antes de guardar el vínculo, y evita que una edición general de
+ * campos de laboratorio pise sourceWorkOrderId/sourcePlanId por accidente.
+ */
+export async function linkFluidSampleToWorkOrder(
+  session: TenantAccessSession,
+  sampleId: string,
+  input: { workOrderId: string; planId: string },
+) {
+  ensureAdminOrManager(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+
+  const sample = await (prisma as any).fluidSample.findFirst({ where: { id: sampleId, tenantId, deletedAt: null } });
+  if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+
+  // Idempotente: si un reintento de red repite el link tras un éxito previo, no falla.
+  if (sample.sourceWorkOrderId) return sample;
+
+  const workOrderId = String(input.workOrderId || "").trim();
+  const planId = String(input.planId || "").trim();
+  if (!workOrderId || !planId) throw new RouteError(400, "FIELD_REQUIRED", "workOrderId y planId son requeridos.");
+
+  const workOrder = await (prisma as any).workOrder.findFirst({ where: { id: workOrderId, tenantId, deletedAt: null } });
+  if (!workOrder) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Orden de trabajo no encontrada.");
+  if (workOrder.assetId !== sample.assetId) {
+    throw new RouteError(409, "ASSET_MISMATCH", "La orden de trabajo no corresponde al mismo equipo que la muestra.");
+  }
+
+  const updated = await (prisma as any).fluidSample.update({
+    where: { id: sampleId },
+    data: { sourceWorkOrderId: workOrderId, sourcePlanId: planId, updatedByUserId: session.user.id },
+  });
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "FluidSample.linkedToWorkOrder",
+    entityType: "FluidSample",
+    entityId: sampleId,
+    metadata: { sampleCode: sample.sampleCode, workOrderCode: workOrder.workOrderCode, planId },
+  });
+
+  return updated;
+}
+
+/**
  * Corrección puntual del horómetro de la muestra, abierta a todo rol operativo.
  * Es deliberadamente más acotada que updateFluidSample: toca un solo campo, para
  * no abrir el resto de la ficha a roles que no la administran.
@@ -685,7 +735,7 @@ export interface CreateSampleFromWoInput {
   createdByUserId: string;
 }
 
-export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoInput): Promise<string | null> {
+export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoInput): Promise<{ id: string; sampleCode: string } | null> {
   const prisma = getPrismaClient();
   if (!prisma) return null;
 
@@ -722,7 +772,7 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
     metadata: { sampleCode, vesselCode: input.vesselCode, kind, fluidType: input.fluidType ?? null, workOrderCode: input.workOrderCode },
   });
 
-  return sample.id;
+  return { id: sample.id, sampleCode };
 }
 
 // ── Trend data: last N samples of an asset, optionally filtered by parameter ─

@@ -122,6 +122,19 @@ REGLAS:
 - Si ningún equipo corresponde con razonabilidad, respondé {"assetId":null}.
 - Sin texto fuera del JSON, sin code fence, sin explicación.`;
 
+const PROMPT_PLAN_LINK = `Sos experto en mantenimiento planificado de máquinas navales. Te doy el título/descripción de una orden de trabajo (OT) recién creada y la lista de ítems del plan de mantenimiento periódico (PDM) del MISMO equipo, cada uno con su id, código de tarea, título, tipo de disparador y próximo vencimiento.
+
+Tu tarea: decidir si esta OT corresponde a (acredita) uno o más de esos ítems del plan — es decir, si el trabajo que describe la OT es efectivamente la ejecución de esa tarea periódica.
+
+REGLAS:
+- Comparás por el CONTENIDO técnico de la tarea (qué se hace, sobre qué componente), no por coincidencia literal de palabras.
+- Una OT puede corresponder a varios ítems del plan a la vez (ej. una intervención mayor que cubre varias tareas periódicas del mismo equipo).
+- Asigná "high" solo si estás razonablemente segura de que la OT ES esa tarea periódica. "medium" si es probable pero no coincide del todo. "low" si es una posibilidad débil, sólo temática.
+- Es preferible devolver la lista vacía antes que forzar una coincidencia dudosa: NUNCA inventes ni fuerces un id sólo para completar.
+- El id debe ser EXACTAMENTE uno de los ids de la lista recibida. NUNCA inventes un id.
+- Respondé SOLO con JSON válido: {"matches":[{"id":"<id exacto>","confidence":"high"|"medium"|"low"}, ...]}. Si no corresponde a ninguno, {"matches":[]}.
+- Sin texto fuera del JSON, sin code fence, sin explicación.`;
+
 interface AssetCandidate {
   id: string;
   code?: string | null;
@@ -131,6 +144,32 @@ interface AssetCandidate {
 interface AssetSuggestionInput {
   taskDesc?: string | null;
   assets?: AssetCandidate[];
+}
+
+export interface PlanCandidate {
+  id: string;
+  taskCode?: string | null;
+  title?: string | null;
+  triggerType?: string | null;
+  nextDueDate?: string | null;
+  nextDueHours?: number | null;
+  executionStatus?: string | null;
+}
+
+interface SuggestPlanLinkInput {
+  assetLabel?: string | null;
+  title?: string | null;
+  taskDesc?: string | null;
+  plans?: PlanCandidate[];
+}
+
+export interface PlanLinkSuggestion {
+  id: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface SuggestPlanLinkResult {
+  matches: PlanLinkSuggestion[];
 }
 
 interface BaseInput {
@@ -388,4 +427,44 @@ export async function suggestAsset(
   // Validación anti-alucinación: solo aceptamos un id que estaba en la lista.
   const valid = id && assets.some(a => a.id === id) ? id : null;
   return { assetId: valid };
+}
+
+// Sugiere a qué ítem(s) del plan de mantenimiento (mismo equipo) podría corresponder
+// una OT recién creada, para ofrecerle al usuario vincularla y así acreditar el plan
+// al cerrarla. Nunca decide sola: sólo sugiere, y sólo con ids validados contra la
+// lista de candidatos recibida (nunca uno inventado por la IA).
+export async function suggestPlanLinks(
+  session: TenantAccessSession,
+  input: SuggestPlanLinkInput,
+): Promise<SuggestPlanLinkResult> {
+  const plans = Array.isArray(input.plans) ? input.plans.filter(p => p && p.id) : [];
+  const taskDesc = (input.title ?? "").trim() || (input.taskDesc ?? "").trim();
+  if (!taskDesc || plans.length === 0) return { matches: [] };
+
+  const list = plans
+    .map(p => `- id=${p.id} | ${(p.taskCode ?? "").trim()} — ${(p.title ?? "").trim()} | disparador: ${(p.triggerType ?? "").trim() || "?"} | próximo vencimiento: ${p.nextDueDate ?? p.nextDueHours ?? "sin definir"}`)
+    .join("\n");
+  const userContent = `Equipo: ${(input.assetLabel ?? "").trim() || "equipo desconocido"}\nOT — título/descripción: ${(input.title ?? "").trim()}\n${(input.taskDesc ?? "").trim() ? `OT — tarea: ${input.taskDesc!.trim()}\n` : ""}\nÍtems del plan de mantenimiento de ese equipo:\n${list}`;
+
+  const raw = await callClaude(session, "wo_plan_link_suggestion", PROMPT_PLAN_LINK, userContent, 500);
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(stripCodeFence(raw));
+  } catch {
+    return { matches: [] };
+  }
+
+  const rawMatches = Array.isArray(parsed?.matches) ? parsed.matches : [];
+  const validConfidence = new Set(["high", "medium", "low"]);
+  const matches: PlanLinkSuggestion[] = [];
+  for (const m of rawMatches) {
+    const id = m?.id == null ? null : String(m.id).trim();
+    const confidence = validConfidence.has(m?.confidence) ? m.confidence : null;
+    // Validación anti-alucinación: solo aceptamos ids que estaban en la lista recibida.
+    if (id && confidence && plans.some(p => p.id === id)) {
+      matches.push({ id, confidence });
+    }
+  }
+  return { matches };
 }

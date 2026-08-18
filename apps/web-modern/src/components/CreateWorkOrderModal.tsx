@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Droplets, Loader2, Sparkles, Wrench } from "lucide-react";
+import { Camera, Droplets, Loader2, Sparkles, Wrench } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { WO_MAINTENANCE_KINDS } from "../lib/wo-form-catalog";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssigneeSelect } from "./AssigneeSelect";
+import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,20 @@ interface PlanProviderPreview { id: string; name: string; purposes: string[]; ta
 
 interface Asset { id: string; assetCode: string; name: string; }
 interface Vessel { code: string; name: string; }
+interface PlanCandidateApi {
+  id: string; taskCode: string; title: string; triggerType: string;
+  nextDueDate?: string | null; nextDueHours?: number | null; executionStatus?: string | null;
+}
+interface ExtractedFieldApi<T> { value: T | null; confidence: "high" | "medium" | "low"; }
+interface ExtractedWorkOrderApi {
+  title: ExtractedFieldApi<string>;
+  description: ExtractedFieldApi<string>;
+  acceptanceCriteria: ExtractedFieldApi<string>;
+  priority: ExtractedFieldApi<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">;
+  dueDate: ExtractedFieldApi<string>;
+  assetReferenceText: ExtractedFieldApi<string>;
+  assetIdSuggestion: { id: string; name: string; score: number } | null;
+}
 
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
@@ -178,6 +193,17 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // la tarea: quien abre la OT tiene que ver a quién se le va a encargar antes
   // de crearla (al guardar se abre una SS por taller).
   const [planProviders, setPlanProviders] = useState<PlanProviderPreview[]>([]);
+  // El usuario puede mandarlo a otro taller distinto del que trae el plan,
+  // ad hoc para esta OT (no toca la configuración del plan). Clave = providerId
+  // original que trajo el plan, valor = providerId elegido.
+  const [providerOverride, setProviderOverride] = useState<Record<string, string>>({});
+  const [availableProviders, setAvailableProviders] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    if (planProviders.length === 0 || availableProviders.length > 0) return;
+    api.get<{ items: Array<{ id: string; name: string }> }>("/app/providers?status=ACTIVE")
+      .then(res => setAvailableProviders(res.items ?? []))
+      .catch(() => setAvailableProviders([]));
+  }, [planProviders.length, availableProviders.length]);
   const [description, setDescription]           = useState(prefill?.description ?? "");
   const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
   const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : "");
@@ -245,6 +271,19 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [suggestingAsset, setSuggestingAsset] = useState(false);
   const [assetSuggested,  setAssetSuggested]  = useState(false);
   const autoSuggestedAssetRef = useRef(false);
+
+  // IA: sugerencia automática de a qué ítem(s) del plan de mantenimiento del
+  // equipo podría corresponder esta OT (solo modo standalone). El vínculo real
+  // se crea recién al guardar, y solo si el usuario confirma en el popup.
+  const can = useCan();
+  const canLinkPlan = can("wo.operate") || can("wo.manage");
+  const [planLinkCandidates, setPlanLinkCandidates] = useState<PlanLinkCandidate[] | null>(null);
+  const [planLinkMode, setPlanLinkMode] = useState<"confirm" | "choose" | null>(null);
+  const [confirmedPlanIds, setConfirmedPlanIds] = useState<string[]>([]);
+  // Guarda el assetId con el que ya se sugirió, para volver a sugerir si el
+  // usuario cambia de equipo (a diferencia de la sugerencia de activo, que
+  // corre una sola vez).
+  const suggestedPlanForAssetRef = useRef<string | null>(null);
 
   // Etiqueta del activo a partir del prefill o de la lista cargada
   const aiAssetLabel = prefill?.sourceLabel
@@ -406,6 +445,164 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     void handleSuggestAsset();
   }, [prefill, assets, assetId, handleSuggestAsset]);
 
+  // IA: a qué ítem(s) del plan de mantenimiento del mismo equipo podría
+  // corresponder esta OT. Solo en creación libre (standalone): la OT que ya
+  // nace de un plan (prefill.source === "plan") ya viene vinculada.
+  const handleSuggestPlanLinks = useCallback(async () => {
+    if (prefill || !assetId || !canLinkPlan) return;
+    const taskDesc = title.trim() || description.trim();
+    if (!taskDesc) return;
+    try {
+      const plansRes = await api.get<{ items: PlanCandidateApi[] }>(
+        `/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=100`,
+      );
+      const items = plansRes.items ?? [];
+      if (items.length === 0) return;
+      const res = await api.post<{ matches: { id: string; confidence: "high" | "medium" | "low" }[] }>(
+        "/app/pms/work-orders/suggest-plan-links",
+        {
+          assetLabel: assets.find(a => a.id === assetId)?.name ?? null,
+          title: title.trim() || null,
+          taskDesc: description.trim() || null,
+          plans: items.map(p => ({
+            id: p.id, taskCode: p.taskCode, title: p.title, triggerType: p.triggerType,
+            nextDueDate: p.nextDueDate, nextDueHours: p.nextDueHours, executionStatus: p.executionStatus,
+          })),
+        },
+      );
+      const matches = res.matches ?? [];
+      if (matches.length === 0) return;
+      const candidates: PlanLinkCandidate[] = [];
+      for (const m of matches) {
+        const plan = items.find(p => p.id === m.id);
+        if (!plan) continue;
+        candidates.push({
+          id: plan.id, taskCode: plan.taskCode, title: plan.title,
+          nextDueDate: plan.nextDueDate, nextDueHours: plan.nextDueHours, confidence: m.confidence,
+        });
+      }
+      if (candidates.length === 0) return;
+      const highs = candidates.filter(c => c.confidence === "high");
+      setPlanLinkCandidates(candidates);
+      setPlanLinkMode(candidates.length === 1 && highs.length === 1 ? "confirm" : "choose");
+    } catch (e) {
+      console.error("[suggest-plan-links] failed:", e);
+    }
+  }, [prefill, assetId, canLinkPlan, title, description, assets]);
+
+  // Dispara la sugerencia automáticamente, sin que el usuario la pida, en
+  // cuanto hay equipo + título/descripción cargados. Se re-arma si el usuario
+  // cambia de equipo, para no sugerir en base a un equipo que ya no aplica.
+  // Debounce de 800ms: sin esto, el efecto disparaba con la PRIMERA letra
+  // tipeada (ej. "A" de "Análisis de Aceite") y marcaba el equipo como "ya
+  // sugerido", mandándole a la IA un texto sin sentido y sin volver a
+  // intentarlo aunque el usuario terminara de escribir el título real.
+  useEffect(() => {
+    if (prefill || !assetId || !canLinkPlan) return;
+    if (!(title.trim() || description.trim())) return;
+    if (suggestedPlanForAssetRef.current === assetId) return;
+    const timer = setTimeout(() => {
+      suggestedPlanForAssetRef.current = assetId;
+      void handleSuggestPlanLinks();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks]);
+
+  // Al confirmar, el usuario dijo "esta OT ES este ítem del plan": hereda los
+  // campos que el plan ya tiene definidos (criterios, LOTO, riesgo, RCM,
+  // talleres) usando el mismo endpoint y el mismo criterio "no pisar lo que
+  // el usuario ya escribió a mano" que usa el modo prefill=plan (ver
+  // useEffect de arriba). La TAREA es la excepción: se reemplaza por la del
+  // plan aunque el usuario ya haya escrito algo — lo que había era sólo el
+  // texto con el que se buscó la coincidencia, no una tarea definitiva. El
+  // título sí se deja como lo escribió el usuario.
+  const handlePlanLinkConfirm = useCallback(async (planIds: string[]) => {
+    setConfirmedPlanIds(planIds);
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+    try {
+      const merged = await api.get<{
+        description: string | null;
+        acceptanceCriteria: string | null; loto: string | null;
+        riskLevel: string | null; riskAnalysisResult: string | null;
+        consequenceCategory: string | null; consequenceRationale: string | null;
+        providers: PlanProviderPreview[];
+      }>(`/app/pms/maintenance-plans/merged-text?ids=${planIds.map(encodeURIComponent).join(",")}`);
+      if (merged.description) setDescription(merged.description);
+      if (!acceptanceCriteria.trim() && merged.acceptanceCriteria) setAcceptanceCriteria(merged.acceptanceCriteria);
+      if (!loto.trim() && merged.loto) setLoto(merged.loto);
+      if (!riskLevel && merged.riskLevel) setRiskLevel(merged.riskLevel);
+      if (!riskAnalysisResult.trim() && merged.riskAnalysisResult) setRiskAnalysisResult(merged.riskAnalysisResult);
+      if (!consequenceCategory && merged.consequenceCategory) setConsequenceCategory(merged.consequenceCategory);
+      if (!consequenceRationale.trim() && merged.consequenceRationale) setConsequenceRationale(merged.consequenceRationale);
+      if (merged.providers?.length) setPlanProviders(merged.providers);
+    } catch (e) {
+      console.error("[plan-link] merged-text failed:", e);
+    }
+  }, [acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
+
+  const handlePlanLinkDismiss = useCallback(() => {
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+  }, []);
+
+  // Si el usuario cambia de equipo, los vínculos confirmados (y cualquier
+  // sugerencia pendiente) quedaban referidos al equipo anterior: se descartan.
+  useEffect(() => {
+    setConfirmedPlanIds([]);
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+  }, [assetId]);
+
+  // IA: escanear una OT llenada a mano en papel (foto o PDF) y precompletar el
+  // formulario. Solo en creación libre — nunca guarda nada por sí sola, el
+  // usuario revisa y confirma con el botón Guardar de siempre.
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+
+  const handleScanFile = useCallback(async (file: File) => {
+    if (scanning) return;
+    setScanning(true);
+    setErr(null);
+    setScanNotice(null);
+    try {
+      const res = await api.uploadRaw<{ extracted: ExtractedWorkOrderApi }>(
+        "/app/pms/work-orders/extract-scan",
+        file,
+        {
+          "X-Filename": encodeURIComponent(file.name),
+          ...(vesselCode.trim() ? { "X-Vessel-Code": vesselCode.trim().toUpperCase() } : {}),
+        },
+      );
+      const ex = res.extracted;
+      const lowConfidenceLabels: string[] = [];
+      const apply = (field: ExtractedFieldApi<string>, label: string, setter: (v: string) => void) => {
+        if (!field.value) return;
+        setter(field.value);
+        if (field.confidence !== "high") lowConfidenceLabels.push(label);
+      };
+      apply(ex.title, t("wo.modal.titleField"), setTitle);
+      apply(ex.description, t("wo.modal.task"), setDescription);
+      apply(ex.acceptanceCriteria, t("wo.modal.acceptanceCriteria"), setAcceptanceCriteria);
+      if (ex.priority.value) setPriority(ex.priority.value);
+      if (ex.dueDate.value) setDueDate(ex.dueDate.value);
+      // Solo preselecciona el equipo si ya está en la lista cargada del buque
+      // (misma validación anti-alucinación que handleSuggestAsset): un id que
+      // no está en `assets` sería de otro buque o inexistente.
+      if (!assetId && ex.assetIdSuggestion && assets.some(a => a.id === ex.assetIdSuggestion!.id)) {
+        setAssetId(ex.assetIdSuggestion.id);
+        setAssetSuggested(true);
+      }
+      setScanNotice(lowConfidenceLabels.length > 0
+        ? `${t("wo.ai.scan.reviewFields")}: ${lowConfidenceLabels.join(", ")}`
+        : t("wo.ai.scan.done"));
+    } catch (e) {
+      console.error("[extract-scan] failed:", e);
+      setErr(e instanceof ApiError ? e.message : t("wo.ai.scan.failed"));
+    } finally { setScanning(false); }
+  }, [scanning, vesselCode, assetId, assets, t]);
+
   // Usuarios del tenant para el selector "Abierta por (en nombre de)" — solo admin.
   // El endpoint /app/team/members ya es admin-only.
   useEffect(() => {
@@ -498,6 +695,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
           // Otros ítems del PDM que cubre la misma OT.
           additionalPlanIds:  prefill.additionalPlans?.map(p => p.id),
+          providerOverride:   Object.keys(providerOverride).length > 0 ? providerOverride : undefined,
         });
         woId = created.id;
       } else {
@@ -541,13 +739,29 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         } catch { /* non-blocking */ }
       }
 
+      // Vincular los ítems del plan que el usuario confirmó en el popup de la
+      // IA. La OT ya quedó guardada: si un vínculo falla no se pierde el alta
+      // (se puede vincular a mano desde la orden después) — mismo criterio
+      // no bloqueante que el adjunto de checklist, arriba.
+      if (confirmedPlanIds.length > 0 && woId) {
+        const hasOverride = Object.keys(providerOverride).length > 0;
+        for (const planId of confirmedPlanIds) {
+          try {
+            await api.post(`/app/pms/work-orders/${woId}/plans`, {
+              planId, providerOverride: hasOverride ? providerOverride : undefined,
+            });
+          }
+          catch (e) { console.error("[link-plan] failed:", e); }
+        }
+      }
+
       await onSaved(woId);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
-      checklistDocFile, isAdmin, onBehalfUserId, onSaved, t]);
+      checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -585,6 +799,27 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           {/* ── INFORMACIÓN ── */}
           <section>
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">{t("wo.modal.section.info")}</p>
+
+            {!prefill && (
+              <div className="mb-3">
+                <input ref={scanInputRef} type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
+                  capture="environment" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleScanFile(f); e.target.value = ""; }} />
+                <button type="button" onClick={() => scanInputRef.current?.click()}
+                  disabled={scanning || !vesselCode.trim()}
+                  title={!vesselCode.trim() ? t("wo.ai.scan.selectVesselFirst") : t("wo.ai.scan.tooltip")}
+                  className={`flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors disabled:opacity-40 ${!scanning && vesselCode.trim() ? "hover:text-fg cursor-pointer" : ""}`}>
+                  {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                  {t("wo.ai.scan.button")}
+                </button>
+                {scanNotice && (
+                  <p className="text-[10px] text-accent mt-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 shrink-0" /> {scanNotice}
+                  </p>
+                )}
+              </div>
+            )}
 
             {prefill ? (
               <div className="space-y-3">
@@ -798,15 +1033,26 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   {planProviders.length === 1 ? "Proveedor" : `Proveedores (${planProviders.length})`}
                 </p>
                 {planProviders.map(p => (
-                  <p key={p.id} className="text-[11px] text-fg">
-                    <span className="font-semibold">{p.name}</span>
+                  <div key={p.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-fg">
+                    {availableProviders.length > 0 ? (
+                      <select
+                        value={providerOverride[p.id] ?? p.id}
+                        onChange={e => setProviderOverride(prev => ({ ...prev, [p.id]: e.target.value }))}
+                        className="bg-fg/5 border border-fg/10 rounded px-1.5 py-0.5 text-[11px] font-semibold text-fg focus:outline-none focus:border-accent/50"
+                      >
+                        {!availableProviders.some(ap => ap.id === p.id) && <option value={p.id}>{p.name}</option>}
+                        {availableProviders.map(ap => <option key={ap.id} value={ap.id}>{ap.name}</option>)}
+                      </select>
+                    ) : (
+                      <span className="font-semibold">{p.name}</span>
+                    )}
                     {p.purposes.length > 0 && (
-                      <span className="text-text-industrial/60"> · {p.purposes.join(" / ")}</span>
+                      <span className="text-text-industrial/60">· {p.purposes.join(" / ")}</span>
                     )}
                     {p.taskCodes.length > 0 && (
-                      <span className="text-text-industrial/45 font-mono"> · {p.taskCodes.join(", ")}</span>
+                      <span className="text-text-industrial/45 font-mono">· {p.taskCodes.join(", ")}</span>
                     )}
-                  </p>
+                  </div>
                 ))}
                 <p className="text-[10px] text-text-industrial/50 pt-0.5">
                   {planProviders.length === 1
@@ -961,6 +1207,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           </button>
         </div>
       </div>
+
+      {planLinkCandidates && planLinkMode && (
+        <PlanLinkSuggestionDialog
+          candidates={planLinkCandidates}
+          mode={planLinkMode}
+          onConfirm={handlePlanLinkConfirm}
+          onDismiss={handlePlanLinkDismiss}
+        />
+      )}
     </div>
   );
 };

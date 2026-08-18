@@ -199,6 +199,12 @@ export interface OpenFormalWorkOrderInput {
    * Deben ser del mismo buque; el equipo puede ser distinto.
    */
   additionalPlanIds?: string[] | null;
+  /**
+   * Taller elegido por el usuario en vez del que traen configurado los
+   * planes (ad hoc, sólo para esta OT — no toca la configuración del plan).
+   * Clave = providerId original del plan, valor = providerId elegido.
+   */
+  providerOverride?: Record<string, string> | null;
 }
 
 interface RecalculatePlanInput {
@@ -1316,6 +1322,7 @@ async function generateWorkOrderCode(
   tenantSlug: string | null | undefined,
   tenantId: string,
   vesselCode: string,
+  seqOffset = 0,
 ): Promise<string> {
   const woYY = String(new Date().getFullYear()).slice(-2);
   const codeBody = `${vesselCode}-${woYY}-`;
@@ -1330,7 +1337,7 @@ async function generateWorkOrderCode(
     codeBody + "%",
   );
   const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
-  return `${workOrderPrefix(tenantSlug)}-${vesselCode}-${woYY}-${String(maxSeq + 1).padStart(4, "0")}`;
+  return `${workOrderPrefix(tenantSlug)}-${vesselCode}-${woYY}-${String(maxSeq + 1 + seqOffset).padStart(4, "0")}`;
 }
 
 export async function quickClosePlan(
@@ -1374,11 +1381,13 @@ export async function quickClosePlan(
   // manual) y ya CERRADA. AUTO_WO/APPROVAL_WO no pasan por quickClosePlan (usan
   // openFormalWorkOrder), así que el registro queda naturalmente acotado.
   const shouldCreateWo = planAny.triggerResultMode !== "AUTO_WO" && planAny.triggerResultMode !== "APPROVAL_WO";
-  const autoWoCode = shouldCreateWo
-    ? await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode)
-    : null;
-
-  const txResult = await prisma.$transaction(async (tx) => {
+  // withUniqueRetry + código regenerado por intento (+attempt): dos cierres
+  // simultáneos en el mismo buque no chocan dos veces con el mismo correlativo.
+  const txResult = await withUniqueRetry(async (attempt) => {
+    const autoWoCode = shouldCreateWo
+      ? await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode, attempt)
+      : null;
+    return prisma.$transaction(async (tx) => {
     // OT automática (registro): nace AUTORIZADA por Sistema y ya cerrada.
     const workOrder = shouldCreateWo && autoWoCode
       ? await tx.workOrder.create({
@@ -1492,6 +1501,7 @@ export async function quickClosePlan(
     const workLogs = await loadRecentWorkLogs(tx.workLog, plan.tenantId, plan.id);
 
     return { plan: { ...updatedPlan, workLogs }, workLog, workOrder };
+    });
   });
   void publishAudit(prismaRaw, {
     tenantId: plan.tenantId,
@@ -1703,14 +1713,10 @@ export async function completeChecklistPlan(
  * separarían sin que nadie se entere.
  */
 export async function previewMergedPlanText(session: TenantAccessSession, planIds: string[]) {
-  const plans: PlanTextSource[] = [];
-  const raw: MaintenancePlanRecord[] = [];
-  for (const id of planIds) {
-    // Aplica scope tenant/vessel y 404 si el plan no es visible.
-    const plan = await getTenantMaintenancePlan(session, id);
-    plans.push(plan as unknown as PlanTextSource);
-    raw.push(plan as MaintenancePlanRecord);
-  }
+  // En paralelo (cada get aplica scope tenant/vessel y 404 si no es visible).
+  const fetched = await Promise.all(planIds.map((id) => getTenantMaintenancePlan(session, id)));
+  const plans: PlanTextSource[] = fetched.map((p) => p as unknown as PlanTextSource);
+  const raw: MaintenancePlanRecord[] = fetched.map((p) => p as MaintenancePlanRecord);
 
   // Talleres a los que va este trabajo, uno por proveedor (misma agrupación que
   // usa la apertura de la OT: una SS por taller). Sirve para que el formulario
@@ -1788,8 +1794,6 @@ export async function openFormalWorkOrder(
   // El principal primero: define el orden del ITEM DEL PDM en el PDF.
   const allPlans = [plan as MaintenancePlanRecord, ...extraPlans];
 
-  const workOrderCode = await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode);
-
   // Hereda del plan cuando el payload no lo provee. Si el payload manda
   // el campo (incluso vacío "", el normalizeOptionalText lo convertirá a
   // null), respeta esa intención del usuario.
@@ -1861,17 +1865,21 @@ export async function openFormalWorkOrder(
   // misma empresa, es un solo pedido con seis trabajos adentro — no seis
   // pedidos. Cada pedido recuerda de qué planes salió para describir el servicio
   // y las causas (un bloque por ítem, encabezado por su código).
+  const providerOverride = payload.providerOverride ?? undefined;
   const byProvider = new Map<string, Array<{ purpose: string | null; plan: MaintenancePlanRecord }>>();
   for (const p of allPlans) {
     const pAny = p as any;
     if (pAny.department !== "PROVEEDOR") continue;
     for (const req of resolvePlanProviderRequests(pAny)) {
-      const entries = byProvider.get(req.providerId) ?? [];
+      // Ad hoc: el usuario eligió mandarlo a otro taller distinto del que
+      // trae el plan, sólo para esta OT (no toca la configuración del plan).
+      const providerId = providerOverride?.[req.providerId] ?? req.providerId;
+      const entries = byProvider.get(providerId) ?? [];
       const purpose = normalizeOptionalText(req.purpose);
       // Mismo taller, mismo plan y misma aclaración: no se repite.
       if (entries.some(e => e.plan.id === p.id && (normalizeOptionalText(e.purpose) ?? "") === (purpose ?? ""))) continue;
       entries.push({ purpose, plan: p });
-      byProvider.set(req.providerId, entries);
+      byProvider.set(providerId, entries);
     }
   }
   /** Un pedido por taller; `entries` son los ítems del PDM que le tocan. */
@@ -1902,7 +1910,12 @@ export async function openFormalWorkOrder(
       }
     : {};
 
-  const woTxResult = await withUniqueRetry(async (attempt) => prisma.$transaction(async (tx) => {
+  // El código se regenera en CADA intento con `attempt` como offset: si dos
+  // requests simultáneos calculan el mismo correlativo, el reintento avanza la
+  // secuencia en vez de chocar de nuevo con el mismo código (P2002).
+  const woTxResult = await withUniqueRetry(async (attempt) => {
+    const workOrderCode = await generateWorkOrderCode(prismaRaw, session.tenantSlug, plan.tenantId, plan.vesselCode, attempt);
+    return prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.create({
       data: {
         tenantId: plan.tenantId,
@@ -2034,7 +2047,8 @@ export async function openFormalWorkOrder(
     }
 
     return workOrder;
-  }));
+    });
+  });
   void publishAudit(prismaRaw, {
     tenantId: plan.tenantId,
     actorUserId: session.user.id,

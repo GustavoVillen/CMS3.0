@@ -75,7 +75,10 @@ import {
   suggestLoto,
   suggestRisk,
   suggestAsset,
+  suggestPlanLinks,
 } from "../work-orders/work-orders-ai-suggestions";
+import { extractWorkOrderScan } from "../work-orders/work-orders-ai-extractor";
+import { saveWorkOrderScanFile } from "../work-orders/work-order-scan-uploads-service";
 import {
   suggestPlanAcceptanceCriteria,
   suggestPlanLoto,
@@ -392,6 +395,37 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  // Sugerir a que item(s) del plan de mantenimiento del mismo equipo podria
+  // corresponder esta OT recien creada, para ofrecer vincularla (y asi acreditar
+  // el plan al cerrarla). Solo sugiere: el vinculo real se crea via POST a
+  // /app/pms/work-orders/:id/plans cuando el usuario confirma en el popup.
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-plan-links") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<{
+      assetLabel?: string; title?: string; taskDesc?: string;
+      plans?: Array<{ id: string; taskCode?: string; title?: string; triggerType?: string; nextDueDate?: string; nextDueHours?: number; executionStatus?: string }>;
+    }>(request);
+    sendJson(response, 200, await suggestPlanLinks(session, body));
+    return true;
+  }
+
+  // Escanear una OT llenada a mano en papel (foto/PDF) y extraer los campos
+  // del formulario de creación. No guarda la OT: el usuario revisa/corrige y
+  // confirma con el botón Guardar de siempre.
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/extract-scan") {
+    enforceRateLimit(request, `ai-extract:${session.user.id}`, { maxRequests: 15, windowMs: 60_000 });
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "ot-escaneada");
+    const rawVessel = request.headers["x-vessel-code"];
+    const vesselCode = (Array.isArray(rawVessel) ? rawVessel[0] : rawVessel) ?? null;
+    const buffer = await readBinaryBody(request);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    const saved = await saveWorkOrderScanFile(session.tenantSlug, originalName, buffer);
+    const extracted = await extractWorkOrderScan(session, { buffer, mime: saved.mime, vesselCode });
+    sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
+    return true;
+  }
+
   if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/start$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await startWorkOrder(session, id));
@@ -517,8 +551,8 @@ export async function handleMaintenanceRoutes(
       return true;
     }
     if (method === "POST") {
-      const body = await readJsonBody(request) as { planId?: string };
-      sendJson(response, 201, await addPlanToWorkOrder(session, id, String(body?.planId ?? "")));
+      const body = await readJsonBody(request) as { planId?: string; providerOverride?: Record<string, string> };
+      sendJson(response, 201, await addPlanToWorkOrder(session, id, String(body?.planId ?? ""), body?.providerOverride));
       return true;
     }
   }

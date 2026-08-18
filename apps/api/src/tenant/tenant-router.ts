@@ -143,7 +143,7 @@ import {
 } from "./ai-documents/ai-documents-service";
 import {
   listFluidSamples, getFluidSample, createFluidSample, updateFluidSample,
-  updateFluidSampleRunningHours, deleteFluidSample,
+  updateFluidSampleRunningHours, deleteFluidSample, linkFluidSampleToWorkOrder,
   upsertFluidResult, listThresholds, upsertThreshold, deleteThreshold, getAssetFluidTrend,
   regenerateFluidAiAnalysis,
   type FluidType as FluidTypeEnum, type Verdict, type SampleStatus,
@@ -1175,6 +1175,15 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as any;
     sendJson(response, 200, await upsertFluidResult(session, sampleId, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/fluid-analyses\/[\w-]+\/link-work-order$/.test(url.pathname)) {
+    const sampleId = url.pathname.split("/")[3]!;
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { workOrderId?: string; planId?: string };
+    sendJson(response, 200, await linkFluidSampleToWorkOrder(session, sampleId, {
+      workOrderId: String(body?.workOrderId ?? ""), planId: String(body?.planId ?? ""),
+    }));
     return true;
   }
   if (method === "POST" && /^\/app\/fluid-analyses\/[\w-]+\/generate-ai-analysis$/.test(url.pathname)) {
