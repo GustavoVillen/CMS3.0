@@ -1222,11 +1222,13 @@ export async function handleTenantRoutes(
     const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
     const vesselCode = (Array.isArray(request.headers["x-vessel-code"]) ? request.headers["x-vessel-code"][0] : request.headers["x-vessel-code"]) ?? null;
     const referenceDate = (Array.isArray(request.headers["x-reference-date"]) ? request.headers["x-reference-date"][0] : request.headers["x-reference-date"]) ?? null;
+    const rawSampleNumber = request.headers["x-sample-number"];
+    const sampleNumber = decodeURIComponent(Array.isArray(rawSampleNumber) ? rawSampleNumber[0]! : rawSampleNumber ?? "") || null;
     const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     // Save the file first so the URL is available for later
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
-    const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate });
+    const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate, sampleNumber });
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
     return true;
   }

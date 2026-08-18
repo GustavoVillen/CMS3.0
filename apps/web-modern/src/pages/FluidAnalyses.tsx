@@ -33,7 +33,7 @@ interface ListResponse { items: FluidSample[]; total: number; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function uploadAndExtract(file: File, vesselCode: string | null, referenceDate: string | null): Promise<{ extracted: any; file: { url: string; name: string; mime: string } }> {
+async function uploadAndExtract(file: File, vesselCode: string | null, referenceDate: string | null, sampleNumber?: string | null): Promise<{ extracted: any; file: { url: string; name: string; mime: string } }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/octet-stream",
     "X-Filename": encodeURIComponent(file.name),
@@ -44,6 +44,7 @@ async function uploadAndExtract(file: File, vesselCode: string | null, reference
   if (slug)  headers["X-Tenant-Slug"] = slug;
   if (vesselCode) headers["X-Vessel-Code"] = vesselCode;
   if (referenceDate) headers["X-Reference-Date"] = referenceDate;
+  if (sampleNumber && sampleNumber.trim()) headers["X-Sample-Number"] = encodeURIComponent(sampleNumber.trim());
   const res = await fetch("/app/fluid-analyses/extract", { method: "POST", headers, body: file });
   if (!res.ok) {
     let msg = res.statusText;
@@ -995,6 +996,10 @@ function ResultFormModal({
   const [err, setErr]               = useState<string | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractNote, setExtractNote]   = useState<string | null>(null);
+  // Cuando el reporte del lab trae el historial de varias muestras del mismo
+  // equipo, este número le dice a la IA cuál analizar — nunca "la más reciente"
+  // por default si el usuario ya sabe cuál es.
+  const [sampleNumber, setSampleNumber] = useState("");
 
   const processFile = useCallback(async (f: File) => {
     setFile(f);
@@ -1003,7 +1008,7 @@ function ResultFormModal({
     setExtracting(true);
     try {
       const referenceDate = sample.sampledAt ? sample.sampledAt.slice(0, 10) : null;
-      const { extracted, file: saved } = await uploadAndExtract(f, sample.vesselCode, referenceDate);
+      const { extracted, file: saved } = await uploadAndExtract(f, sample.vesselCode, referenceDate, sampleNumber);
       setReportUrl(saved.url);
       setReportMime(saved.mime);
 
@@ -1030,7 +1035,7 @@ function ResultFormModal({
     } finally {
       setExtracting(false);
     }
-  }, [sample.vesselCode, sample.sampledAt]);
+  }, [sample.vesselCode, sample.sampledAt, sampleNumber]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -1133,6 +1138,17 @@ function ResultFormModal({
             El sistema va a leer el archivo y rellenar los campos abajo. Vos confirmás antes de guardar.
             También podés <kbd className="px-1 py-0.5 rounded bg-fg/10 border border-fg/20 text-[10px] font-mono">Ctrl+V</kbd> una imagen del portapapeles.
           </p>
+          <div className="space-y-1">
+            <label className={labelCls}>{t("fa.sampleNumberHint")}</label>
+            <input
+              value={sampleNumber}
+              onChange={e => setSampleNumber(e.target.value)}
+              placeholder={t("fa.sampleNumberPh")}
+              disabled={extracting || saving}
+              className={inputCls}
+            />
+            <p className="text-[10px] text-text-industrial/45">{t("fa.sampleNumberHelp")}</p>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <label className="cursor-pointer">
               <span className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 inline-flex items-center gap-1.5">

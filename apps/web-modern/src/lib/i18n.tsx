@@ -1083,6 +1083,9 @@ const dict = {
   "fa.paramLabel":        { es: "Parámetro",                           en: "Parameter",                           pt: "Parâmetro" },
   "fa.uploadLabReport":   { es: "Subí el reporte del laboratorio (PDF, JPG, PNG, foto)", en: "Upload the lab report (PDF, JPG, PNG, photo)", pt: "Envie o relatório do laboratório (PDF, JPG, PNG, foto)" },
   "fa.receivedAt":        { es: "Fecha de recepción",                  en: "Reception date",                      pt: "Data de recebimento" },
+  "fa.sampleNumberHint":  { es: "Número de muestra (opcional)",        en: "Sample number (optional)",            pt: "Número da amostra (opcional)" },
+  "fa.sampleNumberPh":    { es: "Ej. 12345",                           en: "E.g. 12345",                          pt: "Ex. 12345" },
+  "fa.sampleNumberHelp":  { es: "Si el reporte tiene varias muestras del mismo equipo, la IA analiza sólo la que tenga este número.", en: "If the report has several samples for the same equipment, the AI only analyzes the one with this number.", pt: "Se o relatório tiver várias amostras do mesmo equipamento, a IA analisa apenas a que tiver este número." },
   "fa.verdict":           { es: "Veredicto *",                         en: "Verdict *",                           pt: "Veredito *" },
   "fa.summary":           { es: "Resumen del laboratorio",             en: "Lab summary",                         pt: "Resumo do laboratório" },
 

@@ -50,13 +50,14 @@ interface Props {
   onDone: (sampleId: string) => void;
 }
 
-async function extractReport(file: File, vesselCode: string | null): Promise<{ extracted: ExtractedReportApi; file: { url: string; name: string; mime: string } }> {
+async function extractReport(file: File, vesselCode: string | null, sampleNumber: string | null): Promise<{ extracted: ExtractedReportApi; file: { url: string; name: string; mime: string } }> {
   return api.uploadRaw<{ extracted: ExtractedReportApi; file: { url: string; name: string; mime: string } }>(
     "/app/fluid-analyses/extract",
     file,
     {
       "X-Filename": encodeURIComponent(file.name),
       ...(vesselCode ? { "X-Vessel-Code": vesselCode } : {}),
+      ...(sampleNumber && sampleNumber.trim() ? { "X-Sample-Number": encodeURIComponent(sampleNumber.trim()) } : {}),
     },
   );
 }
@@ -74,6 +75,9 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [reportMime, setReportMime] = useState<string | null>(null);
   const [assetIdSuggestionScore, setAssetIdSuggestionScore] = useState(false);
+  // Si el reporte trae el historial de varias muestras del mismo equipo, este
+  // número le dice a la IA cuál analizar en vez de asumir la más reciente.
+  const [sampleNumberHint, setSampleNumberHint] = useState("");
 
   // ── Paso 2: revisión (editable) ──────────────────────────────────────────
   const [assetId, setAssetId] = useState("");
@@ -102,13 +106,17 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
   const [openedWo, setOpenedWo] = useState<{ id: string; workOrderCode: string } | null>(null);
   const [linkFailed, setLinkFailed] = useState(false);
 
+  const [extractNote, setExtractNote] = useState<string | null>(null);
+
   const handleFile = useCallback(async (file: File) => {
     setExtractError(null);
+    setExtractNote(null);
     setExtracting(true);
     try {
-      const { extracted, file: saved } = await extractReport(file, vesselCode || null);
+      const { extracted, file: saved } = await extractReport(file, vesselCode || null, sampleNumberHint);
       setReportUrl(saved.url);
       setReportMime(saved.mime);
+      if (typeof extracted.notes === "string" && extracted.notes.trim()) setExtractNote(extracted.notes.trim());
 
       const nextConf: typeof conf = {};
       if (extracted.fluidType?.value)     { setFluidType(extracted.fluidType.value); nextConf.fluidType = extracted.fluidType.confidence; }
@@ -137,7 +145,7 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
     } finally {
       setExtracting(false);
     }
-  }, [vesselCode, filteredAssets, t]);
+  }, [vesselCode, filteredAssets, sampleNumberHint, t]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -261,6 +269,16 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
               </select>
             </div>
             <p className="text-xs text-text-industrial/60 leading-relaxed">{t("fa.ai.wizard.step1.help")}</p>
+            <div className="space-y-1">
+              <label className={labelCls}>{t("fa.sampleNumberHint")}</label>
+              <input
+                value={sampleNumberHint}
+                onChange={e => setSampleNumberHint(e.target.value)}
+                placeholder={t("fa.sampleNumberPh")}
+                className={inputCls}
+              />
+              <p className="text-[10px] text-text-industrial/45">{t("fa.sampleNumberHelp")}</p>
+            </div>
             <label
               className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
                 vesselCode ? "border-accent/30 hover:border-accent/60 cursor-pointer" : "border-fg/10 opacity-50 cursor-not-allowed"
@@ -286,6 +304,11 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
             )}
             {!extracting && (
               <>
+                {extractNote && !extractError && (
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {extractNote}
+                  </p>
+                )}
                 {extractError && (
                   <p className="text-xs text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {extractError}

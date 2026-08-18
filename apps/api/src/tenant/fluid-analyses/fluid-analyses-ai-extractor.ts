@@ -69,8 +69,9 @@ REGLAS:
 
 IMPORTANTE — reportes con historial de varias muestras:
 Algunos laboratorios entregan una tabla con el HISTORIAL de varias muestras del mismo equipo, cada una con su propia fecha de muestreo (ej: una fila de 2025 y otra de 2026). En ese caso NO combines ni promedies datos de distintas filas.
-- Si el usuario te indica una fecha de referencia, elegí la fila cuya fecha de muestreo coincida o sea la más cercana a esa referencia, y extraé los datos SOLO de esa fila (Desgaste, Contaminantes, Fluido, Aditivos, etc. de esa misma columna/fila).
-- Si no hay fecha de referencia, elegí la fila de muestreo más reciente.
+- Si el usuario te indica un NÚMERO DE MUESTRA, es la instrucción más fuerte: buscá la fila cuyo número/código de muestra coincida EXACTAMENTE con ese valor (puede figurar como "Nº de muestra", "Sample No.", "Muestra", código de barras, etc.) y extraé los datos SOLO de esa fila, ignorando el resto del historial. Si NINGUNA fila coincide con ese número exacto, NO extraigas de otra fila "parecida" ni de la más reciente: dejá los campos de resultado en null y explicá en "notes" que no encontraste ese número de muestra en el documento.
+- Si no te dan número de muestra pero sí una fecha de referencia, elegí la fila cuya fecha de muestreo coincida o sea la más cercana a esa referencia, y extraé los datos SOLO de esa fila (Desgaste, Contaminantes, Fluido, Aditivos, etc. de esa misma columna/fila).
+- Si no hay ni número de muestra ni fecha de referencia, elegí la fila de muestreo más reciente.
 - En "notes" mencioná qué fila elegiste (fecha de muestra y código de muestra si el reporte lo tiene) y que las demás filas del historial fueron ignoradas.`;
 
 const ALLOWED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -81,6 +82,13 @@ interface ExtractInput {
   vesselCode?: string | null;
   /** Fecha de la muestra a completar (ISO), para desambiguar reportes con historial de varias muestras. */
   referenceDate?: string | null;
+  /**
+   * Número/código de muestra a analizar, tal como figura en el reporte del
+   * lab (ej. "Nº de muestra", "Sample No."). Desambiguador más fuerte que
+   * referenceDate: si el usuario lo carga, la IA analiza ÚNICAMENTE esa fila
+   * del historial y no otra, aunque el reporte tenga varias muestras.
+   */
+  sampleNumber?: string | null;
 }
 
 export async function extractFluidReport(
@@ -119,12 +127,15 @@ export async function extractFluidReport(
   const fluidModel = AI_MODEL.fast;
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
-  const referenceDateInstruction = input.referenceDate
+  const sampleNumberInstruction = input.sampleNumber
+    ? `\nNúmero de muestra a analizar: "${input.sampleNumber}". Si el reporte trae un historial de varias muestras, extraé ÚNICAMENTE la fila cuyo número/código de muestra coincida EXACTAMENTE con este valor — ninguna otra, aunque sea la más reciente.`
+    : "";
+  const referenceDateInstruction = (!input.sampleNumber && input.referenceDate)
     ? `\nFecha de referencia de la muestra a completar: ${input.referenceDate}. Si el reporte trae un historial de varias muestras, usá SOLO la fila cuya fecha de muestreo coincida o esté más cerca de esta fecha.`
     : "";
   contentBlocks.push({
     type: "text",
-    text: `${localeUserReminder(locale)}\nExtraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.${referenceDateInstruction}`,
+    text: `${localeUserReminder(locale)}\nExtraé los campos del reporte de análisis adjunto y devolvé únicamente el JSON estructurado.${sampleNumberInstruction}${referenceDateInstruction}`,
   });
 
   // Antes Sonnet 4.6 + 4096. Haiku ya hace OCR de PDF y es ~5× más rápido/barato.
