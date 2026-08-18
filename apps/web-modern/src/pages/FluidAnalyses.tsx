@@ -591,15 +591,22 @@ function SampleDetailModal({
         )}
 
         <div className="flex justify-between items-center gap-2 pt-2 border-t border-fg/10">
-          <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30">
-            <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
-          </button>
-          {canManage && (
-            <button onClick={remove} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/20">
-              <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
+          <div className="flex items-center gap-2">
+            <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30">
+              <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
             </button>
-          )}
+            {canManage && (
+              <button onClick={remove} title={t("common.delete")}
+                className="flex items-center justify-center p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-500/20">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-text-industrial hover:text-fg hover:bg-fg/5">
+            {t("common.close")}
+          </button>
         </div>
       </div>
     </ModalShell>

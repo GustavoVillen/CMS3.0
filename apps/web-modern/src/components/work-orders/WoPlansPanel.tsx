@@ -8,6 +8,7 @@
 // equipo y datos a la orden.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ClipboardList, Loader2, Plus, Search, X } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 
@@ -29,6 +30,7 @@ export function WoPlansPanel({ workOrderId, vesselCode, plans, canEdit, onChange
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<WoPlanRow[]>(plans);
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -134,7 +136,14 @@ export function WoPlansPanel({ workOrderId, vesselCode, plans, canEdit, onChange
         <div className="space-y-1">
           {rows.map(r => (
             <div key={r.id} className="flex items-center gap-2 text-[11px]">
-              <span className="font-mono font-bold text-accent shrink-0">{r.taskCode}</span>
+              <button
+                type="button"
+                onClick={() => navigate(`/maintenance-plans?openId=${r.id}`)}
+                title="Abrir este ítem del plan"
+                className="font-mono font-bold text-accent shrink-0 hover:underline"
+              >
+                {r.taskCode}
+              </button>
               <span className="text-fg truncate">{r.title}</span>
               {r.assetName && <span className="text-text-industrial/50 truncate hidden sm:inline">· {r.assetName}</span>}
               {r.isPrimary && (
