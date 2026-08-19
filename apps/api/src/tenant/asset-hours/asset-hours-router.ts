@@ -27,6 +27,7 @@ interface SaveBody {
   entries?: Array<{
     assetId?: string;
     runningHours?: number | string | null;
+    rpm?: number | string | null;
     readingDate?: string;
     note?: string | null;
   }>;
@@ -78,7 +79,19 @@ export async function handleAssetHoursRoutes(
         if (!Number.isFinite(runningHours)) {
           throw new RouteError(400, "VALIDATION_ERROR", "Las horas deben ser un número.");
         }
-        return { assetId: e.assetId!, runningHours, readingDate, note: e.note ?? null };
+        // El rpm sólo se toca si la planilla lo mandó: ausente = queda como estaba,
+        // vacío o null = se borra.
+        let rpm: number | null | undefined;
+        if (e.rpm !== undefined) {
+          if (e.rpm === null || e.rpm === "") rpm = null;
+          else {
+            rpm = Number(e.rpm);
+            if (!Number.isFinite(rpm)) {
+              throw new RouteError(400, "VALIDATION_ERROR", "El RPM debe ser un número.");
+            }
+          }
+        }
+        return { assetId: e.assetId!, runningHours, rpm, readingDate, note: e.note ?? null };
       });
 
     if (entries.length === 0) {

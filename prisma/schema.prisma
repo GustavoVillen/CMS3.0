@@ -1320,6 +1320,11 @@ model AssetHoursReading {
   assetId         String
   readingDate     DateTime           @db.Date
   runningHours    Float
+  /// RPM del equipo al momento de la lectura. Opcional y sólo informativo: no
+  /// interviene en el vencimiento de planes (eso lo define runningHours). Se
+  /// carga a mano desde la planilla "Horas de Equipos"; las vías automáticas
+  /// (M2, reporte diario) lo dejan en null.
+  rpm             Float?
   source          HoursReadingSource
   /// Id del M2 / Reporte Diario que originó la lectura. Null en las manuales.
   sourceRecordId  String?

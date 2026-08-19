@@ -26,7 +26,10 @@ export interface HoursSheetRow {
   trackDailyReport: boolean;
   lastReading: { runningHours: number; readingDate: string; source: string } | null;
   daysSinceReading: number | null;
-  readingOnDate: { runningHours: number; source: string; note: string | null } | null;
+  /** Última lectura anterior a la fecha de la planilla: contra ella se calcula
+   *  la diferencia de horas de la columna "Dif. horas". */
+  previousReading: { runningHours: number; readingDate: string; source: string } | null;
+  readingOnDate: { runningHours: number; rpm: number | null; source: string; note: string | null } | null;
 }
 
 export interface HoursSheet {
@@ -42,13 +45,13 @@ export const STALE_DAYS = 7;
 /** Salto máximo plausible de horómetro por día calendario. */
 const MAX_HOURS_PER_DAY = 24;
 
-const COL_IDS = ["equipo", "sfi", "last", "date", "stale", "input", "source"] as const;
+const COL_IDS = ["equipo", "sfi", "last", "date", "stale", "input", "delta", "rpm", "source"] as const;
 type ColId = (typeof COL_IDS)[number];
 const DEFAULT_WIDTHS: Record<ColId, number> = {
-  equipo: 240, sfi: 70, last: 110, date: 104, stale: 96, input: 130, source: 120,
+  equipo: 240, sfi: 70, last: 110, date: 104, stale: 96, input: 130, delta: 100, rpm: 100, source: 120,
 };
 const MIN_WIDTHS: Record<ColId, number> = {
-  equipo: 120, sfi: 50, last: 80, date: 84, stale: 70, input: 90, source: 80,
+  equipo: 120, sfi: 50, last: 80, date: 84, stale: 70, input: 90, delta: 80, rpm: 70, source: 80,
 };
 const COL_WIDTHS_LS_KEY = "assetHours.grid.colWidths";
 
@@ -86,27 +89,66 @@ export const AssetHoursGrid: React.FC<Props> = ({
     return map;
   }, [sheet.rows]);
 
+  // El RPM es un dato aparte de la misma lectura: se edita en su propia celda y
+  // viaja con las horas en el mismo guardado.
+  const initialRpmDrafts = useCallback(() => {
+    const map: Record<string, string> = {};
+    for (const row of sheet.rows) {
+      map[row.assetId] = row.readingOnDate?.rpm != null ? String(row.readingOnDate.rpm) : "";
+    }
+    return map;
+  }, [sheet.rows]);
+
   const [drafts, setDrafts] = useState<Record<string, string>>(initialDrafts);
+  const [rpmDrafts, setRpmDrafts] = useState<Record<string, string>>(initialRpmDrafts);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
   // Confirmación pendiente: el aviso ya se mostró y el usuario decide si sigue.
   const [pending, setPending] = useState<{ message: string; note: string } | null>(null);
 
   // Al cambiar de buque o de fecha, los borradores se rehacen desde el servidor.
-  useEffect(() => { setDrafts(initialDrafts()); }, [sheet.vesselCode, sheet.readingDate, initialDrafts]);
+  useEffect(() => {
+    setDrafts(initialDrafts());
+    setRpmDrafts(initialRpmDrafts());
+  }, [sheet.vesselCode, sheet.readingDate, initialDrafts, initialRpmDrafts]);
+
+  const savedHoursOf = (row: HoursSheetRow) =>
+    row.readingOnDate ? String(row.readingOnDate.runningHours) : "";
+  const savedRpmOf = (row: HoursSheetRow) =>
+    row.readingOnDate?.rpm != null ? String(row.readingOnDate.rpm) : "";
+  /** Horas que se van a guardar para la fila: lo tipeado o, si se vació la celda,
+   *  lo que ya estaba guardado para esa fecha (el RPM no puede ir solo). */
+  const effectiveHoursOf = (row: HoursSheetRow) => {
+    const draft = (drafts[row.assetId] ?? "").trim();
+    return draft !== "" ? draft : savedHoursOf(row);
+  };
 
   const dirtyIds = useMemo(() => {
     return sheet.rows
       .filter((row) => {
         const draft = (drafts[row.assetId] ?? "").trim();
-        const saved = row.readingOnDate ? String(row.readingOnDate.runningHours) : "";
-        return draft !== "" && draft !== saved;
+        const hoursChanged = draft !== "" && draft !== savedHoursOf(row);
+        const rpmChanged = (rpmDrafts[row.assetId] ?? "").trim() !== savedRpmOf(row);
+        return hoursChanged || rpmChanged;
       })
       .map((row) => row.assetId);
-  }, [drafts, sheet.rows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drafts, rpmDrafts, sheet.rows]);
 
   const setDraft = (assetId: string, value: string) =>
     setDrafts((prev) => ({ ...prev, [assetId]: value }));
+  const setRpmDraft = (assetId: string, value: string) =>
+    setRpmDrafts((prev) => ({ ...prev, [assetId]: value }));
+
+  /** Horas operadas desde el registro anterior. Se recalcula mientras se tipea. */
+  const deltaOf = (row: HoursSheetRow): number | null => {
+    if (!row.previousReading) return null;
+    const raw = effectiveHoursOf(row);
+    if (raw === "") return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return null;
+    return value - row.previousReading.runningHours;
+  };
 
   // ── Validación blanda: avisa, no bloquea ──────────────────────────────────
   const buildWarnings = (): { message: string; note: string } | null => {
@@ -115,7 +157,9 @@ export const AssetHoursGrid: React.FC<Props> = ({
     for (const assetId of dirtyIds) {
       const row = sheet.rows.find((r) => r.assetId === assetId);
       if (!row) continue;
-      const value = Number((drafts[assetId] ?? "").trim());
+      const raw = effectiveHoursOf(row);
+      if (raw === "") continue;
+      const value = Number(raw);
       if (!Number.isFinite(value)) continue;
       const last = row.lastReading;
       if (!last) continue;
@@ -157,11 +201,16 @@ export const AssetHoursGrid: React.FC<Props> = ({
     try {
       await api.put("/app/pms/asset-hours", {
         readingDate,
-        entries: dirtyIds.map((assetId) => ({
-          assetId,
-          runningHours: Number((drafts[assetId] ?? "").trim()),
-          note,
-        })),
+        entries: dirtyIds.map((assetId) => {
+          const row = sheet.rows.find((r) => r.assetId === assetId)!;
+          const rpmDraft = (rpmDrafts[assetId] ?? "").trim();
+          return {
+            assetId,
+            runningHours: Number(effectiveHoursOf(row)),
+            rpm: rpmDraft === "" ? null : Number(rpmDraft),
+            note,
+          };
+        }),
       });
       onSaved();
     } catch (err) {
@@ -174,8 +223,17 @@ export const AssetHoursGrid: React.FC<Props> = ({
   const save = async () => {
     if (dirtyIds.length === 0) { setAlert(t("assetHours.nothingToSave")); return; }
     for (const assetId of dirtyIds) {
-      const value = Number((drafts[assetId] ?? "").trim());
+      const row = sheet.rows.find((r) => r.assetId === assetId)!;
+      const raw = effectiveHoursOf(row);
+      // El RPM es un dato DE la lectura: sin horas no hay lectura donde guardarlo.
+      if (raw === "") { setAlert(t("assetHours.rpmNeedsHours")); return; }
+      const value = Number(raw);
       if (!Number.isFinite(value) || value < 0) { setAlert(t("assetHours.invalidNumber")); return; }
+      const rpmDraft = (rpmDrafts[assetId] ?? "").trim();
+      if (rpmDraft !== "") {
+        const rpm = Number(rpmDraft);
+        if (!Number.isFinite(rpm) || rpm < 0) { setAlert(t("assetHours.invalidRpm")); return; }
+      }
     }
     const warning = buildWarnings();
     if (warning) { setPending(warning); return; }
@@ -295,6 +353,8 @@ export const AssetHoursGrid: React.FC<Props> = ({
       case "date": return renderHeader(id, t("assetHours.col.readingDate"), "date");
       case "stale": return renderHeader(id, t("assetHours.col.daysSince"), "stale");
       case "input": return renderHeader(id, t("assetHours.col.hoursOnDate"));
+      case "delta": return renderHeader(id, t("assetHours.col.deltaHours"));
+      case "rpm": return renderHeader(id, t("assetHours.col.rpm"));
       case "source": return renderHeader(id, t("assetHours.col.source"));
       default: return null;
     }
@@ -390,6 +450,43 @@ export const AssetHoursGrid: React.FC<Props> = ({
                         value={drafts[row.assetId] ?? ""}
                         onChange={(e) => setDraft(row.assetId, e.target.value)}
                         placeholder={row.lastReading ? fmtHours(row.lastReading.runningHours) : "0"}
+                        className="w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] font-mono text-fg text-right placeholder-text-industrial/25 focus:outline-none focus:border-accent/60 disabled:opacity-50"
+                      />
+                    </td>
+                  )}
+                  {visibleCols.includes("delta") && (() => {
+                    const delta = deltaOf(row);
+                    const prev = row.previousReading;
+                    return (
+                      <td
+                        className="px-2 py-1.5 text-[11px] font-mono text-right"
+                        title={prev
+                          ? t("assetHours.deltaHint")
+                              .replace("{last}", fmtHours(prev.runningHours))
+                              .replace("{date}", prev.readingDate)
+                          : t("assetHours.deltaNone")}
+                      >
+                        {delta == null ? (
+                          <span className="text-text-industrial/40">—</span>
+                        ) : (
+                          <span className={delta < 0 ? "text-amber-500 font-semibold" : "text-text-industrial/70"}>
+                            {delta > 0 ? "+" : ""}{fmtHours(delta)} h
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
+                  {visibleCols.includes("rpm") && (
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step="any"
+                        disabled={readOnly || saving}
+                        value={rpmDrafts[row.assetId] ?? ""}
+                        onChange={(e) => setRpmDraft(row.assetId, e.target.value)}
+                        placeholder={t("assetHours.rpmPlaceholder")}
                         className="w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] font-mono text-fg text-right placeholder-text-industrial/25 focus:outline-none focus:border-accent/60 disabled:opacity-50"
                       />
                     </td>

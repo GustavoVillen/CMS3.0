@@ -22,6 +22,7 @@ interface HistoryEntry {
   id: string;
   readingDate: string;
   runningHours: number;
+  rpm: number | null;
   source: string;
   note: string | null;
   createdAt: string;
@@ -182,6 +183,7 @@ export const AssetHoursPage: React.FC = () => {
                     <tr className="text-left text-[10px] uppercase tracking-wider text-text-industrial/50 border-b border-fg/10">
                       <th className="py-2 pr-2">{t("assetHours.col.readingDate")}</th>
                       <th className="py-2 pr-2 text-right">{t("assetHours.col.lastReading")}</th>
+                      <th className="py-2 pr-2 text-right">{t("assetHours.col.rpm")}</th>
                       <th className="py-2 pr-2">{t("assetHours.col.source")}</th>
                       <th className="py-2 pr-2">{t("assetHours.col.loadedBy")}</th>
                       <th className="py-2">{t("assetHours.col.note")}</th>
@@ -192,6 +194,9 @@ export const AssetHoursPage: React.FC = () => {
                       <tr key={e.id}>
                         <td className="py-1.5 pr-2 whitespace-nowrap">{e.readingDate}</td>
                         <td className="py-1.5 pr-2 font-mono text-right">{e.runningHours.toLocaleString()} h</td>
+                        <td className="py-1.5 pr-2 font-mono text-right text-text-industrial/60">
+                          {e.rpm != null ? e.rpm.toLocaleString() : "—"}
+                        </td>
                         <td className="py-1.5 pr-2 text-text-industrial/60">
                           {e.source === "MANUAL" ? t("assetHours.source.manual")
                             : e.source === "VOYAGE_TANK_REPORT" ? t("assetHours.source.voyage")

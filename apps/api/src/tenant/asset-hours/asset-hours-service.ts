@@ -136,6 +136,54 @@ export async function loadCurrentHoursByAsset(
   return map;
 }
 
+/**
+ * Última lectura ESTRICTAMENTE anterior a una fecha, por equipo. La planilla la
+ * usa para mostrar cuántas horas se operaron desde el registro previo: contra
+ * `loadCurrentHoursByAsset` no serviría, porque cuando ya hay lectura del día
+ * elegido la "última" ES la del día y la diferencia daría siempre cero.
+ */
+export async function loadPreviousHoursByAsset(
+  prisma: PrismaClientLike,
+  tenantId: string,
+  assetIds: string[],
+  beforeDate: Date,
+): Promise<Map<string, CurrentHours>> {
+  const map = new Map<string, CurrentHours>();
+  const ids = [...new Set(assetIds.filter(Boolean))];
+  if (ids.length === 0) return map;
+
+  try {
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+    const tenantPlaceholder = `$${ids.length + 1}`;
+    const datePlaceholder = `$${ids.length + 2}`;
+    const rows = await prisma.$queryRawUnsafe<CurrentHoursRow[]>(
+      `SELECT "assetId", "runningHours", "readingDate", "source"
+       FROM (
+         SELECT "assetId", "runningHours", "readingDate", "source",
+                ROW_NUMBER() OVER (
+                  PARTITION BY "assetId"
+                  ORDER BY "readingDate" DESC, ${SOURCE_PRIORITY_SQL} ASC, "createdAt" DESC
+                ) AS rn
+         FROM "AssetHoursReading"
+         WHERE "assetId" IN (${placeholders})
+           AND "tenantId" = ${tenantPlaceholder}
+           AND "readingDate" < ${datePlaceholder}
+       ) sub WHERE rn = 1`,
+      ...ids, tenantId, beforeDate,
+    );
+    for (const row of rows) {
+      map.set(row.assetId, {
+        runningHours: Number(row.runningHours),
+        readingDate: toIsoDate(row.readingDate),
+        source: row.source,
+      });
+    }
+  } catch (err) {
+    log.error("[asset-hours] carga de lectura anterior falló:", err);
+  }
+  return map;
+}
+
 /** Atajo para los consumidores que sólo necesitan el número. */
 export async function loadCurrentHoursNumberByAsset(
   prisma: PrismaClientLike,
@@ -228,7 +276,7 @@ export async function advanceHoursPlansForAsset(
     },
   });
 
-  let touched = 0;
+  const pending: Array<{ id: string; updates: Record<string, unknown> }> = [];
   for (const plan of plans) {
     if (!plan.frequencyHours || plan.frequencyHours <= 0) continue;
     const updates: Record<string, unknown> = {};
@@ -243,12 +291,14 @@ export async function advanceHoursPlansForAsset(
       updates.windowOpenHours = plan.nextDueHours - plan.frequencyHours * 0.1;
     }
 
-    if (Object.keys(updates).length > 0) {
-      await (prisma as any).maintenancePlan.update({ where: { id: plan.id }, data: updates });
-      touched++;
-    }
+    if (Object.keys(updates).length > 0) pending.push({ id: plan.id, updates });
   }
-  return touched;
+
+  // Los updates son independientes entre planes: en paralelo, no en serie.
+  await Promise.all(pending.map((u) =>
+    (prisma as any).maintenancePlan.update({ where: { id: u.id }, data: u.updates }),
+  ));
+  return pending.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +310,9 @@ export interface HoursReadingInput {
   runningHours: number;
   /** YYYY-MM-DD. Si falta, la resuelve el llamador (planilla = fecha elegida). */
   readingDate: string | Date;
+  /** RPM del equipo en esa lectura. `undefined` = no tocar lo que ya estaba;
+   *  `null` = borrarlo. Sólo lo manda la planilla manual. */
+  rpm?: number | null;
   note?: string | null;
 }
 
@@ -305,6 +358,12 @@ export async function recordHoursReadings(
     if (!Number.isFinite(hours) || hours < 0) {
       throw new RouteError(400, "VALIDATION_ERROR", "Las horas deben ser un número mayor o igual a cero.");
     }
+    if (entry.rpm != null) {
+      const rpm = Number(entry.rpm);
+      if (!Number.isFinite(rpm) || rpm < 0) {
+        throw new RouteError(400, "VALIDATION_ERROR", "El RPM debe ser un número mayor o igual a cero.");
+      }
+    }
   }
 
   // Los equipos tienen que existir, ser del tenant y estar dentro del alcance de
@@ -325,16 +384,19 @@ export async function recordHoursReadings(
   }
 
   const advancePlans = options.advancePlans !== false;
-  let saved = 0;
-  let plansTouched = 0;
 
-  for (const entry of clean) {
+  // Cada fila de la planilla es de un equipo distinto: upsert + avance de planes
+  // en paralelo por fila (antes era todo en serie, fila por fila).
+  const touchedPerEntry = await Promise.all(clean.map(async (entry) => {
     const asset = assetMap.get(entry.assetId)!;
     const readingDate = entry.readingDate instanceof Date
       ? entry.readingDate
       : parseReadingDate(entry.readingDate);
     const runningHours = Number(entry.runningHours);
     const note = entry.note?.trim() || null;
+    // `undefined` deja el rpm como estaba (las vías automáticas no lo mandan);
+    // `null` lo borra cuando el usuario vacía la celda.
+    const rpm = entry.rpm === undefined ? undefined : (entry.rpm === null ? null : Number(entry.rpm));
 
     await (prisma as any).assetHoursReading.upsert({
       where: {
@@ -353,21 +415,22 @@ export async function recordHoursReadings(
         runningHours,
         source: options.source,
         sourceRecordId: options.sourceRecordId ?? null,
+        rpm: rpm ?? null,
         note,
         createdByUserId: session.user.id,
       },
       update: {
         runningHours,
         note,
+        ...(rpm === undefined ? {} : { rpm }),
         sourceRecordId: options.sourceRecordId ?? null,
         updatedByUserId: session.user.id,
       },
     });
-    saved++;
 
     if (advancePlans) {
       try {
-        plansTouched += await advanceHoursPlansForAsset(
+        return await advanceHoursPlansForAsset(
           prisma, tenantId, asset.vesselCode, entry.assetId, runningHours,
         );
       } catch (err) {
@@ -376,7 +439,10 @@ export async function recordHoursReadings(
         log.error("[asset-hours] avance de planes falló:", err);
       }
     }
-  }
+    return 0;
+  }));
+  const saved = clean.length;
+  const plansTouched = touchedPerEntry.reduce((a, b) => a + b, 0);
 
   void publishAudit(prisma, {
     tenantId,
@@ -409,8 +475,11 @@ export interface HoursSheetRow {
   lastReading: CurrentHours | null;
   /** Días entre la última lectura y hoy. Null si nunca se cargó. */
   daysSinceReading: number | null;
+  /** Última lectura anterior a la fecha pedida. Contra ella se calcula, en la
+   *  planilla, la diferencia de horas del registro que se está cargando. */
+  previousReading: CurrentHours | null;
   /** Lectura ya cargada para la fecha pedida (para que la planilla venga rellena). */
-  readingOnDate: { runningHours: number; source: HoursReadingSource; note: string | null } | null;
+  readingOnDate: { runningHours: number; rpm: number | null; source: HoursReadingSource; note: string | null } | null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -454,14 +523,15 @@ export async function listVesselHoursSheet(
   }>;
 
   const assetIds = assets.map((a) => a.id);
-  const [currentMap, onDateRows] = await Promise.all([
+  const [currentMap, previousMap, onDateRows] = await Promise.all([
     loadCurrentHoursByAsset(prisma, tenantId, assetIds),
+    loadPreviousHoursByAsset(prisma, tenantId, assetIds, readingDate),
     assetIds.length > 0
       ? (prisma as any).assetHoursReading.findMany({
           where: { tenantId, assetId: { in: assetIds }, readingDate },
-          select: { assetId: true, runningHours: true, source: true, note: true, createdAt: true },
+          select: { assetId: true, runningHours: true, rpm: true, source: true, note: true, createdAt: true },
         }) as Promise<Array<{
-          assetId: string; runningHours: number; source: HoursReadingSource;
+          assetId: string; runningHours: number; rpm: number | null; source: HoursReadingSource;
           note: string | null; createdAt: Date;
         }>>
       : Promise.resolve([]),
@@ -472,13 +542,14 @@ export async function listVesselHoursSheet(
   const priority: Record<HoursReadingSource, number> = {
     MANUAL: 0, VOYAGE_TANK_REPORT: 1, DAILY_REPORT: 2,
   };
-  const onDateMap = new Map<string, { runningHours: number; source: HoursReadingSource; note: string | null }>();
+  const onDateMap = new Map<string, { runningHours: number; rpm: number | null; source: HoursReadingSource; note: string | null }>();
   for (const row of [...onDateRows].sort((a, b) =>
     priority[a.source] - priority[b.source] || b.createdAt.getTime() - a.createdAt.getTime()
   )) {
     if (!onDateMap.has(row.assetId)) {
       onDateMap.set(row.assetId, {
         runningHours: Number(row.runningHours),
+        rpm: row.rpm == null ? null : Number(row.rpm),
         source: row.source,
         note: row.note,
       });
@@ -503,6 +574,7 @@ export async function listVesselHoursSheet(
       trackDailyReport: asset.trackDailyReport,
       lastReading,
       daysSinceReading,
+      previousReading: previousMap.get(asset.id) ?? null,
       readingOnDate: onDateMap.get(asset.id) ?? null,
     };
   });
@@ -519,6 +591,7 @@ export interface HoursHistoryEntry {
   id: string;
   readingDate: string;
   runningHours: number;
+  rpm: number | null;
   source: HoursReadingSource;
   note: string | null;
   createdAt: string;
@@ -551,8 +624,8 @@ export async function getAssetHoursHistory(
     orderBy: [{ readingDate: "desc" }, { createdAt: "desc" }],
     take: Math.min(Math.max(limit, 1), 200),
   }) as Array<{
-    id: string; readingDate: Date; runningHours: number; source: HoursReadingSource;
-    note: string | null; createdAt: Date; createdByUserId: string;
+    id: string; readingDate: Date; runningHours: number; rpm: number | null;
+    source: HoursReadingSource; note: string | null; createdAt: Date; createdByUserId: string;
   }>;
 
   const userIds = [...new Set(rows.map((r) => r.createdByUserId).filter(Boolean))];
@@ -574,6 +647,7 @@ export async function getAssetHoursHistory(
       id: r.id,
       readingDate: toIsoDate(r.readingDate),
       runningHours: Number(r.runningHours),
+      rpm: r.rpm == null ? null : Number(r.rpm),
       source: r.source,
       note: r.note,
       createdAt: r.createdAt.toISOString(),

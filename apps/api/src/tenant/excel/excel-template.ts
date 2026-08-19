@@ -170,6 +170,7 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "assetName",    header: "assetName",    required: false, width: 32 },
     { key: "readingDate",  header: "readingDate",  required: false, width: 14 },
     { key: "runningHours", header: "runningHours", required: false, width: 14 },
+    { key: "rpm",          header: "rpm",          required: false, width: 10 },
     { key: "source",       header: "source",       required: false, width: 20 },
     { key: "note",         header: "note",         required: false, width: 36 },
     { key: "createdAt",    header: "createdAt",    required: false, width: 20 },

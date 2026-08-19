@@ -192,7 +192,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             {columns.map(col => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${!sortingEnabled || col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
+                className={`px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider ${!sortingEnabled || col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
                 onClick={() => onHeaderClick(col)}
                 aria-sort={sortingEnabled && sortKey === col.key ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
@@ -232,7 +232,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                         onClick={() => onRowClick?.(row)}
                       >
                         {columns.map(col => (
-                          <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
+                          <td key={col.key} className={`px-4 py-2 text-fg/80 ${col.className ?? ""}`}>
                             {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
                           </td>
                         ))}
@@ -248,7 +248,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                   onClick={() => onRowClick?.(row)}
                 >
                   {columns.map(col => (
-                    <td key={col.key} className={`px-4 py-3 text-fg/80 ${col.className ?? ""}`}>
+                    <td key={col.key} className={`px-4 py-2 text-fg/80 ${col.className ?? ""}`}>
                       {col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode}
                     </td>
                   ))}
