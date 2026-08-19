@@ -512,11 +512,16 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // campos que el plan ya tiene definidos (criterios, LOTO, riesgo, RCM,
   // talleres) usando el mismo endpoint y el mismo criterio "no pisar lo que
   // el usuario ya escribió a mano" que usa el modo prefill=plan (ver
-  // useEffect de arriba). La TAREA es la excepción: se reemplaza por la del
-  // plan aunque el usuario ya haya escrito algo — lo que había era sólo el
-  // texto con el que se buscó la coincidencia, no una tarea definitiva. El
-  // título sí se deja como lo escribió el usuario.
+  // useEffect de arriba). Título y tarea son la excepción: se reemplazan por
+  // los del plan aunque el usuario ya haya escrito algo — lo que había era
+  // sólo el texto con el que se buscó la coincidencia, no la identidad
+  // definitiva de la OT.
   const handlePlanLinkConfirm = useCallback(async (planIds: string[]) => {
+    // El título pasa a ser "<código> <título del plan>" — misma identidad con
+    // la que ese ítem se ve en todos lados (Ítems del PDM, PDF, etc.).
+    const primary = planLinkCandidates?.find(c => c.id === planIds[0]);
+    if (primary) setTitle(`${primary.taskCode} ${primary.title}`.trim());
+
     setConfirmedPlanIds(planIds);
     setPlanLinkCandidates(null);
     setPlanLinkMode(null);
@@ -539,7 +544,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     } catch (e) {
       console.error("[plan-link] merged-text failed:", e);
     }
-  }, [acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
+  }, [planLinkCandidates, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
 
   const handlePlanLinkDismiss = useCallback(() => {
     setPlanLinkCandidates(null);
