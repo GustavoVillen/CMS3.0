@@ -95,6 +95,7 @@ const d = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00.000Z`) 
 const USUARIO_POR_BUQUE: Record<string, string> = {
   LTE: "MAQUINASLATERE",
   DCH: "OSCAR-DUARTE",
+  M02: "PEDRO-PONT",
 };
 
 async function main() {
@@ -125,11 +126,23 @@ async function main() {
   // Alta de los equipos del plan en papel que todavia no existen como activo.
   // Idempotente: si ya estan, no se crea nada.
   const declarados = lote.assetCreates ?? [];
-  const yaExisten = new Set((await prisma.asset.findMany({
+  const previos = await prisma.asset.findMany({
     where: { tenantId, vesselCode: VESSEL, assetCode: { in: declarados.map(a => a.assetCode) } },
-    select: { assetCode: true },
-  })).map((a: any) => a.assetCode));
+    select: { id: true, assetCode: true, name: true, deletedAt: true },
+  });
+  const yaExisten = new Set(previos.map((a: any) => a.assetCode));
+  // Un equipo que el plan en papel lleva pero que en el sistema figura dado de
+  // baja se REACTIVA, no se duplica: suele tener ordenes de trabajo colgando y
+  // crear un activo gemelo partiria su historial en dos.
+  const aReactivar = previos.filter((a: any) => a.deletedAt);
   const nuevos = declarados.filter(a => !yaExisten.has(a.assetCode));
+
+  if (aReactivar.length && !DRY) {
+    await prisma.asset.updateMany({
+      where: { id: { in: aReactivar.map((a: any) => a.id) } },
+      data: { deletedAt: null, deletedByUserId: null, updatedByUserId: user.id },
+    });
+  }
 
   if (nuevos.length && !DRY) {
     await prisma.asset.createMany({
@@ -158,6 +171,9 @@ async function main() {
   if (DRY) {
     for (const a of nuevos) {
       byCode.set(a.assetCode, { id: `(nuevo:${a.assetCode})`, assetCode: a.assetCode, name: a.name, sfiCode: a.sfiCode ?? null });
+    }
+    for (const a of aReactivar) {
+      byCode.set(a.assetCode, { id: `(reactivado:${a.assetCode})`, assetCode: a.assetCode, name: a.name, sfiCode: null });
     }
   }
   const faltantes = assetCodes.filter(c => !byCode.has(c));
@@ -235,6 +251,12 @@ async function main() {
   console.log(`── ${lote.titulo} ──`);
   console.log(`Buque ${VESSEL} · usuario ${user.firstName}`);
   console.log(`Corrige ${updates.length} · crea ${creates.length} · deja sin tocar ${sinPar.length}\n`);
+
+  if (aReactivar.length) {
+    console.log("ACTIVOS REACTIVADOS (estaban dados de baja y el plan en papel los lleva)");
+    for (const a of aReactivar) console.log(`  ${a.assetCode.padEnd(18)} ${a.name}`);
+    console.log("");
+  }
 
   if (nuevos.length) {
     console.log("ACTIVOS NUEVOS (no existian en el sistema)");

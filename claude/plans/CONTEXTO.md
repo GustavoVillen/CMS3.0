@@ -1,7 +1,7 @@
 # Alineación de los planes de mantenimiento con las planillas de a bordo
 
-Dos buques del tenant `mercurio`: **LATERE (LTE)** — terminado — y
-**DON CHICUETO (DCH)** — en curso. Mismos criterios en los dos.
+Tres buques del tenant `mercurio`, todos terminados: **LATERE (LTE)**,
+**DON CHICUETO (DCH)** y **MAO 02 (M02)**. Mismos criterios en los tres.
 
 ---
 
@@ -262,3 +262,49 @@ Al normalizar área/responsable se pisaron dos responsables que no eran "Jefe de
 `DCH-8-001` (Electricista) y `DCH-ELEV-02` (Proveedor Externo Calificado). Se restauraron.
 `_tmp-normaliza-area.ts` ahora sólo unifica la variante sin tilde y respeta el resto; los de
 cubierta (3er Oficial) van a área CUBIERTA.
+
+
+---
+
+# MAO 02 (M02) — TERMINADO
+
+**Fuente:** `MisDocs/MAO02/Mao 02 -JULIO-PLAN DE MANTENIMIENTO MAQUINAS 06- 2026.xlsx`
+(una sola hoja, 48 items, 222 tareas). Estado inicial: 97 planes vivos sobre 62 activos.
+
+**Estado final:** 326 planes sobre 79 activos; **218 salen del papel** + 2 de rutina
+consolidada, 108 sin par. 325 con analisis de IA completo.
+Informe: https://claude.ai/code/artifact/2455dca5-9638-45b8-8013-ea2edb7033bf
+
+## Particularidades
+
+- Formato igual al del LATERE (una hoja, equipo en la columna "Descripcion" que se
+  arrastra). Generador: `scripts/_tmp-gen-m02.py`.
+- **El item 41 (carta nautica) arranca con su tarea y nombra el equipo una fila mas abajo.**
+  El generador mira hacia adelante cuando empieza un item numerado sin equipo.
+- Jefe de maquinas: **PEDRO-PONT** (Pedro Pont).
+- Solo 4 tareas de rutina (2 controles diarios de los MMPP, 2 quincenales de baterias de
+  los MMAA) -> 2 planes consolidados en `M02-6-ED-001`.
+
+## ⚠ Segunda trampa del borrado logico: los ACTIVOS
+
+Ademas de los planes (ver DCH), los **activos** dados de baja rompen la carga: existen para
+el unique pero no para la query que filtra `deletedAt: null`, asi que el cargador fallaba con
+"Activos inexistentes". El MAO 02 tenia 14 activos dados de baja el 14-jul.
+`load-vessel-plan.ts` ahora **reactiva** el activo cuando el plan en papel lo lleva, en vez de
+crear un gemelo: cinco de ellos (cocina, termotanque, malacate, libro de aislaciones, calidad
+del combustible) tenian **20 ordenes de trabajo** colgando y duplicarlos habria partido el
+historial.
+
+## ⚠ Sin mapeo de reuso, la carga duplica
+
+La primera pasada daba "corrige 0 · crea 218": los 97 planes del clon habrian quedado al lado
+de los 218 del papel. El generador necesita la tabla `REUSA` (activo -> regex de la tarea ->
+codigo del plan existente). Con ella: 64 corregidos, 154 creados. **Revisar siempre este
+numero antes de aplicar: si "corrige" da 0 y el buque ya tenia planes, falta el mapeo.**
+
+## Pendiente de decision
+
+- **Plan huerfano**: `M02-BAROM-01` sigue activo con su activo (barometro) dado de baja, asi
+  que no se ve en ninguna pantalla de equipo. El papel del MAO 02 no lista barometro.
+- **El electrocompresor NK40** (10 planes) y el **motor auxiliar de puerto** (10) no figuran
+  en el papel del MAO 02.
