@@ -1,7 +1,7 @@
 // Pre-Arrival / Pre-Departure / etc. checklists firmadas (SIRE 2.0 Ch. 4).
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ListChecks, Plus, Loader2, X, CheckCircle2, XCircle, MinusCircle, Settings } from "lucide-react";
+import { ListChecks, Plus, Loader2, X, CheckCircle2, XCircle, MinusCircle, Settings, FileDown } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
@@ -9,6 +9,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { downloadAuthedFile } from "../lib/authed-media";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
@@ -99,6 +100,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Para creación
   const { data: templatesData } = useFetch<{ items: Template[] }>("/app/checklist-templates");
@@ -189,6 +191,16 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
     if (!window.confirm(t("confirm.deleteNamed").replace("{code}", exec.executionCode))) return;
     try { await api.delete(`/app/checklist-executions/${exec.id}`); onSaved(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
+  };
+
+  // Papel del registro: es la evidencia objetiva que pide la auditoría.
+  const downloadPdf = async () => {
+    if (!exec) return;
+    setPdfBusy(true); setErr(null);
+    try {
+      await downloadAuthedFile(`/app/checklist-executions/${exec.id}/pdf`, `${exec.executionCode}-${exec.vesselCode}.pdf`);
+    } catch { setErr(t("error.pdfFailed")); }
+    finally { setPdfBusy(false); }
   };
 
   const saveMeta = async () => {
@@ -329,6 +341,17 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
             )}
           </div>
           <div className="flex gap-2">
+            {!isCreating && (
+              <button
+                onClick={() => { void downloadPdf(); }}
+                disabled={pdfBusy}
+                title={t("common.savePdf")}
+                className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-fg hover:border-fg/20 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                PDF
+              </button>
+            )}
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">Cerrar</button>
             {isCreating ? (
               <button onClick={() => { void handleCreate(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs disabled:opacity-50">

@@ -2,6 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
+import { NO_ASSIGNED_VESSEL_SENTINEL } from "../auth/vessel-scope";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 export interface SpareRequestListFilters {
@@ -27,11 +28,23 @@ export interface UpdateSpareRequestInput {
 }
 
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE", "TECHNICIAN_OPERATOR"].includes(session.user.role);
+  return hasPermission(session, "spareRequest.manage");
 }
 
 function canApprove(session: TenantAccessSession): boolean {
   return hasPermission(session, "spareRequest.approve");
+}
+
+// Vessel scope adaptado a requestedForVesselCode (nullable): las solicitudes
+// generales (sin buque) las ve todo el tenant; las de un buque, solo quien lo
+// tiene asignado. TENANT_ADMIN ve todo.
+function assertVesselAccess(session: TenantAccessSession, vesselCode: string | null): void {
+  if (session.user.role === "TENANT_ADMIN") return;
+  if (!vesselCode) return;
+  const assigned = session.user.assignedVesselCodes ?? [];
+  if (!assigned.includes(vesselCode)) {
+    throw new RouteError(404, "NOT_FOUND", "Solicitud no encontrada.");
+  }
 }
 
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {
@@ -47,6 +60,7 @@ async function getRequestOrThrow(session: TenantAccessSession, id: string) {
   const tenantId = await resolveTenantId(session);
   const req = await prisma.spareRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!req) throw new RouteError(404, "NOT_FOUND", "Solicitud no encontrada.");
+  assertVesselAccess(session, req.requestedForVesselCode);
   return req;
 }
 
@@ -62,7 +76,24 @@ export async function listSpareRequests(session: TenantAccessSession, filters: S
     where.status = filters.status;
   }
   if (filters.priority)   where.priority = filters.priority;
-  if (filters.vesselCode) where.requestedForVesselCode = filters.vesselCode;
+
+  // Vessel scope: mismo criterio fail-closed que vessel-scope.ts, adaptado al
+  // campo nullable requestedForVesselCode (null = solicitud general del tenant).
+  if (session.user.role === "TENANT_ADMIN") {
+    if (filters.vesselCode) where.requestedForVesselCode = filters.vesselCode;
+  } else {
+    const assigned = session.user.assignedVesselCodes ?? [];
+    if (filters.vesselCode) {
+      where.requestedForVesselCode = assigned.includes(filters.vesselCode)
+        ? filters.vesselCode
+        : NO_ASSIGNED_VESSEL_SENTINEL;
+    } else {
+      where.OR = [
+        { requestedForVesselCode: { in: assigned } },
+        { requestedForVesselCode: null },
+      ];
+    }
+  }
 
   return prisma.spareRequest.findMany({
     where,
@@ -85,7 +116,10 @@ export async function createSpareRequest(session: TenantAccessSession, payload: 
   const prisma = getPrismaClient()!;
   const tenantId = await resolveTenantId(session);
 
-  const vesselCode = payload.requestedForVesselCode?.trim().toUpperCase() || "GEN";
+  const requestedVessel = payload.requestedForVesselCode?.trim().toUpperCase() || null;
+  assertVesselAccess(session, requestedVessel);
+
+  const vesselCode = requestedVessel ?? "GEN";
   const yy = String(new Date().getFullYear()).slice(-2);
   const count = await prisma.spareRequest.count({ where: { tenantId, requestCode: { startsWith: `REQ-${vesselCode}-${yy}-` } } });
   const requestCode = `REQ-${vesselCode}-${yy}-${String(count + 1).padStart(4, "0")}`;
@@ -99,7 +133,7 @@ export async function createSpareRequest(session: TenantAccessSession, payload: 
       requestedByUserId: session.user.id,
       requestedAt: new Date(),
       notes: payload.notes ? String(payload.notes).trim() || null : null,
-      requestedForVesselCode: payload.requestedForVesselCode?.trim().toUpperCase() || null,
+      requestedForVesselCode: requestedVessel,
       requestedForAssetId: payload.requestedForAssetId ?? null,
       requestedForLocationId: payload.requestedForLocationId ?? null,
       createdByUserId: session.user.id,
@@ -126,7 +160,11 @@ export async function updateSpareRequest(session: TenantAccessSession, id: strin
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (payload.priority !== undefined) data.priority = payload.priority;
   if (payload.notes !== undefined) data.notes = payload.notes ? String(payload.notes).trim() || null : null;
-  if (payload.requestedForVesselCode !== undefined) data.requestedForVesselCode = payload.requestedForVesselCode?.trim().toUpperCase() || null;
+  if (payload.requestedForVesselCode !== undefined) {
+    const nextVessel = payload.requestedForVesselCode?.trim().toUpperCase() || null;
+    assertVesselAccess(session, nextVessel);
+    data.requestedForVesselCode = nextVessel;
+  }
   if (payload.requestedForAssetId !== undefined) data.requestedForAssetId = payload.requestedForAssetId ?? null;
   if (payload.requestedForLocationId !== undefined) data.requestedForLocationId = payload.requestedForLocationId ?? null;
 

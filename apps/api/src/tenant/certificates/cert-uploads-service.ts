@@ -3,6 +3,7 @@ import { join, extname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
 import { applySecurityHeaders } from "../../http/security-headers";
+import { RouteError } from "../../http/route-error";
 
 const UPLOADS_ROOT = join(process.cwd(), "uploads", "certificates");
 
@@ -18,7 +19,13 @@ export async function saveCertificateSourceFile(
   buffer: Buffer,
 ): Promise<{ url: string; name: string }> {
   const dir = tenantDir(tenantSlug);
-  const ext = extname(originalName) || "";
+  const ext = (extname(originalName) || "").toLowerCase();
+  // Whitelist al GUARDAR (no solo al servir): solo entran los tipos que el
+  // sistema sabe servir de forma segura (los del MIME_MAP).
+  if (!MIME_MAP[ext]) {
+    throw new RouteError(400, "INVALID_FILE_TYPE",
+      `Tipo de archivo no permitido (${ext || "sin extensión"}). Permitidos: ${Object.keys(MIME_MAP).join(", ")}.`);
+  }
   const savedName = randomUUID() + ext;
   const filePath = join(dir, savedName);
 

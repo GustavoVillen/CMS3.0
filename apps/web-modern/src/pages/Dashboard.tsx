@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
@@ -13,8 +13,8 @@ import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
-import { ComplianceDashboard } from "../components/ComplianceDashboard";
 import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
+import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
 import { domToPng } from "modern-screenshot";
 
@@ -132,6 +132,7 @@ export const Dashboard: React.FC = () => {
   };
   const [showInsights, setShowInsights] = React.useState(false);
   const [showHoursEntry, setShowHoursEntry] = React.useState(false);
+  const [showCreateWo, setShowCreateWo] = React.useState(false);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -355,13 +356,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   return (
     <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
-      {/* Compliance score (izquierda) + Exportar HTML (derecha) en la MISMA fila,
-          cada uno en su esquina. El botón va absoluto arriba a la derecha para no
-          angostar las cards de compliance; el min-h reserva su lugar cuando la
-          sección de compliance no se renderiza (no-manager / sin scores). */}
-      <div className="relative min-h-[34px]">
-        <ComplianceDashboard />
-        <div className="absolute top-0 right-0 flex items-center gap-2" data-export-exclude="true">
+      {/* Generar OT (izquierda) + Plan Map / Exportar HTML (derecha) en la
+          misma fila. Antes iba acá el score de compliance por buque. */}
+      <div className="relative min-h-[34px] flex items-center">
+        <button
+          onClick={() => setShowCreateWo(true)}
+          data-export-exclude="true"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
+        >
+          <Wrench className="w-3.5 h-3.5" />
+          {t("dashboard.generateWo")}
+        </button>
+        <div className="ml-auto flex items-center gap-2" data-export-exclude="true">
           <button
             onClick={() => navigate("/plan-map")}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
@@ -381,6 +387,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </button>
         </div>
       </div>
+
+      {showCreateWo && (
+        <CreateWorkOrderModal
+          initialVesselCode={selectedVesselCode ?? undefined}
+          onClose={() => setShowCreateWo(false)}
+          onSaved={() => { setShowCreateWo(false); navigate("/work-orders"); }}
+        />
+      )}
 
       {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
        * (reporte diario, defectos abiertos, AI insights, certs por vencer).

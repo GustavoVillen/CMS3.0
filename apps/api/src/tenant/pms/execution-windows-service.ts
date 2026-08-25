@@ -22,6 +22,7 @@ interface MaintenancePlanDelegate {
   findMany(args: { where: Record<string, unknown>; orderBy?: unknown }): Promise<MaintenancePlanRecord[]>;
   findFirst(args: { where: Record<string, unknown> }): Promise<MaintenancePlanRecord | null>;
   update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<MaintenancePlanRecord>;
+  updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
 }
 
 interface ExecutionWindowsPrismaClient {
@@ -114,20 +115,23 @@ function computeDateExecutionStatus(plan: MaintenancePlanRecord, now: Date): str
   return "FUTURE";
 }
 
-export async function refreshExecutionStatuses(tenantId: string, currentHours?: number): Promise<number> {
+export async function refreshExecutionStatuses(tenantId: string, currentHours?: number, vesselCode?: string): Promise<number> {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) return 0;
   const maintenancePlan = maintenancePlanDelegate(prismaRaw);
 
+  // Con vesselCode se recalcula solo ese buque (Parte Diario / M2). Sin él
+  // (refresh manual del endpoint), todo el tenant.
   const plans = await maintenancePlan.findMany({
-    where: { tenantId, deletedAt: null },
+    where: { tenantId, deletedAt: null, ...(vesselCode ? { vesselCode } : {}) },
     orderBy: { createdAt: "asc" },
   });
 
-  let updated = 0;
   const now = new Date();
-  const hasCurrentHours = typeof currentHours === "number" && Number.isFinite(currentHours);
 
+  // Un updateMany por estado destino en vez de un update por plan: el guardado
+  // del parte no crece linealmente con la cantidad de planes que cambian.
+  const idsByStatus = new Map<string, string[]>();
   for (const plan of plans) {
     if (plan.triggerType === "CONDITION" || plan.triggerType === "EVENT") continue;
     if (plan.status === "INACTIVE") continue;
@@ -142,12 +146,19 @@ export async function refreshExecutionStatuses(tenantId: string, currentHours?: 
     }
 
     if (nextStatus !== plan.executionStatus) {
-      await maintenancePlan.update({
-        where: { id: plan.id },
-        data: { executionStatus: nextStatus },
-      });
-      updated += 1;
+      const ids = idsByStatus.get(nextStatus) ?? [];
+      ids.push(plan.id);
+      idsByStatus.set(nextStatus, ids);
     }
+  }
+
+  let updated = 0;
+  for (const [nextStatus, ids] of idsByStatus) {
+    const res = await maintenancePlan.updateMany({
+      where: { id: { in: ids }, tenantId },
+      data: { executionStatus: nextStatus },
+    });
+    updated += res.count;
   }
 
   return updated;

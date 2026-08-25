@@ -101,9 +101,17 @@ export async function updateWorkOrderItem(
     if (!d) throw new RouteError(400, "VALIDATION_ERROR", "La descripción del ítem es requerida.");
     data.description = d;
   }
-  if (payload.quantity !== undefined) data.quantity = Number(payload.quantity);
+  if (payload.quantity !== undefined) {
+    const q = Number(payload.quantity);
+    if (!Number.isFinite(q)) throw new RouteError(400, "VALIDATION_ERROR", "La cantidad debe ser un número válido.");
+    data.quantity = q;
+  }
   if (payload.unit !== undefined) data.unit = String(payload.unit).trim() || "ud";
-  if (payload.sortOrder !== undefined) data.sortOrder = Number(payload.sortOrder);
+  if (payload.sortOrder !== undefined) {
+    const s = Number(payload.sortOrder);
+    if (!Number.isFinite(s)) throw new RouteError(400, "VALIDATION_ERROR", "El orden debe ser un número válido.");
+    data.sortOrder = s;
+  }
 
   return (prisma as any).workOrderItem.update({ where: { id: itemId }, data });
 }

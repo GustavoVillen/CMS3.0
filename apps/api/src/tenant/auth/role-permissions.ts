@@ -45,6 +45,7 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "sr.approve",               group: "procurement", labelKey: "perm.srApprove" },
   { key: "sr.authorize",             group: "procurement", labelKey: "perm.srAuthorize" },
   { key: "spareRequest.approve",     group: "procurement", labelKey: "perm.spareRequestApprove" },
+  { key: "spareRequest.manage",      group: "procurement", labelKey: "perm.spareRequestManage" },
   { key: "spare.manage",             group: "procurement", labelKey: "perm.spareManage" },
   { key: "stock.manage",             group: "procurement", labelKey: "perm.stockManage" },
   { key: "provider.manage",          group: "procurement", labelKey: "perm.providerManage" },
@@ -110,7 +111,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Capitan / Jefe de Maquinas (a bordo): aprueba a bordo, NO autoriza.
   MAINTENANCE_MANAGER: [
     "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write",
-    "sr.approve", "spareRequest.approve", "spare.manage", "stock.manage", "provider.manage",
+    "sr.approve", "spareRequest.approve", "spareRequest.manage", "spare.manage", "stock.manage", "provider.manage",
     "permit.manage", "externalAudit.manage", "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",
   ],
@@ -118,6 +119,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Tripulante: opera la OT, no la habilita. Carga horómetros (es quien los lee a bordo).
   TECHNICIAN_OPERATOR: [
     "wo.operate", "assetHours.write", "defect.write", "permit.manage", "crew.manage", "certificate.manage",
+    "spareRequest.manage",
   ],
 
   INSPECTOR_COMPLIANCE: [
@@ -126,7 +128,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   ],
 
   PROCUREMENT_STORE: [
-    "spare.manage", "stock.manage", "provider.manage",
+    "spare.manage", "stock.manage", "provider.manage", "spareRequest.manage",
   ],
 
   // Jefe SSMA — perfil de seguridad. Autoriza permisos de trabajo (el pedido que

@@ -48,27 +48,44 @@ export async function enqueueNotificationForRoles(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   params: EnqueueParams,
 ): Promise<number> {
-  const memberships = await prisma.tenantMembership.findMany({
-    where: {
-      tenantId: params.tenantId,
-      status: "ACTIVE",
-      role: { in: [...NOTIFICATION_RECIPIENT_ROLES] },
-      OR: params.vesselCode
-        ? [
-            { role: "TENANT_ADMIN" },
-            { assignedVesselCodes: { has: params.vesselCode } },
-          ]
-        : undefined,
-    },
-    select: { userId: true },
-  });
+  return enqueueNotificationsBatch(prisma, [params]);
+}
 
-  if (memberships.length === 0) return 0;
+/**
+ * Versión batch: los destinatarios dependen solo de (tenant, vessel), así que
+ * se resuelven una vez por buque y todas las notificaciones entran en UN solo
+ * createMany — no una query de memberships + un insert POR FILA como antes.
+ */
+export async function enqueueNotificationsBatch(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  items: EnqueueParams[],
+): Promise<number> {
+  if (items.length === 0) return 0;
 
-  const result = await prisma.notification.createMany({
-    data: memberships.map((m) => ({
+  const vesselCodes = [...new Set(items.map((i) => i.vesselCode))];
+  const recipientsByVessel = new Map<string | null, string[]>();
+  await Promise.all(vesselCodes.map(async (vc) => {
+    const memberships = await prisma.tenantMembership.findMany({
+      where: {
+        tenantId: items[0]!.tenantId,
+        status: "ACTIVE",
+        role: { in: [...NOTIFICATION_RECIPIENT_ROLES] },
+        OR: vc
+          ? [
+              { role: "TENANT_ADMIN" },
+              { assignedVesselCodes: { has: vc } },
+            ]
+          : undefined,
+      },
+      select: { userId: true },
+    });
+    recipientsByVessel.set(vc, memberships.map((m) => m.userId));
+  }));
+
+  const data = items.flatMap((params) =>
+    (recipientsByVessel.get(params.vesselCode) ?? []).map((userId) => ({
       tenantId:        params.tenantId,
-      recipientUserId: m.userId,
+      recipientUserId: userId,
       vesselCode:      params.vesselCode,
       type:            params.type,
       severity:        params.severity,
@@ -78,8 +95,10 @@ export async function enqueueNotificationForRoles(
       sourceType:      params.sourceType,
       sourceId:        params.sourceId,
     })),
-    skipDuplicates: true,
-  });
+  );
+  if (data.length === 0) return 0;
+
+  const result = await prisma.notification.createMany({ data, skipDuplicates: true });
   return result.count;
 }
 
@@ -251,20 +270,20 @@ async function syncOverdueWorkOrders(
     },
     take: 200,
   });
-  for (const wo of overdue) {
+  await enqueueNotificationsBatch(prisma, overdue.map((wo) => {
     const daysOverdue = Math.floor((now.getTime() - (wo.dueDate?.getTime() ?? now.getTime())) / 86_400_000);
-    await enqueueNotificationForRoles(prisma, {
+    return {
       tenantId,
       vesselCode: wo.vesselCode,
-      type:       "WORK_ORDER_OVERDUE",
-      severity:   wo.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
+      type:       "WORK_ORDER_OVERDUE" as NotificationType,
+      severity:   (wo.priority === "CRITICAL" ? "CRITICAL" : "HIGH") as NotificationSeverity,
       title:      `OT vencida — ${wo.workOrderCode}`,
       body:       `${wo.title}${daysOverdue > 0 ? ` · ${daysOverdue}d vencida` : ""}`,
       linkUrl:    `/work-orders?openId=${wo.id}`,
       sourceType: "WORK_ORDER",
       sourceId:   wo.id,
-    });
-  }
+    };
+  }));
 }
 
 async function syncExpiredCertificates(
@@ -284,17 +303,15 @@ async function syncExpiredCertificates(
     },
     take: 200,
   });
-  for (const c of expired) {
-    await enqueueNotificationForRoles(prisma, {
-      tenantId,
-      vesselCode: c.vesselCode,
-      type:       "CERTIFICATE_EXPIRED",
-      severity:   "CRITICAL",
-      title:      `Certificado vencido — ${c.name}`,
-      body:       c.certificateCode ? `Código ${c.certificateCode}` : null,
-      linkUrl:    `/certificates?vesselCode=${encodeURIComponent(c.vesselCode)}&status=EXPIRED`,
-      sourceType: "CERTIFICATE",
-      sourceId:   c.id,
-    });
-  }
+  await enqueueNotificationsBatch(prisma, expired.map((c) => ({
+    tenantId,
+    vesselCode: c.vesselCode,
+    type:       "CERTIFICATE_EXPIRED" as NotificationType,
+    severity:   "CRITICAL" as NotificationSeverity,
+    title:      `Certificado vencido — ${c.name}`,
+    body:       c.certificateCode ? `Código ${c.certificateCode}` : null,
+    linkUrl:    `/certificates?vesselCode=${encodeURIComponent(c.vesselCode)}&status=EXPIRED`,
+    sourceType: "CERTIFICATE",
+    sourceId:   c.id,
+  })));
 }

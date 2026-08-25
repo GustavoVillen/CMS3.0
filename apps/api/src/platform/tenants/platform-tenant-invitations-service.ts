@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { LocaleCode, TenantRole } from "@cms3/shared-types";
 import { RouteError } from "../../http/route-error";
 import { hashOpaqueToken } from "../auth/passwords";
@@ -141,7 +142,7 @@ export async function createPlatformTenantInvitation(
     throw new RouteError(409, "INVITE_USER_EXISTS", "User already exists.");
   }
 
-  const token = `invite-${Math.random().toString(36).slice(2)}`;
+  const token = `invite-${randomBytes(32).toString("hex")}`;
   const tokenHash = hashOpaqueToken(token);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 

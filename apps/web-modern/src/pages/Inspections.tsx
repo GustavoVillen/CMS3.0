@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, FileDown } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { downloadAuthedFile } from "../lib/authed-media";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -437,6 +438,23 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
     }
   }, [editing.execution.id, onSaved, t]);
 
+  // Papel del registro: es la evidencia objetiva que pide la auditoría.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const onDownloadPdf = useCallback(async () => {
+    setPdfBusy(true);
+    setActionError(null);
+    try {
+      await downloadAuthedFile(
+        `/app/pms/inspections/${editing.execution.id}/pdf`,
+        `${editing.execution.executionCode}-${editing.execution.vesselCode}.pdf`,
+      );
+    } catch {
+      setActionError(t("error.pdfFailed"));
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [editing.execution.id, editing.execution.executionCode, editing.execution.vesselCode, t]);
+
   const onCancel = useCallback(async () => {
     setCancelling(true);
     setActionError(null);
@@ -555,6 +573,15 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ editing, onClose, onSav
                 {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : t("insp.cancel")}
               </button>
             )}
+            <button
+              onClick={() => { void onDownloadPdf(); }}
+              disabled={pdfBusy}
+              title={t("common.savePdf")}
+              className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial font-bold text-xs hover:text-fg hover:border-fg/20 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            >
+              {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              PDF
+            </button>
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">
               {t("common.close")}
             </button>

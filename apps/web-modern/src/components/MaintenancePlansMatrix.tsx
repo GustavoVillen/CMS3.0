@@ -27,6 +27,14 @@ interface MatrixRow {
   vesselCode: string;
 }
 
+// Grupo SFI (G0-G9 + "sin grupo") que agrupa las filas de equipo.
+interface MatrixGroup {
+  key: string;
+  order: number;
+  label: string;
+  rows: MatrixRow[];
+}
+
 type Mode = "due" | "last";
 
 interface Props {
@@ -129,18 +137,37 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
     };
   }, [t, monthLabel]);
 
-  const { columns, rows, cellMap } = useMemo(() => {
+  // Grupo SFI de un plan (mismo criterio que los chips G0-G9 de la página:
+  // primer dígito del número de grupo; 600-699 → G6).
+  const groupOf = useMemo(() => {
+    const noneLabel = t("mp.matrix.noGroup");
+    return (n: number | null | undefined): { key: string; order: number; label: string } => {
+      if (n == null) return { key: "none", order: 99, label: noneLabel };
+      const d = n < 10 ? n : Math.floor(n / 100);
+      if (d < 0 || d > 9) return { key: "none", order: 99, label: noneLabel };
+      return { key: `g${d}`, order: d, label: `G${d} · ${t(`sfi.g.${d}` as Parameters<typeof t>[0])}` };
+    };
+  }, [t]);
+
+  const { columns, groups, rowCount, cellMap } = useMemo(() => {
     const bucketByKey = new Map<string, FreqBucket>();
-    const rowByKey = new Map<string, MatrixRow>();
+    const groupByKey = new Map<string, { key: string; order: number; label: string; rowByKey: Map<string, MatrixRow> }>();
     const cells = new Map<string, MaintenancePlan[]>();
 
     for (const p of plans) {
       const b = bucketOf(p);
       if (!bucketByKey.has(b.key)) bucketByKey.set(b.key, b);
 
-      const rowKey = p.assetId || p.assetName || "—";
-      if (!rowByKey.has(rowKey)) {
-        rowByKey.set(rowKey, { key: rowKey, label: p.assetName ?? p.assetId ?? "—", vesselCode: p.vesselCode });
+      const g = groupOf(p.sfiGroupNumber);
+      let grp = groupByKey.get(g.key);
+      if (!grp) { grp = { ...g, rowByKey: new Map() }; groupByKey.set(g.key, grp); }
+
+      // La fila se identifica por grupo + equipo: si un equipo tiene tareas en
+      // dos grupos SFI, aparece bajo cada uno con sus propias tareas.
+      const assetKey = p.assetId || p.assetName || "—";
+      const rowKey = `${g.key}::${assetKey}`;
+      if (!grp.rowByKey.has(rowKey)) {
+        grp.rowByKey.set(rowKey, { key: rowKey, label: p.assetName ?? p.assetId ?? "—", vesselCode: p.vesselCode });
       }
       const cellKey = `${rowKey}::${b.key}`;
       const arr = cells.get(cellKey);
@@ -148,16 +175,20 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
     }
 
     const columns = [...bucketByKey.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
-    const rows = [...rowByKey.values()].sort((a, b) => {
+    const sortRows = (a: MatrixRow, b: MatrixRow) => {
       if (multiVessel && a.vesselCode !== b.vesselCode) {
         const an = vesselNameMap.get(a.vesselCode) ?? a.vesselCode;
         const bn = vesselNameMap.get(b.vesselCode) ?? b.vesselCode;
         return an.localeCompare(bn, undefined, { sensitivity: "base" });
       }
       return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
-    });
-    return { columns, rows, cellMap: cells };
-  }, [plans, bucketOf, multiVessel, vesselNameMap]);
+    };
+    const groups: MatrixGroup[] = [...groupByKey.values()]
+      .sort((a, b) => a.order - b.order)
+      .map(g => ({ key: g.key, order: g.order, label: g.label, rows: [...g.rowByKey.values()].sort(sortRows) }));
+    const rowCount = groups.reduce((n, g) => n + g.rows.length, 0);
+    return { columns, groups, rowCount, cellMap: cells };
+  }, [plans, bucketOf, groupOf, multiVessel, vesselNameMap]);
 
   const displayVal = (p: MaintenancePlan, kind: FreqKind): string => {
     if (mode === "due") {
@@ -255,36 +286,50 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
       });
       hr.height = 26;
 
-      // Filas de datos.
-      rows.forEach((r, ri) => {
-        const row = ws.getRow(3 + ri);
-        let ci = 1;
-        const eq = row.getCell(ci++);
-        eq.value = r.label;
-        eq.font = { bold: true, size: 10, color: { argb: "FF1A3A5A" } };
-        eq.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
-        eq.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-        eq.border = border;
-        if (multiVessel) {
-          const v = row.getCell(ci++);
-          v.value = vesselNameMap.get(r.vesselCode) ?? r.vesselCode;
-          v.font = { size: 9, color: { argb: "FF5A6B7B" } };
-          v.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
-          v.alignment = { horizontal: "left", vertical: "middle" };
-          v.border = border;
-        }
-        columns.forEach(col => {
-          const c = row.getCell(ci++);
-          c.border = border;
-          c.alignment = { horizontal: "center", vertical: "middle" };
-          const inCell = cellMap.get(`${r.key}::${col.key}`);
-          if (!inCell || inCell.length === 0) return;
-          const rep = pickRep(inCell, col);
-          const txt = displayVal(rep, col.kind);
-          if (txt === "—") return;
-          c.value = inCell.length > 1 ? `${txt} (×${inCell.length})` : txt;
-          const st = mode === "due" ? getStatus(rep) : "";
-          c.font = { size: 10, color: { argb: xlsxToneForStatus(st) }, bold: st === "OVERDUE" || st === "DUE" };
+      // Filas de datos, agrupadas por grupo SFI: una banda con el nombre del
+      // grupo (fusionada sobre todas las columnas) y debajo sus equipos.
+      let rowIdx = 3;
+      groups.forEach(g => {
+        ws.mergeCells(rowIdx, 1, rowIdx, nCols);
+        const gc = ws.getCell(rowIdx, 1);
+        gc.value = `${g.label}  (${g.rows.length})`;
+        gc.font = { bold: true, size: 11, color: { argb: "FF1F6FEB" } };
+        gc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDCE9FA" } };
+        gc.alignment = { horizontal: "left", vertical: "middle" };
+        for (let i = 1; i <= nCols; i++) ws.getCell(rowIdx, i).border = border;
+        ws.getRow(rowIdx).height = 20;
+        rowIdx++;
+
+        g.rows.forEach(r => {
+          const row = ws.getRow(rowIdx++);
+          let ci = 1;
+          const eq = row.getCell(ci++);
+          eq.value = r.label;
+          eq.font = { bold: true, size: 10, color: { argb: "FF1A3A5A" } };
+          eq.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
+          eq.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+          eq.border = border;
+          if (multiVessel) {
+            const v = row.getCell(ci++);
+            v.value = vesselNameMap.get(r.vesselCode) ?? r.vesselCode;
+            v.font = { size: 9, color: { argb: "FF5A6B7B" } };
+            v.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF2FB" } };
+            v.alignment = { horizontal: "left", vertical: "middle" };
+            v.border = border;
+          }
+          columns.forEach(col => {
+            const c = row.getCell(ci++);
+            c.border = border;
+            c.alignment = { horizontal: "center", vertical: "middle" };
+            const inCell = cellMap.get(`${r.key}::${col.key}`);
+            if (!inCell || inCell.length === 0) return;
+            const rep = pickRep(inCell, col);
+            const txt = displayVal(rep, col.kind);
+            if (txt === "—") return;
+            c.value = inCell.length > 1 ? `${txt} (×${inCell.length})` : txt;
+            const st = mode === "due" ? getStatus(rep) : "";
+            c.font = { size: 10, color: { argb: xlsxToneForStatus(st) }, bold: st === "OVERDUE" || st === "DUE" };
+          });
         });
       });
 
@@ -340,7 +385,7 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
             <span className="truncate">{t("mp.matrix.title")}</span>
           </h2>
           <p className="text-[11px] text-text-industrial/50">
-            {t("mp.matrix.subtitle").replace("{eq}", String(rows.length)).replace("{cols}", String(columns.length))}
+            {t("mp.matrix.subtitle").replace("{eq}", String(rowCount)).replace("{cols}", String(columns.length)).replace("{groups}", String(groups.length))}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -351,7 +396,7 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => { void exportToExcel(); }}
-            disabled={rows.length === 0 || exporting}
+            disabled={rowCount === 0 || exporting}
             title={t("mp.matrix.exportExcel")}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -363,7 +408,7 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
       </div>
 
       {/* Tabla: ocupa el recuadro central, con scroll interno (H y V) */}
-      {rows.length === 0 ? (
+      {rowCount === 0 ? (
         <p className="text-sm text-text-industrial/50 px-2 py-10 text-center">{t("mp.matrix.empty")}</p>
       ) : (
         <div
@@ -406,22 +451,41 @@ export const MaintenancePlansMatrix: React.FC<Props> = ({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
-                  <tr key={r.key} className="hover:bg-fg/[0.03]">
-                    <td className={`border border-fg/10 px-3 py-1.5 text-left ${cornerBg} sticky left-0 z-10`}>
-                      <span className="block text-xs font-semibold text-fg leading-tight">{r.label}</span>
-                      {multiVessel && (
-                        <span className="block text-[10px] text-accent/70 leading-tight truncate">
-                          {vesselNameMap.get(r.vesselCode) ?? r.vesselCode}
+                {groups.map(g => (
+                  <React.Fragment key={g.key}>
+                    {/* Banda del grupo SFI. La etiqueta va en un span sticky para
+                        que siga visible al scrollear horizontalmente. */}
+                    <tr>
+                      <td
+                        colSpan={columns.length + 1}
+                        className="border border-fg/10 bg-accent/10 px-3 py-1"
+                      >
+                        <span className="sticky left-3 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-accent">
+                          {g.label}
+                          <span className="text-[10px] font-semibold text-text-industrial/50 normal-case">
+                            ({g.rows.length})
+                          </span>
                         </span>
-                      )}
-                    </td>
-                    {columns.map(c => (
-                      <td key={c.key} className="border border-fg/10 px-2 py-1.5 text-center">
-                        {renderCell(cellMap.get(`${r.key}::${c.key}`), c)}
                       </td>
+                    </tr>
+                    {g.rows.map(r => (
+                      <tr key={r.key} className="hover:bg-fg/[0.03]">
+                        <td className={`border border-fg/10 px-3 py-1.5 text-left ${cornerBg} sticky left-0 z-10`}>
+                          <span className="block text-xs font-semibold text-fg leading-tight">{r.label}</span>
+                          {multiVessel && (
+                            <span className="block text-[10px] text-accent/70 leading-tight truncate">
+                              {vesselNameMap.get(r.vesselCode) ?? r.vesselCode}
+                            </span>
+                          )}
+                        </td>
+                        {columns.map(c => (
+                          <td key={c.key} className="border border-fg/10 px-2 py-1.5 text-center">
+                            {renderCell(cellMap.get(`${r.key}::${c.key}`), c)}
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

@@ -3,6 +3,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevDailyReportsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
+import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface DailyReportListFilters {
   vesselCode?: string | null;
@@ -91,7 +92,9 @@ export async function listTenantDailyReports(session: TenantAccessSession, filte
     where.reportDate = parseTenantLocalDate(filters.reportDate, tenantTz);
   }
 
-  return prisma.dailyReport.findMany({ where, orderBy: { reportDate: "desc" } });
+  // Tope defensivo: sin filtros, el historial completo del tenant crece sin
+  // límite. 1000 partes = ~3 años de carga diaria de una flota chica.
+  return prisma.dailyReport.findMany({ where, orderBy: { reportDate: "desc" }, take: 1000 });
 }
 
 export async function getTenantDailyReport(session: TenantAccessSession, id: string) {
@@ -122,12 +125,21 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
 
   const vesselCode = input.vesselCode.trim().toUpperCase();
   const tenantTz = (tenant as any).settings?.timezone ?? "UTC";
-  const year = new Date().getFullYear();
-  const yy = String(year).slice(-2);
-  const rptCount = await prisma.dailyReport.count({ where: { tenantId: tenant.id, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } });
-  const reportCode = `RPT-${vesselCode}-${yy}-${String(rptCount + 1).padStart(4, "0")}`;
+  const yy = String(new Date().getFullYear()).slice(-2);
+  const codePrefix = `RPT-${vesselCode}-${yy}-`;
 
-  return await prisma.dailyReport.create({
+  // Secuencia por MAX del código (no COUNT): con gaps el COUNT repite códigos.
+  // @@unique([tenantId, reportCode]) + retry: dos partes simultáneos no chocan.
+  return await withUniqueRetry(async (attempt) => {
+  const last = await prisma.dailyReport.findFirst({
+    where: { tenantId: tenant.id, vesselCode, reportCode: { startsWith: codePrefix } },
+    orderBy: { reportCode: "desc" },
+    select: { reportCode: true },
+  });
+  const lastSeq = last?.reportCode ? parseInt(last.reportCode.slice(codePrefix.length), 10) || 0 : 0;
+  const reportCode = `${codePrefix}${String(lastSeq + 1 + attempt).padStart(4, "0")}`;
+
+  return prisma.dailyReport.create({
     data: {
       tenantId: tenant.id,
       vesselCode,
@@ -155,6 +167,7 @@ export async function createTenantDailyReport(session: TenantAccessSession, inpu
       createdByUserId: session.user.id,
       updatedByUserId: session.user.id,
     },
+  });
   });
 }
 

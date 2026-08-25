@@ -2196,6 +2196,9 @@ model DailyReport {
   spareUsages         DailySpareUsage[]
   defectEntries       DailyDefectEntry[]
 
+  // Dos partes creados a la vez no pueden compartir código (la app reintenta en P2002).
+  @@unique([tenantId, reportCode])
+
   @@index([tenantId])
   @@index([tenantId, vesselCode])
   @@index([tenantId, vesselCode, reportDate])

@@ -197,7 +197,7 @@ export async function integrateVoyageTankReportHours(
 
   let recalculatedPlansCount = 0;
   try {
-    recalculatedPlansCount = await refreshExecutionStatuses(tenant.id, maxHours);
+    recalculatedPlansCount = await refreshExecutionStatuses(tenant.id, maxHours, report.vesselCode);
   } catch (err) {
     log.error("[voyage-tank integrate] refreshExecutionStatuses failed:", err);
   }

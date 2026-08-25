@@ -116,7 +116,7 @@ export async function confirmAndIntegrateDailyReport(
     return max == null || e.runningHoursTotal > max ? e.runningHoursTotal : max;
   }, undefined);
 
-  const refreshed = await refreshExecutionStatuses(tenant.id, maxHoursEntry);
+  const refreshed = await refreshExecutionStatuses(tenant.id, maxHoursEntry, report.vesselCode);
   result.recalculatedPlansCount = refreshed;
 
   // ── Step 3: Auto-close due items when maintenance entries confirm completion ─
@@ -342,6 +342,7 @@ export async function getDailyReportWithSubEntities(
   if (unlinkedDescriptions.length > 0) {
     const matched = await (prisma as any).defect.findMany({
       where: {
+        tenantId: tenant.id,
         vesselCode: report.vesselCode,
         description: { in: unlinkedDescriptions },
         deletedAt: null,

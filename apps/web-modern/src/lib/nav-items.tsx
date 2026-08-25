@@ -6,6 +6,7 @@ import {
   UsersRound, ScrollText, Gauge, Bot, Handshake,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, Zap, CalendarRange, Fuel,
+  SearchCheck,
   Timer,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
@@ -92,6 +93,7 @@ export const NAV: NavSection[] = [
       { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
       { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
       { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },
+      { icon: SearchCheck,     labelKey: "nav.inspections",      path: "/inspections" },
       { icon: ListChecks,      labelKey: "nav.checklists",       path: "/checklists" },
       { icon: ShieldAlert,     labelKey: "nav.permits",          path: "/permits" },
     ],

@@ -82,10 +82,9 @@ export async function getTmsaMaintenanceEvidence(
   const vessels = await listVesselsInScope(prisma, session, tenant.id, vesselCode);
   if (vessels.length === 0) return { items: [] };
 
-  const items: TmsaVesselEvidence[] = [];
-  for (const v of vessels) {
-    items.push(await computeOne(prisma, tenant.id, v));
-  }
+  // Todos los buques en paralelo: el costo de la pantalla no crece en serie
+  // con el tamaño de la flota.
+  const items = await Promise.all(vessels.map((v) => computeOne(prisma, tenant.id, v)));
   return { items };
 }
 
@@ -114,14 +113,76 @@ async function computeOne(
 
   const groups: TmsaGroup[] = [];
 
-  // ── 4.1 · Cobertura del PMS ────────────────────────────────────────────────
-  {
-    const assetsTotal = await safe(() => p.asset.count({ where: { ...base } }), 0);
+  // Todas las consultas son independientes entre sí: se disparan juntas y se
+  // espera una sola vez (antes eran ~20 idas a la base en serie POR BUQUE).
+  const [
+    assetsTotal, plans, criticalAssets, safetyCritical, criticalOverdueWo,
+    closed, woOpen, woOverdue, woCriticalOverdue, plansOverdue,
+    active, sparesCriticalA, requestsPending, plansWithSampling, analysesOutOfRange,
+    defectsWithRca, defectsGrouped, mocOpen, mocPendingImpl,
+  ] = await Promise.all([
+    safe(() => p.asset.count({ where: { ...base } }), 0),
     // Activos con ≥1 plan activo (distinct assetId).
-    const plans = await safe(
+    safe(
       () => p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true } }) as Promise<Array<{ assetId: string }>>,
       [] as Array<{ assetId: string }>,
-    );
+    ),
+    safe(() => p.asset.count({ where: { ...base, criticality: "A" } }), 0),
+    safe(() => p.asset.count({ where: { ...base, isSafetyCritical: true } }), 0),
+    // OTs abiertas de criticidad A vencidas (mantenimiento de equipo crítico sin ejecutar).
+    safe(() => p.workOrder.count({
+      where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: now } },
+    }), 0),
+    // % OT cerradas en plazo (últimos 90d) — misma lógica que compliance-service.
+    safe(
+      () => p.workOrder.findMany({
+        where: { ...base, status: "CLOSED", completedDate: { gte: d90 } },
+        select: { completedDate: true, dueDate: true },
+      }) as Promise<Array<{ completedDate: Date | null; dueDate: Date | null }>>,
+      [] as Array<{ completedDate: Date | null; dueDate: Date | null }>,
+    ),
+    safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] } } }), 0),
+    safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, dueDate: { lt: now } } }), 0),
+    safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: dCritical } } }), 0),
+    safe(() => p.maintenancePlan.count({ where: { ...base, status: "OVERDUE" } }), 0),
+    safe(
+      () => p.deferral.findMany({
+        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
+        select: { riskLevel: true, decisionAt: true, status: true, targetDate: true, expiredAt: true },
+      }) as Promise<Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>>,
+      [] as Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>,
+    ),
+    // Spares criticidad A con onHand < minStock — misma lógica que sidebar-counts.
+    safe(
+      () => p.spare.findMany({
+        where: { ...base, criticality: "A", status: "ACTIVE" },
+        select: { id: true, minStock: true },
+      }) as Promise<Array<{ id: string; minStock: number }>>,
+      [] as Array<{ id: string; minStock: number }>,
+    ),
+    safe(() => p.spareRequest.count({ where: { tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } } }), 0),
+    safe(() => p.maintenancePlan.count({ where: { ...base, status: "ACTIVE", samplingKind: { not: null } } }), 0),
+    // Análisis de fluidos fuera de rango (verdict crítico) del buque, últimos 90d.
+    safe(() => p.fluidAnalysisResult.count({
+      where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode: vessel.code, deletedAt: null } },
+    }), 0),
+    safe(() => p.defect.count({ where: { ...base, rcaApprovedAt: { not: null } } }), 0),
+    // Activos con defectos recurrentes (≥3 en 60d) — misma lógica que getSmartAlerts.
+    safe(
+      () => p.defect.groupBy({
+        by: ["assetId"],
+        where: { ...base, reportedAt: { gte: d60 } },
+        _count: { _all: true },
+        having: { assetId: { _count: { gte: 3 } } },
+      }),
+      [] as Array<{ assetId: string | null; _count: { _all: number } }>,
+    ),
+    safe(() => p.mocRecord.count({ where: { ...base, status: { notIn: ["REVIEWED", "REJECTED", "CANCELLED"] } } }), 0),
+    safe(() => p.mocRecord.count({ where: { ...base, status: { in: ["APPROVED", "IN_PROGRESS"] } } }), 0),
+  ]);
+
+  // ── 4.1 · Cobertura del PMS ────────────────────────────────────────────────
+  {
     const assetsWithPlan = new Set(plans.map(pl => pl.assetId)).size;
     const assetsWithoutPlan = Math.max(0, assetsTotal - assetsWithPlan);
     const coverage = assetsTotal === 0 ? 1 : assetsWithPlan / assetsTotal;
@@ -142,12 +203,6 @@ async function computeOne(
 
   // ── 4.2 · Equipo crítico ───────────────────────────────────────────────────
   {
-    const criticalAssets = await safe(() => p.asset.count({ where: { ...base, criticality: "A" } }), 0);
-    const safetyCritical = await safe(() => p.asset.count({ where: { ...base, isSafetyCritical: true } }), 0);
-    // OTs abiertas de criticidad A vencidas (mantenimiento de equipo crítico sin ejecutar).
-    const criticalOverdueWo = await safe(() => p.workOrder.count({
-      where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: now } },
-    }), 0);
     const status: TmsaStatus =
       criticalAssets === 0 && safetyCritical === 0 ? "INFO" :
       criticalOverdueWo > 0 ? "GAP" : "OK";
@@ -163,20 +218,8 @@ async function computeOne(
 
   // ── 4.3 · Cumplimiento de mantenimiento planificado ────────────────────────
   {
-    // % OT cerradas en plazo (últimos 90d) — misma lógica que compliance-service.
-    const closed = await safe(
-      () => p.workOrder.findMany({
-        where: { ...base, status: "CLOSED", completedDate: { gte: d90 } },
-        select: { completedDate: true, dueDate: true },
-      }) as Promise<Array<{ completedDate: Date | null; dueDate: Date | null }>>,
-      [] as Array<{ completedDate: Date | null; dueDate: Date | null }>,
-    );
     const closedOnTime = closed.filter(w => w.completedDate && w.dueDate && new Date(w.completedDate) <= new Date(w.dueDate)).length;
     const woComplianceRate = closed.length === 0 ? 1 : closedOnTime / closed.length;
-    const woOpen = await safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] } } }), 0);
-    const woOverdue = await safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, dueDate: { lt: now } } }), 0);
-    const woCriticalOverdue = await safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: dCritical } } }), 0);
-    const plansOverdue = await safe(() => p.maintenancePlan.count({ where: { ...base, status: "OVERDUE" } }), 0);
     let status: TmsaStatus =
       woComplianceRate < WO_COMPLIANCE_GAP ? "GAP" :
       woComplianceRate < WO_COMPLIANCE_ATTENTION ? "ATTENTION" : "OK";
@@ -196,13 +239,6 @@ async function computeOne(
 
   // ── 4.3 · Control de diferimientos ─────────────────────────────────────────
   {
-    const active = await safe(
-      () => p.deferral.findMany({
-        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
-        select: { riskLevel: true, decisionAt: true, status: true, targetDate: true, expiredAt: true },
-      }) as Promise<Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>>,
-      [] as Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>,
-    );
     const total = active.length;
     const withRisk = active.filter(d => d.riskLevel != null && d.riskLevel !== "").length;
     const withApproval = active.filter(d => d.decisionAt != null).length;
@@ -226,19 +262,15 @@ async function computeOne(
 
   // ── 4.4 · Repuestos críticos ───────────────────────────────────────────────
   {
-    // Spares criticidad A con onHand < minStock — misma lógica que sidebar-counts.
+    // El stock disponible depende de la lista de spares: es la única consulta
+    // que queda fuera del Promise.all inicial.
     let sparesCriticalLow = 0;
     try {
-      const spares = await (p.spare.findMany({
-        where: { ...base, criticality: "A", status: "ACTIVE" },
-        select: { id: true, minStock: true },
-      }) as Promise<Array<{ id: string; minStock: number }>>);
-      if (spares.length > 0) {
-        const onHand = await getOnHandMap(prisma, spares.map(s => s.id));
-        sparesCriticalLow = spares.filter(s => (onHand.get(s.id) ?? 0) < s.minStock).length;
+      if (sparesCriticalA.length > 0) {
+        const onHand = await getOnHandMap(prisma, sparesCriticalA.map(s => s.id));
+        sparesCriticalLow = sparesCriticalA.filter(s => (onHand.get(s.id) ?? 0) < s.minStock).length;
       }
     } catch { sparesCriticalLow = 0; }
-    const requestsPending = await safe(() => p.spareRequest.count({ where: { tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } } }), 0);
     const status: TmsaStatus = sparesCriticalLow > 0 ? "GAP" : "OK";
     groups.push({
       key: "criticalSpares", element: "4.4", status,
@@ -251,11 +283,6 @@ async function computeOne(
 
   // ── 4.5 · Monitoreo de condición (CBM) ─────────────────────────────────────
   {
-    const plansWithSampling = await safe(() => p.maintenancePlan.count({ where: { ...base, status: "ACTIVE", samplingKind: { not: null } } }), 0);
-    // Análisis de fluidos fuera de rango (verdict crítico) del buque, últimos 90d.
-    const analysesOutOfRange = await safe(() => p.fluidAnalysisResult.count({
-      where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode: vessel.code, deletedAt: null } },
-    }), 0);
     const status: TmsaStatus =
       plansWithSampling === 0 ? "INFO" :
       analysesOutOfRange > 0 ? "ATTENTION" : "OK";
@@ -270,18 +297,7 @@ async function computeOne(
 
   // ── 4.6 / Elem 8 · Análisis de fallas y feedback ───────────────────────────
   {
-    const defectsWithRca = await safe(() => p.defect.count({ where: { ...base, rcaApprovedAt: { not: null } } }), 0);
-    // Activos con defectos recurrentes (≥3 en 60d) — misma lógica que getSmartAlerts.
-    let recurringAssets = 0;
-    try {
-      const grouped = await p.defect.groupBy({
-        by: ["assetId"],
-        where: { ...base, reportedAt: { gte: d60 } },
-        _count: { _all: true },
-        having: { assetId: { _count: { gte: 3 } } },
-      });
-      recurringAssets = grouped.filter(g => g.assetId).length;
-    } catch { recurringAssets = 0; }
+    const recurringAssets = defectsGrouped.filter(g => g.assetId).length;
     const status: TmsaStatus = recurringAssets > 0 ? "ATTENTION" : "OK";
     groups.push({
       key: "failureAnalysis", element: "8", status,
@@ -294,8 +310,6 @@ async function computeOne(
 
   // ── Elem 7 · Gestión del cambio (MOC) ──────────────────────────────────────
   {
-    const mocOpen = await safe(() => p.mocRecord.count({ where: { ...base, status: { notIn: ["REVIEWED", "REJECTED", "CANCELLED"] } } }), 0);
-    const mocPendingImpl = await safe(() => p.mocRecord.count({ where: { ...base, status: { in: ["APPROVED", "IN_PROGRESS"] } } }), 0);
     groups.push({
       key: "managementOfChange", element: "7", status: "INFO",
       metrics: [

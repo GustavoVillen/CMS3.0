@@ -407,6 +407,73 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
   return { meta, config, logoBuffer };
 }
 
+// ── Registros operativos sin fila TenantForm ─────────────────────────────────
+// Un registro del SGS (checklist firmado, inspección ejecutada) también es
+// documento controlado, pero su número y su título no viven en TenantForm: los
+// trae la plantilla que se ejecutó — el `code`/`title` de la plantilla de
+// inspección, o el nombre del checklist cuando arranca con el código del
+// formulario ("REGI-OPE-3.3 — Lista previa al zarpe"). Esto arma el mismo
+// chrome (logo, empresa y pie Elaborado/Revisado/Aprobado) para esos casos,
+// sin inventar un tipo de formulario nuevo por cada plantilla.
+
+export interface ControlledDocChrome {
+  meta: ControlledDocMeta;
+  logoBuffer: Buffer | null;
+  tenantName: string;
+}
+
+/**
+ * Separa "REGI-OPE-3.3 — Lista previa al zarpe" en código + título. Si el texto
+ * no arranca con un código de formulario, todo el texto es el título.
+ */
+export function splitFormCodeFromTitle(raw: string | null | undefined): { formCode: string; title: string } {
+  const text = String(raw ?? "").trim();
+  const m = text.match(/^([A-Za-z]{2,6}-[A-Za-z]{2,6}-[\d.]+)\s*[-–—:.]?\s*(.*)$/);
+  if (!m || !m[2]?.trim()) return { formCode: "", title: text };
+  return { formCode: m[1].toUpperCase(), title: m[2].trim() };
+}
+
+/** Chrome de documento controlado para un registro que no tiene fila TenantForm. */
+export async function resolveControlledDocChrome(
+  slug: string,
+  docMeta: { formCode?: string | null; title: string; revision?: number | string | null; effectiveFrom?: string | null },
+): Promise<ControlledDocChrome> {
+  let settings: any = null;
+  const prisma = getPrismaClient();
+  if (prisma) {
+    try {
+      const tenant = await (prisma as any).tenant.findUnique({
+        where: { slug },
+        select: {
+          settings: {
+            select: {
+              displayName: true, logoUrl: true, logoUrlLight: true, workOrderPdfTemplate: true,
+              controlledDocPreparedBy: true, controlledDocReviewedBy: true, controlledDocApprovedBy: true,
+            },
+          },
+        },
+      });
+      settings = tenant?.settings ?? null;
+    } catch { /* non-blocking → defaults */ }
+  }
+
+  let logoBuffer: Buffer | null = null;
+  try { logoBuffer = await resolveTenantLogo(slug, settings?.logoUrl, settings?.logoUrlLight); } catch { /* */ }
+
+  const meta: ControlledDocMeta = {
+    style: String(settings?.workOrderPdfTemplate ?? "").startsWith("MERCURIO") ? "MERCURIO" : "STANDARD",
+    formCode: (docMeta.formCode ?? "").trim(),
+    title: docMeta.title.trim(),
+    revision: docMeta.revision ?? 1,
+    effectiveFrom: (docMeta.effectiveFrom ?? "").trim(),
+    preparedBy: settings?.controlledDocPreparedBy ?? MERCURIO_FOOTER.preparedBy,
+    reviewedBy: settings?.controlledDocReviewedBy ?? MERCURIO_FOOTER.reviewedBy,
+    approvedBy: settings?.controlledDocApprovedBy ?? MERCURIO_FOOTER.approvedBy,
+  };
+
+  return { meta, logoBuffer, tenantName: settings?.displayName ?? slug };
+}
+
 // ── Generacion de codigo (idempotente + atomica por tenant) ──────────────────
 function renderCodePattern(pattern: string, vars: { seq: number; vesselShort: string; year: number }): string {
   return pattern.replace(/\{(\w+)(?::([0#]+))?\}/g, (_m, key: string, pad?: string) => {

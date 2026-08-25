@@ -50,7 +50,13 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
   const [loading, setLoading] = useState<boolean>(!!effectivePath);
   const [error, setError]     = useState<string | null>(null);
 
+  // Token de secuencia: si mientras una request estaba en vuelo cambió el path
+  // (filtro, buque) o se pidió otra recarga, esa respuesta llega tarde y se
+  // descarta — una respuesta vieja nunca pisa a una más nueva.
+  const seqRef = useRef(0);
+
   const load = useCallback(async (force = false) => {
+    const seq = ++seqRef.current;
     if (!effectivePath) {
       setData(null);
       setError(null);
@@ -84,13 +90,15 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
 
     try {
       const res = await promise as T;
+      if (seqRef.current !== seq) return;
       setData(res);
       setError(null);
     } catch (err) {
+      if (seqRef.current !== seq) return;
       // Si ya mostramos cache, no pisamos con error (revalidación silenciosa).
       if (!showFromCache) setError(err instanceof ApiError ? err.message : "Error de carga");
     } finally {
-      setLoading(false);
+      if (seqRef.current === seq) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectivePath, ...deps]);

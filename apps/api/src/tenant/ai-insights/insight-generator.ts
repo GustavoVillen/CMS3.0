@@ -497,22 +497,21 @@ async function collectBacklogRiskInsights(
   drafts: InsightDraft[],
   today: Date,
 ) {
-  // Count overdue PLANNED work orders per vessel
-  const vessels = await prisma.vessel.findMany({
-    where:  { tenantId, deletedAt: null },
-    select: { code: true },
-  });
+  // Una sola agregación por buque (antes: un count por buque en serie).
+  const grouped = await (prisma as any).workOrder.groupBy({
+    by: ["vesselCode"],
+    where: {
+      tenantId,
+      deletedAt: null,
+      status:    "PLANNED",
+      dueDate:   { lt: today },
+    },
+    _count: { _all: true },
+  }) as Array<{ vesselCode: string; _count: { _all: number } }>;
 
-  for (const vessel of vessels) {
-    const overdueCount = await prisma.workOrder.count({
-      where: {
-        tenantId,
-        vesselCode: vessel.code,
-        deletedAt:  null,
-        status:     "PLANNED",
-        dueDate:    { lt: today },
-      },
-    });
+  for (const g of grouped) {
+    const vessel = { code: g.vesselCode };
+    const overdueCount = g._count._all;
 
     if (overdueCount > 5) {
       drafts.push({
@@ -709,31 +708,30 @@ async function collectInspectionFailureInsights(
   const window90 = new Date(now);
   window90.setDate(window90.getDate() - 90);
 
-  const vessels = await prisma.vessel.findMany({
-    where:  { tenantId, deletedAt: null },
-    select: { code: true },
-  });
+  // Una sola agregación por buque+resultado (antes: 2 counts por buque en serie).
+  const grouped = await (prisma as any).inspection.groupBy({
+    by: ["vesselCode", "result"],
+    where: {
+      tenantId,
+      deletedAt:   null,
+      result:      { in: ["FAIL", "CONDITIONAL"] },
+      completedAt: { gte: window90 },
+    },
+    _count: { _all: true },
+  }) as Array<{ vesselCode: string; result: string; _count: { _all: number } }>;
 
-  for (const vessel of vessels) {
-    const failCount = await prisma.inspection.count({
-      where: {
-        tenantId,
-        vesselCode:   vessel.code,
-        deletedAt:    null,
-        result:       "FAIL",
-        completedAt:  { gte: window90 },
-      },
-    });
+  const byVessel = new Map<string, { fail: number; conditional: number }>();
+  for (const g of grouped) {
+    const entry = byVessel.get(g.vesselCode) ?? { fail: 0, conditional: 0 };
+    if (g.result === "FAIL") entry.fail += g._count._all;
+    else entry.conditional += g._count._all;
+    byVessel.set(g.vesselCode, entry);
+  }
 
-    const conditionalCount = await prisma.inspection.count({
-      where: {
-        tenantId,
-        vesselCode:   vessel.code,
-        deletedAt:    null,
-        result:       "CONDITIONAL",
-        completedAt:  { gte: window90 },
-      },
-    });
+  for (const [code, counts] of byVessel) {
+    const vessel = { code };
+    const failCount = counts.fail;
+    const conditionalCount = counts.conditional;
 
     if (failCount >= 2 || conditionalCount >= 3) {
       drafts.push({
@@ -957,38 +955,32 @@ async function collectFuelConsumptionInsights(
   const day60 = new Date(now);
   day60.setDate(day60.getDate() - 60);
 
-  const vessels = await prisma.vessel.findMany({
-    where:  { tenantId, deletedAt: null },
-    select: { code: true },
+  // Una sola query para los 60 días de todos los buques; el reparto
+  // reciente/anterior se hace en memoria (antes: 2 findMany por buque en serie).
+  const rows = await prisma.dailyReport.findMany({
+    where: {
+      tenantId,
+      deletedAt:          null,
+      reportDate:         { gte: day60 },
+      fuelConsumedLiters: { gt: 0 },
+    },
+    select: { vesselCode: true, reportDate: true, fuelConsumedLiters: true },
   });
 
-  for (const vessel of vessels) {
-    const recent = await prisma.dailyReport.findMany({
-      where: {
-        tenantId,
-        vesselCode:       vessel.code,
-        deletedAt:        null,
-        reportDate:       { gte: day30 },
-        fuelConsumedLiters: { gt: 0 },
-      },
-      select: { fuelConsumedLiters: true },
-    });
+  const byVessel = new Map<string, { recent: number[]; prior: number[] }>();
+  for (const r of rows) {
+    const entry = byVessel.get(r.vesselCode) ?? { recent: [], prior: [] };
+    if (r.reportDate >= day30) entry.recent.push(r.fuelConsumedLiters ?? 0);
+    else entry.prior.push(r.fuelConsumedLiters ?? 0);
+    byVessel.set(r.vesselCode, entry);
+  }
 
-    const prior = await prisma.dailyReport.findMany({
-      where: {
-        tenantId,
-        vesselCode:       vessel.code,
-        deletedAt:        null,
-        reportDate:       { gte: day60, lt: day30 },
-        fuelConsumedLiters: { gt: 0 },
-      },
-      select: { fuelConsumedLiters: true },
-    });
-
+  for (const [code, { recent, prior }] of byVessel) {
+    const vessel = { code };
     if (recent.length < 3 || prior.length < 3) continue;
 
-    const avgRecent = recent.reduce((s, r) => s + (r.fuelConsumedLiters ?? 0), 0) / recent.length;
-    const avgPrior  = prior.reduce((s, r) => s + (r.fuelConsumedLiters ?? 0), 0) / prior.length;
+    const avgRecent = recent.reduce((s, v) => s + v, 0) / recent.length;
+    const avgPrior  = prior.reduce((s, v) => s + v, 0) / prior.length;
 
     if (avgPrior <= 0) continue;
 

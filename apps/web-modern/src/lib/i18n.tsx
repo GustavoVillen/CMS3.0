@@ -1778,7 +1778,8 @@ const dict = {
   "mp.page.expandAll":         { es: "Expandir todo",          en: "Expand all",            pt: "Expandir tudo" },
   "mp.page.collapseAll":       { es: "Colapsar todo",          en: "Collapse all",          pt: "Recolher tudo" },
   "mp.matrix.title":           { es: "Matriz de vencimientos por equipo", en: "Due-date matrix by equipment", pt: "Matriz de vencimentos por equipamento" },
-  "mp.matrix.subtitle":        { es: "{eq} equipos · {cols} periodicidades", en: "{eq} equipment · {cols} periodicities", pt: "{eq} equipamentos · {cols} periodicidades" },
+  "mp.matrix.subtitle":        { es: "{eq} equipos · {groups} grupos · {cols} periodicidades", en: "{eq} equipment · {groups} groups · {cols} periodicities", pt: "{eq} equipamentos · {groups} grupos · {cols} periodicidades" },
+  "mp.matrix.noGroup":         { es: "Sin grupo SFI",           en: "No SFI group",          pt: "Sem grupo SFI" },
   "mp.matrix.equipmentCol":    { es: "Equipo o Sistema",       en: "Equipment or System",   pt: "Equipamento ou Sistema" },
   "mp.matrix.modeDue":         { es: "Fecha de vencimiento",   en: "Due date",              pt: "Data de vencimento" },
   "mp.matrix.modeLast":        { es: "Fecha de última ejecución", en: "Last execution date", pt: "Data da última execução" },
@@ -2145,6 +2146,7 @@ const dict = {
   "nearMiss.cat.UNSAFE_CONDITION":   { es: "Condición insegura",  en: "Unsafe condition",   pt: "Condição insegura" },
 
   // ─── Dashboard — Export, Crew, Permits ──────────────────────────────────────
+  "dashboard.generateWo":         { es: "Generar OT",           en: "Generate WO",         pt: "Gerar OS" },
   "dashboard.exportHtml":         { es: "Exportar HTML",        en: "Export HTML",         pt: "Exportar HTML" },
   "dashboard.exportHtmlTitle":    { es: "Descargar snapshot HTML del dashboard (imprimible)", en: "Download dashboard HTML snapshot (printable)", pt: "Baixar snapshot HTML do painel (imprimível)" },
   "dashboard.exportHtmlError":    { es: "No se pudo exportar el dashboard.", en: "Could not export the dashboard.", pt: "Não foi possível exportar o painel." },

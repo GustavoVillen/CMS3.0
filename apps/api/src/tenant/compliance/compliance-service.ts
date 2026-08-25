@@ -130,10 +130,8 @@ export async function getComplianceScores(session: TenantAccessSession, vesselCo
   const vessels = await listVesselsInScope(prisma, session, tenant.id, vesselCode);
   if (vessels.length === 0) return { items: [] };
 
-  const items: ComplianceScore[] = [];
-  for (const v of vessels) {
-    items.push(await computeOne(prisma, tenant.id, v));
-  }
+  // Todos los buques en paralelo: el costo no crece en serie con la flota.
+  const items = await Promise.all(vessels.map((v) => computeOne(prisma, tenant.id, v)));
   return { items };
 }
 
@@ -159,11 +157,33 @@ async function computeOne(
     crewRestHours: { count(a: { where: Record<string, unknown> }): Promise<number> };
   };
 
+  // Las 8 consultas son independientes: se disparan juntas (antes eran 8 idas
+  // a la base en serie por buque).
+  const [closedWos, drillsDone, requirements, certsTotal, certsActive, findingsOpen, criticalDefectsOpen, restViolations] = await Promise.all([
+    p.workOrder.findMany({
+      where: { ...base, status: "CLOSED", completedDate: { gte: d90 } },
+      select: { completedDate: true, dueDate: true, status: true } as never,
+    }),
+    p.drill.count({
+      where: { tenantId, vesselCode: vessel.code, deletedAt: null, status: "COMPLETED", completedDate: { gte: d90 } },
+    }),
+    p.drillRequirement.findMany({
+      where: { tenantId, enabled: true, deletedAt: null },
+    }),
+    p.certificate.count({ where: { ...base } }),
+    p.certificate.count({ where: { ...base, status: "ACTIVE" } }),
+    p.externalAuditFinding.count({
+      where: { tenantId, vesselCode: vessel.code, status: { in: ["OPEN", "IN_PROGRESS"] } },
+    }),
+    p.defect.count({
+      where: { ...base, severity: "CRITICAL", status: { notIn: ["RESOLVED", "CLOSED"] } },
+    }),
+    p.crewRestHours.count({
+      where: { tenantId, vesselCode: vessel.code, hasViolation: true, recordDate: { gte: d30 } },
+    }),
+  ]);
+
   // --- 1) OT compliance: cerradas a tiempo / cerradas totales (últimos 90d) ---
-  const closedWos = await p.workOrder.findMany({
-    where: { ...base, status: "CLOSED", completedDate: { gte: d90 } },
-    select: { completedDate: true, dueDate: true, status: true } as never,
-  });
   const closedTotal = closedWos.length;
   const closedOnTime = closedWos.filter(w => {
     if (!w.completedDate || !w.dueDate) return false;
@@ -172,14 +192,7 @@ async function computeOne(
   const woComplianceRate = closedTotal === 0 ? 1 : closedOnTime / closedTotal;
 
   // --- 2) Drill compliance: realizados vs esperados según frecuencias ---
-  const drillsDone = await p.drill.count({
-    where: { tenantId, vesselCode: vessel.code, deletedAt: null, status: "COMPLETED", completedDate: { gte: d90 } },
-  });
-  // Cargar requirements del tenant que aplican a este vessel:
   // applicableVesselCodes vacío = aplica a todos los vessels.
-  const requirements = await p.drillRequirement.findMany({
-    where: { tenantId, enabled: true, deletedAt: null },
-  });
   let drillsExpected = 0;
   for (const r of requirements) {
     const codes = Array.isArray(r.applicableVesselCodes) ? r.applicableVesselCodes as string[] : [];
@@ -190,14 +203,9 @@ async function computeOne(
   const drillCompliance = clamp01(safeDiv(drillsDone, drillsExpected));
 
   // --- 3) Cert compliance: vigentes / total ---
-  const certsTotal = await p.certificate.count({ where: { ...base } });
-  const certsActive = await p.certificate.count({ where: { ...base, status: "ACTIVE" } });
   const certVigent = safeDiv(certsActive, certsTotal);
 
   // --- 4) Findings PSC abiertos (penalizar) ---
-  const findingsOpen = await p.externalAuditFinding.count({
-    where: { tenantId, vesselCode: vessel.code, status: { in: ["OPEN", "IN_PROGRESS"] } },
-  });
   // 0 findings = 1, 1-2 findings = 0.7, 3-4 = 0.4, 5+ = 0.1
   const noFindingsPenalty =
     findingsOpen === 0 ? 1 :
@@ -206,9 +214,6 @@ async function computeOne(
     0.1;
 
   // --- 5) Defectos CRITICAL abiertos (penalizar) ---
-  const criticalDefectsOpen = await p.defect.count({
-    where: { ...base, severity: "CRITICAL", status: { notIn: ["RESOLVED", "CLOSED"] } },
-  });
   const noCriticalDefects =
     criticalDefectsOpen === 0 ? 1 :
     criticalDefectsOpen === 1 ? 0.6 :
@@ -216,9 +221,6 @@ async function computeOne(
     0.1;
 
   // --- 6) Violaciones STCW últimos 30d (penalizar) ---
-  const restViolations = await p.crewRestHours.count({
-    where: { tenantId, vesselCode: vessel.code, hasViolation: true, recordDate: { gte: d30 } },
-  });
   const noRestHoursViolations =
     restViolations === 0 ? 1 :
     restViolations <= 2 ? 0.7 :

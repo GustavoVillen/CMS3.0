@@ -20,6 +20,7 @@ import {
   startInspectionExecution,
   submitInspectionResults,
 } from "./inspection-executions-service";
+import { buildInspectionExecutionPdf } from "./inspection-execution-pdf-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -112,6 +113,19 @@ export async function handleInspectionsRoutes(
   if (method === "POST" && /^\/app\/pms\/inspections\/[^/]+\/cancel$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await cancelInspectionExecution(session, id));
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/pms\/inspections\/[^/]+\/pdf$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const exec = await getInspectionExecution(session, id) as unknown as { executionCode: string; vesselCode: string };
+    const buffer = await buildInspectionExecutionPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${exec.executionCode}-${exec.vesselCode}.pdf"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

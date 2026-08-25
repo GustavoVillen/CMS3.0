@@ -3,7 +3,7 @@
 //
 // Transcripción del papel — los textos se imprimen tal cual porque son parte del
 // documento controlado: cambiarlos altera el formulario auditable. Los originales
-// están en MisDocs/FormsMerc/*.docm.
+// están en MisDocs/MercurioSGS/FormsMerc/*.docm.
 //
 // Sin lógica: sólo datos que consume template-mercurio.ts.
 

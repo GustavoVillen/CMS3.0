@@ -32,6 +32,7 @@ import {
   listTemplates, getTemplate, createTemplate, updateTemplate,
   listExecutions, getExecution, createExecution, updateExecution, deleteExecution, setResponse,
 } from "./checklists/checklists-service";
+import { buildChecklistExecutionPdf } from "./checklists/checklist-pdf-service";
 import {
   getMatrix, upsertCapability, deleteCapability,
 } from "./crew-matrix/crew-matrix-service";
@@ -2098,6 +2099,19 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const body = await readJsonBody(request) as Parameters<typeof createExecution>[1];
     sendJson(response, 201, await createExecution(session, body));
+    return true;
+  }
+  if (method === "GET" && /^\/app\/checklist-executions\/[^/]+\/pdf$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const exec = await getExecution(session, id) as unknown as { executionCode: string; vesselCode: string };
+    const buffer = await buildChecklistExecutionPdf(session, id);
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${exec.executionCode}-${exec.vesselCode}.pdf"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
   if (/^\/app\/checklist-executions\/[^/]+\/responses$/.test(url.pathname)) {
