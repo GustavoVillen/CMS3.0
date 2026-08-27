@@ -280,6 +280,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [planLinkCandidates, setPlanLinkCandidates] = useState<PlanLinkCandidate[] | null>(null);
   const [planLinkMode, setPlanLinkMode] = useState<"confirm" | "choose" | null>(null);
   const [confirmedPlanIds, setConfirmedPlanIds] = useState<string[]>([]);
+  // Estado del botón "Detectar" (manual) y del intento automático: antes esto
+  // corría en silencio y si no encontraba nada no se enteraba nadie — por eso
+  // parecía que "a veces no funcionaba". Ahora siempre queda un rastro visible.
+  const [detectingPlanLink, setDetectingPlanLink] = useState(false);
+  const [planLinkNoMatch, setPlanLinkNoMatch] = useState(false);
   // Guarda el assetId con el que ya se sugirió, para volver a sugerir si el
   // usuario cambia de equipo (a diferencia de la sugerencia de activo, que
   // corre una sola vez).
@@ -452,12 +457,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     if (prefill || !assetId || !canLinkPlan) return;
     const taskDesc = title.trim() || description.trim();
     if (!taskDesc) return;
+    setDetectingPlanLink(true);
+    setPlanLinkNoMatch(false);
     try {
       const plansRes = await api.get<{ items: PlanCandidateApi[] }>(
         `/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=100`,
       );
       const items = plansRes.items ?? [];
-      if (items.length === 0) return;
+      if (items.length === 0) { setPlanLinkNoMatch(true); return; }
       const res = await api.post<{ matches: { id: string; confidence: "high" | "medium" | "low" }[] }>(
         "/app/pms/work-orders/suggest-plan-links",
         {
@@ -471,7 +478,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         },
       );
       const matches = res.matches ?? [];
-      if (matches.length === 0) return;
+      if (matches.length === 0) { setPlanLinkNoMatch(true); return; }
       const candidates: PlanLinkCandidate[] = [];
       for (const m of matches) {
         const plan = items.find(p => p.id === m.id);
@@ -481,12 +488,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           nextDueDate: plan.nextDueDate, nextDueHours: plan.nextDueHours, confidence: m.confidence,
         });
       }
-      if (candidates.length === 0) return;
+      if (candidates.length === 0) { setPlanLinkNoMatch(true); return; }
       const highs = candidates.filter(c => c.confidence === "high");
       setPlanLinkCandidates(candidates);
       setPlanLinkMode(candidates.length === 1 && highs.length === 1 ? "confirm" : "choose");
     } catch (e) {
       console.error("[suggest-plan-links] failed:", e);
+      setPlanLinkNoMatch(true);
+    } finally {
+      setDetectingPlanLink(false);
     }
   }, [prefill, assetId, canLinkPlan, title, description, assets]);
 
@@ -507,6 +517,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     }, 800);
     return () => clearTimeout(timer);
   }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks]);
+
+  // El aviso de "sin coincidencias" queda desactualizado en cuanto el usuario
+  // sigue editando el título/tarea: se limpia para no sugerir que el texto
+  // nuevo tampoco tiene plan, cuando en realidad todavía no se volvió a buscar.
+  useEffect(() => { setPlanLinkNoMatch(false); }, [title, description]);
 
   // Al confirmar, el usuario dijo "esta OT ES este ítem del plan": hereda los
   // campos que el plan ya tiene definidos (criterios, LOTO, riesgo, RCM,
@@ -557,6 +572,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     setConfirmedPlanIds([]);
     setPlanLinkCandidates(null);
     setPlanLinkMode(null);
+    setPlanLinkNoMatch(false);
   }, [assetId]);
 
   // IA: escanear una OT llenada a mano en papel (foto o PDF) y precompletar el
@@ -1012,6 +1028,29 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 placeholder={t("wo.modal.titlePlaceholder")}
               />
             </div>
+
+            {/* Detección de plan: corre sola una vez por equipo (silenciosa si
+                no encuentra nada), pero acá se puede repetir a mano en
+                cualquier momento — típicamente después de terminar de escribir
+                el título, que es cuando el intento automático ya pasó. */}
+            {!prefill && canLinkPlan && (
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => { void handleSuggestPlanLinks(); }}
+                  disabled={detectingPlanLink || !assetId || !(title.trim() || description.trim())}
+                  title={!assetId ? t("wo.ai.planLink.detectNeedsEquipment") : !(title.trim() || description.trim()) ? t("wo.ai.completeTitleFirst") : t("wo.ai.planLink.detectTooltip")}
+                  className={`flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors disabled:opacity-40 ${!detectingPlanLink && assetId && (title.trim() || description.trim()) ? "hover:text-fg cursor-pointer" : ""}`}
+                >
+                  {detectingPlanLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {t("wo.ai.planLink.detectButton")}
+                </button>
+                {planLinkNoMatch && (
+                  <p className="text-[10px] text-text-industrial/50">{t("wo.ai.planLink.noMatch")}</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               {/* Clic en el rótulo = la IA propone las tareas a partir del
                   equipo y el título (mismo gesto que Criterios / LOTO / Riesgo). */}

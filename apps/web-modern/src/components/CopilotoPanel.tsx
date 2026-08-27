@@ -986,10 +986,17 @@ export const CopilotoPanel: React.FC = () => {
   sendMessageRef.current = sendMessage;
   useEffect(() => {
     if (!requestMessage) return;
-    setRequestMessage(null); // consume immediately so it doesn't fire twice
     if (!expanded) setExpanded(true);
-    // Tiny delay lets the panel expand before the message goes out
-    const tid = setTimeout(() => { void sendMessageRef.current(requestMessage); }, 80);
+    // Tiny delay lets the panel expand before the message goes out. IMPORTANT:
+    // consuming requestMessage (setRequestMessage(null)) has to happen INSIDE
+    // the timeout, not before scheduling it — nulling it synchronously here
+    // changes this effect's own dependency, so React tears down and re-runs
+    // it on the next render, and the cleanup below cancels the timeout before
+    // the 80ms elapse. The message never went out and nothing failed loudly.
+    const tid = setTimeout(() => {
+      setRequestMessage(null);
+      void sendMessageRef.current(requestMessage);
+    }, 80);
     return () => clearTimeout(tid);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestMessage]);

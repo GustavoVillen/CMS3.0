@@ -3,13 +3,13 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench, Send } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate } from "../lib/utils";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
@@ -133,6 +133,19 @@ export const Dashboard: React.FC = () => {
   const [showInsights, setShowInsights] = React.useState(false);
   const [showHoursEntry, setShowHoursEntry] = React.useState(false);
   const [showCreateWo, setShowCreateWo] = React.useState(false);
+
+  // Campo de comando: manda el pedido en lenguaje natural al Copiloto (panel
+  // lateral), que detecta equipo/plan y propone abrir la OT/SS — el usuario
+  // confirma ahí con un click, acá sólo se dispara el mensaje. setRequestMessage
+  // ya abre el panel si estaba colapsado (ver copilot-context.tsx).
+  const { setRequestMessage } = useCopilotScreenContext();
+  const [commandText, setCommandText] = React.useState("");
+  const submitCommand = () => {
+    const text = commandText.trim();
+    if (!text) return;
+    setRequestMessage(`Quiero registrar esto en el sistema: "${text}"`);
+    setCommandText("");
+  };
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -367,6 +380,31 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           <Wrench className="w-3.5 h-3.5" />
           {t("dashboard.generateWo")}
         </button>
+
+        {/* Campo de comando: "¿Qué querés hacer?" → se lo manda al Copiloto. */}
+        <div className="flex-1 min-w-0 mx-3 flex items-center" data-export-exclude="true">
+          <div className="w-full max-w-md flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg pl-3 pr-1.5 py-1.5 focus-within:border-accent/40 transition-colors">
+            <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+            <input
+              value={commandText}
+              onChange={e => setCommandText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") submitCommand(); }}
+              placeholder={t("dashboard.command.placeholder")}
+              title={t("dashboard.command.tooltip")}
+              className="flex-1 min-w-0 bg-transparent text-xs text-fg placeholder-text-industrial/40 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={submitCommand}
+              disabled={!commandText.trim()}
+              title={t("dashboard.command.button")}
+              className="shrink-0 p-1.5 rounded-md text-accent hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         <div className="ml-auto flex items-center gap-2" data-export-exclude="true">
           <button
             onClick={() => navigate("/plan-map")}

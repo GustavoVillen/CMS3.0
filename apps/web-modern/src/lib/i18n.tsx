@@ -1417,6 +1417,10 @@ const dict = {
   "wo.ai.planLink.linkSelected":   { es: "Vincular seleccionados", en: "Link selected", pt: "Vincular selecionados" },
   "wo.ai.planLink.none":           { es: "Ninguno", en: "None", pt: "Nenhum" },
   "wo.ai.planLink.dueDate":        { es: "Próximo vencimiento", en: "Next due", pt: "Próximo vencimento" },
+  "wo.ai.planLink.detectButton":   { es: "Detectar plan de mantenimiento", en: "Detect maintenance plan", pt: "Detectar plano de manutenção" },
+  "wo.ai.planLink.detectTooltip":  { es: "Buscar en los planes de este equipo un ítem que coincida con el título/tarea", en: "Search this equipment's plans for an item matching the title/task", pt: "Buscar nos planos deste equipamento um item que corresponda ao título/tarefa" },
+  "wo.ai.planLink.detectNeedsEquipment": { es: "Elegí el equipo primero", en: "Select the equipment first", pt: "Selecione o equipamento primeiro" },
+  "wo.ai.planLink.noMatch":        { es: "No se encontró ningún ítem del plan de este equipo que coincida con el título/tarea.", en: "No plan item for this equipment matched the title/task.", pt: "Nenhum item do plano deste equipamento correspondeu ao título/tarefa." },
 
   "wo.ai.fluidSampleCreatedTitle": { es: "Análisis generado", en: "Analysis generated", pt: "Análise gerada" },
   "wo.ai.fluidSampleCreatedOne":   { es: 'Esta orden corresponde a una toma de muestra del plan de mantenimiento. Se generó el registro de Análisis de Fluidos {code}.\n\nCuando llegue el resultado del laboratorio, andá a "{section}" y cargalo ahí con ese código.', en: 'This work order matches a sampling item from the maintenance plan. Fluid Analysis record {code} was generated.\n\nWhen the lab result arrives, go to "{section}" and load it there with that code.', pt: 'Esta ordem corresponde a uma coleta de amostra do plano de manutenção. Foi gerado o registro de Análise de Fluidos {code}.\n\nQuando chegar o resultado do laboratório, vá em "{section}" e carregue-o lá com esse código.' },
@@ -2147,6 +2151,9 @@ const dict = {
 
   // ─── Dashboard — Export, Crew, Permits ──────────────────────────────────────
   "dashboard.generateWo":         { es: "Generar OT",           en: "Generate WO",         pt: "Gerar OS" },
+  "dashboard.command.placeholder": { es: "¿Qué querés hacer? (ej. \"Renovación de Clase\")", en: "What do you want to do? (e.g. \"Class Renewal\")", pt: "O que você quer fazer? (ex. \"Renovação de Classe\")" },
+  "dashboard.command.tooltip":     { es: "Describí el trabajo y el Copiloto detecta el equipo/plan y prepara la OT (y la SS si corresponde) para que la confirmes", en: "Describe the work and the Copilot detects the equipment/plan and prepares the WO (and SS if needed) for you to confirm", pt: "Descreva o trabalho e o Copiloto detecta o equipamento/plano e prepara a OS (e a SS se necessário) para você confirmar" },
+  "dashboard.command.button":      { es: "Enviar al Copiloto",   en: "Send to Copilot",    pt: "Enviar ao Copiloto" },
   "dashboard.exportHtml":         { es: "Exportar HTML",        en: "Export HTML",         pt: "Exportar HTML" },
   "dashboard.exportHtmlTitle":    { es: "Descargar snapshot HTML del dashboard (imprimible)", en: "Download dashboard HTML snapshot (printable)", pt: "Baixar snapshot HTML do painel (imprimível)" },
   "dashboard.exportHtmlError":    { es: "No se pudo exportar el dashboard.", en: "Could not export the dashboard.", pt: "Não foi possível exportar o painel." },
