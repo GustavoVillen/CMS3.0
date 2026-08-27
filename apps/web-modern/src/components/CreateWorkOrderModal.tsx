@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Droplets, Loader2, Sparkles, Wrench } from "lucide-react";
+import { Camera, Droplets, Loader2, Plus, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
@@ -45,6 +45,70 @@ export interface WoPrefill {
    * cerrar la OT avanzan todos. Solo aplica con source = "plan".
    */
   additionalPlans?: Array<{ id: string; taskCode: string; title: string; assetName?: string | null }>;
+}
+
+/**
+ * Arma el `WoPrefill` de "abrir OT desde este ítem del plan" — mismo mapeo que
+ * ya usaba `MaintenancePlans.tsx` en dos lugares (fila de la lista y modal de
+ * detalle), centralizado acá para no triplicarlo cuando lo usa además el
+ * asistente de "Nueva OT" (`NewWorkOrderWizard`). `plan` tiene que venir del
+ * detalle completo (`GET /app/pms/maintenance-plans/:id`) — la lista general
+ * omite criterios/LOTO/riesgo/RCM para aligerar el payload.
+ */
+export function buildWoPrefillFromPlan(
+  plan: MaintenancePlanLike,
+  sourceLabel: string,
+  additionalPlans?: WoPrefill["additionalPlans"],
+): WoPrefill {
+  return {
+    source: "plan",
+    sourceId: plan.id,
+    sourceCode: plan.taskCode,
+    sourceLabel,
+    vesselCode: plan.vesselCode,
+    assetId: plan.assetId,
+    assetName: plan.assetName,
+    type: plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE",
+    title: plan.title,
+    description: plan.description,
+    dueDate: plan.nextDueDate,
+    acceptanceCriteria: plan.acceptanceCriteria,
+    responsible: plan.responsible,
+    loto: plan.loto,
+    riskLevel: plan.riskLevel,
+    riskAnalysisResult: plan.riskAnalysisResult,
+    consequenceCategory: plan.consequenceCategory,
+    consequenceRationale: plan.consequenceRationale,
+    estimatedHours: plan.estimatedHours,
+    checklistDocUrl: plan.checklistTemplate,
+    samplingFluidType: plan.samplingFluidType,
+    additionalPlans,
+  };
+}
+
+/** Subconjunto de `MaintenancePlan` (definido en pages/MaintenancePlans.tsx)
+ *  que necesita `buildWoPrefillFromPlan` — se tipa acá en vez de importar el
+ *  tipo completo desde una página, para no acoplar el componente a esa página. */
+interface MaintenancePlanLike {
+  id: string;
+  vesselCode: string;
+  assetId: string;
+  assetName?: string | null;
+  taskCode: string;
+  title: string;
+  description: string | null;
+  taskType: "MAINTENANCE" | "INSPECTION";
+  acceptanceCriteria?: string | null;
+  responsible?: string | null;
+  loto?: string | null;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
+  estimatedHours: number | null;
+  checklistTemplate: string | null;
+  samplingFluidType?: string | null;
+  nextDueDate: string | null;
 }
 
 const FLUID_TYPE_KEYS: Record<string, TranslationKey> = {
@@ -100,6 +164,22 @@ interface ExtractedWorkOrderApi {
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
   initialVesselCode?: string;
+  /** Preset del tipo de mantenimiento (modo standalone) — accesos rápidos del Dashboard. */
+  initialMaintKind?: string;
+  /** Preset del título (modo standalone) — ej. "Inspección de Clase". */
+  initialTitle?: string;
+  /** Modo standalone: al cargar los equipos del buque elegido, preselecciona
+   *  el que coincida con este nombre (ej. "Inspeccion de Clase"), sin esperar
+   *  que el usuario lo busque. */
+  autoSelectAssetByName?: string;
+  /** Modo standalone: equipo ya resuelto de antemano (ej. por el asistente de
+   *  "Nueva OT") — se preselecciona directo, sin esperar la carga de la lista. */
+  initialAssetId?: string;
+  /** Preset de prioridad (modo standalone) — ej. según el tipo de reparación
+   *  elegido en el asistente de "Nueva OT" (Emergencia → CRITICAL). */
+  initialPriority?: string;
+  /** Exige elegir proveedor para guardar: al crear la OT se abre también la SS a ese proveedor. */
+  requireProvider?: boolean;
   onClose: () => void;
   onSaved: (woId: string) => void | Promise<void>;
 }
@@ -144,7 +224,7 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectAssetByName, initialAssetId, initialPriority, requireProvider, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -159,7 +239,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // ── INFO fields (standalone mode only) ────────────────────────────────────
   const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? initialVesselCode ?? "");
   const [vessels, setVessels]         = useState<Vessel[]>([]);
-  const [assetId, setAssetId]         = useState(prefill?.assetId ?? "");
+  const [assetId, setAssetId]         = useState(prefill?.assetId ?? initialAssetId ?? "");
   const [assets, setAssets]           = useState<Asset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [resolvedAssetName, setResolvedAssetName] = useState(prefill?.assetName ?? null);
@@ -169,8 +249,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // deriva el grueso desde éste, así MTTR / OT→Defecto / reportes no se enteran.
   // "Inspección" no está en el papel pero se mantiene: la empresa la usa a mano
   // (ej. "Inspección subacua del sistema de propulsión").
-  const [maintKind, setMaintKind]     = useState(kindFromType(prefill?.type));
-  const [priority, setPriority]       = useState(prefill?.priority ?? "MEDIUM");
+  const [maintKind, setMaintKind]     = useState(prefill ? kindFromType(prefill.type) : (initialMaintKind ?? kindFromType(prefill?.type)));
+  const [priority, setPriority]       = useState(prefill?.priority ?? initialPriority ?? "MEDIUM");
   const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
   const [openDate, setOpenDate]       = useState(today);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -180,7 +260,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // al backend los textos combinados reales y los reemplaza.
   const [title, setTitle] = useState(() => {
     const extras = prefill?.additionalPlans ?? [];
-    if (extras.length === 0) return prefill?.title ?? "";
+    if (extras.length === 0) return prefill?.title ?? initialTitle ?? "";
     return [
       `${prefill!.sourceCode} · ${prefill!.title ?? ""}`.trim(),
       ...extras.map(p => `${p.taskCode} · ${p.title}`),
@@ -197,13 +277,23 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // ad hoc para esta OT (no toca la configuración del plan). Clave = providerId
   // original que trajo el plan, valor = providerId elegido.
   const [providerOverride, setProviderOverride] = useState<Record<string, string>>({});
-  const [availableProviders, setAvailableProviders] = useState<Array<{ id: string; name: string }>>([]);
+  const [availableProviders, setAvailableProviders] = useState<Array<{ id: string; name: string; providerCode?: string }>>([]);
   useEffect(() => {
-    if (planProviders.length === 0 || availableProviders.length > 0) return;
-    api.get<{ items: Array<{ id: string; name: string }> }>("/app/providers?status=ACTIVE")
+    // Además de los talleres que trae un plan, en modo standalone se puede
+    // elegir proveedores libres (ver `standaloneProviderRequests`) — ahí
+    // también hace falta la lista.
+    if ((planProviders.length === 0 && prefill) || availableProviders.length > 0) return;
+    api.get<{ items: Array<{ id: string; name: string; providerCode?: string }> }>("/app/providers?status=ACTIVE")
       .then(res => setAvailableProviders(res.items ?? []))
       .catch(() => setAvailableProviders([]));
-  }, [planProviders.length, availableProviders.length]);
+  }, [planProviders.length, availableProviders.length, prefill]);
+  // Proveedores elegidos a mano en modo standalone (sin plan, o para completar
+  // uno): mismo formato {providerId, purpose} que usa el editor del Plan de
+  // Mantenimiento. Al guardar, la OT se manda a esos talleres y se abre una SS
+  // por cada uno.
+  const [standaloneProviderRequests, setStandaloneProviderRequests] = useState<{ providerId: string; purpose: string }[]>(
+    () => requireProvider ? [{ providerId: "", purpose: "" }] : [],
+  );
   const [description, setDescription]           = useState(prefill?.description ?? "");
   const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
   const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : "");
@@ -508,6 +598,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // sugerido", mandándole a la IA un texto sin sentido y sin volver a
   // intentarlo aunque el usuario terminara de escribir el título real.
   useEffect(() => {
+    // El equipo preseleccionado por `autoSelectAssetByName` (ej. "Inspección de
+    // Clase") ya lista TODOS sus planes activos apenas se elige, sin pasar por
+    // el matching de la IA — ver el efecto de "Asset lookup". Este detector por
+    // texto no aplica ahí (sería una segunda sugerencia redundante).
+    if (autoSelectAssetByName) return;
     if (prefill || !assetId || !canLinkPlan) return;
     if (!(title.trim() || description.trim())) return;
     if (suggestedPlanForAssetRef.current === assetId) return;
@@ -516,7 +611,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       void handleSuggestPlanLinks();
     }, 800);
     return () => clearTimeout(timer);
-  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks]);
+  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks, autoSelectAssetByName]);
 
   // El aviso de "sin coincidencias" queda desactualizado en cuanto el usuario
   // sigue editando el título/tarea: se limpia para no sugerir que el texto
@@ -645,7 +740,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   useEffect(() => {
     if (prefill) return;
     setAssets([]);
-    setAssetId("");
+    // Si el asistente ya resolvió el equipo de antemano, no se pisa con "".
+    setAssetId(initialAssetId ?? "");
     clearTimeout(debounceRef.current);
     const code = vesselCode.trim().toUpperCase();
     if (!code) return;
@@ -653,12 +749,39 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setLoadingAssets(true);
       try {
         const res = await api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(code)}&limit=200`);
-        setAssets(res.items ?? []);
+        const items = res.items ?? [];
+        setAssets(items);
+        if (autoSelectAssetByName) {
+          const needle = autoSelectAssetByName.trim().toLowerCase();
+          const match = items.find(a => a.name.trim().toLowerCase() === needle);
+          if (match) {
+            setAssetId(match.id);
+            // Con el equipo ya identificado de antemano (no hace falta que la
+            // IA adivine de qué se trata), se listan TODOS sus planes activos
+            // para que el usuario elija el tipo de inspección correcto — no
+            // sólo el que la IA hubiera matcheado por texto.
+            suggestedPlanForAssetRef.current = match.id;
+            try {
+              const plansRes = await api.get<{ items: PlanCandidateApi[] }>(
+                `/app/pms/maintenance-plans?assetId=${encodeURIComponent(match.id)}&status=ACTIVE&limit=100`,
+              );
+              const plans = plansRes.items ?? [];
+              if (plans.length > 0) {
+                setPlanLinkCandidates(plans.map(p => ({
+                  id: p.id, taskCode: p.taskCode, title: p.title,
+                  nextDueDate: p.nextDueDate, nextDueHours: p.nextDueHours,
+                  confidence: "medium" as const,
+                })));
+                setPlanLinkMode("choose");
+              }
+            } catch { /* sin sugerencias automáticas; el usuario puede vincular a mano */ }
+          }
+        }
       } catch { setAssets([]); }
       finally { setLoadingAssets(false); }
     }, 400);
     return () => clearTimeout(debounceRef.current);
-  }, [vesselCode, prefill]);
+  }, [vesselCode, prefill, autoSelectAssetByName, initialAssetId]);
 
   // Asset list for prefill mode when the source has no asset (audit findings): user picks one.
   useEffect(() => {
@@ -681,11 +804,19 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       .catch(() => {});
   }, [prefill]);
 
+  // Filas con proveedor elegido (descarta las vacías, como en el editor del
+  // Plan de Mantenimiento). Si ya se confirmó un vínculo a un plan (que trae
+  // sus propios proveedores), no hace falta elegir uno más acá: sería pedir
+  // el mismo dato dos veces.
+  const cleanStandaloneProviders = standaloneProviderRequests.filter(r => r.providerId);
+  const hasAnyProvider = cleanStandaloneProviders.length > 0 || confirmedPlanIds.length > 0;
+
   const onSave = useCallback(async () => {
     setErr(null);
     if (!prefill) {
       if (!vesselCode.trim()) { setErr(t("wo.modal.vesselRequired")); return; }
       if (!assetId)           { setErr(t("wo.modal.equipmentRequired")); return; }
+      if (requireProvider && !hasAnyProvider) { setErr(t("wo.modal.providerRequired")); return; }
     } else if (prefill.assetSelectable && !assetId) {
       setErr(t("wo.modal.equipmentRequired")); return;
     }
@@ -746,6 +877,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
           // Solo admin: abrir en nombre de otro usuario (SOLICITA). openDate ya va arriba.
           createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
+          // Proveedor(es) libre(s) elegido(s) a mano (sin plan): mismo eje
+          // "Asignado a: Tercerizado" que usa el editor completo de la OT.
+          // providerId de la OT sólo puede guardar UNO — con varios queda null,
+          // igual que en el Plan de Mantenimiento (cada SS igual lleva el suyo).
+          ...(cleanStandaloneProviders.length > 0 ? {
+            assignedToArea: "TERCERIZADO",
+            providerId: cleanStandaloneProviders.length === 1 ? cleanStandaloneProviders[0]!.providerId : undefined,
+          } : {}),
         });
         woId = created.id;
       }
@@ -758,6 +897,24 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             await api.patch(`/app/pms/work-orders/${woId}`, { checklistDocUrl: res.url });
           }
         } catch { /* non-blocking */ }
+      }
+
+      // Proveedor(es) libre(s) elegido(s) a mano: abre una Solicitud de
+      // Servicio por cada uno (mismo criterio "una SS por taller" que el plan).
+      // No bloqueante: si una falla, la OT ya quedó guardada y se puede abrir
+      // a mano después.
+      if (!prefill && cleanStandaloneProviders.length > 0 && woId) {
+        for (const r of cleanStandaloneProviders) {
+          const servicio = r.purpose.trim() || title.trim() || undefined;
+          try {
+            await api.post(`/app/pms/work-orders/${woId}/service-requests`, {
+              providerId:  r.providerId,
+              title:       servicio,
+              description: servicio,
+              priority:    prefill?.priority ?? priority,
+            });
+          } catch (e) { console.error("[create-sr] failed:", e); }
+        }
       }
 
       // Vincular los ítems del plan que el usuario confirmó en el popup de la
@@ -782,7 +939,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
-      checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t]);
+      checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
+      standaloneProviderRequests, hasAnyProvider, requireProvider]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -790,7 +948,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
     consequenceCategory, consequenceRationale, estimatedHours,
     checklistDocFileName: checklistDocFile?.name ?? "",
-    onBehalfUserId,
+    onBehalfUserId, standaloneProviderRequests,
   });
   const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
@@ -1103,6 +1261,56 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     ? "Al crear la orden se abre una solicitud de servicio para este taller."
                     : "Al crear la orden se abre una solicitud de servicio por taller."}
                 </p>
+              </div>
+            )}
+            {/* Proveedor(es) libre(s) (modo standalone, sin plan): al crear la
+                OT se abre una SS por cada uno. Mismo editor que usa el Plan de
+                Mantenimiento (proveedor + para qué). Si ya se vinculó un plan
+                que trae sus propios proveedores (caja de arriba), esto no hace
+                falta — sería pedir el dato dos veces. */}
+            {!prefill && planProviders.length === 0 && (
+              <div className="space-y-2">
+                <label className={labelCls}>{t("wo.modal.provider")}{requireProvider ? " *" : ""}</label>
+                {standaloneProviderRequests.map((row, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                      <select
+                        value={row.providerId}
+                        onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                        className={inputCls}
+                      >
+                        <option value="">{t("wo.modal.providerSelect")}</option>
+                        {availableProviders.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                        ))}
+                      </select>
+                      <input
+                        value={row.purpose}
+                        onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                        placeholder={t("mp.providerRequests.purposePlaceholder")}
+                        className={inputCls}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                      title={t("mp.providerRequests.remove")}
+                      className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+                </button>
+                {cleanStandaloneProviders.length > 0 && (
+                  <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>
+                )}
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

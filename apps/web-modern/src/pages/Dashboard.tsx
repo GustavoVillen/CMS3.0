@@ -3,20 +3,29 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench, Send } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench, ClipboardList } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate } from "../lib/utils";
-import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
+import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
 import { domToPng } from "modern-screenshot";
+
+// Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
+// (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
+const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode: string | null; }
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -133,19 +142,22 @@ export const Dashboard: React.FC = () => {
   const [showInsights, setShowInsights] = React.useState(false);
   const [showHoursEntry, setShowHoursEntry] = React.useState(false);
   const [showCreateWo, setShowCreateWo] = React.useState(false);
-
-  // Campo de comando: manda el pedido en lenguaje natural al Copiloto (panel
-  // lateral), que detecta equipo/plan y propone abrir la OT/SS — el usuario
-  // confirma ahí con un click, acá sólo se dispara el mensaje. setRequestMessage
-  // ya abre el panel si estaba colapsado (ver copilot-context.tsx).
-  const { setRequestMessage } = useCopilotScreenContext();
-  const [commandText, setCommandText] = React.useState("");
-  const submitCommand = () => {
-    const text = commandText.trim();
-    if (!text) return;
-    setRequestMessage(`Quiero registrar esto en el sistema: "${text}"`);
-    setCommandText("");
-  };
+  // "Nueva OT" en blanco (botón chico "Generar OT" y el grande "Nueva Orden de
+  // Trabajo") pasa por el asistente categoría → equipo → ítem del plan. La SS
+  // (createWoPreset + showCreateWo) sigue con su propio mecanismo, sin tocar.
+  const [showNewWoWizard, setShowNewWoWizard] = React.useState(false);
+  // Preset con el que se abre CreateWorkOrderModal cuando viene del chooser de
+  // "Nueva Solicitud de Servicio" (null = alta libre, sin preset).
+  const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; autoAsset?: string } | null>(null);
+  const [showSsChooser, setShowSsChooser] = React.useState(false);
+  const [showMpChooser, setShowMpChooser] = React.useState(false);
+  // Panel de equipos del grupo elegido (al lado de los grupos, dentro del
+  // mismo chooser) + buscador inteligente por nombre/código. null = ningún
+  // grupo elegido todavía; mpAllAssets = todo el catálogo del buque, pedido
+  // una sola vez al abrir el chooser.
+  const [mpGroup, setMpGroup] = React.useState<number | null>(null);
+  const [mpAllAssets, setMpAllAssets] = React.useState<MpAsset[] | null>(null);
+  const [mpLoadingAssets, setMpLoadingAssets] = React.useState(false);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -367,44 +379,43 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     }
   };
 
+  // Todos los equipos del buque elegido arriba (header), para el chooser de
+  // Plan de Mantenimiento: se piden una sola vez al abrirlo y de ahí salen
+  // tanto el panel por grupo como el buscador inteligente.
+  const loadMpAssets = async () => {
+    if (!selectedVesselCode) { setMpAllAssets(null); return; }
+    setMpLoadingAssets(true);
+    try {
+      const res = await api.get<{ items: MpAsset[] }>(
+        `/app/pms/assets?vesselCode=${encodeURIComponent(selectedVesselCode)}&limit=500`,
+      );
+      setMpAllAssets(res.items ?? []);
+    } catch {
+      setMpAllAssets([]);
+    } finally {
+      setMpLoadingAssets(false);
+    }
+  };
+
+  const mpGroupOf = (a: MpAsset): number | null => {
+    const n = a.sfiCode ? Number(a.sfiCode) : NaN;
+    if (!Number.isFinite(n)) return null;
+    return n < 10 ? n : Math.floor(n / 100);
+  };
+  const mpAssets = mpGroup === null ? [] : (mpAllAssets ?? []).filter(a => mpGroupOf(a) === mpGroup);
+
+  const goToAsset = (assetId: string) => {
+    if (!selectedVesselCode) return;
+    setShowMpChooser(false);
+    navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&assetId=${assetId}`);
+  };
+
   return (
     <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
-      {/* Generar OT (izquierda) + Plan Map / Exportar HTML (derecha) en la
-          misma fila. Antes iba acá el score de compliance por buque. */}
+      {/* Plan Map / Exportar HTML. Antes iba acá el score de compliance por
+          buque; "Generar OT" y el campo de comando se sacaron (redundantes
+          con los accesos grandes de abajo). */}
       <div className="relative min-h-[34px] flex items-center">
-        <button
-          onClick={() => setShowCreateWo(true)}
-          data-export-exclude="true"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
-        >
-          <Wrench className="w-3.5 h-3.5" />
-          {t("dashboard.generateWo")}
-        </button>
-
-        {/* Campo de comando: "¿Qué querés hacer?" → se lo manda al Copiloto. */}
-        <div className="flex-1 min-w-0 mx-3 flex items-center" data-export-exclude="true">
-          <div className="w-full max-w-md flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg pl-3 pr-1.5 py-1.5 focus-within:border-accent/40 transition-colors">
-            <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
-            <input
-              value={commandText}
-              onChange={e => setCommandText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") submitCommand(); }}
-              placeholder={t("dashboard.command.placeholder")}
-              title={t("dashboard.command.tooltip")}
-              className="flex-1 min-w-0 bg-transparent text-xs text-fg placeholder-text-industrial/40 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={submitCommand}
-              disabled={!commandText.trim()}
-              title={t("dashboard.command.button")}
-              className="shrink-0 p-1.5 rounded-md text-accent hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
         <div className="ml-auto flex items-center gap-2" data-export-exclude="true">
           <button
             onClick={() => navigate("/plan-map")}
@@ -426,12 +437,149 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
       </div>
 
+      {showNewWoWizard && (
+        <NewWorkOrderWizard
+          onClose={() => setShowNewWoWizard(false)}
+          onSaved={() => { setShowNewWoWizard(false); navigate("/work-orders"); }}
+        />
+      )}
+
       {showCreateWo && (
         <CreateWorkOrderModal
           initialVesselCode={selectedVesselCode ?? undefined}
-          onClose={() => setShowCreateWo(false)}
-          onSaved={() => { setShowCreateWo(false); navigate("/work-orders"); }}
+          initialMaintKind={createWoPreset?.maintKind}
+          initialTitle={createWoPreset?.title}
+          autoSelectAssetByName={createWoPreset?.autoAsset}
+          requireProvider={!!createWoPreset}
+          onClose={() => { setShowCreateWo(false); setCreateWoPreset(null); }}
+          onSaved={() => {
+            const wasSsFlow = !!createWoPreset;
+            setShowCreateWo(false);
+            setCreateWoPreset(null);
+            navigate(wasSsFlow ? "/service-requests" : "/work-orders");
+          }}
         />
+      )}
+
+      {showSsChooser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowSsChooser(false)}>
+          <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-fg">{t("dashboard.ssChooser.title")}</h2>
+                <p className="text-xs text-text-industrial/50 mt-0.5">{t("dashboard.ssChooser.subtitle")}</p>
+              </div>
+              <ModalCloseButton onClose={() => setShowSsChooser(false)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={() => { setCreateWoPreset({ maintKind: "PREVENTIVO" }); setShowSsChooser(false); setShowCreateWo(true); }}
+                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              >
+                <ClipboardList className="w-6 h-6 text-accent shrink-0" />
+                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.maintenance")}</span>
+              </button>
+              <button
+                onClick={() => { setCreateWoPreset({ maintKind: "CORRECTIVO_NO_PROGRAMADO" }); setShowSsChooser(false); setShowCreateWo(true); }}
+                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              >
+                <Wrench className="w-6 h-6 text-accent shrink-0" />
+                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.repair")}</span>
+              </button>
+              <button
+                onClick={() => { setCreateWoPreset({ maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), autoAsset: "Inspeccion de Clase" }); setShowSsChooser(false); setShowCreateWo(true); }}
+                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              >
+                <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
+                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.classInspection")}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMpChooser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowMpChooser(false)}>
+          <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between shrink-0">
+              <h2 className="text-sm font-bold text-fg">{t("dashboard.mpChooser.title")}</h2>
+              <ModalCloseButton onClose={() => setShowMpChooser(false)} />
+            </div>
+
+            {/* Buscador inteligente: escribí el equipo y salta directo, sin
+                pasar por el grupo. Mismo componente que "Nueva OT". */}
+            {selectedVesselCode && (
+              <div className="shrink-0">
+                <AssetSearchDropdown
+                  assets={mpAllAssets ?? []}
+                  value=""
+                  onChange={id => { if (id) goToAsset(id); }}
+                  placeholder={mpLoadingAssets ? t("common.loading") : t("dashboard.mpChooser.searchPlaceholder")}
+                  disabled={mpLoadingAssets}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-hidden flex-1 min-h-0">
+              {/* Grupos */}
+              <div className="space-y-1.5 overflow-y-auto pr-1">
+                <button
+                  onClick={() => { setShowMpChooser(false); navigate("/maintenance-plans"); }}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left w-full"
+                >
+                  <ClipboardList className="w-5 h-5 text-accent shrink-0" />
+                  <span className="font-bold text-sm text-fg">{t("dashboard.mpChooser.all")}</span>
+                </button>
+                {SFI_GROUP_NUMBERS.map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setMpGroup(g)}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left w-full ${
+                      mpGroup === g ? "bg-accent/10 border-accent/40" : "bg-fg/5 border-fg/10 hover:border-accent/40 hover:bg-fg/10"
+                    }`}
+                  >
+                    <span className="shrink-0 w-7 h-7 rounded-lg bg-accent/10 text-accent font-mono font-bold text-[11px] flex items-center justify-center">G{g}</span>
+                    <span className="font-bold text-xs text-fg">{t(`sfi.g.${g}` as TranslationKey)}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Equipos del grupo elegido — "ventanita al lado". */}
+              <div className="overflow-y-auto pl-1 border-l border-fg/10">
+                {mpGroup === null ? (
+                  <p className="text-xs text-text-industrial/40 px-2 py-4">{t("dashboard.mpChooser.pickGroupHint")}</p>
+                ) : !selectedVesselCode ? (
+                  <p className="text-xs text-text-industrial/40 px-2 py-4">{t("dashboard.mpChooser.pickVesselHint")}</p>
+                ) : mpLoadingAssets ? (
+                  <div className="flex items-center gap-2 text-xs text-text-industrial/40 px-2 py-4">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
+                  </div>
+                ) : mpAssets.length === 0 ? (
+                  <p className="text-xs text-text-industrial/40 px-2 py-4">{t("common.noResults")}</p>
+                ) : (
+                  <div className="space-y-1.5 px-1">
+                    <button
+                      onClick={() => { setShowMpChooser(false); navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&sfiTab=${mpGroup}`); }}
+                      className="w-full text-left px-3 py-1.5 text-[11px] text-accent hover:text-fg transition-colors"
+                    >
+                      {t("dashboard.mpChooser.viewGroup")}
+                    </button>
+                    {mpAssets.map(a => (
+                      <button
+                        key={a.id}
+                        onClick={() => goToAsset(a.id)}
+                        className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left w-full"
+                      >
+                        <span className="font-bold text-xs text-fg truncate">{a.name ?? a.assetCode}</span>
+                        <span className="font-mono text-[10px] text-text-industrial/40 shrink-0">{a.assetCode}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* "Mi día" — unifica tareas personales / vista del vessel + KPI cards
@@ -443,6 +591,32 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
        * activarlo, descomentar la línea de abajo y el import de MyDayPanel.
        * Mismo patrón que los módulos dormantes del Sidebar. */}
       {/* <MyDayPanel onShowInsights={() => setShowInsights(true)} /> */}
+
+      {/* Accesos grandes a Planes de Mantenimiento / OT / SS, arriba de
+          "Reportes sin procesar" (pedido del usuario). */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-export-exclude="true">
+        <button
+          onClick={() => { setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
+          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+        >
+          <ClipboardList className="w-6 h-6 text-accent shrink-0" />
+          <span className="font-bold text-sm text-fg">{t("nav.maintenancePlans")}</span>
+        </button>
+        <button
+          onClick={() => setShowNewWoWizard(true)}
+          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+        >
+          <Wrench className="w-6 h-6 text-accent shrink-0" />
+          <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
+        </button>
+        <button
+          onClick={() => setShowSsChooser(true)}
+          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+        >
+          <Handshake className="w-6 h-6 text-accent shrink-0" />
+          <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
+        </button>
+      </div>
 
       {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
           debajo de "Mi día". Solo se muestra si hay algo pendiente; cada badge

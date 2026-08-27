@@ -14,6 +14,7 @@ import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
+import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { PlannedItemsEditor } from "../components/work-orders/PlannedItemsEditor";
@@ -3648,12 +3649,15 @@ export const WorkOrdersPage: React.FC = () => {
     } catch { /* sin certificado vinculado: no molestamos */ }
   }, []);
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
-  const [showCreate, setShowCreate]   = useState(false);
   const [createPrefill, setCreatePrefill] = useState<WoPrefill | null>(null);
+  // "+ Nueva OT" pasa por el asistente categoría → equipo → ítem del plan.
+  // `createPrefill` (deep-link desde un defecto, etc.) sigue abriendo el
+  // formulario directo — ya trae su propio origen resuelto.
+  const [showNewWoWizard, setShowNewWoWizard] = useState(false);
   const [viewMode, setViewMode]       = useState<"list" | "kanban">("kanban");
   const [search, setSearch]           = useState("");
 
-  useCopilotEmitter(!editing && !showCreate ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
+  useCopilotEmitter(!editing && !showNewWoWizard && !createPrefill ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
   const [showExcel, setShowExcel]     = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
@@ -3870,7 +3874,7 @@ export const WorkOrdersPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader icon={Wrench} title={t("page.workOrders")} total={data?.total} onReload={reload}>
         {canCreate && (
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
+          <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}
           </button>
         )}
@@ -3966,12 +3970,19 @@ export const WorkOrdersPage: React.FC = () => {
         <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
       )}
 
-      {(showCreate || createPrefill) && (
+      {showNewWoWizard && (
+        <NewWorkOrderWizard
+          onClose={() => setShowNewWoWizard(false)}
+          onSaved={() => { setShowNewWoWizard(false); void reload(); }}
+        />
+      )}
+
+      {createPrefill && (
         <CreateWorkOrderModal
-          prefill={createPrefill ?? undefined}
+          prefill={createPrefill}
           initialVesselCode={selectedVesselCode ?? undefined}
-          onClose={() => { setShowCreate(false); setCreatePrefill(null); }}
-          onSaved={() => { setShowCreate(false); setCreatePrefill(null); void reload(); }}
+          onClose={() => setCreatePrefill(null)}
+          onSaved={() => { setCreatePrefill(null); void reload(); }}
         />
       )}
       {editing && (

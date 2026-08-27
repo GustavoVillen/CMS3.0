@@ -44,7 +44,7 @@ import { useT, useWoTerms } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
-import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { CreateWorkOrderModal, buildWoPrefillFromPlan } from "../components/CreateWorkOrderModal";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
@@ -1036,6 +1036,9 @@ export interface MaintenancePlanModalProps {
   userName: string;
   isAdmin: boolean;
   canDelete: boolean;
+  /** Fijar el próximo vencimiento a mano: reservado al rol TENANT_ADMIN literal
+   *  (no alcanza con el permiso plan.manage que habilita `isAdmin`). */
+  canEditNextDue: boolean;
   onClose: () => void;
   onSaved: (savedId?: string) => Promise<void>;
   setRequestMessage?: (msg: string | null) => void;
@@ -1055,7 +1058,7 @@ export interface MaintenancePlanModalProps {
   deepLinked?: boolean;
 }
 
-export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, canEditNextDue, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1131,6 +1134,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // Última ejecución editable por admin (el próximo vencimiento se recalcula).
   const [lastExecDate, setLastExecDate] = useState(toDateInput(plan?.lastExecutionDate ?? null));
   const [lastExecHours, setLastExecHours] = useState(String(plan?.lastExecutionHours ?? ""));
+  // Próximo vencimiento fijado a mano (solo TENANT_ADMIN). Si no se toca, no se
+  // manda al guardar y el backend sigue calculándolo solo desde la frecuencia.
+  const [nextDueDateOverride, setNextDueDateOverride] = useState(toDateInput(plan?.nextDueDate ?? null));
+  const [nextDueHoursOverride, setNextDueHoursOverride] = useState(String(plan?.nextDueHours ?? ""));
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
@@ -1312,6 +1319,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setEstimatedHours(String(plan.estimatedHours ?? ""));
     setLastExecDate(toDateInput(plan.lastExecutionDate ?? null));
     setLastExecHours(String(plan.lastExecutionHours ?? ""));
+    setNextDueDateOverride(toDateInput(plan.nextDueDate ?? null));
+    setNextDueHoursOverride(String(plan.nextDueHours ?? ""));
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
@@ -1543,6 +1552,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         });
         savedId = created.id;
       } else {
+        // Se mandan solo si cambiaron respecto del plan original — mandarlos
+        // siempre (como antes) hacía que el backend recalculara el próximo
+        // vencimiento en CUALQUIER guardado (aunque no se tocaran las fechas),
+        // pisando en silencio un vencimiento fijado a mano en un guardado previo.
+        const lastExecDateChanged = isAdmin && !needsHours(triggerType) && lastExecDate !== toDateInput(plan.lastExecutionDate ?? null);
+        const lastExecHoursChanged = isAdmin && needsHours(triggerType) && lastExecHours !== String(plan.lastExecutionHours ?? "");
+        const nextDueDateChanged = canEditNextDue && !needsHours(triggerType) && nextDueDateOverride !== toDateInput(plan.nextDueDate ?? null);
+        const nextDueHoursChanged = canEditNextDue && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
         await api.patch(`/app/pms/maintenance-plans/${plan.id}`, {
           ...(assetId ? { assetId } : {}),
           ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
@@ -1573,12 +1590,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
-          // Última ejecución editable (admin). El backend recalcula el próximo
-          // vencimiento desde la frecuencia. Solo lo manda el admin.
-          ...(isAdmin ? {
-            lastExecutionDate: needsHours(triggerType) ? undefined : (lastExecDate || null),
-            lastExecutionHours: needsHours(triggerType) ? (lastExecHours ? Number(lastExecHours) : null) : undefined,
-          } : {}),
+          // Última ejecución editable (admin): el backend recalcula el próximo
+          // vencimiento desde la frecuencia. Próximo vencimiento fijado a mano
+          // (solo TENANT_ADMIN): manda sobre ese cálculo automático.
+          ...(lastExecDateChanged ? { lastExecutionDate: lastExecDate || null } : {}),
+          ...(lastExecHoursChanged ? { lastExecutionHours: lastExecHours ? Number(lastExecHours) : null } : {}),
+          ...(nextDueDateChanged ? { nextDueDate: nextDueDateOverride || null } : {}),
+          ...(nextDueHoursChanged ? { nextDueHours: nextDueHoursOverride ? Number(nextDueHoursOverride) : null } : {}),
           spares: cleanSpares,
         });
         savedId = plan.id;
@@ -1631,7 +1649,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
     checklistTemplate, samplingFluidType,
-    lastExecDate, lastExecHours, plannedSpares,
+    lastExecDate, lastExecHours, nextDueDateOverride, nextDueHoursOverride, plannedSpares,
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
   const requestClose = useEscapeGuard({
@@ -1978,17 +1996,38 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   </div>
                   <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.nextDueDate")}</p>
-                    <p className="text-sm font-mono text-accent">
-                      {isAdmin
-                        ? (preview?.text ?? (needsHours(plan.triggerType)
-                            ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                            : (fmtDate(plan.nextDueDate) ?? "—")))
-                        : (needsHours(plan.triggerType)
-                            ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                            : (fmtDate(plan.nextDueDate) ?? "—"))}
-                    </p>
-                    {isAdmin && preview && (
-                      <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueAuto")}</p>
+                    {canEditNextDue ? (
+                      needsHours(triggerType) ? (
+                        <input
+                          type="number" value={nextDueHoursOverride}
+                          onChange={e => setNextDueHoursOverride(e.target.value)}
+                          placeholder="Horas"
+                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-accent py-0.5 transition-colors"
+                        />
+                      ) : (
+                        <input
+                          type="date" value={nextDueDateOverride}
+                          onChange={e => setNextDueDateOverride(e.target.value)}
+                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-accent py-0.5 transition-colors"
+                        />
+                      )
+                    ) : (
+                      <p className="text-sm font-mono text-accent">
+                        {isAdmin
+                          ? (preview?.text ?? (needsHours(plan.triggerType)
+                              ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                              : (fmtDate(plan.nextDueDate) ?? "—")))
+                          : (needsHours(plan.triggerType)
+                              ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                              : (fmtDate(plan.nextDueDate) ?? "—"))}
+                      </p>
+                    )}
+                    {canEditNextDue ? (
+                      <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueManualHint")}</p>
+                    ) : (
+                      isAdmin && preview && (
+                        <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueAuto")}</p>
+                      )
                     )}
                   </div>
                 </div>
@@ -2584,29 +2623,25 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
       {!isNew && showExecution && needsWO && (
         <CreateWorkOrderModal
-          prefill={{
-            source: "plan",
-            sourceId: plan.id,
-            sourceCode: plan.taskCode,
-            sourceLabel: t("mp.modal.maintenancePlanLabel"),
-            vesselCode: plan.vesselCode,
-            assetId: plan.assetId,
-            assetName: plan.assetName,
-            type: plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE",
-            title: plan.title,
-            description: description || plan.description,
-            dueDate: plan.nextDueDate,
-            acceptanceCriteria: acceptanceCriteria || plan.acceptanceCriteria,
-            responsible: responsible || plan.responsible,
-            loto: loto || plan.loto,
-            riskLevel: riskLevel || plan.riskLevel,
-            riskAnalysisResult: riskAnalysisResult || plan.riskAnalysisResult,
-            consequenceCategory: (consequenceCategory as ("SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | "")) || plan.consequenceCategory || null,
-            consequenceRationale: consequenceRationale || plan.consequenceRationale,
-            estimatedHours: estimatedHours ? Number(estimatedHours) : plan.estimatedHours,
-            checklistDocUrl: plan.checklistTemplate,
-            samplingFluidType: samplingFluidType || plan.samplingFluidType,
-          }}
+          // Con overrides de lo que el admin ya haya tipeado en este modal sin
+          // guardar todavía — buildWoPrefillFromPlan hereda del plan, pero acá
+          // lo que hay en pantalla manda por sobre lo guardado.
+          prefill={buildWoPrefillFromPlan(
+            {
+              ...plan,
+              description: description || plan.description,
+              acceptanceCriteria: acceptanceCriteria || plan.acceptanceCriteria,
+              responsible: responsible || plan.responsible,
+              loto: loto || plan.loto,
+              riskLevel: riskLevel || plan.riskLevel,
+              riskAnalysisResult: riskAnalysisResult || plan.riskAnalysisResult,
+              consequenceCategory: (consequenceCategory as ("SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | "")) || plan.consequenceCategory || null,
+              consequenceRationale: consequenceRationale || plan.consequenceRationale,
+              estimatedHours: estimatedHours ? Number(estimatedHours) : plan.estimatedHours,
+              samplingFluidType: samplingFluidType || plan.samplingFluidType,
+            },
+            t("mp.modal.maintenancePlanLabel"),
+          )}
           onClose={() => setShowExecution(false)}
           onSaved={_woId => { setShowExecution(false); void onSaved(); onClose(); }}
         />
@@ -2840,6 +2875,8 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   const statusFilter        = (searchParams.get("status")          ?? "").trim();
   const vesselFilter        = (searchParams.get("vesselCode")      ?? "").trim();
   const executionFilter     = (searchParams.get("executionStatus") ?? "").trim();
+  // Deep-link a los ítems de UN equipo puntual (ej. desde el acceso del Dashboard).
+  const assetFilter         = (searchParams.get("assetId")         ?? "").trim();
   // Filtro por semana (desde el gráfico de carga): weekStart = lunes UTC de la semana clickeada;
   // weeks = misma ventana del gráfico. Trae del backend los IDs de planes con ocurrencia en esa
   // semana (incluye recurrencias y planes por horas) para que coincida 1:1 con la curva.
@@ -2857,7 +2894,13 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
   const overdueParam = (overdueKeysPresent.length ? (searchParams.get(overdueKeysPresent[0]!) ?? "") : "").trim().toLowerCase();
   const overdueOnly  = overdueParam === "1" || overdueParam === "true" || overdueParam === "si";
 
-  const [sfiTab,        setSfiTab]        = useState<SfiTab>("ALL");
+  // Deep-link al grupo SFI (ej. desde el acceso del Dashboard): ?sfiTab=6.
+  const sfiTabParam = (searchParams.get("sfiTab") ?? "").trim();
+  const sfiTabParamNum = sfiTabParam === "" ? NaN : Number(sfiTabParam);
+  const initialSfiTab: SfiTab = Number.isInteger(sfiTabParamNum) && sfiTabParamNum >= 0 && sfiTabParamNum <= 9
+    ? (sfiTabParamNum as SfiTab)
+    : "ALL";
+  const [sfiTab,        setSfiTab]        = useState<SfiTab>(initialSfiTab);
   const [dueXlsxBusy,   setDueXlsxBusy]   = useState(false);
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
@@ -2930,9 +2973,10 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     const params = new URLSearchParams();
     if (statusFilter) params.set("status", statusFilter);
     if (vesselFilter) params.set("vesselCode", vesselFilter);
+    if (assetFilter) params.set("assetId", assetFilter);
     const query = params.toString();
     return `/app/pms/maintenance-plans${query ? `?${query}` : ""}`;
-  }, [statusFilter, vesselFilter]);
+  }, [statusFilter, vesselFilter, assetFilter]);
 
   const { data: rawData, loading, error, reload } = useFetch<ListResponse>(path, [path]);
 
@@ -3534,7 +3578,12 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
         )}
       </PageHeader>
 
-      {/* ── Tabs SFI ─────────────────────────────────────────────────────────── */}
+      {/* ── Tabs SFI ─────────────────────────────────────────────────────────
+          Ocultas cuando se llega ya filtrado desde el acceso del Dashboard
+          (?sfiTab= o ?assetId=): esa selección ya se hizo ahí, repetirla acá
+          es ruido. Sólo se muestran entrando por el menú lateral (sin esos
+          params en la URL). */}
+      {!sfiTabParam && !assetFilter && (
       <div className="flex items-center gap-1 flex-wrap">
         {SFI_TABS.map(tab => {
           const count = tab.key === "ALL" ? (sfiTabCounts["ALL"] ?? rawData?.total ?? 0) : (sfiTabCounts[String(tab.key)] ?? 0);
@@ -3563,6 +3612,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           );
         })}
       </div>
+      )}
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
       {weekStartFilter && (
@@ -3679,38 +3729,19 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
 
       {executing && (
         <CreateWorkOrderModal
-          prefill={{
-            source: "plan",
-            sourceId: executing.id,
-            sourceCode: executing.taskCode,
-            sourceLabel: t("mp.modal.maintenancePlanLabel"),
-            vesselCode: executing.vesselCode,
-            assetId: executing.assetId,
-            assetName: executing.assetName,
-            type: executing.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE",
-            title: executing.title,
-            description: executing.description,
-            dueDate: executing.nextDueDate,
-            acceptanceCriteria: executing.acceptanceCriteria,
-            responsible: executing.responsible,
-            loto: executing.loto,
-            riskLevel: executing.riskLevel,
-            riskAnalysisResult: executing.riskAnalysisResult,
-            consequenceCategory: executing.consequenceCategory,
-            consequenceRationale: executing.consequenceRationale,
-            estimatedHours: executing.estimatedHours,
-            checklistDocUrl: executing.checklistTemplate,
-            samplingFluidType: executing.samplingFluidType,
+          prefill={buildWoPrefillFromPlan(
+            executing,
+            t("mp.modal.maintenancePlanLabel"),
             // Los otros ítems marcados van a la MISMA OT. Solo cuando el plan que
             // se está abriendo es el primero de la selección: abrir otro plan
             // suelto no debe arrastrar la selección.
-            additionalPlans: bundlePlans[0]?.id === executing.id
+            bundlePlans[0]?.id === executing.id
               ? bundlePlans.slice(1).map(p => ({
                   id: p.id, taskCode: p.taskCode, title: p.title,
                   assetName: (p as MaintenancePlan & { assetName?: string | null }).assetName ?? null,
                 }))
               : undefined,
-          }}
+          )}
           onClose={() => setExecuting(null)}
           onSaved={_woId => { setExecuting(null); setBundleIds([]); void reload(); }}
         />
@@ -3734,6 +3765,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
           userName={userName}
           isAdmin={can("plan.manage")}
           canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
+          canEditNextDue={user?.role === "TENANT_ADMIN"}
           setRequestMessage={setRequestMessageFromContext}
           deepLinked={!!linkCode}
           // NO hacer setEditing(null) acá: al quedar `editing` en null con el :code

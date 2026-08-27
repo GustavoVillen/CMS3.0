@@ -1153,6 +1153,14 @@ export async function updateTenantMaintenancePlan(
   payload: UpdateMaintenancePlanInput,
 ) {
   ensureCanManagePlans(session);
+  // Fijar el vencimiento a mano pisa el cálculo automático (frecuencia / última
+  // ejecución) — reservado al rol literal TENANT_ADMIN, no al permiso plan.manage
+  // (ese lo tienen por defecto otros roles y es configurable por tenant).
+  if (payload.nextDueDate !== undefined || payload.nextDueHours !== undefined) {
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede fijar el próximo vencimiento a mano.");
+    }
+  }
 
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");

@@ -82,7 +82,7 @@ export const PlanLinkSuggestionDialog: React.FC<Props> = ({ candidates, mode, on
         <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1">
           <p className="text-[11px] text-fg">
             <span className="font-mono font-bold">{only.taskCode}</span>
-            <span className="text-text-industrial/60"> · {only.title}</span>
+            <span className="text-fg font-semibold"> · {only.title}</span>
           </p>
           {(only.nextDueDate || only.nextDueHours != null) && (
             <p className="text-[10px] text-text-industrial/50">
@@ -118,7 +118,7 @@ export const PlanLinkSuggestionDialog: React.FC<Props> = ({ candidates, mode, on
             <div className="min-w-0 flex-1">
               <p className="text-[11px] text-fg">
                 <span className="font-mono font-bold">{c.taskCode}</span>
-                <span className="text-text-industrial/60"> · {c.title}</span>
+                <span className="text-fg font-semibold"> · {c.title}</span>
               </p>
               {(c.nextDueDate || c.nextDueHours != null) && (
                 <p className="text-[10px] text-text-industrial/50">

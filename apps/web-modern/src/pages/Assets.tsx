@@ -702,6 +702,7 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
           userName={user?.name ?? user?.email ?? ""}
           isAdmin={canManage}
           canDelete={canDelete}
+          canEditNextDue={role === "TENANT_ADMIN"}
           overlayZClass="z-[60]"
           defaultVesselCode={asset.vesselCode}
           defaultAssetId={asset.id}
