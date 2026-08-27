@@ -122,6 +122,7 @@ const OTRA = "__OTRA__";
 export function WoRegiSections({
   form, onChange, priority, disabled,
   providers, providerId, onProviderChange, location, onLocationChange, onPriorityChange,
+  serviceRequestProviders, onServiceRequestProviderChange,
   providerOther, onProviderOtherChange,
   saving, saved, error,
 }: {
@@ -139,6 +140,13 @@ export function WoRegiSections({
   providers: Array<{ id: string; name: string; providerCode: string }>;
   providerId: string;
   onProviderChange: (id: string) => void;
+  /** Solicitudes de Servicio ya abiertas para esta OT (una por taller cuando el
+   *  plan trae varios, ej. Clase + Espesores). Cuando hay más de una, se
+   *  muestra un selector por SS en vez del selector único de arriba: el
+   *  recuadro del papel es de una sola línea, pero acá adentro puede haber
+   *  más de un taller trabajando la misma orden. */
+  serviceRequestProviders?: Array<{ id: string; providerId: string | null; label: string | null }>;
+  onServiceRequestProviderChange?: (serviceRequestId: string, providerId: string) => void;
   /** Empresa tercerizada escrita a mano, cuando no está en el catálogo. */
   providerOther: string;
   onProviderOtherChange: (v: string) => void;
@@ -207,35 +215,64 @@ export function WoRegiSections({
             estar en el catálogo: en ese caso se escribe el nombre, y el resto del
             sistema (PDF incluido) lo trata igual que a uno de la lista. */}
         {form.assignedToArea === "TERCERIZADO" && (
-          <>
-            <select
-              value={otraEmpresa ? OTRA : providerId}
-              onChange={e => {
-                if (e.target.value === OTRA) { setOtraEmpresa(true); onProviderChange(""); return; }
-                setOtraEmpresa(false);
-                onProviderOtherChange("");
-                onProviderChange(e.target.value);
-              }}
-              disabled={disabled}
-              className={inputCls + " mt-2"}
-            >
-              <option value="">Seleccionar taller / proveedor…</option>
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+          (serviceRequestProviders?.length ?? 0) > 1 ? (
+            // El plan trae más de un taller (ej. Clase + Espesores): ya hay una
+            // SS abierta por cada uno. El recuadro del papel es de una sola
+            // línea, así que acá se listan todos con su propio selector en vez
+            // de forzarlos en un único campo.
+            <div className="mt-2 space-y-1.5">
+              {serviceRequestProviders!.map(sr => (
+                <div key={sr.id} className="flex items-center gap-2">
+                  {sr.label && (
+                    <span className="shrink-0 max-w-[40%] truncate text-[11px] text-text-industrial/50" title={sr.label}>
+                      {sr.label}
+                    </span>
+                  )}
+                  <select
+                    value={sr.providerId ?? ""}
+                    onChange={e => onServiceRequestProviderChange?.(sr.id, e.target.value)}
+                    disabled={disabled}
+                    className={inputCls}
+                  >
+                    <option value="">Seleccionar taller / proveedor…</option>
+                    {providers.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                    ))}
+                  </select>
+                </div>
               ))}
-              <option value={OTRA}>Otra empresa (no está en la lista)…</option>
-            </select>
-            {otraEmpresa && (
-              <input
-                className={inputCls + " mt-2"}
-                value={providerOther}
+            </div>
+          ) : (
+            <>
+              <select
+                value={otraEmpresa ? OTRA : providerId}
+                onChange={e => {
+                  if (e.target.value === OTRA) { setOtraEmpresa(true); onProviderChange(""); return; }
+                  setOtraEmpresa(false);
+                  onProviderOtherChange("");
+                  onProviderChange(e.target.value);
+                }}
                 disabled={disabled}
-                onChange={e => onProviderOtherChange(e.target.value)}
-                placeholder="Nombre de la empresa"
-                autoFocus
-              />
-            )}
-          </>
+                className={inputCls + " mt-2"}
+              >
+                <option value="">Seleccionar taller / proveedor…</option>
+                {providers.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                ))}
+                <option value={OTRA}>Otra empresa (no está en la lista)…</option>
+              </select>
+              {otraEmpresa && (
+                <input
+                  className={inputCls + " mt-2"}
+                  value={providerOther}
+                  disabled={disabled}
+                  onChange={e => onProviderOtherChange(e.target.value)}
+                  placeholder="Nombre de la empresa"
+                  autoFocus
+                />
+              )}
+            </>
+          )
         )}
       </div>
 

@@ -4,8 +4,13 @@
 import { makeFormatters, val, statusLabel, priorityLabel, riskLabel, woResultLabel, type WorkOrderPdfContext } from "./shared";
 import {
   wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
-  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize,
+  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize, fitLogoBox,
 } from "../doc-export";
+
+// Caja de la firma en la TRAMITACION: mismo tamaño que el PDF (fit:[156,66]pt),
+// para que Word y PDF salgan iguales. Sin ancho explícito, Word ignora la altura
+// CSS y estampa el PNG a su tamaño de píxeles nativo (firma gigante a página completa).
+const SIG_BOX = { wcm: 156 / 28.35, hcm: 66 / 28.35 };
 
 const DEPTS = ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"];
 const MOTIVOS = ["FALLA", "AVERIA", "INSPECCION", "PLANIFICADO", "CAMBIO", "OTRO"];
@@ -143,13 +148,15 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   parts.push(docSpacer());
   parts.push(docSection("TRAMITACION DE LA ORDEN"));
   const trCols = [
-    { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: w.createdAt, sig: bufferToDataUri(ctx.solicitaSignatureBuffer) },
-    { label: "APRUEBA",      name: w.aprobadoByName, date: w.aprobadoAt, sig: bufferToDataUri(ctx.apruebaSignatureBuffer) },
-    { label: "AUTORIZA",     name: w.autorizadoByName, date: w.autorizadoAt, sig: bufferToDataUri(ctx.autorizaSignatureBuffer) },
-    { label: "CIERRA LA OT", name: w.executedByName, date: w.completedDate, sig: bufferToDataUri(ctx.cierraSignatureBuffer) },
-  ];
+    { label: "SOLICITA",     name: ctx.createdByFormName ?? createdByName, date: w.createdAt, buf: ctx.solicitaSignatureBuffer },
+    { label: "APRUEBA",      name: w.aprobadoByName, date: w.aprobadoAt, buf: ctx.apruebaSignatureBuffer },
+    { label: "AUTORIZA",     name: w.autorizadoByName, date: w.autorizadoAt, buf: ctx.autorizaSignatureBuffer },
+    { label: "CIERRA LA OT", name: w.executedByName, date: w.completedDate, buf: ctx.cierraSignatureBuffer },
+  ].map(c => ({ ...c, sig: bufferToDataUri(c.buf), sigBox: c.buf ? fitLogoBox(imagePixelSize(c.buf), SIG_BOX.wcm, SIG_BOX.hcm) : null }));
   parts.push(`<table><tr>${trCols.map(c => {
-    const img = c.sig ? `<img src="${c.sig}" style="height:72pt;max-width:95%;">` : "";
+    const img = c.sig && c.sigBox
+      ? `<img src="${c.sig}" width="${Math.round(c.sigBox.wcm * 37.8)}" height="${Math.round(c.sigBox.hcm * 37.8)}" style="width:${c.sigBox.wcm}cm;height:${c.sigBox.hcm}cm;">`
+      : "";
     return `<td style="width:25%;height:110pt;background:#F3F4F6;text-align:center;vertical-align:top;font-size:7pt;color:#6B7280;">` +
       `<b>${esc(c.label)}</b><br>${img}<br>_______________<br>` +
       `<span style="font-size:8pt;color:#111827;">${esc(c.name ?? "—")}</span>` +

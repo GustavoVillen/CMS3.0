@@ -22,6 +22,7 @@ import { useEscapeGuard } from "../lib/escape-guard";
 import { FormModal } from "../components/FormModal";
 import { AlertDialog } from "../components/AlertDialog";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 import { printServiceRequest } from "../lib/print-work-order";
 import { downloadDocx } from "../lib/download-docx";
 
@@ -1124,6 +1125,42 @@ function DeleteServiceRequestModal({ code, busy, onClose, onConfirm }: {
 }
 
 // ---------------------------------------------------------------------------
+// Envío al proveedor por mail
+// ---------------------------------------------------------------------------
+
+// Casilla fija a la que se manda toda SS lista para el proveedor. El .docx no
+// se puede adjuntar solo (ningún navegador deja adjuntar un archivo a un mailto:
+// por seguridad): se descarga aparte y la persona lo adjunta a mano en el
+// correo que se abre ya completo, desde su propia cuenta.
+const PROVIDER_EMAIL = "jbael@mercuriogroup.com.py";
+
+function buildProviderEmailDraft(sr: ServiceRequest, vesselName: string): { subject: string; body: string } {
+  const equipo = sr.workOrder?.assetName ? ` — ${sr.workOrder.assetName}` : "";
+  const taller = sr.providerName || sr.tallerNotes || "";
+  const servicio = sr.title || sr.description || "";
+  const subject = `Solicitud de Servicio ${sr.serviceRequestCode} — ${vesselName}`;
+  const body = [
+    "Estimados,",
+    "",
+    `Adjunto la Solicitud de Servicio ${sr.serviceRequestCode} del buque ${vesselName}${equipo}.`,
+    taller ? `Taller: ${taller}` : null,
+    servicio ? `Servicio solicitado: ${servicio}` : null,
+    "",
+    "Quedamos a la espera de confirmación.",
+    "",
+    "Saludos.",
+  ].filter((line): line is string => line !== null).join("\n");
+  return { subject, body };
+}
+
+/** Abre el cliente de correo del usuario con el mail ya armado. No adjunta el
+ *  archivo (ver PROVIDER_EMAIL): eso lo hace la persona a mano. */
+function openProviderEmailDraft(sr: ServiceRequest, vesselName: string) {
+  const { subject, body } = buildProviderEmailDraft(sr, vesselName);
+  window.location.href = `mailto:${PROVIDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// ---------------------------------------------------------------------------
 // Modal
 // ---------------------------------------------------------------------------
 
@@ -1141,8 +1178,12 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [actionError, setActionError] = useState<string | null>(null);
   // Pasos que piden datos (antes eran prompt()/confirm() nativos).
   const [receiving, setReceiving] = useState(false);
-  // Aviso posterior a "Enviar a Proveedor" (PDF ya generado).
+  // Aviso posterior a "Listo para enviar al Proveedor" (.docx descargado, mail abierto).
   const [sentNotice, setSentNotice] = useState(false);
+  // Nombre del buque para el asunto/cuerpo del mail: nunca el código (ver
+  // CLAUDE.md "Nombres, no códigos").
+  const { vessels } = useVesselContext();
+  const vesselName = vessels.find(v => v.code === sr.vesselCode)?.name ?? sr.vesselCode;
   // Bajas: anular (queda el registro) o eliminar el borrador (no queda nada).
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1352,19 +1393,23 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   };
 
   /**
-   * "Enviar a Proveedor": primero sale el PDF (es el documento que se le manda
-   * al taller), después se avanza el estado y recién ahí se avisa por dónde
-   * mandarlo. Si el PDF falla no se avanza: no habría qué enviar.
+   * "Listo para enviar al Proveedor": baja el .docx (el documento que se le
+   * manda al taller) y abre el correo del usuario con destinatario, asunto y
+   * cuerpo ya armados — la persona adjunta el .docx recién descargado y lo
+   * manda desde su propia cuenta (un mailto: no puede adjuntar archivos solo).
+   * Guarda primero: el documento tiene que salir con lo último cargado. Si el
+   * .docx falla no se avanza el estado: no habría qué enviar.
    */
   const sendToProvider = async () => {
     setActionError(null);
-    // Guardar PRIMERO: el PDF es el papel que se le manda al taller, así que
-    // tiene que salir con lo último cargado. Antes se imprimía con `sr` tal
-    // como estaba al abrir el modal y los cambios recién tipeados no salían.
     const fresh = await saveIfDirty();
     if (!fresh) return;
-    const pdfOk = await printServiceRequest(fresh);
-    if (!pdfOk) return;
+    const docxOk = await downloadDocx(`/app/pms/service-requests/${fresh.id}/docx`, fresh.serviceRequestCode);
+    if (!docxOk) {
+      setActionError("No se pudo generar el documento Word. Intentá de nuevo.");
+      return;
+    }
+    openProviderEmailDraft(fresh, vesselName);
     try {
       await act("start", undefined, { keepOpen: true });
       setSentNotice(true);
@@ -1668,7 +1713,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           {sr.status === "AUTORIZADA" && (
             <button onClick={() => { void sendToProvider(); }} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50">
-              <Play className="w-3.5 h-3.5" /> Enviar a Proveedor
+              <Play className="w-3.5 h-3.5" /> Listo para enviar al Proveedor
             </button>
           )}
 
@@ -1759,10 +1804,11 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           }
         >
           <p className="text-sm text-text-industrial">
-            Enviar al proveedor a través de los canales predeterminados.
+            El documento Word (.docx) ya se descargó y se abrió un correo a{" "}
+            <span className="font-semibold">{PROVIDER_EMAIL}</span> con el asunto y el mensaje completos.
           </p>
           <p className="text-[11px] text-text-industrial/50">
-            El PDF de la solicitud ya se descargó.
+            Adjuntá el .docx descargado antes de enviarlo — el correo se abre sin el archivo adjunto.
           </p>
         </FormModal>
       )}

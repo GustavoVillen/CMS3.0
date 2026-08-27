@@ -24,6 +24,7 @@ const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Default Extension="png" ContentType="image/png"/>
   <Default Extension="jpeg" ContentType="image/jpeg"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/afchunk.htm" ContentType="text/html"/>
 </Types>`;
 
@@ -35,7 +36,26 @@ const ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 const DOCUMENT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="htmlChunk" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk" Target="afchunk.htm"/>
+  <Relationship Id="stylesRel" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
+
+// El HTML del altChunk se convierte a paragraphs "Normal" al abrir en Word. Sin
+// este styles.xml, "Normal" sale del template por defecto de Word (interlineado
+// 1,08 + espacio después de párrafo ~8pt), pisando el CSS del HTML. Fijar acá
+// spacing after=0 / line=240 (simple) es lo que realmente controla el resultado.
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:pPrDefault>
+      <w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>
+  </w:style>
+</w:styles>`;
 
 // A4 vertical con los mismos márgenes que el PDF del formulario controlado.
 // Medidas en twips (1 pt = 20 twips): A4 = 595.3 x 841.9 pt.
@@ -63,6 +83,7 @@ export async function wrapHtmlAsDocx(html: string): Promise<Buffer> {
   zip.file("_rels/.rels", ROOT_RELS);
   zip.file("word/document.xml", DOCUMENT_XML);
   zip.file("word/_rels/document.xml.rels", DOCUMENT_RELS);
+  zip.file("word/styles.xml", STYLES_XML);
   zip.file("word/afchunk.htm", html);
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }

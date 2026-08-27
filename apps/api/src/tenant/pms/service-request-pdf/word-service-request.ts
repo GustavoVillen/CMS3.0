@@ -6,8 +6,13 @@ import { buildHojaRuta } from "../../service-requests/hoja-ruta";
 import type { ServiceRequestPdfContext } from "./shared";
 import {
   buildWordHtml, bufferToDataUri, esc, docControlledHeader, docControlledFooter,
-  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize,
+  docSection, docKvRow, docTable, docCheckboxRow, docTextBox, docSpacer, imagePixelSize, fitLogoBox,
 } from "../doc-export";
+
+// Caja de la firma en la TRAMITACION: mismo tamaño que el PDF (fit:[156,66]pt),
+// para que Word y PDF salgan iguales. Sin ancho explícito, Word ignora la altura
+// CSS y estampa el PNG a su tamaño de píxeles nativo (firma gigante a página completa).
+const SIG_BOX = { wcm: 156 / 28.35, hcm: 66 / 28.35 };
 
 export function renderServiceRequestDoc(ctx: ServiceRequestPdfContext): Buffer {
   return Buffer.from(renderServiceRequestHtml(ctx), "utf-8");
@@ -67,9 +72,12 @@ export function renderServiceRequestHtml(ctx: ServiceRequestPdfContext): string 
       const celda = (c: (typeof cols)[number]) => {
         const noAqui = rechazadaEn === c.rol;
         const sigUri = c.sig ? bufferToDataUri(c.sig) : null;
+        const sigBox = c.sig ? fitLogoBox(imagePixelSize(c.sig), SIG_BOX.wcm, SIG_BOX.hcm) : null;
         return `<td style="width:33.33%;height:82pt;vertical-align:top;text-align:center;background:#f5f5f5;">` +
           `<span style="font-size:7pt;${noAqui ? "color:#b91c1c;" : "color:#666666;"}"><b>${noAqui ? `${c.rol} — NO APROBADA` : c.rol}</b></span><br>` +
-          (sigUri ? `<img src="${sigUri}" style="height:44pt;"><br>` : `<br><br><br>`) +
+          (sigUri && sigBox
+            ? `<img src="${sigUri}" width="${Math.round(sigBox.wcm * 37.8)}" height="${Math.round(sigBox.hcm * 37.8)}" style="width:${sigBox.wcm}cm;height:${sigBox.hcm}cm;"><br>`
+            : `<br><br><br>`) +
           `_____________________<br>` +
           `<span style="font-size:8pt;">${c.nombre ? esc(c.nombre) : "&nbsp;"}</span><br>` +
           `<span style="font-size:6pt;" class="muted">${c.fecha ? fmt(c.fecha as Date) : ""}</span>` +

@@ -94,6 +94,7 @@ interface LinkedServiceRequest {
   openDate: string;
   // Taller al que se le pidió el trabajo (catálogo o escrito a mano).
   providerName: string | null;
+  providerId: string | null;
 }
 
 interface LinkedPermit {
@@ -1451,6 +1452,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
   }, [workOrder, reloadServiceRequests]);
 
+  // Cuando el plan trae más de un taller (ej. Clase + Espesores), la OT abre
+  // una SS por taller y el campo único "Asignado a: Tercerizado" del papel no
+  // alcanza para mostrarlos a todos. En ese caso WoRegiSections lista una fila
+  // por SS con su propio selector; esto la guarda directo en la SS.
+  const handleChangeServiceRequestProvider = useCallback(async (serviceRequestId: string, newProviderId: string) => {
+    await api.patch(`/app/pms/service-requests/${serviceRequestId}`, { providerId: newProviderId || null });
+    reloadServiceRequests();
+  }, [reloadServiceRequests]);
+
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const handleGeneratePdf = useCallback(async () => {
     setGeneratingPdf(true);
@@ -2113,6 +2123,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               providers={providers}
               providerId={providerId}
               onProviderChange={v => { touchRegi(); setProviderId(v); }}
+              serviceRequestProviders={linkedServiceRequests.map(sr => ({
+                id: sr.id,
+                providerId: sr.providerId,
+                label: sr.description || sr.title,
+              }))}
+              onServiceRequestProviderChange={handleChangeServiceRequestProvider}
               providerOther={providerOther}
               onProviderOtherChange={v => { touchRegi(); setProviderOther(v); }}
               location={location}

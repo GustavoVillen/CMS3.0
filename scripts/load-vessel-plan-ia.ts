@@ -41,6 +41,7 @@ const VESSEL = (process.argv.find(a => a.startsWith("--buque="))?.split("=")[1] 
 const USUARIO_POR_BUQUE: Record<string, string> = {
   LTE: "MAQUINASLATERE",
   DCH: "OSCAR-DUARTE",
+  M02: "PEDRO-PONT",
 };
 const USER_LEGACY_ID = USUARIO_POR_BUQUE[VESSEL];
 const FORCE = process.env.FORCE === "1";

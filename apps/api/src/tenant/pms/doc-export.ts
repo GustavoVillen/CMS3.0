@@ -104,9 +104,10 @@ export function buildWordHtml(opts: WordDocOptions): string {
 <style>
 @page Section1 { size:595.3pt 841.9pt; margin:1.4cm 1.1cm 1.4cm 1.1cm; ${msoFooter} mso-footer-margin:0.6cm; }
 div.Section1 { page:Section1; }
-body { font-family:Arial, Helvetica, sans-serif; font-size:9pt; color:#111827; }
+body { font-family:Arial, Helvetica, sans-serif; font-size:9pt; color:#111827; line-height:100%; mso-line-height-rule:exactly; }
+p { margin:0; mso-margin-top-alt:0; margin-bottom:0; mso-margin-bottom-alt:0; line-height:100%; mso-line-height-rule:exactly; }
 table { border-collapse:collapse; width:100%; table-layout:fixed; }
-td, th { border:0.5pt solid ${BORDER}; padding:3pt 5pt; vertical-align:middle; word-wrap:break-word; }
+td, th { border:0.5pt solid ${BORDER}; padding:3pt 5pt; vertical-align:middle; word-wrap:break-word; line-height:100%; mso-line-height-rule:exactly; }
 .sec td { background:${NAVY}; color:#fff; font-weight:bold; font-size:8pt; letter-spacing:0.4pt; text-transform:uppercase; }
 .lbl { background:${NAVY}; color:#fff; font-weight:bold; font-size:8pt; }
 .hdr td { background:${LIGHT}; color:${GRAY}; font-weight:bold; font-size:7pt; text-align:center; }
