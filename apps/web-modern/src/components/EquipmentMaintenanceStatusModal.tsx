@@ -8,34 +8,7 @@ import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssetHistory } from "../pages/Assets";
-
-interface PlanForStatus {
-  id: string;
-  status: string;
-  executionStatus: string;
-}
-
-type Severity = "OVERDUE" | "UPCOMING" | "OK";
-
-const SEVERITY_RANK: Record<string, Severity> = {
-  OVERDUE: "OVERDUE",
-  DUE: "UPCOMING",
-  IN_WINDOW: "UPCOMING",
-  UPCOMING: "UPCOMING",
-  FUTURE: "OK",
-  COMPLETED: "OK",
-};
-
-function worstSeverity(plans: PlanForStatus[]): Severity {
-  let worst: Severity = "OK";
-  for (const p of plans) {
-    if (p.status !== "ACTIVE") continue;
-    const sev = SEVERITY_RANK[p.executionStatus] ?? "OK";
-    if (sev === "OVERDUE") return "OVERDUE";
-    if (sev === "UPCOMING") worst = "UPCOMING";
-  }
-  return worst;
-}
+import { worstSeverity, SEVERITY_STYLE, type Severity, type PlanForStatus } from "../lib/maintenance-severity";
 
 interface Props {
   assetId: string;
@@ -67,11 +40,13 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
     return () => { cancelled = true; };
   }, [assetId]);
 
+  const sev: Severity = severity ?? "OK";
+  const icon = { OVERDUE: AlertTriangle, UPCOMING: Clock, OK: CheckCircle2 }[sev];
   const badge = {
-    OVERDUE:  { icon: AlertTriangle, cls: "bg-danger/10 text-danger border-danger/25",   label: t("dashboard.equipmentStatus.overdue") },
-    UPCOMING: { icon: Clock,         cls: "bg-warning/10 text-warning border-warning/25", label: t("dashboard.equipmentStatus.upcoming") },
-    OK:       { icon: CheckCircle2,  cls: "bg-success/10 text-success border-success/25", label: t("dashboard.equipmentStatus.ok") },
-  }[severity ?? "OK"];
+    icon,
+    cls: SEVERITY_STYLE[sev].badge,
+    label: t(SEVERITY_STYLE[sev].labelKey as Parameters<typeof t>[0]),
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>

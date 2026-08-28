@@ -2,6 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarRange,
   CheckCircle2,
   ChevronsDownUp,
@@ -20,9 +21,11 @@ import {
   Minimize2,
   Plus,
   Search,
+  ShieldCheck,
   Sparkles,
   Table2,
   Trash2,
+  Wrench,
   X,
   Zap,
 } from "lucide-react";
@@ -1874,7 +1877,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       <div className={`fixed inset-0 ${overlayZClass ?? "z-50"} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
         <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-            <div>
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={requestClose}
+                title={t("common.back")}
+                aria-label={t("common.back")}
+                className="p-2 -ml-1 rounded-xl text-fg/40 hover:text-fg hover:bg-fg/5 transition-all shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="min-w-0">
               <h2 className="text-base font-bold text-fg">
                 {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
               </h2>
@@ -1895,6 +1908,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   <FileText className="w-3 h-3" /> Renueva {linkedCert.certificateCode}
                 </button>
               )}
+              </div>
             </div>
             <div className="flex items-center gap-1.5">
               {!isNew && <CopyLinkButton />}
@@ -2889,7 +2903,6 @@ export const MaintenancePlansPage: React.FC = () => {
     ? (sfiTabParamNum as SfiTab)
     : "ALL";
   const [sfiTab,        setSfiTab]        = useState<SfiTab>(initialSfiTab);
-  const [dueXlsxBusy,   setDueXlsxBusy]   = useState(false);
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
@@ -3027,15 +3040,6 @@ export const MaintenancePlansPage: React.FC = () => {
       counts[k] = (counts[k] ?? 0) + 1;
     }
     return counts;
-  }, [rawData, baseItems]);
-
-  // ── Count of overdue/due/in_window for the toggle badge ───────────────────
-  const urgentCount = useMemo(() => {
-    if (!rawData) return 0;
-    return baseItems.filter(p => {
-      const s = computeStatus(p);
-      return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW";
-    }).length;
   }, [rawData, baseItems]);
 
   // `prefetched` = el registro que ya vino en la lista. La lista trae casi todo
@@ -3290,9 +3294,17 @@ export const MaintenancePlansPage: React.FC = () => {
             {t("mp.assetOutOfService")}
           </span>
         );
+        const isInspection = row.taskType === "INSPECTION";
+        const TaskTypeIcon = isInspection ? ShieldCheck : Wrench;
+        const taskTypeIcon = (
+          <span title={t(`mp.taskType.${isInspection ? "INSPECTION" : "MAINTENANCE"}` as any)} className="shrink-0 inline-flex">
+            <TaskTypeIcon className="w-3.5 h-3.5 text-accent/70" />
+          </span>
+        );
         if (groupByEquipment) {
           return (
             <span className="flex items-center gap-1.5 min-w-0">
+              {taskTypeIcon}
               <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
               {oosBadge}
             </span>
@@ -3303,6 +3315,7 @@ export const MaintenancePlansPage: React.FC = () => {
         return (
           <div className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5 min-w-0">
+              {taskTypeIcon}
               <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
               {oosBadge}
             </span>
@@ -3485,51 +3498,6 @@ export const MaintenancePlansPage: React.FC = () => {
             )}
           </>
         )}
-        {/* Excel de planes próximos a vencer (vencidos / por vencer / en ventana) */}
-        <button
-          onClick={async () => {
-            if (dueXlsxBusy) return;
-            setDueXlsxBusy(true);
-            try {
-              // Respeta el buque seleccionado globalmente (VesselContext), igual que
-              // ExcelPanel — el vesselCode de la URL (deep-link) tiene prioridad si vino.
-              const effectiveVessel = vesselFilter || selectedVesselCode || "";
-              const qs = effectiveVessel ? `?vesselCode=${encodeURIComponent(effectiveVessel)}` : "";
-              const today = new Date().toISOString().slice(0, 10);
-              await downloadAuthedFile(
-                `/app/pms/maintenance-plans/due-soon.xlsx${qs}`,
-                `Planes-Proximos-Vencer-${effectiveVessel || "flota"}-${today}.xlsx`,
-              );
-            } catch (err) {
-              setPageError(err instanceof Error ? err.message : "No se pudo exportar el Excel.");
-            } finally {
-              setDueXlsxBusy(false);
-            }
-          }}
-          disabled={dueXlsxBusy}
-          title={t("mp.page.dueSoonExcel")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300 text-xs font-bold hover:bg-orange-500/20 hover:border-orange-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {dueXlsxBusy
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <FileSpreadsheet className="w-3.5 h-3.5" />}
-          {t("mp.page.dueSoonExcel")}
-        </button>
-        {/* Toggle VENCIDOS / PRÓX. */}
-        <button
-          onClick={() => setOverdueOnly(!overdueOnly)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-            overdueOnly
-              ? "bg-orange-500/20 border-orange-500/40 text-orange-700 dark:text-orange-300"
-              : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-orange-400/30"
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          {t("mp.page.overdueToggle")}
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-            overdueOnly ? "bg-orange-500/30 text-orange-200" : "bg-fg/10 text-text-industrial/50"
-          }`}>{urgentCount}</span>
-        </button>
         {/* Buscador global */}
         <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5">
           <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />

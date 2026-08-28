@@ -412,7 +412,12 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   });
 
   const assetIds = [...new Set(orders.map(o => o.assetId).filter(Boolean))];
-  const userIds  = [...new Set(orders.map(o => (o as unknown as { assignedToUserId?: string | null }).assignedToUserId).filter((v): v is string => !!v))];
+  // Se resuelven juntos el asignado y el creador: "GENERADO POR" es un recuadro
+  // del formulario controlado (REGI-OPE-26.3) y sale de createdByUserId.
+  const userIds  = [...new Set(orders.flatMap(o => [
+    (o as unknown as { assignedToUserId?: string | null }).assignedToUserId,
+    (o as unknown as { createdByUserId?: string | null }).createdByUserId,
+  ]).filter((v): v is string => !!v))];
   const providerIds = [...new Set(orders.map(o => (o as unknown as { providerId?: string | null }).providerId).filter((v): v is string => !!v))];
 
   const [assetRows, userRows, providerRows] = await Promise.all([
@@ -437,6 +442,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
     ...o,
     assetName: assetNameMap.get(o.assetId) ?? null,
     assignedToUserName: userNameMap.get((o as unknown as { assignedToUserId?: string | null }).assignedToUserId ?? "") ?? null,
+    createdByName: userNameMap.get((o as unknown as { createdByUserId?: string | null }).createdByUserId ?? "") ?? null,
     // Mismo criterio que getTenantWorkOrder: catálogo, o el escrito a mano.
     providerName: providerNameMap.get((o as unknown as { providerId?: string | null }).providerId ?? "")
       ?? ((o as unknown as { providerOther?: string | null }).providerOther ?? null),
@@ -558,7 +564,21 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
 
   const providerName = providerFromCatalog ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
-  return { ...record, assetName, providerName, spareUsages, plans };
+  // GENERADO POR del formulario controlado. Mismo criterio de nombre que el
+  // listado: el nombre para formularios manda, si no nombre y apellido.
+  let createdByName: string | null = null;
+  const creatorId = (record as unknown as { createdByUserId?: string | null }).createdByUserId;
+  if (creatorId) {
+    try {
+      const u = await (prismaRaw as any).user.findUnique({
+        where: { id: creatorId },
+        select: { firstName: true, lastName: true, formName: true },
+      });
+      if (u) createdByName = u.formName?.trim() || [u.firstName, u.lastName].filter(Boolean).join(" ") || null;
+    } catch { /* non-blocking */ }
+  }
+
+  return { ...record, assetName, providerName, createdByName, spareUsages, plans };
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {

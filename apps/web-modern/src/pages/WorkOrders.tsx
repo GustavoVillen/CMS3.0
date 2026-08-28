@@ -16,10 +16,14 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { CopyLinkButton } from "../components/CopyLinkButton";
-import { WoRegiSections, WoRegiClosure, type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
+// WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
+// la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
+import { type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { PlannedItemsEditor } from "../components/work-orders/PlannedItemsEditor";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
+import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
+import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
@@ -98,6 +102,12 @@ interface LinkedServiceRequest {
   providerId: string | null;
 }
 
+/** ESTADO DE OT en el recuadro del papel (texto del documento, en español). */
+const WO_STATUS_PAPER_LABEL: Record<string, string> = {
+  PLANNED: "Planificada", IN_PROGRESS: "En progreso", ON_HOLD: "Diferida",
+  CLOSED: "Cerrada", CANCELLED: "Cancelada",
+};
+
 interface LinkedPermit {
   id: string;
   permitCode: string;
@@ -157,6 +167,8 @@ interface WorkOrder {
   description: string | null;
   assignedToUserId: string | null;
   assignedToUserName: string | null;
+  /** GENERADO POR del formulario: quien creó la OT. */
+  createdByName?: string | null;
   assetName: string | null;
   estimatedHours: number | null;
   actualHours: number | null;
@@ -903,6 +915,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
+
+  // ── Hoja del formulario controlado (REGI-OPE-26.3) ──
+  // Las secciones y los rótulos salen del tenant, igual que el PDF: pantalla y
+  // papel no pueden divergir. Sólo se pide con el formulario de Mercurio activo.
+  const { data: woFormDoc } = useFetch<WoFormDoc>(
+    isMercurio ? "/app/pms/work-orders/form" : null, [isMercurio]);
+  const paperDoc = woFormDoc ?? WO_FORM_FALLBACK;
+  const { vessels: contextVesselsForPaper } = useVesselContext();
+  const paperVesselName =
+    contextVesselsForPaper.find(v => v.code === workOrder.vesselCode)?.name ?? workOrder.vesselCode;
+  const { theme: paperTheme } = useTheme();
+  // El logo del papel es oscuro: en modo oscuro gana el logo claro del tenant.
+  const paperLogo = paperTheme === "dark"
+    ? (tenant?.logoUrlLight || paperDoc.logoUrl || tenant?.logoUrl || null)
+    : (paperDoc.logoUrl || tenant?.logoUrl || tenant?.logoUrlLight || null);
 
   // Tramitación: los avances (5) y el resultado (6) se habilitan desde que la OT
   // está APROBADA. La aprobación es la que da luz verde a ejecutar y registrar el
@@ -2023,179 +2050,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           )}
 
-          {/* ── 1. INFORMACIÓN ── */}
-          <section>
-            <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
-            <div className="mt-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {([
-                [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
-                [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-fg"],
-                [t("wo.modal.type"),       null, null,
-                  isEditable
-                    ? <select key="ty" value={type} onChange={e => { void saveType(e.target.value); }} disabled={savingType}
-                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50 disabled:opacity-60">
-                        <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
-                        <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
-                        <option value="INSPECTION">{t("wo.type.inspection")}</option>
-                      </select>
-                    : <CategoryBadge key="cat" type={type} />],
-                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
-                // Lee del estado (no de workOrder) para reflejar en el acto el
-                // cambio hecho en el recuadro PRIORIDAD del formulario.
-                [t("wo.modal.priority"),   priority,                        "text-fg"],
-                [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
-                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
-                  (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
-                    ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
-                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
-                    : undefined],
-                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
-                  tramitaPhase === "SOLICITADA" && isEditable
-                    ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
-                    : undefined],
-              ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
-                <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
-                  {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
-                </div>
-              ))}
-            </div>
-            {workOrder.holdReason && (() => {
-              const inProcess = deferralStatus === "REQUESTED" || deferralStatus === "UNDER_REVIEW";
-              const approved  = deferralStatus === "APPROVED" || deferralStatus === "ACTIVE";
-              const closed    = deferralStatus === "CLOSED" || deferralStatus === "EXPIRED";
-              const rejected  = deferralStatus === "REJECTED";
-              const badge = inProcess
-                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" }
-                : approved
-                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
-                : rejected
-                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30" }
-                : closed
-                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-fg/10 text-text-industrial/60 border-fg/10" }
-                : null;
-              const originalDue = workOrder.dueDate;
-              const postponedTo = deferralTargetDate;
-              const postponedDays = originalDue && postponedTo
-                ? Math.round((new Date(postponedTo).getTime() - new Date(originalDue).getTime()) / 86_400_000)
-                : null;
-              const boxCls = rejected
-                ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
-                : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
-              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-700 dark:text-yellow-400";
-              const textCls  = rejected ? "text-xs text-red-700 dark:text-red-300" : "text-xs text-yellow-700 dark:text-yellow-300";
-              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-700 dark:text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-700 dark:text-yellow-400/70";
-              const strongCls = rejected ? "font-semibold text-red-700 dark:text-red-300" : "font-semibold text-yellow-700 dark:text-yellow-300";
-              return (
-                <div className={boxCls}>
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className={labelCls}>{t("wo.holdReasonLabel")}</p>
-                    {badge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    )}
-                  </div>
-                  <p className={textCls}>{workOrder.holdReason}</p>
-                  <div className={metaCls}>
-                    {originalDue && (
-                      <span>{t("wo.originalDue")}: <span className={strongCls}>{fmtDate(originalDue)}</span></span>
-                    )}
-                    {postponedTo && (
-                      <span>{t("wo.targetDate")}: <span className={strongCls}>{fmtDate(postponedTo)}</span></span>
-                    )}
-                    {postponedDays !== null && (
-                      <span>{t("wo.postponedBy")}: <span className={strongCls}>{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
-                    )}
-                  </div>
-                  {rejected && workOrder.status === "ON_HOLD" && (
-                    <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la {woTerms.abbr} o solicite uno nuevo.</p>
-                      <button
-                        type="button"
-                        onClick={() => { void handleResubmitDeferral(); }}
-                        disabled={resuming}
-                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-800 dark:text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
-                      >
-                        {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                        Re-solicitar diferimiento
-                      </button>
-                    </div>
-                  )}
-                  {deferralHistory.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-fg/10">
-                      <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
-                      <div className="space-y-0.5">
-                        {deferralHistory.map(d => (
-                          <button
-                            type="button"
-                            key={d.id}
-                            onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
-                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-fg/5 transition-colors text-left"
-                          >
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-mono text-yellow-700 dark:text-yellow-300/80 truncate">{d.deferralCode}</span>
-                              <DeferralStatusBadge status={d.status} />
-                            </span>
-                            <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {workOrder.cancelReason && (
-              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
-                <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.assignee")}</label>
-                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
-              </div>
-            </div>
-            </div>{/* end mt-3 */}
-          </section>
-
-          {/* ── Formulario controlado REGI-OPE-26.3 (solo tenants con el form de Mercurio) ── */}
-          {isMercurio && (
-            <WoRegiSections
-              form={regiForm}
-              onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
-              priority={priority}
-              onPriorityChange={v => { touchRegi(); setPriority(v); }}
-              type={type}
-              onTypeChange={v => { touchRegi(); setType(v); }}
-              disabled={!isEditable}
-              providers={providers}
-              providerId={providerId}
-              onProviderChange={v => { touchRegi(); setProviderId(v); }}
-              serviceRequestProviders={linkedServiceRequests.map(sr => ({
-                id: sr.id,
-                providerId: sr.providerId,
-                label: sr.description || sr.title,
-              }))}
-              onServiceRequestProviderChange={handleChangeServiceRequestProvider}
-              providerOther={providerOther}
-              onProviderOtherChange={v => { touchRegi(); setProviderOther(v); }}
-              location={location}
-              onLocationChange={v => { touchRegi(); setLocation(v); }}
-              saving={regiSaving}
-              saved={regiSaved}
-              error={regiErr}
-            />
-          )}
-
           {/* ── 2. PLAN ── */}
           <section className="space-y-4">
             <PhaseHeader
-              n={2}
+              n={isMercurio ? 1 : 2}
               label={t("wo.modal.section.plan")}
               dotCls="bg-accent/20 text-accent"
               borderCls="border-accent/30"
@@ -2247,6 +2105,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             )}
 
+            {/* Con el formulario controlado esto vive en la hoja de arriba. */}
+            {!isMercurio && (
+              <>
             <div className="space-y-1.5">
               <label
                 onClick={isEditable ? handleTitleClick : undefined}
@@ -2282,10 +2143,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </label>
               <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable || loadingTask} className={`${inputCls} resize-y`} />
             </div>
+              </>
+            )}
+
             {/* Criterios/LOTO/riesgo/consecuencia heredados del plan: siempre
                 visibles y editables, vengan o no de un plan (antes quedaban
                 colapsados por defecto en las OT que sí venían de un plan). */}
             <div className="space-y-4">
+                {/* Con el formulario controlado esto vive en la hoja de arriba. */}
+                {!isMercurio && (
+                  <>
                 <div className="space-y-1.5">
                   <label
                     onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
@@ -2338,44 +2205,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
                   <textarea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
                 </div>
-                <div className="space-y-1.5">
-                  <label
-                    onClick={isEditable ? handleConsequenceClick : undefined}
-                    title={isEditable ? t("wo.modal.consequenceTooltip") : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : ""}`}
-                  >
-                    {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    {t("wo.modal.consequenceTitle")}
-                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
-                    {loadingConsequence && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
-                  </label>
-                  <select
-                    value={consequenceCategory}
-                    onChange={e => setConsequenceCategory(e.target.value)}
-                    disabled={!isEditable || loadingConsequence}
-                    className={inputCls}
-                  >
-                    <option value="">{t("wo.modal.consequenceUnclassified")}</option>
-                    <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
-                    <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
-                    <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
-                    <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
-                  </select>
-                  <textarea
-                    rows={autoRows(consequenceRationale, 2)}
-                    value={consequenceRationale}
-                    onChange={e => setConsequenceRationale(e.target.value)}
-                    disabled={!isEditable || loadingConsequence}
-                    className={`${inputCls} resize-y`}
-                    placeholder={t("wo.modal.consequencePlaceholder")}
-                  />
-                </div>
+                  </>
+                )}
+
+                {/* La consecuencia de la falla (RCM) se sacó de esta pantalla
+                    (ago 2026, decisión de producto): el campo sigue en la base y
+                    en el registro, pero no se completa desde la OT. Mismo criterio
+                    que los módulos RCM / CAPA, que están construidos y ocultos.
+                    No volver a montarlo sin pedido explícito. */}
               </div>
           </section>
 
           {/* ── 3. DOCUMENTO CHECKLIST ── */}
           <section className="space-y-3">
-            <PhaseHeader n={3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
+            <PhaseHeader n={isMercurio ? 2 : 3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
             <div className="space-y-1.5 mt-3">
               {checklistDocUrl && !checklistDocFile && (
                 <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
@@ -2385,94 +2228,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── 4. PERMISOS DE TRABAJO — oculta (no sólo deshabilitada) hasta
-              que la OT esté aprobada, igual que 6-10. */}
-          {isApproved && (
-          <section className="space-y-3">
-            <PhaseHeader
-              n={4}
-              label="Permisos de trabajo"
-              dotCls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-              borderCls="border-yellow-500/25"
-              action={isEditable ? (
-                <button
-                  type="button"
-                  onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
-                >
-                  <Plus className="w-3 h-3" /> Nuevo permiso
-                </button>
-              ) : undefined}
-            />
-
-            {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
-            {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
-              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200 font-semibold mb-1">Esta {woTerms.abbr} podría requerir permiso de trabajo</p>
-                  <p className="text-[11px] text-yellow-800 dark:text-yellow-200/80 leading-snug mb-2">
-                    Por el contenido del trabajo, sugerimos: <span className="font-bold">{advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}</span>.
-                    <span className="block text-[10px] text-yellow-800 dark:text-yellow-200/60 mt-0.5">
-                      Coincidencias detectadas: {advisoryMatches.flatMap(m => m.matchedKeywords).slice(0, 6).join(", ")}
-                    </span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {advisoryMatches.map(m => (
-                      <button
-                        key={m.type}
-                        type="button"
-                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
-                        className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
-                      >
-                        Crear {PERMIT_TYPE_LABEL[m.type]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Lista de PTWs vinculados */}
-            {linkedPermits.length === 0 ? (
-              advisoryMatches.length === 0 && (
-                <p className="text-xs text-text-industrial/40 italic">Sin permisos vinculados.</p>
-              )
-            ) : (
-              <div className="space-y-1.5">
-                {linkedPermits.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPermitModalState({ kind: "edit", permit: p })}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 hover:border-accent/30 text-left transition-colors"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <span className="text-[10px] font-mono text-text-industrial/50">{p.permitCode}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${PTW_STATUS_COLOR[p.status]}`}>
-                          {PTW_STATUS_LABEL[p.status]}
-                        </span>
-                        <span className="text-[10px] text-text-industrial/70">{PERMIT_TYPE_LABEL[p.type as PermitType] ?? p.type}</span>
-                      </div>
-                      <p className="text-xs text-fg/80 truncate">{p.description}</p>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-          )}
-
           {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
           {/* Una SS es el pedido de un servicio externo (un taller). No se abre
               desde una OT cerrada o cancelada, por eso el botón depende del
               estado de la OT. Una OT diferida sí admite SS. */}
           <section className="space-y-3">
             <PhaseHeader
-              n={5}
+              n={isMercurio ? 3 : 5}
               label="Solicitudes de Servicio"
               dotCls="bg-cyan-500/15 text-cyan-700 dark:text-cyan-400"
               borderCls="border-cyan-500/25"
@@ -2570,6 +2332,449 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
+          {/* ── LA HOJA: la OT tal como se imprime (REGI-OPE-26.3) ──
+              Completar la OT es completar el formulario. Lo que la pantalla
+              tiene y el papel no (asistentes de IA, adjuntos, avances, planes,
+              permisos, diferimientos) queda debajo, en su propia zona. */}
+          {isMercurio && (
+            <WoPaperForm
+              meta={paperDoc.meta}
+              config={paperDoc.config}
+              logoUrl={paperLogo}
+              tenantName={tenant?.name ?? ""}
+              editable={isEditable}
+              resultEditable={isResultEditable}
+              autosave={{ saving: regiSaving, saved: regiSaved, error: regiErr }}
+              header={{
+                vesselName: paperVesselName,
+                workOrderCode: workOrder.workOrderCode,
+                assetLabel: workOrder.assetName ?? workOrder.assetId ?? "",
+                serviceRequestCodes: linkedServiceRequests.map(sr => sr.serviceRequestCode),
+                openDate: fmtDate(workOrder.openDate),
+                planItemCode: (workOrder.plans ?? []).map(pl => pl.taskCode).join(", "),
+                statusLabel: WO_STATUS_PAPER_LABEL[workOrder.status] ?? workOrder.status,
+                createdByName: workOrder.createdByName ?? "",
+              }}
+              values={{
+                voyageNumber: regiForm.voyageNumber,
+                location,
+                requestedByArea: regiForm.requestedByArea,
+                assignedToArea: regiForm.assignedToArea,
+                priority,
+                maintenanceKind: regiForm.maintenanceKind,
+                type,
+                systemArea: regiForm.systemArea,
+                description,
+                title,
+                acceptanceCriteria,
+                taskCompleted: regiForm.taskCompleted,
+                woResult,
+                pendingDetail: regiForm.pendingDetail,
+                riskLevel,
+                riskAnalysisResult,
+                loto,
+              }}
+              // Los recuadros del papel escriben sobre los mismos campos de
+              // siempre: el bloque del formulario (regiForm, con su
+              // auto-guardado) y los campos sueltos de la OT.
+              onChange={patch => {
+                touchRegi();
+                const regi: Partial<WoRegiForm> = {};
+                if (patch.voyageNumber !== undefined)    regi.voyageNumber = patch.voyageNumber;
+                if (patch.requestedByArea !== undefined) regi.requestedByArea = patch.requestedByArea;
+                if (patch.assignedToArea !== undefined)  regi.assignedToArea = patch.assignedToArea;
+                if (patch.systemArea !== undefined)      regi.systemArea = patch.systemArea;
+                if (patch.maintenanceKind !== undefined) regi.maintenanceKind = patch.maintenanceKind;
+                if (patch.pendingDetail !== undefined)   regi.pendingDetail = patch.pendingDetail;
+                if (patch.taskCompleted !== undefined)   regi.taskCompleted = patch.taskCompleted;
+                if (Object.keys(regi).length > 0) setRegiForm(prev => ({ ...prev, ...regi }));
+                if (patch.location !== undefined)           setLocation(patch.location);
+                if (patch.priority !== undefined)           setPriority(patch.priority);
+                if (patch.type !== undefined)               setType(patch.type);
+                if (patch.description !== undefined)        setDescription(patch.description);
+                if (patch.title !== undefined)              setTitle(patch.title);
+                if (patch.acceptanceCriteria !== undefined) setAcceptanceCriteria(patch.acceptanceCriteria);
+                // Elegir "con deficiencias" dispara la propuesta de abrir un
+                // defecto: por eso pasa por su handler y no por setWoResult.
+                if (patch.woResult !== undefined)           handleWoResultChange(patch.woResult);
+                if (patch.riskLevel !== undefined)          setRiskLevel(patch.riskLevel);
+                if (patch.riskAnalysisResult !== undefined) setRiskAnalysisResult(patch.riskAnalysisResult);
+                if (patch.loto !== undefined)               setLoto(patch.loto);
+              }}
+              tecnico={
+                <AssigneeSelect
+                  value={assignedTo}
+                  onChange={setAssignedTo}
+                  disabled={!isEditable}
+                  className="w-full bg-transparent text-[13px] text-fg outline-none"
+                />
+              }
+              proveedor={needsProvider ? (
+                <div className="w-full space-y-1">
+                  <select
+                    value={providerId}
+                    onChange={e => { touchRegi(); setProviderId(e.target.value); }}
+                    disabled={!isEditable}
+                    className="w-full bg-transparent text-[13px] text-fg outline-none"
+                  >
+                    <option value="">Seleccionar taller / proveedor…</option>
+                    {providers.map(pr => (
+                      <option key={pr.id} value={pr.id}>{pr.name}{pr.providerCode ? ` (${pr.providerCode})` : ""}</option>
+                    ))}
+                  </select>
+                  {!providerId && (
+                    <input
+                      className="w-full bg-transparent text-[13px] text-fg placeholder-text-industrial/30 outline-none"
+                      value={providerOther}
+                      disabled={!isEditable}
+                      onChange={e => { touchRegi(); setProviderOther(e.target.value); }}
+                      placeholder="…o escribí la empresa si no está en la lista"
+                    />
+                  )}
+                </div>
+              ) : undefined}
+              permits={
+                linkedPermits.length === 0
+                  ? <span className="text-[11px] italic text-text-industrial/40">Sin permisos vinculados. Se cargan abajo, en Permisos de trabajo.</span>
+                  : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {linkedPermits.map(pm => (
+                        <span key={pm.id} className="px-2 py-0.5 border border-fg/30 text-[11px] font-bold text-fg">
+                          {PERMIT_TYPE_LABEL[pm.type] ?? pm.type} · <span className="font-mono">{pm.permitCode}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )
+              }
+              spares={
+                <PlannedItemsEditor
+                  items={plannedItems}
+                  onChange={v => { touchRegi(); setPlannedItems(v); }}
+                  spares={woSpares}
+                  disabled={!isEditable}
+                />
+              }
+              materials={
+                <p className="text-[11px] italic text-text-industrial/50">
+                  Los materiales se cargan en el mismo listado de arriba, eligiendo el tipo “Material”.
+                </p>
+              }
+              schedule={
+                <div className="space-y-2 p-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
+                        {t("wo.modal.startDate")}
+                      </label>
+                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                        disabled={!isEditable} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
+                        {t("wo.modal.endDate")}
+                      </label>
+                      <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)}
+                        disabled={!isEditable} className={inputCls} />
+                    </div>
+                  </div>
+                  <WoScheduleEditor
+                    workOrderId={workOrder.id}
+                    canEdit={isResultEditable}
+                    defaultPlace={location || null}
+                    defaultCompany={workOrder.providerName ?? providerOther ?? null}
+                  />
+                </div>
+              }
+              riskMatrix={
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">Nivel</span>
+                  <div className="flex gap-1.5">
+                    {([
+                      ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
+                      ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+                      ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                      "text-red-700 dark:text-red-400 border-red-400/40"],
+                      ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                      "text-red-600 border-red-600/40"],
+                    ] as [string, string, string, string][]).map(([val, lab, activeCls, inactiveLabelCls]) => (
+                      <button key={val} type="button" disabled={!isEditable || loadingRisk}
+                        onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
+                        className={`w-8 h-8 rounded border font-bold text-xs transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Sugerir el nivel y el análisis con IA — la única herramienta
+                      de la app dentro de este recuadro. */}
+                  {isEditable && (
+                    <button type="button" onClick={() => { void handleRiskClick(); }} disabled={loadingRisk}
+                      title={t("wo.ai.riskTooltip")}
+                      className="ml-auto flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-accent hover:text-fg disabled:opacity-40">
+                      {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      Sugerir
+                    </button>
+                  )}
+                </div>
+              }
+              signatures={{
+                solicitante: { name: workOrder.enviadoAprobacionByName ?? workOrder.createdByName ?? null },
+                asignado: { name: workOrder.assignedToUserName ?? null },
+              }}
+            />
+          )}
+
+          {/* ── 1. INFORMACIÓN ── */}
+          <section>
+            <PhaseHeader n={isMercurio ? 4 : 1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
+            <div className="mt-3">
+            {/* Con el formulario controlado, buque / equipo / tipo / prioridad
+                son recuadros de la hoja: acá quedan sólo los datos de gestión
+                que el papel no lleva. Repetirlos daba dos controles para el
+                mismo dato. */}
+            {isMercurio ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  [t("wo.col.status"), null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
+                  [t("wo.modal.criticality"), workOrder.criticality, "text-fg"],
+                  [t("wo.modal.openDate"), fmtDate(workOrder.openDate), "text-fg",
+                    (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
+                      ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+                          className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                      : undefined],
+                  [t("wo.modal.dueDate"), fmtDate(workOrder.dueDate),
+                    workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
+                    tramitaPhase === "SOLICITADA" && isEditable
+                      ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                          className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                      : undefined],
+                ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
+                  <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
+                    {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {([
+                [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
+                [t("wo.modal.equipment"),  workOrder.assetName ?? workOrder.assetId, "text-fg"],
+                [t("wo.modal.type"),       null, null,
+                  isEditable
+                    ? <select key="ty" value={type} onChange={e => { void saveType(e.target.value); }} disabled={savingType}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50 disabled:opacity-60">
+                        <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
+                        <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
+                        <option value="INSPECTION">{t("wo.type.inspection")}</option>
+                      </select>
+                    : <CategoryBadge key="cat" type={type} />],
+                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
+                // Lee del estado (no de workOrder) para reflejar en el acto el
+                // cambio hecho en el recuadro PRIORIDAD del formulario.
+                [t("wo.modal.priority"),   priority,                        "text-fg"],
+                [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
+                [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
+                  (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
+                    ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                    : undefined],
+                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
+                  tramitaPhase === "SOLICITADA" && isEditable
+                    ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
+                    : undefined],
+              ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
+                <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
+                  {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
+                </div>
+              ))}
+            </div>
+            )}
+            {workOrder.holdReason && (() => {
+              const inProcess = deferralStatus === "REQUESTED" || deferralStatus === "UNDER_REVIEW";
+              const approved  = deferralStatus === "APPROVED" || deferralStatus === "ACTIVE";
+              const closed    = deferralStatus === "CLOSED" || deferralStatus === "EXPIRED";
+              const rejected  = deferralStatus === "REJECTED";
+              const badge = inProcess
+                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" }
+                : approved
+                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
+                : rejected
+                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30" }
+                : closed
+                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-fg/10 text-text-industrial/60 border-fg/10" }
+                : null;
+              const originalDue = workOrder.dueDate;
+              const postponedTo = deferralTargetDate;
+              const postponedDays = originalDue && postponedTo
+                ? Math.round((new Date(postponedTo).getTime() - new Date(originalDue).getTime()) / 86_400_000)
+                : null;
+              const boxCls = rejected
+                ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
+                : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
+              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-700 dark:text-yellow-400";
+              const textCls  = rejected ? "text-xs text-red-700 dark:text-red-300" : "text-xs text-yellow-700 dark:text-yellow-300";
+              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-700 dark:text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-700 dark:text-yellow-400/70";
+              const strongCls = rejected ? "font-semibold text-red-700 dark:text-red-300" : "font-semibold text-yellow-700 dark:text-yellow-300";
+              return (
+                <div className={boxCls}>
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className={labelCls}>{t("wo.holdReasonLabel")}</p>
+                    {badge && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <p className={textCls}>{workOrder.holdReason}</p>
+                  <div className={metaCls}>
+                    {originalDue && (
+                      <span>{t("wo.originalDue")}: <span className={strongCls}>{fmtDate(originalDue)}</span></span>
+                    )}
+                    {postponedTo && (
+                      <span>{t("wo.targetDate")}: <span className={strongCls}>{fmtDate(postponedTo)}</span></span>
+                    )}
+                    {postponedDays !== null && (
+                      <span>{t("wo.postponedBy")}: <span className={strongCls}>{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
+                    )}
+                  </div>
+                  {rejected && workOrder.status === "ON_HOLD" && (
+                    <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la {woTerms.abbr} o solicite uno nuevo.</p>
+                      <button
+                        type="button"
+                        onClick={() => { void handleResubmitDeferral(); }}
+                        disabled={resuming}
+                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-800 dark:text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
+                      >
+                        {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Re-solicitar diferimiento
+                      </button>
+                    </div>
+                  )}
+                  {deferralHistory.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-fg/10">
+                      <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
+                      <div className="space-y-0.5">
+                        {deferralHistory.map(d => (
+                          <button
+                            type="button"
+                            key={d.id}
+                            onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
+                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-fg/5 transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-yellow-700 dark:text-yellow-300/80 truncate">{d.deferralCode}</span>
+                              <DeferralStatusBadge status={d.status} />
+                            </span>
+                            <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {workOrder.cancelReason && (
+              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
+                <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
+              </div>
+            )}
+            {/* Con el formulario controlado el responsable es el recuadro
+                TECNICO de la hoja. */}
+            {!isMercurio && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.assignee")}</label>
+                  <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
+                </div>
+              </div>
+            )}
+            </div>{/* end mt-3 */}
+          </section>
+
+          {/* ── 4. PERMISOS DE TRABAJO — oculta (no sólo deshabilitada) hasta
+              que la OT esté aprobada, igual que 6-10. */}
+          {isApproved && (
+          <section className="space-y-3">
+            <PhaseHeader
+              n={isMercurio ? 5 : 4}
+              label="Permisos de trabajo"
+              dotCls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+              borderCls="border-yellow-500/25"
+              action={isEditable ? (
+                <button
+                  type="button"
+                  onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
+                >
+                  <Plus className="w-3 h-3" /> Nuevo permiso
+                </button>
+              ) : undefined}
+            />
+
+            {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
+            {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
+              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200 font-semibold mb-1">Esta {woTerms.abbr} podría requerir permiso de trabajo</p>
+                  <p className="text-[11px] text-yellow-800 dark:text-yellow-200/80 leading-snug mb-2">
+                    Por el contenido del trabajo, sugerimos: <span className="font-bold">{advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}</span>.
+                    <span className="block text-[10px] text-yellow-800 dark:text-yellow-200/60 mt-0.5">
+                      Coincidencias detectadas: {advisoryMatches.flatMap(m => m.matchedKeywords).slice(0, 6).join(", ")}
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {advisoryMatches.map(m => (
+                      <button
+                        key={m.type}
+                        type="button"
+                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
+                        className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
+                      >
+                        Crear {PERMIT_TYPE_LABEL[m.type]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de PTWs vinculados */}
+            {linkedPermits.length === 0 ? (
+              advisoryMatches.length === 0 && (
+                <p className="text-xs text-text-industrial/40 italic">Sin permisos vinculados.</p>
+              )
+            ) : (
+              <div className="space-y-1.5">
+                {linkedPermits.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPermitModalState({ kind: "edit", permit: p })}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 hover:border-accent/30 text-left transition-colors"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-[10px] font-mono text-text-industrial/50">{p.permitCode}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${PTW_STATUS_COLOR[p.status]}`}>
+                          {PTW_STATUS_LABEL[p.status]}
+                        </span>
+                        <span className="text-[10px] text-text-industrial/70">{PERMIT_TYPE_LABEL[p.type as PermitType] ?? p.type}</span>
+                      </div>
+                      <p className="text-xs text-fg/80 truncate">{p.description}</p>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+          )}
+
           {/* ── Secciones 6-10 (Avances/Programación/Repuestos/Tarea concluida/
               Resultado): ocultas del todo hasta que la OT esté aprobada, no
               sólo deshabilitadas. */}
@@ -2592,86 +2797,32 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* ── 7. PROGRAMACION DE TRABAJO (formulario REGI-OPE-26.3) ──
-              Una fila por jornada. Es lo que imprime el recuadro del papel: antes
-              salía siempre vacío porque no había dónde cargarlo. */}
-          {isMercurio && (
-            <section className="space-y-3">
-              <PhaseHeader n={7} label="Programación de trabajo" dotCls="bg-amber-500/15 text-amber-700 dark:text-amber-400" borderCls="border-amber-500/25" />
-              {/* Las dos fechas del encabezado del recuadro en el papel. La de
-                  finalización es la MISMA que "Fecha de ejecución" de la sección
-                  8 (comparten estado): es un solo dato, editable desde los dos
-                  lugares, no una copia. */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.startDate")}</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!isEditable} className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.endDate")}</label>
-                  <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
-                </div>
-              </div>
-              <WoScheduleEditor
-                workOrderId={workOrder.id}
-                canEdit={isResultEditable}
-                defaultPlace={location || null}
-                defaultCompany={workOrder.providerName ?? providerOther ?? null}
-              />
-            </section>
-          )}
-
-          {/* ── 8. REPUESTOS Y MATERIALES PREVISTOS (formulario REGI-OPE-26.3) ──
-              Antes vivía al pie del bloque de opciones del formulario, sin
-              título propio: nadie lo encontraba. Sección propia, acá, porque es
-              lo que se planifica antes de ejecutar el trabajo. Lo realmente
-              consumido se carga en RESULTADO ("Repuestos utilizados"). */}
-          {isMercurio && (
-            <section className="space-y-3">
-              <PhaseHeader n={8} label="Repuestos y materiales" dotCls="bg-orange-500/15 text-orange-700 dark:text-orange-400" borderCls="border-orange-500/25" />
-              <PlannedItemsEditor
-                items={plannedItems}
-                onChange={v => { touchRegi(); setPlannedItems(v); }}
-                spares={woSpares}
-                disabled={!isEditable}
-              />
-            </section>
-          )}
-
-          {/* ── 9. TAREA CONCLUIDA (formulario REGI-OPE-26.3) ──
-              Se completa al terminar el trabajo: va después de los avances y
-              antes del resultado. Sección propia porque en el papel también lo es. */}
-          {isMercurio && (
-            <section className="space-y-3">
-              <PhaseHeader n={9} label="Tarea concluida" dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
-              <WoRegiClosure
-                form={regiForm}
-                onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
-                disabled={!isResultEditable}
-              />
-            </section>
-          )}
+          {/* Programación de trabajo, repuestos/materiales y tarea concluida son
+              recuadros de la hoja de arriba (ver WoPaperForm). */}
 
           {/* ── RESULTADO (10 con el formulario de Mercurio, que suma
                  "Programación de trabajo", "Repuestos y materiales" y
                  "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={isMercurio ? 10 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.result")} *</label>
-              <div className="flex gap-2">
-                {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
-                  ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
-                  <button key={val} type="button" disabled={!isEditable}
-                    onClick={() => handleWoResultChange(val)}
-                    className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
-                    {label}
-                  </button>
-                ))}
+            {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}
+            {!isMercurio && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.result")} *</label>
+                <div className="flex gap-2">
+                  {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
+                    ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
+                    <button key={val} type="button" disabled={!isEditable}
+                      onClick={() => handleWoResultChange(val)}
+                      className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* ── Deficiencias encontradas ── */}
             {woResult === "WITH_DEFICIENCIES" && (

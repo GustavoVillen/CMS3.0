@@ -92,6 +92,7 @@ import { serveDoc } from "./doc-export";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildDueSoonPlansXlsx } from "./maintenance-plans-due-excel-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
+import { resolveTenantForm } from "./tenant-forms-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -333,6 +334,17 @@ export async function handleMaintenanceRoutes(
     }
     await deleteTenantMaintenancePlan(session, id);
     sendJson(response, 200, { ok: true });
+    return true;
+  }
+
+  // Definicion del formulario controlado de OT (REGI-OPE-26.3 en Mercurio).
+  // La pantalla de la OT dibuja el MISMO papel que imprime el PDF: mismas
+  // secciones, en el mismo orden, con las mismas etiquetas. Sin esto, la
+  // pantalla tendria una copia hardcodeada del formulario y divergiria del
+  // documento apenas un tenant cambie su config.
+  if (method === "GET" && url.pathname === "/app/pms/work-orders/form") {
+    const form = await resolveTenantForm(session.tenantSlug, "WORK_ORDER");
+    sendJson(response, 200, { meta: form.meta, config: form.config, logoUrl: form.logoUrl });
     return true;
   }
 

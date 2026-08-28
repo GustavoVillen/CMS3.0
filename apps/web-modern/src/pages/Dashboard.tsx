@@ -24,6 +24,8 @@ import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
 // (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
+import { worstSeverity, worstOf, SEVERITY_STYLE, type Severity } from "../lib/maintenance-severity";
+
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode: string | null; }
@@ -177,6 +179,9 @@ export const Dashboard: React.FC = () => {
   // una sola vez al abrir el chooser.
   const [mpGroup, setMpGroup] = React.useState<number | null>(null);
   const [mpAllAssets, setMpAllAssets] = React.useState<MpAsset[] | null>(null);
+  // Semáforo por equipo del buque elegido. Solo se pide en el modo "estado":
+  // es la lista de planes del buque y no hace falta para elegir un plan.
+  const [mpSeverityByAsset, setMpSeverityByAsset] = React.useState<Map<string, Severity> | null>(null);
   const [mpLoadingAssets, setMpLoadingAssets] = React.useState(false);
   // Mismo chooser, dos finales posibles: "planList" (Plan de Mantenimiento,
   // navega a la lista filtrada) o "status" (Estado de mantenimiento de
@@ -313,16 +318,38 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // Todos los equipos del buque elegido arriba (header), para el chooser de
   // Plan de Mantenimiento: se piden una sola vez al abrirlo y de ahí salen
   // tanto el panel por grupo como el buscador inteligente.
-  const loadMpAssets = async () => {
-    if (!selectedVesselCode) { setMpAllAssets(null); return; }
+  // `mode` llega por parámetro y no desde el estado: quien abre el modal hace
+  // setMpChooserMode(...) e inmediatamente llama acá, y en ese momento el
+  // estado todavía tiene el valor anterior.
+  const loadMpAssets = async (mode: "planList" | "status") => {
+    if (!selectedVesselCode) { setMpAllAssets(null); setMpSeverityByAsset(null); return; }
     setMpLoadingAssets(true);
+    setMpSeverityByAsset(null);
     try {
       const res = await api.get<{ items: MpAsset[] }>(
         `/app/pms/assets?vesselCode=${encodeURIComponent(selectedVesselCode)}&limit=500`,
       );
       setMpAllAssets(res.items ?? []);
+
+      if (mode === "status") {
+        // Una sola consulta de los planes activos del buque; de ahí sale el
+        // semáforo de cada equipo y, agrupando, el de cada grupo SFI.
+        const plans = await api.get<{ items: Array<{ assetId: string; status: string; executionStatus: string }> }>(
+          `/app/pms/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&status=ACTIVE`,
+        );
+        const byAsset = new Map<string, Array<{ status: string; executionStatus: string }>>();
+        for (const pl of plans.items ?? []) {
+          if (!pl.assetId) continue;
+          const list = byAsset.get(pl.assetId);
+          if (list) list.push(pl); else byAsset.set(pl.assetId, [pl]);
+        }
+        const sev = new Map<string, Severity>();
+        for (const [assetId, list] of byAsset) sev.set(assetId, worstSeverity(list));
+        setMpSeverityByAsset(sev);
+      }
     } catch {
       setMpAllAssets([]);
+      setMpSeverityByAsset(null);   // sin datos no se pinta nada, en vez de mentir
     } finally {
       setMpLoadingAssets(false);
     }
@@ -334,6 +361,23 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     return n < 10 ? n : Math.floor(n / 100);
   };
   const mpAssets = mpGroup === null ? [] : (mpAllAssets ?? []).filter(a => mpGroupOf(a) === mpGroup);
+
+  // Semáforo de cada grupo SFI = el peor de sus equipos. Un grupo cuyos equipos
+  // no tienen ningún plan queda SIN color: pintarlo de verde diría "está al
+  // día" cuando en realidad no hay nada cargado, que es muy distinto.
+  const mpSeverityByGroup = React.useMemo(() => {
+    if (!mpSeverityByAsset) return null;
+    const out = new Map<number, Severity>();
+    for (const a of mpAllAssets ?? []) {
+      const g = mpGroupOf(a);
+      if (g === null) continue;
+      const sev = mpSeverityByAsset.get(a.id);
+      if (!sev) continue;
+      const prev = out.get(g);
+      out.set(g, prev ? worstOf([prev, sev]) : sev);
+    }
+    return out;
+  }, [mpSeverityByAsset, mpAllAssets]);
 
   // Planes de inspección de la clase elegida. El backend filtra por tipo de
   // tarea y disparador; el buque sale del contexto (si hay uno elegido).
@@ -625,18 +669,39 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                     <span className="font-bold text-sm text-fg">{t("dashboard.mpChooser.all")}</span>
                   </button>
                 )}
-                {SFI_GROUP_NUMBERS.map(g => (
-                  <button
-                    key={g}
-                    onClick={() => setMpGroup(g)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left w-full ${
-                      mpGroup === g ? "bg-accent/10 border-accent/40" : "bg-fg/5 border-fg/10 hover:border-accent/40 hover:bg-fg/10"
-                    }`}
-                  >
-                    <span className="shrink-0 w-7 h-7 rounded-lg bg-accent/10 text-accent font-mono font-bold text-[11px] flex items-center justify-center">G{g}</span>
-                    <span className="font-bold text-xs text-fg">{t(`sfi.g.${g}` as TranslationKey)}</span>
-                  </button>
-                ))}
+                {SFI_GROUP_NUMBERS.map(g => {
+                  // El color sale del peor estado de los equipos del grupo. Si
+                  // no hay dato (modo lista de planes, o ningún plan cargado)
+                  // el botón queda como siempre, sin inventar un estado.
+                  const sev = mpSeverityByGroup?.get(g) ?? null;
+                  const style = sev ? SEVERITY_STYLE[sev] : null;
+                  const selected = mpGroup === g;
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setMpGroup(g)}
+                      title={style ? t(style.labelKey as TranslationKey) : undefined}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left w-full ${
+                        selected
+                          ? "bg-accent/10 border-accent/40"
+                          : style
+                            ? `${style.chip} hover:brightness-110`
+                            : "bg-fg/5 border-fg/10 hover:border-accent/40 hover:bg-fg/10"
+                      }`}
+                    >
+                      <span className={`shrink-0 w-7 h-7 rounded-lg font-mono font-bold text-[11px] flex items-center justify-center ${
+                        style && !selected ? "bg-fg/10" : "bg-accent/10 text-accent"
+                      }`}>G{g}</span>
+                      <span className="font-bold text-xs text-fg flex-1 truncate">{t(`sfi.g.${g}` as TranslationKey)}</span>
+                      {/* El color solo no alcanza: el texto dice qué significa. */}
+                      {style && (
+                        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide">
+                          {t(style.labelKey as TranslationKey)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Equipos del grupo elegido — "ventanita al lado". */}
@@ -661,16 +726,23 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                         {t("dashboard.mpChooser.viewGroup")}
                       </button>
                     )}
-                    {mpAssets.map(a => (
-                      <button
-                        key={a.id}
-                        onClick={() => goToAsset(a.id)}
-                        className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left w-full"
-                      >
-                        <span className="font-bold text-xs text-fg truncate">{a.name ?? a.assetCode}</span>
-                        <span className="font-mono text-[10px] text-text-industrial/40 shrink-0">{a.assetCode}</span>
-                      </button>
-                    ))}
+                    {mpAssets.map(a => {
+                      const sev = mpSeverityByAsset?.get(a.id) ?? null;
+                      const style = sev ? SEVERITY_STYLE[sev] : null;
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => goToAsset(a.id)}
+                          title={style ? t(style.labelKey as TranslationKey) : undefined}
+                          className={`flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border transition-all text-left w-full ${
+                            style ? `${style.chip} hover:brightness-110` : "bg-fg/5 border-fg/10 hover:border-accent/40 hover:bg-fg/10"
+                          }`}
+                        >
+                          <span className="font-bold text-xs text-fg truncate">{a.name ?? a.assetCode}</span>
+                          <span className="font-mono text-[10px] text-text-industrial/40 shrink-0">{a.assetCode}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -693,7 +765,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           "Reportes sin procesar" (pedido del usuario). */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <button
-          onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
+          onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
           className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
         >
           <ClipboardList className="w-6 h-6 text-accent shrink-0" />
@@ -721,7 +793,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
         </button>
         <button
-          onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
+          onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
           className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
         >
           <Gauge className="w-6 h-6 text-accent shrink-0" />
