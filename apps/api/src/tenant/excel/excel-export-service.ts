@@ -639,7 +639,13 @@ function escapeFormula(s: string): string {
 
 function toExcelValue(val: unknown): string | number | null {
   if (val === null || val === undefined) return null;
-  if (val instanceof Date) return val.toISOString().split("T")[0];
+  // Un registro con una fecha fuera del rango de JS (año de 5 cifras cargado por
+  // error, timestamp corrupto) llega como Invalid Date y toISOString() tira
+  // RangeError: eso volteaba el export ENTERO del módulo con un 500 genérico.
+  // La celda va vacía y el resto de la planilla se exporta igual.
+  if (val instanceof Date) {
+    return Number.isNaN(val.getTime()) ? null : val.toISOString().split("T")[0];
+  }
   if (typeof val === "boolean") return val ? "true" : "false";
   if (typeof val === "string") return escapeFormula(val);
   return val as string | number;

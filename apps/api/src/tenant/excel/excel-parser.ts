@@ -118,7 +118,9 @@ export async function parseExcelBuffer(buffer: Buffer, module: ExcelModule): Pro
       if (val === null || val === undefined || val === "") {
         data[key] = null;
       } else if (val instanceof Date) {
-        data[key] = val.toISOString().split("T")[0]; // YYYY-MM-DD
+        // Una celda con fecha fuera del rango de JS llega como Invalid Date:
+        // toISOString() tiraría RangeError y voltearía la previsualización entera.
+        data[key] = Number.isNaN(val.getTime()) ? null : val.toISOString().split("T")[0]; // YYYY-MM-DD
         hasAnyValue = true;
       } else if (typeof val === "object") {
         if ("richText" in val) {
@@ -140,7 +142,7 @@ export async function parseExcelBuffer(buffer: Buffer, module: ExcelModule): Pro
           if (result === null || result === undefined || result === "") {
             data[key] = null;
           } else if (result instanceof Date) {
-            data[key] = result.toISOString().split("T")[0];
+            data[key] = Number.isNaN(result.getTime()) ? null : result.toISOString().split("T")[0];
             hasAnyValue = true;
           } else {
             data[key] = result as string | number;
