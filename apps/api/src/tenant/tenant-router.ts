@@ -87,7 +87,6 @@ import { listTenantDefects } from "./defects/defects-service";
 import { listTenantDomainEvents } from "./domain-events/domain-events-service";
 import { listTenantMaintenancePlans, getTenantMaintenancePlansSummary, getMaintenanceWorkloadProjection } from "./maintenance-plans/maintenance-plans-service";
 import { getReliabilityKpis, type ReliabilityGroupBy } from "./dashboard/reliability-service";
-import { getPlanMap } from "./dashboard/plan-map-service";
 import { listTenantInspectionLogs } from "./inspection-logs/inspection-logs-service";
 import { listTenantInspections } from "./inspections/inspections-service";
 import { listTenantProviders, getTenantProvider, createProvider, updateProvider, deleteProvider } from "./providers/providers-service";
@@ -665,16 +664,6 @@ export async function handleTenantRoutes(
     return true;
   }
 
-  // Mapa del Plan — estructura del plan de mantenimiento de UN buque.
-  if (method === "GET" && url.pathname === "/app/dashboard/plan-map") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const map = await getPlanMap(session, {
-      vesselCode: url.searchParams.get("vesselCode"),
-    });
-    sendJson(response, 200, map);
-    return true;
-  }
-
   if (method === "GET" && url.pathname === "/app/dashboard/reliability") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const kpis = await getReliabilityKpis(session, {
@@ -691,17 +680,6 @@ export async function handleTenantRoutes(
     return true;
   }
   // Export HTML standalone — para imprimir / archivar / compartir.
-  if (method === "GET" && url.pathname === "/app/dashboard/html") {
-    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const { buildDashboardHtml } = await import("./dashboard/dashboard-html-service");
-    const html = await buildDashboardHtml(session, url.searchParams.get("vesselCode"));
-    response.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": `attachment; filename="dashboard_${session.tenantSlug}_${new Date().toISOString().slice(0, 10)}.html"`,
-    });
-    response.end(html);
-    return true;
-  }
   if (method === "GET" && url.pathname === "/app/dashboard/maintenance-workload/html") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const weeksParam = parseInt(url.searchParams.get("weeks") ?? "52", 10);

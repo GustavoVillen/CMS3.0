@@ -45,6 +45,19 @@ export const WO_MAINTENANCE_KINDS: FormOption[] = [
 ];
 
 /**
+ * Igual que WO_MAINTENANCE_KINDS, más "Inspección" — el papel no la lista
+ * (no tiene equivalente fino), pero la empresa la usa seguido al abrir una OT
+ * a mano. Las 5 primeras viajan como `maintenanceKind` (el backend deriva el
+ * `type` grueso, PREVENTIVE/CORRECTIVE); "Inspección" viaja directo como
+ * `type: "INSPECTION"` — quien la guarda tiene que mandarla aparte, no como
+ * maintenanceKind (el backend no sabe derivar un type desde ese valor).
+ */
+export const WO_MAINTENANCE_KINDS_OR_INSPECTION: FormOption[] = [
+  ...WO_MAINTENANCE_KINDS,
+  { value: "INSPECTION", label: "Inspección" },
+];
+
+/**
  * PRIORIDAD. El papel la expresa como plazo; el sistema la guarda como nivel.
  * Es el mismo dato con otro nombre — por eso se mapea acá y no se duplica una
  * columna. Elegir una opción del formulario cambia la prioridad de la OT.

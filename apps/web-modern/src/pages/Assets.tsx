@@ -392,8 +392,10 @@ const WorkLogResultBadge: React.FC<{ result: string }> = ({ result }) => {
 };
 
 // Historial de mantenimientos/inspecciones (órdenes de trabajo) del asset.
-// Solo lectura, se muestra al final del formulario en modo edición.
-const AssetHistory: React.FC<{ asset: Asset }> = ({ asset }) => {
+// Solo lectura, se muestra al final del formulario en modo edición. Exportado:
+// también lo reusa el panel de "Estado de mantenimiento" del Dashboard.
+// Sólo necesita el id, así que el prop no exige el Asset completo.
+export const AssetHistory: React.FC<{ asset: { id: string } }> = ({ asset }) => {
   const t = useT();
   const navigate = useNavigate();
   const assetId = asset.id;

@@ -168,6 +168,19 @@ export interface OpenFormalWorkOrderInput {
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
+  // Recuadros del formulario REGI-OPE-26.3 que el plan no define (a diferencia
+  // de tipo/prioridad/talleres, que sí vienen del plan): los completa quien
+  // abre la OT.
+  requestedByArea?: string | null;
+  systemArea?: string | null;
+  voyageNumber?: string | null;
+  location?: string | null;
+  /**
+   * "Asignado a": por defecto se deriva del área del plan (ver más abajo), pero
+   * quien abre la OT puede pisarlo acá — no afecta a qué proveedor se le manda
+   * la SS (eso sale de `providerRequests`, un dato aparte del plan).
+   */
+  assignedToArea?: "TRIPULACION" | "TERCERIZADO" | "TECNICA" | "OPS_SSMA" | null;
   // Solo TENANT_ADMIN: fecha de apertura (backdating) y abrir en nombre de
   // otro usuario (queda como SOLICITA / createdByUserId). Ignorados si el actor
   // no es admin. Ver openFormalWorkOrder.
@@ -215,10 +228,9 @@ interface RecalculateResult {
   nextDueHours: number | null;
 }
 
-// Exportada para que el Mapa del Plan (dashboard/plan-map-service) muestre el
-// MISMO estado que la pantalla de Planes. El campo `executionStatus` guardado se
-// queda viejo (un plan COMPLETED cuya fecha ya pasó está vencido), así que el
-// estado real se deriva acá y no se lee de la columna.
+// El campo `executionStatus` guardado se queda viejo (un plan COMPLETED cuya
+// fecha ya pasó está vencido), así que el estado real se deriva acá y no se lee
+// de la columna.
 export function deriveExecutionStatus(
   plan: Pick<MaintenancePlanRecord, "executionStatus" | "nextDueDate" | "nextDueHours" | "triggerType">,
   currentHours?: number | null,
@@ -1419,7 +1431,12 @@ export async function quickClosePlan(
             // Colapso del proveedor igual que al abrir la OT: único → id, varios → null.
             // (Este cierre rápido NO crea SS, solo hereda el proveedor a la OT ya cerrada.)
             providerId: collapseProviderId(planAny.department === "PROVEEDOR" ? resolvePlanProviderRequests(planAny) : []),
-            // Tramitación automática: aprobada + autorizada por Sistema (sin firma humana).
+            // Tramitación automática: enviada + aprobada + autorizada por
+            // Sistema (sin firma humana). La OT nace cerrada y no llega al
+            // tablero, pero las tres fechas van igual para que la etapa que se
+            // deduce de ellas no quede a medias.
+            enviadoAprobacionByName: "Sistema",
+            enviadoAprobacionAt: completedAt,
             aprobadoByName: "Sistema",
             aprobadoAt: completedAt,
             autorizadoByName: "Sistema",
@@ -1835,6 +1852,12 @@ export async function openFormalWorkOrder(
   const expressSigner = normalizeOptionalText(payload.signerName) ?? null;
   const expressStamps = isExpress
     ? {
+        // Incluye el envío a aprobar: sin esto la OT express quedaría marcada
+        // como autorizada pero nunca enviada, y la etapa (que se deduce de
+        // estas fechas) saldría incoherente.
+        enviadoAprobacionByName:   expressSigner,
+        enviadoAprobacionByUserId: woCreatorId,
+        enviadoAprobacionAt:       woOpenDate,
         aprobadoByName:   expressSigner,
         aprobadoByUserId: woCreatorId,
         aprobadoAt:       woOpenDate,
@@ -1877,10 +1900,15 @@ export async function openFormalWorkOrder(
   //   Proveedor              → Tercerizado (lo hace un tercero)
   //   Cubierta/Máquinas/Barcaza → Tripulación (lo hace la dotación a bordo)
   //   Otros / sin área       → sin asignar (queda para que lo defina quien abre)
-  const assignedToArea: "TRIPULACION" | "TERCERIZADO" | null =
+  // Quien abre la OT puede pisar ese valor por defecto (payload.assignedToArea):
+  // no cambia a qué proveedor se le manda la SS, eso sale de `providerRequests`.
+  const assignedToAreaDefault: "TRIPULACION" | "TERCERIZADO" | null =
     planAny.department === "PROVEEDOR" ? "TERCERIZADO"
     : (planAny.department === "CUBIERTA" || planAny.department === "MAQUINAS" || planAny.department === "BARCAZA") ? "TRIPULACION"
     : null;
+  const assignedToArea = payload.assignedToArea !== undefined
+    ? payload.assignedToArea
+    : assignedToAreaDefault;
   // Import dinámico (mismo criterio que la cascada) para evitar ciclo con el
   // servicio de SS. Se resuelve ANTES de la transacción: si falla, no se abre la OT.
   const { queryMaxServiceRequestSeq, insertServiceRequestForWorkOrderTx } =
@@ -1944,6 +1972,11 @@ export async function openFormalWorkOrder(
         department: planAny.department ?? null,
         assignedToArea,
         providerId: woProviderId,
+        // El plan no define estos — los completa quien abre la OT.
+        requestedByArea: normalizeOptionalText(payload.requestedByArea) ?? null,
+        systemArea: normalizeOptionalText(payload.systemArea) ?? null,
+        voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? null,
+        location: normalizeOptionalText(payload.location) ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
       },

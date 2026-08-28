@@ -20,6 +20,17 @@ REGLAS DE CONCISIÓN:
 
 Responde ÚNICAMENTE con los bullets, en texto plano, sin introducción, sin numeración, sin explicación adicional.`;
 
+const PROMPT_TITLE = `Sos experto en mantenimiento de máquinas navales. A partir del equipo y, si está, la tarea ya cargada, escribí un título corto y específico para esta orden de trabajo.
+
+REGLAS:
+- Una sola línea, sin punto final.
+- Máximo 10 palabras.
+- Específico: nombrá el componente/sistema y la acción principal (ej. "Cambio de aceite motor auxiliar babor", "Inspección visual de línea de eje estribor").
+- No repitas "Orden de trabajo" ni el nombre completo del equipo si ya queda claro por el contexto.
+- Sin mayúsculas sostenidas salvo siglas.
+
+Responde ÚNICAMENTE con el título, en texto plano, sin comillas, sin punto final, sin explicación adicional.`;
+
 const PROMPT_TASK = `Sos experto en mantenimiento de máquinas navales. A partir del equipo y del título de la orden de trabajo, escribí las tareas concretas que hay que ejecutar.
 
 REGLAS:
@@ -271,6 +282,20 @@ async function callClaude(
     .join("\n")
     .trim();
   return cleanAiText(raw);
+}
+
+export async function suggestTitle(
+  session: TenantAccessSession,
+  input: BaseInput,
+): Promise<{ text: string }> {
+  const text = await callClaude(
+    session,
+    "wo_title_suggestion",
+    PROMPT_TITLE,
+    buildContext(input),
+    256,
+  );
+  return { text };
 }
 
 export async function suggestTaskSteps(

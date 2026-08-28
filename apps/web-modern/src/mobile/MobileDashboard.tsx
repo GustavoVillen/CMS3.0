@@ -6,7 +6,7 @@ import { useWoTerms } from "../lib/i18n";
 import type { WoFilter } from "./MobileWorkOrders";
 import type { SparesFilter } from "./MobileSpares";
 
-interface WO { status: string; dueDate: string | null; aprobadoAt: string | null; autorizadoAt: string | null; }
+interface WO { status: string; dueDate: string | null; enviadoAprobacionAt: string | null; aprobadoAt: string | null; autorizadoAt: string | null; }
 interface Defect { status: string; }
 interface Spare { currentStock: number; minStock: number; reorderPoint: number; }
 interface Certificate { status: string; expiryDate: string | null; }
@@ -73,9 +73,10 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
 
   const openWOs    = (woData?.items  ?? []).filter(w => w.status === "PLANNED" || w.status === "IN_PROGRESS");
   const overdueWOs = openWOs.filter(w => w.dueDate && new Date(w.dueDate) < today);
-  // SS SOLICITADAS = OT activa sin aprobado ni autorizado (etapa SOLICITADA de la tramitación).
-  const solicitadasWOs = openWOs.filter(w => !w.aprobadoAt && !w.autorizadoAt);
-  // SS APROBADAS = OT activa aprobada pero aún sin autorizar (pendiente de autorización).
+  // Pendientes de aprobación = OT activa YA ENVIADA a aprobar, sin firmar. Las
+  // que todavía están en preparación no cuentan: nadie tiene que firmarlas.
+  const solicitadasWOs = openWOs.filter(w => w.enviadoAprobacionAt && !w.aprobadoAt && !w.autorizadoAt);
+  // Pendientes de autorización = OT activa aprobada pero aún sin autorizar.
   const aprobadasWOs   = openWOs.filter(w => w.aprobadoAt && !w.autorizadoAt);
   const openDefs   = (defData?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
   const lowSpares  = (spData?.items  ?? []).filter(s => s.currentStock <= s.reorderPoint);
@@ -110,7 +111,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* SS para aprobar — solo superintendente/admin, y solo si hay solicitadas */}
+      {/* OT para aprobar — solo superintendente/admin, y solo si hay enviadas */}
       {canApproveSS && solicitadasWOs.length > 0 && (
         <button
           type="button"
@@ -128,7 +129,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
-              {solicitadasWOs.length} SS para aprobar
+              {solicitadasWOs.length} {woTerms.abbr} para aprobar
             </p>
             <p className="text-[10px] text-text-industrial/50">Tocá para revisarlas</p>
           </div>
@@ -136,7 +137,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
         </button>
       )}
 
-      {/* SS para autorizar — solo superintendente/admin, y solo si hay aprobadas pendientes */}
+      {/* OT para autorizar — solo superintendente/admin, y solo si hay aprobadas pendientes */}
       {canApproveSS && aprobadasWOs.length > 0 && (
         <button
           type="button"
@@ -152,7 +153,7 @@ export const MobileDashboard: React.FC<Props> = ({ onNavigate }) => {
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
-              {aprobadasWOs.length} SS para autorizar
+              {aprobadasWOs.length} {woTerms.abbr} para autorizar
             </p>
             <p className="text-[10px] text-text-industrial/50">Tocá para revisarlas</p>
           </div>

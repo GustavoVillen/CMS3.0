@@ -6,6 +6,7 @@
  *
  * Triggers actuales:
  *  - Defect crítico al crear/editar (event-driven desde defects-service).
+ *  - OT enviada a aprobar (event-driven desde work-orders-service, paso ENVIA).
  *  - WO vencida y Certificado vencido (lazy — sync al pedir la lista, con throttle).
  */
 
@@ -16,6 +17,7 @@ import { RouteError } from "../../http/route-error";
 export type NotificationType =
   | "DEFECT_CRITICAL"
   | "WORK_ORDER_OVERDUE"
+  | "WORK_ORDER_PENDING_APPROVAL"
   | "CERTIFICATE_EXPIRED";
 
 export type NotificationSeverity = "CRITICAL" | "HIGH" | "INFO";

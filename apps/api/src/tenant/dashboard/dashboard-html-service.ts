@@ -1,12 +1,10 @@
 // Export HTML standalone (single file, sin JS, CSS inline) de:
-//   - Dashboard (sidebar-counts + breakdown por buque)
 //   - Maintenance Workload (proyección semanal)
 //
 // Útil para imprimir, mandar por email, archivar como evidencia. Las páginas
 // vivas son SPAs con React/Recharts — esto es una versión "snapshot" sin JS.
 
 import type { TenantAccessSession } from "../auth/session-store";
-import { getSidebarCounts } from "../sidebar/sidebar-counts-service";
 import { getMaintenanceWorkloadProjection } from "../maintenance-plans/maintenance-plans-service";
 import { resolveTenantTime, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
@@ -62,79 +60,6 @@ ${body}
 <div class="footer">Generado por Copilot Management System — ${esc(generado)}</div>
 </body>
 </html>`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dashboard HTML
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface KpiDef {
-  key: string;
-  label: string;
-  /** Umbral arriba del cual se considera "high" (rojo) — opcional. */
-  highIf?: (n: number) => boolean;
-  /** Umbral arriba del cual se considera "medium" (naranja). */
-  mediumIf?: (n: number) => boolean;
-}
-
-const DASHBOARD_KPIS: Array<KpiDef> = [
-  { key: "workOrdersOpen",            label: "OTs abiertas",                highIf: n => n > 20, mediumIf: n => n > 5 },
-  { key: "defectsOpen",               label: "Defectos abiertos",           highIf: n => n > 15, mediumIf: n => n > 3 },
-  { key: "deferralsOpen",             label: "Diferimientos activos",       highIf: n => n > 10, mediumIf: n => n > 0 },
-  { key: "capaOpen",                  label: "CAPA abiertas",               highIf: n => n > 10, mediumIf: n => n > 0 },
-  { key: "certsExpiringOrExpired",    label: "Certificados venc./por vencer", highIf: n => n > 0 },
-  { key: "nearMissOpen",              label: "Near miss abiertos",          mediumIf: n => n > 0 },
-  { key: "restHoursViolations",       label: "Días con violación STCW/MLC", highIf: n => n > 0 },
-  { key: "externalAuditsFindingsOpen", label: "Findings auditoría externa", highIf: n => n > 0 },
-  { key: "mocOpen",                   label: "MOC en curso",                mediumIf: n => n > 0 },
-  { key: "maintenancePlansOverdue",   label: "Planes vencidos",             highIf: n => n > 0 },
-  { key: "fluidAnalysisCritical",     label: "Análisis fluido crítico",     highIf: n => n > 0 },
-  { key: "spareRequestsPending",      label: "Solicitudes de repuestos",    mediumIf: n => n > 0 },
-  { key: "checklistsOverdue",         label: "Checklists atrasados",        mediumIf: n => n > 0 },
-  { key: "permitsAttention",          label: "Permisos requieren atención", highIf: n => n > 0 },
-  { key: "crewCertsAttention",        label: "Certif. tripulación venc.",   highIf: n => n > 0 },
-  { key: "drillsOverdue",             label: "Drills vencidos",             highIf: n => n > 0 },
-  { key: "providerNcOpen",            label: "NCRs proveedor abiertas",     mediumIf: n => n > 0 },
-  { key: "sparesCriticalLow",         label: "Spares críticos bajo mínimo", highIf: n => n > 0 },
-];
-
-export async function buildDashboardHtml(
-  session: TenantAccessSession,
-  vesselCode: string | null,
-): Promise<string> {
-  // Sello de generación en la hora de la EMPRESA (el servidor corre en UTC).
-  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
-  const counts = await getSidebarCounts(session, vesselCode) as unknown as Record<string, number>;
-
-  const scopeLabel = vesselCode
-    ? `Buque: ${esc(vesselCode)}`
-    : `Flota completa (${session.user.role === "TENANT_ADMIN" ? "todos los buques del tenant" : "buques asignados al usuario"})`;
-
-  const kpiHtml = DASHBOARD_KPIS.map(kpi => {
-    const value = counts[kpi.key] ?? 0;
-    const klass = kpi.highIf?.(value)
-      ? " high"
-      : kpi.mediumIf?.(value)
-        ? " medium"
-        : "";
-    return `<div class="kpi${klass}"><div class="label">${esc(kpi.label)}</div><div class="value">${value}</div></div>`;
-  }).join("");
-
-  const body = `
-<h1>Dashboard — ${esc(session.tenantSlug)}</h1>
-<div class="sub">${scopeLabel} · Generado ${esc(fmtDateTimeTz(new Date(), tz, locale))}</div>
-
-<h2>Acciones requeridas</h2>
-<div class="kpi-grid">
-  ${kpiHtml}
-</div>
-
-<p class="muted" style="font-size:11px;">
-  Esta vista es un snapshot estático. Las cifras representan el estado en el momento de exportación.
-  Para datos actualizados en vivo, abrir la aplicación.
-</p>
-`;
-  return htmlShell(`Dashboard — ${session.tenantSlug}`, body, fmtDateTimeTz(new Date(), tz, locale));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

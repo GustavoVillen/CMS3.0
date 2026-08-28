@@ -4,7 +4,8 @@ import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
-import { WO_MAINTENANCE_KINDS } from "../lib/wo-form-catalog";
+import { WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_PRIORITY_OPTIONS } from "../lib/wo-form-catalog";
+import { FormBox, OptionRow, PaperSectionBar } from "./work-orders/WoRegiSections";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssigneeSelect } from "./AssigneeSelect";
@@ -181,7 +182,7 @@ interface CreateWorkOrderModalProps {
   /** Exige elegir proveedor para guardar: al crear la OT se abre también la SS a ese proveedor. */
   requireProvider?: boolean;
   onClose: () => void;
-  onSaved: (woId: string) => void | Promise<void>;
+  onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -196,16 +197,8 @@ const RISK_LEVEL_OPTS: [string, string, string, string][] = [
   ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                    "text-red-600 border-red-600/40"],
 ];
 
-/**
- * TIPO para los tenants con el formulario REGI-OPE-26.3: los 5 del papel, más
- * "Inspección" — que el papel no lista pero la empresa usa al crear OT a mano.
- * Las 5 viajan como `maintenanceKind` (el backend deriva el type grueso);
- * "Inspección" viaja como `type`, porque no tiene equivalente fino.
- */
-const WO_KIND_OPTIONS = [
-  ...WO_MAINTENANCE_KINDS,
-  { value: "INSPECTION", label: "Inspección" },
-];
+// WO_KIND_OPTIONS (los 5 del papel + "Inspección") vive en wo-form-catalog.ts
+// como WO_MAINTENANCE_KINDS_OR_INSPECTION — compartido con WoRegiSections.
 
 /** Tipo grueso de un prefill (ej. OT correctiva nacida de un defecto) → opción fina. */
 function kindFromType(t?: string): string {
@@ -252,6 +245,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [maintKind, setMaintKind]     = useState(prefill ? kindFromType(prefill.type) : (initialMaintKind ?? kindFromType(prefill?.type)));
   const [priority, setPriority]       = useState(prefill?.priority ?? initialPriority ?? "MEDIUM");
   const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
+  // Recuadros del formulario REGI-OPE-26.3 (Mercurio), modo standalone.
+  // assignedToArea arranca en TERCERIZADO cuando el flujo ya exige proveedor
+  // (ej. "Nueva Solicitud de Servicio"), para no pedir un clic de más.
+  const [requestedByArea, setRequestedByArea] = useState("");
+  const [assignedToArea, setAssignedToArea]   = useState(requireProvider ? "TERCERIZADO" : "");
+  // En modo prefill el valor por defecto lo trae el plan (Proveedor→Tercerizado,
+  // Cubierta/Máquinas/Barcaza→Tripulación); una vez que el usuario lo toca a
+  // mano, ese valor gana y el efecto de abajo deja de pisarlo.
+  const assignedToAreaTouchedRef = useRef(false);
+  const [systemArea, setSystemArea]           = useState("");
+  const [voyageNumber, setVoyageNumber]       = useState("");
+  const [location, setLocation]               = useState("");
   const [openDate, setOpenDate]       = useState(today);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -273,6 +278,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // la tarea: quien abre la OT tiene que ver a quién se le va a encargar antes
   // de crearla (al guardar se abre una SS por taller).
   const [planProviders, setPlanProviders] = useState<PlanProviderPreview[]>([]);
+  // Precarga "Asignado a" con lo que el plan define (mismo criterio que el
+  // backend deriva por defecto si nadie lo toca): Proveedor→Tercerizado,
+  // si no hay proveedores→Tripulación. Sólo en modo prefill.
+  useEffect(() => {
+    if (!prefill || assignedToAreaTouchedRef.current) return;
+    setAssignedToArea(planProviders.length > 0 ? "TERCERIZADO" : "TRIPULACION");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill, planProviders.length]);
   // El usuario puede mandarlo a otro taller distinto del que trae el plan,
   // ad hoc para esta OT (no toca la configuración del plan). Clave = providerId
   // original que trajo el plan, valor = providerId elegido.
@@ -353,6 +366,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo / Consecuencia ──
   const [loadingTask,        setLoadingTask]        = useState(false);
+  const [loadingTitle,       setLoadingTitle]       = useState(false);
   const [loadingCriteria,    setLoadingCriteria]    = useState(false);
   const [loadingLoto,        setLoadingLoto]        = useState(false);
   const [loadingRisk,        setLoadingRisk]        = useState(false);
@@ -417,6 +431,27 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     }
     finally { setLoadingTask(false); }
   }, [loadingTask, aiAssetLabel, title, description, t]);
+
+  // Sugerir el título en sí: a diferencia de Tarea, no requiere nada previo
+  // cargado — parte del equipo y, si ya hay algo escrito en Tarea, de eso.
+  const handleTitleClick = useCallback(async () => {
+    if (loadingTitle) return;
+    setLoadingTitle(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-title", {
+        assetLabel: aiAssetLabel,
+        taskDesc: description.trim() || title.trim() || null,
+      });
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setTitle(sugerido);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-title] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.taskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingTitle(false); }
+  }, [loadingTitle, aiAssetLabel, title, description, t]);
 
   const handleCriteriaClick = useCallback(async () => {
     if (loadingCriteria) return;
@@ -823,9 +858,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     setSaving(true);
     try {
       let woId: string;
+      let woCode: string | undefined;
 
       if (prefill?.source === "plan") {
-        const created = await api.post<{ id: string }>(`/app/pms/maintenance-plans/${prefill.sourceId}/open-work-order`, {
+        const created = await api.post<{ id: string; workOrderCode: string }>(`/app/pms/maintenance-plans/${prefill.sourceId}/open-work-order`, {
           title:              title.trim()              || undefined,
           description:        description.trim()        || undefined,
           assignedToUserId:   assignedTo.trim()         || undefined,
@@ -848,10 +884,20 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           // Otros ítems del PDM que cubre la misma OT.
           additionalPlanIds:  prefill.additionalPlans?.map(p => p.id),
           providerOverride:   Object.keys(providerOverride).length > 0 ? providerOverride : undefined,
+          // Recuadros del papel que el plan no define, más "Asignado a" (trae un
+          // valor por defecto del plan, pero acá se puede pisar).
+          ...(isMercurio ? {
+            requestedByArea: requestedByArea || null,
+            assignedToArea:  assignedToArea  || null,
+            systemArea:      systemArea      || null,
+            voyageNumber:    voyageNumber.trim() || null,
+            location:        location.trim()     || null,
+          } : {}),
         });
         woId = created.id;
+        woCode = created.workOrderCode;
       } else {
-        const created = await api.post<{ id: string }>("/app/pms/work-orders", {
+        const created = await api.post<{ id: string; workOrderCode: string }>("/app/pms/work-orders", {
           vesselCode:         (prefill?.vesselCode ?? vesselCode).trim().toUpperCase(),
           assetId:            prefill?.assetSelectable ? assetId : (prefill?.assetId ?? assetId),
           // Mercurio manda el tipo fino y el backend deriva el grueso; el resto
@@ -877,16 +923,25 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
           // Solo admin: abrir en nombre de otro usuario (SOLICITA). openDate ya va arriba.
           createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
-          // Proveedor(es) libre(s) elegido(s) a mano (sin plan): mismo eje
-          // "Asignado a: Tercerizado" que usa el editor completo de la OT.
+          // Recuadros del formulario REGI-OPE-26.3 (Mercurio). "Asignado a" es lo
+          // que gatilla el proveedor — mismo eje que usa el editor completo de la
+          // OT. Tenants sin ese formulario preservan el criterio anterior: sólo
+          // se manda TERCERIZADO si se cargó algún proveedor libre.
+          ...(isMercurio ? {
+            requestedByArea: requestedByArea || null,
+            assignedToArea:  assignedToArea  || null,
+            systemArea:      systemArea      || null,
+            voyageNumber:    voyageNumber.trim() || null,
+            location:        location.trim()     || null,
+          } : (cleanStandaloneProviders.length > 0 ? { assignedToArea: "TERCERIZADO" } : {})),
           // providerId de la OT sólo puede guardar UNO — con varios queda null,
           // igual que en el Plan de Mantenimiento (cada SS igual lleva el suyo).
           ...(cleanStandaloneProviders.length > 0 ? {
-            assignedToArea: "TERCERIZADO",
             providerId: cleanStandaloneProviders.length === 1 ? cleanStandaloneProviders[0]!.providerId : undefined,
           } : {}),
         });
         woId = created.id;
+        woCode = created.workOrderCode;
       }
 
       // Upload checklist doc after WO is created (needs id)
@@ -933,14 +988,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         }
       }
 
-      await onSaved(woId);
+      await onSaved(woId, woCode);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
-      standaloneProviderRequests, hasAnyProvider, requireProvider]);
+      standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio,
+      requestedByArea, assignedToArea, systemArea, voyageNumber, location]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -949,6 +1005,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     consequenceCategory, consequenceRationale, estimatedHours,
     checklistDocFileName: checklistDocFile?.name ?? "",
     onBehalfUserId, standaloneProviderRequests,
+    requestedByArea, assignedToArea, systemArea, voyageNumber, location,
   });
   const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
@@ -1052,7 +1109,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {([
-                    [t("wo.modal.vessel"),    prefill.vesselCode,                   "font-mono text-accent"],
+                    [t("wo.modal.vessel"),    vessels.find(v => v.code === prefill.vesselCode)?.name ?? prefill.vesselCode, "text-accent"],
                     prefill.assetSelectable
                       ? null
                       : [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-fg"],
@@ -1069,6 +1126,46 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     </div>
                   ))}
                 </div>
+                {/* Mismos recuadros del formulario REGI-OPE-26.3 que el alta
+                    libre. Tipo/Prioridad ya vienen fijados por el plan (cajas
+                    de arriba); acá sólo lo que el papel pide y el plan no
+                    define: viaje, ubicación, quién solicita/asigna y sistema. */}
+                {isMercurio && (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
+                        <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
+                          placeholder="Ej. V-2026-014" className={inputCls} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.location")}</label>
+                        <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <PaperSectionBar title={t("wo.modal.requestedBy")} />
+                      <OptionRow options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <PaperSectionBar title={t("wo.modal.assignedTo")} />
+                      {/* Precargado según el plan (Proveedor→Tercerizado,
+                          Cubierta/Máquinas/Barcaza→Tripulación), pero editable:
+                          quien abre la OT puede pisarlo. No cambia a qué
+                          proveedor se le manda la SS (sale de los proveedores
+                          del plan, más abajo). */}
+                      <OptionRow options={WO_ASSIGNED_TO} value={assignedToArea}
+                        onChange={v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); }} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Prioridad ya viene fijada por el plan (caja de
+                          arriba) — se repite acá con el look del papel, pero
+                          deshabilitada: no se cambia desde este recuadro. */}
+                      <FormBox title={t("wo.modal.priority")} options={WO_PRIORITY_OPTIONS} value={priority} disabled onChange={() => {}} />
+                      <FormBox title={t("wo.modal.system")} options={WO_SYSTEM_AREAS} value={systemArea} onChange={setSystemArea} />
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -1095,41 +1192,76 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     }
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.type")}</label>
-                    {isMercurio ? (
-                      <select value={maintKind} onChange={e => setMaintKind(e.target.value)} className={inputCls}>
-                        {WO_KIND_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
+                {isMercurio ? (
+                  <>
+                    {/* Mismo orden que el papel REGI-OPE-26.3: nro de viaje/
+                        ubicación, solicitado por, asignado a (+ proveedor si
+                        corresponde), y los 3 recuadros con casillero. */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
+                        <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
+                          placeholder="Ej. V-2026-014" className={inputCls} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.location")}</label>
+                        <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <PaperSectionBar title={t("wo.modal.requestedBy")} />
+                      <OptionRow options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <PaperSectionBar title={t("wo.modal.assignedTo")} />
+                      <OptionRow options={WO_ASSIGNED_TO} value={assignedToArea} onChange={setAssignedToArea} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <FormBox title={t("wo.modal.priority")} options={WO_PRIORITY_OPTIONS} value={priority}
+                        onChange={v => { if (v) setPriority(v); }} />
+                      <FormBox title={t("wo.modal.type")} options={WO_MAINTENANCE_KINDS_OR_INSPECTION} value={maintKind}
+                        onChange={setMaintKind} />
+                      <FormBox title={t("wo.modal.system")} options={WO_SYSTEM_AREAS} value={systemArea}
+                        onChange={setSystemArea} />
+                    </div>
+                    <div className="space-y-1.5 max-w-[8rem]">
+                      <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                      <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
                       </select>
-                    ) : (
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <label className={labelCls}>{t("wo.modal.type")}</label>
                       <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
                         <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
                         <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
                         <option value="INSPECTION">{t("wo.type.inspection")}</option>
                       </select>
-                    )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={labelCls}>{t("wo.modal.priority")}</label>
+                      <select value={priority} onChange={e => setPriority(e.target.value)} title={t("priority.hint")} className={inputCls}>
+                        <option value="LOW">{t("priority.low")}</option>
+                        <option value="MEDIUM">{t("priority.medium")}</option>
+                        <option value="HIGH">{t("priority.high")}</option>
+                        <option value="CRITICAL">{t("priority.critical")}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                      <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.priority")}</label>
-                    <select value={priority} onChange={e => setPriority(e.target.value)} title={t("priority.hint")} className={inputCls}>
-                      <option value="LOW">{t("priority.low")}</option>
-                      <option value="MEDIUM">{t("priority.medium")}</option>
-                      <option value="HIGH">{t("priority.high")}</option>
-                      <option value="CRITICAL">{t("priority.critical")}</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.criticality")}</label>
-                    <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
-                    </select>
-                  </div>
-                </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className={labelCls}>{t("wo.modal.openDate")}</label>
@@ -1174,7 +1306,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-fg/10 pt-4">{t("wo.modal.section.plan")}</p>
 
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.titleField")}</label>
+              <label
+                onClick={handleTitleClick}
+                title={t("wo.ai.titleTooltip")}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors hover:text-fg cursor-pointer ${loadingTitle ? "opacity-60 animate-pulse" : ""}`}
+              >
+                {loadingTitle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("wo.modal.titleField")}
+              </label>
               {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
                   título es una línea por ítem y en un input se vería sólo la
                   primera. Con un solo ítem se ve igual que antes (una fila). */}
@@ -1182,6 +1321,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 rows={Math.min(6, Math.max(1, title.split("\n").length))}
                 value={title}
                 onChange={e => setTitle(e.target.value)}
+                disabled={loadingTitle}
                 className={`${inputCls} resize-y`}
                 placeholder={t("wo.modal.titlePlaceholder")}
               />
@@ -1268,7 +1408,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 Mantenimiento (proveedor + para qué). Si ya se vinculó un plan
                 que trae sus propios proveedores (caja de arriba), esto no hace
                 falta — sería pedir el dato dos veces. */}
-            {!prefill && planProviders.length === 0 && (
+            {!prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider) && (
+              /* Sólo en alta libre: en modo prefill (desde un plan) el
+                 proveedor ya lo maneja el plan (caja "Proveedores" de arriba)
+                 y el backend lo deriva solo al abrir la OT — un editor acá
+                 se ignoraría en silencio. */
               <div className="space-y-2">
                 <label className={labelCls}>{t("wo.modal.provider")}{requireProvider ? " *" : ""}</label>
                 {standaloneProviderRequests.map((row, i) => (

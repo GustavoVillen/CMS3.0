@@ -19,8 +19,10 @@ interface WO {
   criticality: string;
   openDate: string;
   dueDate: string | null;
-  // Tramitación (cadena de aprobación): SOLICITADA = sin aprobado ni autorizado;
-  // APROBADA = aprobado, sin autorizar.
+  // Tramitación (cadena de aprobación): EN PREPARACIÓN = sin enviar a aprobar;
+  // PENDIENTE DE APROBACIÓN = enviada, sin aprobar; PENDIENTE DE AUTORIZACIÓN =
+  // aprobada, sin autorizar.
+  enviadoAprobacionAt: string | null;
   aprobadoByName: string | null;
   aprobadoAt: string | null;
   autorizadoByName: string | null;
@@ -542,8 +544,9 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const isOverdue = (wo: WO) => !!wo.dueDate && new Date(wo.dueDate) < today;
-  // SS SOLICITADA = OT activa (no diferida/cerrada) sin aprobado ni autorizado.
-  const isSolicitada = (wo: WO) => (wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && !wo.aprobadoAt && !wo.autorizadoAt;
+  // Pendiente de aprobación = OT activa YA ENVIADA a aprobar, sin firmar. Las
+  // que todavía están en preparación no cuentan: nadie tiene que firmarlas.
+  const isSolicitada = (wo: WO) => (wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && !!wo.enviadoAprobacionAt && !wo.aprobadoAt && !wo.autorizadoAt;
   // SS APROBADA = OT activa aprobada pero aún sin autorizar (pendiente de autorización).
   const isAprobada = (wo: WO) => (wo.status === "PLANNED" || wo.status === "IN_PROGRESS") && !!wo.aprobadoAt && !wo.autorizadoAt;
 

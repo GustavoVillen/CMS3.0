@@ -91,7 +91,7 @@ export function ensureCanWriteAssetHours(session: TenantAccessSession): void {
 
 /**
  * Última lectura de horómetro por equipo. Reemplaza las copias del mismo query
- * que había en assets, maintenance-plans, plan-map, due-items y reliability.
+ * que había en assets, maintenance-plans, due-items y reliability.
  * Nunca tira: si la consulta falla devuelve el mapa vacío (el consumidor degrada
  * a "sin horas" en vez de romper la pantalla entera).
  */

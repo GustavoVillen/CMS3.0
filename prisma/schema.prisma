@@ -1517,8 +1517,14 @@ model WorkOrder {
   lastReopenAt        DateTime?
   lastReopenReason    String?
   lastReopenByUserId  String?
-  // Tramitación (cadena de aprobación del tablero): Solicita (= creador) →
-  // Aprueba → Autoriza. El nombre se captura en cada paso del drag-and-drop.
+  // Tramitación (cadena de aprobación del tablero): En preparación → Envía a
+  // aprobar → Aprueba → Autoriza. El nombre se captura en cada paso.
+  // La etapa NO se guarda: se deduce de estas fechas (ver woStage en
+  // WorkOrders.tsx). Sin enviadoAprobacionAt la OT está EN PREPARACIÓN — el
+  // que la abrió todavía la está completando y nadie tiene que firmarla.
+  enviadoAprobacionByName   String?
+  enviadoAprobacionByUserId String?
+  enviadoAprobacionAt       DateTime?
   aprobadoByName      String?
   aprobadoByUserId    String?
   aprobadoAt          DateTime?
@@ -1526,7 +1532,8 @@ model WorkOrder {
   autorizadoByUserId  String?
   autorizadoAt        DateTime?
   // Rechazo de tramitación: [NO APROBADA] / [NO AUTORIZADA] devuelven la OT a
-  // Solicitada (en rojo) limpiando aprobado/autorizado y registrando quién/por qué.
+  // En preparación (en rojo) limpiando enviado/aprobado/autorizado y
+  // registrando quién/por qué — es donde hay que corregirla y reenviarla.
   rechazadoByName     String?
   rechazadoAt         DateTime?
   rechazoReason       String?

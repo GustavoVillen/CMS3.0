@@ -6,22 +6,23 @@
 // Mantenimiento al abrir una OT desde un ítem — ver buildWoPrefillFromPlan).
 import React, { useCallback, useState } from "react";
 import { AlertTriangle, ClipboardList, Loader2, ShieldAlert, Wrench, Zap } from "lucide-react";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssetSearchDropdown, type AssetOption } from "./AssetSearchDropdown";
-import { CreateWorkOrderModal, buildWoPrefillFromPlan, type WoPrefill } from "./CreateWorkOrderModal";
+import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
 
 type Category = "MAINTENANCE" | "REPAIR" | "CLASS";
 type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind";
 /** Mismos valores que WO_MAINTENANCE_KINDS (wo-form-catalog.ts) para el eje
  *  "reparación" del formulario. */
 type RepairKind = "CORRECTIVO_PROGRAMADO" | "CORRECTIVO_NO_PROGRAMADO" | "EMERGENCIA";
-type Result =
-  | { kind: "prefill"; prefill: WoPrefill }
-  | { kind: "blank"; vesselCode: string; assetId: string; maintKind?: string; priority?: string };
+/** Sólo el camino "sin ítem de plan" pasa por el formulario completo — eligiendo
+ *  un ítem del plan la OT se crea directo (ver `choosePlanItem`) y se abre ya
+ *  hecha en el editor real, sin una pantalla intermedia de revisión. */
+type Result = { vesselCode: string; assetId: string; maintKind?: string; priority?: string };
 
 /** Urgencia implícita de cada tipo de reparación — misma escala que
  *  WO_PRIORITY_FORM_LABELS (wo-form-catalog.ts). */
@@ -52,7 +53,7 @@ const optionBtnCls = "flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 borde
 
 interface NewWorkOrderWizardProps {
   onClose: () => void;
-  onSaved: (woId: string) => void | Promise<void>;
+  onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
 
 export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved }) => {
@@ -68,6 +69,8 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
   const [planItems, setPlanItems] = useState<PlanItemCandidate[] | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   // Con Inspección de Clase el paso de equipo se puede saltear (equipo
   // resuelto solo) o no (equipo dedicado no encontrado, se elige a mano) —
   // hace falta saber cuál pasó para que "Atrás" desde el ítem del plan vuelva
@@ -89,22 +92,22 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
     }
   }, []);
 
-  const loadPlanItems = useCallback(async (vc: string, aid: string) => {
+  const loadPlanItems = useCallback(async (cat: Category, vc: string, aid: string) => {
     setLoadingPlans(true);
+    // Sin ítems activos (o si falla la búsqueda) no tiene sentido preguntar,
+    // se abre en blanco — pero si es Inspección de Clase, igual va con ese
+    // tipo preseleccionado (no "Preventivo" por default).
+    const blank = () => setResult({ vesselCode: vc, assetId: aid, maintKind: cat === "CLASS" ? "INSPECTION" : undefined });
     try {
       const res = await api.get<{ items: PlanItemCandidate[] }>(
         `/app/pms/maintenance-plans?assetId=${encodeURIComponent(aid)}&status=ACTIVE&limit=100`,
       );
       const items = res.items ?? [];
-      if (items.length === 0) {
-        // Sin ítems activos en este equipo: no tiene sentido preguntar, se abre en blanco.
-        setResult({ kind: "blank", vesselCode: vc, assetId: aid });
-        return;
-      }
+      if (items.length === 0) { blank(); return; }
       setPlanItems(items);
       setStep("planItem");
     } catch {
-      setResult({ kind: "blank", vesselCode: vc, assetId: aid });
+      blank();
     } finally {
       setLoadingPlans(false);
     }
@@ -124,7 +127,7 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
       const match = items.find(a => (a.name ?? "").trim().toLowerCase() === needle);
       if (match) {
         setAssetId(match.id);
-        void loadPlanItems(vc, match.id);
+        void loadPlanItems(cat, vc, match.id);
         return;
       }
       // Este buque no tiene el equipo dedicado todavía: se elige a mano, como
@@ -152,32 +155,37 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
     // ítems del plan, como en mantenimiento planeado. Reparación pregunta
     // aparte qué tipo de correctivo es.
     if (category === "MAINTENANCE" || category === "CLASS") {
-      void loadPlanItems(vesselCode, aid);
+      void loadPlanItems(category, vesselCode, aid);
     } else {
       setStep("repairKind");
     }
   };
 
   const chooseRepairKind = (kind: RepairKind) => {
-    setResult({ kind: "blank", vesselCode, assetId, maintKind: kind, priority: REPAIR_KIND_PRIORITY[kind] });
+    setResult({ vesselCode, assetId, maintKind: kind, priority: REPAIR_KIND_PRIORITY[kind] });
   };
 
+  // Elegido el ítem del plan, la OT se crea directo (sin pantalla intermedia
+  // de revisión) y se entrega a onSaved, que la abre ya hecha en el editor
+  // real — ahí sí se puede tocar todo (título, asignado a, checklist, etc.).
   const choosePlanItem = useCallback(async (item: PlanItemCandidate) => {
-    setLoadingPlans(true);
+    setCreating(true);
+    setCreateError(null);
     try {
-      const full = await api.get<Parameters<typeof buildWoPrefillFromPlan>[0]>(`/app/pms/maintenance-plans/${item.id}`);
-      setResult({ kind: "prefill", prefill: buildWoPrefillFromPlan(full, t("mp.modal.maintenancePlanLabel")) });
-    } catch {
-      setResult({ kind: "blank", vesselCode, assetId });
+      const created = await api.post<{ id: string; workOrderCode: string }>(
+        `/app/pms/maintenance-plans/${item.id}/open-work-order`, {},
+      );
+      await onSaved(created.id, created.workOrderCode);
+    } catch (e) {
+      console.error("[wo-wizard] open-work-order failed:", e);
+      setCreateError(e instanceof ApiError ? e.message : t("wo.wizard.createFailed"));
     } finally {
-      setLoadingPlans(false);
+      setCreating(false);
     }
-  }, [vesselCode, assetId, t]);
+  }, [onSaved, t]);
 
   if (result) {
-    return result.kind === "prefill" ? (
-      <CreateWorkOrderModal prefill={result.prefill} onClose={onClose} onSaved={onSaved} />
-    ) : (
+    return (
       <CreateWorkOrderModal
         initialVesselCode={result.vesselCode}
         initialAssetId={result.assetId}
@@ -289,12 +297,15 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
               <button onClick={() => setStep(assetStepShown ? "asset" : "category")} className="text-xs text-accent hover:text-fg transition-colors">
                 {t("wo.wizard.back")}
               </button>
-              {loadingPlans ? (
+              {loadingPlans || creating ? (
                 <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-3">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {creating ? t("wo.wizard.creating") : t("common.loading")}
                 </div>
               ) : (
                 <>
+                  {createError && (
+                    <p className="text-xs text-red-500">{createError}</p>
+                  )}
                   <div className="space-y-3 overflow-y-auto max-h-[50vh] pr-1">
                     {(planItems ?? []).map(item => (
                       <button key={item.id} onClick={() => void choosePlanItem(item)} className={optionBtnCls}>
@@ -313,7 +324,7 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
                     ))}
                   </div>
                   <button
-                    onClick={() => setResult({ kind: "blank", vesselCode, assetId })}
+                    onClick={() => setResult({ vesselCode, assetId, maintKind: category === "CLASS" ? "INSPECTION" : undefined })}
                     className="w-full text-center px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors"
                   >
                     {t("wo.wizard.none")}

@@ -43,7 +43,6 @@ const AiDocumentsPage = React.lazy(() => import("./pages/AiDocuments").then(m =>
 const FluidAnalysesPage = React.lazy(() => import("./pages/FluidAnalyses").then(m => ({ default: m.FluidAnalysesPage })));
 const MaintenancePlansPage = React.lazy(() => import("./pages/MaintenancePlans").then(m => ({ default: m.MaintenancePlansPage })));
 const MaintenanceGanttPage = React.lazy(() => import("./pages/MaintenanceGantt").then(m => ({ default: m.MaintenanceGanttPage })));
-const PlanMapPage = React.lazy(() => import("./pages/PlanMap").then(m => ({ default: m.PlanMapPage })));
 // DORMANTE — Carga de Mantenimiento: reactivar descomentando esta línea, la ruta de abajo
 // y el ítem del Sidebar (nav-items.tsx).
 // const MaintenanceWorkloadPage = React.lazy(() => import("./pages/MaintenanceWorkload").then(m => ({ default: m.MaintenanceWorkloadPage })));
@@ -226,8 +225,6 @@ export default function App() {
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
-              {/* Mapa del Plan — se entra desde el botón del Dashboard (no está en el Sidebar). */}
-              <Route path="/plan-map" element={<PlanMapPage />} />
               {/* DORMANTE — Carga de Mantenimiento: reactivar descomentando (y el import arriba + Sidebar). */}
               {/* <Route path="/maintenance-workload" element={<MaintenanceWorkloadPage />} /> */}
               {/* DORMANTE — Confiabilidad: reactivar descomentando (y el import arriba + Sidebar). */}

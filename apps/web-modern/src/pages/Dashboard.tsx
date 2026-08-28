@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, FileCode, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Map as MapIcon, Gauge, Wrench, ClipboardList } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Gauge, Wrench, ClipboardList, Timer } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -18,8 +18,8 @@ import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
+import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
-import { domToPng } from "modern-screenshot";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
 // (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
@@ -158,6 +158,11 @@ export const Dashboard: React.FC = () => {
   const [mpGroup, setMpGroup] = React.useState<number | null>(null);
   const [mpAllAssets, setMpAllAssets] = React.useState<MpAsset[] | null>(null);
   const [mpLoadingAssets, setMpLoadingAssets] = React.useState(false);
+  // Mismo chooser, dos finales posibles: "planList" (Plan de Mantenimiento,
+  // navega a la lista filtrada) o "status" (Estado de mantenimiento de
+  // equipos, abre el panel de semáforo + historial sin salir del Dashboard).
+  const [mpChooserMode, setMpChooserMode] = React.useState<"planList" | "status">("planList");
+  const [statusAssetId, setStatusAssetId] = React.useState<string | null>(null);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -333,52 +338,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   const insightCount = insights.data?.total ?? 0;
 
-  // Snapshot HTML del dashboard: captura visual fiel de lo que se ve en pantalla
-  // (gráficos Recharts/SVG, tema oscuro, colores) usando modern-screenshot, y lo
-  // baja como imagen PNG embebida en un HTML. No usa el endpoint backend para que
-  // el export coincida exactamente con la UI renderizada.
-  const dashboardRef = React.useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = React.useState(false);
-
-  const exportDashboardHtml = async () => {
-    const node = dashboardRef.current;
-    if (!node || exporting) return;
-    setExporting(true);
-    try {
-      const bg = getComputedStyle(document.body).backgroundColor || "#0D1B2A";
-      const dataUrl = await domToPng(node, {
-        backgroundColor: bg,
-        scale: 2,
-        // Excluir la barra de herramientas (el propio botón de export) del snapshot.
-        filter: (el) => !(el instanceof HTMLElement && el.dataset.exportExclude === "true"),
-      });
-      const today = new Date().toISOString().slice(0, 10);
-      const scope = (isVesselScoped ? selectedVessel?.name : null) ?? t("dashboard.allVessels");
-      const html = `<!doctype html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard — ${scope} — ${today}</title>
-<style>html,body{margin:0;background:${bg};}img{display:block;width:100%;height:auto;}</style>
-</head>
-<body><img src="${dataUrl}" alt="Dashboard ${scope} ${today}"></body>
-</html>`;
-      const blob = new Blob([html], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dashboard_${today}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      console.error("[dashboard] export HTML failed", err);
-      alert(t("dashboard.exportHtmlError"));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   // Todos los equipos del buque elegido arriba (header), para el chooser de
   // Plan de Mantenimiento: se piden una sola vez al abrirlo y de ahí salen
   // tanto el panel por grupo como el buscador inteligente.
@@ -405,42 +364,27 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   const mpAssets = mpGroup === null ? [] : (mpAllAssets ?? []).filter(a => mpGroupOf(a) === mpGroup);
 
   const goToAsset = (assetId: string) => {
-    if (!selectedVesselCode) return;
     setShowMpChooser(false);
+    if (mpChooserMode === "status") {
+      setStatusAssetId(assetId);
+      return;
+    }
+    if (!selectedVesselCode) return;
     navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&assetId=${assetId}`);
   };
 
   return (
-    <div ref={dashboardRef} className={`${rootGap} animate-in fade-in duration-500`}>
-      {/* Plan Map / Exportar HTML. Antes iba acá el score de compliance por
-          buque; "Generar OT" y el campo de comando se sacaron (redundantes
-          con los accesos grandes de abajo). */}
-      <div className="relative min-h-[34px] flex items-center">
-        <div className="ml-auto flex items-center gap-2" data-export-exclude="true">
-          <button
-            onClick={() => navigate("/plan-map")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-            title={t("dashboard.planMapTitle")}
-          >
-            <MapIcon className="w-3.5 h-3.5 text-accent" />
-            {t("dashboard.planMap")}
-          </button>
-          <button
-            onClick={() => { void exportDashboardHtml(); }}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-50"
-            title={t("dashboard.exportHtmlTitle")}
-          >
-            {exporting ? <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" /> : <FileCode className="w-3.5 h-3.5 text-accent" />}
-            {t("dashboard.exportHtml")}
-          </button>
-        </div>
-      </div>
+    <div className={`${rootGap} animate-in fade-in duration-500`}>
 
       {showNewWoWizard && (
         <NewWorkOrderWizard
           onClose={() => setShowNewWoWizard(false)}
-          onSaved={() => { setShowNewWoWizard(false); navigate("/work-orders"); }}
+          onSaved={(_woId, workOrderCode) => {
+            setShowNewWoWizard(false);
+            // Ruta directa del deep-link (no `?autoCode=`, que es sólo un puente
+            // de compatibilidad y agrega un salto de más en el historial).
+            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders");
+          }}
         />
       )}
 
@@ -452,11 +396,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           autoSelectAssetByName={createWoPreset?.autoAsset}
           requireProvider={!!createWoPreset}
           onClose={() => { setShowCreateWo(false); setCreateWoPreset(null); }}
-          onSaved={() => {
+          onSaved={(_woId, workOrderCode) => {
             const wasSsFlow = !!createWoPreset;
             setShowCreateWo(false);
             setCreateWoPreset(null);
-            navigate(wasSsFlow ? "/service-requests" : "/work-orders");
+            // El flujo de SS termina en la solicitud (es lo que se estaba
+            // creando); el de OT abre la orden recién creada para completarla.
+            if (wasSsFlow) { navigate("/service-requests"); return; }
+            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders");
           }}
         />
       )}
@@ -502,7 +449,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowMpChooser(false)}>
           <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-bold text-fg">{t("dashboard.mpChooser.title")}</h2>
+              <h2 className="text-sm font-bold text-fg">{t(mpChooserMode === "status" ? "dashboard.mpChooser.titleStatus" : "dashboard.mpChooser.title")}</h2>
               <ModalCloseButton onClose={() => setShowMpChooser(false)} />
             </div>
 
@@ -523,13 +470,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-hidden flex-1 min-h-0">
               {/* Grupos */}
               <div className="space-y-1.5 overflow-y-auto pr-1">
-                <button
-                  onClick={() => { setShowMpChooser(false); navigate("/maintenance-plans"); }}
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left w-full"
-                >
-                  <ClipboardList className="w-5 h-5 text-accent shrink-0" />
-                  <span className="font-bold text-sm text-fg">{t("dashboard.mpChooser.all")}</span>
-                </button>
+                {mpChooserMode === "planList" && (
+                  <button
+                    onClick={() => { setShowMpChooser(false); navigate("/maintenance-plans"); }}
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left w-full"
+                  >
+                    <ClipboardList className="w-5 h-5 text-accent shrink-0" />
+                    <span className="font-bold text-sm text-fg">{t("dashboard.mpChooser.all")}</span>
+                  </button>
+                )}
                 {SFI_GROUP_NUMBERS.map(g => (
                   <button
                     key={g}
@@ -558,12 +507,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <p className="text-xs text-text-industrial/40 px-2 py-4">{t("common.noResults")}</p>
                 ) : (
                   <div className="space-y-1.5 px-1">
-                    <button
-                      onClick={() => { setShowMpChooser(false); navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&sfiTab=${mpGroup}`); }}
-                      className="w-full text-left px-3 py-1.5 text-[11px] text-accent hover:text-fg transition-colors"
-                    >
-                      {t("dashboard.mpChooser.viewGroup")}
-                    </button>
+                    {mpChooserMode === "planList" && (
+                      <button
+                        onClick={() => { setShowMpChooser(false); navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(selectedVesselCode)}&sfiTab=${mpGroup}`); }}
+                        className="w-full text-left px-3 py-1.5 text-[11px] text-accent hover:text-fg transition-colors"
+                      >
+                        {t("dashboard.mpChooser.viewGroup")}
+                      </button>
+                    )}
                     {mpAssets.map(a => (
                       <button
                         key={a.id}
@@ -594,9 +545,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
       {/* Accesos grandes a Planes de Mantenimiento / OT / SS, arriba de
           "Reportes sin procesar" (pedido del usuario). */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-export-exclude="true">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <button
-          onClick={() => { setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
+          onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
           className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
         >
           <ClipboardList className="w-6 h-6 text-accent shrink-0" />
@@ -616,7 +567,30 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           <Handshake className="w-6 h-6 text-accent shrink-0" />
           <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
         </button>
+        <button
+          onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
+          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+        >
+          <Gauge className="w-6 h-6 text-accent shrink-0" />
+          <span className="font-bold text-sm text-fg">{t("dashboard.equipmentStatusButton")}</span>
+        </button>
+        {/* Mismo modal que ya abre el widget chico de "Horas de Equipos" más
+            abajo (assetHours.data) — sólo se ve con buque elegido y permiso de
+            carga, igual que ese widget. */}
+        {assetHours.data?.canWrite && (
+          <button
+            onClick={() => setShowHoursEntry(true)}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <Timer className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.assetHoursButton")}</span>
+          </button>
+        )}
       </div>
+
+      {statusAssetId && (
+        <EquipmentMaintenanceStatusModal assetId={statusAssetId} onClose={() => setStatusAssetId(null)} />
+      )}
 
       {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
           debajo de "Mi día". Solo se muestra si hay algo pendiente; cada badge

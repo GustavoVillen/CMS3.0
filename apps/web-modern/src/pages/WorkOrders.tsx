@@ -183,6 +183,8 @@ interface WorkOrder {
   supportingDocUrl: string | null;
   createdAt: string;
   // Tramitación (cadena de aprobación del tablero)
+  enviadoAprobacionByName: string | null;
+  enviadoAprobacionAt: string | null;
   aprobadoByName: string | null;
   aprobadoAt: string | null;
   autorizadoByName: string | null;
@@ -910,14 +912,19 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isApproved = !!workOrder.aprobadoAt || isAuthorized;
   const isResultEditable = isEditable && isApproved;
   // Sub-estado de la cadena de aprobación (independiente del status operativo).
-  const tramitaPhase: "SOLICITADA" | "APROBADA" | "AUTORIZADA" =
-    workOrder.autorizadoAt ? "AUTORIZADA" : workOrder.aprobadoAt ? "APROBADA" : "SOLICITADA";
+  // Misma derivación que woStage(); acá no hacen falta DIFERIDA/HIDDEN porque
+  // el modal ya tiene la OT abierta.
+  const tramitaPhase: "EN_PREPARACION" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" =
+    workOrder.autorizadoAt ? "AUTORIZADA"
+    : workOrder.aprobadoAt ? "APROBADA"
+    : workOrder.enviadoAprobacionAt ? "SOLICITADA"
+    : "EN_PREPARACION";
   const isRejected = !!workOrder.rechazadoAt && !workOrder.aprobadoAt;
   // Autorizar (OT y SS) es sólo de tierra. Debe coincidir con
   // canAuthorizeWorkOrders del backend.
   const canAuthorizeWo = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
   // step de tramitación pendiente (abre ApprovalModal). null = cerrado.
-  const [tramita, setTramita] = useState<"APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+  const [tramita, setTramita] = useState<"ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
 
   // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
   interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null }
@@ -1207,6 +1214,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [closing,         setClosing]        = useState(false);
   const [err,             setErr]            = useState<string | null>(null);
   const [expanded,        setExpanded]       = useState(true);
+  const [loadingTitle, setLoadingTitle] = useState(false);
   const [loadingTask, setLoadingTask] = useState(false);
   const [loadingCriteria, setLoadingCriteria] = useState(false);
   const [loadingLoto,     setLoadingLoto]    = useState(false);
@@ -1215,9 +1223,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingRewrite,   setLoadingRewrite]    = useState(false);
   const [showProgressSheet, setShowProgressSheet] = useState(false);
   const [notesReloadKey,    setNotesReloadKey]    = useState(0);
-  // Plan section: collapsed by default when WO comes from a maintenance plan
-  const [planExpanded, setPlanExpanded] = useState(!workOrder.maintenancePlanId);
-  const fromPlan = !!workOrder.maintenancePlanId;
 
   // Tras guardar/editar/borrar un avance, reconsulta la OT (con delay para dar
   // tiempo al pipeline asincrónico de IA que reconsolida Observaciones y detecta
@@ -1285,6 +1290,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // Clic en el rótulo TAREA: la IA arma la lista de tareas desde el equipo y el
   // título. Si el campo ya tiene texto se lo manda y devuelve la lista completa
   // con lo escrito integrado (por eso reemplaza en vez de agregar).
+  const handleTitleClick = useCallback(async () => {
+    if (!isEditable || loadingTitle) return;
+    setLoadingTitle(true);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-title", {
+        assetLabel: workOrder.assetName ?? null,
+        taskDesc: description.trim() || title.trim() || null,
+      });
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setTitle(sugerido);
+    } catch { /* el campo queda como estaba */ }
+    finally { setLoadingTitle(false); }
+  }, [isEditable, loadingTitle, workOrder.assetName, description, title]);
+
   const handleTaskClick = useCallback(async () => {
     if (!isEditable || loadingTask) return;
     const base = (title || "").trim();
@@ -1735,7 +1754,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
    * recién tipeado se perdía en silencio. Si el guardado falla no se abre el
    * paso: no se firma sobre datos que nunca llegaron a la base.
    */
-  const openTramita = async (step: "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
+  const openTramita = async (step: "ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
     if (isDirty && !(await onSave())) return;
     setTramita(step);
   };
@@ -1921,7 +1940,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           )}
 
-          {/* ── 0. TRAMITACIÓN (Solicita → Aprueba → Autoriza) ── */}
+          {/* ── 0. TRAMITACIÓN (En preparación → Envía → Aprueba → Autoriza) ── */}
           {isEditable && (
             <div className={`rounded-2xl border p-4 space-y-3 ${isRejected ? "border-red-500/40 bg-red-500/[0.06]" : "border-fg/10 bg-fg/[0.03]"}`}>
               <div className="flex items-center gap-2">
@@ -1944,6 +1963,23 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <p><span className="font-bold">Autorizó:</span> {workOrder.autorizadoByName}{workOrder.autorizadoAt ? ` · ${fmtDate(workOrder.autorizadoAt)}` : ""}</p>
                   <p className="text-text-industrial/60 normal-case">{woTerms.abbr} autorizada — avances y resultado habilitados.</p>
                 </div>
+              ) : tramitaPhase === "EN_PREPARACION" ? (
+                /* Todavía la está completando quien la abrió: un solo botón,
+                   para mandarla a firmar. "No aprobar" no tiene sentido acá —
+                   nadie la recibió todavía. */
+                <>
+                  <p className="text-[11px] text-text-industrial/60 normal-case">
+                    {t("wo.tramita.enPreparacionHint")}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => openTramita("ENVIA")}
+                    className="w-full py-2 rounded-xl border text-xs font-bold bg-accent/10 text-accent border-accent/30 hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {t("wo.tramita.send")}
+                  </button>
+                </>
               ) : (
                 <>
                   {tramitaPhase === "APROBADA" && (
@@ -2110,6 +2146,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
               </div>
             )}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.assignee")}</label>
+                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
+              </div>
+            </div>
             </div>{/* end mt-3 */}
           </section>
 
@@ -2120,6 +2162,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               onChange={patch => { touchRegi(); setRegiForm(prev => ({ ...prev, ...patch })); }}
               priority={priority}
               onPriorityChange={v => { touchRegi(); setPriority(v); }}
+              type={type}
+              onTypeChange={v => { touchRegi(); setType(v); }}
               disabled={!isEditable}
               providers={providers}
               providerId={providerId}
@@ -2147,10 +2191,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               label={t("wo.modal.section.plan")}
               dotCls="bg-accent/20 text-accent"
               borderCls="border-accent/30"
-              collapsible={fromPlan}
-              expanded={planExpanded}
-              onToggle={() => setPlanExpanded(v => !v)}
-              hint={fromPlan ? t("wo.modal.planFromPlanHint") : undefined}
             />
 
             {/* ── Ítems del PDM que ejecuta esta OT (uno o varios) ── */}
@@ -2200,7 +2240,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
 
             <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.titleField")}</label>
+              <label
+                onClick={isEditable ? handleTitleClick : undefined}
+                title={isEditable ? t("wo.ai.titleTooltip") : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingTitle ? "opacity-60 animate-pulse" : ""}` : ""}`}
+              >
+                {loadingTitle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {t("wo.modal.titleField")}{loadingTitle && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
+              </label>
               {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
                   título es una línea "CÓDIGO · tarea" por ítem. Con un solo ítem
                   se ve igual que antes (una fila). */}
@@ -2209,7 +2256,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 onBlur={() => { void analyzeForDeficiency(title, "title"); }}
-                disabled={!isEditable}
+                disabled={!isEditable || loadingTitle}
                 className={`${inputCls} resize-y`}
                 placeholder={t("wo.modal.titlePlaceholder")}
               />
@@ -2227,20 +2274,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </label>
               <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable || loadingTask} className={`${inputCls} resize-y`} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.assignee")}</label>
-                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.dueDate")}</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!isEditable} className={inputCls} />
-              </div>
-            </div>
-            {/* ── Campos colapsables (criterios/LOTO/riesgo/consecuencia): siempre visibles en OTs standalone;
-                   ocultos por defecto cuando viene de un plan de mantenimiento ── */}
-            {(planExpanded || !fromPlan) && (
-              <div className="space-y-4">
+            {/* Criterios/LOTO/riesgo/consecuencia heredados del plan: siempre
+                visibles y editables, vengan o no de un plan (antes quedaban
+                colapsados por defecto en las OT que sí venían de un plan). */}
+            <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label
                     onClick={isEditable ? handleAcceptanceCriteriaClick : undefined}
@@ -2326,7 +2363,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   />
                 </div>
               </div>
-            )}
           </section>
 
           {/* ── 3. DOCUMENTO CHECKLIST ── */}
@@ -2341,7 +2377,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── 4. PERMISOS DE TRABAJO ── */}
+          {/* ── 4. PERMISOS DE TRABAJO — oculta (no sólo deshabilitada) hasta
+              que la OT esté aprobada, igual que 6-10. */}
+          {isApproved && (
           <section className="space-y-3">
             <PhaseHeader
               n={4}
@@ -2418,6 +2456,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             )}
           </section>
+          )}
 
           {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
           {/* Una SS es el pedido de un servicio externo (un taller). No se abre
@@ -2523,13 +2562,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── Tramitación gate: 5 (Avances) y 6 (Resultado) desde OT APROBADA ── */}
-          <fieldset disabled={!isResultEditable} className={`space-y-6 border-0 p-0 m-0 min-w-0 ${!isApproved ? "opacity-70" : ""}`}>
-          {!isApproved && (
-            <p className="text-[11px] text-text-industrial/50 italic">
-              Los avances y el resultado se habilitan cuando la {woTerms.abbr} esté aprobada.
-            </p>
-          )}
+          {/* ── Secciones 6-10 (Avances/Programación/Repuestos/Tarea concluida/
+              Resultado): ocultas del todo hasta que la OT esté aprobada, no
+              sólo deshabilitadas. */}
+          {isApproved && (
+          <div className="space-y-6">
 
           {/* ── 5. AVANCES ── */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
@@ -2904,7 +2941,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
             </div>{/* end bg-blue box */}
           </section>
-          </fieldset>
+          </div>
+          )}
 
           {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
           {isMercurio && (
@@ -3112,16 +3150,24 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
 };
 
 // ── Tramitación: etapa derivada de la cadena de aprobación + estado diferido ──
-type WoStage = "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "DIFERIDA" | "HIDDEN";
+// Los identificadores internos se conservan (SOLICITADA/APROBADA/AUTORIZADA)
+// aunque las etiquetas visibles ahora digan "Pendiente de aprobación" /
+// "Pendiente de autorización" / "Autorizada y en proceso": renombrarlos
+// obligaría a tocar el arrastre, los filtros, el móvil y los badges sin ganar
+// nada. El texto sale de i18n (wo.kanban.*).
+type WoStage = "EN_PREPARACION" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "DIFERIDA" | "HIDDEN";
 function woStage(wo: WorkOrder): WoStage {
   if (wo.status === "CLOSED" || wo.status === "CANCELLED") return "HIDDEN"; // no van al tablero
   if (wo.status === "ON_HOLD") return "DIFERIDA";
   if (wo.autorizadoAt) return "AUTORIZADA";
   if (wo.aprobadoAt) return "APROBADA";
+  // Sin enviar a aprobar todavía: la está completando quien la abrió.
+  if (!wo.enviadoAprobacionAt) return "EN_PREPARACION";
   return "SOLICITADA";
 }
 
 const KANBAN_COLS: Array<{ colId: WoStage; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
+  { colId: "EN_PREPARACION", labelKey: "wo.kanban.enPreparacion", headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20",         droppable: true  },
   { colId: "SOLICITADA", labelKey: "wo.kanban.solicitada", headerCls: "text-blue-700 dark:text-blue-400",       borderCls: "border-t-2 border-blue-500/40",   droppable: true  },
   { colId: "APROBADA",   labelKey: "wo.kanban.aprobada",   headerCls: "text-violet-700 dark:text-violet-400",   borderCls: "border-t-2 border-violet-500/40", droppable: true  },
   { colId: "AUTORIZADA", labelKey: "wo.kanban.autorizada", headerCls: "text-emerald-700 dark:text-emerald-400", borderCls: "border-t-2 border-emerald-500/40", droppable: true  },
@@ -3154,6 +3200,7 @@ function WoStageBadge({ wo }: { wo: WorkOrder }) {
   const stage = woStage(wo);
   if (stage === "HIDDEN") return <span className="text-xs text-text-industrial/30">—</span>;
   const map: Record<Exclude<WoStage, "HIDDEN">, { label: string; cls: string }> = {
+    EN_PREPARACION: { label: t("wo.kanban.enPreparacion"), cls: "bg-fg/5 text-text-industrial/60 border-fg/15" },
     SOLICITADA: { label: t("wo.kanban.solicitada"), cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
     APROBADA:   { label: t("wo.kanban.aprobada"),   cls: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30" },
     AUTORIZADA: { label: t("wo.kanban.autorizada"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
@@ -3287,14 +3334,14 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   const [draggingWo, setDraggingWo]   = useState<WorkOrder | null>(null);
   const [overCol, setOverCol]         = useState<string | null>(null);
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
-  const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "APRUEBA" | "AUTORIZA" } | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "ENVIA" | "APRUEBA" | "AUTORIZA" } | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
   const { user } = useAuth();
   const canAuthorize = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
-  // Grupos por equipo colapsados (clave `${colId}::${assetKey}`). Default: expandidos.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = useCallback((k: string) => {
-    setCollapsedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+    setExpandedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   }, []);
   // ref para evitar stale closure en handleDrop (React 18 batching)
   const draggingWoRef = React.useRef<WorkOrder | null>(null);
@@ -3314,7 +3361,9 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
     const wo = items.find(w => w.id === id);
     if (!wo) return;
 
-    // Aprobar (Solicitada → Aprobada): pide nombre.
+    // Enviar a aprobar (En preparación → Pendiente de aprobación): pide nombre.
+    if (stage === "EN_PREPARACION" && targetCol === "SOLICITADA") { setPendingApproval({ wo, step: "ENVIA" }); return; }
+    // Aprobar (Pendiente de aprobación → Pendiente de autorización): pide nombre.
     if (stage === "SOLICITADA" && targetCol === "APROBADA") { setPendingApproval({ wo, step: "APRUEBA" }); return; }
     // Autorizar (Aprobada → Autorizada): pide nombre. No se puede saltar desde
     // Solicitada. Es de tierra: se avisa acá en vez de dejar que el backend
@@ -3366,7 +3415,7 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
                 {groupWosByAsset(colItems).map(group => {
                   const gkey = `${col.colId}::${group.key}`;
-                  const collapsed = collapsedGroups.has(gkey);
+                  const collapsed = !expandedGroups.has(gkey);
                   return (
                     <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
                       <button
@@ -3423,10 +3472,10 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   );
 }
 
-// ── ApprovalModal: captura el nombre del firmante al aprobar/autorizar ────────
+// ── ApprovalModal: captura el nombre del firmante al enviar/aprobar/autorizar ─
 function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   workOrder: WorkOrder;
-  step: "APRUEBA" | "AUTORIZA" | "RECHAZA";
+  step: "ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA";
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -3452,12 +3501,15 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role: string; assignedVesselCodes: string[] }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
-  // Quién puede firmar depende del PASO: aprobar admite al JEFE DE MÁQUINAS
-  // (es a bordo); autorizar es sólo tierra (admin / superintendente). Mismo
-  // criterio que la SS. El backend valida igual; esto es para no ofrecer un 403.
+  // Quién puede firmar depende del PASO: enviar a aprobar lo hace cualquiera
+  // embarcado (no es firma de autoridad, salvo el auditor de sólo lectura);
+  // aprobar admite al JEFE DE MÁQUINAS (es a bordo); autorizar es sólo tierra
+  // (admin / superintendente). Mismo criterio que la SS. El backend valida
+  // igual; esto es para no ofrecer un 403.
   const eligibleApprovers = teamUsers.filter(u => {
     if (u.role === "TENANT_ADMIN") return true;
     const enElBuque = (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode);
+    if (step === "ENVIA") return enElBuque && u.role !== "AUDITOR_READONLY";
     if (u.role === "FLEET_SUPERINTENDENT") return enElBuque;
     if (u.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
     return false;
@@ -3472,8 +3524,11 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
       .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
       .catch(() => setTeamUsers([]));
   }, [adminPicker]);
-  const title = step === "APRUEBA" ? `Aprobar ${woTerms.abbr}` : step === "AUTORIZA" ? `Autorizar ${woTerms.abbr}` : `Rechazar ${woTerms.abbr}`;
-  const verb  = step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
+  const title = step === "ENVIA" ? `Enviar ${woTerms.abbr} a aprobar`
+    : step === "APRUEBA" ? `Aprobar ${woTerms.abbr}`
+    : step === "AUTORIZA" ? `Autorizar ${woTerms.abbr}`
+    : `Rechazar ${woTerms.abbr}`;
+  const verb  = step === "ENVIA" ? "envía" : step === "APRUEBA" ? "aprueba" : step === "AUTORIZA" ? "autoriza" : "rechaza";
 
   // ESC cierra esta ventana (captura + stopImmediatePropagation para no disparar
   // el guard global que cerraría el modal de la OT por detrás).
@@ -3900,7 +3955,17 @@ export const WorkOrdersPage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setViewMode("kanban")}
+            onClick={() => {
+              setViewMode("kanban");
+              // El tablero muestra todas las etapas como columnas: si quedaba un
+              // chip activo de la lista, se limpia — si no, el tablero saldría
+              // recortado sin ningún filtro visible que lo explique.
+              if (viewFilter) {
+                const params = new URLSearchParams(searchParams);
+                params.delete("view");
+                setSearchParams(params, { replace: true });
+              }
+            }}
             title="Vista Kanban"
             className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
           >
@@ -3913,7 +3978,11 @@ export const WorkOrdersPage: React.FC = () => {
       {tableActionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {([
+        {/* Los chips son de la vista lista: en el tablero las etapas YA son las
+            columnas, así que ahí sobran (y un filtro activo pero invisible
+            recortaría el tablero sin decir por qué — ver el toggle a Kanban,
+            que limpia el filtro al cambiar de vista). */}
+        {viewMode === "list" && ([
           { key: "",                  labelKey: "wo.filter.all" },
           { key: "toApprove",         labelKey: "wo.filter.toApprove" },
           { key: "toAuthorize",       labelKey: "wo.filter.toAuthorize" },
@@ -3933,9 +4002,6 @@ export const WorkOrdersPage: React.FC = () => {
                 const params = new URLSearchParams(searchParams);
                 if (opt.key) params.set("view", opt.key); else params.delete("view");
                 setSearchParams(params, { replace: true });
-                // Las OT cerradas no van al tablero (woStage → HIDDEN), así que
-                // al filtrar "Cerradas" pasamos automáticamente a vista lista.
-                if (opt.key === "closed") setViewMode("list");
               }}
               className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
                 active
@@ -3973,7 +4039,11 @@ export const WorkOrdersPage: React.FC = () => {
       {showNewWoWizard && (
         <NewWorkOrderWizard
           onClose={() => setShowNewWoWizard(false)}
-          onSaved={() => { setShowNewWoWizard(false); void reload(); }}
+          onSaved={(_woId, workOrderCode) => {
+            setShowNewWoWizard(false);
+            void reload();
+            if (workOrderCode) openLink(workOrderCode);
+          }}
         />
       )}
 
@@ -3982,7 +4052,12 @@ export const WorkOrdersPage: React.FC = () => {
           prefill={createPrefill}
           initialVesselCode={selectedVesselCode ?? undefined}
           onClose={() => setCreatePrefill(null)}
-          onSaved={() => { setCreatePrefill(null); void reload(); }}
+          // La OT recién creada se abre para completarla (nace "En preparación").
+          onSaved={(_woId, workOrderCode) => {
+            setCreatePrefill(null);
+            void reload();
+            if (workOrderCode) openLink(workOrderCode);
+          }}
         />
       )}
       {editing && (

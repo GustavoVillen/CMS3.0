@@ -69,6 +69,7 @@ import {
 } from "../work-orders/work-order-progress-notes-service";
 import { createWorkLog, listWorkLogs } from "./work-logs-service";
 import {
+  suggestTitle,
   suggestAcceptanceCriteria,
   suggestTaskSteps,
   suggestLoto,
@@ -349,6 +350,14 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && url.pathname === "/app/pms/work-orders") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantWorkOrder>[1];
     sendJson(response, 201, await createTenantWorkOrder(session, body));
+    return true;
+  }
+
+  // Sugerir el título a partir del equipo y la tarea ya cargada (si hay).
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-title") {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string }>(request);
+    sendJson(response, 200, await suggestTitle(session, body));
     return true;
   }
 

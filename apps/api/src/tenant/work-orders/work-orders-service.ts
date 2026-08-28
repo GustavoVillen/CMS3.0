@@ -403,6 +403,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
       deletedAt: true, deletedByUserId: true,
       reopenCount: true, lastReopenAt: true, lastReopenByUserId: true,
+      enviadoAprobacionByName: true, enviadoAprobacionByUserId: true, enviadoAprobacionAt: true,
       aprobadoByName: true, aprobadoByUserId: true, aprobadoAt: true,
       autorizadoByName: true, autorizadoByUserId: true, autorizadoAt: true,
       rechazadoByName: true, rechazadoAt: true, rechazoReason: true,
@@ -1047,14 +1048,16 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
   return resumed;
 }
 
-// ── Tramitación: cadena de aprobación (Solicita → Aprueba → Autoriza) ─────────
-// Cada paso se dispara por drag-and-drop en el tablero y captura el nombre del
-// firmante. Solo registra los campos de tramitación (no toca el status
-// operativo). Secuencial: no se puede Autorizar sin Aprobar.
+// ── Tramitación: cadena de aprobación ────────────────────────────────────────
+// En preparación → Envía a aprobar → Aprueba → Autoriza. Cada paso se dispara
+// desde la caja TRAMITACIÓN o por drag-and-drop en el tablero, y captura el
+// nombre del firmante. Solo registra los campos de tramitación (no toca el
+// status operativo). Secuencial: no se aprueba sin enviar, ni se autoriza sin
+// aprobar.
 export async function setWorkOrderApproval(
   session: TenantAccessSession,
   id: string,
-  payload: { step: "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null; actionDate?: string | Date | null },
+  payload: { step: "ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null; actionDate?: string | Date | null },
 ) {
   ensureCanOperateWorkOrders(session);
   // Autorizar es de tierra, igual que en la SS (ver canAuthorizeWorkOrders).
@@ -1087,20 +1090,26 @@ export async function setWorkOrderApproval(
         select: { userId: true, role: true, assignedVesselCodes: true },
       });
       if (!membership) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
-      // La elegibilidad depende del PASO. APRUEBA admite al JEFE DE MÁQUINAS
-      // (es a bordo); AUTORIZA no, porque es de tierra. Sin esta distinción un
-      // admin podría autorizar "en nombre de" un jefe de máquinas y saltear el
-      // gate por la ventana. Defensa en profundidad: el front ya filtra la lista.
+      // La elegibilidad depende del PASO. ENVIA no es una firma de autoridad
+      // (es "ya la completé, fírmenla"): lo manda cualquiera embarcado, salvo
+      // el auditor externo, que es de sólo lectura — mismo criterio que
+      // SOLICITA en la SS. APRUEBA admite al JEFE DE MÁQUINAS (es a bordo);
+      // AUTORIZA no, porque es de tierra. Sin esta distinción un admin podría
+      // autorizar "en nombre de" un jefe de máquinas y saltear el gate por la
+      // ventana. Defensa en profundidad: el front ya filtra la lista.
       const enElBuque = Array.isArray(membership.assignedVesselCodes)
         && membership.assignedVesselCodes.includes(current.vesselCode);
       const eligible = membership.role === "TENANT_ADMIN"
+        || (payload.step === "ENVIA" && enElBuque && membership.role !== "AUDITOR_READONLY")
         || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
         || (payload.step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
       if (!eligible) {
         throw new RouteError(
           403,
           "NOT_ELIGIBLE_APPROVER",
-          payload.step === "APRUEBA"
+          payload.step === "ENVIA"
+            ? "Quien envía la orden a aprobar tiene que estar asignado a este buque."
+            : payload.step === "APRUEBA"
             ? "Solo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
             : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
         );
@@ -1112,7 +1121,17 @@ export async function setWorkOrderApproval(
   }
 
   let data: Record<string, unknown>;
-  if (payload.step === "APRUEBA") {
+  if (payload.step === "ENVIA") {
+    // EN PREPARACIÓN → PENDIENTE DE APROBACIÓN. No exige rol de aprobador: es
+    // el que abrió la OT diciendo "ya está lista, fírmenla". Limpia el rechazo
+    // para que el ciclo corregir-y-reenviar salga del rojo.
+    if (current.enviadoAprobacionAt) throw new RouteError(409, "ALREADY_SUBMITTED", "La OT ya fue enviada a aprobar.");
+    data = {
+      enviadoAprobacionByName: name, enviadoAprobacionByUserId: signerUserId, enviadoAprobacionAt: actionAt,
+      rechazadoByName: null, rechazadoAt: null, rechazoReason: null,
+    };
+  } else if (payload.step === "APRUEBA") {
+    if (!current.enviadoAprobacionAt) throw new RouteError(409, "NOT_SUBMITTED", "La OT tiene que enviarse a aprobar antes de aprobarla.");
     if (current.aprobadoAt) throw new RouteError(409, "ALREADY_APPROVED", "La OT ya fue aprobada.");
     // Re-aprobar tras un rechazo: limpia el flag de rechazo (sale del rojo).
     // Se guarda el userId del firmante para incrustar su firma digital en el PDF.
@@ -1122,16 +1141,20 @@ export async function setWorkOrderApproval(
     if (current.autorizadoAt) throw new RouteError(409, "ALREADY_AUTHORIZED", "La OT ya fue autorizada.");
     data = { autorizadoByName: name, autorizadoByUserId: signerUserId, autorizadoAt: actionAt };
   } else if (payload.step === "RECHAZA") {
-    // [NO APROBADA] / [NO AUTORIZADA]: devuelve la OT a Solicitada (en rojo),
-    // limpiando aprobado/autorizado y registrando quién rechazó + el motivo.
+    // [NO APROBADA] / [NO AUTORIZADA]: devuelve la OT a EN PREPARACIÓN (en
+    // rojo), limpiando enviado/aprobado/autorizado y registrando quién rechazó
+    // + el motivo. Vuelve a preparación y no a "pendiente de aprobación"
+    // porque rechazar significa "corregila": el que la abrió tiene que poder
+    // arreglarla y reenviarla, y ese reenvío vuelve a avisar a quien aprueba.
     const reason = normalizeRequiredText(payload.reason ?? "", "reason");
     data = {
+      enviadoAprobacionByName: null, enviadoAprobacionByUserId: null, enviadoAprobacionAt: null,
       aprobadoByName: null, aprobadoByUserId: null, aprobadoAt: null,
       autorizadoByName: null, autorizadoByUserId: null, autorizadoAt: null,
       rechazadoByName: name, rechazadoAt: now, rechazoReason: reason,
     };
   } else {
-    throw new RouteError(400, "VALIDATION_ERROR", "Paso de tramitación inválido. Use APRUEBA, AUTORIZA o RECHAZA.");
+    throw new RouteError(400, "VALIDATION_ERROR", "Paso de tramitación inválido. Use ENVIA, APRUEBA, AUTORIZA o RECHAZA.");
   }
 
   const updated = await prisma.workOrder.update({
@@ -1141,7 +1164,8 @@ export async function setWorkOrderApproval(
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
     actorUserId: session.user.id,
-    action: payload.step === "APRUEBA" ? "WorkOrder.approved"
+    action: payload.step === "ENVIA" ? "WorkOrder.submittedForApproval"
+      : payload.step === "APRUEBA" ? "WorkOrder.approved"
       : payload.step === "AUTORIZA" ? "WorkOrder.authorized"
       : "WorkOrder.rejected",
     entityType: "WorkOrder",
@@ -1151,6 +1175,38 @@ export async function setWorkOrderApproval(
       onBehalfOf: signerUserId !== session.user.id ? signerUserId : undefined,
     },
   });
+
+  // Aviso a quien tiene que aprobar ESTE buque (admin / superintendente / jefe
+  // de máquinas asignado — lo resuelve enqueueNotificationForRoles). Es el
+  // único punto donde después se engancha el correo.
+  //
+  // Se borra el aviso anterior de esta misma OT antes de encolar: la tabla
+  // tiene @@unique(tenantId, recipientUserId, sourceType, sourceId), así que
+  // un reenvío tras un rechazo se saltearía en silencio y nadie se enteraría.
+  if (payload.step === "ENVIA") {
+    void (async () => {
+      try {
+        const { enqueueNotificationForRoles } = await import("../notifications/notifications-service");
+        await (prismaRaw as any).notification.deleteMany({
+          where: { tenantId: current.tenantId, sourceType: "WORK_ORDER_APPROVAL", sourceId: current.id },
+        });
+        await enqueueNotificationForRoles(prismaRaw as any, {
+          tenantId:   current.tenantId,
+          vesselCode: current.vesselCode,
+          type:       "WORK_ORDER_PENDING_APPROVAL",
+          severity:   "HIGH",
+          title:      `Pendiente de aprobación — ${current.workOrderCode}`,
+          body:       (current.title as string | null)?.slice(0, 200) ?? null,
+          linkUrl:    `/work-orders?autoCode=${encodeURIComponent(current.workOrderCode)}`,
+          sourceType: "WORK_ORDER_APPROVAL",
+          sourceId:   current.id,
+        });
+      } catch (err) {
+        // Nunca puede voltear la tramitación: la OT ya quedó enviada.
+        log.error("[setWorkOrderApproval] aviso de pendiente de aprobación falló", err);
+      }
+    })();
+  }
 
   // Arrastre a las Solicitudes de Servicio colgadas de esta OT: firmar la OT
   // firma también sus SS (OT aprobada → SS aprobada; OT autorizada → SS

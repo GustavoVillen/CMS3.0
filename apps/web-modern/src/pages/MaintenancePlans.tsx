@@ -2613,7 +2613,20 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             t("mp.modal.maintenancePlanLabel"),
           )}
           onClose={() => setShowExecution(false)}
-          onSaved={_woId => { setShowExecution(false); void onSaved(); onClose(); }}
+          // Igual que desde la lista de planes: la OT recién creada se abre
+          // para completarla y enviarla a aprobar.
+          onSaved={(_woId, workOrderCode) => {
+            setShowExecution(false);
+            void onSaved();
+            if (workOrderCode) {
+              // Nos vamos a la OT. No se llama a onClose(): ese cierre también
+              // navega (vuelve al plan/lista) y pelearía con este navigate —
+              // irse de la pantalla ya desmonta el modal.
+              navigate(`/work-orders/${encodeURIComponent(workOrderCode)}`);
+              return;
+            }
+            onClose();
+          }}
         />
       )}
       {!isNew && showExecution && !needsWO && (
@@ -3708,7 +3721,15 @@ export const MaintenancePlansPage: React.FC = () => {
               : undefined,
           )}
           onClose={() => setExecuting(null)}
-          onSaved={_woId => { setExecuting(null); setBundleIds([]); void reload(); }}
+          // Recién creada, la OT se abre para completarla: nace "En preparación"
+          // y hay que terminarla y enviarla a aprobar, así que dejarla en la
+          // lista obligaba a ir a buscarla.
+          onSaved={(_woId, workOrderCode) => {
+            setExecuting(null);
+            setBundleIds([]);
+            void reload();
+            if (workOrderCode) navigate(`/work-orders/${encodeURIComponent(workOrderCode)}`);
+          }}
         />
       )}
 

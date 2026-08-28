@@ -10,7 +10,7 @@
 import React from "react";
 import { Check } from "lucide-react";
 import {
-  WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS,
+  WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS_OR_INSPECTION,
   WO_PRIORITY_OPTIONS, type FormOption,
 } from "../../lib/wo-form-catalog";
 import type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
@@ -39,12 +39,40 @@ export const EMPTY_WO_REGI: WoRegiForm = {
 
 const PRIORITY_HINT = "La prioridad se elige arriba, en Información. Acá se muestra como plazo, que es como la expresa el formulario.";
 
+/** Casilla cuadrada como la del papel — se reusa en FormBox y OptionRow. */
+function PaperCheckbox({ on }: { on: boolean }) {
+  return (
+    <span className={`shrink-0 w-3.5 h-3.5 border flex items-center justify-center ${
+      on ? "bg-fg border-fg" : "border-fg/50"
+    }`}>
+      {on && <Check className="w-2.5 h-2.5 text-surface" strokeWidth={3.5} />}
+    </span>
+  );
+}
+
 /**
- * Recuadro del formulario: cabecera + opciones en vertical con su casilla,
- * igual que en el papel (PRIORIDAD / TIPO DE MANTENIMIENTO / SISTEMA van así,
- * uno al lado del otro). Volver a tocar la opción activa la limpia.
+ * Barra de sección del papel — fondo azul marino, texto blanco centrado en
+ * mayúsculas (SOLICITADO POR / ASIGNADO A / AUTORIZACION DE TRABAJO / etc).
+ * Mismo color que ya usa MaintenancePlans.tsx para sus separadores (#0f172a).
  */
-function FormBox({ title, options, value, onChange, disabled }: {
+export function PaperSectionBar({ title }: { title: string }) {
+  return (
+    <div
+      className="text-[11px] font-bold uppercase tracking-wider text-center py-1.5 px-2"
+      style={{ backgroundColor: "#0f172a", color: "white" }}
+    >
+      {title}
+    </div>
+  );
+}
+
+/**
+ * Recuadro del formulario: cabecera de texto simple + opciones en vertical con
+ * su casilla, igual que en el papel (PRIORIDAD / TIPO DE MANTENIMIENTO /
+ * SISTEMA van así, uno al lado del otro, bordes rectos como una tabla).
+ * Volver a tocar la opción activa la limpia.
+ */
+export function FormBox({ title, options, value, onChange, disabled }: {
   title: string;
   options: FormOption[];
   value: string;
@@ -52,8 +80,8 @@ function FormBox({ title, options, value, onChange, disabled }: {
   disabled?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-fg/15 overflow-hidden">
-      <div className="bg-accent text-accent-fg text-[10px] font-bold uppercase tracking-wider text-center py-1.5 px-2">
+    <div className="border border-fg/25 bg-surface">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-fg text-center py-1.5 px-2 border-b border-fg/25">
         {title}
       </div>
       {options.map(o => {
@@ -64,18 +92,13 @@ function FormBox({ title, options, value, onChange, disabled }: {
             type="button"
             disabled={disabled}
             onClick={() => onChange(on ? "" : o.value)}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 border-t border-fg/10 text-left transition-colors disabled:opacity-60 ${
-              on ? "bg-accent/10" : "hover:bg-fg/5"
+            className={`w-full flex items-center gap-2 px-2 py-1.5 border-t border-fg/15 text-left transition-colors disabled:opacity-60 ${
+              on ? "bg-fg/5" : "hover:bg-fg/5"
             }`}
           >
+            <PaperCheckbox on={on} />
             <span className={`flex-1 min-w-0 text-[11px] leading-tight ${on ? "font-bold text-fg" : "text-text-industrial/70"}`}>
               {o.label}
-            </span>
-            {/* Casilla, como la del papel */}
-            <span className={`shrink-0 w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center ${
-              on ? "bg-accent border-accent" : "border-fg/30"
-            }`}>
-              {on && <Check className="w-2.5 h-2.5 text-accent-fg" strokeWidth={3} />}
             </span>
           </button>
         );
@@ -84,31 +107,39 @@ function FormBox({ title, options, value, onChange, disabled }: {
   );
 }
 
-/** Botonera de opción única — para los recuadros horizontales del papel. */
-function OptionRow({ options, value, onChange, disabled }: {
+/**
+ * Fila horizontal con casillero — para los recuadros del papel que van en una
+ * sola línea bajo la barra de sección (SOLICITADO POR / ASIGNADO A). Franja
+ * bordeada, opciones separadas por líneas verticales, como una fila de tabla.
+ */
+export function OptionRow({ options, value, onChange, disabled }: {
   options: FormOption[];
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
   return (
-    <div className="flex gap-2 flex-wrap">
-      {options.map(o => (
-        <button
-          key={o.value}
-          type="button"
-          disabled={disabled}
-          // Volver a tocar la opción activa la limpia: el papel admite recuadros vacíos.
-          onClick={() => onChange(value === o.value ? "" : o.value)}
-          className={`px-3 py-1 rounded text-xs font-bold border transition-colors disabled:opacity-50 ${
-            value === o.value
-              ? "bg-accent text-accent-fg border-accent"
-              : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div className="flex flex-wrap border border-t-0 border-fg/25 bg-surface divide-x divide-fg/25">
+      {options.map(o => {
+        const on = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            disabled={disabled}
+            // Volver a tocar la opción activa la limpia: el papel admite recuadros vacíos.
+            onClick={() => onChange(on ? "" : o.value)}
+            className={`flex-1 min-w-[7rem] flex items-center gap-2 px-3 py-2 text-left transition-colors disabled:opacity-60 ${
+              on ? "bg-fg/5" : "hover:bg-fg/5"
+            }`}
+          >
+            <PaperCheckbox on={on} />
+            <span className={`text-[11px] leading-tight ${on ? "font-bold text-fg" : "text-text-industrial/70"}`}>
+              {o.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -124,6 +155,7 @@ export function WoRegiSections({
   providers, providerId, onProviderChange, location, onLocationChange, onPriorityChange,
   serviceRequestProviders, onServiceRequestProviderChange,
   providerOther, onProviderOtherChange,
+  type, onTypeChange,
   saving, saved, error,
 }: {
   form: WoRegiForm;
@@ -135,6 +167,14 @@ export function WoRegiSections({
   /** Prioridad de la OT. El papel la nombra como plazo: es el mismo dato. */
   priority: string;
   onPriorityChange: (v: string) => void;
+  /**
+   * Tipo grueso de la OT (PREVENTIVE/CORRECTIVE/INSPECTION). "Inspección" en
+   * el recuadro "Tipo de mantenimiento" viaja acá, no en `form.maintenanceKind`
+   * — no tiene equivalente fino, así que se le asigna directo (mismo criterio
+   * que ya usa el alta rápida de OT).
+   */
+  type: string;
+  onTypeChange: (v: string) => void;
   disabled?: boolean;
   /** Talleres del buque — se ofrecen cuando el trabajo se terceriza. */
   providers: Array<{ id: string; name: string; providerCode: string }>;
@@ -202,13 +242,13 @@ export function WoRegiSections({
 
       {/* Recuadros horizontales del papel */}
       <div>
-        <label className={labelCls}>Solicitado por</label>
+        <PaperSectionBar title="Solicitado por" />
         <OptionRow options={WO_REQUESTED_BY} value={form.requestedByArea} disabled={disabled}
           onChange={v => onChange({ requestedByArea: v })} />
       </div>
 
       <div>
-        <label className={labelCls}>Asignado a</label>
+        <PaperSectionBar title="Asignado a" />
         <OptionRow options={WO_ASSIGNED_TO} value={form.assignedToArea} disabled={disabled}
           onChange={v => onChange({ assignedToArea: v })} />
         {/* Tercerizado = lo hace una empresa externa → acá se dice cuál. Puede no
@@ -282,8 +322,18 @@ export function WoRegiSections({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <FormBox title="Prioridad" options={WO_PRIORITY_OPTIONS} value={priority} disabled={disabled}
           onChange={v => { if (v) onPriorityChange(v); }} />
-        <FormBox title="Tipo de mantenimiento" options={WO_MAINTENANCE_KINDS} value={form.maintenanceKind} disabled={disabled}
-          onChange={v => onChange({ maintenanceKind: v })} />
+        <FormBox
+          title="Tipo de mantenimiento"
+          options={WO_MAINTENANCE_KINDS_OR_INSPECTION}
+          value={type === "INSPECTION" ? "INSPECTION" : form.maintenanceKind}
+          disabled={disabled}
+          onChange={v => {
+            if (v === "INSPECTION") { onTypeChange("INSPECTION"); onChange({ maintenanceKind: null }); return; }
+            // Mismo criterio que deriveTypeFromMaintenanceKind en el backend.
+            onTypeChange(v === "PREVENTIVO" || v === "PREDICTIVO" ? "PREVENTIVE" : "CORRECTIVE");
+            onChange({ maintenanceKind: v });
+          }}
+        />
         <FormBox title="Sistema" options={WO_SYSTEM_AREAS} value={form.systemArea} disabled={disabled}
           onChange={v => onChange({ systemArea: v })} />
       </div>

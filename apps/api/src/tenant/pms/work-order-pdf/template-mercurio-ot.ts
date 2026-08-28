@@ -169,18 +169,32 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       canvas.y = y0 + headH + maxRows * rowH;
     }
 
-    /** Tabla de dos columnas etiqueta/valor. */
+    /**
+     * Tabla de dos columnas etiqueta/valor.
+     *
+     * La fila crece si algún valor no entra en una línea: una OT de astillero
+     * cubre varios ítems del PDM ("LTE-EB-ESPUMA-34 / -51 / -30") y con alto
+     * fijo el texto se salía de la celda y se montaba sobre la fila de abajo.
+     * Sólo se reparte en varias líneas el valor que lo necesita; los que entran
+     * en una siguen centrados verticalmente, alineados con su etiqueta.
+     */
     function kvRow(pairs: Array<{ label: string; value: string; lw?: number }>, h = 18) {
-      ensureSpace(h);
       const each = Math.floor(W / pairs.length);
-      pairs.forEach((p, i) => {
-        const x = ML + i * each;
+      const geom = pairs.map((p, i) => {
         const lw = p.lw ?? 78;
-        const vw = (i === pairs.length - 1 ? W - i * each : each) - lw;
-        cell(x, canvas.y, lw, h, p.label, { bold: true, fontSize: 7, bg: NAVY, color: WHITE });
-        cell(x + lw, canvas.y, vw, h, sanitizePdfText(p.value), { fontSize: 8 });
+        return { x: ML + i * each, lw, vw: (i === pairs.length - 1 ? W - i * each : each) - lw };
       });
-      canvas.y += h;
+      const values = pairs.map(p => sanitizePdfText(p.value));
+      const needed = values.map((v, i) =>
+        canvas.measureCellHeight([v], [geom[i]!.vw], { fontSize: 8, minHeight: h }));
+      const rowH = Math.max(h, ...needed);
+      ensureSpace(rowH);
+      pairs.forEach((p, i) => {
+        const g = geom[i]!;
+        cell(g.x, canvas.y, g.lw, rowH, p.label, { bold: true, fontSize: 7, bg: NAVY, color: WHITE });
+        cell(g.x + g.lw, canvas.y, g.vw, rowH, values[i]!, { fontSize: 8, wrap: needed[i]! > h });
+      });
+      canvas.y += rowH;
     }
 
     /** Encabezado de columnas + primera fila de las tablas de items. */
