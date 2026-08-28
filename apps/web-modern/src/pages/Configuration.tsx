@@ -5,9 +5,13 @@ import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
 import { NAV, LOCKED_NAV_PATHS } from "../lib/nav-items";
 import { fetchHiddenNavPaths, saveHiddenNavPaths } from "../lib/nav-config";
+import { WeeklyReportSettings } from "../components/WeeklyReportSettings";
+import { useAuth } from "../lib/auth";
 
 export const ConfigurationPage: React.FC = () => {
   const t = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN";
 
   const [hidden, setHidden] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +139,10 @@ export const ConfigurationPage: React.FC = () => {
           )}
         </div>
       </section>
+
+      {/* El backend vuelve a chequear el rol: esto solo evita mostrar controles
+          que el usuario no puede usar. */}
+      {isAdmin && <WeeklyReportSettings />}
     </div>
   );
 };

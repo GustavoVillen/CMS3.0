@@ -5,7 +5,7 @@
 // evidencia. Reusa el endpoint /app/tmsa/maintenance (tmsa-service.ts) y respeta
 // el buque seleccionado en el contexto global (igual que ComplianceDashboard).
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, Download, Loader2, CheckCircle2, AlertTriangle, XCircle, Info, ChevronRight, Sparkles } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -74,10 +74,146 @@ interface DrillDownTarget {
   metricLabel: string;
 }
 
+interface GroupAssessTarget {
+  vesselCode: string;
+  vesselName: string;
+  groupKey: string;
+  groupLabel: string;
+  element: string;
+  status: TmsaStatus;
+  metrics: TmsaMetric[];
+}
+
 interface TmsaAssessment {
   narrative: string;
   recommendedAction: string;
 }
+
+// Panel de análisis IA. Compartido por el drill-down de una métrica (botón
+// "Analizar con IA") y por el modal del sub-requisito completo, que se dispara
+// desde el badge de estado y arranca solo (auto).
+const TmsaAiAssessment: React.FC<{
+  vesselCode: string;
+  groupKey: string;
+  metricKey?: string;
+  auto?: boolean;
+}> = ({ vesselCode, groupKey, metricKey, auto }) => {
+  const t = useT();
+  const [assessment, setAssessment] = useState<TmsaAssessment | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const startedRef = useRef(false);
+
+  const analyze = useCallback(async () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const res = await api.post<TmsaAssessment>("/app/tmsa/maintenance/assessment", {
+        vesselCode,
+        groupKey,
+        ...(metricKey ? { metricKey } : {}),
+      });
+      setAssessment(res);
+    } catch (e) {
+      setAnalyzeError(e instanceof ApiError ? e.message : t("tmsa.detail.analyzeError"));
+      startedRef.current = false; // permitir reintentar
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [vesselCode, groupKey, metricKey, t]);
+
+  useEffect(() => {
+    if (auto) void analyze();
+  }, [auto, analyze]);
+
+  return (
+    <div className="space-y-2">
+      {!assessment && !analyzing && (
+        <button
+          type="button"
+          onClick={() => { void analyze(); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-medium text-accent hover:bg-accent/20 transition-all"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          {analyzeError ? t("tmsa.detail.analyzeRetry") : t("tmsa.detail.analyze")}
+        </button>
+      )}
+      {analyzing && (
+        <div className="flex items-center gap-2 text-xs text-text-industrial/60">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+          {t("tmsa.detail.analyzing")}
+        </div>
+      )}
+      {analyzeError && (
+        <p className="text-xs text-red-700 dark:text-red-400">{analyzeError}</p>
+      )}
+      {assessment && (
+        <div className="space-y-2">
+          <p className="text-xs text-fg/80 leading-relaxed">{assessment.narrative}</p>
+          {assessment.recommendedAction && (
+            <div className="bg-accent/5 border border-accent/15 rounded-lg px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider text-accent/70 font-bold mb-0.5">{t("tmsa.detail.recommendedAction")}</p>
+              <p className="text-xs text-fg/80 leading-relaxed">{assessment.recommendedAction}</p>
+            </div>
+          )}
+          <p className="text-[10px] text-text-industrial/40 italic">{t("tmsa.detail.analyzeDisclaimer")}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Modal del sub-requisito completo: se abre al presionar el badge de estado
+// (Brecha / Atención / Info) y analiza el grupo entero con IA.
+const TmsaGroupAssessmentModal: React.FC<{ target: GroupAssessTarget; onClose: () => void }> = ({ target, onClose }) => {
+  const t = useT();
+  const meta = STATUS_META[target.status];
+  const Icon = meta.icon;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[85vh] flex flex-col bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-fg/10">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 truncate">
+              {target.vesselName} · TMSA {target.element}
+            </p>
+            <h2 className="text-sm font-bold text-fg truncate">{target.groupLabel}</h2>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${meta.pill}`}>
+              <Icon className="w-3 h-3" />
+              {t(`tmsa.status.${target.status}` as TranslationKey)}
+            </span>
+            <ModalCloseButton onClose={onClose} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1.5">{t("tmsa.assess.metrics")}</p>
+            <dl className="space-y-1">
+              {target.metrics.map(m => (
+                <div key={m.key} className="flex items-center justify-between gap-2 text-[11px]">
+                  <dt className="text-text-industrial/60 truncate">{t(`tmsa.metric.${m.key}` as TranslationKey)}</dt>
+                  <dd className="font-bold text-fg shrink-0">{metricValue(m)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="pt-3 border-t border-fg/10">
+            <TmsaAiAssessment vesselCode={target.vesselCode} groupKey={target.groupKey} auto />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const TmsaDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => void }> = ({ target, onClose }) => {
   const t = useT();
@@ -85,28 +221,6 @@ const TmsaDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => voi
   const path = `/app/tmsa/maintenance/detail?vesselCode=${encodeURIComponent(target.vesselCode)}&metric=${encodeURIComponent(target.metricKey)}`;
   const { data, loading, error } = useFetch<{ items: TmsaDetailItem[] }>(path, [path]);
   const items = data?.items ?? [];
-
-  const [assessment, setAssessment] = useState<TmsaAssessment | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-
-  const analyze = async () => {
-    if (analyzing) return;
-    setAnalyzing(true);
-    setAnalyzeError(null);
-    try {
-      const res = await api.post<TmsaAssessment>("/app/tmsa/maintenance/assessment", {
-        vesselCode: target.vesselCode,
-        groupKey: target.groupKey,
-        metricKey: target.metricKey,
-      });
-      setAssessment(res);
-    } catch (e) {
-      setAnalyzeError(e instanceof ApiError ? e.message : t("tmsa.detail.analyzeError"));
-    } finally {
-      setAnalyzing(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -122,38 +236,8 @@ const TmsaDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => voi
           <ModalCloseButton onClose={onClose} />
         </div>
 
-        <div className="px-5 py-3 border-b border-fg/10 space-y-2">
-          {!assessment && !analyzing && (
-            <button
-              type="button"
-              onClick={() => { void analyze(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-medium text-accent hover:bg-accent/20 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {t("tmsa.detail.analyze")}
-            </button>
-          )}
-          {analyzing && (
-            <div className="flex items-center gap-2 text-xs text-text-industrial/60">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-              {t("tmsa.detail.analyzing")}
-            </div>
-          )}
-          {analyzeError && (
-            <p className="text-xs text-red-700 dark:text-red-400">{analyzeError}</p>
-          )}
-          {assessment && (
-            <div className="space-y-2">
-              <p className="text-xs text-fg/80 leading-relaxed">{assessment.narrative}</p>
-              {assessment.recommendedAction && (
-                <div className="bg-accent/5 border border-accent/15 rounded-lg px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wider text-accent/70 font-bold mb-0.5">{t("tmsa.detail.recommendedAction")}</p>
-                  <p className="text-xs text-fg/80 leading-relaxed">{assessment.recommendedAction}</p>
-                </div>
-              )}
-              <p className="text-[10px] text-text-industrial/40 italic">{t("tmsa.detail.analyzeDisclaimer")}</p>
-            </div>
-          )}
+        <div className="px-5 py-3 border-b border-fg/10">
+          <TmsaAiAssessment vesselCode={target.vesselCode} groupKey={target.groupKey} metricKey={target.metricKey} />
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -197,6 +281,7 @@ export const TmsaPage: React.FC = () => {
   const path = `/app/tmsa/maintenance${qs}`;
   const { data, loading, error, reload } = useFetch<{ items: TmsaVesselEvidence[] }>(path, [path]);
   const [drillDown, setDrillDown] = useState<DrillDownTarget | null>(null);
+  const [groupAssess, setGroupAssess] = useState<GroupAssessTarget | null>(null);
 
   const exportPdf = () => {
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -225,7 +310,9 @@ export const TmsaPage: React.FC = () => {
 
       <p className="text-xs text-text-industrial/60 max-w-3xl">{t("tmsa.subtitle")}</p>
       {!loading && items.length > 0 && (
-        <p className="text-[10px] text-text-industrial/40 italic">{t("tmsa.detail.hint")}</p>
+        <p className="text-[10px] text-text-industrial/40 italic">
+          {t("tmsa.detail.hint")} · {t("tmsa.assess.hint")}
+        </p>
       )}
 
       {loading && (
@@ -262,10 +349,31 @@ export const TmsaPage: React.FC = () => {
                       <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">TMSA {g.element}</p>
                       <p className="text-sm font-semibold text-fg leading-tight">{groupLabel}</p>
                     </div>
-                    <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${meta.pill}`}>
-                      <Icon className="w-3 h-3" />
-                      {t(`tmsa.status.${g.status}` as TranslationKey)}
-                    </span>
+                    {g.status === "OK" ? (
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${meta.pill}`}>
+                        <Icon className="w-3 h-3" />
+                        {t(`tmsa.status.${g.status}` as TranslationKey)}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setGroupAssess({
+                          vesselCode: v.vesselCode,
+                          vesselName: v.vesselName,
+                          groupKey: g.key,
+                          groupLabel,
+                          element: g.element,
+                          status: g.status,
+                          metrics: g.metrics,
+                        })}
+                        title={t("tmsa.assess.hint")}
+                        className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer hover:brightness-110 hover:ring-1 hover:ring-fg/20 transition-all ${meta.pill}`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {t(`tmsa.status.${g.status}` as TranslationKey)}
+                        <Sparkles className="w-2.5 h-2.5 opacity-70" />
+                      </button>
+                    )}
                   </div>
                   <dl className="space-y-1">
                     {g.metrics.map(m => {
@@ -306,6 +414,7 @@ export const TmsaPage: React.FC = () => {
       )}
 
       {drillDown && <TmsaDrillDownModal target={drillDown} onClose={() => setDrillDown(null)} />}
+      {groupAssess && <TmsaGroupAssessmentModal target={groupAssess} onClose={() => setGroupAssess(null)} />}
     </div>
   );
 };

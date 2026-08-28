@@ -821,6 +821,7 @@ model Tenant {
   trainingItems      TrainingItem[] @relation("TrainingItems")
   forms              TenantForm[]
   formDocuments      FormDocument[]
+  scheduledReportRuns ScheduledReportRun[]
 }
 
 model TenantDomain {
@@ -877,10 +878,56 @@ model TenantSetting {
   // SOLO lo que el admin cambio; null / rol ausente => se usan los defaults del
   // codigo (mismo criterio que hiddenNavPaths: lo nuevo aparece sin reconfigurar).
   rolePermissions           Json?
+  // Parte semanal de flota por correo (lunes apertura / viernes cierre). Apagado
+  // por defecto: una empresa nueva no empieza a mandar correos sola. Sin
+  // destinatarios cargados tampoco se manda nada aunque este prendido.
+  weeklyReportEnabled       Boolean  @default(false)
+  weeklyReportRecipients    String[] @default([])
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum ScheduledReportKind {
+  WEEKLY_OPENING   // lunes: estado de flota + tareas de la semana
+  WEEKLY_CLOSING   // viernes: lo ejecutado + lo que queda abierto
+}
+
+enum ScheduledReportStatus {
+  SENT
+  FAILED
+  SKIPPED_NO_RECIPIENTS
+  SKIPPED_NOT_CONFIGURED
+}
+
+// Un envio del parte semanal. El indice unico (tenant, tipo, semana) es lo que
+// garantiza UN solo correo por semana: el job pregunta si ya existe la fila
+// antes de mandar, y la propia constraint lo frena si dos procesos compiten.
+// Sobrevive a reinicios del servidor, que es donde fallaria un simple contador
+// en memoria. Ademas es la primera traza de "salio o no salio" que tiene el
+// sistema: hasta ahora ningun correo dejaba registro en la base.
+model ScheduledReportRun {
+  id         String                @id @default(cuid())
+  tenantId   String
+  reportKind ScheduledReportKind
+  // Semana ISO del envio, "2026-W35". Junto al tipo identifica el envio.
+  periodKey  String
+  status     ScheduledReportStatus
+  recipients String[]              @default([])
+  // Motivo cuando status = FAILED (mensaje del servidor SMTP, truncado).
+  error      String?
+  // Copia CONGELADA del parte de esa semana. Es lo que se consulta despues en
+  // "semanas anteriores": regenerarlo daria los numeros de hoy, no los de
+  // aquella semana, y entonces no serviria para comparar como veniamos.
+  // Es de flota completa, asi que solo lo abre quien ve toda la flota.
+  html       String?
+  sentAt     DateTime              @default(now())
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, reportKind, periodKey])
+  @@index([tenantId, sentAt])
 }
 
 // Definicion de un formulario controlado por tenant. Unica fuente de verdad de

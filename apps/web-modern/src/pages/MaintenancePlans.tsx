@@ -2414,10 +2414,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               />
             </div>
 
-            {/* Checklist upload — CHECKLIST mode only */}
-            {triggerResultMode === "CHECKLIST" && (
-              <div className="space-y-1.5">
+            {/* LISTA DE CHEQUEO del ítem del PDM (Word / PDF / Excel).
+                Antes sólo aparecía con el modo "CHECKLIST", que ya no se puede
+                elegir: la subida quedó inalcanzable aunque hay planes con
+                documento cargado. Ahora está siempre — es la planilla que se
+                usa al ejecutar, y en una inspección es lo que se completa. */}
+            <div className="space-y-1.5">
                 <label className={labelCls}>{t("mp.checklistTemplate")}</label>
+                {taskType === "INSPECTION" && (
+                  <p className="text-[11px] text-text-industrial/50">{t("mp.checklistInspectionHint")}</p>
+                )}
                 <div className="rounded-xl border border-fg/10 bg-fg/5 p-4 space-y-3">
                   {checklistTemplate && (checklistTemplate.startsWith("/uploads/") || checklistTemplate.startsWith("/app/files/")) ? (
                     <div className="flex items-center justify-between gap-3">
@@ -2462,8 +2468,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   )}
                   {checklistUploadError && <p className="text-xs text-red-700 dark:text-red-400">{checklistUploadError}</p>}
                 </div>
-              </div>
-            )}
+            </div>
 
             {/* Los avisos de este formulario van en una ventanita con OK
                 (ver AlertDialog al final del modal): al pie del formulario
@@ -3566,6 +3571,10 @@ export const MaintenancePlansPage: React.FC = () => {
         {SFI_TABS.map(tab => {
           const count = tab.key === "ALL" ? (sfiTabCounts["ALL"] ?? rawData?.total ?? 0) : (sfiTabCounts[String(tab.key)] ?? 0);
           const isActive = sfiTab === tab.key;
+          // Un grupo sin planes no se muestra: el chip no lleva a ningún lado y
+          // sólo agrega ruido. El activo se mantiene aunque quede en cero (por
+          // ejemplo al cambiar de buque) para no dejar la selección huérfana.
+          if (tab.key !== "ALL" && count === 0 && !isActive) return null;
           return (
             <button
               key={String(tab.key)}

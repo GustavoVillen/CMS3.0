@@ -5,6 +5,7 @@ import { readJsonBody } from "../http/read-json-body";
 import { readBinaryBody } from "../http/read-binary-body";
 import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-service";
 import { getRolePermissions, setRolePermissions } from "./settings/role-permissions-config-service";
+import { getWeeklyReportConfig, setWeeklyReportConfig } from "./settings/weekly-report-config-service";
 import { hasPermission, resolvePermissionsForRole } from "./auth/role-permissions";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
@@ -2598,6 +2599,105 @@ export async function handleTenantRoutes(
     }
     const body = await readJsonBody(request) as { rolePermissions?: unknown };
     sendJson(response, 200, await setRolePermissions(session, body?.rolePermissions));
+    return true;
+  }
+
+  // ── Parte semanal de flota por correo ─────────────────────────────────────
+  // Se chequea el rol directo, como las dos config de arriba, en vez de agregar
+  // una clave al catalogo de permisos: en produccion la matriz de Mercurio esta
+  // guardada en la base y REEMPLAZA a la del codigo, asi que una clave nueva
+  // llegaria vacia para todos los roles menos admin.
+  if (method === "GET" && url.pathname === "/app/tenant/weekly-report-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getWeeklyReportConfig(session));
+    return true;
+  }
+
+  if (method === "PATCH" && url.pathname === "/app/tenant/weekly-report-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden configurar el parte semanal.");
+    }
+    const body = await readJsonBody(request) as { enabled?: unknown; recipients?: unknown };
+    sendJson(response, 200, await setWeeklyReportConfig(session, body ?? {}));
+    return true;
+  }
+
+  // Parte del momento. Solo TENANT_ADMIN, por decisión del cliente: el parte es
+  // una lectura de gestión de toda la flota, no una pantalla de a bordo.
+  // Se sigue armando con la sesión de quien mira (no con la de sistema) para
+  // que el alcance salga del usuario y no de un privilegio fijo del código: si
+  // mañana se abre a otro rol, cada uno ve lo suyo sin tocar esta ruta.
+  if (method === "GET" && url.pathname === "/app/tenant/weekly-report/preview") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden ver el parte semanal.");
+    }
+    const kind = url.searchParams.get("kind") === "WEEKLY_CLOSING" ? "WEEKLY_CLOSING" : "WEEKLY_OPENING";
+    const { buildWeeklyFleetReport } = await import("./reports/weekly-fleet-report-service");
+    const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || null;
+    const report = await buildWeeklyFleetReport(session.tenantSlug, kind, new Date(), name, session);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end(report.html);
+    return true;
+  }
+
+  // ── Semanas anteriores ────────────────────────────────────────────────────
+  // Las copias archivadas son de FLOTA COMPLETA (las arma el job, sin usuario).
+  // Solo TENANT_ADMIN ve toda la flota (ver auth/vessel-scope.ts), así que
+  // abrirlas a otro rol filtraría buques fuera de su alcance. Fail-closed.
+  if (method === "GET" && url.pathname === "/app/tenant/weekly-report/history") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden ver las semanas anteriores.");
+    }
+    const { listWeeklyReportHistory } = await import("./reports/weekly-report-archive-service");
+    sendJson(response, 200, { items: await listWeeklyReportHistory(session) });
+    return true;
+  }
+
+  if (method === "GET" && /^\/app\/tenant\/weekly-report\/archived\/[^/]+$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden ver las semanas anteriores.");
+    }
+    const id = url.pathname.split("/").pop()!;
+    const { getArchivedWeeklyReport } = await import("./reports/weekly-report-archive-service");
+    const html = await getArchivedWeeklyReport(session, id);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end(html);
+    return true;
+  }
+
+  // Prueba real: se manda SOLO a quien la pide, para no molestar a la lista
+  // mientras se ajusta el correo. No cuenta como envio de la semana.
+  if (method === "POST" && url.pathname === "/app/tenant/weekly-report/send-test") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden enviar la prueba.");
+    }
+    if (!session.user.email) {
+      throw new RouteError(400, "NO_EMAIL", "Tu usuario no tiene una dirección de correo cargada.");
+    }
+    const body = await readJsonBody(request) as { kind?: unknown };
+    const kind = body?.kind === "WEEKLY_CLOSING" ? "WEEKLY_CLOSING" : "WEEKLY_OPENING";
+    const { buildWeeklyFleetReport } = await import("./reports/weekly-fleet-report-service");
+    const { isMailConfigured, sendMail } = await import("../common/mailer");
+    if (!isMailConfigured()) {
+      throw new RouteError(503, "MAIL_NOT_CONFIGURED", "El servidor de correo no está configurado. Falta cargar las credenciales SMTP.");
+    }
+    const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || null;
+    const report = await buildWeeklyFleetReport(session.tenantSlug, kind, new Date(), name);
+    const result = await sendMail({
+      to: session.user.email,
+      subject: `[PRUEBA] ${report.subject}`,
+      text: report.text,
+      html: report.html,
+    });
+    if (!result.sent) {
+      throw new RouteError(502, "MAIL_SEND_FAILED", result.error || "No se pudo enviar el correo de prueba.");
+    }
+    sendJson(response, 200, { sent: true, to: result.to });
     return true;
   }
 

@@ -31,8 +31,18 @@ export interface SendMailInput {
   to: string | string[];
   cc?: string | string[];
   subject: string;
-  /** Cuerpo en texto plano (los correos del sistema no usan HTML). */
+  /**
+   * Cuerpo en texto plano. Obligatorio SIEMPRE, incluso cuando se manda `html`:
+   * es lo que ven los clientes que no muestran HTML y lo que leen los filtros de
+   * spam (un correo solo-HTML puntua peor).
+   */
   text: string;
+  /**
+   * Cuerpo HTML opcional. Si va, el cliente lo prefiere sobre `text`. Pensado
+   * para los partes que se envian solos (ver tenant/reports/), no para los
+   * avisos operativos, que siguen siendo texto plano.
+   */
+  html?: string;
   attachments?: MailAttachment[];
 }
 
@@ -119,6 +129,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       cc: cc.length ? cc : undefined,
       subject: input.subject,
       text: input.text,
+      html: input.html,
       attachments: input.attachments?.map(a => ({
         filename: a.filename,
         content: a.content,

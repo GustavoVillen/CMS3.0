@@ -12,7 +12,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2, Ban } from "lucide-react";
+import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
@@ -83,7 +83,7 @@ interface ServiceRequest {
   // Pie del formulario
   capitanName: string | null;
   jefeMaquinasName: string | null;
-  workOrder?: { id: string; workOrderCode: string; title: string | null; status: string; assetName?: string | null } | null;
+  workOrder?: { id: string; workOrderCode: string; title: string | null; status: string; assetId?: string | null; assetName?: string | null } | null;
 }
 interface ListResponse { items: ServiceRequest[]; total: number }
 
@@ -272,11 +272,7 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
       {srServicio(sr) && (
         <p className="text-xs text-fg font-medium line-clamp-2">{srServicio(sr)}</p>
       )}
-      {sr.workOrder?.assetName && (
-        <p className="text-[10px] text-text-industrial/60 truncate" title={sr.workOrder.assetName}>
-          {sr.workOrder.assetName}
-        </p>
-      )}
+      {/* El equipo NO va acá: es el header del grupo que contiene la tarjeta. */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] text-text-industrial/50">{fmtDate(sr.openDate)}</span>
         {sr.workOrder && (
@@ -287,6 +283,25 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
       </div>
     </div>
   );
+}
+
+/**
+ * Agrupa las SS de una columna por equipo, igual que el kanban de OT. El equipo
+ * lo aporta la OT de origen (la SS no guarda assetId propio); la clave es el
+ * assetId para no fusionar equipos homónimos de distintos buques, y las SS sin
+ * OT (o sin equipo resuelto) caen en un grupo aparte.
+ */
+function groupSrsByAsset(items: ServiceRequest[]): { key: string; label: string; items: ServiceRequest[] }[] {
+  const map = new Map<string, { label: string; items: ServiceRequest[] }>();
+  for (const sr of items) {
+    const key = sr.workOrder?.assetId ?? sr.workOrder?.assetName ?? "—";
+    const label = sr.workOrder?.assetName ?? "—";
+    const g = map.get(key);
+    if (g) g.items.push(sr); else map.set(key, { label, items: [sr] });
+  }
+  return [...map.entries()]
+    .map(([key, g]) => ({ key, label: g.label, items: g.items }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
@@ -301,6 +316,11 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
   const [busyId, setBusyId]         = useState<string | null>(null);
   const [dropError, setDropError]   = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ sr: ServiceRequest; step: "SOLICITA" | "APRUEBA" | "AUTORIZA" } | null>(null);
+  // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = React.useCallback((k: string) => {
+    setExpandedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  }, []);
 
   // Mismo criterio que el backend: se chequea acá sólo para explicar el porqué
   // en vez de dejar que el arrastre termine en un 403 sin mensaje.
@@ -382,16 +402,39 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {colItems.map(sr => (
-                  <SsKanbanCard
-                    key={sr.id}
-                    sr={sr}
-                    busy={busyId === sr.id}
-                    draggingId={draggingSr?.id ?? null}
-                    onOpen={onOpen}
-                    onDragStart={setDraggingSr}
-                  />
-                ))}
+                {groupSrsByAsset(colItems).map(group => {
+                  const gkey = `${col.colId}::${group.key}`;
+                  const collapsed = !expandedGroups.has(gkey);
+                  return (
+                    <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(gkey)}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
+                        title={group.label}
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} />
+                        <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
+                        <span className="text-[11px] font-bold text-fg truncate flex-1">{group.label}</span>
+                        <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">{group.items.length}</span>
+                      </button>
+                      {!collapsed && (
+                        <div className="flex flex-col gap-2 p-2 pt-0">
+                          {group.items.map(sr => (
+                            <SsKanbanCard
+                              key={sr.id}
+                              sr={sr}
+                              busy={busyId === sr.id}
+                              draggingId={draggingSr?.id ?? null}
+                              onOpen={onOpen}
+                              onDragStart={setDraggingSr}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

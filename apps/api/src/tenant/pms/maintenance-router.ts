@@ -130,7 +130,9 @@ export async function handleMaintenanceRoutes(
     const items = await listTenantMaintenancePlans(session, {
       vesselCode: url.searchParams.get("vesselCode"),
       status: url.searchParams.get("status"),
+      taskType: url.searchParams.get("taskType"),
       triggerType: url.searchParams.get("triggerType"),
+      triggerTypeNot: url.searchParams.get("triggerTypeNot"),
       executionStatus: url.searchParams.get("executionStatus"),
       taskMasterId: url.searchParams.get("taskMasterId"),
       assetId: url.searchParams.get("assetId"),

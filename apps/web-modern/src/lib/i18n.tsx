@@ -5,7 +5,7 @@
  * - Usage: const t = useT();  t("dashboard.vessels")
  */
 
-import React, { createContext, useContext } from "react";
+import React, { createContext, useCallback, useContext } from "react";
 
 export type Locale = "es" | "en" | "pt";
 
@@ -82,6 +82,35 @@ const dict = {
   "config.save":            { es: "Guardar cambios",           en: "Save changes",            pt: "Salvar alterações" },
   "config.saved":           { es: "Cambios guardados",         en: "Changes saved",           pt: "Alterações salvas" },
   "config.saveError":       { es: "No se pudo guardar",        en: "Could not save",          pt: "Não foi possível salvar" },
+  "config.weeklyReport.title":          { es: "Parte semanal por correo",  en: "Weekly report by email",   pt: "Boletim semanal por e-mail" },
+  "config.weeklyReport.subtitle":       { es: "Los lunes a las 07:00 se arma el estado de la flota con las tareas de la semana; los viernes a las 17:00, lo ejecutado y lo que quedó abierto. Cada parte queda guardado en la pantalla Parte semanal, y además se envía por correo a quienes cargues acá.", en: "Mondays at 07:00 the fleet status and the week's tasks are compiled; Fridays at 17:00, what was done and what is still open. Each report is kept in the Weekly report screen, and is also emailed to whoever you add here.", pt: "Às segundas 07:00 monta-se o estado da frota com as tarefas da semana; às sextas 17:00, o executado e o que ficou aberto. Cada boletim fica guardado na tela Boletim semanal e também é enviado por e-mail a quem você adicionar aqui." },
+  "config.weeklyReport.enable":         { es: "Generar el parte cada semana", en: "Compile the report every week", pt: "Gerar o boletim toda semana" },
+  "config.weeklyReport.recipients":     { es: "Enviarlo también por correo a", en: "Also email it to",        pt: "Enviar também por e-mail para" },
+  "config.weeklyReport.noRecipients":   { es: "Sin direcciones: el parte se guarda en la pantalla, pero no se manda por correo.", en: "No addresses: the report is kept in the screen but not emailed.", pt: "Sem endereços: o boletim fica na tela, mas não é enviado por e-mail." },
+  "config.weeklyReport.emailPlaceholder": { es: "nombre@empresa.com",      en: "name@company.com",         pt: "nome@empresa.com" },
+  "config.weeklyReport.add":            { es: "Agregar",                   en: "Add",                      pt: "Adicionar" },
+  "config.weeklyReport.invalidEmail":   { es: "Esa no es una dirección de correo válida.", en: "That is not a valid email address.", pt: "Esse não é um endereço de e-mail válido." },
+  "config.weeklyReport.checkIt":        { es: "Revisar antes de activar",  en: "Check before enabling",    pt: "Revisar antes de ativar" },
+  "config.weeklyReport.previewMonday":  { es: "Ver el del lunes",          en: "View Monday's",            pt: "Ver o de segunda" },
+  "config.weeklyReport.previewFriday":  { es: "Ver el del viernes",        en: "View Friday's",            pt: "Ver o de sexta" },
+  "config.weeklyReport.sendTest":       { es: "Enviarme una prueba",       en: "Send me a test",           pt: "Enviar-me um teste" },
+  "config.weeklyReport.testSent":       { es: "Prueba enviada a {email}",  en: "Test sent to {email}",     pt: "Teste enviado para {email}" },
+  "config.weeklyReport.testError":      { es: "No se pudo enviar la prueba", en: "Could not send the test", pt: "Não foi possível enviar o teste" },
+  "config.weeklyReport.previewError":   { es: "No se pudo generar la vista previa", en: "Could not generate the preview", pt: "Não foi possível gerar a pré-visualização" },
+  "config.weeklyReport.popupBlocked":   { es: "El navegador bloqueó la ventana. Permití las ventanas emergentes de este sitio y probá de nuevo.", en: "The browser blocked the window. Allow pop-ups for this site and try again.", pt: "O navegador bloqueou a janela. Permita pop-ups neste site e tente novamente." },
+  "nav.weeklyReport":       { es: "Parte semanal",             en: "Weekly report",            pt: "Boletim semanal" },
+  "page.weeklyReport":      { es: "Parte semanal de flota",    en: "Weekly fleet report",      pt: "Boletim semanal da frota" },
+  "weeklyReport.opening":   { es: "Estado de flota",           en: "Fleet status",             pt: "Estado da frota" },
+  "weeklyReport.closing":   { es: "Cierre de semana",          en: "Week closing",             pt: "Fecho da semana" },
+  "weeklyReport.pastWeeks": { es: "Semanas anteriores",        en: "Past weeks",               pt: "Semanas anteriores" },
+  "weeklyReport.viewingArchived": { es: "Estás viendo el parte archivado de {week} — {kind}", en: "You are viewing the archived report for {week} — {kind}", pt: "Você está vendo o boletim arquivado de {week} — {kind}" },
+  "weeklyReport.backToNow": { es: "Ver el de ahora",           en: "View current",             pt: "Ver o atual" },
+  "weeklyReport.emailed":   { es: "Se envió por correo",       en: "Sent by email",            pt: "Enviado por e-mail" },
+  "weeklyReport.notEmailed":{ es: "No se envió por correo",    en: "Not sent by email",        pt: "Não enviado por e-mail" },
+  "weeklyReport.noSnapshot":{ es: "De esta semana no quedó copia guardada", en: "No saved copy for this week", pt: "Não há cópia salva desta semana" },
+  "weeklyReport.loadError": { es: "No se pudo cargar el parte", en: "Could not load the report", pt: "Não foi possível carregar o boletim" },
+  "weeklyReport.empty":     { es: "No hay nada para mostrar",  en: "Nothing to show",          pt: "Nada para mostrar" },
+  "weeklyReport.adminOnly": { es: "El parte semanal de flota sólo está disponible para administradores.", en: "The weekly fleet report is only available to administrators.", pt: "O boletim semanal da frota está disponível apenas para administradores." },
 
   // Header chrome
   "header.allVessels":      { es: "Todos los buques",          en: "All vessels",             pt: "Todas as embarcações" },
@@ -227,6 +256,24 @@ const dict = {
   "insp.triggerType":      { es: "Tipo de trigger",          en: "Trigger type",            pt: "Tipo de gatilho" },
   "insp.frequency":        { es: "Frecuencia (días)",        en: "Frequency (days)",        pt: "Frequência (dias)" },
   "insp.checklist":        { es: "Checklist de Inspección",  en: "Inspection Checklist",    pt: "Checklist de Inspeção" },
+  // ── Inspecciones = OT de inspección ──────────────────────────────────────────
+  "mp.checklistInspectionHint": { es: "Es la planilla que se completa durante la inspección. La orden de trabajo la hereda del plan.", en: "This is the sheet filled in during the inspection. The work order inherits it from the plan.", pt: "É a planilha preenchida durante a inspeção. A ordem de serviço a herda do plano." },
+  "wo.tramita.inspectionAutoAuthorized": { es: "Inspección: autorizada de entrada. No requiere aprobación ni autorización.", en: "Inspection: authorized on creation. It requires no approval or authorization.", pt: "Inspeção: autorizada de saída. Não requer aprovação nem autorização." },
+  "wo.tramita.inspectionSsNote":         { es: "Las Solicitudes de Servicio de esta orden sí se aprueban y autorizan desde cada solicitud.", en: "Service Requests on this order are still approved and authorized from each request.", pt: "As Solicitações de Serviço desta ordem são aprovadas e autorizadas em cada solicitação." },
+  // ── Dashboard: generar una inspección ────────────────────────────────────────
+  "dashboard.generateInspection":   { es: "Generar una inspección",   en: "Generate an inspection",   pt: "Gerar uma inspeção" },
+  "dashboard.inspection.title":     { es: "Generar una inspección",   en: "Generate an inspection",   pt: "Gerar uma inspeção" },
+  "dashboard.inspection.subtitle":  { es: "¿Qué clase de inspección vas a hacer?", en: "What kind of inspection are you doing?", pt: "Que tipo de inspeção você vai fazer?" },
+  "dashboard.inspection.byEvent":   { es: "Por evento",               en: "By event",                 pt: "Por evento" },
+  "dashboard.inspection.periodic":  { es: "Inspección periódica",     en: "Periodic inspection",      pt: "Inspeção periódica" },
+  "dashboard.inspection.search":    { es: "Buscar por tarea, código o equipo…", en: "Search by task, code or equipment…", pt: "Buscar por tarefa, código ou equipamento…" },
+  "dashboard.inspection.empty":     { es: "No hay planes de inspección de esta clase.", en: "No inspection plans of this kind.", pt: "Não há planos de inspeção deste tipo." },
+  "dashboard.inspection.open":      { es: "Abrir OT",                 en: "Open WO",                  pt: "Abrir OS" },
+  "dashboard.inspection.loadError": { es: "No se pudieron cargar los planes de inspección.", en: "Could not load the inspection plans.", pt: "Não foi possível carregar os planos de inspeção." },
+  "dashboard.inspection.openError": { es: "No se pudo abrir la orden de trabajo.", en: "Could not open the work order.", pt: "Não foi possível abrir a ordem de serviço." },
+  "insp.col.completedDate": { es: "F. Realización",            en: "Completed date",           pt: "Data conclusão" },
+  "insp.status.onHold":     { es: "Diferida",                  en: "Deferred",                 pt: "Adiada" },
+  "insp.woListHint":        { es: "Cada inspección es una orden de trabajo. Se abre desde un ítem del plan de mantenimiento de tipo Inspección y no requiere aprobación ni autorización: nace autorizada.", en: "Each inspection is a work order. It is opened from an Inspection-type maintenance plan item and needs no approval or authorization: it is authorized on creation.", pt: "Cada inspeção é uma ordem de serviço. Abre-se a partir de um item do plano de manutenção do tipo Inspeção e não requer aprovação nem autorização: nasce autorizada." },
   "insp.isGlobal":         { es: "Global",                   en: "Global",                  pt: "Global" },
   "page.spares":           { es: "Repuestos & Stock",        en: "Spares & Stock",          pt: "Sobressalentes & Estoque" },
   "page.reports":          { es: "Reportes Mensuales",       en: "Monthly Reports",         pt: "Relatórios Mensais" },
@@ -527,6 +574,7 @@ const dict = {
   "common.save":           { es: "Guardar",             en: "Save",               pt: "Salvar" },
   "common.saveChanges":    { es: "Guardar cambios",     en: "Save changes",       pt: "Salvar alterações" },
   "common.saving":         { es: "Guardando…",          en: "Saving…",            pt: "Salvando…" },
+  "common.back":           { es: "Volver",              en: "Back",               pt: "Voltar" },
   "common.cancel":         { es: "Cancelar",            en: "Cancel",             pt: "Cancelar" },
   "common.close":          { es: "Cerrar",              en: "Close",              pt: "Fechar" },
   "common.attention":      { es: "Atención",            en: "Heads up",           pt: "Atenção" },
@@ -2271,6 +2319,10 @@ const dict = {
   "tmsa.detail.analyzeError":    { es: "No se pudo generar el análisis con IA.",   en: "Could not generate the AI analysis.", pt: "Não foi possível gerar a análise com IA." },
   "tmsa.detail.analyzeDisclaimer": { es: "Borrador generado por IA — revisá antes de usarlo en la autoevaluación TMSA.", en: "AI-generated draft — review before using it in the TMSA self-assessment.", pt: "Rascunho gerado por IA — revise antes de usar na autoavaliação TMSA." },
   "tmsa.detail.recommendedAction": { es: "Acción recomendada",                      en: "Recommended action",                 pt: "Ação recomendada" },
+  "tmsa.detail.analyzeRetry":    { es: "Reintentar análisis",                       en: "Retry analysis",                     pt: "Tentar análise novamente" },
+
+  "tmsa.assess.hint":    { es: "Click en el estado para analizarlo con IA", en: "Click the status to analyze it with AI", pt: "Clique no estado para analisá-lo com IA" },
+  "tmsa.assess.metrics": { es: "Métricas del sub-requisito",                en: "Sub-requirement metrics",                pt: "Métricas do sub-requisito" },
 
   // ─── Compliance Dashboard ───────────────────────────────────────────────────
   "compliance.scoreTitle":        { es: "Compliance score por buque", en: "Compliance score by vessel", pt: "Compliance score por navio" },
@@ -2467,14 +2519,23 @@ export function useWoTerms(): WoTerms {
   return { abbr: WO_TERMS.abbr[locale], full: WO_TERMS.full[locale], fullPlural: WO_TERMS.fullPlural[locale] };
 }
 
-/** Returns a translation function bound to the active locale. */
+/**
+ * Returns a translation function bound to the active locale.
+ *
+ * Memorizada por idioma A PROPOSITO: antes devolvia una funcion nueva en cada
+ * render, asi que cualquier `useCallback`/`useEffect` que la pusiera en su lista
+ * de dependencias se volvia inestable y se disparaba en cada render — un bucle
+ * de recargas dificil de rastrear (paso en la pantalla del parte semanal). La
+ * identidad ahora solo cambia cuando cambia el idioma, que es cuando de verdad
+ * hay que volver a traducir.
+ */
 export function useT() {
   const { locale } = useContext(I18nContext);
-  return (key: TranslationKey): string => {
+  return useCallback((key: TranslationKey): string => {
     const entry = dict[key as keyof typeof dict];
     if (!entry) return `[${key}]`;
     return entry[locale] ?? entry["es"] ?? `[${key}]`;
-  };
+  }, [locale]);
 }
 
 /** Standalone translate — useful outside React (e.g. chart data builders). */

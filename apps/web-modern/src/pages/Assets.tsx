@@ -1598,7 +1598,7 @@ export const AssetsPage: React.FC = () => {
             ? (data?.items.length ?? 0)
             : (tabCounts[String(tab.key)] ?? 0);
           const isActive = sfiTab === tab.key;
-          if (tab.key !== "ALL" && count === 0) return null;
+          if (tab.key !== "ALL" && count === 0 && !isActive) return null;
           return (
             <button
               key={String(tab.key)}

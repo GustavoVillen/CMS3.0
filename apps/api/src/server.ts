@@ -211,4 +211,107 @@ async function runUsagePurge(): Promise<void> {
 setTimeout(() => { runUsagePurge().catch(() => {}); }, 60_000);
 setInterval(() => { runUsagePurge().catch(() => {}); }, 24 * 60 * 60 * 1_000).unref();
 
+// ── Parte semanal de flota por correo ───────────────────────────────────────
+//
+// Lunes 07:00 (apertura) y viernes 17:00 (cierre), EN LA HORA DE CADA EMPRESA.
+// A diferencia de los otros jobs, este tiene que pegarle a una hora concreta:
+// por eso el tick es cada 15 minutos y no cada 6 horas, y por eso la hora se
+// calcula con la zona horaria del tenant (07:00 UTC serían las 03:00 en
+// Paraguay).
+//
+// La condición NO es "son exactamente las 7", sino "es lunes, ya pasaron las 7
+// y todavía no se mandó el parte de esta semana". La diferencia importa: si el
+// servidor estuvo caído el lunes a la mañana, el correo sale igual cuando
+// vuelve, en vez de perderse hasta la semana siguiente. Lo que impide el doble
+// envío es la fila en ScheduledReportRun con su índice único, que sobrevive a
+// reinicios — un contador en memoria no serviría.
+
+const WEEKLY_REPORT_SLOTS = [
+  { weekday: 1, hour: 7,  kind: "WEEKLY_OPENING" as const },
+  { weekday: 5, hour: 17, kind: "WEEKLY_CLOSING" as const },
+];
+
+let weeklyReportRunning = false;
+
+async function runWeeklyReportScheduler(): Promise<void> {
+  if (weeklyReportRunning) return;
+  weeklyReportRunning = true;
+  try {
+    const { getPrismaClient } = await import("./platform/data/prisma-client");
+    const prisma = getPrismaClient();
+    if (!prisma) return;
+
+    const tenants = await prisma.tenant.findMany({
+      where: { status: "ACTIVE", settings: { weeklyReportEnabled: true } },
+      select: { id: true, slug: true, settings: { select: { timezone: true, weeklyReportRecipients: true } } },
+    });
+    if (tenants.length === 0) return;
+
+    const { localNow, isoWeekKey, buildWeeklyFleetReport } = await import("./tenant/reports/weekly-fleet-report-service");
+    const { isMailConfigured, sendMail } = await import("./common/mailer");
+    const now = new Date();
+
+    for (const t of tenants) {
+      try {
+        const local = localNow(now, t.settings?.timezone || "UTC");
+        const slot = WEEKLY_REPORT_SLOTS.find(s => s.weekday === local.weekday && local.hour >= s.hour);
+        if (!slot) continue;
+
+        const periodKey = isoWeekKey(local);
+        const already = await prisma.scheduledReportRun.findUnique({
+          where: { tenantId_reportKind_periodKey: { tenantId: t.id, reportKind: slot.kind, periodKey } },
+          select: { id: true },
+        });
+        if (already) continue;
+
+        const recipients = t.settings?.weeklyReportRecipients ?? [];
+
+        // El parte se arma y se ARCHIVA siempre, aunque no haya correo que
+        // mandar: es la copia congelada que despues se consulta en "semanas
+        // anteriores". Regenerarla mas tarde daria los numeros de hoy, no los
+        // de aquella semana. El envio es el paso siguiente, y puede no ocurrir.
+        const report = await buildWeeklyFleetReport(t.slug, slot.kind, now, null);
+
+        let status = "SENT";
+        let error: string | undefined;
+        if (!isMailConfigured()) {
+          status = "SKIPPED_NOT_CONFIGURED";
+        } else if (recipients.length === 0) {
+          status = "SKIPPED_NO_RECIPIENTS";
+        } else {
+          const result = await sendMail({
+            to: recipients,
+            subject: report.subject,
+            text: report.text,
+            html: report.html,
+          });
+          status = result.sent ? "SENT" : "FAILED";
+          if (!result.sent) error = result.error || result.reason;
+        }
+
+        // La fila se escribe SIEMPRE, salga o no el correo: sin ella el job
+        // reintentaria en cada tick durante todo el dia.
+        await prisma.scheduledReportRun.create({
+          data: {
+            tenantId: t.id, reportKind: slot.kind, periodKey,
+            status: status as any, recipients,
+            error: error ? error.slice(0, 500) : null,
+            html: report.html,
+          },
+        }).catch(() => { /* choque con otro proceso: ya quedó asentado */ });
+        process.stdout.write(`[weekly-report] tenant=${t.slug} ${slot.kind} ${periodKey} ${status}\n`);
+      } catch (err) {
+        process.stderr.write(`[weekly-report] tenant=${t.slug} failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
+  } catch (err) {
+    process.stderr.write(`[weekly-report] aborted: ${err instanceof Error ? err.message : String(err)}\n`);
+  } finally {
+    weeklyReportRunning = false;
+  }
+}
+
+setTimeout(() => { runWeeklyReportScheduler().catch(() => {}); }, 90_000);
+setInterval(() => { runWeeklyReportScheduler().catch(() => {}); }, 15 * 60 * 1_000).unref();
+
 // restart: 1776615000000

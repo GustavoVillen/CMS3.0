@@ -12,6 +12,7 @@ import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from 
 import { log } from "../../common/logger";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
+import { isInspectionWorkOrder, inspectionApprovalStamps } from "./wo-inspection-flow";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -632,6 +633,11 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     );
     const maxSeq = maxSeqRows[0]?.max_seq ?? 0;
     const workOrderCode = `${codePrefix}${String(maxSeq + 1 + attempt).padStart(4, "0")}`;
+    // `maintenanceKind` (5 opciones del formulario) manda sobre `type` (3):
+    // así MTTR / OT→Defecto / reportes siguen viendo el eje que esperan.
+    const woType = payload.maintenanceKind
+      ? deriveTypeFromMaintenanceKind(payload.maintenanceKind)
+      : payload.type ?? "PREVENTIVE";
     return prisma.workOrder.create({
       data: {
         tenantId,
@@ -639,12 +645,11 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         assetId,
         maintenancePlanId: null,
         workOrderCode,
-        // `maintenanceKind` (5 opciones del formulario) manda sobre `type` (3):
-        // así MTTR / OT→Defecto / reportes siguen viendo el eje que esperan.
-        type: payload.maintenanceKind
-          ? deriveTypeFromMaintenanceKind(payload.maintenanceKind)
-          : payload.type ?? "PREVENTIVE",
+        type: woType,
         status: "PLANNED",
+        // Inspección: nace autorizada, sin aprobación ni autorización manual
+        // (ver wo-inspection-flow). Sus SS siguen su propia tramitación.
+        ...(isInspectionWorkOrder(woType) ? inspectionApprovalStamps(woOpenDate) : {}),
         priority: payload.priority ?? "MEDIUM",
         criticality: payload.criticality ?? "B",
         openDate: woOpenDate,

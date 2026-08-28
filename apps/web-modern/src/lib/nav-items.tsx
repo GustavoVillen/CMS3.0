@@ -82,6 +82,8 @@ export const NAV: NavSection[] = [
   {
     titleKey: "nav.section.control",
     items: [
+      { icon: CalendarRange,   labelKey: "nav.weeklyReport",     path: "/weekly-report",
+        roles: ["TENANT_ADMIN"] },
       { icon: Clock,           labelKey: "nav.deferrals",        path: "/deferrals" },
       // DORMANTE — CAPA: módulo oculto de la entrega (simplificación; el flujo correctivo
       // vive dentro del Defecto). Reactivar: descomentar esta línea + rutas /capa en App.tsx.

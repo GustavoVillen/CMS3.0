@@ -46,7 +46,8 @@ Reglas:
 export interface TmsaAssessmentInput {
   vesselCode: string;
   groupKey: string;
-  metricKey: string;
+  /** Opcional. Con metricKey el análisis se enfoca en esa métrica; sin él, cubre el sub-requisito completo. */
+  metricKey?: string;
 }
 
 export interface TmsaAssessment {
@@ -61,34 +62,50 @@ export async function suggestTmsaAssessment(
   const vesselCode = String(input.vesselCode ?? "").trim();
   const groupKey = String(input.groupKey ?? "").trim();
   const metricKey = String(input.metricKey ?? "").trim();
-  if (!vesselCode || !groupKey || !metricKey) throw new RouteError(400, "VALIDATION_ERROR", "Faltan parámetros.");
+  if (!vesselCode || !groupKey) throw new RouteError(400, "VALIDATION_ERROR", "Faltan parámetros.");
 
   const apiKey = aiApiKey();
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
 
-  const [evidence, detail] = await Promise.all([
-    getTmsaMaintenanceEvidence(session, vesselCode),
-    getTmsaMetricDetail(session, vesselCode, metricKey),
-  ]);
+  const evidence = await getTmsaMaintenanceEvidence(session, vesselCode);
   const vessel = evidence.items.find(v => v.vesselCode === vesselCode);
   const group = vessel?.groups.find(g => g.key === groupKey);
   if (!vessel || !group) throw new RouteError(404, "NOT_FOUND", "No se encontró el grupo TMSA solicitado.");
-  const metric = group.metrics.find(m => m.key === metricKey);
+  const metric = metricKey ? group.metrics.find(m => m.key === metricKey) : undefined;
 
   const fmtMetric = (m: { value: number; kind: string }) => m.kind === "pct" ? `${Math.round(m.value * 100)}%` : String(m.value);
   const metricsLines = group.metrics.map(m => `- ${m.key}: ${fmtMetric(m)}`).join("\n");
-  const sample = detail.items.slice(0, 15);
-  const sampleLines = sample.length > 0
-    ? sample.map(it => `- ${it.code} — ${it.label}${it.sublabel ? ` (${it.sublabel})` : ""}`).join("\n")
-    : "(sin elementos)";
+
+  // Muestra de elementos concretos. Con metricKey: esa métrica en detalle. Sin
+  // metricKey (análisis del sub-requisito completo, disparado desde el badge de
+  // estado): las métricas de conteo con valor > 0, que son las que explican por
+  // qué el grupo no quedó en OK.
+  const SAMPLE_METRICS = 3;
+  const SAMPLE_ITEMS = metricKey ? 15 : 8;
+  const detailKeys = metricKey
+    ? [metricKey]
+    : group.metrics.filter(m => m.kind === "count" && m.value > 0).slice(0, SAMPLE_METRICS).map(m => m.key);
+  const details = await Promise.all(detailKeys.map(async key => ({
+    key,
+    detail: await getTmsaMetricDetail(session, vesselCode, key),
+  })));
+  const sampleBlocks = details.map(({ key, detail }) => {
+    const sample = detail.items.slice(0, SAMPLE_ITEMS);
+    const lines = sample.length > 0
+      ? sample.map(it => `- ${it.code} — ${it.label}${it.sublabel ? ` (${it.sublabel})` : ""}`).join("\n")
+      : "(sin elementos)";
+    return `Muestra de elementos de la métrica "${key}" (${detail.items.length} en total, mostrando hasta ${SAMPLE_ITEMS}):\n${lines}`;
+  });
 
   const userContent = [
     `Buque: ${vessel.vesselName} (${vessel.vesselCode})`,
     `Sub-requisito TMSA ${group.element} — grupo "${group.key}" — estado actual: ${group.status}`,
     `Métricas del grupo:\n${metricsLines}`,
-    `Métrica puntual consultada: ${metricKey}${metric ? ` = ${fmtMetric(metric)}` : ""}`,
-    `Muestra de elementos que componen esta métrica (${detail.items.length} en total, mostrando hasta 15):\n${sampleLines}`,
+    metricKey
+      ? `Métrica puntual consultada: ${metricKey}${metric ? ` = ${fmtMetric(metric)}` : ""}`
+      : `Alcance del análisis: el sub-requisito completo (todas las métricas del grupo), no una métrica puntual.`,
+    ...(sampleBlocks.length > 0 ? sampleBlocks : ["(sin elementos concretos para muestrear)"]),
   ].join("\n\n");
 
   const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });

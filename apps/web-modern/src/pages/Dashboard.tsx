@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -20,7 +20,7 @@ import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
-import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
+import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
 // (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
@@ -37,8 +37,6 @@ interface MpSummary { counts: { NEVER_EXECUTED: number; OVERDUE: number; DUE: nu
 interface Defect { id: string; status: string; severity: string; }
 interface Certificate { id: string; status: string; expiryDate?: string; }
 interface Deferral   { id: string; status: string; sourceId: string; }
-interface CritSpare  { id: string; available: number; reorderPoint: number | null; }
-interface SpareRequest { id: string; status: string; items: { id: string; status: string; quantity: number; quantityFulfilled: number }[]; }
 interface AiInsight {
   id: string;
   insightType: string;
@@ -93,6 +91,18 @@ const DonutLegend: React.FC<{ items: LegendItem[]; onSelect: (item: LegendItem) 
 // Dashboard
 // ---------------------------------------------------------------------------
 
+/** Ítem del plan de tipo Inspección, para el asistente "Generar una inspección". */
+interface InspectionPlanOption {
+  id: string;
+  taskCode: string;
+  title: string;
+  vesselCode: string;
+  assetName?: string | null;
+  triggerType: string;
+  nextDueDate: string | null;
+  activeWorkOrderCode?: string | null;
+}
+
 export const Dashboard: React.FC = () => {
   const { vessels: contextVessels, selectedVessel, selectedVesselCode, isVesselScoped } = useVesselContext();
   const insightsPath = selectedVesselCode
@@ -109,13 +119,7 @@ export const Dashboard: React.FC = () => {
   // diferimientos y repuestos.
   const serviceRequests   = useFetch<ListResponse<{ id: string; status: string }>>("/app/pms/service-requests");
   const insights          = useFetch<ListResponse<AiInsight>>(insightsPath, [insightsPath]);
-  // Todos los repuestos (no solo criticidad A): el widget muestra el estado de
-  // stock global — sin stock / bajo reorden / OK — para seguimiento completo.
-  const criticalSpares    = useFetch<ListResponse<CritSpare>>("/app/pms/spares");
-  const spareRequests     = useFetch<ListResponse<SpareRequest>>("/app/pms/spare-requests");
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
-  // Equipos fuera de servicio (OUT_OF_SERVICE) — para identificarlos de un vistazo.
-  const oosAssets         = useFetch<ListResponse<{ id: string; assetCode: string; name: string; vesselCode: string; criticality: string }>>("/app/pms/assets?status=OUT_OF_SERVICE");
   // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
   const pendingCounts     = useFetch<PendingCounts>("/app/dashboard/sidebar-counts");
   // Lecturas de horómetro del buque seleccionado (widget "Horas de Equipos").
@@ -156,6 +160,17 @@ export const Dashboard: React.FC = () => {
   // el alta de la solicitud.
   const [showWoPicker, setShowWoPicker] = React.useState(false);
   const [showMpChooser, setShowMpChooser] = React.useState(false);
+  // ── Generar una inspección ────────────────────────────────────────────────
+  // Dos pasos: qué clase de inspección (por evento / periódica) y después el
+  // ítem del plan. Elegir el ítem abre su OT de inspección y lleva a ella.
+  // "Por evento" = planes de inspección con disparador Por evento; "periódica"
+  // = todos los demás (vencen por fecha u horas).
+  const [inspKind, setInspKind] = React.useState<"none" | "chooser" | "EVENT" | "PERIODIC">("none");
+  const [inspPlans, setInspPlans] = React.useState<InspectionPlanOption[] | null>(null);
+  const [inspLoading, setInspLoading] = React.useState(false);
+  const [inspSearch, setInspSearch] = React.useState("");
+  const [inspOpeningId, setInspOpeningId] = React.useState<string | null>(null);
+  const [inspError, setInspError] = React.useState<string | null>(null);
   // Panel de equipos del grupo elegido (al lado de los grupos, dentro del
   // mismo chooser) + buscador inteligente por nombre/código. null = ningún
   // grupo elegido todavía; mpAllAssets = todo el catálogo del buque, pedido
@@ -261,24 +276,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // Donut chart: maintenance plans by execution status — counts come directly
   // from /app/dashboard/mp-summary (server-side computation). ~50 bytes vs
   // 755 KB of the full plan list.
-  // Estado de las lecturas de horómetro: al día / atrasada (más de STALE_DAYS) /
-  // nunca cargada. Mismos colores que el resto de los widgets (verde al día,
-  // naranja por vencer, gris sin datos).
-  const hoursCounts = React.useMemo(() => {
-    const rows = assetHours.data?.rows ?? [];
-    let ok = 0, stale = 0, never = 0;
-    for (const r of rows) {
-      if (r.daysSinceReading == null) never++;
-      else if (r.daysSinceReading > STALE_DAYS) stale++;
-      else ok++;
-    }
-    return [
-      { key: "OK",     name: t("dashboard.hours.upToDate"), value: ok,    fill: "#06D6A0" },
-      { key: "STALE",  name: t("dashboard.hours.stale"),    value: stale, fill: "#F97316" },
-      { key: "NEVER",  name: t("dashboard.hours.never"),    value: never, fill: "#64748b" },
-    ].filter(s => s.value > 0);
-  }, [assetHours.data, t]);
-
   const mpStatusCounts = React.useMemo(() => {
     const map = mpSummary.data?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
     return [
@@ -311,36 +308,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ].filter(s => s.value > 0);
   }, [serviceRequests.data, t]);
 
-  const spareReqCounts = React.useMemo(() => {
-    const allItems = (spareRequests.data?.items ?? []).flatMap(r => r.items);
-    const map: Record<string, number> = { PENDING: 0, FULFILLED: 0, CANCELLED: 0 };
-    for (const i of allItems) {
-      if (i.status === "FULFILLED") map.FULFILLED++;
-      else if (i.status === "CANCELLED") map.CANCELLED++;
-      else map.PENDING++;
-    }
-    return [
-      { key: "PENDING",   name: t("dashboard.sr.pending"),   value: map.PENDING,   fill: "#EAB308" },
-      { key: "FULFILLED", name: t("dashboard.sr.fulfilled"), value: map.FULFILLED, fill: "#06D6A0" },
-      { key: "CANCELLED", name: t("dashboard.sr.cancelled"), value: map.CANCELLED, fill: "#475569" },
-    ].filter(s => s.value > 0);
-  }, [spareRequests.data, t]);
-
-  const critSparesCounts = React.useMemo(() => {
-    const items = criticalSpares.data?.items ?? [];
-    let sinStock = 0, bajoReorden = 0, ok = 0;
-    for (const s of items) {
-      if (s.available <= 0) { sinStock++; continue; }
-      if (s.reorderPoint !== null && s.reorderPoint > 0 && s.available < s.reorderPoint) { bajoReorden++; continue; }
-      ok++;
-    }
-    return [
-      { key: "sin_stock",    name: t("dashboard.cs.outOfStock"),   value: sinStock,    fill: "#EF4444" },
-      { key: "bajo_reorden", name: t("dashboard.cs.belowReorder"), value: bajoReorden, fill: "#F97316" },
-      { key: "ok",           name: t("dashboard.cs.ok"),           value: ok,          fill: "#06D6A0" },
-    ].filter(s => s.value > 0);
-  }, [criticalSpares.data, t]);
-
   const insightCount = insights.data?.total ?? 0;
 
   // Todos los equipos del buque elegido arriba (header), para el chooser de
@@ -367,6 +334,48 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     return n < 10 ? n : Math.floor(n / 100);
   };
   const mpAssets = mpGroup === null ? [] : (mpAllAssets ?? []).filter(a => mpGroupOf(a) === mpGroup);
+
+  // Planes de inspección de la clase elegida. El backend filtra por tipo de
+  // tarea y disparador; el buque sale del contexto (si hay uno elegido).
+  const loadInspectionPlans = async (kind: "EVENT" | "PERIODIC") => {
+    setInspKind(kind);
+    setInspSearch("");
+    setInspError(null);
+    setInspLoading(true);
+    setInspPlans(null);
+    try {
+      const params = new URLSearchParams({ taskType: "INSPECTION", status: "ACTIVE" });
+      if (kind === "EVENT") params.set("triggerType", "EVENT");
+      else params.set("triggerTypeNot", "EVENT");
+      if (selectedVesselCode) params.set("vesselCode", selectedVesselCode);
+      const res = await api.get<{ items: InspectionPlanOption[] }>(`/app/pms/maintenance-plans?${params.toString()}`);
+      setInspPlans(res.items ?? []);
+    } catch {
+      setInspPlans([]);
+      setInspError(t("dashboard.inspection.loadError"));
+    } finally {
+      setInspLoading(false);
+    }
+  };
+
+  // Abre la OT de inspección de ese ítem del PDM y va a la orden. La OT nace
+  // autorizada (las inspecciones no requieren aprobación ni autorización).
+  const openInspectionWo = async (plan: InspectionPlanOption) => {
+    setInspOpeningId(plan.id);
+    setInspError(null);
+    try {
+      const wo = await api.post<{ workOrderCode: string }>(
+        `/app/pms/maintenance-plans/${plan.id}/open-work-order`,
+        {},
+      );
+      setInspKind("none");
+      navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`);
+    } catch (e) {
+      setInspError(e instanceof Error ? e.message : t("dashboard.inspection.openError"));
+    } finally {
+      setInspOpeningId(null);
+    }
+  };
 
   const goToAsset = (assetId: string) => {
     setShowMpChooser(false);
@@ -455,6 +464,117 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.classInspection")}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Generar una inspección ─────────────────────────────────────────
+          Paso 1: por evento o periódica. Paso 2: el ítem del plan, como botón.
+          Elegirlo abre su OT de inspección (nace autorizada) y lleva a ella. */}
+      {inspKind !== "none" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInspKind("none")}>
+          <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-sm font-bold text-fg">{t("dashboard.inspection.title")}</h2>
+                <p className="text-xs text-text-industrial/50 mt-0.5">
+                  {inspKind === "chooser"
+                    ? t("dashboard.inspection.subtitle")
+                    : inspKind === "EVENT" ? t("dashboard.inspection.byEvent") : t("dashboard.inspection.periodic")}
+                </p>
+              </div>
+              <ModalCloseButton onClose={() => setInspKind("none")} />
+            </div>
+
+            {inspKind === "chooser" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => { void loadInspectionPlans("EVENT"); }}
+                  className="flex items-center gap-3 px-5 py-5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+                >
+                  <Zap className="w-6 h-6 text-accent shrink-0" />
+                  <span className="font-bold text-sm text-fg">{t("dashboard.inspection.byEvent")}</span>
+                </button>
+                <button
+                  onClick={() => { void loadInspectionPlans("PERIODIC"); }}
+                  className="flex items-center gap-3 px-5 py-5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+                >
+                  <CalendarClock className="w-6 h-6 text-accent shrink-0" />
+                  <span className="font-bold text-sm text-fg">{t("dashboard.inspection.periodic")}</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
+                    className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-accent/30 transition-all"
+                  >
+                    {t("common.back")}
+                  </button>
+                  <input
+                    value={inspSearch}
+                    onChange={e => setInspSearch(e.target.value)}
+                    placeholder={t("dashboard.inspection.search")}
+                    className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                  />
+                </div>
+
+                {inspError && <p className="text-xs text-red-700 dark:text-red-400 shrink-0">{inspError}</p>}
+
+                <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                  {inspLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-text-industrial/50 py-4">
+                      <Loader2 className="w-4 h-4 animate-spin" /> {t("common.loading")}
+                    </div>
+                  ) : (inspPlans ?? []).length === 0 ? (
+                    <p className="text-xs text-text-industrial/40 py-4">{t("dashboard.inspection.empty")}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {(inspPlans ?? [])
+                        .filter(p => {
+                          const q = inspSearch.trim().toLowerCase();
+                          if (!q) return true;
+                          return `${p.taskCode} ${p.title} ${p.assetName ?? ""}`.toLowerCase().includes(q);
+                        })
+                        .map(p => (
+                          <button
+                            key={p.id}
+                            disabled={inspOpeningId !== null}
+                            onClick={() => { void openInspectionWo(p); }}
+                            className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 disabled:opacity-50 transition-all text-left"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-fg line-clamp-1">{p.title}</p>
+                              <p className="text-[10px] text-text-industrial/50 mt-0.5 truncate">
+                                <span className="font-mono">{p.taskCode}</span>
+                                {p.assetName ? ` · ${p.assetName}` : ""}
+                                {!selectedVesselCode ? ` · ${p.vesselCode}` : ""}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              {/* Vencimiento: la lista viene ordenada por él, así
+                                  que arriba quedan las que hay que hacer ya. */}
+                              {p.nextDueDate && (
+                                <span className={`text-[10px] whitespace-nowrap ${
+                                  parseLocalDate(p.nextDueDate) < new Date()
+                                    ? "text-red-700 dark:text-red-400 font-bold"
+                                    : "text-text-industrial/50"
+                                }`}>
+                                  {parseLocalDate(p.nextDueDate).toLocaleDateString(locale)}
+                                </span>
+                              )}
+                              {inspOpeningId === p.id
+                                ? <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                                : <span className="text-[10px] font-bold text-accent uppercase tracking-wider">{t("dashboard.inspection.open")}</span>}
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -571,7 +691,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
       {/* Accesos grandes a Planes de Mantenimiento / OT / SS, arriba de
           "Reportes sin procesar" (pedido del usuario). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <button
           onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
           className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
@@ -592,6 +712,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         >
           <Handshake className="w-6 h-6 text-accent shrink-0" />
           <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
+        </button>
+        <button
+          onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
+          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+        >
+          <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
+          <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
         </button>
         <button
           onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets(); setShowMpChooser(true); }}
@@ -823,195 +950,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           )}
         </div>
 
-        {/* Equipos fuera de servicio (OUT_OF_SERVICE) */}
-        {(() => {
-          const oosList = oosAssets.data?.items ?? [];
-          const oosStyle: React.CSSProperties | undefined = oosList.length > 0
-            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
-            : undefined;
-          return (
-        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={oosStyle}>
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h2 className="text-xs font-bold text-fg">{t("dashboard.oosTitle")}</h2>
-              <p className="text-[10px] text-text-industrial/40">{t("dashboard.oosSubtitle")}</p>
-            </div>
-            {oosAssets.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-          </div>
-          {oosAssets.error ? <ErrorMsg msg={oosAssets.error} /> : oosList.length === 0 && !oosAssets.loading ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
-              <ShieldAlert className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">{t("dashboard.oosEmpty")}</p>
-            </div>
-          ) : (
-            <div className="flex flex-col flex-1 min-h-0">
-              <button type="button" onClick={() => navigate("/assets?status=OUT_OF_SERVICE")}
-                className="flex items-baseline gap-2 mb-1.5 text-left shrink-0">
-                <span className="text-2xl font-bold text-red-600 dark:text-red-400">{oosList.length}</span>
-                <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.oosCountLabel")}</span>
-              </button>
-              <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-                {oosList.map(a => (
-                  <button key={a.id} type="button" onClick={() => navigate("/assets?status=OUT_OF_SERVICE")}
-                    className="w-full flex items-center gap-2 text-left rounded px-1.5 py-1 hover:bg-fg/5 transition-colors group">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                    <span className="text-[12px] font-mono text-text-industrial/50 shrink-0">{a.assetCode}</span>
-                    <span className="text-[12px] text-text-industrial/70 group-hover:text-fg transition-colors truncate flex-1">{a.name}</span>
-                    <span className="text-[10px] text-text-industrial/40 shrink-0">{a.vesselCode}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-          );
-        })()}
-
-        {/* Critical Spares stock status chart */}
-        {(() => {
-          const csAlert = (critSparesCounts.find(s => s.key === "sin_stock")?.value ?? 0) > 0;
-          const csStyle: React.CSSProperties | undefined = csAlert
-            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
-            : undefined;
-          return (
-        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={csStyle}>
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h2 className="text-xs font-bold text-fg">{t("dashboard.criticalSparesTitle")}</h2>
-              <p className="text-[10px] text-text-industrial/40">{t("dashboard.criticalSparesSubtitle")}</p>
-            </div>
-            {criticalSpares.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-          </div>
-          {criticalSpares.error ? <ErrorMsg msg={criticalSpares.error} /> : critSparesCounts.length === 0 && !criticalSpares.loading ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
-              <Package className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">{t("dashboard.criticalSparesEmpty")}</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <div className={`${chartBox} shrink-0 relative`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={critSparesCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                      {critSparesCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                    </Pie>
-                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-fg">{criticalSpares.data?.total ?? 0}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
-                </div>
-              </div>
-              <DonutLegend items={critSparesCounts} onSelect={s => navigate(`/spares?stockStatus=${s.key}`)} />
-            </div>
-          )}
-        </div>
-          );
-        })()}
-
-        {/* Spare Requests status chart */}
-        <div className={`bento-card ${cardPad} flex flex-col ${cardH}`}>
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h2 className="text-xs font-bold text-fg">{t("dashboard.spareReqTitle")}</h2>
-              <p className="text-[10px] text-text-industrial/40">{t("dashboard.spareReqSubtitle")}</p>
-            </div>
-            {spareRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-          </div>
-          {spareRequests.error ? <ErrorMsg msg={spareRequests.error} /> : spareReqCounts.length === 0 && !spareRequests.loading ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
-              <Package className="w-6 h-6 text-text-industrial/40" />
-              <p className="text-xs text-text-industrial/40">{t("dashboard.spareReqEmpty")}</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <div className={`${chartBox} shrink-0 relative`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={spareReqCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                      {spareReqCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                    </Pie>
-                    <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-fg">{spareReqCounts.reduce((a, s) => a + s.value, 0)}</span>
-                  <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.itemsLabel")}</span>
-                </div>
-              </div>
-              <DonutLegend items={spareReqCounts} onSelect={s => navigate(`/spare-requests?status=${s.key}`)} />
-            </div>
-          )}
-        </div>
-
-        {/* Horas de equipos — estado de las lecturas de horómetro del buque.
-            Va como widget más de la grilla (completa la segunda fila de 4 sin
-            desplazar a los demás). Importa porque los planes por horas vencen
-            contra estas lecturas: si nadie carga, el plan no vence nunca.
-            El botón abre la planilla de carga en modal — una planilla no entra
-            en el alto fijo de la tarjeta. */}
-        {(() => {
-          // Se resalta igual que Planes vencidos, pero sólo por equipos que nunca
-          // tuvieron lectura: una lectura atrasada es rutina, un equipo sin ninguna
-          // lectura significa que su plan por horas no puede vencer nunca.
-          const hoursAlert = (hoursCounts.find(s => s.key === "NEVER")?.value ?? 0) > 0;
-          const hoursStyle: React.CSSProperties | undefined = hoursAlert
-            ? { background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }
-            : undefined;
-          return (
-            <div className={`bento-card ${cardPad} flex flex-col ${cardH}`} style={hoursStyle}>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <div className="min-w-0">
-                  <h2 className="text-xs font-bold text-fg">{t("assetHours.pageTitle")}</h2>
-                  <p className="text-[10px] text-text-industrial/40 truncate">{t("dashboard.hoursSubtitle")}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {assetHours.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
-                  {assetHours.data?.canWrite && (
-                    <button
-                      type="button"
-                      onClick={() => setShowHoursEntry(true)}
-                      title={t("assetHours.loadHours")}
-                      className="px-2 py-1 rounded-lg bg-accent/10 border border-accent/30 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
-                    >
-                      {t("assetHours.loadHours")}
-                    </button>
-                  )}
-                </div>
-              </div>
-              {!selectedVesselCode ? (
-                <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
-                  <Gauge className="w-6 h-6 text-text-industrial/40" />
-                  <p className="text-xs text-text-industrial/40 text-center px-2">{t("dashboard.hoursPickVessel")}</p>
-                </div>
-              ) : assetHours.error ? <ErrorMsg msg={assetHours.error} /> : hoursCounts.length === 0 && !assetHours.loading ? (
-                <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
-                  <Gauge className="w-6 h-6 text-text-industrial/40" />
-                  <p className="text-xs text-text-industrial/40 text-center px-2">{t("assetHours.empty")}</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 flex-1">
-                  <div className={`${chartBox} shrink-0 relative`}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={hoursCounts} cx="50%" cy="50%" innerRadius={donut.inner} outerRadius={donut.outer} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                          {hoursCounts.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                        </Pie>
-                        <Tooltip contentStyle={chartTooltip.contentStyle} itemStyle={chartTooltip.itemStyle} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xl font-bold text-fg">{hoursCounts.reduce((a, s) => a + s.value, 0)}</span>
-                      <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
-                    </div>
-                  </div>
-                  <DonutLegend items={hoursCounts} onSelect={() => navigate("/asset-hours")} />
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {/* Sacadas del Dashboard (ago 2026, pedido del usuario): Equipos fuera
+            de servicio, Stock de Repuestos, Solicitudes de Repuestos y Horas de
+            Equipos. Cada una vive en su propia pantalla; el botón "Cargar horas"
+            de los accesos rápidos sigue arriba. */}
 
         {/* Inactive vessels — compact alert strip */}
         {(() => {

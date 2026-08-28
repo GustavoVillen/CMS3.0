@@ -8,11 +8,16 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
+import { isInspectionWorkOrder, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
   status?: string | null;
+  /** MAINTENANCE | INSPECTION — separa el plan de mantenimiento del de inspección. */
+  taskType?: string | null;
   triggerType?: string | null;
+  /** Excluye un disparador (ej. todo lo que NO es por evento = inspección periódica). */
+  triggerTypeNot?: string | null;
   executionStatus?: string | null;
   taskMasterId?: string | null;
   assetId?: string | null;
@@ -678,7 +683,9 @@ export async function listTenantMaintenancePlans(
   const where: Record<string, unknown> = { tenantId, deletedAt: null };
   applyVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
+  if (filters.taskType) where.taskType = filters.taskType;
   if (filters.triggerType) where.triggerType = filters.triggerType;
+  else if (filters.triggerTypeNot) where.triggerType = { not: filters.triggerTypeNot };
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
   if (filters.taskMasterId) where.taskMasterId = filters.taskMasterId;
   if (filters.assetId) where.assetId = filters.assetId;
@@ -1848,7 +1855,14 @@ export async function openFormalWorkOrder(
   // OT Express: se firma sola a nombre de quien la abre. Sin esto la OT quedaría
   // AUTORIZADA con las firmas en blanco, que es peor que no tenerla autorizada:
   // el papel saldría diciendo que alguien la habilitó sin decir quién.
-  const isExpress = payload.express === true;
+  // Tipo de la OT según el ítem del PDM: un plan de inspección abre una OT de
+  // INSPECCIÓN. De ahí sale la regla de tramitación (ver wo-inspection-flow).
+  const woType = plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE";
+  const isInspection = isInspectionWorkOrder(woType);
+  // La inspección ya nace autorizada, así que el atajo "OT express" no aplica:
+  // si se aplicara, arrastraría las SS a AUTORIZADA y las solicitudes de
+  // servicio SÍ tienen que aprobarse y autorizarse.
+  const isExpress = payload.express === true && !isInspection;
   const expressSigner = normalizeOptionalText(payload.signerName) ?? null;
   const expressStamps = isExpress
     ? {
@@ -1938,9 +1952,12 @@ export async function openFormalWorkOrder(
         assetId: plan.assetId,
         maintenancePlanId: plan.id,
         workOrderCode,
-        type: "PREVENTIVE",
+        type: woType,
         status: "PLANNED",
         ...expressStamps,
+        // Inspección: enviada + aprobada + autorizada de entrada. Sus SS nacen
+        // DRAFT igual que siempre y se firman desde la solicitud.
+        ...(isInspection ? inspectionApprovalStamps(woOpenDate) : {}),
         priority: payload.priority ?? "MEDIUM",
         openDate: woOpenDate,
         // createdAt alineado a la fecha de apertura: así en el PDF coinciden la
@@ -1954,6 +1971,10 @@ export async function openFormalWorkOrder(
           ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")
           : (planAny.estimatedHours ?? null),
         taskMasterId: plan.taskMasterId ?? null,
+        // LISTA DE CHEQUEO del ítem del PDM (Word/PDF/Excel): la OT la hereda
+        // para que quien ejecuta la tenga a mano — es la planilla que se usa
+        // durante la inspección. Con varios ítems, la del primero que tenga una.
+        checklistDocUrl: allPlans.map(p => (p as any).checklistTemplate).find(Boolean) ?? null,
         acceptanceCriteria: inheritMerged(payload.acceptanceCriteria, planAny.acceptanceCriteria, merged.acceptanceCriteria),
         loto: inheritMerged(payload.loto, planAny.loto, merged.loto),
         riskLevel: inheritMerged(payload.riskLevel, planAny.riskLevel, merged.riskLevel),
@@ -2090,6 +2111,8 @@ export async function openFormalWorkOrder(
       // tramitación: es la excepción y tiene que poder auditarse como tal.
       express: isExpress || undefined,
       expressSigner: isExpress ? expressSigner : undefined,
+      // Inspección: autorizada por regla, sin firma humana.
+      inspectionAutoAuthorized: isInspection || undefined,
       // Cuántas SS se crearon solas (una por proveedor del plan).
       autoServiceRequests: providerRequests.length || undefined,
     },

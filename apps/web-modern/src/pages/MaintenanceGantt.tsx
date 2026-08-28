@@ -29,6 +29,14 @@ interface MaintenancePlan {
    * menor opacidad y borde punteado para distinguirla.
    */
   projectedDueDate: string | null;
+  /**
+   * Ventana de ejecución anticipada (lo que el Gantt dibuja como barra).
+   * MANUAL → windowLeadDays fijos; AUTO → el sistema toma ~10% del ciclo.
+   * windowOpenDate, si está cargada, manda sobre todo lo demás.
+   */
+  windowMode: "AUTO" | "MANUAL" | null;
+  windowLeadDays: number | null;
+  windowOpenDate: string | null;
   sfiGroupNumber: number | null;
   assetName: string | null;
 }
@@ -74,6 +82,12 @@ function fmtDMY(date: Date): string {
   return `${d}/${m}/${date.getFullYear()}`;
 }
 
+function fmtDMY2(date: Date): string {
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${d}/${m}/${String(date.getFullYear()).slice(2)}`;
+}
+
 function daysInMonth(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
@@ -84,6 +98,46 @@ function monthStart(d: Date, addMonths = 0): Date {
 
 function monthDiff(a: Date, b: Date): number {
   return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+}
+
+const DAY_MS = 86_400_000;
+const DAYS_PER_MONTH = 30.44;
+
+/**
+ * Apertura de la ventana de ejecución del plan (el "desde" de la barra).
+ * Es lo único que el Gantt debe dibujar como barra: el período en el que la
+ * tarea se puede ejecutar, NO el ciclo completo entre una ejecución y la otra.
+ * Ej: una renovación de clase cada 60 meses con 365 días de ventana se dibuja
+ * como un año, no como cinco.
+ *
+ * Prioridad (misma semántica que el modal del plan y que execution-windows):
+ *   1. windowOpenDate cargada a mano → manda.
+ *   2. MANUAL con windowLeadDays → vencimiento − esos días.
+ *   3. AUTO → ~10% del ciclo (frequencyMonths, o el largo real última→próxima).
+ * Se recorta contra la última ejecución: la ventana nunca puede abrir antes de
+ * que la tarea se haya hecho por última vez.
+ */
+function windowOpenOf(p: MaintenancePlan, nextD: Date | null, lastD: Date | null): Date | null {
+  if (!nextD) return null;
+
+  const explicit = parseDate(p.windowOpenDate);
+  if (explicit) return explicit;
+
+  let leadDays: number | null = null;
+  if (p.windowMode === "MANUAL" && p.windowLeadDays && p.windowLeadDays > 0) {
+    leadDays = p.windowLeadDays;
+  } else if (p.frequencyMonths && p.frequencyMonths > 0) {
+    leadDays = p.frequencyMonths * DAYS_PER_MONTH * 0.1;
+  } else if (lastD) {
+    // Planes por horas: no hay frecuencia en meses, pero el largo del ciclo
+    // se puede leer del propio tramo última ejecución → próximo vencimiento.
+    leadDays = ((nextD.getTime() - lastD.getTime()) / DAY_MS) * 0.1;
+  }
+  if (leadDays == null || !(leadDays > 0)) return null;
+
+  const open = new Date(nextD.getTime() - leadDays * DAY_MS);
+  if (lastD && open < lastD) return lastD;
+  return open;
 }
 
 // ─── Legend ───────────────────────────────────────────────────────────────────
@@ -97,6 +151,13 @@ function GanttLegend() {
           <span className="text-[11px] text-text-industrial/60">{label}</span>
         </div>
       ))}
+      {/* La barra no es el ciclo completo del plan: es el tramo en el que la
+          tarea se puede ejecutar (ventana anticipada del plan). */}
+      <span className="w-px h-3 bg-fg/15" />
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-6 h-2 rounded-[2px] border" style={{ background: "color-mix(in srgb, #3b82f6 26%, transparent)", borderColor: "color-mix(in srgb, #3b82f6 55%, transparent)" }} />
+        <span className="text-[11px] text-text-industrial/60">Ventana de ejecución (hasta el vencimiento)</span>
+      </div>
     </div>
   );
 }
@@ -399,6 +460,10 @@ export function MaintenanceGanttPage() {
                 const nextColor = STATUS_COLORS[p.executionStatus] ?? STATUS_COLORS.FUTURE;
                 const xLast = lastD ? xOf(lastD) : null;
                 const xNext = nextD ? xOf(nextD) : null;
+                // Barra = ventana de ejecución (cuándo se puede hacer la tarea),
+                // no el ciclo entero entre ejecuciones.
+                const winD = windowOpenOf(p, nextD, lastD);
+                const xWin = winD ? xOf(winD) : null;
                 return (
                   <div
                     key={row.key}
@@ -412,16 +477,33 @@ export function MaintenanceGanttPage() {
                         <span className="font-mono font-semibold text-accent">{p.taskCode}</span>
                         <span className="text-text-industrial/60"> · {p.title}</span>
                       </span>
-                      <span className="text-[9px] tabular-nums text-text-industrial/40 leading-tight">
-                        {lastD ? fmtDMY(lastD) : "—"} <span className="opacity-50">→</span> {nextD ? `${isProjected ? "~" : ""}${fmtDMY(nextD)}` : "—"}
+                      {/* Antes esta línea era "última → próxima", que se leía como si
+                          la barra fuera todo el ciclo. Ahora dice explícitamente cuál
+                          es la última ejecución y cuál la ventana. */}
+                      <span className="text-[9px] tabular-nums text-text-industrial/40 leading-tight truncate">
+                        <span className="opacity-70">Últ.</span> {lastD ? fmtDMY2(lastD) : "—"}
+                        <span className="opacity-40"> · </span>
+                        {xWin != null && nextD
+                          ? <><span className="opacity-70">Vent.</span> {fmtDMY2(winD!)} <span className="opacity-50">→</span> {fmtDMY2(nextD)}</>
+                          : <><span className="opacity-70">Venc.</span> {nextD ? `${isProjected ? "~" : ""}${fmtDMY2(nextD)}` : "—"}</>}
                       </span>
                     </div>
                     <div className="relative shrink-0 track-bg" style={{ width: timelineW, "--px": `${pxPerMonth}px` } as React.CSSProperties}>
                       {/* today line */}
                       <span className="absolute top-0 bottom-0 border-l border-dashed border-accent/40" style={{ left: xToday }} />
-                      {/* connector última → próxima */}
-                      {xLast != null && xNext != null && Math.abs(xNext - xLast) > 2 && (
-                        <span className="absolute top-1/2 border-t border-dashed border-fg/20" style={{ left: Math.min(xLast, xNext), width: Math.abs(xNext - xLast) }} />
+                      {/* ventana de ejecución: desde que la tarea se puede hacer hasta el vencimiento */}
+                      {xWin != null && xNext != null && xNext > xWin && (
+                        <span
+                          className="absolute top-1/2 -translate-y-1/2 rounded-[3px] z-[1]"
+                          style={{
+                            left: xWin,
+                            width: Math.max(xNext - xWin, 3),
+                            height: 10,
+                            background: `color-mix(in srgb, ${nextColor} 26%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${nextColor} 55%, transparent)`,
+                          }}
+                          title={`Ventana de ejecución · ${fmtDMY(winD!)} → ${fmtDMY(nextD!)}`}
+                        />
                       )}
                       {/* marca última ejecución (completado) */}
                       {xLast != null && (

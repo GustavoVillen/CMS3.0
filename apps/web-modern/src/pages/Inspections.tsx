@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, ShieldCheck, FileDown } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -701,7 +701,12 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, onClose }) => {
   );
 };
 
-export const InspectionsPage: React.FC = () => {
+// ─── DORMANTE: motor de plantillas + ejecuciones de checklist ────────────────
+// Quedó fuera de la vista cuando las inspecciones pasaron a llevarse con OT y
+// una lista de chequeo adjunta al plan (Word/PDF/Excel). No se borra: las
+// plantillas cargadas siguen en la base y el módulo se puede volver a colgar de
+// una ruta si algún día se retoma. Mismo criterio que Modos de Falla y CAPA.
+export const InspectionTemplatesLegacyPage: React.FC = () => {
   const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"executions" | "templates">("executions");
@@ -966,6 +971,160 @@ export const InspectionsPage: React.FC = () => {
           onClose={() => setEditingTemplate(null)}
         />
       )}
+    </div>
+  );
+};
+
+
+// ─── Inspecciones = las OT de inspección ─────────────────────────────────────
+// Una inspección se lleva como cualquier orden de trabajo: sale de un ítem del
+// PDM de tipo Inspección (o se abre a mano como OT de inspección) y se ejecuta
+// con la lista de chequeo adjunta al plan. Esta pantalla es el seguimiento de
+// todas ellas: no crea nada, muestra lo que hay y lleva a la OT.
+//
+// Diferencia de tramitación: la inspección nace AUTORIZADA (no requiere
+// aprobación ni autorización). Sus Solicitudes de Servicio sí las requieren.
+
+interface InspectionWorkOrder {
+  id: string;
+  workOrderCode: string;
+  vesselCode: string;
+  assetName: string | null;
+  title: string | null;
+  status: string;
+  openDate: string;
+  completedDate: string | null;
+  woResult: string | null;
+  executedByName: string | null;
+  maintenancePlanId: string | null;
+}
+
+interface InspectionWoListResponse {
+  items: InspectionWorkOrder[];
+  total: number;
+}
+
+const WO_RESULT_STYLES: Record<string, string> = {
+  SATISFACTORY:      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  WITH_DEFICIENCIES: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+};
+
+const WoResultBadge: React.FC<{ result: string | null }> = ({ result }) => {
+  const t = useT();
+  if (!result) return <span className="text-text-industrial/30 text-xs">—</span>;
+  const label = result === "SATISFACTORY"
+    ? t("wo.modal.result.satisfactory")
+    : result === "WITH_DEFICIENCIES"
+      ? t("wo.modal.result.withDeficiencies")
+      : result;
+  return (
+    <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${WO_RESULT_STYLES[result] ?? "bg-fg/5 text-text-industrial/60 border-fg/10"}`}>
+      {label}
+    </span>
+  );
+};
+
+export const InspectionsPage: React.FC = () => {
+  const t = useT();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const statusFilter = (searchParams.get("status") ?? "").trim();
+  const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
+  const [vesselInput, setVesselInput] = useState(vesselFilter);
+  useEffect(() => { setVesselInput(vesselFilter); }, [vesselFilter]);
+
+  const updateFilters = useCallback((patch: { status?: string; vessel?: string }) => {
+    const next = new URLSearchParams(searchParams);
+    if (patch.status !== undefined) { patch.status ? next.set("status", patch.status) : next.delete("status"); }
+    if (patch.vessel !== undefined) { patch.vessel ? next.set("vesselCode", patch.vessel.toUpperCase()) : next.delete("vesselCode"); }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const path = useMemo(() => {
+    const params = new URLSearchParams({ type: "INSPECTION" });
+    if (statusFilter) params.set("status", statusFilter);
+    if (vesselFilter) params.set("vesselCode", vesselFilter);
+    return `/app/pms/work-orders?${params.toString()}`;
+  }, [statusFilter, vesselFilter]);
+
+  const { data, loading, error, reload } = useFetch<InspectionWoListResponse>(path, [path]);
+
+  const columns: Column<InspectionWorkOrder>[] = useMemo(() => [
+    {
+      key: "workOrderCode",
+      header: t("wo.col.codeVessel"),
+      sortValue: r => `${r.vesselCode} ${r.workOrderCode}`,
+      render: r => (
+        <div>
+          <div className="font-mono font-bold text-fg text-xs">{r.workOrderCode}</div>
+          <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" showCode /></div>
+        </div>
+      ),
+    },
+    {
+      key: "title",
+      header: t("wo.col.equipmentTask"),
+      sortValue: r => r.assetName ?? r.title ?? "",
+      render: r => (
+        <div>
+          <div className="text-xs text-fg font-medium">{r.assetName ?? "—"}</div>
+          <div className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{r.title?.trim() || "—"}</div>
+        </div>
+      ),
+    },
+    { key: "status", header: t("wo.col.status"), render: r => <StatusBadge status={r.status} /> },
+    { key: "openDate", header: t("wo.col.openDate"), render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{fmtDate(r.openDate)}</span> },
+    { key: "completedDate", header: t("insp.col.completedDate"), render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{r.completedDate ? fmtDate(r.completedDate) : "—"}</span> },
+    { key: "woResult", header: t("insp.result"), render: r => <WoResultBadge result={r.woResult} /> },
+    {
+      key: "executedByName",
+      header: t("insp.inspectorName"),
+      render: r => <span className="text-xs text-text-industrial/70">{r.executedByName?.trim() || "—"}</span>,
+    },
+  ], [t]);
+
+  return (
+    <div className="space-y-5">
+      <PageHeader icon={ShieldCheck} title={t("page.inspections")} total={data?.total} onReload={() => { void reload(); }}>
+        <select
+          value={toFilterSelectValue(statusFilter)}
+          onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })}
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
+          <option value="PLANNED">{t("status.planned")}</option>
+          <option value="IN_PROGRESS">{t("status.inProgress")}</option>
+          <option value="ON_HOLD">{t("insp.status.onHold")}</option>
+          <option value="CLOSED">{t("status.closed")}</option>
+          <option value="CANCELLED">{t("status.cancelled")}</option>
+        </select>
+        <div className="flex items-center gap-2">
+          <input
+            value={vesselInput}
+            onChange={e => setVesselInput(e.target.value.toUpperCase())}
+            onKeyDown={e => { if (e.key === "Enter") updateFilters({ vessel: vesselInput.trim() }); }}
+            placeholder={t("common.filterByVessel")}
+            className="w-44 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+          />
+          <button onClick={() => updateFilters({ vessel: vesselInput.trim() })} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">{t("common.apply")}</button>
+          {(statusFilter || vesselFilter) && (
+            <button onClick={() => updateFilters({ status: "", vessel: "" })} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all">{t("common.clear")}</button>
+          )}
+        </div>
+      </PageHeader>
+
+      <p className="text-[11px] text-text-industrial/50">{t("insp.woListHint")}</p>
+
+      <DataTable
+        columns={columns}
+        data={data?.items ?? null}
+        loading={loading}
+        error={error}
+        keyFn={row => row.id}
+        emptyText={t("empty.inspections")}
+        // La inspección se trabaja en su OT: esta pantalla es el seguimiento.
+        onRowClick={row => navigate(`/work-orders?autoCode=${encodeURIComponent(row.workOrderCode)}`)}
+      />
     </div>
   );
 };

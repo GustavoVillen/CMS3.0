@@ -1957,7 +1957,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 </p>
               )}
 
-              {tramitaPhase === "AUTORIZADA" ? (
+              {tramitaPhase === "AUTORIZADA" && workOrder.type === "INSPECTION" ? (
+                /* Inspección: no pasa por aprobación ni autorización, nace
+                   autorizada. Mostrar "Aprobó: Sistema" confundiría — se explica
+                   la regla. Las SS de esta OT sí se aprueban y autorizan. */
+                <div className="text-xs text-emerald-700 dark:text-emerald-300 space-y-0.5">
+                  <p className="normal-case">{t("wo.tramita.inspectionAutoAuthorized")}</p>
+                  <p className="text-text-industrial/60 normal-case">{t("wo.tramita.inspectionSsNote")}</p>
+                </div>
+              ) : tramitaPhase === "AUTORIZADA" ? (
                 <div className="text-xs text-emerald-700 dark:text-emerald-300 space-y-0.5">
                   {workOrder.aprobadoByName && <p><span className="font-bold">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}</p>}
                   <p><span className="font-bold">Autorizó:</span> {workOrder.autorizadoByName}{workOrder.autorizadoAt ? ` · ${fmtDate(workOrder.autorizadoAt)}` : ""}</p>
