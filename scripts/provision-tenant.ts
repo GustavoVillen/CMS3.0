@@ -4,7 +4,7 @@
 //
 // Uso:
 //   DATABASE_URL=<prod> \
-//   TENANT_SLUG=mercurio TENANT_NAME="Mercurio Group Naviera" \
+//   TENANT_SLUG=mercurio TENANT_NAME="Mercurio Naviera" \
 //   ADMIN_EMAIL=admin@mercurio.com ADMIN_PASSWORD='CambiaEsto123' \
 //   TZ_NAME=America/Asuncion CURRENCY=PYG \
 //   npx tsx scripts/provision-tenant.ts
@@ -17,7 +17,7 @@ import { createPlatformTenantUser } from "../apps/api/src/platform/tenants/platf
 const prisma = new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionString: process.env.DATABASE_URL })) } as any);
 
 const SLUG     = (process.env.TENANT_SLUG || "mercurio").toLowerCase();
-const NAME     = process.env.TENANT_NAME || "Mercurio Group Naviera";
+const NAME     = process.env.TENANT_NAME || "Mercurio Naviera";
 const EMAIL    = process.env.ADMIN_EMAIL || "admin@mercurio.com";
 
 // Sin default: este script crea un TENANT_ADMIN en producción. Un fallback fijo
@@ -87,7 +87,7 @@ async function main() {
       slug: SLUG, status: "ACTIVE", displayName: NAME, supportEmail: EMAIL,
       defaultLocale: "es" as any, enabledLocales: ["es"] as any,
       timezone: TZ, currency: CURRENCY, workOrderPdfTemplate: "MERCURIO",
-      logoUrl: null, logoUrlLight: null,
+      logoUrl: "/mercurio-logo.png", logoUrlLight: "/mercurio-logo-light.png",
     });
     console.log(`✔ Tenant creado '${t.slug}' (${t.id})`);
   }
