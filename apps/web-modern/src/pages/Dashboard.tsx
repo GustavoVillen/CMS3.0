@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Gauge, Wrench, ClipboardList, Timer } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Package, Droplets, FileText, ShieldAlert, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -19,6 +19,7 @@ import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
+import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
 import { STALE_DAYS, type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
@@ -150,6 +151,10 @@ export const Dashboard: React.FC = () => {
   // "Nueva Solicitud de Servicio" (null = alta libre, sin preset).
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; autoAsset?: string } | null>(null);
   const [showSsChooser, setShowSsChooser] = React.useState(false);
+  // Cuarto camino del asistente de SS: la OT ya existe. En vez de crear una
+  // orden nueva, se elige entre las abiertas y se abre esa OT, que es donde vive
+  // el alta de la solicitud.
+  const [showWoPicker, setShowWoPicker] = React.useState(false);
   const [showMpChooser, setShowMpChooser] = React.useState(false);
   // Panel de equipos del grupo elegido (al lado de los grupos, dentro del
   // mismo chooser) + buscador inteligente por nombre/código. null = ningún
@@ -419,6 +424,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <ModalCloseButton onClose={() => setShowSsChooser(false)} />
             </div>
             <div className="grid grid-cols-1 gap-3">
+              {/* La orden ya existe: se elige de la lista y la SS se carga desde
+                  ahí. Va primero porque es el caso más común a bordo. */}
+              <button
+                onClick={() => { setShowSsChooser(false); setShowWoPicker(true); }}
+                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/15 transition-all text-left"
+              >
+                <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
+                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.fromOpenWo")}</span>
+              </button>
               <button
                 onClick={() => { setCreateWoPreset({ maintKind: "PREVENTIVO" }); setShowSsChooser(false); setShowCreateWo(true); }}
                 className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
@@ -443,6 +457,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </div>
           </div>
         </div>
+      )}
+
+      {showWoPicker && (
+        <OpenWorkOrdersPicker
+          onClose={() => setShowWoPicker(false)}
+          onPick={wo => {
+            setShowWoPicker(false);
+            // La OT se abre en su pantalla: ahí está el recuadro de Solicitudes
+            // de Servicio, que es donde se carga el pedido al taller.
+            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`);
+          }}
+        />
       )}
 
       {showMpChooser && (
