@@ -24,6 +24,11 @@ import { AlertDialog } from "../components/AlertDialog";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { printServiceRequest } from "../lib/print-work-order";
+import { useTheme } from "../lib/theme";
+import {
+  SsPaperForm, SsSignColumn, SsCheckRow, SsTableHead, SS_FORM_FALLBACK, OTRO_TALLER,
+  type SsFormDoc, type SsPaperValues,
+} from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +57,8 @@ interface ServiceRequest {
   /** Usuario de quien solicita: de ahí sale la firma del PDF. */
   solicitaByUserId: string | null;
   createdByUserId: string | null;
+  /** Nombre de quien la creó: es el que figura en SOLICITA hasta que se corrija. */
+  createdByName?: string | null;
   aprobadoByName: string | null;
   aprobadoAt: string | null;
   aprobadoByUserId: string | null;
@@ -64,6 +71,15 @@ interface ServiceRequest {
   receptionItem: string | null;
   receivedByName: string | null;
   receptionConform: boolean | null;
+  // Recuadros del papel que hasta ahora sólo se imprimian
+  /** DEPARTAMENTO + ASIGNADO A: es el mismo campo, mostrado dos veces. */
+  department: string | null;
+  /** COMENTARIOS ADICIONALES */
+  observations: string | null;
+  /** MEDIO DE COMUNICACION UTILIZADO */
+  communicationMethod: string[];
+  /** DISTRIBUCION (copia a) */
+  distribution: string[];
   // Pie del formulario
   capitanName: string | null;
   jefeMaquinasName: string | null;
@@ -75,8 +91,12 @@ interface ListResponse { items: ServiceRequest[]; total: number }
 // Constants
 // ---------------------------------------------------------------------------
 
+// Los valores del enum en la base no cambian (DRAFT/SOLICITADA/...): acá se
+// nombran por lo que falta hacer, igual que las etapas de la OT, que es como lo
+// lee la tripulación. "En ejecución" queda aparte de "Autorizada": autorizada
+// es que se aprobó el gasto, en ejecución es que ya se le mandó al taller.
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Borrador", SOLICITADA: "Solicitada", APROBADA: "Aprobada",
+  DRAFT: "En preparación", SOLICITADA: "Pendiente de aprobación", APROBADA: "Aprobada. Pendiente de autorización",
   AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
   REJECTED: "Rechazada", CANCELLED: "Cancelada",
 };
@@ -117,11 +137,9 @@ const LOCKED_STATUSES = ["COMPLETED", "CANCELLED", "REJECTED"];
 const srServicio = (sr: { title: string | null; description: string | null }) =>
   sr.description || sr.title || "";
 
-/** Valor centinela del select de taller: "no está en el catálogo". */
-const OTRO_TALLER = "__OTRO__";
 
-/** SOLICITUD DE COMPRAS del formulario — se pueden marcar varias. */
-const PURCHASE_KINDS = ["NORMAL", "AFECTA SEGURIDAD", "AFECTA SERVICIO"];
+/** Los tres pasos del recuadro TRAMITACION DE LA SOLICITUD, en el orden del papel. */
+const TRAMITA_STEPS = ["SOLICITA", "APRUEBA", "AUTORIZA"] as const;
 
 interface TeamMember {
   userId: string;
@@ -210,11 +228,11 @@ type SsStage = "DRAFT" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "IN_PROGRESS
 
 /** Colores alineados con STATUS_COLORS para que la tarjeta y el badge no se contradigan. */
 const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; label: string; headerCls: string; borderCls: string }> = [
-  { colId: "DRAFT",       label: "Borrador",     headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
-  { colId: "SOLICITADA",  label: "Solicitada",   headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
-  { colId: "APROBADA",    label: "Aprobada",     headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
-  { colId: "AUTORIZADA",  label: "Autorizada",   headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
-  { colId: "IN_PROGRESS", label: "En ejecución", headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
+  { colId: "DRAFT",       label: "En preparación",            headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
+  { colId: "SOLICITADA",  label: "Pendiente de aprobación",   headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
+  { colId: "APROBADA",    label: "Aprobada. Pendiente de autorización", headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
+  { colId: "AUTORIZADA",  label: "Autorizada",                headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
+  { colId: "IN_PROGRESS", label: "En ejecución",              headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
 ];
 
 function ssStage(sr: ServiceRequest): SsStage {
@@ -678,7 +696,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
     ? []
     : eligibleSigners(Array.isArray(teamData) ? teamData : [], step, sr.vesselCode);
 
-  const title = step === "SOLICITA" ? "Solicitar SS"
+  const title = step === "SOLICITA" ? "Enviar SS a aprobar"
     : step === "APRUEBA" ? "Aprobar SS"
     : step === "AUTORIZA" ? "Autorizar SS"
     : "Rechazar SS";
@@ -851,73 +869,78 @@ function HojaRutaBox({ srId, editable, isAdmin }: {
     }
   };
 
-  return (
-    <div className="rounded-xl border border-fg/10 p-3 space-y-2">
-      <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold">Hoja de ruta del pedido</p>
+  // El papel nunca sale sin renglones: se completan hasta 3 para anotar a mano.
+  const vacias = Math.max(0, 3 - filas.length);
 
-      {loading && filas.length === 0 ? (
-        <p className="text-[11px] text-text-industrial/40 italic">Cargando…</p>
-      ) : filas.length === 0 ? (
-        <p className="text-[11px] text-text-industrial/40 italic">Sin movimientos todavía.</p>
-      ) : (
-        <div className="space-y-1">
-          {filas.map((f, i) => (
-            <div key={f.logId ?? `hito-${i}`} className="flex items-start gap-2 text-[11px]">
-              <span className="w-20 shrink-0 text-text-industrial/40 tabular-nums">{fmtDate(f.fecha)}</span>
-              <span className={`flex-1 min-w-0 ${f.logId ? "text-text-industrial" : "text-text-industrial/60 italic"}`}>
-                {f.novedad}
-              </span>
-              <span className="w-32 shrink-0 truncate text-text-industrial/50">{f.asienta}</span>
-              {f.logId && isAdmin ? (
-                confirmando === f.logId ? (
-                  <span className="shrink-0 flex items-center gap-1 text-[10px]">
-                    <button type="button" onClick={() => { void borrar(f.logId!); }}
-                      className="font-bold text-red-600 hover:underline">Borrar</button>
-                    <span className="text-text-industrial/30">/</span>
-                    <button type="button" onClick={() => setConfirmando(null)}
-                      className="text-text-industrial/50 hover:underline">No</button>
-                  </span>
-                ) : (
-                  <button type="button" onClick={() => setConfirmando(f.logId!)}
-                    className="shrink-0 text-text-industrial/30 hover:text-red-500" title="Borrar novedad">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                )
+  return (
+    <>
+      <SsTableHead cols={[
+        { label: "FECHA", className: "w-28 shrink-0" },
+        { label: "NOVEDAD", className: "flex-1" },
+        { label: "ASIENTA", className: "w-44 shrink-0" },
+      ]} />
+
+      {loading && filas.length === 0 && (
+        <div className="px-2 py-1.5 border-b border-fg/25 text-[11px] italic text-text-industrial/40">Cargando…</div>
+      )}
+
+      {filas.map((f, i) => (
+        <div key={f.logId ?? `hito-${i}`} className="flex divide-x divide-fg/25 border-b border-fg/25">
+          <div className="w-28 shrink-0 px-2 py-1 text-[12px] text-center tabular-nums text-text-industrial">{fmtDate(f.fecha)}</div>
+          {/* En gris e italica, los hitos que el sistema asienta solo. */}
+          <div className={`flex-1 min-w-0 px-2 py-1 text-[12px] ${f.logId ? "text-fg" : "text-text-industrial/60 italic"}`}>
+            {f.novedad}
+          </div>
+          <div className="w-44 shrink-0 px-2 py-1 flex items-center gap-1">
+            <span className="flex-1 min-w-0 truncate text-[12px] text-center text-text-industrial">{f.asienta}</span>
+            {f.logId && isAdmin && (
+              confirmando === f.logId ? (
+                <span className="shrink-0 flex items-center gap-1 text-[10px]">
+                  <button type="button" onClick={() => { void borrar(f.logId!); }}
+                    className="font-bold text-red-600 hover:underline">Borrar</button>
+                  <span className="text-text-industrial/30">/</span>
+                  <button type="button" onClick={() => setConfirmando(null)}
+                    className="text-text-industrial/50 hover:underline">No</button>
+                </span>
               ) : (
-                <span className="w-3 shrink-0" />
-              )}
-            </div>
-          ))}
+                <button type="button" onClick={() => setConfirmando(f.logId!)}
+                  className="shrink-0 text-text-industrial/30 hover:text-red-500" title="Borrar novedad">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      ))}
+
+      {Array.from({ length: vacias }).map((_, i) => (
+        <div key={`vacia-${i}`} className="flex divide-x divide-fg/25 border-b border-fg/25">
+          <div className="w-28 shrink-0 px-2 py-1 text-[12px]">&nbsp;</div>
+          <div className="flex-1 min-w-0 px-2 py-1" />
+          <div className="w-44 shrink-0 px-2 py-1" />
+        </div>
+      ))}
+
+      {editable && (
+        <div className="flex divide-x divide-fg/25 border-b border-fg/25 bg-fg/5">
+          <input type="date" className="w-28 shrink-0 px-2 py-1 bg-transparent text-[12px] text-fg outline-none"
+            value={fecha} onChange={e => setFecha(e.target.value)} title="Sin fecha = hoy" />
+          <input className="flex-1 min-w-0 px-2 py-1 bg-transparent text-[12px] text-fg placeholder-text-industrial/30 outline-none"
+            value={novedad}
+            onChange={e => setNovedad(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void agregar(); } }}
+            placeholder="Asentar una novedad del pedido (el taller reprogramó, falta un repuesto…)" />
+          <button type="button" onClick={() => { void agregar(); }} disabled={saving || !novedad.trim()}
+            className="w-44 shrink-0 flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold text-accent hover:bg-accent/10 disabled:opacity-40">
+            <Plus className="w-3 h-3" /> Asentar
+          </button>
         </div>
       )}
 
-      {editable && (
-        <>
-          <div className="flex gap-1.5 items-center pt-1">
-            <input type="date" className={cellCls + " w-32 shrink-0"} value={fecha}
-              onChange={e => setFecha(e.target.value)} title="Sin fecha = hoy" />
-            <input className={cellCls + " flex-1 min-w-0"} value={novedad}
-              onChange={e => setNovedad(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void agregar(); } }}
-              placeholder="Ej. El taller confirma visita para el jueves" />
-            <button type="button" onClick={() => { void agregar(); }} disabled={saving || !novedad.trim()}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold disabled:opacity-40">
-              <Plus className="w-3 h-3" /> Asentar
-            </button>
-          </div>
-          <p className="text-[10px] text-text-industrial/40 italic">
-            En gris, los movimientos que el sistema asienta solo. Acá se cargan las novedades del pedido
-            (el taller reprogramó, falta un repuesto…). Sin fecha, se asienta con la de hoy.
-          </p>
-        </>
-      )}
-
       {error && (
-        <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[10px] text-red-700 dark:text-red-400">
-          {error}
-        </p>
+        <p className="px-2 py-1.5 border-b border-fg/25 text-[10px] text-red-700 dark:text-red-400">{error}</p>
       )}
-    </div>
+    </>
   );
 }
 
@@ -927,14 +950,16 @@ function HojaRutaBox({ srId, editable, isAdmin }: {
  * La conformidad es una decisión explícita (no hay default): "no conforme" es
  * la evidencia de que el trabajo del tercero no se aceptó.
  */
-function ReceiveServiceModal({ onClose, onConfirm, busy }: {
+function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
   onClose: () => void;
   onConfirm: (v: { receivedByName: string; receptionItem: string; receptionConform: boolean; closeNotes: string }) => Promise<void>;
   busy: boolean;
+  /** Lo que ya se escribió en el recuadro ENTREGA / RECEPCION del formulario. */
+  initial?: { recibe: string; item: string; conforme: boolean | null };
 }) {
-  const [recibe, setRecibe] = useState("");
-  const [item, setItem] = useState("");
-  const [conforme, setConforme] = useState<boolean | null>(null);
+  const [recibe, setRecibe] = useState(initial?.recibe ?? "");
+  const [item, setItem] = useState(initial?.item ?? "");
+  const [conforme, setConforme] = useState<boolean | null>(initial?.conforme ?? null);
   const [notas, setNotas] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -1178,8 +1203,10 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [actionError, setActionError] = useState<string | null>(null);
   // Pasos que piden datos (antes eran prompt()/confirm() nativos).
   const [receiving, setReceiving] = useState(false);
-  // Aviso posterior a "Listo para enviar al Proveedor" (.docx descargado, mail abierto).
-  const [sentNotice, setSentNotice] = useState(false);
+  // Aviso posterior a "Enviar al Proveedor". `mailedTo` = casilla a la que lo
+  // mandó el sistema; null = no hay casilla configurada y el correo se manda a
+  // mano (se descargó el .docx y se abrió el borrador).
+  const [sentNotice, setSentNotice] = useState<{ mailedTo: string | null } | null>(null);
   // Nombre del buque para el asunto/cuerpo del mail: nunca el código (ver
   // CLAUDE.md "Nombres, no códigos").
   const { vessels } = useVesselContext();
@@ -1195,15 +1222,46 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // lo bloquea igual (record lock), esto sólo evita ofrecerlo.
   const editable = !LOCKED_STATUSES.includes(sr.status);
 
-  // ── Campos editables del formulario ──
-  const [description, setDescription] = useState(sr.description ?? "");
-  const [causes, setCauses] = useState(sr.causes ?? "");
-  const [tallerNotes, setTallerNotes] = useState(sr.tallerNotes ?? "");
-  const [providerId, setProviderId] = useState(sr.providerId ?? "");
-  const [compras, setCompras] = useState<string[]>(sr.purchaseRequestKinds ?? []);
-  const [capitan, setCapitan] = useState(sr.capitanName ?? "");
-  const [jefeMaq, setJefeMaq] = useState(sr.jefeMaquinasName ?? "");
+  // ── Recuadros editables del formulario ──
+  // Van todos juntos porque la hoja los edita como un solo bloque (ver
+  // SsPaperForm): el papel es un formulario, no una lista de campos sueltos.
+  const [form, setForm] = useState<SsPaperValues>({
+    department: sr.department ?? "",
+    description: sr.description ?? "",
+    causes: sr.causes ?? "",
+    compras: sr.purchaseRequestKinds ?? [],
+    providerId: sr.providerId ?? "",
+    tallerNotes: sr.tallerNotes ?? "",
+    observations: sr.observations ?? "",
+    comunicacion: sr.communicationMethod ?? [],
+    distribucion: sr.distribution ?? [],
+    capitan: sr.capitanName ?? "",
+    jefeMaq: sr.jefeMaquinasName ?? "",
+    recepcionItem: sr.receptionItem ?? "",
+    recibe: sr.receivedByName ?? "",
+    conforme: sr.receptionConform ?? null,
+  });
+  const patchForm = (patch: Partial<SsPaperValues>) => setForm(f => ({ ...f, ...patch }));
   const [saving, setSaving] = useState(false);
+
+  // Definicion del formulario controlado del tenant: la pantalla dibuja las
+  // MISMAS secciones que imprime el PDF (ver SsPaperForm). Si el endpoint no
+  // responde, se usa el default Mercurio y la hoja se dibuja igual.
+  const { data: formDoc } = useFetch<SsFormDoc>("/app/pms/service-requests/form", []);
+  // Firmas de la tramitación: van por endpoint aparte porque son imágenes en
+  // base64 (no tienen por qué viajar en el listado). Se recargan cuando la SS
+  // avanza de estado: cada paso agrega la suya.
+  const { data: firmas } = useFetch<{ solicita: string | null; aprueba: string | null; autoriza: string | null }>(
+    `/app/pms/service-requests/${sr.id}/signatures`, [sr.id, sr.status, sr.aprobadoAt, sr.autorizadoAt]);
+  const doc = formDoc ?? SS_FORM_FALLBACK;
+  // Logo de la cabecera: el propio del formulario (el que estampa el PDF) y, si
+  // no hay, el del tenant. En modo oscuro gana el logo claro del tenant — el del
+  // papel es oscuro y sobre fondo oscuro no se ve.
+  const { tenant } = useAuth();
+  const { theme } = useTheme();
+  const formLogo = theme === "dark"
+    ? (tenant?.logoUrlLight || doc.logoUrl || tenant?.logoUrl || null)
+    : (doc.logoUrl || tenant?.logoUrl || tenant?.logoUrlLight || null);
 
   // Descarga de la copia editable en Word (.docx).
   const [bajandoWord, setBajandoWord] = useState(false);
@@ -1278,14 +1336,25 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // Sólo para gatear el borrado de novedades de la hoja de ruta.
   const isAdmin = role === "TENANT_ADMIN";
 
+  // Si la SS se rechazó, el paso que la frenó: el que seguía sin fecha (mismo
+  // criterio que el PDF, para que papel y pantalla marquen la misma columna).
+  const rechazadaEn = sr.status === "REJECTED" ? (sr.aprobadoAt ? "AUTORIZA" : "APRUEBA") : null;
+
   const dirty =
-    description !== (sr.description ?? "") ||
-    causes !== (sr.causes ?? "") ||
-    tallerNotes !== (sr.tallerNotes ?? "") ||
-    providerId !== (sr.providerId ?? "") ||
-    capitan !== (sr.capitanName ?? "") ||
-    jefeMaq !== (sr.jefeMaquinasName ?? "") ||
-    compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|") ||
+    form.description !== (sr.description ?? "") ||
+    form.causes !== (sr.causes ?? "") ||
+    form.tallerNotes !== (sr.tallerNotes ?? "") ||
+    form.providerId !== (sr.providerId ?? "") ||
+    form.capitan !== (sr.capitanName ?? "") ||
+    form.jefeMaq !== (sr.jefeMaquinasName ?? "") ||
+    form.department !== (sr.department ?? "") ||
+    form.observations !== (sr.observations ?? "") ||
+    form.recepcionItem !== (sr.receptionItem ?? "") ||
+    form.recibe !== (sr.receivedByName ?? "") ||
+    form.conforme !== (sr.receptionConform ?? null) ||
+    form.compras.join("|") !== (sr.purchaseRequestKinds ?? []).join("|") ||
+    form.comunicacion.join("|") !== (sr.communicationMethod ?? []).join("|") ||
+    form.distribucion.join("|") !== (sr.distribution ?? []).join("|") ||
     // Sólo cuentan los desplegables que de verdad se muestran (admin + paso ya
     // cumplido). Si no, un dirty fantasma dejaría Guardar siempre encendido.
     (puedeCorregirFirmas && (
@@ -1294,19 +1363,24 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       (autorizaDone && firmaAutoriza.userId !== (sr.autorizadoByUserId ?? ""))
     ));
 
-  const toggleCompra = (v: string) =>
-    setCompras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-
   // providerId y tallerNotes son excluyentes: el taller sale del catálogo o se
   // escribe a mano, nunca las dos cosas. Se manda el par completo (uno con
   // valor, el otro vacío) para que cambiar de opción borre la anterior.
   const patchPayload = () => ({
-    description, causes,
-    tallerNotes: otroTaller ? tallerNotes : "",
-    providerId: otroTaller ? "" : providerId,
-    purchaseRequestKinds: compras,
-    capitanName: capitan,
-    jefeMaquinasName: jefeMaq,
+    description: form.description,
+    causes: form.causes,
+    tallerNotes: otroTaller ? form.tallerNotes : "",
+    providerId: otroTaller ? "" : form.providerId,
+    purchaseRequestKinds: form.compras,
+    department: form.department,
+    communicationMethod: form.comunicacion,
+    distribution: form.distribucion,
+    observations: form.observations,
+    capitanName: form.capitan,
+    jefeMaquinasName: form.jefeMaq,
+    receptionItem: form.recepcionItem,
+    receivedByName: form.recibe,
+    receptionConform: form.conforme,
     // Las firmas viajan sólo si el que edita es admin Y el paso ya se cumplió:
     // mandarlas de más haría que el backend devuelva 403/409 y se pierda todo el
     // resto del guardado.
@@ -1393,28 +1467,49 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   };
 
   /**
-   * "Listo para enviar al Proveedor": baja el .docx (el documento que se le
-   * manda al taller) y abre el correo del usuario con destinatario, asunto y
-   * cuerpo ya armados — la persona adjunta el .docx recién descargado y lo
-   * manda desde su propia cuenta (un mailto: no puede adjuntar archivos solo).
-   * Guarda primero: el documento tiene que salir con lo último cargado. Si el
-   * .docx falla no se avanza el estado: no habría qué enviar.
+   * "Enviar al Proveedor": el sistema manda la SS por correo con el formulario
+   * en PDF adjunto y recién entonces la pasa a EN EJECUCIÓN (el backend hace las
+   * dos cosas en ese orden: una SS no puede figurar enviada si el correo no
+   * salió).
+   *
+   * Guarda primero: el documento tiene que salir con lo último cargado.
+   *
+   * Si todavía no hay casilla de correo configurada, el backend devuelve
+   * `sent:false` sin tocar el estado y se cae al camino manual de siempre: se
+   * baja el .docx y se abre el correo del usuario con destinatario, asunto y
+   * cuerpo ya armados, para que lo adjunte y lo mande desde su cuenta (un
+   * mailto: no puede adjuntar archivos solo).
    */
   const sendToProvider = async () => {
     setActionError(null);
     const fresh = await saveIfDirty();
     if (!fresh) return;
-    const docxOk = await downloadDocx(`/app/pms/service-requests/${fresh.id}/docx`, fresh.serviceRequestCode);
-    if (!docxOk) {
-      setActionError("No se pudo generar el documento Word. Intentá de nuevo.");
-      return;
-    }
-    openProviderEmailDraft(fresh, vesselName);
+
+    setBusy(true);
     try {
+      const r = await api.post<{ sent: boolean; to: string[]; reason?: string; error?: string }>(
+        `/app/pms/service-requests/${fresh.id}/send-to-provider`, {});
+      if (r.sent) {
+        setSentNotice({ mailedTo: r.to.join(", ") });
+        return;
+      }
+      if (r.reason === "SEND_FAILED") {
+        setActionError(`No se pudo enviar el correo. ${r.error ?? ""}`.trim());
+        return;
+      }
+      // Sin casilla configurada: se manda a mano, como antes.
+      const docxOk = await downloadDocx(`/app/pms/service-requests/${fresh.id}/docx`, fresh.serviceRequestCode);
+      if (!docxOk) {
+        setActionError("No se pudo generar el documento Word. Intentá de nuevo.");
+        return;
+      }
+      openProviderEmailDraft(fresh, vesselName);
       await act("start", undefined, { keepOpen: true });
-      setSentNotice(true);
+      setSentNotice({ mailedTo: null });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "No se pudo completar la acción.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -1445,7 +1540,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // fondo no tiene onClick.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
         {/* sticky: el formulario es largo — el código, el estado y la X tienen que
             seguir a la vista mientras se scrollea. El scroll lo hace la tarjeta. */}
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 bg-bg border-b border-fg/10">
@@ -1456,7 +1551,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
             )}
             {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
                 DEL SERVICIO son el mismo dato, no pueden decir cosas distintas. */}
-            <p className="text-xs text-text-industrial/60 truncate">{description || sr.title || "—"}</p>
+            <p className="text-xs text-text-industrial/60 truncate">{form.description || sr.title || "—"}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>
@@ -1466,189 +1561,84 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           </div>
         </div>
 
-        <div className="px-6 py-4 space-y-4">
-          {sr.workOrder && (
-            <Link
-              to={`/work-orders?autoCode=${sr.workOrder.workOrderCode}`}
-              className="flex items-center gap-2 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-accent shrink-0" />
-              <span className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold">OT de origen</span>
-              <span className="font-mono text-xs font-bold text-accent">{sr.workOrder.workOrderCode}</span>
-              <span className="flex-1 min-w-0 truncate text-xs text-text-industrial/70">{sr.workOrder.title}</span>
-            </Link>
-          )}
-
-          <div>
-            <label className={labelCls}>Descripción del servicio</label>
-            <textarea
-              className={inputCls + " min-h-[64px] resize-y"}
-              value={description}
-              disabled={!editable}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Qué se le pide al taller"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Detalle del servicio</label>
-            <textarea
-              className={inputCls + " min-h-[64px] resize-y"}
-              value={causes}
-              disabled={!editable}
-              onChange={e => setCauses(e.target.value)}
-              placeholder="Detalle del trabajo a realizar"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Taller que concurre</label>
-            {/* Se elige del catálogo de proveedores (providerId). El texto libre
-                (tallerNotes) queda para el taller que todavía no está cargado:
-                el resto del sistema —PDF incluido— lo trata igual. */}
-            <select
-              className={inputCls}
-              value={otroTaller ? OTRO_TALLER : providerId}
-              disabled={!editable}
-              onChange={e => {
-                if (e.target.value === OTRO_TALLER) { setOtroTaller(true); setProviderId(""); return; }
-                setOtroTaller(false);
-                setTallerNotes("");
-                setProviderId(e.target.value);
-              }}
-            >
-              <option value="">Seleccionar taller / proveedor…</option>
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
-              ))}
-              <option value={OTRO_TALLER}>Otro taller (no está en la lista)…</option>
-            </select>
-            {otroTaller && (
-              <input
-                className={inputCls + " mt-2"}
-                value={tallerNotes}
-                disabled={!editable}
-                onChange={e => setTallerNotes(e.target.value)}
-                placeholder="Ej. Hidraulica Brasil"
-                autoFocus
-              />
-            )}
-          </div>
-
-          {/* SOLICITUD DE COMPRAS — admite varias marcadas a la vez, como el papel */}
-          <div>
-            <label className={labelCls}>Solicitud de compras</label>
-            <div className="flex gap-2 flex-wrap">
-              {PURCHASE_KINDS.map(k => {
-                const on = compras.includes(k);
+        {/* La pantalla ES el formulario REGI-LOG-01.3: las mismas secciones, en
+            el mismo orden, con las mismas listas que imprime el PDF. */}
+        <div className="px-6 py-4">
+          <SsPaperForm
+            meta={doc.meta}
+            config={doc.config}
+            logoUrl={formLogo}
+            tenantName={tenant?.name ?? ""}
+            code={sr.serviceRequestCode}
+            vesselName={vesselName}
+            openDate={sr.openDate}
+            assetName={sr.workOrder?.assetName ?? null}
+            workOrder={sr.workOrder ? { workOrderCode: sr.workOrder.workOrderCode, title: sr.workOrder.title } : null}
+            workOrderLink={sr.workOrder ? (
+              <Link
+                to={`/work-orders?autoCode=${sr.workOrder.workOrderCode}`}
+                className="flex items-center gap-2 min-w-0 hover:underline"
+                title="Abrir la OT de origen"
+              >
+                <span className="font-mono text-[12px] font-bold text-accent shrink-0">{sr.workOrder.workOrderCode}</span>
+                <span className="truncate text-text-industrial">{sr.workOrder.title}</span>
+                <ExternalLink className="w-3 h-3 text-accent shrink-0" />
+              </Link>
+            ) : undefined}
+            values={form}
+            onChange={patchForm}
+            editable={editable}
+            providers={providers}
+            otroTaller={otroTaller}
+            onOtroTaller={setOtroTaller}
+            hojaRuta={<HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} />}
+            tramitacion={
+              /* Una columna por paso, como el bloque de firmas del papel. La
+                 fecha la estampa el paso real; el admin sólo corrige QUIÉN firmó
+                 (y sólo sobre un paso ya cumplido). El rechazo se marca en rojo
+                 sobre la columna que lo frenó. */
+              TRAMITA_STEPS.map(step => {
+                const c = {
+                  // Mismo criterio que el PDF: el nombre corregido gana; si no,
+                  // el de quien la creó.
+                  SOLICITA: { name: sr.solicitaByName ?? sr.createdByName ?? null, at: sr.openDate, done: solicitaDone, value: firmaSolicita, set: setFirmaSolicita },
+                  APRUEBA:  { name: sr.aprobadoByName, at: sr.aprobadoAt, done: apruebaDone, value: firmaAprueba, set: setFirmaAprueba },
+                  AUTORIZA: { name: sr.autorizadoByName, at: sr.autorizadoAt, done: autorizaDone, value: firmaAutoriza, set: setFirmaAutoriza },
+                }[step];
+                // Sólo SOLICITA lleva firma estampada. APRUEBA y AUTORIZA van en
+                // blanco por decisión del cliente (ago 2026): esas dos se firman
+                // a mano sobre el impreso, y la pantalla muestra lo mismo que el
+                // papel. Quién aprobó y autorizó igual queda registrado en el
+                // nombre, la fecha y la hoja de ruta.
+                const firma = step === "SOLICITA" ? firmas?.solicita : null;
                 return (
-                  <button
-                    key={k}
-                    type="button"
-                    disabled={!editable}
-                    onClick={() => toggleCompra(k)}
-                    className={`px-3 py-1 rounded text-xs font-bold border transition-colors disabled:opacity-60 ${
-                      on ? "bg-accent text-accent-fg border-accent"
-                        : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                    }`}
-                  >
-                    {k}
-                  </button>
+                  <SsSignColumn key={step} rol={step} at={c.at} rejected={rechazadaEn === step} signatureUrl={firma}>
+                    {puedeCorregirFirmas && c.done ? (
+                      <SignerSelect value={c.value} onChange={c.set}
+                        options={eligibleSigners(team, step, sr.vesselCode)} />
+                    ) : (
+                      <p className="text-[11px] text-fg text-center truncate">{c.name || ""}</p>
+                    )}
+                  </SsSignColumn>
                 );
-              })}
-            </div>
-          </div>
+              })
+            }
+          />
 
-          {/* TRAMITACION. Cada paso se registra al solicitar/aprobar/autorizar, y
-              ahí mismo el admin elige quién firma y con qué fecha (ver
-              ApprovalModal). Además, el ADMIN puede corregir los nombres acá:
-              hace falta cuando la SS se carga desde el papel y los que firmaron
-              no son los que operaron el sistema. Las FECHAS no se editan: las
-              pone el paso real. */}
-          <div className="rounded-xl border border-fg/10 p-3 space-y-2">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold">Tramitación</p>
-            {puedeCorregirFirmas && solicitaDone ? (
-              <SignerRow label="Solicita" value={firmaSolicita} onChange={setFirmaSolicita}
-                at={sr.openDate} options={eligibleSigners(team, "SOLICITA", sr.vesselCode)} />
-            ) : (
-              <Row label="Solicita" name={sr.solicitaByName} at={sr.openDate} />
-            )}
-
-            {puedeCorregirFirmas && apruebaDone ? (
-              <SignerRow label="Aprueba" value={firmaAprueba} onChange={setFirmaAprueba}
-                at={sr.aprobadoAt} options={eligibleSigners(team, "APRUEBA", sr.vesselCode)} />
-            ) : (
-              <Row label="Aprueba" name={sr.aprobadoByName} at={sr.aprobadoAt} />
-            )}
-
-            {puedeCorregirFirmas && autorizaDone ? (
-              <SignerRow label="Autoriza" value={firmaAutoriza} onChange={setFirmaAutoriza}
-                at={sr.autorizadoAt} options={eligibleSigners(team, "AUTORIZA", sr.vesselCode)} />
-            ) : (
-              <Row label="Autoriza" name={sr.autorizadoByName} at={sr.autorizadoAt} />
-            )}
-
-            {puedeCorregirFirmas && (
-              <p className="text-[10px] text-text-industrial/40 italic">
-                Corrección administrativa: cambiar el nombre no aprueba ni autoriza la
-                solicitud, sólo deja asentado quién firmó el formulario. Los pasos que
-                todavía no se cumplieron no se editan.
-              </p>
-            )}
-
-            {sr.status === "REJECTED" && sr.rechazoReason && (
-              <p className="text-[11px] text-red-600 dark:text-red-400">Rechazada: {sr.rechazoReason}</p>
-            )}
-          </div>
-
-          {/* HOJA DE RUTA DEL PEDIDO — va después de la tramitación, igual que en el papel */}
-          <HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} />
-
-          {/* ENTREGA / RECEPCION: la evidencia de que el trabajo del taller se aceptó */}
-          {sr.receivedByName && (
-            <div className="rounded-xl border border-fg/10 p-3 space-y-1.5">
-              <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold">Entrega / Recepción</p>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="w-16 shrink-0 text-text-industrial/40 font-bold">Recibe</span>
-                <span className="flex-1 min-w-0 truncate text-text-industrial">{sr.receivedByName}</span>
-                <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${
-                  sr.receptionConform
-                    ? "bg-success-sea/10 text-success-sea border-success-sea/20"
-                    : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
-                }`}>
-                  {sr.receptionConform ? "Conforme" : "No conforme"}
-                </span>
-              </div>
-              {sr.receptionItem && <p className="text-[11px] text-text-industrial/70">{sr.receptionItem}</p>}
-            </div>
+          {puedeCorregirFirmas && (
+            <p className="mt-2 text-[10px] text-text-industrial/40 italic">
+              Corrección administrativa: cambiar el nombre de la tramitación no aprueba ni autoriza la
+              solicitud, sólo deja asentado quién firmó el formulario. Los pasos que todavía no se
+              cumplieron no se editan.
+            </p>
           )}
 
-          {/* Pie del papel: "Deben firmar y registrarse el Jefe de Máquinas y Capitán" */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Capitán</label>
-              <input
-                className={inputCls}
-                value={capitan}
-                disabled={!editable}
-                onChange={e => setCapitan(e.target.value)}
-                placeholder="Ej. CAP. WILLIAM RIQUELME"
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Jefe de Máquinas</label>
-              <input
-                className={inputCls}
-                value={jefeMaq}
-                disabled={!editable}
-                onChange={e => setJefeMaq(e.target.value)}
-                placeholder="Ej. J.M. CRISTHIAN VERON"
-              />
-            </div>
-          </div>
+          {sr.status === "REJECTED" && sr.rechazoReason && (
+            <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">Rechazada: {sr.rechazoReason}</p>
+          )}
 
           {!canAuthorize && sr.status === "APROBADA" && (
-            <p className="text-[11px] text-text-industrial/50 italic">
+            <p className="mt-2 text-[11px] text-text-industrial/50 italic">
               Sólo el Superintendente técnico o el DPA / Director de Operaciones pueden autorizar esta solicitud.
             </p>
           )}
@@ -1682,7 +1672,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           {sr.status === "DRAFT" && (
             <button onClick={() => openTramita("SOLICITA")} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 disabled:opacity-50">
-              <Send className="w-3.5 h-3.5" /> Solicitar
+              <Send className="w-3.5 h-3.5" /> Enviar a aprobar
             </button>
           )}
 
@@ -1713,7 +1703,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           {sr.status === "AUTORIZADA" && (
             <button onClick={() => { void sendToProvider(); }} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50">
-              <Play className="w-3.5 h-3.5" /> Listo para enviar al Proveedor
+              <Play className="w-3.5 h-3.5" /> Enviar al Proveedor
             </button>
           )}
 
@@ -1762,6 +1752,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       {receiving && (
         <ReceiveServiceModal
           busy={busy}
+          initial={{ recibe: form.recibe, item: form.recepcionItem, conforme: form.conforme }}
           onClose={() => setReceiving(false)}
           onConfirm={async v => { await act("complete", v); setReceiving(false); }}
         />
@@ -1795,65 +1786,58 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
         <FormModal
           title="Solicitud enviada a proveedor"
           subtitle={sr.serviceRequestCode}
-          onClose={() => { setSentNotice(false); onChanged(); }}
+          onClose={() => { setSentNotice(null); onChanged(); }}
           footer={
-            <button type="button" onClick={() => { setSentNotice(false); onChanged(); }}
+            <button type="button" onClick={() => { setSentNotice(null); onChanged(); }}
               className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold">
               Entendido
             </button>
           }
         >
-          <p className="text-sm text-text-industrial">
-            El documento Word (.docx) ya se descargó y se abrió un correo a{" "}
-            <span className="font-semibold">{PROVIDER_EMAIL}</span> con el asunto y el mensaje completos.
-          </p>
-          <p className="text-[11px] text-text-industrial/50">
-            Adjuntá el .docx descargado antes de enviarlo — el correo se abre sin el archivo adjunto.
-          </p>
+          {sentNotice.mailedTo ? (
+            <>
+              <p className="text-sm text-text-industrial">
+                El correo salió a <span className="font-semibold">{sentNotice.mailedTo}</span> con el
+                formulario en PDF adjunto. La solicitud quedó en ejecución.
+              </p>
+              <p className="text-[11px] text-text-industrial/50">
+                Queda asentado en la hoja de ruta del pedido.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-text-industrial">
+                El documento Word (.docx) ya se descargó y se abrió un correo a{" "}
+                <span className="font-semibold">{PROVIDER_EMAIL}</span> con el asunto y el mensaje completos.
+              </p>
+              <p className="text-[11px] text-text-industrial/50">
+                Adjuntá el .docx descargado antes de enviarlo — el correo se abre sin el archivo adjunto.
+                (El sistema todavía no tiene casilla de correo propia configurada.)
+              </p>
+            </>
+          )}
         </FormModal>
       )}
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-bold mb-1">{label}</p>
-      <p className="text-xs text-text-industrial whitespace-pre-wrap">{value}</p>
-    </div>
-  );
-}
-
-function Row({ label, name, at }: { label: string; name: string | null; at: string | null }) {
-  return (
-    <div className="flex items-center gap-2 text-[11px]">
-      <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
-      <span className="flex-1 min-w-0 truncate text-text-industrial">{name || "—"}</span>
-      <span className="shrink-0 text-text-industrial/40">{at ? fmtDate(at) : ""}</span>
-    </div>
-  );
-}
-
 /**
- * Misma fila de la tramitación pero con el nombre elegible de la tripulación —
- * sólo para el admin y sólo sobre un paso YA CUMPLIDO (ver `done` en el modal).
+ * Nombre de un paso de la tramitacion, dentro de su columna de firma del papel.
+ * Sólo lo ve el admin y sólo sobre un paso YA CUMPLIDO (ver `done` en el modal).
  *
  * Es un desplegable, no texto libre: el que figura firmando tiene que ser
  * alguien del equipo habilitado para ese paso. Si el nombre guardado no está
  * entre los elegibles (cargó una SS de papel, o esa persona ya no está en la
  * empresa) se conserva como opción propia para no borrarlo sin querer.
  *
- * La FECHA es de sólo lectura a propósito: la estampa el paso real
+ * La FECHA no se edita a propósito: la estampa el paso real
  * (Solicitar / Aprobar / Autorizar), no se escribe a mano acá.
  */
-function SignerRow({ label, value, onChange, at, options }: {
-  label: string;
+function SignerSelect({ value, onChange, options }: {
   /** Nombre y usuario van juntos: el usuario es el que le da la firma al PDF. */
   value: { name: string; userId: string };
   onChange: (v: { name: string; userId: string }) => void;
-  at: string | null;
   options: TeamMember[];
 }) {
   // El select se maneja por userId, no por nombre: dos personas pueden llamarse
@@ -1862,30 +1846,26 @@ function SignerRow({ label, value, onChange, at, options }: {
   const enLista = options.some(m => m.userId === value.userId);
   const huerfano = !enLista && value.name ? value.name : null;
   return (
-    <div className="flex items-center gap-2 text-[11px]">
-      <span className="w-16 shrink-0 text-text-industrial/40 font-bold">{label}</span>
-      <select
-        className={cellCls + " flex-1 min-w-0"}
-        value={enLista ? value.userId : (huerfano ? HUERFANO : "")}
-        onChange={e => {
-          const uid = e.target.value;
-          if (uid === HUERFANO) return; // no se re-elige: es el nombre que ya estaba
-          const m = options.find(x => x.userId === uid);
-          onChange(m ? { name: memberLabel(m), userId: m.userId } : { name: "", userId: "" });
-        }}
-      >
-        <option value="">— sin asignar —</option>
-        {/* Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
-            empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
-            pone firma: no hay a quién buscársela. */}
-        {huerfano && <option value={HUERFANO}>{huerfano}  ·  (sin firma)</option>}
-        {options.map(m => (
-          <option key={m.userId} value={m.userId}>
-            {memberLabel(m)}{m.hasSignature ? "" : "  ·  (sin firma)"}
-          </option>
-        ))}
-      </select>
-      <span className="w-16 shrink-0 text-right text-text-industrial/40">{at ? fmtDate(at) : ""}</span>
-    </div>
+    <select
+      className="w-full bg-transparent text-[11px] text-fg text-center outline-none"
+      value={enLista ? value.userId : (huerfano ? HUERFANO : "")}
+      onChange={e => {
+        const uid = e.target.value;
+        if (uid === HUERFANO) return; // no se re-elige: es el nombre que ya estaba
+        const m = options.find(x => x.userId === uid);
+        onChange(m ? { name: memberLabel(m), userId: m.userId } : { name: "", userId: "" });
+      }}
+    >
+      <option value="">— sin asignar —</option>
+      {/* Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
+          empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
+          pone firma: no hay a quién buscársela. */}
+      {huerfano && <option value={HUERFANO}>{huerfano}  ·  (sin firma)</option>}
+      {options.map(m => (
+        <option key={m.userId} value={m.userId}>
+          {memberLabel(m)}{m.hasSignature ? "" : "  ·  (sin firma)"}
+        </option>
+      ))}
+    </select>
   );
 }

@@ -294,6 +294,8 @@ export interface ResolvedTenantForm {
   meta: ControlledDocMeta;
   config: FormConfig;
   logoBuffer: Buffer | null;
+  /** Ruta publica del logo (para la pantalla; el PDF usa `logoBuffer`). */
+  logoUrl: string | null;
 }
 
 /** Lee un logo propio del formulario desde public/ por su `logoUrl` (ej "/LogoMercurio.png"). */
@@ -333,6 +335,7 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
         reviewedBy: def.footer.reviewedBy, approvedBy: def.footer.approvedBy },
       config: def.config,
       logoBuffer: null,
+      logoUrl: null,
     };
   }
 
@@ -404,7 +407,7 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
     try { logoBuffer = await resolveTenantLogo(slug, settings?.logoUrl, settings?.logoUrlLight); } catch { /* */ }
   }
 
-  return { meta, config, logoBuffer };
+  return { meta, config, logoBuffer, logoUrl: (form?.logoUrl as string | null) ?? null };
 }
 
 // ── Registros operativos sin fila TenantForm ─────────────────────────────────

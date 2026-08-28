@@ -9,13 +9,13 @@ import { sanitizePdfText } from "../work-order-pdf/shared";
 import { resolveTenantForm } from "../tenant-forms-service";
 import { resolveTenantTime } from "../../../common/tenant-time";
 import type { ServiceRequestPdfContext, ServiceRequestPdfTenantInfo } from "./shared";
+// La regla de "que firma corresponde a cada paso" es una sola, compartida con
+// la pantalla del formulario (ver service-requests/signatures.ts).
+import { resolveServiceRequestSignatures, signatureUrlToBuffer } from "../../service-requests/signatures";
 
 /** Firma del usuario como Buffer, sólo si es un data-URI base64. */
 function signatureBuffer(signatureUrl: unknown): Buffer | null {
-  if (!signatureUrl || typeof signatureUrl !== "string") return null;
-  const m = signatureUrl.match(/^data:image\/[a-z+]+;base64,(.+)$/i);
-  if (!m) return null;
-  try { return Buffer.from(m[1], "base64"); } catch { return null; }
+  return signatureUrlToBuffer(typeof signatureUrl === "string" ? signatureUrl : null);
 }
 
 export async function loadServiceRequestPdfContext(
@@ -80,41 +80,6 @@ export async function loadServiceRequestPdfContext(
   let apruebaSignatureBuffer: Buffer | null = null;
   let autorizaSignatureBuffer: Buffer | null = null;
 
-  /**
-   * Firma del usuario, y SÓLO si es de la persona cuyo nombre imprime el
-   * recuadro.
-   *
-   * El chequeo del nombre no es paranoia: este PDF es un documento controlado y
-   * estampar la firma de alguien debajo del nombre de otro es atribuirle una
-   * conformidad que no dio. Pasó de verdad — el paso SOLICITA no guardaba a su
-   * usuario y caía a la firma de quien había creado el registro
-   * (SS-112-M01-2026, ago 2026). Sin usuario o con nombre que no coincide, la
-   * línea sale en blanco para firmar a mano, que es lo correcto.
-   */
-  const norm = (s: unknown) =>
-    typeof s === "string" ? s.trim().replace(/\s+/g, " ").toLocaleLowerCase() : "";
-
-  const firmaDe = async (
-    userId: string | null | undefined,
-    nombreImpreso?: string | null,
-  ): Promise<Buffer | null> => {
-    if (!prismaRaw || !userId) return null;
-    try {
-      const u = await prismaRaw.user.findUnique({
-        where: { id: userId },
-        select: { signatureUrl: true, firstName: true, lastName: true, formName: true },
-      });
-      if (!u) return null;
-      // El nombre guardado puede ser el del formulario o "nombre apellido": el
-      // desplegable ofrece uno u otro según lo que tenga cargado el usuario.
-      if (nombreImpreso) {
-        const candidatos = [u.formName, `${u.firstName ?? ""} ${u.lastName ?? ""}`].map(norm);
-        if (!candidatos.includes(norm(nombreImpreso))) return null;
-      }
-      return signatureBuffer(u.signatureUrl);
-    } catch { return null; }
-  };
-
   if (prismaRaw) {
     try {
       const vessel = await prismaRaw.vessel.findFirst({
@@ -167,19 +132,13 @@ export async function loadServiceRequestPdfContext(
       } catch { /* non-blocking */ }
     }
 
-    // Firmas de la tramitación: cada paso lleva la de quien lo ejecutó, y sólo
-    // si el paso ya ocurrió (aprobadoAt / autorizadoAt).
-    //
-    // SOLICITA sale de solicitaByUserId. Las SS anteriores a ese campo lo tienen
-    // en null: ahí se cae al creador, pero sólo si el nombre impreso es el suyo
-    // — es lo que evita repetir el bug de la firma ajena.
+    // Firmas de la tramitación: la regla vive en service-requests/signatures.ts,
+    // compartida con la pantalla del formulario.
     const solicitaNombre = sr.solicitaByName ?? createdByFormName ?? createdByName;
-    solicitaSignatureBuffer = sr.status !== "DRAFT"
-      ? (await firmaDe(sr.solicitaByUserId, solicitaNombre)
-        ?? await firmaDe(sr.createdByUserId, solicitaNombre))
-      : null;
-    apruebaSignatureBuffer  = sr.aprobadoAt   ? await firmaDe(sr.aprobadoByUserId, sr.aprobadoByName)     : null;
-    autorizaSignatureBuffer = sr.autorizadoAt ? await firmaDe(sr.autorizadoByUserId, sr.autorizadoByName) : null;
+    const firmas = await resolveServiceRequestSignatures(sr as any, solicitaNombre);
+    solicitaSignatureBuffer = signatureUrlToBuffer(firmas.solicita);
+    apruebaSignatureBuffer  = signatureUrlToBuffer(firmas.aprueba);
+    autorizaSignatureBuffer = signatureUrlToBuffer(firmas.autoriza);
   }
 
   return {

@@ -38,6 +38,8 @@ import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
 import { buildHojaRuta } from "./hoja-ruta";
+import { resolveServiceRequestSignatures } from "./signatures";
+import { isMailConfigured, sendMail } from "../../common/mailer";
 
 // Estados de OT desde los que se puede pedir un servicio externo. DEFERRED entra
 // a pedido del cliente: diferir el trabajo no impide gestionar el servicio del
@@ -82,6 +84,12 @@ export interface CreateServiceRequestInput {
   communicationMethod?: string[];
   distribution?: string[];
   observations?: string | null;
+  // ENTREGA / RECEPCION. El recuadro se completa en el formulario, igual que en
+  // el papel; el paso "Servicio recibido" (complete) es el que además cierra la
+  // SS y estampa receivedAt.
+  receptionItem?: string | null;
+  receivedByName?: string | null;
+  receptionConform?: boolean | null;
   // Pie del formulario: firman Jefe de Máquinas y Capitán.
   capitanName?: string | null;
   jefeMaquinasName?: string | null;
@@ -193,6 +201,12 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return value.map(v => String(v).trim()).filter(Boolean);
 }
 
+/** Nombre a estampar en el formulario: el configurado para documentos, si tiene. */
+function formNameOf(u: { firstName?: string | null; lastName?: string | null; formName?: string | null } | null): string | null {
+  if (!u) return null;
+  return u.formName?.trim() || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || null;
+}
+
 /** Nombre a estampar en la tramitación: el que se pasó, o el del usuario. */
 function signerName(session: TenantAccessSession, name?: string | null): string | null {
   const explicit = normalizeOptionalText(name);
@@ -251,6 +265,12 @@ function writableFields(payload: CreateServiceRequestInput) {
     ...(comm !== undefined ? { communicationMethod: comm } : {}),
     ...(dist !== undefined ? { distribution: dist } : {}),
     ...(payload.observations !== undefined ? { observations: normalizeOptionalText(payload.observations) } : {}),
+    ...(payload.receptionItem !== undefined ? { receptionItem: normalizeOptionalText(payload.receptionItem) } : {}),
+    ...(payload.receivedByName !== undefined ? { receivedByName: normalizeOptionalText(payload.receivedByName) } : {}),
+    // Tri-estado: sí / no / todavía sin definir (el papel admite el recuadro vacío).
+    ...(payload.receptionConform !== undefined
+      ? { receptionConform: payload.receptionConform === null ? null : Boolean(payload.receptionConform) }
+      : {}),
     ...(payload.capitanName !== undefined ? { capitanName: normalizeOptionalText(payload.capitanName) } : {}),
     ...(payload.jefeMaquinasName !== undefined ? { jefeMaquinasName: normalizeOptionalText(payload.jefeMaquinasName) } : {}),
   };
@@ -284,20 +304,28 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
   // para que el modal muestre el taller cuando vino elegido de la lista (si no,
   // el campo queda vacío aunque la hoja de ruta sí lo muestre).
   const providerIds = [...new Set(rows.map((r: any) => r.providerId).filter(Boolean))] as string[];
-  const [assetRows, providerRows] = await Promise.all([
+  // SOLICITA del papel: mientras nadie corrigió el nombre, el que figura es el
+  // que la creó — igual que en el PDF (solicitaByName ?? creador).
+  const creatorIds = [...new Set(rows.map((r: any) => r.createdByUserId).filter(Boolean))] as string[];
+  const [assetRows, providerRows, creatorRows] = await Promise.all([
     assetIds.length > 0
       ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([]),
     providerIds.length > 0
       ? (prisma as any).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    creatorIds.length > 0
+      ? (prisma as any).user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, firstName: true, lastName: true, formName: true } })
+      : Promise.resolve([]),
   ]);
   const assetNameMap = new Map<string, string | null>(assetRows.map((a: any) => [a.id, a.name ?? null]));
   const providerNameMap = new Map<string, string | null>(providerRows.map((p: any) => [p.id, p.name ?? null]));
+  const creatorNameMap = new Map<string, string | null>(creatorRows.map((u: any) => [u.id, formNameOf(u)]));
 
   return rows.map((r: any) => ({
     ...r,
     providerName: r.providerId ? (providerNameMap.get(r.providerId) ?? null) : null,
+    createdByName: r.createdByUserId ? (creatorNameMap.get(r.createdByUserId) ?? null) : null,
     workOrder: r.workOrder
       ? { ...r.workOrder, assetName: assetNameMap.get(r.workOrder.assetId) ?? null }
       : r.workOrder,
@@ -318,7 +346,7 @@ export async function getServiceRequest(session: TenantAccessSession, id: string
       orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
     }),
   ]);
-  const [asset, provider] = await Promise.all([
+  const [asset, provider, creador] = await Promise.all([
     wo?.assetId
       ? (prisma as any).asset.findFirst({ where: { id: wo.assetId, tenantId: (sr as any).tenantId }, select: { name: true } })
       : null,
@@ -331,10 +359,37 @@ export async function getServiceRequest(session: TenantAccessSession, id: string
           select: { name: true },
         })
       : null,
+    // SOLICITA del papel cuando todavía nadie corrigió el nombre.
+    (sr as any).createdByUserId
+      ? (prisma as any).user.findUnique({
+          where: { id: (sr as any).createdByUserId },
+          select: { firstName: true, lastName: true, formName: true },
+        })
+      : null,
   ]);
   const assetName: string | null = asset?.name ?? null;
   const providerName: string | null = provider?.name ?? null;
-  return { ...sr, providerName, workOrder: wo ? { ...wo, assetName } : wo, hojaRuta };
+  return { ...sr, providerName, createdByName: formNameOf(creador), workOrder: wo ? { ...wo, assetName } : wo, hojaRuta };
+}
+
+/**
+ * Firmas de la TRAMITACION para la pantalla del formulario (data-URI PNG/JPG).
+ *
+ * Van por endpoint aparte y no dentro del registro: son imágenes en base64, no
+ * tienen por qué viajar en cada listado. La regla de qué firma corresponde a
+ * cada paso es la misma que usa el PDF (ver signatures.ts).
+ */
+export async function getServiceRequestSignatures(session: TenantAccessSession, id: string) {
+  const prisma = getPrismaClient()!;
+  const sr = await getRequestOrThrow(session, id); // tenant + vessel scope + 404
+  const creador = sr.createdByUserId
+    ? await (prisma as any).user.findUnique({
+        where: { id: sr.createdByUserId },
+        select: { firstName: true, lastName: true, formName: true },
+      })
+    : null;
+  const solicitaNombre = sr.solicitaByName ?? formNameOf(creador);
+  return resolveServiceRequestSignatures(sr as any, solicitaNombre);
 }
 
 /** SS de una OT — panel del modal de OT. */
@@ -695,6 +750,10 @@ export async function unsubmitServiceRequest(session: TenantAccessSession, id: s
  * (IN_PROGRESS) es siempre manual, con el botón "Enviar a Proveedor", que además
  * emite el PDF. Por eso IN_PROGRESS y COMPLETED quedan fuera en todos los pasos.
  *
+ * ENVIA (la OT sale de "En preparación") arrastra las SS en DRAFT a SOLICITADA:
+ * mandar la OT a aprobar manda también sus pedidos, sin tener que enviarlos uno
+ * por uno. Es el equivalente en cascada de submitServiceRequest.
+ *
  * En RECHAZA se devuelven a SOLICITADA las que este mismo mecanismo pudo haber
  * adelantado (APROBADA / AUTORIZADA), espejando lo que RECHAZA le hace a la OT.
  * Las ya despachadas no se tocan: el taller ya está trabajando y revertirlas en
@@ -710,7 +769,7 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
   tenantId: string;
   workOrderId: string;
   workOrderCode: string;
-  step: "APRUEBA" | "AUTORIZA" | "RECHAZA";
+  step: "ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA";
   /** Nombre estampado en la OT: se replica como firmante de la SS. */
   signerName: string;
   signerUserId: string;
@@ -725,6 +784,7 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
 
   // Estados sobre los que actúa cada paso. Todo lo que no esté acá se ignora.
   const affected =
+    step === "ENVIA"    ? ["DRAFT"] :
     step === "APRUEBA"  ? ["DRAFT", "SOLICITADA"] :
     step === "AUTORIZA" ? ["DRAFT", "SOLICITADA", "APROBADA"] :
                           ["APROBADA", "AUTORIZADA"]; // RECHAZA
@@ -737,7 +797,16 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
 
   for (const sr of targets) {
     let data: Record<string, unknown>;
-    if (step === "APRUEBA") {
+    if (step === "ENVIA") {
+      // Sólo cambia de estado: solicitar no es una firma de autoridad, así que
+      // no estampa aprobado/autorizado. Se registra quién solicita, igual que
+      // submitServiceRequest, porque de ahí sale la firma del PDF.
+      data = {
+        status: "SOLICITADA",
+        solicitaByName: signerName, solicitaByUserId: signerUserId,
+        rechazadoByName: null, rechazadoAt: null, rechazoReason: null,
+      };
+    } else if (step === "APRUEBA") {
       data = {
         status: "APROBADA",
         aprobadoByName: signerName, aprobadoByUserId: signerUserId, aprobadoAt: actionAt,
@@ -771,7 +840,8 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
     void publishAudit(prismaRaw, {
       tenantId,
       actorUserId,
-      action: step === "APRUEBA" ? "ServiceRequest.approved"
+      action: step === "ENVIA" ? "ServiceRequest.submitted"
+        : step === "APRUEBA" ? "ServiceRequest.approved"
         : step === "AUTORIZA" ? "ServiceRequest.authorized"
         : "ServiceRequest.approvalReverted",
       entityType: "ServiceRequest",
@@ -950,6 +1020,122 @@ export async function startServiceRequest(session: TenantAccessSession, id: stri
     where: { id },
     data: { status: "IN_PROGRESS", startedAt: new Date(), updatedByUserId: session.user.id },
   });
+}
+
+/**
+ * Casilla a la que se manda toda SS lista para el proveedor.
+ *
+ * El correo NO sale para afuera: llega a Mercurio y desde ahi se reenvia al
+ * taller (decision de negocio, ago 2026). Configurable por si cambia la casilla:
+ *   SERVICE_REQUEST_MAILBOX=otra@mercuriogroup.com.py
+ */
+function providerMailbox(): string {
+  return (process.env.SERVICE_REQUEST_MAILBOX || "").trim() || "jbael@mercuriogroup.com.py";
+}
+
+export interface SendToProviderResult {
+  /** Salio el correo. Si es false, la SS NO avanzo de estado. */
+  sent: boolean;
+  /** Casilla a la que se mando. */
+  to: string[];
+  /** Por que no salio: sin casilla configurada, o fallo el envio. */
+  reason?: "NOT_CONFIGURED" | "SEND_FAILED";
+  error?: string;
+  /** La SS ya en ejecucion, cuando el correo salio. */
+  serviceRequest?: unknown;
+}
+
+/**
+ * "Enviar al Proveedor": manda la SS por correo con el PDF adjunto y recien
+ * entonces la pasa a EN EJECUCION.
+ *
+ * El orden importa: primero sale el correo, despues avanza el estado. Al reves,
+ * una SS podria figurar "enviada al taller" sin que nunca haya salido nada.
+ *
+ * Si no hay casilla configurada (`isMailConfigured()` en false) devuelve
+ * `sent:false` SIN tocar el estado: la pantalla sigue con el camino manual
+ * (descargar el documento y mandarlo desde el correo propio).
+ *
+ * El PDF lo arma el router y llega por parametro: este service no depende del
+ * generador de documentos.
+ */
+export async function sendServiceRequestToProvider(
+  session: TenantAccessSession,
+  id: string,
+  pdf: { filename: string; buffer: Buffer },
+): Promise<SendToProviderResult> {
+  ensureCanManage(session);
+  const prisma = getPrismaClient()!;
+  const current = await getRequestOrThrow(session, id);
+  if (current.status !== "AUTORIZADA") {
+    throw new RouteError(
+      409,
+      "NOT_AUTHORIZED_YET",
+      "La solicitud debe estar autorizada por el Superintendente técnico o el DPA antes de mandar el trabajo al taller.",
+    );
+  }
+
+  const to = providerMailbox();
+  if (!isMailConfigured()) return { sent: false, to: [to], reason: "NOT_CONFIGURED" };
+
+  // Nombre del buque, nunca el codigo (ver CLAUDE.md "Nombres, no codigos").
+  const vessel = await (prisma as any).vessel.findFirst({
+    where: { tenantId: current.tenantId, code: current.vesselCode },
+    select: { name: true },
+  });
+  const vesselName: string = vessel?.name ?? current.vesselCode;
+  const taller = current.providerId
+    ? (await (prisma as any).provider.findFirst({
+        where: { id: current.providerId, tenantId: current.tenantId },
+        select: { name: true },
+      }))?.name ?? null
+    : normalizeOptionalText(current.tallerNotes);
+  const servicio = normalizeOptionalText(current.description) ?? normalizeOptionalText(current.title);
+
+  const result = await sendMail({
+    to,
+    subject: `Solicitud de Servicio ${current.serviceRequestCode} — ${vesselName}`,
+    text: [
+      "Estimados,",
+      "",
+      `Adjunto la Solicitud de Servicio ${current.serviceRequestCode} del buque ${vesselName}.`,
+      taller ? `Taller: ${taller}` : null,
+      servicio ? `Servicio solicitado: ${servicio}` : null,
+      "",
+      "Quedamos a la espera de confirmación.",
+      "",
+      "Saludos.",
+    ].filter((l): l is string => l !== null).join("\n"),
+    attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: "application/pdf" }],
+  });
+
+  if (!result.sent) {
+    return { sent: false, to: result.to, reason: result.reason ?? "SEND_FAILED", error: result.error };
+  }
+
+  // El envio es evidencia: queda asentado en la hoja de ruta del pedido, con la
+  // casilla a la que salio y quien lo mando.
+  const asientaByName = `${session.user.firstName ?? ""} ${session.user.lastName ?? ""}`.trim() || session.user.email;
+  try {
+    await (prisma as any).serviceRequestLog.create({
+      data: {
+        tenantId: current.tenantId,
+        serviceRequestId: id,
+        entryDate: new Date(),
+        novedad: `Enviada por correo a ${result.to.join(", ")} con el formulario adjunto`,
+        asientaByName,
+        asientaByUserId: session.user.id,
+        createdByUserId: session.user.id,
+      },
+    });
+  } catch { /* el correo ya salio: no se cae el paso por no poder asentar la novedad */ }
+
+  const serviceRequest = await (prisma as any).serviceRequest.update({
+    where: { id },
+    data: { status: "IN_PROGRESS", startedAt: new Date(), updatedByUserId: session.user.id },
+  });
+
+  return { sent: true, to: result.to, serviceRequest };
 }
 
 export interface CompleteServiceRequestInput {

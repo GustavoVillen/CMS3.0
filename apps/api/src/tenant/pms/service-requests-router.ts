@@ -15,6 +15,7 @@ import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-rout
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import { buildServiceRequestPdf, buildServiceRequestDoc, buildServiceRequestDocx } from "./service-request-pdf";
 import { serveDoc } from "./doc-export";
+import { resolveTenantForm } from "./tenant-forms-service";
 import { serveDocx } from "./docx-export";
 import {
   addHojaRutaEntry,
@@ -25,6 +26,8 @@ import {
   deleteHojaRutaEntry,
   deleteServiceRequest,
   getServiceRequest,
+  getServiceRequestSignatures,
+  sendServiceRequestToProvider,
   listHojaRuta,
   listServiceRequests,
   rejectServiceRequest,
@@ -95,6 +98,17 @@ export async function handleServiceRequestsRoutes(
     return true;
   }
 
+  // ── Definicion del formulario controlado ───────────────────────────────────
+  // La pantalla de la SS dibuja el MISMO papel que imprime el PDF: mismas
+  // secciones, en el mismo orden, con las mismas listas y etiquetas. Sin esto,
+  // la pantalla tendria una copia hardcodeada del formulario y divergiria del
+  // documento apenas un tenant cambie su config.
+  if (method === "GET" && url.pathname === "/app/pms/service-requests/form") {
+    const form = await resolveTenantForm(session.tenantSlug, "SERVICE_REQUEST");
+    sendJson(response, 200, { meta: form.meta, config: form.config, logoUrl: form.logoUrl });
+    return true;
+  }
+
   if (/^\/app\/pms\/service-requests\/[^/]+$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "GET")    { sendJson(response, 200, await getServiceRequest(session, id)); return true; }
@@ -104,6 +118,13 @@ export async function handleServiceRequestsRoutes(
       return true;
     }
     if (method === "DELETE") { await deleteServiceRequest(session, id); sendJson(response, 200, { ok: true }); return true; }
+  }
+
+  // Firmas de la tramitacion para la pantalla del formulario (imagenes base64).
+  if (method === "GET" && /^\/app\/pms\/service-requests\/[^/]+\/signatures$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, await getServiceRequestSignatures(session, id));
+    return true;
   }
 
   // ── HOJA DE RUTA DEL PEDIDO: novedades asentadas a mano ────────────────────
@@ -155,6 +176,22 @@ export async function handleServiceRequestsRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof authorizeServiceRequest>[2];
     sendJson(response, 200, await authorizeServiceRequest(session, id, body ?? {}));
+    return true;
+  }
+
+  // "Enviar al Proveedor": manda la SS por correo con el PDF adjunto y recien
+  // ahi la pasa a EN EJECUCION. Sin casilla SMTP configurada devuelve
+  // sent:false y NO avanza el estado — la pantalla sigue con el envio a mano.
+  if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/send-to-provider$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const sr = await getServiceRequest(session, id);
+    const buffer = await buildServiceRequestPdf(session, id);
+    const result = await sendServiceRequestToProvider(session, id, {
+      filename: `${(sr as any).serviceRequestCode}.pdf`,
+      buffer,
+    });
+    sendJson(response, 200, result);
     return true;
   }
 
