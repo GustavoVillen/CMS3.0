@@ -607,12 +607,17 @@ enum TaskType {
   INSPECTION
 }
 
+// EXPRESS se elimino junto con el modulo "Mantenimiento Express". Antes de
+// aplicar este schema a una base con datos hay que correr
+// `scripts/migrate-express-plans.ts`, que pasa los planes que lo usaban a
+// DUE_ONLY; si queda alguna fila con EXPRESS, el push falla.
+// CHECKLIST se conserva: ya no se puede elegir (ver MaintenancePlans.tsx) pero
+// el valor sigue vivo por si alguna base productiva tiene planes historicos.
 enum TriggerResultMode {
   DUE_ONLY
   AUTO_WO
   APPROVAL_WO
   CHECKLIST
-  EXPRESS
 }
 
 enum ExecutionWindowMode {

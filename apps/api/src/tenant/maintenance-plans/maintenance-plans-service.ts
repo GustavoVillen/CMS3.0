@@ -5,7 +5,6 @@ import { hasPermission } from "../auth/role-permissions";
 import { workOrderPrefix } from "../../common/wo-code";
 import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
-import { resolveConsumables, createWorkLogSpareMovements } from "../pms/spare-consumption";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
@@ -53,7 +52,7 @@ export interface CreateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
-  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST" | "EXPRESS";
+  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
   windowLeadDays?: number | null;
@@ -117,7 +116,7 @@ export interface UpdateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
-  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST" | "EXPRESS";
+  triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
   windowLeadDays?: number | null;
@@ -144,8 +143,6 @@ export interface QuickClosePlanInput {
   runningHoursAtExecution?: number | null;
   notes?: string | null;
   completedAt?: string | Date | null;
-  /** Repuestos consumidos (solo Mantenimiento Express). Se registran como ISSUE atados al WorkLog. */
-  spareUsages?: Array<{ spareId: string; qty: number; unit?: string | null }>;
 }
 
 export interface CompleteChecklistInput {
@@ -1361,12 +1358,6 @@ export async function quickClosePlan(
 
   const plan = await getTenantMaintenancePlan(session, id);
 
-  // Consumo de repuestos (Mantenimiento Express): validar/resolver ANTES de la
-  // transacción para fallar temprano si algún repuesto no es del buque/tenant.
-  const resolvedConsumables = payload.spareUsages?.length
-    ? await resolveConsumables(prismaRaw, { tenantId: plan.tenantId, vesselCode: plan.vesselCode }, payload.spareUsages)
-    : [];
-
   const completedAt = parseOptionalDate(payload.completedAt, "completedAt") ?? new Date();
   const runningHoursAtExecution = normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution");
   const hoursWorked = normalizeOptionalNumber(payload.hoursWorked, "hoursWorked");
@@ -1384,7 +1375,7 @@ export async function quickClosePlan(
 
   const executedByName = normalizeRequiredText(payload.executedByName, "executedByName");
   const planAny = plan as any;
-  // Toda ejecución sin flujo de OT (DUE_ONLY / CHECKLIST / EXPRESS) genera igual
+  // Toda ejecución sin flujo de OT (DUE_ONLY / CHECKLIST) genera igual
   // un registro de OT: nace AUTORIZADA (firmada por "Sistema", sin aprobación
   // manual) y ya CERRADA. AUTO_WO/APPROVAL_WO no pasan por quickClosePlan (usan
   // openFormalWorkOrder), así que el registro queda naturalmente acotado.
@@ -1440,7 +1431,7 @@ export async function quickClosePlan(
       : null;
 
     // Repuestos/materiales previstos → WorkOrderItem (si esta vía creó una OT).
-    // Planificación, no consumo (el consumo va por createWorkLogSpareMovements).
+    // Es planificación, no consumo: no descuenta stock.
     if (workOrder) {
       const planSpares = resolvePlanSpares(planAny);
       if (planSpares.length > 0) {
@@ -1483,17 +1474,6 @@ export async function quickClosePlan(
         createdByUserId: session.user.id,
       },
     });
-
-    if (resolvedConsumables.length > 0) {
-      await createWorkLogSpareMovements(
-        tx,
-        { tenantId: plan.tenantId, vesselCode: plan.vesselCode },
-        workLog.id,
-        logCode,
-        resolvedConsumables,
-        session.user.id,
-      );
-    }
 
     const updatedPlan = await tx.maintenancePlan.update({
       where: { id: plan.id },
@@ -1548,8 +1528,8 @@ export async function quickClosePlan(
 
 // ── Historial de ejecuciones del plan ────────────────────────────────────────
 // Cada ejecución de un plan queda registrada como una WorkOrder con
-// maintenancePlanId = plan.id (las express además tienen un WorkLog espejo por
-// workOrderId). La OT es por tanto la fuente canónica y completa del historial.
+// maintenancePlanId = plan.id, más un WorkLog espejo por workOrderId. La OT es
+// por tanto la fuente canónica y completa del historial.
 
 export interface UpdatePlanExecutionInput {
   completedDate?: string | Date | null;
@@ -1602,8 +1582,7 @@ export async function listPlanExecutions(session: TenantAccessSession, planId: s
  * observaciones) sobre la OT que la representa, incluso si está CERRADA — es una
  * corrección de historial acotada, solo admin (canManagePlans). No pasa por el
  * candado de OT (assertNotLocked) a propósito: no reabre la OT ni toca su
- * tramitación, solo estos campos. Sincroniza el WorkLog espejo (ejecución
- * express) para que el copiloto y los reportes vean datos coherentes, y refresca
+ * tramitación, solo estos campos. Sincroniza el WorkLog espejo para que el copiloto y los reportes vean datos coherentes, y refresca
  * lastExecution/nextDue del plan desde la ejecución más reciente.
  */
 export async function updatePlanExecution(
@@ -1637,7 +1616,7 @@ export async function updatePlanExecution(
   await prisma.$transaction(async (tx) => {
     await tx.workOrder.update({ where: { id: wo.id }, data: woData });
 
-    // Sincronizar el WorkLog espejo (solo existe en ejecuciones express).
+    // Sincronizar el WorkLog espejo de la ejecución.
     const logData: Record<string, unknown> = {};
     if (payload.completedDate !== undefined) logData.completedAt = woData.completedDate;
     // executedByName en WorkLog es NOT NULL: solo se sincroniza si hay valor.
@@ -2098,7 +2077,6 @@ export interface ReportExecutionInput {
   completedAt?: string | Date | null;
   runningHoursAtExecution?: number | null;
   hoursWorked?: number | null;
-  spareUsages?: Array<{ spareId: string; qty: number; unit?: string | null }>;
 }
 
 export async function reportExecution(
@@ -2122,41 +2100,12 @@ export async function reportExecution(
     completedAt: payload.completedAt,
     runningHoursAtExecution: normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution"),
     hoursWorked: normalizeOptionalNumber(payload.hoursWorked, "hoursWorked"),
-    spareUsages: payload.spareUsages,
   });
 
   return {
     ...closeResult,
     hasDeficiencies: payload.result === "CON_DEFICIENCIAS",
     deficienciesNotes: normalizeOptionalText(payload.deficienciesNotes),
-  };
-}
-
-// ---------------------------------------------------------------------------
-// getLastSpareUsage — repuestos consumidos en la última ejecución del plan.
-// Alimenta el prellenado del reporte de Mantenimiento Express.
-// ---------------------------------------------------------------------------
-
-export async function getLastSpareUsage(session: TenantAccessSession, planId: string) {
-  const plan = await getTenantMaintenancePlan(session, planId);
-  const prismaRaw = getPrismaClient();
-  if (!prismaRaw) return { lines: [] as Array<{ spareId: string; qty: number; unit: string }> };
-  const db = prismaRaw as any;
-
-  const lastLog = await db.workLog.findFirst({
-    where: { tenantId: plan.tenantId, maintenancePlanId: plan.id },
-    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
-    select: { id: true },
-  });
-  if (!lastLog) return { lines: [] };
-
-  const movements = await db.stockMovement.findMany({
-    where: { tenantId: plan.tenantId, referenceType: "WORK_LOG", referenceId: lastLog.id, movementType: "ISSUE" },
-    select: { spareId: true, quantity: true, unit: true },
-  });
-
-  return {
-    lines: movements.map((m: any) => ({ spareId: m.spareId, qty: m.quantity, unit: m.unit })),
   };
 }
 

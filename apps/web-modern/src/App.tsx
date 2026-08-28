@@ -225,7 +225,6 @@ export default function App() {
               <Route path="/assets"            element={<AssetsPage />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
-              <Route path="/mantenimiento-express" element={<MaintenancePlansPage lockedResultMode="EXPRESS" />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               {/* Mapa del Plan — se entra desde el botón del Dashboard (no está en el Sidebar). */}
               <Route path="/plan-map" element={<PlanMapPage />} />

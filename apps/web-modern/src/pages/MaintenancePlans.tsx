@@ -50,7 +50,6 @@ import { AlertDialog } from "../components/AlertDialog";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { PlanHistoryModal } from "../components/PlanHistoryModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
-import { SpareUsageEditor, type SpareLine } from "../components/SpareUsageEditor";
 import { RichTextArea } from "../components/RichTextArea";
 import { RiskMatrix } from "../components/RiskMatrix";
 import {
@@ -303,7 +302,7 @@ type TriggerType = (typeof TRIGGER_TYPES)[number];
 // (0 de 1101 en producción). El valor sigue existiendo en el enum del schema
 // para no romper datos históricos si alguno apareciera; simplemente ya no se
 // puede elegir al crear o editar.
-const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO", "EXPRESS"] as const;
+const TRIGGER_RESULT_MODES = ["DUE_ONLY", "AUTO_WO"] as const;
 // SFI: solo se usa el GRUPO (0-9). Los nombres salen de i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
@@ -389,28 +388,6 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
   const [deficienciesNotes, setDeficienciesNotes] = useState("");
   const [completedAt, setCompletedAt] = useState(new Date().toISOString().slice(0, 10));
   const [runningHours, setRunningHours] = useState("");
-  const isExpress = plan.triggerResultMode === "EXPRESS";
-  const [spareUsages, setSpareUsages] = useState<SpareLine[]>([]);
-  // Prellenar los repuestos con los de la última ejecución de este plan (así no
-  // hay que reelegir el mismo aceite cada vez). Solo para planes EXPRESS.
-  useEffect(() => {
-    if (!isExpress) return;
-    let cancelled = false;
-    api.get<{ lines: Array<{ spareId: string; qty: number; unit: string }> }>(
-      `/app/pms/maintenance-plans/${plan.id}/last-spare-usage`,
-    ).then(res => {
-      if (cancelled || !res?.lines?.length) return;
-      setSpareUsages(res.lines.map(l => ({
-        spareId: l.spareId,
-        spareName: "",
-        unit: l.unit,
-        qty: l.qty,
-        criticality: "C",
-        available: 0,
-      })));
-    }).catch(() => { /* sin previa → lista vacía */ });
-    return () => { cancelled = true; };
-  }, [isExpress, plan.id]);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -473,7 +450,6 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
         deficienciesNotes: result === "CON_DEFICIENCIAS" ? normalizeOptionalText(deficienciesNotes) : null,
         completedAt,
         runningHoursAtExecution: isHoursBased && runningHours ? Number(runningHours) : null,
-        spareUsages: isExpress ? spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })) : undefined,
       });
       return true;
     } catch (err) {
@@ -492,7 +468,6 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
   const isDirty = useDirtyTracker({
     executedByName, result, notes, deficienciesNotes, completedAt, runningHours,
     docFileName: docFile?.name ?? "",
-    spareCount: spareUsages.length,
   });
   const requestClose = useEscapeGuard({
     enabled: !showPrintConfirm,
@@ -700,11 +675,6 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
                 placeholder={t("wo.modal.runningHoursPlaceholder")}
               />
             </div>
-          )}
-
-          {/* Repuestos utilizados (solo Mantenimiento Express) */}
-          {isExpress && (
-            <SpareUsageEditor vesselCode={plan.vesselCode} value={spareUsages} onChange={setSpareUsages} />
           )}
 
           {/* Notes */}
@@ -1692,7 +1662,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("es-AR") : "—";
     const v = (x: unknown) => String(x ?? "").trim() || "—";
     const triggerLbl = (t: string) => ({ CALENDAR: "Meses (calendario)", MONTHS: "Meses (calendario)", HOURS: "Horas de operación", RUNNING_HOURS: "Horas de operación" }[t.toUpperCase()] ?? t);
-    const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: `${woTerms.abbr} automática`, APPROVAL_WO: `${woTerms.abbr} con aprobación`, CHECKLIST: "Completar Checklist", EXPRESS: "Mantenimiento Express" }[r] ?? r);
+    const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: `${woTerms.abbr} automática`, APPROVAL_WO: `${woTerms.abbr} con aprobación`, CHECKLIST: "Completar Checklist" }[r] ?? r);
     const statusLbl = (s: string) => ({ ACTIVE: "Activo", INACTIVE: "Inactivo", OVERDUE: "Vencido", DUE_SOON: "Por vencer" }[s] ?? s);
     const taskTypeLbl = (t: string) => ({ MAINTENANCE: "Mantenimiento", INSPECTION: "Inspección" }[t] ?? t);
     const riskLbl = (r: string) => ({ LOW: "BAJO", MEDIUM: "MEDIO", HIGH: "ALTO", CRITICAL: "CRÍTICO" }[r] ?? r.toUpperCase());
@@ -2865,7 +2835,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ lockedResultMode }) => {
+export const MaintenancePlansPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
   const can = useCan();
@@ -2992,12 +2962,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
     () => new Set((oosAssetsData?.items ?? []).map(a => a.id)),
     [oosAssetsData],
   );
-  // Vista "Mantenimiento Express": acota TODO (tabla + contadores) a los planes
-  // del modo bloqueado. Si no hay lockedResultMode, es la lista normal completa.
-  const baseItems = useMemo(() => {
-    const all = rawData?.items ?? [];
-    return lockedResultMode ? all.filter(p => p.triggerResultMode === lockedResultMode) : all;
-  }, [rawData, lockedResultMode]);
+  const baseItems = useMemo(() => rawData?.items ?? [], [rawData]);
   // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
   const { vessels, selectedVesselCode } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
@@ -3433,7 +3398,7 @@ export const MaintenancePlansPage: React.FC<{ lockedResultMode?: string }> = ({ 
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={lockedResultMode === "EXPRESS" ? Zap : ClipboardList} title={lockedResultMode === "EXPRESS" ? t("nav.expressMaintenance") : t("page.maintenancePlans")} total={data?.total} onReload={reload}>
+      <PageHeader icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
         {/* Nueva tarea */}
         <button
           onClick={() => { setEditing(null); setShowModal(true); }}

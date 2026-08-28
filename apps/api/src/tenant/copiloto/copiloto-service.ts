@@ -125,7 +125,7 @@ CODE-TO-NATURAL CONVERSION (mandatory when speaking to the user):
 Available tenant module routes (use ONLY these — any other path is a broken link):
 - Dashboard: /            · Vencimientos: /due-items
 - Buques: /vessels        · Activos: /assets
-- Planes de mantenimiento: /maintenance-plans   · Mantenimiento express: /mantenimiento-express   · Gantt: /maintenance-gantt
+- Planes de mantenimiento: /maintenance-plans   · Gantt: /maintenance-gantt
 - Ordenes de trabajo: /work-orders               · Solicitudes de servicio (SS): /service-requests
 - Reportes diarios: /daily-reports               · Reportes mensuales: /reports
 - Reportes de tanques / viaje (M2): /voyage-tank-reports · Horas de equipos: /asset-hours
@@ -142,7 +142,7 @@ NOTE: the RCA is NOT a separate module — it lives inside the defect record (/d
 FULL-SYSTEM COVERAGE (important):
 - You have a query_* tool for every module of the system. NEVER answer "no tengo acceso a esa información" or "consultá el módulo X" for data that lives in the PMS: look it up first.
 - Quick map: certificados del buque → query_certificates · inspecciones → query_inspections · PSC/vetting/bandera/clase → query_external_audits · solicitudes de servicio (SS) → query_service_requests · postergaciones → query_deferrals · horas de equipos/horómetros → query_asset_hours · pedidos de repuestos → query_spare_requests · recepciones y consumos de stock → query_stock_movements · proveedores y talleres → query_providers · datos del buque (IMO, eslora, potencia, año) → query_vessels · reportes mensuales → query_monthly_reports · reporte de tanques/viaje M2 → query_voyage_tank_reports · bitácora → query_bitacora · permisos de trabajo → query_permits · cuasi accidentes → query_near_misses · horas de descanso → query_rest_hours · checklists firmados → query_checklists · gestión del cambio → query_moc · alertas del sistema → query_ai_insights · quién está habilitado para una tarea → query_crew_capabilities.
-- Un dato puede vivir en más de un módulo: si la primera consulta no encuentra nada, probá el módulo vecino antes de responder que no existe (ej. un trabajo puede estar en una OT, en una SS, en un registro express o en la bitácora; un vencimiento puede estar en certificados, en certificados de tripulación o en simulacros).
+- Un dato puede vivir en más de un módulo: si la primera consulta no encuentra nada, probá el módulo vecino antes de responder que no existe (ej. un trabajo puede estar en una OT, en una SS, en un registro de ejecución de plan o en la bitácora; un vencimiento puede estar en certificados, en certificados de tripulación o en simulacros).
 - El análisis de causa raíz (RCA) de un defecto viene en los campos rcaRootCause / rcaImmediateCause / rcaContributingCause / rcaPreventiveActions de query_defects. Si el usuario pregunta por la causa raíz de algo ya analizado, leelos en vez de volver a analizar desde cero.
 
 DOMAIN TERMINOLOGY (terminología náutica/naval):
@@ -463,13 +463,13 @@ const CORE_COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_work_logs",
     description:
-      "Query work logs / express maintenance records (registros de mantenimiento hechos al equipo SIN OT — p.ej. 'mantenimiento express' como relleno/agregado de aceite lubricante, grasa, cambio de filtro). Use this to answer how much lube oil / consumable an equipment has been fed between services and to detect abnormal consumption (e.g. 'esta caja reductora está consumiendo mucho aceite'). Each result includes taskType, result, completedAt (when performed), executedByName, runningHoursAtExecution, notes AND `consumables` (the spares consumed in that record: spare name, quantity and unit, from the linked stock movements). These records are INVISIBLE to query_work_orders — always use this tool for oil top-ups / express maintenance history of an asset.",
+      "Query work logs (registros de ejecución de mantenimiento sobre el equipo — p.ej. relleno/agregado de aceite lubricante, grasa, cambio de filtro). Use this to answer how much lube oil / consumable an equipment has been fed between services and to detect abnormal consumption (e.g. 'esta caja reductora está consumiendo mucho aceite'). Each result includes taskType, result, completedAt (when performed), executedByName, runningHoursAtExecution, notes AND `consumables` (the spares consumed in that record: spare name, quantity and unit, from the linked stock movements). These records are INVISIBLE to query_work_orders — always use this tool for oil top-ups / maintenance execution history of an asset.",
     input_schema: {
       type: "object" as const,
       properties: {
         vesselCode: { type: "string",  description: "Filter by vessel code (required)" },
         assetId:    { type: "string",  description: "Filter by asset ID (optional but recommended to focus on one equipment)" },
-        textSearch: { type: "string",  description: "Case-insensitive keyword search in the log notes (e.g. 'filtro', 'aceite', 'grasa'). Use it to find a specific express-maintenance task regardless of recency. (optional)" },
+        textSearch: { type: "string",  description: "Case-insensitive keyword search in the log notes (e.g. 'filtro', 'aceite', 'grasa'). Use it to find a specific maintenance task regardless of recency. (optional)" },
         sinceDate:  { type: "string",  description: "ISO date (YYYY-MM-DD) — only logs on/after this date (optional). Use it to sum consumption over a period." },
         limit:      { type: "number",  description: "Max results to return (default 20, max 50)" },
       },
@@ -1192,7 +1192,7 @@ async function executeCopilotTool(
 
       const namedLogs = await attachAssetNames(prisma, tenantId, result);
       return wrapUntrusted(JSON.stringify(
-        namedLogs.length > 0 ? namedLogs : { message: "No work logs / express maintenance records found matching the criteria." },
+        namedLogs.length > 0 ? namedLogs : { message: "No work logs found matching the criteria." },
       ));
     }
 

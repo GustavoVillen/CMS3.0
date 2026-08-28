@@ -281,8 +281,8 @@ export async function loadWorkOrderPdfContext(
       }
 
       // Sin filas cargadas se cae a los WorkLog, como hacía antes: las OT
-      // viejas (y las del Mantenimiento Express, que sí generan WorkLog) siguen
-      // imprimiendo lo mismo de siempre.
+      // viejas (y las nacidas del cierre de un plan, que sí generan WorkLog)
+      // siguen imprimiendo lo mismo de siempre.
       if (scheduleRows.length === 0) {
         const logs = await (prismaRaw as any).workLog.findMany({
           where: { workOrderId: wo.id, tenantId: (wo as any).tenantId },

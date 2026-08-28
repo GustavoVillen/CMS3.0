@@ -226,7 +226,7 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_stock_movements",
     description:
-      "Query stock movements (movimientos de inventario: recepciones, salidas/consumos, ajustes, transferencias y devoluciones). Use this to answer WHEN a spare entered or left the store, how much was consumed by a work order or an express maintenance record, or to reconstruct the history behind a current stock figure. movementType RECEIPT = recepción de repuestos. referenceType tells you what caused the movement (WORK_ORDER, WORK_LOG, SPARE_REQUEST, DEFECT, ADJUSTMENT).",
+      "Query stock movements (movimientos de inventario: recepciones, salidas/consumos, ajustes, transferencias y devoluciones). Use this to answer WHEN a spare entered or left the store, how much was consumed by a work order or a maintenance execution record, or to reconstruct the history behind a current stock figure. movementType RECEIPT = recepción de repuestos. referenceType tells you what caused the movement (WORK_ORDER, WORK_LOG, SPARE_REQUEST, DEFECT, ADJUSTMENT).",
     input_schema: {
       type: "object" as const,
       properties: {

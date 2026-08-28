@@ -1,9 +1,9 @@
 // PROGRAMACION DE TRABAJO de una OT (recuadro del formulario REGI-OPE-26.3):
 // una fila por jornada — fecha, técnico, lugar, empresa y horario.
 //
-// Antes el PDF derivaba estas filas de los WorkLog, que sólo nacen del
-// Mantenimiento Express y del parte diario: en una OT tramitada la tabla salía
-// siempre vacía porque no había dónde cargarla. Ahora se carga en la OT.
+// Antes el PDF derivaba estas filas de los WorkLog, que sólo nacen del cierre
+// de un plan y del parte diario: en una OT tramitada la tabla salía siempre
+// vacía porque no había dónde cargarla. Ahora se carga en la OT.
 
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";

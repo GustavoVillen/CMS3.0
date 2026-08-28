@@ -2,8 +2,8 @@
 // una fila por jornada — fecha, técnico, lugar, empresa y horario.
 //
 // Antes esta tabla del papel salía siempre vacía: se derivaba de los registros
-// de trabajo, que sólo nacen del Mantenimiento Express y del parte diario. Acá
-// se carga a mano, que es como se completa a bordo.
+// de trabajo, que sólo nacen del cierre de un plan y del parte diario. Acá se
+// carga a mano, que es como se completa a bordo.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
