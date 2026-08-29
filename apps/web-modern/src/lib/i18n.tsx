@@ -274,6 +274,10 @@ const dict = {
   "dashboard.inspection.title":     { es: "Nueva Inspección",         en: "New Inspection",           pt: "Nova Inspeção" },
   "dashboard.inspection.subtitle":  { es: "¿Qué clase de inspección vas a hacer?", en: "What kind of inspection are you doing?", pt: "Que tipo de inspeção você vai fazer?" },
   "dashboard.inspection.byEvent":   { es: "Por evento",               en: "By event",                 pt: "Por evento" },
+  "dashboard.inspection.classInspection": { es: "Por Inspección de Clase", en: "For a Class Inspection", pt: "Por Inspeção de Classe" },
+  "dashboard.inspection.classTitle":      { es: "Inspección de Clase",     en: "Class Inspection",       pt: "Inspeção de Classe" },
+  "dashboard.inspection.occasional":      { es: "Inspección ocasional",    en: "One-off inspection",     pt: "Inspeção ocasional" },
+  "dashboard.inspection.occasionalHint":  { es: "No está en el plan: abre la orden directo", en: "Not in the plan: opens the work order directly", pt: "Não está no plano: abre a ordem direto" },
   "dashboard.inspection.periodic":  { es: "Inspección periódica",     en: "Periodic inspection",      pt: "Inspeção periódica" },
   "dashboard.inspection.search":    { es: "Buscar por tarea, código o equipo…", en: "Search by task, code or equipment…", pt: "Buscar por tarefa, código ou equipamento…" },
   "dashboard.inspection.empty":     { es: "No hay planes de inspección de esta clase.", en: "No inspection plans of this kind.", pt: "Não há planos de inspeção deste tipo." },
@@ -1636,6 +1640,11 @@ const dict = {
   "wo.closeAudit.appendAndClose":   { es: "Agregar a Observaciones y cerrar", en: "Add to Observations and close", pt: "Adicionar a Observações e fechar" },
   "wo.closeAudit.closeWithout":     { es: "Cerrar sin agregar",           en: "Close without adding",       pt: "Fechar sem adicionar" },
   "wo.closeAudit.back":             { es: "Volver a la orden",            en: "Back to the work order",     pt: "Voltar à ordem" },
+
+  // ─── Gantt de Mantenimiento ────────────────────────────────────────────────
+  "gantt.onlyG0":        { es: "Solo G0 · Inspecciones",  en: "G0 only · Inspections",  pt: "Só G0 · Inspeções" },
+  "gantt.onlyG0Tooltip": { es: "Mostrar sólo los planes del grupo SFI G0 (Inspecciones). Tocá de nuevo para ver todos.", en: "Show only plans in SFI group G0 (Inspections). Click again to see all.", pt: "Mostrar apenas os planos do grupo SFI G0 (Inspeções). Toque de novo para ver todos." },
+  "gantt.zoomHint":      { es: "Sobre el diagrama: la ruedita hacia arriba ensancha los meses y hacia abajo los angosta (entran más). Shift + ruedita desplaza la lista.", en: "Over the chart: wheel up widens the months and wheel down narrows them (more fit). Shift + wheel scrolls the list.", pt: "Sobre o diagrama: a roda para cima alarga os meses e para baixo os estreita (cabem mais). Shift + roda rola a lista." },
   "wo.modal.startDate":        { es: "Fecha inicio",           en: "Start date",           pt: "Data de início" },
   "wo.modal.endDate":          { es: "Fecha finalización",     en: "End date",             pt: "Data de conclusão" },
   "wo.modal.runningHours":     { es: "Horas del motor al momento de ejecución", en: "Engine hours at execution time", pt: "Horas do motor no momento da execução" },

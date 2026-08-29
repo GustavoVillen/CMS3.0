@@ -6,6 +6,8 @@ import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
 import { useAuth } from "../lib/auth";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
+import { useT } from "../lib/i18n";
+import { sfiGroupDigit } from "../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,12 +184,20 @@ function StatusChip({ statusKey, active, count, onClick }: { statusKey: string; 
 
 // ─── Zoom ───────────────────────────────────────────────────────────────────
 
+// Los tres botones son atajos a un ancho de mes concreto. El zoom real es
+// continuo (la ruedita del mouse lo mueve de a poco), así que `px` es un preset,
+// no el único valor posible.
 const ZOOMS = [
   { key: "week",  label: "Semana", px: 118 },
   { key: "month", label: "Mes",    px: 64 },
   { key: "year",  label: "Año",    px: 22 },
 ] as const;
-type ZoomKey = (typeof ZOOMS)[number]["key"];
+
+/** Límites del zoom continuo, en píxeles de ancho por mes. */
+const PX_MIN = 6;    // ~17 años en una pantalla de 1200px
+const PX_MAX = 300;  // un mes ocupa casi un cuarto de pantalla
+/** Cuánto cambia el ancho por cada golpe de ruedita. */
+const ZOOM_STEP = 1.15;
 
 const LEFT_W = 300;   // px — columna izquierda (nombre + fechas), fija
 const ROW_H = 36;     // px — alto de fila
@@ -203,13 +213,19 @@ type Row =
 
 export function MaintenanceGanttPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { data, loading, error } = useFetch<ListResponse>("/app/pms/maintenance-plans?limit=500");
   const plans = data?.items ?? [];
 
   const [selectedYear,   setSelectedYear]   = useState<number>(new Date().getFullYear());
   const [selectedType,   setSelectedType]   = useState<string>("ALL");
+  // Filtro por grupo SFI G0 (Inspecciones). Es aparte del selector de tipo:
+  // "Solo Inspecciones" mira el taskType del plan, esto mira el grupo del código.
+  const [onlyG0,         setOnlyG0]         = useState(false);
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set(Object.keys(STATUS_LABELS)));
-  const [zoom, setZoom] = useState<ZoomKey>("month");
+  // Ancho de cada mes en píxeles. Es el zoom: lo mueven los tres botones y,
+  // de forma continua, la ruedita del mouse sobre el diagrama.
+  const [pxPerMonth, setPxPerMonth] = useState<number>(64);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // Planilla de mantenimiento (.xlsx) del buque elegido en el selector del header.
@@ -233,8 +249,6 @@ export function MaintenanceGanttPage() {
     }
   };
 
-  const pxPerMonth = ZOOMS.find((z) => z.key === zoom)!.px;
-
   function toggleStatus(s: string) {
     setActiveStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
   }
@@ -251,16 +265,19 @@ export function MaintenanceGanttPage() {
   //    el año NO filtra: se ve todo con scroll. ──
   const filtered = useMemo(() => plans.filter((p) => {
     if (selectedType !== "ALL" && p.taskType !== selectedType) return false;
+    if (onlyG0 && sfiGroupDigit(p.sfiGroupNumber) !== 0) return false;
     if (!activeStatuses.has(p.executionStatus)) return false;
     return true;
-  }), [plans, selectedType, activeStatuses]);
+  }), [plans, selectedType, onlyG0, activeStatuses]);
 
   const statusCounts = useMemo(() => {
-    const base = plans.filter((p) => selectedType === "ALL" || p.taskType === selectedType);
+    const base = plans.filter((p) =>
+      (selectedType === "ALL" || p.taskType === selectedType) &&
+      (!onlyG0 || sfiGroupDigit(p.sfiGroupNumber) === 0));
     const counts: Record<string, number> = {};
     base.forEach((p) => { counts[p.executionStatus] = (counts[p.executionStatus] ?? 0) + 1; });
     return counts;
-  }, [plans, selectedType]);
+  }, [plans, selectedType, onlyG0]);
 
   // ── Rango temporal (min/max de últimas ejec. y próximos venc., con padding) ──
   const range = useMemo(() => {
@@ -328,7 +345,10 @@ export function MaintenanceGanttPage() {
     return acc;
   }, [axisMonths]);
 
-  // ── Scroll: al cambiar de año/zoom, llevar ese año a la vista ──
+  // ── Scroll: al cambiar de año, llevar ese año a la vista ──
+  // El zoom NO está en las dependencias a propósito: la ruedita ya reacomoda el
+  // scroll ella misma para no soltar la fecha que estás mirando, y un
+  // scrollTo suave encima le peleaba en cada golpe de rueda.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
@@ -336,7 +356,50 @@ export function MaintenanceGanttPage() {
     const x = xOf(new Date(selectedYear, 0, 1));
     el.scrollTo({ left: Math.max(0, x - 60), behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear, zoom, range.lo.getTime(), timelineW]);
+  }, [selectedYear, range.lo.getTime(), range.months]);
+
+  // ── Zoom con la ruedita del mouse ──
+  // Rueda ARRIBA ensancha los meses; rueda ABAJO los angosta (entran más en la
+  // misma pantalla). Se ancla en el punto que está bajo el cursor: la fecha que
+  // estabas mirando se queda donde estaba, en vez de irse de pantalla.
+  //
+  // Listener nativo con `passive: false` porque hay que cancelar el scroll
+  // normal de la página; el onWheel de React no lo permite.
+  const pxRef = useRef(pxPerMonth);
+  pxRef.current = pxPerMonth;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // Gesto horizontal de trackpad: es desplazamiento, no zoom.
+      if (e.deltaY === 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      // Con la rueda tomada por el zoom, la lista de planes quedaría sin forma
+      // de recorrerse salvo arrastrando la barra: Shift + rueda la desplaza.
+      if (e.shiftKey) {
+        e.preventDefault();
+        el.scrollTop += e.deltaY;
+        return;
+      }
+      e.preventDefault();
+      const prev = pxRef.current;
+      const next = Math.min(PX_MAX, Math.max(PX_MIN, e.deltaY < 0 ? prev * ZOOM_STEP : prev / ZOOM_STEP));
+      if (next === prev) return;
+      // Mes (con decimales) que está justo debajo del cursor, para volver a
+      // dejarlo ahí con el ancho nuevo.
+      const cursorX = e.clientX - el.getBoundingClientRect().left;
+      const months = Math.max(0, (el.scrollLeft + cursorX - LEFT_W) / prev);
+      pxRef.current = next;
+      setPxPerMonth(next);
+      // Recién cuando React repintó el ancho nuevo se puede reubicar el scroll.
+      requestAnimationFrame(() => {
+        el.scrollLeft = Math.max(0, LEFT_W + months * next - cursorX);
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // El contenedor no existe mientras carga ni cuando no hay filas: hay que
+    // volver a engancharlo cuando aparece.
+  }, [rows.length]);
 
   const showMonthLabels = pxPerMonth >= 40;
 
@@ -356,9 +419,27 @@ export function MaintenanceGanttPage() {
           <option value="INSPECTION">Solo Inspecciones</option>
         </select>
 
-        <div className="flex items-center gap-1 bg-fg/5 border border-fg/10 rounded-lg p-0.5">
-          {ZOOMS.map(({ key, label }) => (
-            <button key={key} onClick={() => setZoom(key)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${zoom === key ? "bg-accent/20 text-accent border border-accent/30" : "text-text-industrial/50 hover:text-fg"}`}>
+        {/* Grupo SFI G0 = Inspecciones. Se apaga tocándolo de nuevo. */}
+        <button
+          type="button"
+          onClick={() => setOnlyG0((v) => !v)}
+          aria-pressed={onlyG0}
+          title={t("gantt.onlyG0Tooltip")}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+            onlyG0
+              ? "bg-accent/20 border-accent/40 text-accent"
+              : "bg-fg/5 border-fg/10 text-text-industrial/70 hover:border-accent/30"
+          }`}
+        >
+          {t("gantt.onlyG0")}
+        </button>
+
+        <div
+          className="flex items-center gap-1 bg-fg/5 border border-fg/10 rounded-lg p-0.5"
+          title={t("gantt.zoomHint")}
+        >
+          {ZOOMS.map(({ key, label, px }) => (
+            <button key={key} onClick={() => setPxPerMonth(px)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${pxPerMonth === px ? "bg-accent/20 text-accent border border-accent/30" : "text-text-industrial/50 hover:text-fg"}`}>
               {label}
             </button>
           ))}

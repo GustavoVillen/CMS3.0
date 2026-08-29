@@ -9,7 +9,7 @@ import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
-import { parseLocalDate } from "../lib/utils";
+import { parseLocalDate, sfiGroupDigit } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useAuth } from "../lib/auth";
@@ -105,6 +105,8 @@ interface InspectionPlanOption {
   triggerType: string;
   nextDueDate: string | null;
   activeWorkOrderCode?: string | null;
+  /** Grupo SFI: G0 es el de Inspecciones (ver sfiGroupDigit en lib/utils). */
+  sfiGroupNumber?: number | null;
 }
 
 export const Dashboard: React.FC = () => {
@@ -176,7 +178,7 @@ export const Dashboard: React.FC = () => {
   // ítem del plan. Elegir el ítem abre su OT de inspección y lleva a ella.
   // "Por evento" = planes de inspección con disparador Por evento; "periódica"
   // = todos los demás (vencen por fecha u horas).
-  const [inspKind, setInspKind] = React.useState<"none" | "chooser" | "EVENT" | "PERIODIC">("none");
+  const [inspKind, setInspKind] = React.useState<"none" | "chooser" | "EVENT" | "PERIODIC" | "CLASS">("none");
   const [inspPlans, setInspPlans] = React.useState<InspectionPlanOption[] | null>(null);
   const [inspLoading, setInspLoading] = React.useState(false);
   const [inspSearch, setInspSearch] = React.useState("");
@@ -391,7 +393,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
   // Planes de inspección de la clase elegida. El backend filtra por tipo de
   // tarea y disparador; el buque sale del contexto (si hay uno elegido).
-  const loadInspectionPlans = async (kind: "EVENT" | "PERIODIC") => {
+  const loadInspectionPlans = async (kind: "EVENT" | "PERIODIC" | "CLASS") => {
     setInspKind(kind);
     setInspSearch("");
     setInspError(null);
@@ -399,11 +401,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     setInspPlans(null);
     try {
       const params = new URLSearchParams({ taskType: "INSPECTION", status: "ACTIVE" });
+      // CLASE no discrimina por disparador: son todas las del grupo SFI G0,
+      // periódicas o por evento. El filtro por grupo se hace acá porque el
+      // endpoint de planes no filtra por sfiGroupNumber.
       if (kind === "EVENT") params.set("triggerType", "EVENT");
-      else params.set("triggerTypeNot", "EVENT");
+      else if (kind === "PERIODIC") params.set("triggerTypeNot", "EVENT");
       if (selectedVesselCode) params.set("vesselCode", selectedVesselCode);
       const res = await api.get<{ items: InspectionPlanOption[] }>(`/app/pms/maintenance-plans?${params.toString()}`);
-      setInspPlans(res.items ?? []);
+      const items = res.items ?? [];
+      setInspPlans(kind === "CLASS" ? items.filter(p => sfiGroupDigit(p.sfiGroupNumber) === 0) : items);
     } catch {
       setInspPlans([]);
       setInspError(t("dashboard.inspection.loadError"));
@@ -534,7 +540,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 <p className="text-xs text-text-industrial/50 mt-0.5">
                   {inspKind === "chooser"
                     ? t("dashboard.inspection.subtitle")
-                    : inspKind === "EVENT" ? t("dashboard.inspection.byEvent") : t("dashboard.inspection.periodic")}
+                    : inspKind === "EVENT" ? t("dashboard.inspection.byEvent")
+                    : inspKind === "CLASS" ? t("dashboard.inspection.classInspection")
+                    : t("dashboard.inspection.periodic")}
                 </p>
               </div>
               <ModalCloseButton onClose={() => setInspKind("none")} />
@@ -556,6 +564,16 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   <CalendarClock className="w-6 h-6 text-accent shrink-0" />
                   <span className="font-bold text-sm text-fg">{t("dashboard.inspection.periodic")}</span>
                 </button>
+                {/* Inspecciones de Clase = grupo SFI G0 del plan, sean
+                    periódicas o por evento. Ocupa las dos columnas para no
+                    dejar un hueco al lado. */}
+                <button
+                  onClick={() => { void loadInspectionPlans("CLASS"); }}
+                  className="sm:col-span-2 flex items-center gap-3 px-5 py-5 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+                >
+                  <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
+                  <span className="font-bold text-sm text-fg">{t("dashboard.inspection.classInspection")}</span>
+                </button>
               </div>
             ) : (
               <>
@@ -575,6 +593,31 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 </div>
 
                 {inspError && <p className="text-xs text-red-700 dark:text-red-400 shrink-0">{inspError}</p>}
+
+                {/* Inspección de Clase que no está en el plan: la sociedad de
+                    clasificación puede pedir una fuera de programa. Abre la OT
+                    directo, sin ítem del PDM, con el mismo preajuste que ya usa
+                    "Nueva Solicitud de Servicio". */}
+                {inspKind === "CLASS" && (
+                  <button
+                    onClick={() => {
+                      setCreateWoPreset({
+                        maintKind: "INSPECTION",
+                        title: t("dashboard.inspection.classTitle"),
+                        autoAsset: "Inspeccion de Clase",
+                      });
+                      setInspKind("none");
+                      setShowCreateWo(true);
+                    }}
+                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/15 transition-all text-left"
+                  >
+                    <Zap className="w-4 h-4 text-accent shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-fg">{t("dashboard.inspection.occasional")}</span>
+                      <span className="block text-[10px] text-text-industrial/50">{t("dashboard.inspection.occasionalHint")}</span>
+                    </span>
+                  </button>
+                )}
 
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
                   {inspLoading ? (

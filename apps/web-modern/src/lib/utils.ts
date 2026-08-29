@@ -76,3 +76,16 @@ export function toFilterSelectValue(value?: string | null): string {
 export function fromFilterSelectValue(value: string): string {
   return value === FILTER_ALL_VALUE ? "" : value;
 }
+
+/**
+ * Grupo SFI de un plan (G0…G9): el primer dígito de `sfiGroupNumber`. Un plan
+ * puede traer el grupo suelto (0-9) o el código de subgrupo (600 → G6), así que
+ * los dos casos se normalizan acá. Devuelve null si el plan no tiene grupo.
+ *
+ * G0 es el grupo de Inspecciones (incluidas las de Clase).
+ */
+export function sfiGroupDigit(sfiGroupNumber?: number | null): number | null {
+  if (sfiGroupNumber == null) return null;
+  const digit = sfiGroupNumber < 10 ? sfiGroupNumber : Math.floor(sfiGroupNumber / 100);
+  return digit >= 0 && digit <= 9 ? digit : null;
+}
