@@ -1,0 +1,1408 @@
+[
+ {
+  "code": "DCH",
+  "name": "DON CHICUETO",
+  "soc": "RINA",
+  "ciclo": 72,
+  "tipo": "REMOLCADOR",
+  "items": {
+   "renovacion": {
+    "freq": 72,
+    "last": "2024-10-04",
+    "due": "2030-11-10",
+    "win": "2030-11-10",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12
+   },
+   "intermedia": {
+    "freq": 36,
+    "last": null,
+    "due": "2027-11-10",
+    "win": "2028-05-10",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 72,
+    "last": "2026-04-10",
+    "due": "2030-11-10",
+    "win": "2030-11-10",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": {
+    "freq": 72,
+    "last": "2024-10-04",
+    "due": "2030-10-04",
+    "win": null,
+    "from_window": false,
+    "n": 2,
+    "detalle": [
+     {
+      "eje": "Babor",
+      "last": "2024-10-04",
+      "due": "2030-10-04"
+     },
+     {
+      "eje": "Estribor",
+      "last": "2025-11-04",
+      "due": "2031-11-04"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "code": "LTE",
+  "name": "LATERE",
+  "soc": "ClassNK",
+  "ciclo": 72,
+  "tipo": "REMOLCADOR",
+  "items": {
+   "renovacion": {
+    "freq": 72,
+    "last": "2021-08-04",
+    "due": "2027-08-31",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 36,
+    "last": "2024-11-12",
+    "due": "2030-08-31",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 72,
+    "last": "2021-08-04",
+    "due": "2027-08-31",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": {
+    "freq": 144,
+    "last": "2015-09-01",
+    "due": "2027-08-31",
+    "win": null,
+    "from_window": false,
+    "n": 4,
+    "detalle": [
+     {
+      "eje": "No.1 Prop. Shaft Svy",
+      "last": "2015-09-01",
+      "due": "2027-08-31"
+     },
+     {
+      "eje": "No.2 Prop. Shaft Svy",
+      "last": "2015-09-01",
+      "due": "2027-08-31"
+     },
+     {
+      "eje": "No.3 Prop. Shaft Svy",
+      "last": "2015-09-01",
+      "due": "2027-08-31"
+     },
+     {
+      "eje": "No.4 Prop. Shaft Svy",
+      "last": "2015-09-01",
+      "due": "2027-08-31"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "code": "M01",
+  "name": "MAO 01",
+  "soc": "RINA",
+  "ciclo": 72,
+  "tipo": "REMOLCADOR",
+  "items": {
+   "renovacion": {
+    "freq": 72,
+    "last": "2023-03-15",
+    "due": "2029-03-15",
+    "win": "2029-03-15",
+    "from_window": false,
+    "n": 1,
+    "last_note": "alta en clase (Class Issue Survey)"
+   },
+   "periodica": {
+    "freq": 12
+   },
+   "intermedia": {
+    "freq": 36,
+    "last": null,
+    "due": "2026-03-15",
+    "win": "2026-09-15",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 72,
+    "last": "2026-01-13",
+    "due": "2029-03-15",
+    "win": "2029-03-15",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": {
+    "freq": 72,
+    "last": "2023-03-15",
+    "due": "2029-03-15",
+    "win": null,
+    "from_window": false,
+    "n": 2,
+    "detalle": [
+     {
+      "eje": "Babor",
+      "last": "2023-03-15",
+      "due": "2029-03-15"
+     },
+     {
+      "eje": "Estribor",
+      "last": "2023-03-15",
+      "due": "2029-03-15"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "code": "M02",
+  "name": "MAO 02",
+  "soc": "RINA",
+  "ciclo": 72,
+  "tipo": "REMOLCADOR",
+  "items": {
+   "renovacion": {
+    "freq": 72,
+    "last": "2026-03-11",
+    "due": "2032-03-11",
+    "win": "2032-03-11",
+    "from_window": false,
+    "n": 1,
+    "last_note": "alta en clase (Class Issue Survey)"
+   },
+   "periodica": {
+    "freq": 12
+   },
+   "intermedia": {
+    "freq": 36,
+    "last": null,
+    "due": "2029-03-11",
+    "win": "2029-09-11",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 72,
+    "last": "2026-03-11",
+    "due": "2032-03-11",
+    "win": "2032-03-11",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": {
+    "freq": 72,
+    "last": "2026-03-11",
+    "due": "2032-03-11",
+    "win": null,
+    "from_window": false,
+    "n": 2,
+    "detalle": [
+     {
+      "eje": "Babor",
+      "last": "2026-03-11",
+      "due": "2032-03-11"
+     },
+     {
+      "eje": "Estribor",
+      "last": "2026-03-11",
+      "due": "2032-03-11"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "code": "MGT01",
+  "name": "MGT 01",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-04-27",
+    "due": "2034-04-12",
+    "win": "2034-04-12",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-09-26",
+    "due": "2028-04-12",
+    "win": "2028-10-12",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-04-12",
+    "win": "2030-10-12",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-04-27",
+    "due": "2034-04-12",
+    "win": "2034-04-12",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT02",
+  "name": "MGT 02",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2026-04-01",
+    "win": "2026-07-01",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-10-03",
+    "due": "2028-04-01",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2022-05-04",
+    "due": "2030-04-01",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2018-04-01",
+    "due": "2026-04-01",
+    "win": "2026-07-01",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT03",
+  "name": "MGT 03",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-03-11",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-10-03",
+    "due": "2028-04-01",
+    "win": "2028-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-04-01",
+    "win": "2030-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-03-11",
+    "due": "2034-03-11",
+    "win": "2034-03-11",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT04",
+  "name": "MGT 04",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-03-11",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-10-01",
+    "due": "2028-04-01",
+    "win": "2028-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-04-01",
+    "win": "2030-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-03-11",
+    "due": "2034-03-11",
+    "win": "2034-03-11",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT05",
+  "name": "MGT 05",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-06-08",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-10-01",
+    "due": "2028-04-01",
+    "win": "2028-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-04-01",
+    "win": "2030-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-06-08",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT06",
+  "name": "MGT 06",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-05-21",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-10-10",
+    "due": "2028-04-01",
+    "win": "2028-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-04-01",
+    "win": "2030-10-01",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-05-21",
+    "due": "2034-04-01",
+    "win": "2034-04-01",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT07",
+  "name": "MGT 07",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2027-04-26",
+    "win": "2027-04-26",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-03",
+    "due": "2029-04-26",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-10-31",
+    "due": "2031-04-26",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-04-26",
+    "due": "2027-04-26",
+    "win": "2027-04-26",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT08",
+  "name": "MGT 08",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2027-07-15",
+    "win": "2027-07-15",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-03",
+    "due": "2029-07-15",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-11-07",
+    "due": "2031-07-15",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-07-15",
+    "due": "2027-07-15",
+    "win": "2027-07-15",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT09",
+  "name": "MGT 09",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2027-08-07",
+    "win": "2027-08-07",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-29",
+    "due": "2029-08-07",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-11-07",
+    "due": "2031-08-07",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2025-10-30",
+    "due": "2027-08-07",
+    "win": "2027-08-07",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT10",
+  "name": "MGT 10",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2025-01-15",
+    "due": "2028-02-21",
+    "win": "2028-02-21",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2021-11-22",
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT11",
+  "name": "MGT 11",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2025-02-19",
+    "due": "2028-02-21",
+    "win": "2028-02-21",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2021-11-22",
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT12",
+  "name": "MGT 12",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2025-01-11",
+    "due": "2028-02-21",
+    "win": "2028-02-21",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2021-11-22",
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT13",
+  "name": "MGT 13",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2024-10-09",
+    "due": "2028-02-21",
+    "win": "2028-02-21",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2021-11-22",
+    "due": "2029-11-21",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT14",
+  "name": "MGT 14",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2030-04-20",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2025-07-18",
+    "due": "2028-07-20",
+    "win": "2028-07-20",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2022-04-21",
+    "due": "2030-04-20",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT15",
+  "name": "MGT 15",
+  "soc": "ClassNK",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": null,
+    "due": "2030-04-20",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 12,
+    "last": null,
+    "due": null,
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2025-06-27",
+    "due": "2028-07-20",
+    "win": "2028-07-20",
+    "from_window": true,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2022-04-21",
+    "due": "2030-04-20",
+    "win": null,
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT16",
+  "name": "MGT 16",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2018-12-28",
+    "due": "2026-11-25",
+    "win": "2026-11-25",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-04-25",
+    "due": "2028-11-25",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-04-21",
+    "due": "2030-11-25",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2018-12-28",
+    "due": "2026-11-25",
+    "win": "2026-11-25",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT17",
+  "name": "MGT 17",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2026-04-24",
+    "due": "2034-03-26",
+    "win": "2034-03-26",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-01-09",
+    "due": "2028-03-26",
+    "win": "2028-09-26",
+    "from_window": false,
+    "n": 1
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": null,
+    "due": "2030-03-26",
+    "win": "2030-09-26",
+    "from_window": false,
+    "n": 1
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2026-04-24",
+    "due": "2034-03-26",
+    "win": "2034-03-26",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT18",
+  "name": "MGT 18",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-03-26",
+    "due": "2027-01-26",
+    "win": "2027-01-26",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2024-11-11",
+    "due": "2029-01-26",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-08-11",
+    "due": "2031-01-26",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-03-26",
+    "due": "2027-01-26",
+    "win": "2027-01-26",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT19",
+  "name": "MGT 19",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2018-09-13",
+    "due": "2026-09-13",
+    "win": "2026-09-13",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-02-06",
+    "due": "2028-09-13",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-02-28",
+    "due": "2030-09-13",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2018-09-13",
+    "due": "2026-09-13",
+    "win": "2026-09-13",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT20",
+  "name": "MGT 20",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2018-08-21",
+    "due": "2026-08-21",
+    "win": "2026-08-21",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-03-25",
+    "due": "2028-08-21",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-04-11",
+    "due": "2030-08-21",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2018-08-21",
+    "due": "2026-08-21",
+    "win": "2026-08-21",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT21",
+  "name": "MGT 21",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-07-17",
+    "due": "2027-02-21",
+    "win": "2027-02-21",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-29",
+    "due": "2029-02-21",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-08-29",
+    "due": "2031-02-21",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-07-17",
+    "due": "2027-02-21",
+    "win": "2027-02-21",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT22",
+  "name": "MGT 22",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-08-07",
+    "due": "2027-02-22",
+    "win": "2027-02-22",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-15",
+    "due": "2029-02-22",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-08-29",
+    "due": "2031-02-22",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-08-07",
+    "due": "2027-02-22",
+    "win": "2027-02-22",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT23",
+  "name": "MGT 23",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-08-07",
+    "due": "2027-03-28",
+    "win": "2027-03-28",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-05-20",
+    "due": "2029-03-28",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-09-12",
+    "due": "2031-03-28",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2025-05-20",
+    "due": "2027-03-28",
+    "win": "2027-03-28",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT24",
+  "name": "MGT 24",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-06-04",
+    "due": "2027-04-15",
+    "win": "2027-04-15",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-10-04",
+    "due": "2029-04-15",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-08-11",
+    "due": "2031-04-15",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-06-04",
+    "due": "2027-04-15",
+    "win": "2027-04-15",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT25",
+  "name": "MGT 25",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-10-03",
+    "due": "2027-05-05",
+    "win": "2027-05-05",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-07-16",
+    "due": "2029-05-05",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-05-29",
+    "due": "2031-05-05",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-10-03",
+    "due": "2027-05-05",
+    "win": "2027-05-05",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT26",
+  "name": "MGT 26",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-09-13",
+    "due": "2027-05-17",
+    "win": "2027-05-17",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-05-20",
+    "due": "2029-05-17",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-09-01",
+    "due": "2031-05-17",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2025-05-20",
+    "due": "2027-05-17",
+    "win": "2027-05-17",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ },
+ {
+  "code": "MGT27",
+  "name": "MGT 27",
+  "soc": "RINA",
+  "ciclo": 96,
+  "tipo": "BARCAZA",
+  "items": {
+   "renovacion": {
+    "freq": 96,
+    "last": "2019-05-13",
+    "due": "2027-05-30",
+    "win": "2027-05-30",
+    "from_window": false,
+    "n": 1
+   },
+   "periodica": {
+    "freq": 24,
+    "last": "2025-09-03",
+    "due": "2029-05-30",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "intermedia": {
+    "freq": 48,
+    "last": "2023-08-12",
+    "due": "2031-05-30",
+    "win": null,
+    "from_window": false,
+    "n": 1,
+    "projected": true
+   },
+   "seco": {
+    "freq": 96,
+    "last": "2019-05-13",
+    "due": "2027-05-13",
+    "win": "2027-05-13",
+    "from_window": false,
+    "n": 1
+   },
+   "eje": null
+  }
+ }
+]
