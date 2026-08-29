@@ -724,10 +724,6 @@ async function main() {
     }
   }
 
-  console.log(
-    `\n${DRY ? "DRY-RUN (no se escribió nada). " : "✅ Completado. "}` +
-    `${nCreated} planes creados · ${nUpdated} actualizados · ${nSkipped} omitidos · ${nRenamed} activos renombrados.`,
-  );
   if (cambiadas.length) {
     console.log(CONSERVAR_FECHAS
       ? `\n⚠ ${cambiadas.length} fechas del Ship Status NO aplicadas (CONSERVAR_FECHAS=1):`
@@ -738,6 +734,63 @@ async function main() {
     console.log(`\n⚠ ${problems.length} casos NO aplicados:`);
     for (const p of problems) console.log(`  - ${p}`);
   }
+
+  // ── Buques sin Ship Status ────────────────────────────────────────────────
+  // GLT 001/007/008 y YT 010/012/013 no tienen certificado en la carpeta, así que
+  // no entran al dataset, pero varios ya tienen su plan de clase cargado a mano
+  // sin criterios ni riesgo. Se les completan SÓLO los textos vacíos: nunca las
+  // fechas ni la frecuencia, que no hay con qué verificar.
+  const enDataset = new Set(dataset.map((v) => v.code));
+  const porTitulo = new Map<string, ItemKey>();
+  for (const [k, def] of Object.entries(ITEMS) as [ItemKey, typeof ITEMS[ItemKey]][]) {
+    for (const t of [def.title, ...def.alias]) porTitulo.set(norm(t), k);
+  }
+  const huerfanos = (await prisma.maintenancePlan.findMany({
+    where: { tenantId: tid, deletedAt: null, sfiGroupNumber: SFI_GROUP },
+    select: {
+      id: true, vesselCode: true, taskCode: true, title: true, acceptanceCriteria: true,
+      loto: true, riskLevel: true, riskProbability: true, riskConsequence: true,
+      riskAnalysisResult: true, consequenceCategory: true, consequenceRationale: true,
+      responsible: true, taskType: true,
+    },
+    orderBy: [{ vesselCode: "asc" }, { taskCode: "asc" }],
+  })).filter((p: any) => !enDataset.has(p.vesselCode) && porTitulo.has(norm(p.title))
+    && (SOLO.length === 0 || SOLO.includes(p.vesselCode)));
+
+  if (huerfanos.length) {
+    console.log(`\nBuques sin Ship Status: se completan los textos de ${huerfanos.length} planes de clase ya cargados`);
+    for (const p of huerfanos) {
+      const def = ITEMS[porTitulo.get(norm(p.title))!];
+      const data: Record<string, unknown> = { updatedByUserId: uid };
+      const fill = (campo: string, valor: unknown) => {
+        const actual = (p as any)[campo];
+        if (actual === null || actual === undefined || actual === "") data[campo] = valor;
+      };
+      fill("acceptanceCriteria", def.acceptanceCriteria);
+      fill("loto", def.loto);
+      fill("riskProbability", def.riskProbability);
+      fill("riskConsequence", def.riskConsequence);
+      fill("riskLevel", def.riskLevel);
+      fill("riskAnalysisResult", def.riskAnalysisResult);
+      fill("consequenceCategory", def.consequenceCategory);
+      fill("consequenceRationale", def.consequenceRationale);
+      fill("responsible", RESPONSIBLE);
+      fill("taskType", "INSPECTION");
+      const campos = Object.keys(data).filter((k) => k !== "updatedByUserId");
+      if (!campos.length) {
+        console.log(`   ${p.vesselCode.padEnd(7)} ${p.taskCode.padEnd(13)} ${p.title} — ya estaba completo`);
+        continue;
+      }
+      nUpdated++;
+      console.log(`   ${p.vesselCode.padEnd(7)} ${p.taskCode.padEnd(13)} ${p.title} ← ${campos.join(", ")}`);
+      if (!DRY) await prisma.maintenancePlan.update({ where: { id: p.id }, data });
+    }
+  }
+
+  console.log(
+    `\n${DRY ? "DRY-RUN (no se escribió nada). " : "✅ Completado. "}` +
+    `${nCreated} planes creados · ${nUpdated} actualizados · ${nSkipped} omitidos · ${nRenamed} activos renombrados.`,
+  );
 
   // Planes del grupo SFI 0 que no son ninguno de los cinco ítems de clase: no se
   // tocan, pero conviene revisarlos por si son el mismo trabajo con otro nombre.
