@@ -162,7 +162,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
   ] = await Promise.all([
     safe(() => p.workOrder.count({ where: { ...base, deletedAt: null, status: { in: ["PLANNED", "IN_PROGRESS"] } } })),
     safe(() => p.defect.count({ where: { ...base, deletedAt: null, status: { notIn: ["RESOLVED", "CLOSED"] } } })),
-    safe(() => p.deferral.count({ where: { ...base, deletedAt: null, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } } })),
+    safe(() => p.deferral.count({ where: { ...base, deletedAt: null, status: { notIn: ["CLOSED", "EXPIRED", "REJECTED"] } } })),
     safe(() => p.capaRecord.count({ where: { ...base, deletedAt: null, status: { notIn: ["CLOSED", "CANCELLED", "VERIFIED_EFFECTIVE"] } } })),
     safe(() => p.certificate.count({ where: { ...base, deletedAt: null, status: { in: ["EXPIRED", "EXPIRING_SOON"] } } })),
     safe(() => p.nearMissReport.count({ where: { ...base, deletedAt: null, status: { notIn: ["CLOSED"] } } })),

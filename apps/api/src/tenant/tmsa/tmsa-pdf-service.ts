@@ -23,6 +23,13 @@ const GROUP_TITLE: Record<string, string> = {
   conditionMonitoring:"Monitoreo de condición (CBM)",
   failureAnalysis:    "Análisis de fallas / RCA",
   managementOfChange: "Gestión del cambio (MOC)",
+  drydockSpec:        "Especificación de varada",
+  // Grupos agregados después: sin esta entrada el PDF imprimía la clave cruda.
+  defectReporting:    "Reporte de defectos",
+  certificates:       "Certificados",
+  inspections:        "Inspecciones",
+  permits:            "Permisos de Trabajo",
+  engineeringAudit:   "Auditoría de ingeniería",
 };
 
 const METRIC_LABEL: Record<string, string> = {
@@ -50,6 +57,21 @@ const METRIC_LABEL: Record<string, string> = {
   recurringAssets: "Activos recurrentes",
   mocOpen: "MOC abiertos",
   mocPendingImpl: "Pend. implementación",
+  drydockSpecsOpen: "Specs en curso",
+  drydockItemsTotal: "Trabajos listados",
+  drydockItemsFromBacklog: "Del backlog",
+  deferralsNotInSpec: "Diferidos fuera de la spec",
+  defectsTotal: "Defectos registrados",
+  defectsStaleOpen: "Abiertos +60d",
+  certificatesTotal: "Certificados",
+  certificatesExpired: "Vencidos",
+  certificatesExpiringSoon: "Por vencer",
+  inspectionsTotal: "Inspecciones",
+  inspectionsOverdue: "Vencidas sin hacer",
+  permitsTotal: "Permisos emitidos",
+  permitsDraftStuck: "Borradores trabados",
+  auditsLast12m: "Auditorías en 12 meses",
+  auditsAtSea: "Hechas en navegación",
 };
 
 const STATUS_TEXT: Record<TmsaStatus, string> = { OK: "OK", ATTENTION: "ATENCIÓN", GAP: "BRECHA", INFO: "INFO" };

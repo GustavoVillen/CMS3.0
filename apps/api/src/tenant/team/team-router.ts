@@ -87,10 +87,10 @@ export async function handleTeamRoutes(
     return true;
   }
 
-  // PUT /app/team/members/:userId/profile  (nombre para formularios + firma)
+  // PUT /app/team/members/:userId/profile  (nombre para formularios + firma + calificación)
   if (method === "PUT" && /^\/app\/team\/members\/[^/]+\/profile$/.test(url.pathname)) {
     const userId = url.pathname.split("/")[4]!;
-    const body = await readJsonBody(request) as { formName?: string | null; signatureUrl?: string | null };
+    const body = await readJsonBody(request) as Parameters<typeof updateMemberProfile>[2];
     sendJson(response, 200, await updateMemberProfile(session, userId, body));
     return true;
   }

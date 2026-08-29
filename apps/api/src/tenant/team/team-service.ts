@@ -108,6 +108,12 @@ export async function listTeamMembers(
     status: m.status,
     assignedVesselCodes: m.assignedVesselCodes,
     joinedAt: m.joinedAt ?? m.createdAt,
+    // Calificación del representante de la compañía (evidencia TMSA).
+    jobTitle: m.jobTitle ?? null,
+    licenseNumber: m.licenseNumber ?? null,
+    experienceYears: m.experienceYears ?? null,
+    qualificationDocUrl: m.qualificationDocUrl ?? null,
+    qualificationNotes: m.qualificationNotes ?? null,
     hasSignature: opts.withSignatures ? (m.user.signatureUrl != null) : hasSigSet!.has(m.userId),
     ...(opts.withSignatures ? { signatureUrl: m.user.signatureUrl } : {}),
   }));
@@ -171,12 +177,28 @@ function displayName(
 export async function updateMemberProfile(
   session: TenantAccessSession,
   userId: string,
-  input: { formName?: string | null; signatureUrl?: string | null },
+  input: {
+    formName?: string | null;
+    signatureUrl?: string | null;
+    // Calificación del representante de la compañía. Vive en la membership y no
+    // en User: el mismo usuario puede estar en varios tenants con otro cargo.
+    jobTitle?: string | null;
+    licenseNumber?: string | null;
+    experienceYears?: number | null;
+    qualificationDocUrl?: string | null;
+    qualificationNotes?: string | null;
+  },
 ) {
   ensureAdmin(session);
   // La firma viaja como data URI base64; limitamos su tamaño (~1.5MB) por las dudas.
   if (input.signatureUrl && input.signatureUrl.length > 1_500_000) {
     throw new RouteError(400, "SIGNATURE_TOO_LARGE", "La imagen de firma es demasiado grande.");
+  }
+  if (input.experienceYears != null) {
+    const y = input.experienceYears;
+    if (!Number.isInteger(y) || y < 0 || y > 80) {
+      throw new RouteError(400, "INVALID_EXPERIENCE_YEARS", "Los años de experiencia deben ser un número entero entre 0 y 80.");
+    }
   }
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DB_UNAVAILABLE", "Base de datos no disponible.");
@@ -186,11 +208,32 @@ export async function updateMemberProfile(
   if (input.formName !== undefined) data.formName = input.formName?.trim() || null;
   if (input.signatureUrl !== undefined) data.signatureUrl = input.signatureUrl || null;
 
-  const result = await prisma.user.updateMany({
-    where: { id: userId, memberships: { some: { tenantId } } },
-    data,
-  });
-  if (result.count === 0) throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  const membershipData: Record<string, unknown> = {};
+  if (input.jobTitle !== undefined) membershipData.jobTitle = input.jobTitle?.trim() || null;
+  if (input.licenseNumber !== undefined) membershipData.licenseNumber = input.licenseNumber?.trim() || null;
+  if (input.experienceYears !== undefined) membershipData.experienceYears = input.experienceYears ?? null;
+  if (input.qualificationDocUrl !== undefined) membershipData.qualificationDocUrl = input.qualificationDocUrl?.trim() || null;
+  if (input.qualificationNotes !== undefined) membershipData.qualificationNotes = input.qualificationNotes?.trim() || null;
+
+  // Nada que cambiar: no es un error, sólo una llamada vacía.
+  if (Object.keys(data).length === 0 && Object.keys(membershipData).length === 0) return { ok: true };
+
+  let touched = 0;
+  if (Object.keys(data).length > 0) {
+    const result = await prisma.user.updateMany({
+      where: { id: userId, memberships: { some: { tenantId } } },
+      data,
+    });
+    touched += result.count;
+  }
+  if (Object.keys(membershipData).length > 0) {
+    const result = await (prisma as any).tenantMembership.updateMany({
+      where: { tenantId, userId },
+      data: membershipData,
+    });
+    touched += result.count;
+  }
+  if (touched === 0) throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
   return { ok: true };
 }
 

@@ -61,6 +61,17 @@ export function woResultLabel(r: string | null | undefined): string {
   return r === "SATISFACTORY" ? "Satisfactorio" : "Con deficiencias";
 }
 
+// Condición operativa del buque al ejecutar el trabajo. En el papel es la
+// evidencia de que la observación se hizo en marcha (TMSA Elemento 4).
+export function operatingConditionLabel(c: string | null | undefined): string {
+  if (!c) return "";
+  const m: Record<string, string> = {
+    NAVEGACION: "En navegación", PUERTO: "En puerto",
+    FONDEADO: "Fondeado", DIQUE: "En dique",
+  };
+  return m[c] ?? c;
+}
+
 export function departmentLabel(d: string | null | undefined): string {
   if (!d) return "—";
   const m: Record<string, string> = {
@@ -158,10 +169,18 @@ export interface WorkOrderPdfContext {
   assignedFormName?: string | null;
   /** Firma del usuario asignado (imagen decodificada) para la caja del responsable. */
   assignedSignatureBuffer?: Buffer | null;
+  /**
+   * Calificación del usuario asignado, ya armada en una línea
+   * ("Jefe Técnico · Mat. 1234 · 18 años de experiencia"). Se imprime bajo su
+   * firma: es la evidencia TMSA de que quien inspecciona está calificado.
+   */
+  assignedQualification?: string | null;
   /** Display name (or email fallback) for the user that created the WO. */
   createdByName: string | null;
   /** Nombre para formularios del creador (= Solicita) y firmas de tramitación. */
   createdByFormName?: string | null;
+  /** Ídem `assignedQualification` para el solicitante. */
+  createdByQualification?: string | null;
   solicitaSignatureBuffer?: Buffer | null;
   apruebaSignatureBuffer?: Buffer | null;
   autorizaSignatureBuffer?: Buffer | null;

@@ -272,7 +272,10 @@ const BADGE_WARNING = "bg-warning/10 text-warning border-warning/25";
 const BADGE_DANGER  = "bg-danger/10 text-danger border-danger/25";
 const BADGE_NEUTRAL = "bg-fg/5 text-fg/40 border-border";
 
-export function StatusBadge({ status }: { status: string }) {
+// `label` es opcional y sólo cambia el texto mostrado: el color se sigue
+// eligiendo por `status`. Sirve para las pantallas que ya tienen los estados
+// traducidos en el diccionario, sin tocar las que muestran el valor crudo.
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const map: Record<string, string> = {
     ACTIVE:      BADGE_SUCCESS,
     INACTIVE:    BADGE_NEUTRAL,
@@ -311,7 +314,7 @@ export function StatusBadge({ status }: { status: string }) {
   const cls = map[status] ?? BADGE_NEUTRAL;
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
-      {status}
+      {label ?? status}
     </span>
   );
 }

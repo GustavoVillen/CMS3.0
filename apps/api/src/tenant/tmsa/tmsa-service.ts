@@ -17,6 +17,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { getOnHandMap } from "../pms/stock-calc-service";
+import { resolveComputedStatus } from "../certificates/certificates-service";
 
 export type TmsaStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 
@@ -50,6 +51,11 @@ const PMS_COVERAGE_ATTENTION = 0.98;  // por debajo → ATTENTION
 const WO_COMPLIANCE_GAP = 0.75;       // % OT en plazo por debajo → GAP
 const WO_COMPLIANCE_ATTENTION = 0.85; // por debajo → ATTENTION
 const CRITICAL_OVERDUE_DAYS = 30;     // OT crítica vencida hace +N días
+
+// Diferimientos ya otorgados: el mismo conjunto que ofrece el importador de la
+// Especificación de Varada (drydock-spec-items-service). Tienen que coincidir,
+// si no el panel marca una brecha que la pantalla no deja cerrar.
+const DEFERRAL_GRANTED: readonly string[] = ["APPROVED", "ACTIVE", "EXPIRED"];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function clamp01(n: number): number {
@@ -97,6 +103,7 @@ async function computeOne(
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
   const d60 = new Date(now.getTime() - 60 * 86_400_000);
   const dCritical = new Date(now.getTime() - CRITICAL_OVERDUE_DAYS * 86_400_000);
+  const d365 = new Date(now.getTime() - 365 * 86_400_000);
   const base = { tenantId, vesselCode: vessel.code, deletedAt: null };
 
   const p = prisma as unknown as {
@@ -109,9 +116,26 @@ async function computeOne(
     fluidAnalysisResult: Delegate;
     defect: Delegate & { groupBy(a: unknown): Promise<Array<{ assetId: string | null; _count: { _all: number } }>> };
     mocRecord: Delegate;
+    certificate: Delegate;
+    inspection: Delegate;
+    permitToWork: Delegate;
+    drydockSpec: Delegate;
   };
 
   const groups: TmsaGroup[] = [];
+
+  // Planes de auditoría de ingeniería del buque (los crea
+  // scripts/load-superintendent-audit-plan.ts, código `<BUQUE>-AUD-ING-NN`).
+  // Hace falta antes del resto para poder contar SÓLO las OT que salen de esa
+  // auditoría: si se contara toda OT de inspección, entrarían las inspecciones
+  // de rutina del plan de mantenimiento y el indicador mentiría.
+  const auditPlanIds = (await safe(
+    () => p.maintenancePlan.findMany({
+      where: { tenantId, vesselCode: vessel.code, deletedAt: null, taskCode: { startsWith: `${vessel.code}-AUD-ING` } },
+      select: { id: true },
+    }) as Promise<Array<{ id: string }>>,
+    [] as Array<{ id: string }>,
+  )).map(pl => pl.id);
 
   // Todas las consultas son independientes entre sí: se disparan juntas y se
   // espera una sola vez (antes eran ~20 idas a la base en serie POR BUQUE).
@@ -120,6 +144,8 @@ async function computeOne(
     closed, woOpen, woOverdue, woCriticalOverdue, plansOverdue,
     active, sparesCriticalA, requestsPending, plansWithSampling, analysesOutOfRange,
     defectsWithRca, defectsGrouped, mocOpen, mocPendingImpl,
+    certificateRows, inspectionRows, defectsTotal, defectsStaleOpen, permitsTotal, permitsDraftStuck,
+    drydockSpecs, engineeringAuditRows,
   ] = await Promise.all([
     safe(() => p.asset.count({ where: { ...base } }), 0),
     // Activos con ≥1 plan activo (distinct assetId).
@@ -147,10 +173,10 @@ async function computeOne(
     safe(() => p.maintenancePlan.count({ where: { ...base, status: "OVERDUE" } }), 0),
     safe(
       () => p.deferral.findMany({
-        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
-        select: { riskLevel: true, decisionAt: true, status: true, targetDate: true, expiredAt: true },
-      }) as Promise<Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>>,
-      [] as Array<{ riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>,
+        where: { ...base, status: { notIn: ["CLOSED", "EXPIRED", "REJECTED"] } },
+        select: { id: true, riskLevel: true, decisionAt: true, status: true, targetDate: true, expiredAt: true },
+      }) as Promise<Array<{ id: string; riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>>,
+      [] as Array<{ id: string; riskLevel: string | null; decisionAt: Date | null; status: string; targetDate: Date | null; expiredAt: Date | null }>,
     ),
     // Spares criticidad A con onHand < minStock — misma lógica que sidebar-counts.
     safe(
@@ -179,7 +205,57 @@ async function computeOne(
     ),
     safe(() => p.mocRecord.count({ where: { ...base, status: { notIn: ["REVIEWED", "REJECTED", "CANCELLED"] } } }), 0),
     safe(() => p.mocRecord.count({ where: { ...base, status: { in: ["APPROVED", "IN_PROGRESS"] } } }), 0),
+    // Certificados del buque — status EXPIRED/EXPIRING_SOON se recalcula en JS
+    // con la misma función que usa el módulo de Certificados (single source of truth).
+    // Hay que traer también el status guardado: un certificado SUSPENDIDO o
+    // CERRADO no es un vencimiento aunque su fecha ya haya pasado, y contarlo
+    // como tal hacía que este panel contradijera a la pantalla de Certificados.
+    safe(
+      () => p.certificate.findMany({ where: { ...base }, select: { expiryDate: true, status: true } }) as Promise<Array<{ expiryDate: Date; status: string }>>,
+      [] as Array<{ expiryDate: Date; status: string }>,
+    ),
+    safe(
+      () => p.inspection.findMany({
+        where: { ...base },
+        select: { status: true, scheduledAt: true },
+      }) as Promise<Array<{ status: string; scheduledAt: Date | null }>>,
+      [] as Array<{ status: string; scheduledAt: Date | null }>,
+    ),
+    safe(() => p.defect.count({ where: { ...base } }), 0),
+    safe(() => p.defect.count({ where: { ...base, status: "OPEN", reportedAt: { lt: d60 } } }), 0),
+    safe(() => p.permitToWork.count({ where: { ...base } }), 0),
+    safe(() => p.permitToWork.count({ where: { ...base, status: "DRAFT", createdAt: { lt: d60 } } }), 0),
+    // Especificaciones de varada del buque (sin las anuladas) con sus ítems:
+    // sirven para 4.2.4 (existe el documento) y 4.4.2 (los diferidos entran en él).
+    safe(
+      () => p.drydockSpec.findMany({
+        where: { ...base, status: { not: "CANCELLED" } },
+        select: {
+          status: true,
+          items: { select: { itemStatus: true, sourceType: true, sourceId: true } },
+        },
+      }) as Promise<Array<{ status: string; items: Array<{ itemStatus: string; sourceType: string; sourceId: string | null }> }>>,
+      [] as Array<{ status: string; items: Array<{ itemStatus: string; sourceType: string; sourceId: string | null }> }>,
+    ),
+    // Auditorías de ingeniería del último año: las OT ya cerradas que salieron
+    // del plan de auditoría. La condición operativa dice cuáles se hicieron con
+    // el buque en marcha, que es lo que TMSA pide observar.
+    auditPlanIds.length === 0 ? Promise.resolve([] as Array<{ operatingCondition: string | null }>) : safe(
+      () => p.workOrder.findMany({
+        where: { ...base, status: "CLOSED", completedDate: { gte: d365 }, maintenancePlanId: { in: auditPlanIds } },
+        select: { operatingCondition: true },
+      }) as Promise<Array<{ operatingCondition: string | null }>>,
+      [] as Array<{ operatingCondition: string | null }>,
+    ),
   ]);
+
+  const certificatesTotal = certificateRows.length;
+  const certificatesExpired = certificateRows.filter(c => resolveComputedStatus(c.expiryDate, c.status) === "EXPIRED").length;
+  const certificatesExpiringSoon = certificateRows.filter(c => resolveComputedStatus(c.expiryDate, c.status) === "EXPIRING_SOON").length;
+  const inspectionsTotal = inspectionRows.length;
+  const inspectionsOverdue = inspectionRows.filter(
+    i => (i.status === "SCHEDULED" || i.status === "IN_PROGRESS") && i.scheduledAt && new Date(i.scheduledAt) < now,
+  ).length;
 
   // ── 4.1 · Cobertura del PMS ────────────────────────────────────────────────
   {
@@ -260,6 +336,45 @@ async function computeOne(
     });
   }
 
+  // ── 4.2 · Especificación de varada ─────────────────────────────────────────
+  // Evidencia de 4.2.4 (existe el documento formal, armado entre buque y tierra)
+  // y de 4.4.2 (los diferimientos terminan adentro de ese documento, no sueltos).
+  {
+    const specsOpen = drydockSpecs.filter(s => s.status !== "APPROVED").length;
+    const allItems = drydockSpecs.flatMap(s => s.items);
+    const itemsTotal = allItems.length;
+    const itemsFromBacklog = allItems.filter(i => i.sourceType !== "MANUAL").length;
+
+    // Diferimientos vigentes que no figuran en ninguna especificación: es el
+    // agujero real que mira el auditor.
+    //
+    // Sólo cuentan los YA OTORGADOS (APPROVED/ACTIVE/EXPIRED), que es exactamente
+    // el conjunto que ofrece el importador de la especificación. Un diferimiento
+    // todavía en REQUESTED o UNDER_REVIEW no es trabajo diferido: es un pedido.
+    // Contándolo, el panel encendía una brecha roja que nadie podía apagar,
+    // porque la pantalla de varada no lo ofrecía para importar.
+    const deferralIdsInSpec = new Set(
+      allItems.filter(i => i.sourceType === "DEFERRAL" && i.sourceId).map(i => i.sourceId as string),
+    );
+    const granted = active.filter(d => DEFERRAL_GRANTED.includes(d.status));
+    const deferralsNotInSpec = granted.filter(d => !deferralIdsInSpec.has(d.id)).length;
+
+    const status: TmsaStatus =
+      drydockSpecs.length === 0 && active.length === 0 ? "INFO" :
+      deferralsNotInSpec > 0 ? "GAP" :
+      itemsTotal === 0 ? "ATTENTION" : "OK";
+
+    groups.push({
+      key: "drydockSpec", element: "4.2", status,
+      metrics: [
+        { key: "drydockSpecsOpen", value: specsOpen, kind: "count" },
+        { key: "drydockItemsTotal", value: itemsTotal, kind: "count" },
+        { key: "drydockItemsFromBacklog", value: itemsFromBacklog, kind: "count" },
+        { key: "deferralsNotInSpec", value: deferralsNotInSpec, kind: "count" },
+      ],
+    });
+  }
+
   // ── 4.4 · Repuestos críticos ───────────────────────────────────────────────
   {
     // El stock disponible depende de la lista de spares: es la única consulta
@@ -319,6 +434,86 @@ async function computeOne(
     });
   }
 
+  // ── 4.1 · Uso real del sistema de defectos ─────────────────────────────────
+  // Distinto de "failureAnalysis" (Elem 8, RCA): esto responde si el módulo de
+  // Defectos tiene evidencia cargada para este buque, no si esa evidencia
+  // incluye un análisis de causa raíz.
+  {
+    const status: TmsaStatus = defectsTotal === 0 ? "INFO" : defectsStaleOpen > 0 ? "ATTENTION" : "OK";
+    groups.push({
+      key: "defectReporting", element: "4.1", status,
+      metrics: [
+        { key: "defectsTotal", value: defectsTotal, kind: "count" },
+        { key: "defectsStaleOpen", value: defectsStaleOpen, kind: "count" },
+      ],
+    });
+  }
+
+  // ── 4.2 · Certificados (validez y exactitud) ───────────────────────────────
+  // Reusa la misma lógica de estado (30 días) que certificates-service.ts —
+  // no reinventa el umbral de vencimiento.
+  {
+    const status: TmsaStatus = certificatesTotal === 0 ? "INFO" : certificatesExpired > 0 ? "GAP" : certificatesExpiringSoon > 0 ? "ATTENTION" : "OK";
+    groups.push({
+      key: "certificates", element: "4.2", status,
+      metrics: [
+        { key: "certificatesTotal", value: certificatesTotal, kind: "count" },
+        { key: "certificatesExpired", value: certificatesExpired, kind: "count" },
+        { key: "certificatesExpiringSoon", value: certificatesExpiringSoon, kind: "count" },
+      ],
+    });
+  }
+
+  // ── 4.2 · Inspecciones (tanques/lastre, visitas) ───────────────────────────
+  {
+    const status: TmsaStatus = inspectionsTotal === 0 ? "INFO" : inspectionsOverdue > 0 ? "GAP" : "OK";
+    groups.push({
+      key: "inspections", element: "4.2", status,
+      metrics: [
+        { key: "inspectionsTotal", value: inspectionsTotal, kind: "count" },
+        { key: "inspectionsOverdue", value: inspectionsOverdue, kind: "count" },
+      ],
+    });
+  }
+
+  // ── 4.1 · Auditoría de ingeniería del representante de la compañía ─────────
+  // TMSA pide auditorías integrales de ingeniería, hechas por un representante
+  // calificado, que incluyan la observación de las prácticas DURANTE LA
+  // NAVEGACIÓN. Se esperan 2 al año; lo que cuenta como evidencia es la OT de
+  // inspección cerrada con condición "en navegación".
+  {
+    const auditsLast12m = engineeringAuditRows.length;
+    const auditsAtSea = engineeringAuditRows.filter(r => r.operatingCondition === "NAVEGACION").length;
+    // Sin plan de auditoría no hay nada que reclamar: son las barcazas, que no
+    // llevan tripulación de máquinas. Se informa, no se marca brecha.
+    const status: TmsaStatus =
+      auditPlanIds.length === 0 ? "INFO" :
+      auditsAtSea === 0 ? "GAP" :
+      auditsAtSea < 2 ? "ATTENTION" : "OK";
+    groups.push({
+      // El requisito que cubre este grupo es el 4.4.5 de la lista OCIMF (etapa 4
+      // del elemento 4), no el 4.1: con la etiqueta vieja el panel de evidencia
+      // y la pestaña Checklist numeraban distinto el mismo requisito.
+      key: "engineeringAudit", element: "4.4", status,
+      metrics: [
+        { key: "auditsLast12m", value: auditsLast12m, kind: "count" },
+        { key: "auditsAtSea", value: auditsAtSea, kind: "count" },
+      ],
+    });
+  }
+
+  // ── 4A.2 · Permisos de Trabajo en equipo crítico ───────────────────────────
+  {
+    const status: TmsaStatus = permitsTotal === 0 ? "INFO" : permitsDraftStuck > 0 ? "ATTENTION" : "OK";
+    groups.push({
+      key: "permits", element: "4A.2", status,
+      metrics: [
+        { key: "permitsTotal", value: permitsTotal, kind: "count" },
+        { key: "permitsDraftStuck", value: permitsDraftStuck, kind: "count" },
+      ],
+    });
+  }
+
   const summary = { ok: 0, attention: 0, gap: 0, info: 0 };
   for (const g of groups) {
     if (g.status === "OK") summary.ok++;
@@ -342,7 +537,7 @@ function isoDateOnly(d: Date | string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
-export type TmsaEntityType = "asset" | "workOrder" | "maintenancePlan" | "deferral" | "spare" | "spareRequest" | "fluidAnalysis" | "defect" | "moc";
+export type TmsaEntityType = "asset" | "workOrder" | "maintenancePlan" | "deferral" | "spare" | "spareRequest" | "fluidAnalysis" | "defect" | "moc" | "certificate" | "inspection" | "permit" | "drydockSpec";
 
 export interface TmsaDetailItem {
   id: string;
@@ -369,6 +564,7 @@ export async function getTmsaMetricDetail(
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
   const d60 = new Date(now.getTime() - 60 * 86_400_000);
   const dCritical = new Date(now.getTime() - CRITICAL_OVERDUE_DAYS * 86_400_000);
+  const d365 = new Date(now.getTime() - 365 * 86_400_000);
   const base = { tenantId, vesselCode, deletedAt: null };
 
   const p = prisma as unknown as {
@@ -381,6 +577,10 @@ export async function getTmsaMetricDetail(
     fluidAnalysisResult: { findMany(a: unknown): Promise<any[]> };
     defect: { findMany(a: unknown): Promise<any[]>; groupBy(a: unknown): Promise<Array<{ assetId: string | null; _count: { _all: number } }>> };
     mocRecord: { findMany(a: unknown): Promise<any[]> };
+    certificate: { findMany(a: unknown): Promise<any[]> };
+    inspection: { findMany(a: unknown): Promise<any[]> };
+    permitToWork: { findMany(a: unknown): Promise<any[]> };
+    drydockSpec: { findMany(a: unknown): Promise<any[]> };
   };
 
   const assetSelect = { id: true, assetCode: true, name: true, criticality: true, status: true };
@@ -392,6 +592,12 @@ export async function getTmsaMetricDetail(
     ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: pl.nextDueDate ? `Próximo ${isoDateOnly(pl.nextDueDate)}` : null, entityType: "maintenancePlan" });
   const asDeferral = (d: any): TmsaDetailItem =>
     ({ id: d.id, code: d.deferralCode, label: d.justification ?? d.deferralCode, sublabel: d.status, entityType: "deferral" });
+  const asDrydockSpec = (s: any): TmsaDetailItem =>
+    ({ id: s.id, code: s.specCode, label: s.title ?? s.specCode, sublabel: s.status, entityType: "drydockSpec" });
+  // Una línea de la varada se abre por su documento: la pantalla no tiene
+  // deep-link por ítem, así que el código que se muestra es el de la spec.
+  const asDrydockItem = (i: any): TmsaDetailItem =>
+    ({ id: i.specId, code: i.specCode, label: `${i.itemNo}. ${i.title}`, sublabel: i.sourceType, entityType: "drydockSpec" });
   const asSpare = (s: any): TmsaDetailItem =>
     ({ id: s.id, code: s.sku, label: s.name, entityType: "spare" });
   const asSpareRequest = (r: any): TmsaDetailItem =>
@@ -400,6 +606,12 @@ export async function getTmsaMetricDetail(
     ({ id: d.id, code: d.defectCode, label: d.description, sublabel: d.severity, entityType: "defect" });
   const asMoc = (m: any): TmsaDetailItem =>
     ({ id: m.id, code: m.mocCode, label: m.title, sublabel: m.status, entityType: "moc" });
+  const asCertificate = (c: any): TmsaDetailItem =>
+    ({ id: c.id, code: c.certificateCode, label: c.name, sublabel: c.expiryDate ? `Vence ${isoDateOnly(c.expiryDate)}` : null, entityType: "certificate" });
+  const asInspection = (i: any): TmsaDetailItem =>
+    ({ id: i.id, code: i.inspectionCode, label: i.type, sublabel: i.scheduledAt ? `Programada ${isoDateOnly(i.scheduledAt)}` : i.status, entityType: "inspection" });
+  const asPermit = (pw: any): TmsaDetailItem =>
+    ({ id: pw.id, code: pw.permitCode, label: pw.type, sublabel: pw.status, entityType: "permit" });
 
   switch (metric) {
     case "assetsTotal": {
@@ -460,7 +672,7 @@ export async function getTmsaMetricDetail(
     }
     case "deferralsActive": {
       const rows = await p.deferral.findMany({
-        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
+        where: { ...base, status: { notIn: ["CLOSED", "EXPIRED", "REJECTED"] } },
         select: { id: true, deferralCode: true, justification: true, status: true }, orderBy: { deferralCode: "asc" },
       });
       return { items: rows.map(asDeferral) };
@@ -472,7 +684,7 @@ export async function getTmsaMetricDetail(
       // (no en SQL) para garantizar que el drill-down nunca desalinee con el
       // número mostrado en la tarjeta.
       const active = await p.deferral.findMany({
-        where: { ...base, status: { notIn: ["CLOSED", "CANCELLED", "EXPIRED", "REJECTED"] } },
+        where: { ...base, status: { notIn: ["CLOSED", "EXPIRED", "REJECTED"] } },
         select: { id: true, deferralCode: true, justification: true, status: true, riskLevel: true, decisionAt: true, targetDate: true, expiredAt: true },
         orderBy: { deferralCode: "asc" },
       });
@@ -546,6 +758,120 @@ export async function getTmsaMetricDetail(
         select: { id: true, mocCode: true, title: true, status: true }, orderBy: { mocCode: "desc" },
       });
       return { items: rows.map(asMoc) };
+    }
+    case "defectsTotal": {
+      const rows = await p.defect.findMany({
+        where: { ...base },
+        select: { id: true, defectCode: true, description: true, severity: true }, orderBy: { defectCode: "desc" },
+      });
+      return { items: rows.map(asDefect) };
+    }
+    case "defectsStaleOpen": {
+      const rows = await p.defect.findMany({
+        where: { ...base, status: "OPEN", reportedAt: { lt: d60 } },
+        select: { id: true, defectCode: true, description: true, severity: true }, orderBy: { reportedAt: "asc" },
+      });
+      return { items: rows.map(asDefect) };
+    }
+    case "certificatesTotal": {
+      const rows = await p.certificate.findMany({ where: { ...base }, select: { id: true, certificateCode: true, name: true, expiryDate: true }, orderBy: { expiryDate: "asc" } });
+      return { items: rows.map(asCertificate) };
+    }
+    case "certificatesExpired":
+    case "certificatesExpiringSoon": {
+      // Mismo filtro base, luego el mismo predicado en JS que computeOne
+      // (resolveComputedStatus) para no desalinear tarjeta vs. drill-down: los
+      // SUSPENDIDOS/CERRADOS no son vencimientos aunque la fecha haya pasado.
+      const rows = await p.certificate.findMany({ where: { ...base }, select: { id: true, certificateCode: true, name: true, expiryDate: true, status: true }, orderBy: { expiryDate: "asc" } });
+      const wanted = metric === "certificatesExpired" ? "EXPIRED" : "EXPIRING_SOON";
+      const filtered = rows.filter((c: any) => resolveComputedStatus(c.expiryDate, c.status) === wanted);
+      return { items: filtered.map(asCertificate) };
+    }
+    case "inspectionsTotal": {
+      const rows = await p.inspection.findMany({ where: { ...base }, select: { id: true, inspectionCode: true, type: true, status: true, scheduledAt: true }, orderBy: { scheduledAt: "desc" } });
+      return { items: rows.map(asInspection) };
+    }
+    case "inspectionsOverdue": {
+      const rows = await p.inspection.findMany({
+        where: { ...base, status: { in: ["SCHEDULED", "IN_PROGRESS"] }, scheduledAt: { lt: now } },
+        select: { id: true, inspectionCode: true, type: true, status: true, scheduledAt: true }, orderBy: { scheduledAt: "asc" },
+      });
+      return { items: rows.map(asInspection) };
+    }
+    // Auditorías de ingeniería: mismo filtro que el grupo, para que la tarjeta
+    // y su detalle no se desalineen.
+    case "auditsLast12m":
+    case "auditsAtSea": {
+      const auditPlans = await p.maintenancePlan.findMany({
+        where: { tenantId, vesselCode, deletedAt: null, taskCode: { startsWith: `${vesselCode}-AUD-ING` } },
+        select: { id: true },
+      });
+      if (auditPlans.length === 0) return { items: [] };
+      const rows = await p.workOrder.findMany({
+        where: {
+          ...base, status: "CLOSED", completedDate: { gte: d365 },
+          maintenancePlanId: { in: auditPlans.map((pl: any) => pl.id) },
+          ...(metric === "auditsAtSea" ? { operatingCondition: "NAVEGACION" } : {}),
+        },
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { completedDate: "desc" }, take: 200,
+      });
+      return { items: rows.map(asWorkOrder) };
+    }
+    case "permitsTotal": {
+      const rows = await p.permitToWork.findMany({ where: { ...base }, select: { id: true, permitCode: true, type: true, status: true }, orderBy: { permitCode: "desc" } });
+      return { items: rows.map(asPermit) };
+    }
+    case "permitsDraftStuck": {
+      const rows = await p.permitToWork.findMany({
+        where: { ...base, status: "DRAFT", createdAt: { lt: d60 } },
+        select: { id: true, permitCode: true, type: true, status: true }, orderBy: { permitCode: "desc" },
+      });
+      return { items: rows.map(asPermit) };
+    }
+    // ── Especificación de Varada ──────────────────────────────────────────────
+    // Mismo filtro que computeOne (status != CANCELLED) y el mismo predicado en
+    // JS, para que el detalle nunca desalinee con el número de la tarjeta.
+    case "drydockSpecsOpen":
+    case "drydockItemsTotal":
+    case "drydockItemsFromBacklog": {
+      const specs = await p.drydockSpec.findMany({
+        where: { ...base, status: { not: "CANCELLED" } },
+        select: {
+          id: true, specCode: true, title: true, status: true,
+          items: { select: { itemNo: true, title: true, sourceType: true }, orderBy: { itemNo: "asc" } },
+        },
+        orderBy: { specCode: "desc" },
+      });
+      if (metric === "drydockSpecsOpen") {
+        return { items: specs.filter((s: any) => s.status !== "APPROVED").map(asDrydockSpec) };
+      }
+      const lines = specs.flatMap((s: any) =>
+        s.items.map((i: any) => ({ ...i, specId: s.id, specCode: s.specCode })));
+      const filtered = metric === "drydockItemsFromBacklog"
+        ? lines.filter((i: any) => i.sourceType !== "MANUAL")
+        : lines;
+      return { items: filtered.map(asDrydockItem) };
+    }
+    // El agujero que mira el auditor: diferimientos vigentes que no entraron a
+    // ninguna especificación. Se devuelven los diferimientos, no las specs.
+    case "deferralsNotInSpec": {
+      const [active, specs] = await Promise.all([
+        p.deferral.findMany({
+          where: { ...base, status: { in: [...DEFERRAL_GRANTED] } },
+          select: { id: true, deferralCode: true, justification: true, status: true },
+          orderBy: { deferralCode: "asc" },
+        }),
+        p.drydockSpec.findMany({
+          where: { ...base, status: { not: "CANCELLED" } },
+          select: { items: { select: { sourceType: true, sourceId: true } } },
+        }),
+      ]);
+      const inSpec = new Set(
+        specs.flatMap((s: any) => s.items)
+          .filter((i: any) => i.sourceType === "DEFERRAL" && i.sourceId)
+          .map((i: any) => i.sourceId as string),
+      );
+      return { items: active.filter((d: any) => !inSpec.has(d.id)).map(asDeferral) };
     }
     default:
       return { items: [] };

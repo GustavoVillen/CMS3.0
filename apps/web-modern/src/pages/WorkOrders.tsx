@@ -182,6 +182,7 @@ interface WorkOrder {
   consequenceRationale: string | null;
   // Formulario controlado REGI-OPE-26.3 (nullable: las OT anteriores no lo tienen)
   voyageNumber?: string | null;
+  operatingCondition?: string | null;
   requestedByArea?: string | null;
   assignedToArea?: string | null;
   systemArea?: string | null;
@@ -993,6 +994,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // vacíos y siguen siendo válidas.
   const [regiForm, setRegiForm] = useState<WoRegiForm>({
     voyageNumber:    workOrder.voyageNumber ?? "",
+    operatingCondition: workOrder.operatingCondition ?? "",
     requestedByArea: workOrder.requestedByArea ?? "",
     assignedToArea:  workOrder.assignedToArea ?? "",
     systemArea:      workOrder.systemArea ?? "",
@@ -1631,6 +1633,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       // en el resto los campos no existen en el modal y quedarían en null.
       ...(isMercurio ? {
         voyageNumber: normalizeOptionalText(regiForm.voyageNumber),
+        operatingCondition: regiForm.operatingCondition || null,
         requestedByArea: regiForm.requestedByArea || null,
         assignedToArea: regiForm.assignedToArea || null,
         systemArea: regiForm.systemArea || null,
@@ -1685,6 +1688,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         providerId: needsProvider ? (providerId || null) : null,
         providerOther: needsProvider ? normalizeOptionalText(providerOther) : null,
         voyageNumber: normalizeOptionalText(regiForm.voyageNumber),
+        operatingCondition: regiForm.operatingCondition || null,
         requestedByArea: regiForm.requestedByArea || null,
         assignedToArea: regiForm.assignedToArea || null,
         systemArea: regiForm.systemArea || null,
@@ -2357,6 +2361,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               }}
               values={{
                 voyageNumber: regiForm.voyageNumber,
+                operatingCondition: regiForm.operatingCondition,
                 location,
                 requestedByArea: regiForm.requestedByArea,
                 assignedToArea: regiForm.assignedToArea,
@@ -2381,6 +2386,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 touchRegi();
                 const regi: Partial<WoRegiForm> = {};
                 if (patch.voyageNumber !== undefined)    regi.voyageNumber = patch.voyageNumber;
+                if (patch.operatingCondition !== undefined) regi.operatingCondition = patch.operatingCondition;
                 if (patch.requestedByArea !== undefined) regi.requestedByArea = patch.requestedByArea;
                 if (patch.assignedToArea !== undefined)  regi.assignedToArea = patch.assignedToArea;
                 if (patch.systemArea !== undefined)      regi.systemArea = patch.systemArea;

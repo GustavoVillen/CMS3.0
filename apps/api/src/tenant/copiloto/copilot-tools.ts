@@ -192,6 +192,20 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "query_drydock_specs",
+    description:
+      "Query drydock specifications (especificaciones de varada: el documento formal de los trabajos a ejecutar en la varada del buque, que arma el buque y aprueba la gerencia en tierra). Cada especificacion tiene items, que pueden venir de diferimientos, defectos u OT pendientes, y cada item lo acepta o descarta tierra. Use this when the user asks what work is planned for the next drydock, what the shipyard scope is, which items shore accepted or rejected, or who approved the specification. Evidence for TMSA 4.2.4 and 4.4.2.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode:   { type: "string", description: "Filter by vessel code (optional)" },
+        status:       { type: "string", description: "Filter by status: DRAFT | SUBMITTED | UNDER_REVIEW | APPROVED | REJECTED | CANCELLED (optional)" },
+        includeItems: { type: "boolean", description: "Include the line items of each specification (default true)" },
+        limit:        { type: "number", description: "Max results (default 5, max 20)" },
+      },
+    },
+  },
+  {
     name: "query_asset_hours",
     description:
       "Query the running-hours ledger of equipment (horas de equipos). This is the SINGLE SOURCE of running hours: readings come from manual entry, from the daily report or from the voyage/tank report (M2). Use this when the user asks how many hours an engine/generator has, when the hourmeter was last read, or how many hours it ran in a period. Pass latestPerAsset=true to get the current hours of each piece of equipment of the vessel (one row per asset, the most recent reading).",
@@ -742,6 +756,52 @@ export async function executeExtendedCopilotTool(
 
       const enriched = await attachAssetNames(prisma, tenantId, rows);
       return toolResult(enriched, "No deferrals found matching the given criteria.");
+    }
+
+    // ── Especificaciones de varada ─────────────────────────────────────────
+    if (name === "query_drydock_specs") {
+      const limit = cap(input.limit, 5, 20);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scoped = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scoped.ok) return scoped.reason;
+      if (input.status) where.status = input.status;
+
+      const withItems = input.includeItems !== false;
+      const rows = await prisma.drydockSpec.findMany({
+        where,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        select: {
+          specCode: true, vesselCode: true, title: true, status: true,
+          shipyardName: true, port: true, plannedStartDate: true, plannedEndDate: true,
+          scopeSummary: true, submittedByName: true, submittedAt: true,
+          approvedByName: true, approvedAt: true, rejectedReason: true,
+          items: {
+            orderBy: { itemNo: "asc" },
+            select: {
+              itemNo: true, category: true, title: true, description: true,
+              assetId: true, priority: true, classRelated: true,
+              itemStatus: true, sourceType: true, proposedByVessel: true,
+              decisionNotes: true,
+            },
+          },
+        },
+      });
+
+      // Nombres de equipo en los items: la IA nunca debe devolver ids sueltos.
+      type DrydockItemRow = { itemStatus: string; assetId?: string | null };
+      const enriched = await Promise.all(
+        (rows as Array<Record<string, unknown> & { items: DrydockItemRow[] }>).map(
+          async ({ items, ...spec }) => ({
+            ...spec,
+            itemCount: items.length,
+            acceptedCount: items.filter((i) => i.itemStatus === "ACCEPTED").length,
+            ...(withItems ? { items: await attachAssetNames(prisma, tenantId, items) } : {}),
+          }),
+        ),
+      );
+
+      return toolResult(enriched, "No drydock specifications found matching the given criteria.");
     }
 
     // ── Horas de equipos ───────────────────────────────────────────────────

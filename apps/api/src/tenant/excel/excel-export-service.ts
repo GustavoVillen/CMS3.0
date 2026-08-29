@@ -222,6 +222,10 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "sourceRecordId", "assetId",
     "createdByUserId", "updatedByUserId", "updatedAt",
   ],
+  drydock_specs: [
+    "specId", "itemId", "assetId", "sourceId",
+    "createdByUserId", "updatedByUserId",
+  ],
 };
 
 function sortDynamicKeys(module: ExcelModule, keys: string[]): string[] {
@@ -435,6 +439,66 @@ async function fetchRecords(
           assetName: a?.name ?? null,
         };
       });
+    }
+
+    case "drydock_specs": {
+      // Una fila por ítem de especificación, con la cabecera repetida al frente:
+      // es el formato que se le manda al astillero.
+      if (filters.status) where.status = filters.status;
+      const specs = await (prisma as any).drydockSpec.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }],
+        include: {
+          items: {
+            orderBy: { itemNo: "asc" },
+            include: { _count: { select: { comments: true } } },
+          },
+        },
+      }) as any[];
+
+      const assetIds = [...new Set(specs.flatMap((s) => s.items.map((i: any) => i.assetId)).filter(Boolean))];
+      const assets = assetIds.length
+        ? await (prisma as any).asset.findMany({
+            where: { id: { in: assetIds }, tenantId: where.tenantId as string },
+            select: { id: true, name: true },
+          }) as any[]
+        : [];
+      const assetMap = new Map(assets.map((a) => [a.id, a.name]));
+
+      const vesselCodes = [...new Set(specs.map((s) => s.vesselCode))];
+      const vessels = vesselCodes.length
+        ? await (prisma as any).vessel.findMany({
+            where: { tenantId: where.tenantId as string, code: { in: vesselCodes } },
+            select: { code: true, name: true },
+          }) as any[]
+        : [];
+      const vesselMap = new Map(vessels.map((v) => [v.code, v.name]));
+
+      return specs.flatMap((s) =>
+        s.items.map((i: any) => ({
+          specCode:   s.specCode,
+          vesselCode: s.vesselCode,
+          vesselName: vesselMap.get(s.vesselCode) ?? s.vesselCode,
+          specTitle:  s.title,
+          specStatus: s.status,
+          shipyardName: s.shipyardName,
+          port: s.port,
+          plannedStartDate: s.plannedStartDate,
+          plannedEndDate:   s.plannedEndDate,
+          itemNo:      i.itemNo,
+          category:    i.category,
+          title:       i.title,
+          description: i.description,
+          assetName:   i.assetId ? assetMap.get(i.assetId) ?? null : null,
+          priority:    i.priority,
+          classRelated: i.classRelated,
+          itemStatus:  i.itemStatus,
+          sourceType:  i.sourceType,
+          proposedBy:  i.proposedByVessel ? "BUQUE" : "TIERRA",
+          decisionNotes: i.decisionNotes,
+          commentCount:  i._count.comments,
+        })),
+      );
     }
 
     case "crew_rest_hours": {

@@ -41,6 +41,9 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "assetHours.write",         group: "maintenance", labelKey: "perm.assetHoursWrite" },
   { key: "defect.write",             group: "maintenance", labelKey: "perm.defectWrite" },
   { key: "defect.delete",            group: "maintenance", labelKey: "perm.defectDelete" },
+  // Aprobar la especificacion de varada (TMSA 4.2.4): la arma el buque, la
+  // aprueba tierra. Por defecto solo el superintendente de flota.
+  { key: "drydock.approve",          group: "maintenance", labelKey: "perm.drydockApprove" },
   // Solicitudes y compras
   { key: "sr.approve",               group: "procurement", labelKey: "perm.srApprove" },
   { key: "sr.authorize",             group: "procurement", labelKey: "perm.srAuthorize" },
@@ -102,6 +105,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Superintendente tecnico (tierra): autoriza OT y SS, aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
     "wo.authorize", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
+    "drydock.approve",
     "sr.approve", "sr.authorize", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",
     "inspection.execute", "checklist.manageTemplates",

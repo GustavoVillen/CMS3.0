@@ -41,6 +41,7 @@ const MATCHING_KEY: Record<ExcelModule, string> = {
   daily_reports:       "id",
   monthly_reports:     "id",
   asset_hours:         "id",
+  drydock_specs:       "specCode",
 };
 
 const HEADER_ALIASES: Record<string, string> = {

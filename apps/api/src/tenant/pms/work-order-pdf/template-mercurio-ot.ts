@@ -14,7 +14,8 @@
 
 import PDFDocument from "pdfkit";
 import {
-  makeFormatters, val, statusLabel, riskLabel, woResultLabel, sanitizePdfText, PAGE_H,
+  makeFormatters, val, statusLabel, riskLabel, woResultLabel, operatingConditionLabel,
+  sanitizePdfText, PAGE_H,
   type WorkOrderPdfContext,
 } from "./shared";
 import {
@@ -257,7 +258,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     canvas.y = MARGIN_T + hdrH + 10;
 
     const sections: Record<string, () => void> = {
-      // UNIDAD / EQUIPO / UBICACION / ITEM DEL PDM / GENERADO POR
+      // UNIDAD / EQUIPO / UBICACION / ITEM DEL PDM / GENERADO POR / CONDICION
       // + NRO DE OT / NRO DE SS-SC / FECHA / ESTADO / NRO DE VIAJE
       header: () => {
         const assetText = assetIsSafetyCritical ? `${assetLabel}  [ISM 10.3]` : assetLabel;
@@ -281,6 +282,14 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         kvRow([
           { label: label("generadoPor", "GENERADO POR"), value: ctx.createdByFormName ?? createdByName ?? "" },
           { label: label("nroViaje", "NRO DE VIAJE"), value: w.voyageNumber ?? "" },
+        ]);
+        // CONDICION: en qué situación estaba el buque cuando se hizo el trabajo.
+        // Va sola y a lo ancho porque en papel se completa a mano si viene vacía.
+        kvRow([
+          {
+            label: label("condicion", "CONDICION"),
+            value: operatingConditionLabel(w.operatingCondition),
+          },
         ]);
         canvas.y += 8;
       },
@@ -540,7 +549,12 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         // Firma al 300%: el recuadro crece para alojar la firma agrandada sin
         // pisar el nombre / la línea / el rótulo (que se posicionan relativos a H).
         const SIG_W = 210, SIG_H = 78; // 3× el tamaño anterior (70×26)
-        const H = 116;
+        // La calificación del firmante (TMSA: representante calificado y con
+        // experiencia) va sobre el nombre. Sólo si alguno de los dos la tiene
+        // cargada se agranda el recuadro: las OT sin el dato quedan igual.
+        const qual: Array<string | null | undefined> = [ctx.createdByQualification, ctx.assignedQualification];
+        const hasQual = qual.some(q => Boolean(q && q.trim()));
+        const H = hasQual ? 128 : 116;
         ensureSpace(H + 10);
         const half = Math.floor(W / 2);
         const boxes: Array<[string, string | null, Buffer | null | undefined]> = [
@@ -558,6 +572,11 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
           if (name) {
             doc.fontSize(8).font("Helvetica").fillColor(BLACK)
               .text(sanitizePdfText(name), bx + 8, canvas.y + H - 26, { width: bw - 16, lineBreak: false });
+          }
+          const q = qual[i];
+          if (q && q.trim()) {
+            doc.fontSize(6).font("Helvetica").fillColor(GRAY)
+              .text(sanitizePdfText(q), bx + 8, canvas.y + H - 36, { width: bw - 16, lineBreak: false });
           }
           doc.moveTo(bx + 10, canvas.y + H - 14).lineTo(bx + bw - 10, canvas.y + H - 14)
             .strokeColor("#aaaaaa").lineWidth(0.8).stroke();

@@ -8,6 +8,7 @@ import {
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, CalendarRange, Fuel,
   SearchCheck,
   Timer,
+  Anchor,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -85,6 +86,9 @@ export const NAV: NavSection[] = [
       { icon: CalendarRange,   labelKey: "nav.weeklyReport",     path: "/weekly-report",
         roles: ["TENANT_ADMIN"] },
       { icon: Clock,           labelKey: "nav.deferrals",        path: "/deferrals" },
+      // Pegada a Diferimientos: la especificación de varada es donde terminan
+      // los trabajos diferidos, los defectos abiertos y las OT pendientes.
+      { icon: Anchor,          labelKey: "nav.drydockSpecs",     path: "/drydock-specs" },
       // DORMANTE — CAPA: módulo oculto de la entrega (simplificación; el flujo correctivo
       // vive dentro del Defecto). Reactivar: descomentar esta línea + rutas /capa en App.tsx.
       // { icon: Microscope,      labelKey: "nav.capa",             path: "/capa" },

@@ -24,6 +24,15 @@ export const WO_ASSIGNED_TO: FormOption[] = [
   { value: "OPS_SSMA",    label: "Ops / SSMA" },
 ];
 
+/**
+ * CONDICIÓN — en qué situación estaba el buque cuando se hizo el trabajo.
+ * No sale del papel: es dato del sistema (evidencia TMSA de las prácticas
+ * observadas durante la navegación), así que las etiquetas van por i18n
+ * (`wo.condition.<valor>`) y acá viajan sólo los valores del enum.
+ */
+export const WO_OPERATING_CONDITIONS = ["NAVEGACION", "PUERTO", "FONDEADO", "DIQUE"] as const;
+export type WoOperatingCondition = (typeof WO_OPERATING_CONDITIONS)[number];
+
 /** SISTEMA */
 export const WO_SYSTEM_AREAS: FormOption[] = [
   { value: "MAQUINAS",    label: "Máquinas" },

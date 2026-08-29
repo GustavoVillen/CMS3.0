@@ -179,6 +179,7 @@ export interface OpenFormalWorkOrderInput {
   requestedByArea?: string | null;
   systemArea?: string | null;
   voyageNumber?: string | null;
+  operatingCondition?: "NAVEGACION" | "PUERTO" | "FONDEADO" | "DIQUE" | null;
   location?: string | null;
   /**
    * "Asignado a": por defecto se deriva del área del plan (ver más abajo), pero
@@ -1997,6 +1998,7 @@ export async function openFormalWorkOrder(
         requestedByArea: normalizeOptionalText(payload.requestedByArea) ?? null,
         systemArea: normalizeOptionalText(payload.systemArea) ?? null,
         voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? null,
+        operatingCondition: payload.operatingCondition ?? null,
         location: normalizeOptionalText(payload.location) ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,

@@ -311,6 +311,15 @@ const dict = {
   "team.statusInvited":    { es: "Invitado",                 en: "Invited",                 pt: "Convidado" },
   "team.statusRevoked":    { es: "Revocado",                 en: "Revoked",                 pt: "Revogado" },
   "team.statusSuspended":  { es: "Suspendido",               en: "Suspended",               pt: "Suspenso" },
+  // Calificación del representante de la compañía: TMSA pide que las auditorías
+  // de ingeniería las firme alguien debidamente calificado y con experiencia.
+  "team.qual.section":     { es: "Calificación",             en: "Qualification",           pt: "Qualificação" },
+  "team.qual.hint":        { es: "Se imprime bajo la firma en la orden de trabajo.", en: "Printed under the signature on the work order.", pt: "Impresso sob a assinatura na ordem de trabalho." },
+  "team.qual.jobTitle":    { es: "Cargo / título",           en: "Job title",               pt: "Cargo / título" },
+  "team.qual.license":     { es: "Matrícula o licencia",     en: "Licence number",          pt: "Matrícula ou licença" },
+  "team.qual.years":       { es: "Años de experiencia",      en: "Years of experience",     pt: "Anos de experiência" },
+  "team.qual.docUrl":      { es: "Respaldo documental (link)", en: "Supporting document (link)", pt: "Documento de respaldo (link)" },
+  "team.qual.notes":       { es: "Aclaraciones",             en: "Notes",                   pt: "Observações" },
   "empty.team":            { es: "Sin miembros en el equipo", en: "No team members",        pt: "Sem membros na equipe" },
 
   "mp.checklistTemplate":  { es: "Documento de Checklist", en: "Checklist Document",      pt: "Documento de Checklist" },
@@ -1550,6 +1559,13 @@ const dict = {
   "wo.dept.OTROS":             { es: "Otros",                  en: "Other",                pt: "Outros" },
   "wo.modal.location":         { es: "Ubicación",              en: "Location",             pt: "Localização" },
   "wo.modal.voyageNumber":     { es: "Nro de viaje",           en: "Voyage number",        pt: "Nº da viagem" },
+  // Condición operativa del buque al ejecutar el trabajo (evidencia TMSA de las
+  // prácticas observadas durante la navegación).
+  "wo.modal.operatingCondition": { es: "Condición",            en: "Condition",            pt: "Condição" },
+  "wo.condition.NAVEGACION":   { es: "En navegación",          en: "Under way",            pt: "Em navegação" },
+  "wo.condition.PUERTO":       { es: "En puerto",              en: "In port",              pt: "Em porto" },
+  "wo.condition.FONDEADO":     { es: "Fondeado",               en: "At anchor",            pt: "Fundeado" },
+  "wo.condition.DIQUE":        { es: "En dique",               en: "In dry dock",          pt: "Em dique" },
   "wo.modal.requestedBy":      { es: "Solicitado por",         en: "Requested by",         pt: "Solicitado por" },
   "wo.modal.assignedTo":       { es: "Asignado a",             en: "Assigned to",          pt: "Atribuído a" },
   "wo.modal.system":           { es: "Sistema",                en: "System",               pt: "Sistema" },
@@ -2222,6 +2238,7 @@ const dict = {
   "dashboard.mpChooser.searchPlaceholder": { es: "Buscar equipo por código o nombre…", en: "Search equipment by code or name…", pt: "Buscar equipamento por código ou nome…" },
   "dashboard.equipmentStatusButton": { es: "Estado de mantenimiento de equipos", en: "Equipment maintenance status", pt: "Status de manutenção de equipamentos" },
   "dashboard.assetHoursButton": { es: "Registrar Horas de Equipos", en: "Log Equipment Hours", pt: "Registrar Horas de Equipamentos" },
+  "dashboard.tmsaAudit": { es: "Auditoría TMSA", en: "TMSA Audit", pt: "Auditoria TMSA" },
   "dashboard.mpChooser.titleStatus": { es: "¿De qué equipo querés ver el estado?", en: "Which equipment's status do you want to see?", pt: "De qual equipamento você quer ver o status?" },
   "dashboard.equipmentStatus.overdue":  { es: "Con tareas vencidas", en: "Has overdue tasks", pt: "Com tarefas vencidas" },
   "dashboard.equipmentStatus.upcoming": { es: "Con tareas próximas", en: "Has upcoming tasks", pt: "Com tarefas próximas" },
@@ -2284,6 +2301,11 @@ const dict = {
   "tmsa.group.conditionMonitoring":{ es: "Monitoreo de condición (CBM)",   en: "Condition monitoring (CBM)", pt: "Monitoramento de condição (CBM)" },
   "tmsa.group.failureAnalysis":    { es: "Análisis de fallas / RCA",       en: "Failure analysis / RCA",   pt: "Análise de falhas / RCA" },
   "tmsa.group.managementOfChange": { es: "Gestión del cambio (MOC)",       en: "Management of change (MOC)", pt: "Gestão da mudança (MOC)" },
+  "tmsa.group.defectReporting":    { es: "Uso del sistema de defectos",    en: "Defect system usage",      pt: "Uso do sistema de defeitos" },
+  "tmsa.group.certificates":       { es: "Certificados",                  en: "Certificates",              pt: "Certificados" },
+  "tmsa.group.inspections":        { es: "Inspecciones",                  en: "Inspections",               pt: "Inspeções" },
+  "tmsa.group.permits":            { es: "Permisos de Trabajo",           en: "Permits to Work",           pt: "Permissões de Trabalho" },
+  "tmsa.group.engineeringAudit":   { es: "Auditoría de ingeniería",       en: "Engineering audit",         pt: "Auditoria de engenharia" },
   // Métricas
   "tmsa.metric.assetsTotal":          { es: "Activos totales",             en: "Total assets",             pt: "Ativos totais" },
   "tmsa.metric.assetsWithPlan":       { es: "Con plan activo",             en: "With active plan",         pt: "Com plano ativo" },
@@ -2309,6 +2331,17 @@ const dict = {
   "tmsa.metric.recurringAssets":      { es: "Activos recurrentes",         en: "Recurring assets",         pt: "Ativos recorrentes" },
   "tmsa.metric.mocOpen":              { es: "MOC abiertos",                en: "Open MOC",                 pt: "MOC abertos" },
   "tmsa.metric.mocPendingImpl":       { es: "Pend. implementación",        en: "Pending implementation",   pt: "Pend. implementação" },
+  "tmsa.metric.defectsTotal":         { es: "Defectos registrados",        en: "Defects logged",           pt: "Defeitos registrados" },
+  "tmsa.metric.defectsStaleOpen":     { es: "Abiertos hace +60d",          en: "Open 60d+",                pt: "Abertos há +60d" },
+  "tmsa.metric.certificatesTotal":        { es: "Certificados cargados",   en: "Certificates loaded",      pt: "Certificados carregados" },
+  "tmsa.metric.certificatesExpired":      { es: "Vencidos",                en: "Expired",                  pt: "Vencidos" },
+  "tmsa.metric.certificatesExpiringSoon": { es: "Por vencer (30d)",        en: "Expiring soon (30d)",      pt: "A vencer (30d)" },
+  "tmsa.metric.inspectionsTotal":     { es: "Inspecciones registradas",    en: "Inspections logged",       pt: "Inspeções registradas" },
+  "tmsa.metric.inspectionsOverdue":   { es: "Vencidas sin hacer",          en: "Overdue, not done",        pt: "Vencidas, não realizadas" },
+  "tmsa.metric.auditsLast12m":        { es: "Auditorías en 12 meses",      en: "Audits in 12 months",      pt: "Auditorias em 12 meses" },
+  "tmsa.metric.auditsAtSea":          { es: "Hechas en navegación",        en: "Carried out under way",    pt: "Realizadas em navegação" },
+  "tmsa.metric.permitsTotal":         { es: "Permisos registrados",        en: "Permits logged",           pt: "Permissões registradas" },
+  "tmsa.metric.permitsDraftStuck":    { es: "Borrador +60d sin avanzar",   en: "Draft, stuck 60d+",         pt: "Rascunho, parado há +60d" },
 
   "tmsa.detail.hint":        { es: "Click en una métrica para ver el detalle",  en: "Click a metric to see the detail",   pt: "Clique em uma métrica para ver o detalhe" },
   "tmsa.detail.loadError":   { es: "No se pudo cargar el detalle.",             en: "Could not load the detail.",         pt: "Não foi possível carregar o detalhe." },
@@ -2323,6 +2356,111 @@ const dict = {
 
   "tmsa.assess.hint":    { es: "Click en el estado para analizarlo con IA", en: "Click the status to analyze it with AI", pt: "Clique no estado para analisá-lo com IA" },
   "tmsa.assess.metrics": { es: "Métricas del sub-requisito",                en: "Sub-requirement metrics",                pt: "Métricas do sub-requisito" },
+
+  // ─── TMSA · Checklist OCIMF (pestaña nueva, Elemento 4 + 4A) ────────────────
+  "tmsa.tabs.evidence":  { es: "Evidencia",       en: "Evidence",       pt: "Evidência" },
+  "tmsa.tabs.checklist": { es: "Checklist OCIMF", en: "OCIMF Checklist", pt: "Checklist OCIMF" },
+
+  "tmsa.checklist.rating.full":    { es: "Cumple",    en: "Meets",         pt: "Atende" },
+  "tmsa.checklist.rating.partial": { es: "Parcial",   en: "Partial",       pt: "Parcial" },
+  "tmsa.checklist.rating.none":    { es: "No cubre",  en: "Not covered",   pt: "Não cobre" },
+
+  "tmsa.checklist.stage.1": { es: "Etapa 1", en: "Stage 1", pt: "Etapa 1" },
+  "tmsa.checklist.stage.2": { es: "Etapa 2", en: "Stage 2", pt: "Etapa 2" },
+  "tmsa.checklist.stage.3": { es: "Etapa 3", en: "Stage 3", pt: "Etapa 3" },
+  "tmsa.checklist.stage.4": { es: "Etapa 4", en: "Stage 4", pt: "Etapa 4" },
+
+  "tmsa.checklist.subtitle": { es: "Los 26 puntos oficiales de OCIMF sobre Confiabilidad y Mantenimiento (Elemento 4) y Equipo Crítico (Elemento 4A), respondidos según lo que CMS3 hace hoy en tu flota.", en: "The 26 official OCIMF points on Reliability and Maintenance (Element 4) and Critical Equipment (Element 4A), answered against what CMS3 actually does on your fleet today.", pt: "Os 26 pontos oficiais da OCIMF sobre Confiabilidade e Manutenção (Elemento 4) e Equipamento Crítico (Elemento 4A), respondidos conforme o que o CMS3 realmente faz hoje na sua frota." },
+  "tmsa.checklist.scope":    { es: "El TMSA tiene 13 elementos; acá sólo se cubren el 4 y el 4A, los únicos que corresponden a un sistema de mantenimiento.", en: "TMSA has 13 elements; only 4 and 4A are covered here, the only ones that map to a maintenance system.", pt: "O TMSA tem 13 elementos; aqui só são cobertos o 4 e o 4A, os únicos que correspondem a um sistema de manutenção." },
+  "tmsa.checklist.disclaimer": { es: "Mapeo interno de capacidades, no una autoevaluación TMSA presentada ante OCIMF ni una promesa de nivel de madurez.", en: "Internal capability mapping, not a TMSA self-assessment submitted to OCIMF nor a maturity-level claim.", pt: "Mapeamento interno de capacidades, não uma autoavaliação TMSA apresentada à OCIMF nem uma promessa de nível de maturidade." },
+  "tmsa.checklist.liveLabel": { es: "En tu buque:", en: "On your vessel:", pt: "No seu navio:" },
+  "tmsa.checklist.noVessel":  { es: "Elegí un buque para ver el dato en vivo.", en: "Pick a vessel to see the live figure.", pt: "Escolha um navio para ver o dado ao vivo." },
+  "tmsa.checklist.capacityLabel": { es: "Capacidad",         en: "Capability",         pt: "Capacidade" },
+  "tmsa.checklist.usageLabel":    { es: "Uso en tu buque",   en: "Usage on your vessel", pt: "Uso no seu navio" },
+  "tmsa.checklist.usage.unverified": { es: "Sin verificación automática", en: "No automatic verification", pt: "Sem verificação automática" },
+
+  "tmsa.checklist.element.4":  { es: "Confiabilidad y Mantenimiento del Buque", en: "Vessel Reliability and Maintenance", pt: "Confiabilidade e Manutenção do Navio" },
+  "tmsa.checklist.element.4a": { es: "Confiabilidad y Mantenimiento del Buque (Equipo Crítico)", en: "Vessel Reliability and Maintenance (Critical Equipment)", pt: "Confiabilidade e Manutenção do Navio (Equipamento Crítico)" },
+  "tmsa.checklist.element.4.subtitle":  { es: "Mantenimiento planificado, defectos, repuestos, certificados, indicadores de confiabilidad y monitoreo por condición.", en: "Planned maintenance, defects, spares, certificates, reliability indicators and condition-based monitoring.", pt: "Manutenção planejada, defeitos, sobressalentes, certificados, indicadores de confiabilidade e monitoramento por condição." },
+  "tmsa.checklist.element.4a.subtitle": { es: "La misma lógica de mantenimiento, con el foco puesto en lo que no puede fallar.", en: "The same maintenance logic, focused on what can't be allowed to fail.", pt: "A mesma lógica de manutenção, com o foco no que não pode falhar." },
+
+  "tmsa.checklist.item.4-1-1.q":    { es: "Cada buque de la flota está cubierto por un sistema de mantenimiento planificado y un inventario de repuestos que refleja la estrategia de mantenimiento de la empresa.", en: "Each vessel in the fleet is covered by a planned maintenance system and spare parts inventory which reflects the company's maintenance strategy.", pt: "Cada navio da frota está coberto por um sistema de manutenção planejada e um inventário de sobressalentes que reflete a estratégia de manutenção da empresa." },
+  "tmsa.checklist.item.4-1-1.expl": { es: "Todos los buques están cubiertos por el módulo de Planes de Mantenimiento, organizado por grupo SFI y por cada activo. Cada plan define su propio intervalo, y el módulo de Repuestos está enlazado a esos planes y activos.", en: "Every vessel is covered by the Maintenance Plans module, organized by SFI group and by each asset. Each plan sets its own interval, and the Spares module is linked to those plans and assets.", pt: "Todos os navios estão cobertos pelo módulo de Planos de Manutenção, organizado por grupo SFI e por cada ativo. Cada plano define seu próprio intervalo, e o módulo de Sobressalentes está vinculado a esses planos e ativos." },
+
+  "tmsa.checklist.item.4-1-2.q":    { es: "Existe un sistema de reporte de defectos para cada buque de la flota.", en: "A defect reporting system is in place for each vessel within the fleet.", pt: "Existe um sistema de reporte de defeitos para cada navio da frota." },
+  "tmsa.checklist.item.4-1-2.expl": { es: "Existe un módulo de Defectos independiente de las Órdenes de Trabajo, con código propio, severidad y un flujo de estado completo, disponible para todos los buques.", en: "There's a Defects module independent from Work Orders, with its own code, severity and a full status flow, available for every vessel.", pt: "Existe um módulo de Defeitos independente das Ordens de Serviço, com código próprio, severidade e um fluxo de status completo, disponível para todos os navios." },
+
+  "tmsa.checklist.item.4-1-3.q":    { es: "La gerencia de la empresa revisa periódicamente el estado del mantenimiento de la flota.", en: "Company management regularly reviews the status of fleet maintenance.", pt: "A gerência da empresa revisa periodicamente o status da manutenção da frota." },
+  "tmsa.checklist.item.4-1-3.expl": { es: "El estado de vencidos y al día se calcula en tiempo real, y se ve por buque o para toda la flota desde el Panel TMSA y el Diagrama de Gantt de Mantenimiento. La reunión periódica sigue siendo un proceso de la empresa; CMS3 le da números actualizados al minuto.", en: "Overdue/on-time status is calculated in real time and can be seen per vessel or fleet-wide from the TMSA panel and the Maintenance Gantt. The periodic meeting is still a company process; CMS3 feeds it numbers updated to the minute.", pt: "O status de vencidos e em dia é calculado em tempo real e pode ser visto por navio ou para toda a frota a partir do Painel TMSA e do Gantt de Manutenção. A reunião periódica continua sendo um processo da empresa; o CMS3 alimenta ela com números atualizados na hora." },
+
+  "tmsa.checklist.item.4-1-4.q":    { es: "La empresa monitorea las tareas de mantenimiento planificado pendientes.", en: "The company monitors outstanding planned maintenance tasks.", pt: "A empresa monitora as tarefas de manutenção planejada pendentes." },
+  "tmsa.checklist.item.4-1-4.expl": { es: "El sistema calcula automáticamente el estado de cada tarea comparando fecha u horas de funcionamiento contra lo planificado. El Diagrama de Gantt suma una vista visual en línea de tiempo de esas mismas tareas.", en: "The system automatically computes each task's status by comparing date or running hours against the plan. The Maintenance Gantt adds a visual timeline of those same tasks.", pt: "O sistema calcula automaticamente o status de cada tarefa comparando data ou horas de funcionamento com o planejado. O Gantt soma uma visão visual em linha do tempo dessas mesmas tarefas." },
+
+  "tmsa.checklist.item.4-2-1.q":    { es: "Existe un procedimiento para asegurar la validez y exactitud de los certificados estatutarios y/o de clasificación.", en: "A procedure is in place to ensure the validity and accuracy of statutory and/or Classification certificates.", pt: "Existe um procedimento para garantir a validade e exatidão dos certificados estatutários e/ou de classificação." },
+  "tmsa.checklist.item.4-2-1.expl": { es: "El módulo de Certificados guarda fecha de emisión y vencimiento, autoridad emisora y el archivo adjunto. El estado se calcula solo, con aviso desde 30 días antes, y cada renovación queda en su propio historial.", en: "The Certificates module stores issue/expiry dates, issuing authority and the file attachment. Status is calculated automatically, with a warning from 30 days out, and every renewal keeps its own history.", pt: "O módulo de Certificados guarda data de emissão e vencimento, autoridade emissora e o arquivo anexado. O status é calculado automaticamente, com aviso a partir de 30 dias antes, e cada renovação fica com seu próprio histórico." },
+
+  "tmsa.checklist.item.4-2-2.q":    { es: "Los espacios de carga, vacíos y de lastre se inspeccionan para asegurar que se mantiene su integridad.", en: "Cargo, void and ballast spaces are inspected to ensure their integrity is maintained.", pt: "Os espaços de carga, vazios e de lastro são inspecionados para assegurar que sua integridade é mantida." },
+  "tmsa.checklist.item.4-2-2.expl": { es: "El módulo de Inspecciones permite armar plantillas con ítems que exigen foto. Se puede configurar una plantilla específica para tanques de carga, vacíos y lastre — hay que crearla una vez para que quede como rutina fija.", en: "The Inspections module allows checklist templates with photo-required items. A specific template for cargo, void and ballast spaces can be set up — it has to be created once to become a fixed routine.", pt: "O módulo de Inspeções permite montar modelos com itens que exigem foto. É possível configurar um modelo específico para tanques de carga, vazios e lastro — é preciso criá-lo uma vez para virar rotina fixa." },
+
+  "tmsa.checklist.item.4-2-3.q":    { es: "Los superintendentes verifican los registros de mantenimiento y defectos durante las visitas al buque.", en: "Superintendents verify maintenance and defect records during ship visits.", pt: "Os superintendentes verificam os registros de manutenção e defeitos durante as visitas ao navio." },
+  "tmsa.checklist.item.4-2-3.expl": { es: "El módulo de Inspecciones contempla la visita del superintendente, y además cualquier superintendente en tierra ve en vivo los mismos registros que ve el buque — no depende de un informe posterior.", en: "The Inspections module covers the superintendent's visit, and any shore-based superintendent also sees the same records live as the vessel — it doesn't depend on a report afterwards.", pt: "O módulo de Inspeções contempla a visita do superintendente, e qualquer superintendente em terra também vê ao vivo os mesmos registros que o navio — não depende de um relatório posterior." },
+
+  "tmsa.checklist.item.4-2-4.q":    { es: "La empresa cuenta con un sistema formal para elaborar las especificaciones de varada, con colaboración entre el buque y la gerencia en tierra.", en: "The company has a formal system to develop dry-dock specifications, which involves collaboration between the vessel and shore management.", pt: "A empresa possui um sistema formal para elaborar as especificações de docagem, com colaboração entre o navio e a gerência em terra." },
+  "tmsa.checklist.item.4-2-4.expl": { es: "El módulo Especificación de Varada es ese sistema formal: el buque arma la lista de trabajos —a mano o importando diferimientos, defectos y OT pendientes—, la envía a tierra, la superintendencia comenta trabajo por trabajo, acepta o descarta cada línea y aprueba el documento. Queda la traza de quién propuso, quién comentó y quién aprobó, más el PDF y la planilla para el astillero.", en: "The Drydock Specification module is that formal system: the vessel builds the work list —by hand or importing deferrals, defects and pending work orders—, sends it to shore, the superintendency comments item by item, accepts or discards each line and approves the document. The trace of who proposed, who commented and who approved remains, plus the PDF and spreadsheet for the yard.", pt: "O módulo Especificação de Docagem é esse sistema formal: o navio monta a lista de trabalhos —à mão ou importando adiamentos, defeitos e OS pendentes—, envia para terra, a superintendência comenta trabalho por trabalho, aceita ou descarta cada linha e aprova o documento. Fica o rastro de quem propôs, quem comentou e quem aprovou, mais o PDF e a planilha para o estaleiro." },
+
+  "tmsa.checklist.item.4-3-1.q":    { es: "Un sistema de mantenimiento informático común a bordo de cada buque registra todas las tareas de mantenimiento e incorpora el sistema de reporte de defectos.", en: "A common computer-based maintenance system onboard each vessel records all maintenance tasks and incorporates the defect reporting system.", pt: "Um sistema de manutenção informatizado comum a bordo de cada navio registra todas as tarefas de manutenção e incorpora o sistema de reporte de defeitos." },
+  "tmsa.checklist.item.4-3-1.expl": { es: "CMS3 es un sistema único, siempre en línea, que registra cada tarea con la descripción del trabajo por equipo, y tiene el módulo de Defectos completamente integrado a las Órdenes de Trabajo.", en: "CMS3 is a single, always-online system, that records every task with a description of the work done per equipment, with the Defects module fully integrated into Work Orders.", pt: "O CMS3 é um sistema único, sempre online, que registra cada tarefa com a descrição do trabalho por equipamento, com o módulo de Defeitos totalmente integrado às Ordens de Serviço." },
+
+  "tmsa.checklist.item.4-3-2.q":    { es: "La política de la empresa es mantener un inventario óptimo de repuestos o redundancia de sistemas para todos los buques.", en: "The company policy is to maintain an optimum spare parts inventory or system redundancy for all vessels.", pt: "A política da empresa é manter um inventário ótimo de sobressalentes ou redundância de sistemas para todos os navios." },
+  "tmsa.checklist.item.4-3-2.expl": { es: "Cada repuesto tiene stock mínimo, punto de reposición, stock objetivo y criticidad (A/B/C). El stock disponible se calcula a partir de los movimientos reales.", en: "Every spare has minimum stock, reorder point, target stock and a criticality (A/B/C). Available stock is calculated from actual stock movements.", pt: "Cada sobressalente tem estoque mínimo, ponto de reposição, estoque alvo e criticidade (A/B/C). O estoque disponível é calculado a partir das movimentações reais." },
+
+  "tmsa.checklist.item.4-3-3.q":    { es: "Se han desarrollado indicadores de desempeño para monitorear la confiabilidad de la flota. Estos indicadores se miden tanto por buque individual como para toda la flota.", en: "Performance indicators have been developed to monitor fleet reliability. The performance indicators are measured for individual vessels and fleet wide.", pt: "Foram desenvolvidos indicadores de desempenho para monitorar a confiabilidade da frota. Esses indicadores são medidos tanto por navio individual quanto para toda a frota." },
+  "tmsa.checklist.item.4-3-3.expl": { es: "El sistema sigue el cumplimiento de plazo de las Órdenes de Trabajo, las abiertas/vencidas y los planes vencidos, por buque, por grupo SFI y para toda la flota — los mismos números que ve la gerencia son los que ve cada buque.", en: "The system tracks work-order on-time compliance, open/overdue counts and overdue plans, per vessel, per SFI group and fleet-wide — the same numbers management sees are what each vessel sees.", pt: "O sistema acompanha o cumprimento de prazo das ordens de serviço, as abertas/vencidas e os planos vencidos, por navio, por grupo SFI e para toda a frota — os mesmos números que a gerência vê são os que cada navio vê." },
+
+  "tmsa.checklist.item.4-3-4.q":    { es: "La frecuencia y el alcance de las inspecciones estructurales de los espacios de carga, lastre y vacíos del buque se determinan según criterios de riesgo.", en: "The frequency and extent of structural inspections of the vessel's cargo ballast and void spaces is determined based upon risk criteria.", pt: "A frequência e a extensão das inspeções estruturais dos espaços de carga, lastro e vazios do navio são determinadas com base em critérios de risco." },
+  "tmsa.checklist.item.4-3-4.expl": { es: "La frecuencia se puede programar en el sistema, pero que ese intervalo salga de un criterio de riesgo es hoy una decisión que toma la empresa a mano al configurar el plan.", en: "Frequency can be scheduled in the system, but having that interval come from a risk criterion is today a decision the company makes by hand when configuring the plan.", pt: "A frequência pode ser programada no sistema, mas que esse intervalo saia de um critério de risco é hoje uma decisão que a empresa toma manualmente ao configurar o plano." },
+
+  "tmsa.checklist.item.4-4-1.q":    { es: "El sistema de mantenimiento y reporte de defectos integra la gestión del inventario de repuestos y los sistemas de compras.", en: "The maintenance and defect reporting system integrates the spare parts inventory management and procurement systems.", pt: "O sistema de manutenção e reporte de defeitos integra a gestão do inventário de sobressalentes e os sistemas de compras." },
+  "tmsa.checklist.item.4-4-1.expl": { es: "Al abrir una Orden de Trabajo desde un plan, los repuestos previstos pasan automáticamente a la orden, y al cerrarla se descuenta el stock. Si falta un repuesto, se genera una Solicitud de Repuestos con su propio circuito.", en: "When a Work Order is opened from a plan, foreseen spares flow into it automatically, and closing it deducts stock. If a spare is missing, a Spare Request is generated with its own workflow.", pt: "Ao abrir uma Ordem de Serviço a partir de um plano, os sobressalentes previstos passam automaticamente para a ordem, e ao fechá-la o estoque é baixado. Se faltar um sobressalente, é gerada uma Solicitação com seu próprio fluxo." },
+
+  "tmsa.checklist.item.4-4-2.q":    { es: "El sistema de mantenimiento y reporte de defectos hace seguimiento de todos los ítems de reparación diferidos para incluirlos en la especificación de varada.", en: "The maintenance and defect reporting system tracks all deferred repair items for inclusion in the dry-dock specification.", pt: "O sistema de manutenção e reporte de defeitos rastreia todos os itens de reparo adiados para inclusão na especificação de docagem." },
+  "tmsa.checklist.item.4-4-2.expl": { es: "Los diferimientos quedan registrados con fecha y puerto objetivo, y desde la Especificación de Varada se importan al documento del astillero con un tilde. El panel cuenta cuántos diferidos vigentes todavía quedan fuera de una especificación: mientras ese número no sea cero, hay trabajo postergado sin destino.", en: "Deferrals are recorded with a target date and port, and from the Drydock Specification they are imported into the yard document with a tick. The panel counts how many active deferrals are still outside any specification: while that number isn't zero, there is postponed work with nowhere to land.", pt: "Os adiamentos ficam registrados com data e porto de destino, e a partir da Especificação de Docagem são importados para o documento do estaleiro com um clique. O painel conta quantos adiados vigentes ainda estão fora de alguma especificação: enquanto esse número não for zero, há trabalho adiado sem destino." },
+
+  "tmsa.checklist.item.4-4-3.q":    { es: "Los sistemas de mantenimiento y reporte de defectos le dan a la gerencia el estado del mantenimiento de la flota en tiempo real.", en: "The maintenance and defect reporting systems provide management with a real time status of fleet maintenance.", pt: "Os sistemas de manutenção e reporte de defeitos fornecem à gerência o status da manutenção da frota em tempo real." },
+  "tmsa.checklist.item.4-4-3.expl": { es: "Al ser un sistema único siempre online, y no una copia a bordo que sincroniza cada tanto, lo que ve la gerencia en tierra es exactamente el mismo dato, al instante, que el cargado en el buque.", en: "Being a single always-online system, not a copy onboard that syncs every so often, what shore management sees is exactly the same data, instantly, as what's loaded on the vessel.", pt: "Por ser um sistema único sempre online, e não uma cópia a bordo que sincroniza de vez em quando, o que a gerência em terra vê é exatamente o mesmo dado, instantaneamente, que o carregado no navio." },
+
+  "tmsa.checklist.item.4-4-4.q":    { es: "El sistema de mantenimiento planificado incluye el uso de monitoreo por condición para asegurar el desempeño óptimo del equipo.", en: "The planned maintenance system includes the use of condition-based monitoring in order to ensure optimal equipment performance.", pt: "O sistema de manutenção planejada inclui o uso de monitoramento por condição para assegurar o desempenho ótimo do equipamento." },
+  "tmsa.checklist.item.4-4-4.expl": { es: "El módulo de Muestreos y Análisis registra mediciones de aceite, vibración, temperatura y ultrasonido por equipo, con umbrales que arrojan un veredicto, y puede generarse automáticamente al cerrar una orden si el plan lo pide.", en: "The Samples & Analyses module records oil, vibration, temperature and ultrasound readings per equipment, with thresholds that produce a verdict, and can be generated automatically when a work order closes if the plan calls for it.", pt: "O módulo de Amostragens e Análises registra medições de óleo, vibração, temperatura e ultrassom por equipamento, com limites que geram um veredito, e pode ser gerado automaticamente ao fechar uma ordem, se o plano exigir." },
+
+  "tmsa.checklist.item.4-4-5.q":    { es: "Se realizan auditorías integrales de ingeniería a cargo de un representante de la empresa debidamente calificado y con experiencia. La auditoría incluye la observación de las prácticas de ingeniería durante la navegación.", en: "Comprehensive engineering audits are completed by a suitably qualified and experienced company representative. The audit includes observation of engineering practices while on passage.", pt: "São realizadas auditorias abrangentes de engenharia por um representante da empresa devidamente qualificado e experiente. A auditoria inclui a observação das práticas de engenharia durante a navegação." },
+  "tmsa.checklist.item.4-4-5.expl": { es: "La auditoría se planifica con el plan anual de auditoría de ingeniería y se registra como una OT de inspección con la condición operativa del buque (navegación / puerto / fondeado / dique), que es la evidencia de que se observaron las prácticas en marcha. La calificación del representante de la compañía se carga en su ficha de Usuarios y Roles. El panel de evidencia cuenta las auditorías de los últimos 12 meses y cuántas fueron en navegación.", en: "The audit is planned with the annual engineering audit plan and recorded as an inspection work order carrying the vessel's operating condition (at sea / in port / at anchor / in dock), which is the evidence that practices were observed while underway. The company representative's qualification is held on their Users & Roles record. The evidence panel counts audits in the last 12 months and how many took place at sea.", pt: "A auditoria é planejada com o plano anual de auditoria de engenharia e registrada como uma OS de inspeção com a condição operacional do navio (navegação / porto / fundeado / dique), que é a evidência de que as práticas foram observadas em marcha. A qualificação do representante da empresa fica no cadastro de Usuários e Funções. O painel de evidências conta as auditorias dos últimos 12 meses e quantas foram em navegação." },
+
+  "tmsa.checklist.item.4a-1-1.q":    { es: "El equipo y los sistemas críticos están identificados y listados dentro del SGS y del sistema de mantenimiento planificado del buque.", en: "Critical equipment and systems are identified and listed within the SMS and the vessel's planned maintenance system.", pt: "Equipamentos e sistemas críticos são identificados e listados dentro do SGS e do sistema de manutenção planejada do navio." },
+  "tmsa.checklist.item.4a-1-1.expl": { es: "Cada activo tiene un nivel de criticidad (A/B/C) y una marca aparte de 'crítico para la seguridad' (ISM 10.3). Es la misma lista que usan los Planes de Mantenimiento.", en: "Every asset has a criticality level (A/B/C) and a separate 'safety-critical' flag (ISM 10.3). It's the same list the Maintenance Plans use.", pt: "Cada ativo tem um nível de criticidade (A/B/C) e uma marcação à parte de 'crítico para a segurança' (ISM 10.3). É a mesma lista usada pelos Planos de Manutenção." },
+
+  "tmsa.checklist.item.4a-1-2.q":    { es: "Existe un procedimiento para gestionar el mantenimiento planificado del equipo y los sistemas críticos.", en: "A procedure is in place to manage the planned maintenance of critical equipment and systems.", pt: "Existe um procedimento para gerenciar a manutenção planejada de equipamentos e sistemas críticos." },
+  "tmsa.checklist.item.4a-1-2.expl": { es: "El equipo crítico se mantiene con el mismo módulo de Planes y Órdenes de Trabajo, pero el Panel TMSA señala en particular las órdenes vencidas sobre equipos de criticidad A.", en: "Critical equipment is maintained through the same Plans and Work Orders module, but the TMSA panel specifically flags overdue orders on criticality-A equipment.", pt: "O equipamento crítico é mantido com o mesmo módulo de Planos e Ordens de Serviço, mas o Painel TMSA sinaliza especificamente as ordens vencidas sobre equipamentos de criticidade A." },
+
+  "tmsa.checklist.item.4a-1-3.q":    { es: "Existe un procedimiento que exige informar a la gerencia en tierra cuando el equipo o los sistemas críticos presentan defectos o requieren mantenimiento no planificado.", en: "A procedure is in place which requires shore management to be informed when critical equipment or systems become defective or require unplanned maintenance.", pt: "Existe um procedimento que exige que a gerência em terra seja informada quando equipamentos ou sistemas críticos apresentam defeitos ou requerem manutenção não planejada." },
+  "tmsa.checklist.item.4a-1-3.expl": { es: "Cuando se carga un defecto marcado como crítico, el sistema dispara una notificación dentro de la plataforma.", en: "When a defect is logged as critical, the system fires an in-app notification.", pt: "Quando um defeito é registrado como crítico, o sistema dispara uma notificação dentro da plataforma." },
+
+  "tmsa.checklist.item.4a-1-4.q":    { es: "Existen procedimientos para registrar las pruebas de equipos y sistemas críticos que no están en uso continuo.", en: "Procedures are in place to record the testing of critical equipment and systems that are not in continuous use.", pt: "Existem procedimentos para registrar os testes de equipamentos e sistemas críticos que não estão em uso contínuo." },
+  "tmsa.checklist.item.4a-1-4.expl": { es: "Un plan puede definirse por evento o condición, no sólo por calendario u horas, y cada ejecución deja un registro de trabajo con el resultado.", en: "A plan can be defined by event or condition, not only by calendar or hours, and every execution leaves a work record with the result.", pt: "Um plano pode ser definido por evento ou condição, não apenas por calendário ou horas, e cada execução deixa um registro de trabalho com o resultado." },
+
+  "tmsa.checklist.item.4a-2-1.q":    { es: "El mantenimiento de equipos y sistemas críticos que requiere sacarlos de servicio está sujeto a evaluación de riesgo y aprobación de la gerencia.", en: "Maintenance on critical equipment and systems requiring them to be taken out of service is subject to risk assessment and management approval.", pt: "A manutenção de equipamentos e sistemas críticos que exige retirá-los de serviço está sujeita a avaliação de risco e aprovação da gerência." },
+  "tmsa.checklist.item.4a-2-1.expl": { es: "Existe el módulo de Permisos de Trabajo, vinculable a un activo o a una orden. Falta que el sistema lo exija automáticamente cuando el activo es crítico.", en: "The Permits to Work module exists, linkable to an asset or a work order. What's missing is the system requiring it automatically when the asset is critical.", pt: "Existe o módulo de Permissões de Trabalho, vinculável a um ativo ou a uma ordem. Falta que o sistema exija isso automaticamente quando o ativo é crítico." },
+
+  "tmsa.checklist.item.4a-2-2.q":    { es: "Las instrucciones de trabajo para el equipo y los sistemas críticos están disponibles en el sistema de mantenimiento planificado.", en: "Work instructions are available in the planned maintenance system for critical equipment and systems.", pt: "As instruções de trabalho para equipamentos e sistemas críticos estão disponíveis no sistema de manutenção planejada." },
+  "tmsa.checklist.item.4a-2-2.expl": { es: "Cada plan de mantenimiento incluye la descripción de la tarea asociada al activo, equipo crítico incluido.", en: "Every maintenance plan includes the task description tied to the asset, critical equipment included.", pt: "Cada plano de manutenção inclui a descrição da tarefa associada ao ativo, equipamento crítico incluído." },
+
+  "tmsa.checklist.item.4a-3-1.q":    { es: "Personal designado es responsable del mantenimiento y la reparación del equipo y los sistemas críticos.", en: "Designated personnel are responsible for the maintenance and repair of critical equipment and systems.", pt: "Pessoal designado é responsável pela manutenção e reparo de equipamentos e sistemas críticos." },
+  "tmsa.checklist.item.4a-3-1.expl": { es: "Los roles y permisos controlan quién puede ejecutar, aprobar y cerrar órdenes en general. No hay un campo para asignar un responsable nominal por activo crítico particular.", en: "Roles and permissions control who can execute, approve and close orders in general. There's no field to assign a named owner per specific critical asset.", pt: "Os papéis e permissões controlam quem pode executar, aprovar e fechar ordens em geral. Não há um campo para atribuir um responsável nominal por ativo crítico específico." },
+
+  "tmsa.checklist.item.4a-3-2.q":    { es: "Existe un procedimiento para probar y registrar los datos de desempeño de todo el equipo y los sistemas críticos.", en: "A procedure is in place to test and record performance data for all critical equipment and systems.", pt: "Existe um procedimento para testar e registrar dados de desempenho de todos os equipamentos e sistemas críticos." },
+  "tmsa.checklist.item.4a-3-2.expl": { es: "El módulo de Muestreos y Análisis registra datos de desempeño por activo, y el historial de trabajo guarda el resultado de cada prueba realizada.", en: "The Samples & Analyses module records performance data per asset, and the work history keeps the result of every test carried out.", pt: "O módulo de Amostragens e Análises registra dados de desempenho por ativo, e o histórico de trabalho guarda o resultado de cada teste realizado." },
+
+  "tmsa.checklist.item.4a-4-1.q":    { es: "Se monitorea y analiza la confiabilidad y el desempeño del equipo o los sistemas críticos y sus alarmas asociadas.", en: "The reliability and performance of critical equipment or systems and associated alarms is monitored and analysed.", pt: "A confiabilidade e o desempenho dos equipamentos ou sistemas críticos e seus alarmes associados são monitorados e analisados." },
+  "tmsa.checklist.item.4a-4-1.expl": { es: "El equipo crítico tiene sus propias alertas de vencidos y veredictos de monitoreo por condición, así que su desempeño se sigue aparte del resto de la flota. La alarma en sí, como dato propio, no está modelada hoy.", en: "Critical equipment carries its own overdue alerts and condition-monitoring verdicts, so its performance is tracked apart from the rest of the fleet. The alarm signal itself, as its own data point, isn't modeled today.", pt: "O equipamento crítico tem seus próprios alertas de vencidos e vereditos de monitoramento por condição, então seu desempenho é acompanhado à parte do resto da frota. O próprio sinal de alarme, como um dado em si, não está modelado hoje." },
 
   // ─── Compliance Dashboard ───────────────────────────────────────────────────
   "compliance.scoreTitle":        { es: "Compliance score por buque", en: "Compliance score by vessel", pt: "Compliance score por navio" },
@@ -2480,6 +2618,104 @@ const dict = {
   "cert.type.medical":            { es: "Certificado médico",                  en: "Medical Certificate",           pt: "Atestado médico" },
   "cert.type.yellow_fever":       { es: "Fiebre amarilla",                     en: "Yellow Fever",                  pt: "Febre amarela" },
   "cert.type.other":              { es: "Otro",                                en: "Other",                         pt: "Outro" },
+
+  // ─── Especificación de Varada (Drydock Specs) — TMSA 4.2.4 / 4.4.2 ──────────
+  "nav.drydockSpecs":             { es: "Especificación de Varada",  en: "Drydock Specification",   pt: "Especificação de Docagem" },
+  "page.drydockSpecs":            { es: "Especificación de Varada",  en: "Drydock Specification",   pt: "Especificação de Docagem" },
+  "empty.drydockSpecs":           { es: "No hay especificaciones de varada registradas", en: "No drydock specifications registered", pt: "Nenhuma especificação de docagem registrada" },
+  "dds.new":                      { es: "Nueva especificación",      en: "New specification",       pt: "Nova especificação" },
+  "dds.newTitle":                 { es: "Nueva especificación de varada", en: "New drydock specification", pt: "Nova especificação de docagem" },
+  "dds.specCode":                 { es: "Código",                    en: "Code",                    pt: "Código" },
+  "dds.title":                    { es: "Título",                    en: "Title",                   pt: "Título" },
+  "dds.shipyard":                 { es: "Astillero",                 en: "Shipyard",                pt: "Estaleiro" },
+  "dds.port":                     { es: "Puerto",                    en: "Port",                    pt: "Porto" },
+  "dds.plannedStart":             { es: "Inicio previsto",           en: "Planned start",           pt: "Início previsto" },
+  "dds.plannedEnd":               { es: "Fin previsto",              en: "Planned end",             pt: "Fim previsto" },
+  "dds.scopeSummary":             { es: "Alcance general",           en: "General scope",           pt: "Escopo geral" },
+  "dds.items":                    { es: "Trabajos",                  en: "Work items",              pt: "Trabalhos" },
+  "dds.itemCount":                { es: "Ítems",                     en: "Items",                   pt: "Itens" },
+  "dds.acceptedCount":            { es: "Aceptados",                 en: "Accepted",                pt: "Aceitos" },
+  "dds.addItem":                  { es: "Agregar trabajo",           en: "Add work item",           pt: "Adicionar trabalho" },
+  "dds.importBacklog":            { es: "Importar del backlog",      en: "Import from backlog",     pt: "Importar do backlog" },
+  "dds.importTitle":              { es: "Importar trabajos pendientes", en: "Import pending work",  pt: "Importar trabalhos pendentes" },
+  "dds.importHint":               { es: "Diferimientos, defectos y órdenes de trabajo pendientes del buque. Lo que tildes se agrega como trabajo de la varada.", en: "Deferrals, defects and pending work orders of the vessel. Whatever you tick is added as drydock work.", pt: "Adiamentos, defeitos e ordens de trabalho pendentes do navio. O que você marcar é adicionado como trabalho de docagem." },
+  "dds.importEmpty":              { es: "No queda trabajo pendiente sin importar.", en: "No pending work left to import.", pt: "Não resta trabalho pendente para importar." },
+  "dds.importSelected":           { es: "Importar seleccionados",    en: "Import selected",         pt: "Importar selecionados" },
+  "dds.itemTitle":                { es: "Trabajo",                   en: "Work",                    pt: "Trabalho" },
+  "dds.itemDescription":          { es: "Detalle",                   en: "Detail",                  pt: "Detalhe" },
+  "dds.category":                 { es: "Rubro",                     en: "Category",                pt: "Rubrica" },
+  "dds.priority":                 { es: "Prioridad",                 en: "Priority",                pt: "Prioridade" },
+  "dds.classRelated":             { es: "Clase",                     en: "Class",                   pt: "Classe" },
+  "dds.classRelatedFull":         { es: "Requisito de clase o bandera", en: "Class or flag requirement", pt: "Requisito de classe ou bandeira" },
+  "dds.origin":                   { es: "Origen",                    en: "Origin",                  pt: "Origem" },
+  "dds.proposedByVessel":         { es: "Buque",                     en: "Vessel",                  pt: "Navio" },
+  "dds.proposedByShore":          { es: "Tierra",                    en: "Shore",                   pt: "Terra" },
+  "dds.decisionNotes":            { es: "Notas de la decisión",      en: "Decision notes",          pt: "Notas da decisão" },
+  "dds.comments":                 { es: "Comentarios",               en: "Comments",                pt: "Comentários" },
+  "dds.commentsFor":              { es: "Comentarios del trabajo",   en: "Comments on this work item", pt: "Comentários do trabalho" },
+  "dds.commentPlaceholder":       { es: "Escribí un comentario para el otro lado…", en: "Write a comment for the other side…", pt: "Escreva um comentário para o outro lado…" },
+  "dds.commentSend":              { es: "Comentar",                  en: "Comment",                 pt: "Comentar" },
+  "dds.commentsEmpty":            { es: "Sin comentarios todavía.",  en: "No comments yet.",        pt: "Sem comentários ainda." },
+  "dds.selectItemHint":           { es: "Elegí un trabajo de la lista para ver o dejar comentarios.", en: "Pick a work item from the list to read or leave comments.", pt: "Escolha um trabalho da lista para ver ou deixar comentários." },
+  "dds.accept":                   { es: "Aceptar",                   en: "Accept",                  pt: "Aceitar" },
+  "dds.discard":                  { es: "Descartar",                 en: "Discard",                 pt: "Descartar" },
+  "dds.reopenItem":               { es: "Volver a proponer",         en: "Propose again",           pt: "Propor novamente" },
+  "dds.submit":                   { es: "Enviar a tierra",           en: "Send to shore",           pt: "Enviar para terra" },
+  "dds.startReview":              { es: "Tomar para revisión",       en: "Start review",            pt: "Iniciar revisão" },
+  "dds.approve":                  { es: "Aprobar",                   en: "Approve",                 pt: "Aprovar" },
+  "dds.reject":                   { es: "Devolver al buque",         en: "Return to vessel",        pt: "Devolver ao navio" },
+  "dds.backToDraft":              { es: "Volver a borrador",         en: "Back to draft",           pt: "Voltar ao rascunho" },
+  "dds.cancelSpec":               { es: "Anular",                    en: "Cancel",                  pt: "Anular" },
+  "dds.rejectReason":             { es: "Motivo de la devolución",   en: "Reason for return",       pt: "Motivo da devolução" },
+  "dds.rejectReasonRequired":     { es: "Escribí el motivo de la devolución.", en: "Write the reason for returning it.", pt: "Escreva o motivo da devolução." },
+  "dds.submittedBy":              { es: "Enviada por",               en: "Sent by",                 pt: "Enviada por" },
+  "dds.approvedBy":               { es: "Aprobada por",              en: "Approved by",             pt: "Aprovada por" },
+  "dds.frozen":                   { es: "Especificación aprobada: no admite cambios.", en: "Specification approved: no further changes.", pt: "Especificação aprovada: não admite alterações." },
+  "dds.titleRequired":            { es: "Ingresá un título para la especificación.", en: "Enter a title for the specification.", pt: "Informe um título para a especificação." },
+  "dds.vesselRequired":           { es: "Seleccioná una embarcación.", en: "Select a vessel.",      pt: "Selecione uma embarcação." },
+  "dds.itemTitleRequired":        { es: "Todos los trabajos necesitan un título.", en: "Every work item needs a title.", pt: "Todos os trabalhos precisam de um título." },
+  "dds.deleteConfirm":            { es: "¿Eliminar esta especificación de varada?", en: "Delete this drydock specification?", pt: "Excluir esta especificação de docagem?" },
+  "dds.loadError":                { es: "No se pudo cargar la especificación de varada.", en: "Could not load the drydock specification.", pt: "Não foi possível carregar a especificação de docagem." },
+  "dds.saved":                    { es: "Guardado",                  en: "Saved",                   pt: "Salvo" },
+  // Estados del documento
+  "dds.status.DRAFT":             { es: "Borrador",                  en: "Draft",                   pt: "Rascunho" },
+  "dds.status.SUBMITTED":         { es: "Enviada a tierra",          en: "Sent to shore",           pt: "Enviada para terra" },
+  "dds.status.UNDER_REVIEW":      { es: "En revisión",               en: "Under review",            pt: "Em revisão" },
+  "dds.status.APPROVED":          { es: "Aprobada",                  en: "Approved",                pt: "Aprovada" },
+  "dds.status.REJECTED":          { es: "Devuelta al buque",         en: "Returned to vessel",      pt: "Devolvida ao navio" },
+  "dds.status.CANCELLED":         { es: "Anulada",                   en: "Cancelled",               pt: "Anulada" },
+  // Estado de cada trabajo
+  "dds.item.PROPOSED":            { es: "Propuesto",                 en: "Proposed",                pt: "Proposto" },
+  "dds.item.ACCEPTED":            { es: "Aceptado",                  en: "Accepted",                pt: "Aceito" },
+  "dds.item.REJECTED":            { es: "Descartado",                en: "Discarded",               pt: "Descartado" },
+  // Prioridad del trabajo
+  "dds.prio.LOW":                 { es: "Baja",                      en: "Low",                     pt: "Baixa" },
+  "dds.prio.MEDIUM":              { es: "Media",                     en: "Medium",                  pt: "Média" },
+  "dds.prio.HIGH":                { es: "Alta",                      en: "High",                    pt: "Alta" },
+  "dds.prio.CRITICAL":            { es: "Crítica",                   en: "Critical",                pt: "Crítica" },
+  // Rubros
+  "dds.cat.HULL_STRUCTURE":       { es: "Casco y estructura",        en: "Hull & structure",        pt: "Casco e estrutura" },
+  "dds.cat.MACHINERY":            { es: "Máquinas",                  en: "Machinery",               pt: "Máquinas" },
+  "dds.cat.ELECTRICAL":           { es: "Eléctrico",                 en: "Electrical",              pt: "Elétrico" },
+  "dds.cat.PIPING_VALVES":        { es: "Cañerías y válvulas",       en: "Piping & valves",         pt: "Tubulações e válvulas" },
+  "dds.cat.TANKS":                { es: "Tanques",                   en: "Tanks",                   pt: "Tanques" },
+  "dds.cat.SAFETY_EQUIPMENT":     { es: "Equipos de seguridad",      en: "Safety equipment",        pt: "Equipamentos de segurança" },
+  "dds.cat.CLASS_STATUTORY":      { es: "Clase y estatutario",       en: "Class & statutory",       pt: "Classe e estatutário" },
+  "dds.cat.PAINTING":             { es: "Pintura",                   en: "Painting",                pt: "Pintura" },
+  "dds.cat.OTHER":                { es: "Otros",                     en: "Other",                   pt: "Outros" },
+  // Origen del trabajo importado
+  "dds.src.MANUAL":               { es: "Manual",                    en: "Manual",                  pt: "Manual" },
+  "dds.src.DEFERRAL":             { es: "Diferimiento",              en: "Deferral",                pt: "Adiamento" },
+  "dds.src.DEFECT":               { es: "Defecto",                   en: "Defect",                  pt: "Defeito" },
+  "dds.src.WORK_ORDER":           { es: "Orden de trabajo",          en: "Work order",              pt: "Ordem de trabalho" },
+  // Permiso configurable
+  "perm.drydockApprove":          { es: "Aprobar especificación de varada", en: "Approve drydock specification", pt: "Aprovar especificação de docagem" },
+  // Métricas TMSA del módulo
+  "tmsa.group.drydockSpec":            { es: "Especificación de varada",   en: "Drydock specification",     pt: "Especificação de docagem" },
+  "tmsa.metric.drydockSpecsOpen":      { es: "Specs en curso",             en: "Specs in progress",         pt: "Specs em curso" },
+  "tmsa.metric.drydockItemsTotal":     { es: "Trabajos listados",          en: "Work items listed",         pt: "Trabalhos listados" },
+  "tmsa.metric.drydockItemsFromBacklog": { es: "Provenientes del backlog", en: "Coming from the backlog",   pt: "Provenientes do backlog" },
+  "tmsa.metric.deferralsNotInSpec":    { es: "Diferidos fuera de la spec", en: "Deferrals outside the spec", pt: "Adiados fora da spec" },
 
 } satisfies Record<string, Record<Locale, string>>;
 

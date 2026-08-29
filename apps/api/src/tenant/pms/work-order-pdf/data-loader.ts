@@ -73,6 +73,31 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
+  // ── Calificación del firmante (cargo · matrícula · experiencia) ──
+  // TMSA pide que la auditoría de ingeniería la firme un representante
+  // "debidamente calificado y con experiencia": el dato vive en la membership
+  // del tenant (TenantMembership) porque es propio de la empresa.
+  const qualificationByUserId = async (userId: string | null | undefined): Promise<string | null> => {
+    if (!prismaRaw || !userId) return null;
+    try {
+      const m = await (prismaRaw as any).tenantMembership.findFirst({
+        where: { userId, tenant: { slug: session.tenantSlug } },
+        select: { jobTitle: true, licenseNumber: true, experienceYears: true },
+      });
+      if (!m) return null;
+      const parts = [
+        m.jobTitle?.trim() || null,
+        m.licenseNumber?.trim() ? `Mat. ${m.licenseNumber.trim()}` : null,
+        typeof m.experienceYears === "number" && m.experienceYears > 0
+          ? `${m.experienceYears} ${m.experienceYears === 1 ? "año" : "años"} de experiencia`
+          : null,
+      ].filter(Boolean);
+      return parts.length ? parts.join(" · ") : null;
+    } catch { return null; /* non-blocking */ }
+  };
+  const assignedQualification  = await qualificationByUserId((wo as any).assignedToUserId);
+  const createdByQualification = await qualificationByUserId((wo as any).createdByUserId);
+
   // ── Firmas de tramitación: Solicita (creador), Aprueba, Autoriza ──
   // Se incrustan en el recuadro TRAMITACION del PDF cuando el paso fue hecho
   // por un usuario con firma cargada.
@@ -394,8 +419,10 @@ export async function loadWorkOrderPdfContext(
     assignedName,
     assignedFormName,
     assignedSignatureBuffer,
+    assignedQualification,
     createdByName,
     createdByFormName,
+    createdByQualification,
     solicitaSignatureBuffer,
     apruebaSignatureBuffer,
     autorizaSignatureBuffer,

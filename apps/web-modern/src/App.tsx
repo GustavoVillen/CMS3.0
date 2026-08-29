@@ -58,6 +58,7 @@ const DailyReportsPage = React.lazy(() => import("./pages/DailyReports").then(m 
 const VoyageTankReportsPage = React.lazy(() => import("./pages/VoyageTankReports").then(m => ({ default: m.VoyageTankReportsPage })));
 const AssetHoursPage = React.lazy(() => import("./pages/AssetHours").then(m => ({ default: m.AssetHoursPage })));
 const DeferralsPage = React.lazy(() => import("./pages/Deferrals").then(m => ({ default: m.DeferralsPage })));
+const DrydockSpecsPage = React.lazy(() => import("./pages/DrydockSpecs").then(m => ({ default: m.DrydockSpecsPage })));
 // DORMANTE — CAPA: módulo oculto de la entrega (simplificación). Reactivar descomentando
 // esta línea y las rutas /capa de abajo, + el ítem del Sidebar, + el flag CAPA_AUTO_CREATE.
 // const CapaPage = React.lazy(() => import("./pages/Capa").then(m => ({ default: m.CapaPage })));
@@ -242,6 +243,8 @@ export default function App() {
               <Route path="/defects/:code"     element={<DefectsPage />} />
               <Route path="/deferrals"         element={<DeferralsPage />} />
               <Route path="/deferrals/:code"   element={<DeferralsPage />} />
+              <Route path="/drydock-specs"       element={<DrydockSpecsPage />} />
+              <Route path="/drydock-specs/:code" element={<DrydockSpecsPage />} />
               {/* DORMANTE — CAPA: reactivar descomentando (y el import arriba + Sidebar). */}
               {/* <Route path="/capa"              element={<CapaPage />} /> */}
               {/* <Route path="/capa/:code"        element={<CapaPage />} /> */}

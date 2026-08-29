@@ -122,9 +122,9 @@ export interface CertificateWriteInput {
   originalSourceMimeOrExt?: string | null;
 }
 
-type AutoCertificateStatus = "ACTIVE" | "EXPIRING_SOON" | "EXPIRED";
+export type AutoCertificateStatus = "ACTIVE" | "EXPIRING_SOON" | "EXPIRED";
 
-function computeAutoCertificateStatus(expiryDate: Date): AutoCertificateStatus {
+export function computeAutoCertificateStatus(expiryDate: Date): AutoCertificateStatus {
   const now = new Date();
   const msPerDay = 24 * 60 * 60 * 1000;
   const diffDays = Math.floor((expiryDate.getTime() - now.getTime()) / msPerDay);
@@ -133,7 +133,7 @@ function computeAutoCertificateStatus(expiryDate: Date): AutoCertificateStatus {
   return "ACTIVE";
 }
 
-function resolveComputedStatus(expiryDate: Date, currentStatus: string): string {
+export function resolveComputedStatus(expiryDate: Date, currentStatus: string): string {
   if (currentStatus === "SUSPENDED" || currentStatus === "CLOSED") {
     return currentStatus;
   }

@@ -21,8 +21,9 @@ import {
 } from "../paper/PaperKit";
 import {
   WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS,
-  WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_PRIORITY_OPTIONS,
+  WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS,
 } from "../../lib/wo-form-catalog";
+import { useT, type TranslationKey } from "../../lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Definición del formulario (espejo de FormConfig/ControlledDocMeta del backend)
@@ -69,6 +70,8 @@ const DEFAULT_LABELS: Record<string, string> = {
   estadoOt: "ESTADO DE OT",
   generadoPor: "GENERADO POR",
   nroViaje: "NRO DE VIAJE",
+  // No está en el papel: evidencia TMSA de si el trabajo se hizo navegando.
+  condicion: "CONDICION",
   requestedBy: "SOLICITADO POR",
   assignedTo: "ASIGNADO A",
   tecnico: "TECNICO",
@@ -97,6 +100,8 @@ const DEFAULT_LABELS: Record<string, string> = {
 /** Lo que se completa en la hoja. El resto entra por slot. */
 export interface WoPaperValues {
   voyageNumber: string;
+  /** CONDICION del buque al hacer el trabajo (evidencia TMSA de navegación). */
+  operatingCondition: string;
   location: string;
   requestedByArea: string;
   assignedToArea: string;
@@ -169,6 +174,9 @@ export function WoPaperForm({
 }) {
   const label = (id: string) => config.labels[id] ?? DEFAULT_LABELS[id] ?? id;
   const dis = !editable;
+  // Los rótulos del papel van literales (documento controlado); las opciones de
+  // CONDICION, que no están en el papel, sí pasan por i18n.
+  const t = useT();
 
   /** Fila de dos pares etiqueta/valor, como el encabezado del papel. */
   const kvRow = (
@@ -222,6 +230,24 @@ export function WoPaperForm({
             placeholder="Ej. V-2026-014"
           />,
         )}
+        {/* CONDICION — en qué situación estaba el buque cuando se hizo el
+            trabajo. Va a lo ancho porque no tiene par en el papel. */}
+        <PaperRow>
+          <PaperLabelCell className="w-32 shrink-0">{label("condicion")}</PaperLabelCell>
+          <PaperValueCell className="flex-1">
+            <select
+              className={paperFieldCls}
+              value={values.operatingCondition}
+              disabled={dis}
+              onChange={e => onChange({ operatingCondition: e.target.value })}
+            >
+              <option value="">—</option>
+              {WO_OPERATING_CONDITIONS.map(c => (
+                <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+              ))}
+            </select>
+          </PaperValueCell>
+        </PaperRow>
       </>
     ),
 

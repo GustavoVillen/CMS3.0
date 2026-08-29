@@ -24,6 +24,8 @@ export type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
 
 export interface WoRegiForm {
   voyageNumber: string;
+  /** Condición del buque al hacer el trabajo (evidencia TMSA de navegación). */
+  operatingCondition: string;
   requestedByArea: string;
   assignedToArea: string;
   systemArea: string;
@@ -33,7 +35,7 @@ export interface WoRegiForm {
 }
 
 export const EMPTY_WO_REGI: WoRegiForm = {
-  voyageNumber: "", requestedByArea: "", assignedToArea: "",
+  voyageNumber: "", operatingCondition: "", requestedByArea: "", assignedToArea: "",
   systemArea: "", maintenanceKind: "", pendingDetail: "", taskCompleted: "",
 };
 

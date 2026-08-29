@@ -15,6 +15,7 @@ import { handleServiceRequestsRoutes } from "./service-requests-router";
 import { handleTriggersRoutes } from "./triggers-router";
 import { handleQualityRoutes } from "./quality-router";
 import { handleCatalogsRoutes } from "./catalogs-router";
+import { handleDrydockRoutes } from "./drydock-router";
 
 /**
  * PMS (Preventive Maintenance System) router - Etapa 2+
@@ -54,6 +55,7 @@ export async function handlePmsRoutes(
   if (await handleTriggersRoutes(method, url, request, response, env)) return true;
   if (await handleQualityRoutes(method, url, request, response, env)) return true;
   if (await handleCatalogsRoutes(method, url, request, response, env)) return true;
+  if (await handleDrydockRoutes(method, url, request, response, env)) return true;
 
   return false;
 }

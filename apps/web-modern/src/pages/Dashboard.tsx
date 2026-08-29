@@ -12,6 +12,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
+import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
@@ -136,6 +137,10 @@ export const Dashboard: React.FC = () => {
   const t            = useT();
   const locale       = useLocale();
   const { theme }    = useTheme();
+  const { user }     = useAuth();
+  // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
+  // para no mostrar un botón que termina en pantalla bloqueada.
+  const canSeeTmsaAudit = user ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role) : false;
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {
@@ -809,6 +814,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           >
             <Timer className="w-6 h-6 text-accent shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.assetHoursButton")}</span>
+          </button>
+        )}
+        {/* Checklist OCIMF Elemento 4/4A con datos en vivo del buque + accesos
+            directos a los módulos — mismos roles que protegen /tmsa. */}
+        {canSeeTmsaAudit && (
+          <button
+            onClick={() => navigate("/tmsa?tab=checklist")}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.tmsaAudit")}</span>
           </button>
         )}
       </div>

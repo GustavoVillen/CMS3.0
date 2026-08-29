@@ -51,6 +51,7 @@ export interface CreateWorkOrderInput {
   distribution?: string[];
   // Formulario controlado REGI-OPE-26.3 (ver WoFormFields).
   voyageNumber?: string | null;
+  operatingCondition?: WorkOrderOperatingCondition | null;
   requestedByArea?: WorkOrderRequestedByArea | null;
   assignedToArea?: WorkOrderAssignedToArea | null;
   systemArea?: WorkOrderSystemArea | null;
@@ -65,6 +66,9 @@ export type WorkOrderDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEED
 export type WorkOrderRequestedByArea = "CUBIERTA" | "MAQUINAS" | "TECNICA" | "OPS_SSMA";
 export type WorkOrderAssignedToArea  = "TRIPULACION" | "TERCERIZADO" | "TECNICA" | "OPS_SSMA";
 export type WorkOrderSystemArea      = "MAQUINAS" | "RE_CUBIERTA" | "BARCAZAS";
+// Condición operativa del buque al ejecutar el trabajo (evidencia TMSA de las
+// prácticas observadas en navegación).
+export type WorkOrderOperatingCondition = "NAVEGACION" | "PUERTO" | "FONDEADO" | "DIQUE";
 export type WorkOrderMaintenanceKind =
   | "PREVENTIVO" | "CORRECTIVO_PROGRAMADO" | "CORRECTIVO_NO_PROGRAMADO" | "PREDICTIVO" | "EMERGENCIA";
 
@@ -123,6 +127,7 @@ export interface UpdateWorkOrderInput {
   distribution?: string[];
   // Formulario controlado REGI-OPE-26.3
   voyageNumber?: string | null;
+  operatingCondition?: WorkOrderOperatingCondition | null;
   requestedByArea?: WorkOrderRequestedByArea | null;
   assignedToArea?: WorkOrderAssignedToArea | null;
   systemArea?: WorkOrderSystemArea | null;
@@ -398,7 +403,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       department: true, providerId: true, location: true, communicationMethod: true, distribution: true,
       // Formulario REGI-OPE-26.3 — sólo los campos livianos; `pendingDetail`
       // es texto largo y queda para el detalle (getTenantWorkOrder).
-      voyageNumber: true, requestedByArea: true, assignedToArea: true,
+      voyageNumber: true, operatingCondition: true, requestedByArea: true, assignedToArea: true,
       systemArea: true, maintenanceKind: true, taskCompleted: true,
       woResult: true, executedByName: true, supportingDocUrl: true, runningHoursAtExecution: true,
       createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
@@ -698,6 +703,7 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         distribution: payload.distribution ?? [],
         // Formulario REGI-OPE-26.3 — nullable, sólo se llenan si vienen.
         voyageNumber: normalizeOptionalText(payload.voyageNumber),
+        operatingCondition: payload.operatingCondition ?? null,
         requestedByArea: payload.requestedByArea ?? null,
         assignedToArea: payload.assignedToArea ?? null,
         systemArea: payload.systemArea ?? null,
@@ -865,6 +871,7 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.distribution !== undefined) data.distribution = payload.distribution;
   // ── Formulario REGI-OPE-26.3 ──
   if (payload.voyageNumber !== undefined) data.voyageNumber = normalizeOptionalText(payload.voyageNumber);
+  if (payload.operatingCondition !== undefined) data.operatingCondition = payload.operatingCondition ?? null;
   if (payload.requestedByArea !== undefined) data.requestedByArea = payload.requestedByArea ?? null;
   if (payload.assignedToArea !== undefined) data.assignedToArea = payload.assignedToArea ?? null;
   if (payload.systemArea !== undefined) data.systemArea = payload.systemArea ?? null;

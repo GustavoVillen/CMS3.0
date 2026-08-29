@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
-import { WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_PRIORITY_OPTIONS } from "../lib/wo-form-catalog";
+import { WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS } from "../lib/wo-form-catalog";
 import { FormBox, OptionRow, PaperSectionBar } from "./work-orders/WoRegiSections";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
@@ -256,6 +256,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const assignedToAreaTouchedRef = useRef(false);
   const [systemArea, setSystemArea]           = useState("");
   const [voyageNumber, setVoyageNumber]       = useState("");
+  const [operatingCondition, setOperatingCondition] = useState("");
   const [location, setLocation]               = useState("");
   const [openDate, setOpenDate]       = useState(today);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -891,6 +892,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             assignedToArea:  assignedToArea  || null,
             systemArea:      systemArea      || null,
             voyageNumber:    voyageNumber.trim() || null,
+            operatingCondition: operatingCondition || null,
             location:        location.trim()     || null,
           } : {}),
         });
@@ -932,6 +934,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             assignedToArea:  assignedToArea  || null,
             systemArea:      systemArea      || null,
             voyageNumber:    voyageNumber.trim() || null,
+            operatingCondition: operatingCondition || null,
             location:        location.trim()     || null,
           } : (cleanStandaloneProviders.length > 0 ? { assignedToArea: "TERCERIZADO" } : {})),
           // providerId de la OT sólo puede guardar UNO — con varios queda null,
@@ -996,7 +999,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
       standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio,
-      requestedByArea, assignedToArea, systemArea, voyageNumber, location]);
+      requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -1005,7 +1008,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     consequenceCategory, consequenceRationale, estimatedHours,
     checklistDocFileName: checklistDocFile?.name ?? "",
     onBehalfUserId, standaloneProviderRequests,
-    requestedByArea, assignedToArea, systemArea, voyageNumber, location,
+    requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location,
   });
   const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
@@ -1142,6 +1145,17 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                         <label className={labelCls}>{t("wo.modal.location")}</label>
                         <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
                       </div>
+                      {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
+                        <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
+                          className={inputCls}>
+                          <option value="">—</option>
+                          {WO_OPERATING_CONDITIONS.map(c => (
+                            <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <PaperSectionBar title={t("wo.modal.requestedBy")} />
@@ -1206,6 +1220,17 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                       <div className="space-y-1.5">
                         <label className={labelCls}>{t("wo.modal.location")}</label>
                         <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
+                      </div>
+                      {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
+                      <div className="space-y-1.5">
+                        <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
+                        <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
+                          className={inputCls}>
+                          <option value="">—</option>
+                          {WO_OPERATING_CONDITIONS.map(c => (
+                            <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                     <div className="space-y-1.5">

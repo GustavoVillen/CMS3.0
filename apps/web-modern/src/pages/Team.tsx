@@ -26,6 +26,13 @@ interface Member {
   status: string;
   assignedVesselCodes: string[];
   joinedAt: string | null;
+  // Calificación del representante de la compañía (evidencia TMSA: quien firma
+  // una auditoría de ingeniería tiene que estar calificado y con experiencia).
+  jobTitle: string | null;
+  licenseNumber: string | null;
+  experienceYears: number | null;
+  qualificationDocUrl: string | null;
+  qualificationNotes: string | null;
 }
 
 interface PendingInvite {
@@ -438,6 +445,12 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   const [selectedVessels, setSelectedVessels] = useState<Set<string>>(new Set(member.assignedVesselCodes));
   const [formName, setFormName] = useState(member.formName ?? "");
   const [signature, setSignature] = useState<string | null>(member.signatureUrl ?? null);
+  const [jobTitle, setJobTitle]           = useState(member.jobTitle ?? "");
+  const [licenseNumber, setLicenseNumber] = useState(member.licenseNumber ?? "");
+  const [experienceYears, setExperienceYears] = useState(
+    member.experienceYears != null ? String(member.experienceYears) : "");
+  const [qualificationDocUrl, setQualificationDocUrl] = useState(member.qualificationDocUrl ?? "");
+  const [qualificationNotes, setQualificationNotes]   = useState(member.qualificationNotes ?? "");
 
   const toggleVessel = (code: string) => {
     setSelectedVessels(prev => {
@@ -456,8 +469,14 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
     member.assignedVesselCodes.some(c => !selectedVessels.has(c));
   const formNameChanged = formName.trim() !== (member.formName ?? "");
   const signatureChanged = (signature ?? null) !== (member.signatureUrl ?? null);
+  const qualChanged =
+    jobTitle.trim() !== (member.jobTitle ?? "") ||
+    licenseNumber.trim() !== (member.licenseNumber ?? "") ||
+    experienceYears.trim() !== (member.experienceYears != null ? String(member.experienceYears) : "") ||
+    qualificationDocUrl.trim() !== (member.qualificationDocUrl ?? "") ||
+    qualificationNotes.trim() !== (member.qualificationNotes ?? "");
   const canEdit = !isSelf && !isRevoked;
-  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged || formNameChanged || signatureChanged);
+  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged || formNameChanged || signatureChanged || qualChanged);
 
   const handleSaveAll = async () => {
     if (emailChanged) {
@@ -480,8 +499,17 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
       if (passwordSet) {
         await api.put(`/app/team/members/${member.userId}/password`, { password: password.trim() });
       }
-      if (formNameChanged || signatureChanged) {
-        await api.put(`/app/team/members/${member.userId}/profile`, { formName: formName.trim(), signatureUrl: signature });
+      if (formNameChanged || signatureChanged || qualChanged) {
+        await api.put(`/app/team/members/${member.userId}/profile`, {
+          formName: formName.trim(),
+          signatureUrl: signature,
+          jobTitle: jobTitle.trim() || null,
+          licenseNumber: licenseNumber.trim() || null,
+          // Vacío = sin dato; el input ya sólo deja escribir enteros 0-80.
+          experienceYears: experienceYears.trim() ? Number(experienceYears) : null,
+          qualificationDocUrl: qualificationDocUrl.trim() || null,
+          qualificationNotes: qualificationNotes.trim() || null,
+        });
       }
       onChanged();
       onClose();
@@ -595,6 +623,52 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                   </label>
                 )}
                 <p className="text-[10px] text-text-industrial/40">Ideal PNG con fondo transparente. Se incrusta en la caja de firma del responsable.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Calificación: se imprime bajo la firma en la OT. Es la evidencia
+              TMSA de que quien audita está calificado y tiene experiencia. */}
+          {canEdit && (
+            <div className="space-y-3 border border-fg/10 rounded-xl p-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50">{t("team.qual.section")}</p>
+                <p className="text-[10px] text-text-industrial/40 mt-0.5">{t("team.qual.hint")}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("team.qual.jobTitle")}</label>
+                  <input className={inputCls} value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("team.qual.license")}</label>
+                  <input className={inputCls} value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("team.qual.years")}</label>
+                  {/* Sólo enteros 0-80: así no hace falta avisar de un valor
+                      inválido, no se puede escribir uno. */}
+                  <input
+                    className={inputCls}
+                    type="number" min={0} max={80} step={1}
+                    value={experienceYears}
+                    onChange={e => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      if (v === "") { setExperienceYears(""); return; }
+                      setExperienceYears(String(Math.min(80, Number(v))));
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("team.qual.docUrl")}</label>
+                  <input className={inputCls} value={qualificationDocUrl} onChange={e => setQualificationDocUrl(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("team.qual.notes")}</label>
+                <input className={inputCls} value={qualificationNotes} onChange={e => setQualificationNotes(e.target.value)} />
               </div>
             </div>
           )}

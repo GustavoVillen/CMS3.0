@@ -161,6 +161,17 @@ enum WorkOrderDepartment {
   OTROS
 }
 
+// Condición operativa del buque cuando se ejecutó el trabajo. TMSA (Elemento 4)
+// pide evidencia de que las auditorías de ingeniería incluyen la observación de
+// las prácticas DURANTE LA NAVEGACIÓN: sin este dato el papel no distingue una
+// inspección hecha en marcha de una hecha con el buque amarrado.
+enum WorkOrderOperatingCondition {
+  NAVEGACION
+  PUERTO
+  FONDEADO
+  DIQUE
+}
+
 // ── Formulario controlado de OT (Mercurio REGI-OPE-26.3) ─────────────────────
 // Recuadros de opciones del papel. Son ejes independientes entre sí y de
 // `department`: el formulario separa QUIÉN pide, A QUIÉN se asigna y sobre QUÉ
@@ -1070,6 +1081,16 @@ model TenantMembership {
   role                  TenantRole
   status                MembershipStatus @default(INVITED)
   assignedVesselCodes   String[]         @default([])
+  // ── Calificación del representante de la compañía ──────────────────────────
+  // TMSA pide que las auditorías de ingeniería las haga un representante
+  // "debidamente calificado y con experiencia". Va en la membership y no en
+  // User porque es un dato de la empresa: la misma persona puede estar en
+  // varios tenants con cargos distintos. Todo opcional y aditivo.
+  jobTitle              String?          // cargo / título profesional
+  licenseNumber         String?          // matrícula o licencia habilitante
+  experienceYears       Int?             // años de experiencia
+  qualificationDocUrl   String?          // respaldo documental (título, matrícula)
+  qualificationNotes    String?          // aclaraciones (especialidad, alcance)
   joinedAt              DateTime?
   invitedAt             DateTime         @default(now())
   createdAt             DateTime         @default(now())
@@ -1303,6 +1324,7 @@ model Vessel {
   checklistExecutions ChecklistExecution[]
   failureModes     FailureMode[]
   voyageTankReports VoyageTankReport[]
+  drydockSpecs     DrydockSpec[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1540,6 +1562,9 @@ model WorkOrder {
   // Campos aditivos, todos nullable: las OT anteriores al formulario siguen
   // siendo válidas y el PDF cae a los datos que ya tenía.
   voyageNumber            String?                    // NRO DE VIAJE (texto libre)
+  // CONDICIÓN: navegación / puerto / fondeado / dique. Evidencia TMSA de las
+  // prácticas observadas en marcha (ver WorkOrderOperatingCondition).
+  operatingCondition      WorkOrderOperatingCondition?
   requestedByArea         WorkOrderRequestedByArea?  // SOLICITADO POR
   assignedToArea          WorkOrderAssignedToArea?   // ASIGNADO A (área; ≠ assignedToUserId)
   systemArea              WorkOrderSystemArea?       // SISTEMA
@@ -2479,6 +2504,139 @@ model VoyageEngineHours {
 
   @@index([voyageReportId])
   @@index([tenantId, vesselCode])
+}
+
+// ─── Drydock Specification (Especificación de Varada — TMSA 4.2.4 / 4.4.2) ───
+//
+// Documento formal de trabajos a ejecutar en varada. El buque arma la lista
+// (a mano o importando del backlog: diferimientos, defectos, OT pendientes),
+// la envía a tierra, la superintendencia comenta ítem por ítem, acepta o
+// descarta líneas y aprueba. Una vez APPROVED el documento queda congelado:
+// sólo se pueden agregar comentarios y bajar el PDF para el astillero.
+
+enum DrydockSpecStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DrydockItemCategory {
+  HULL_STRUCTURE
+  MACHINERY
+  ELECTRICAL
+  PIPING_VALVES
+  TANKS
+  SAFETY_EQUIPMENT
+  CLASS_STATUTORY
+  PAINTING
+  OTHER
+}
+
+// De dónde salió el ítem. MANUAL = lo escribió alguien; el resto apunta al
+// registro de origen por sourceId (acoplamiento flojo, sin FK, igual que Deferral).
+enum DrydockItemSourceType {
+  MANUAL
+  DEFERRAL
+  DEFECT
+  WORK_ORDER
+}
+
+// Decisión de tierra sobre la línea: entra a la varada o no.
+enum DrydockItemStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+}
+
+model DrydockSpec {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  specCode           String            // "VAR-<VESSEL>-<YY>-<NNNN>"
+  title              String
+  status             DrydockSpecStatus @default(DRAFT)
+  // Datos de la varada
+  shipyardName       String?
+  shipyardProviderId String?           // Provider del astillero, si está dado de alta
+  port               String?
+  plannedStartDate   DateTime?
+  plannedEndDate     DateTime?
+  scopeSummary       String?           // alcance general del documento
+  // Trazabilidad del circuito buque → tierra
+  submittedAt        DateTime?
+  submittedByUserId  String?
+  submittedByName    String?
+  reviewStartedAt    DateTime?
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  approvedByName     String?
+  rejectedAt         DateTime?
+  rejectedReason     String?
+  createdAt          DateTime          @default(now())
+  createdByUserId    String
+  updatedAt          DateTime          @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  vessel             Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  items              DrydockSpecItem[]
+
+  @@unique([tenantId, vesselCode, specCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model DrydockSpecItem {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  specId           String
+  itemNo           Int                      // orden estable dentro del documento
+  category         DrydockItemCategory      @default(OTHER)
+  title            String
+  description      String?
+  assetId          String?                  // sin FK, igual que Deferral/Defect
+  sourceType       DrydockItemSourceType    @default(MANUAL)
+  sourceId         String?                  // deferralId | defectId | workOrderId
+  priority         String?                  // LOW | MEDIUM | HIGH | CRITICAL
+  classRelated     Boolean                  @default(false) // requisito de clase/bandera
+  proposedByVessel Boolean                  @default(true)  // true = lo propuso el buque
+  itemStatus       DrydockItemStatus        @default(PROPOSED)
+  decisionNotes    String?
+  createdAt        DateTime                 @default(now())
+  createdByUserId  String
+  updatedAt        DateTime                 @updatedAt
+  updatedByUserId  String
+
+  spec             DrydockSpec              @relation(fields: [specId], references: [id], onDelete: Cascade)
+  comments         DrydockSpecItemComment[]
+
+  @@index([specId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, sourceType, sourceId])
+}
+
+// Hilo de discusión buque ↔ tierra sobre una línea. El "lado" (buque o tierra)
+// se deriva de authorRole en la UI: no se guarda un campo redundante.
+model DrydockSpecItemComment {
+  id           String          @id @default(cuid())
+  tenantId     String
+  itemId       String
+  body         String
+  authorUserId String
+  authorName   String
+  authorRole   String
+  createdAt    DateTime        @default(now())
+
+  item         DrydockSpecItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([tenantId])
 }
 
 // ─── Block 07: Procurement & Stock ───────────────────────────────────────────
