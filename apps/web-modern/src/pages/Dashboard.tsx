@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +21,7 @@ import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
+import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
 import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
@@ -125,6 +126,9 @@ export const Dashboard: React.FC = () => {
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
   const pendingCounts     = useFetch<PendingCounts>("/app/dashboard/sidebar-counts");
+  // Planes que vencen + OT abiertas, desde lo atrasado hasta el domingo de la
+  // semana que viene (acceso grande "Tareas de la próxima semana").
+  const upcomingTasks     = useFetch<UpcomingTasksResponse>("/app/dashboard/upcoming-tasks");
   // Lecturas de horómetro del buque seleccionado (widget "Horas de Equipos").
   // Sólo con buque elegido: la planilla de horas es siempre por buque. useFetch
   // inyecta el vesselCode del contexto, así que el path no lo lleva.
@@ -193,6 +197,7 @@ export const Dashboard: React.FC = () => {
   // equipos, abre el panel de semáforo + historial sin salir del Dashboard).
   const [mpChooserMode, setMpChooserMode] = React.useState<"planList" | "status">("planList");
   const [statusAssetId, setStatusAssetId] = React.useState<string | null>(null);
+  const [showUpcoming, setShowUpcoming] = React.useState(false);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -766,71 +771,123 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
        * Mismo patrón que los módulos dormantes del Sidebar. */}
       {/* <MyDayPanel onShowInsights={() => setShowInsights(true)} /> */}
 
-      {/* Accesos grandes a Planes de Mantenimiento / OT / SS, arriba de
-          "Reportes sin procesar" (pedido del usuario). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <button
-          onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
-          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-        >
-          <ClipboardList className="w-6 h-6 text-accent shrink-0" />
-          <span className="font-bold text-sm text-fg">{t("nav.maintenancePlans")}</span>
-        </button>
-        <button
-          onClick={() => setShowNewWoWizard(true)}
-          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-        >
-          <Wrench className="w-6 h-6 text-accent shrink-0" />
-          <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
-        </button>
-        <button
-          onClick={() => setShowSsChooser(true)}
-          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-        >
-          <Handshake className="w-6 h-6 text-accent shrink-0" />
-          <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
-        </button>
-        <button
-          onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
-          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-        >
-          <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
-          <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
-        </button>
-        <button
-          onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
-          className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-        >
-          <Gauge className="w-6 h-6 text-accent shrink-0" />
-          <span className="font-bold text-sm text-fg">{t("dashboard.equipmentStatusButton")}</span>
-        </button>
-        {/* Mismo modal que ya abre el widget chico de "Horas de Equipos" más
-            abajo (assetHours.data) — sólo se ve con buque elegido y permiso de
-            carga, igual que ese widget. */}
+      {/* Accesos grandes, arriba de "Reportes sin procesar". El orden y el
+          agrupado por fila los pidió el usuario (2026-08-29): horas de equipos,
+          después lo que se crea, después lo que se consulta y al final las
+          auditorías. Cada fila es su propia grilla de 3 columnas: así un botón
+          que se oculta por permiso no descoloca a los de la fila siguiente. */}
+      <div className="space-y-3">
+
+        {/* Fila 1 — carga de horómetros. Mismo modal que el widget chico de
+            "Horas de Equipos" más abajo (assetHours.data): sólo se ve con buque
+            elegido y permiso de carga, igual que ese widget. */}
         {assetHours.data?.canWrite && (
-          <button
-            onClick={() => setShowHoursEntry(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-          >
-            <Timer className="w-6 h-6 text-accent shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("dashboard.assetHoursButton")}</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <button
+              onClick={() => setShowHoursEntry(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            >
+              <Timer className="w-6 h-6 text-accent shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.assetHoursButton")}</span>
+            </button>
+          </div>
         )}
-        {/* Checklist OCIMF Elemento 4/4A con datos en vivo del buque + accesos
-            directos a los módulos — mismos roles que protegen /tmsa. */}
-        {canSeeTmsaAudit && (
+
+        {/* Fila 2 — lo que se crea: OT, SS e inspección. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <button
-            onClick={() => navigate("/tmsa?tab=checklist")}
+            onClick={() => setShowNewWoWizard(true)}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
           >
-            <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("dashboard.tmsaAudit")}</span>
+            <Wrench className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
           </button>
+          <button
+            onClick={() => setShowSsChooser(true)}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <Handshake className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
+          </button>
+          <button
+            onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
+          </button>
+        </div>
+
+        {/* Fila 3 — lo que se consulta: plan, agenda de la semana y estado. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <button
+            onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <ClipboardList className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("nav.maintenancePlans")}</span>
+          </button>
+          {/* Qué hay que hacer hasta el domingo que viene: planes que vencen + OT
+              abiertas, en una sola lista. El número de la derecha es el total, y
+              se pinta en rojo si hay atrasos. */}
+          <button
+            onClick={() => setShowUpcoming(true)}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <CalendarClock className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg flex-1 min-w-0">{t("dashboard.upcoming.button")}</span>
+            {upcomingTasks.data && upcomingTasks.data.totals.total > 0 && (
+              <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
+                upcomingTasks.data.totals.overdue > 0
+                  ? "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-400"
+                  : "bg-accent/10 border-accent/30 text-accent"
+              }`}>
+                {upcomingTasks.data.totals.total}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+          >
+            <Gauge className="w-6 h-6 text-accent shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.equipmentStatusButton")}</span>
+          </button>
+        </div>
+
+        {/* Fila 4 — auditorías. Checklist OCIMF Elemento 4/4A y las siete
+            cláusulas del Capítulo 10 del Código ISM, ambas con datos en vivo del
+            buque. Mismos roles que protegen /tmsa e /ism. */}
+        {canSeeTmsaAudit && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <button
+              onClick={() => navigate("/tmsa?tab=checklist")}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            >
+              <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.tmsaAudit")}</span>
+            </button>
+            <button
+              onClick={() => navigate("/ism?tab=checklist")}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            >
+              <LifeBuoy className="w-6 h-6 text-accent shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.ismAudit")}</span>
+            </button>
+          </div>
         )}
       </div>
 
       {statusAssetId && (
         <EquipmentMaintenanceStatusModal assetId={statusAssetId} onClose={() => setStatusAssetId(null)} />
+      )}
+
+      {showUpcoming && (
+        <UpcomingTasksModal
+          data={upcomingTasks.data}
+          loading={upcomingTasks.loading}
+          onClose={() => setShowUpcoming(false)}
+        />
       )}
 
       {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
@@ -907,7 +964,20 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-fg">{t("dashboard.woTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.woSubtitle")}</p>
             </div>
-            {workOrders.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+            {/* Acceso directo al tablero Kanban de OT. /work-orders abre en
+                Kanban por defecto y sin filtros: no hace falta pasar params. */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {workOrders.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+              <button
+                type="button"
+                onClick={() => navigate("/work-orders")}
+                title={t("dashboard.woKanbanLink")}
+                aria-label={t("dashboard.woKanbanLink")}
+                className="p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors"
+              >
+                <LayoutGrid className="w-7 h-7" />
+              </button>
+            </div>
           </div>
           {workOrders.error ? <ErrorMsg msg={workOrders.error} /> : (
             <div className="flex items-center gap-2 flex-1">
@@ -937,7 +1007,20 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-fg">{t("dashboard.ssTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.ssSubtitle")}</p>
             </div>
-            {serviceRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+            {/* Acceso directo al tablero Kanban de SS: /service-requests abre
+                en Kanban por defecto y sin filtros. */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {serviceRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+              <button
+                type="button"
+                onClick={() => navigate("/service-requests")}
+                title={t("dashboard.ssKanbanLink")}
+                aria-label={t("dashboard.ssKanbanLink")}
+                className="p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors"
+              >
+                <LayoutGrid className="w-7 h-7" />
+              </button>
+            </div>
           </div>
           {serviceRequests.error ? <ErrorMsg msg={serviceRequests.error} /> : ssCounts.length === 0 && !serviceRequests.loading ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">
@@ -1010,7 +1093,19 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-fg">{t("dashboard.deferralsTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.deferralsSubtitle")}</p>
             </div>
-            {deferrals.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+            {/* Acceso directo a la planilla de diferimientos, sin filtro de estado. */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {deferrals.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
+              <button
+                type="button"
+                onClick={() => navigate("/deferrals")}
+                title={t("dashboard.deferralsSheetLink")}
+                aria-label={t("dashboard.deferralsSheetLink")}
+                className="p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors"
+              >
+                <Table2 className="w-7 h-7" />
+              </button>
+            </div>
           </div>
           {deferrals.error ? <ErrorMsg msg={deferrals.error} /> : deferralCounts.length === 0 && !deferrals.loading ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-2 opacity-40">

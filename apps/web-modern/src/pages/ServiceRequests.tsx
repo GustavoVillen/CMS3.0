@@ -30,6 +30,7 @@ import {
   type SsFormDoc, type SsPaperValues,
 } from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -846,7 +847,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
       {isReject && (
         <div>
           <label className={labelCls}>Motivo del rechazo</label>
-          <textarea autoFocus className={inputCls + " min-h-[72px] resize-y"} value={reason}
+          <AutoTextArea autoFocus className={inputCls + " min-h-[72px] resize-y"} value={reason}
             onChange={e => setReason(e.target.value)}
             placeholder="Ej. El presupuesto del taller excede lo autorizado" />
         </div>
@@ -1067,7 +1068,7 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
       </div>
       <div>
         <label className={labelCls}>Comentarios adicionales (opcional)</label>
-        <textarea className={inputCls + " min-h-[56px] resize-y"} value={notas}
+        <AutoTextArea className={inputCls + " min-h-[56px] resize-y"} value={notas}
           onChange={e => setNotas(e.target.value)} />
       </div>
     </FormModal>
@@ -1129,7 +1130,7 @@ function CancelServiceRequestModal({ code, busy, onClose, onConfirm }: {
         </p>
         <div>
           <label className={labelCls}>Motivo de la cancelación</label>
-          <textarea className={inputCls + " min-h-[64px] resize-y"} value={motivo} autoFocus
+          <AutoTextArea className={inputCls + " min-h-[64px] resize-y"} value={motivo} autoFocus
             onChange={e => setMotivo(e.target.value)}
             placeholder="Ej. El trabajo se resolvió a bordo, no hace falta el taller" />
         </div>

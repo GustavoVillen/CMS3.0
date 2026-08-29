@@ -14,6 +14,8 @@ import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -367,7 +369,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
           {longDescription !== undefined && (
             <div>
               <label className={labelCls}>{t("sp.longDesc")}</label>
-              <textarea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} />
+              <AutoTextArea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} />
             </div>
           )}
 
@@ -648,9 +650,14 @@ export const SparesPage: React.FC = () => {
   };
 
   const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [vesselFilter, statusFilter, criticalityFilter, belowReorder]);
+  const tmsaFilter = useTmsaFilter();
 
   const filteredItems = (() => {
     let items = data?.items ?? null;
+    if (!items) return items;
+    // Cuando se llega desde una métrica del panel TMSA, se muestran exactamente
+    // los repuestos que contó esa tarjeta.
+    items = applyTmsaFilter(items, tmsaFilter, s => s.id);
     if (!items) return items;
     if (categoryFilter) {
       items = items.filter(s => (s.category ?? "") === categoryFilter);
@@ -786,6 +793,7 @@ export const SparesPage: React.FC = () => {
         </button>
       </PageHeader>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={filteredItems?.length ?? 0} total={data?.items?.length ?? 0} />
       <DataTable
         columns={COLUMNS}
         data={filteredItems}

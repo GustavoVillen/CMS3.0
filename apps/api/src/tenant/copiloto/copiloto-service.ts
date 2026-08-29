@@ -135,7 +135,7 @@ Available tenant module routes (use ONLY these — any other path is a broken li
 - Análisis de fluidos: /fluid-analyses
 - Tripulación: /crew      · Matriz de competencias: /crew-matrix   · Horas de descanso: /rest-hours
 - Simulacros: /drills     · Permisos de trabajo: /permits   · Cuasi accidentes: /near-miss   · Checklists: /checklists
-- Gestión del cambio (MOC): /moc   · TMSA: /tmsa
+- Gestión del cambio (MOC): /moc   · TMSA (Elemento 4): /tmsa   · Código ISM Cap. 10 (mantenimiento): /ism
 - Insights IA: /ai-insights   · Base documental IA: /ai-documents
 NOTE: the RCA is NOT a separate module — it lives inside the defect record (/defects). There is no /rca or /capa page.
 

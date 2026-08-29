@@ -12,6 +12,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { printDrill } from "../lib/print-drill";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface DrillRequirement {
   id: string;
@@ -351,15 +352,15 @@ const DrillModal: React.FC<{
                 {t("drill.scenario")}
                 {loadingScenario && <span className="ml-1 text-[9px] normal-case font-normal">{t("drill.scenarioAiAnalyzing")}</span>}
               </label>
-              <textarea rows={4} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked || loadingScenario} className={`${inputCls} resize-y`} placeholder={t("drill.scenarioPlaceholder")} />
+              <AutoTextArea rows={4} value={scenario} onChange={e => setScenario(e.target.value)} disabled={isLocked || loadingScenario} className={`${inputCls} resize-y`} placeholder={t("drill.scenarioPlaceholder")} />
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("drill.observations")}</label>
-              <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={isLocked} className={inputCls} />
+              <AutoTextArea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("drill.lessonsLearned")}</label>
-              <textarea rows={3} value={lessonsLearned} onChange={e => setLessons(e.target.value)} disabled={isLocked} className={inputCls} />
+              <AutoTextArea rows={3} value={lessonsLearned} onChange={e => setLessons(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2">
               <div className="flex items-center justify-between">
@@ -794,7 +795,7 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("drill.notes")}</label>
-                  <textarea rows={2} value={editing.notes}
+                  <AutoTextArea rows={2} value={editing.notes}
                     onChange={e => setEditing(d => d ? { ...d, notes: e.target.value } : d)}
                     className={inputCls} />
                 </div>

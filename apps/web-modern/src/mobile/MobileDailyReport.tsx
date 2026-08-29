@@ -4,6 +4,7 @@ import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface DailyReport {
   id: string;
@@ -500,7 +501,7 @@ export const MobileDailyReport: React.FC = () => {
 
           <div className="space-y-1.5">
             <p className={labelCls}>Comentarios operativos</p>
-            <textarea
+            <AutoTextArea
               value={opRemarks}
               onChange={e => setOpRemarks(e.target.value)}
               rows={2}
@@ -511,7 +512,7 @@ export const MobileDailyReport: React.FC = () => {
 
           <div className="space-y-1.5">
             <p className={labelCls}>Resumen</p>
-            <textarea
+            <AutoTextArea
               value={summary}
               onChange={e => setSummary(e.target.value)}
               rows={2}
@@ -522,7 +523,7 @@ export const MobileDailyReport: React.FC = () => {
 
           <div className="space-y-1.5">
             <p className={labelCls}>Notas</p>
-            <textarea
+            <AutoTextArea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}

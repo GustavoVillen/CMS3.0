@@ -17,6 +17,7 @@ import {
   type FluidType, type Verdict, type AssetItem,
 } from "./shared";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "../PlanLinkSuggestionDialog";
+import { AutoTextArea } from "../AutoTextArea";
 
 type Step = "capture" | "review" | "linking" | "result";
 
@@ -396,7 +397,7 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
                     <label className={labelCls + " mb-0"}>{t("fa.summary")}</label>
                     {conf.summary && <ConfidenceBadge confidence={conf.summary} />}
                   </div>
-                  <textarea rows={2} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-none"} />
+                  <AutoTextArea rows={2} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-none"} />
                 </div>
                 {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
                 <div className="flex justify-end gap-2 pt-2">

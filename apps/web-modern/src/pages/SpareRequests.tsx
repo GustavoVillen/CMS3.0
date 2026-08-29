@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ClipboardList, Plus, X, Trash2, CheckCheck, XCircle, Send, Maximize2, Minimize2, FileDown, PackageCheck } from "lucide-react";
 import { api } from "../lib/api";
@@ -11,6 +11,8 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -535,7 +537,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
               </div>
               <div>
                 <label className={labelCls}>Notas</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Contexto de la solicitud…" disabled={status !== "DRAFT"} className={`${inputCls} resize-none`} />
+                <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Contexto de la solicitud…" disabled={status !== "DRAFT"} className={`${inputCls} resize-none`} />
               </div>
               {request?.rejectionReason && (
                 <div className="border border-red-500/20 rounded-xl p-3 bg-red-500/5">
@@ -567,7 +569,7 @@ const SpareRequestModal: React.FC<ModalProps> = ({ request, onClose, onSaved }) 
           {rejecting && (
             <div className="mt-4 border border-red-500/20 rounded-xl p-4 space-y-2 bg-red-500/5">
               <p className="text-xs font-semibold text-red-700 dark:text-red-400">Razón de rechazo</p>
-              <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Motivo del rechazo…" />
+              <AutoTextArea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Motivo del rechazo…" />
               <div className="flex gap-2">
                 <button onClick={() => void doReject()} disabled={saving} className="px-3 py-1.5 text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-500/20 disabled:opacity-40">
                   {t("confirm.confirmRejection")}
@@ -665,6 +667,10 @@ export const SpareRequestsPage: React.FC = () => {
   };
 
   const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [statusFilter, priorityFilter]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx):
+  // la planilla muestra exactamente los registros que contó esa tarjeta.
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
 
   const handleSaved = (r: SpareRequest) => { reload(); setSelected(r); };
 
@@ -709,9 +715,10 @@ export const SpareRequestsPage: React.FC = () => {
         </button>
       </PageHeader>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
       <DataTable
         columns={COLUMNS}
-        data={data?.items ?? null}
+        data={tmsaItems}
         loading={loading}
         error={error}
         keyFn={r => r.id}

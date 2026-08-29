@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Clock, Download, ExternalLink, GitBranch, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
 import { api, ApiError } from "../lib/api";
 import { MocModal, type MocPrefill } from "./Moc";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AlertDialog } from "../components/AlertDialog";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -17,6 +19,8 @@ import { RiskMatrix } from "../components/RiskMatrix";
 import { deriveRiskLevelFromMatrix, toUiRiskLevel, toUiRiskProbability, toUiRiskConsequence, type RiskLevel, type RiskProbability, type RiskConsequence } from "../lib/risk";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 const SOURCE_ROUTE: Record<string, string> = {
   WORK_ORDER:       "/work-orders",
@@ -39,6 +43,9 @@ interface Deferral {
   requestedByUserId: string;
   requestedByName: string | null;
   targetDate: string | null;
+  toNextDrydock?: boolean;
+  /** Sólo en el detalle: la línea de varada que salió de este diferimiento. */
+  drydockSpec?: { itemId: string; itemStatus: string; specId: string; specCode: string } | null;
   justification: string | null;
   compensatoryMeasures: string | null;
   riskLevel: string | null;
@@ -145,7 +152,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ deferralId, compensatoryMeasu
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.reviewNotes")}</label>
-            <textarea rows={4} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <AutoTextArea rows={4} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -220,7 +227,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.compensatory")}</label>
-            <textarea rows={4} value={compensatoryMeasures} onChange={e => setCompensatoryMeasures(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <AutoTextArea rows={4} value={compensatoryMeasures} onChange={e => setCompensatoryMeasures(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -289,7 +296,7 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")} *</label>
-            <textarea rows={4} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <AutoTextArea rows={4} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -344,7 +351,7 @@ const CloseDeferralModal: React.FC<CloseDeferralModalProps> = ({ deferralId, onC
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def.closeNotes")}</label>
-            <textarea rows={4} value={closeNotes} onChange={e => setCloseNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <AutoTextArea rows={4} value={closeNotes} onChange={e => setCloseNotes(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -390,6 +397,51 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
   const [confirmCancel, setConfirmCancel]               = useState(false);
   const [saving, setSaving]                             = useState(false);
   const [savedOk, setSavedOk]                           = useState(false);
+
+  // ── Destino de varada ──
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  // Mismo conjunto de roles que ensureCanManageDeferrals en el backend. La
+  // regla real la aplica el servidor; acá sólo se esconde el control.
+  const canManageDestination = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]
+    .includes(user?.role ?? "");
+  const [toNextDrydock, setToNextDrydock]               = useState(deferral.toNextDrydock === true);
+  const [savingDestination, setSavingDestination]       = useState(false);
+  const [attaching, setAttaching]                       = useState(false);
+  const [drydockNotice, setDrydockNotice]               = useState<string | null>(null);
+
+  const onToggleDrydock = useCallback(async (next: boolean) => {
+    setSavingDestination(true);
+    setActionError(null);
+    const previous = toNextDrydock;
+    setToNextDrydock(next);
+    try {
+      await api.patch(`/app/pms/deferrals/${deferral.id}`, { toNextDrydock: next });
+      onSuccess();
+    } catch (e) {
+      setToNextDrydock(previous);
+      setActionError(e instanceof ApiError ? e.message : t("common.saveError"));
+    } finally {
+      setSavingDestination(false);
+    }
+  }, [deferral.id, toNextDrydock, onSuccess, t]);
+
+  const onAttachDrydock = useCallback(async () => {
+    setAttaching(true);
+    setActionError(null);
+    try {
+      const res = await api.post<{ specId: string | null; specCode: string | null }>(
+        `/app/pms/deferrals/${deferral.id}/attach-drydock`, {},
+      );
+      // Sin spec no es un error: es que el buque no tiene exactamente una abierta.
+      setDrydockNotice(res.specCode ? t("def2.attachDone") : t("def2.attachNoSpec"));
+      onSuccess();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : t("common.saveError"));
+    } finally {
+      setAttaching(false);
+    }
+  }, [deferral.id, onSuccess, t]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -646,6 +698,51 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   <p className="text-sm text-fg">{fmtDate(deferral.targetDate)}</p>
                 </div>
               )}
+              {/* Destino: si el trabajo va a la varada, dónde aterrizó. */}
+              <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2">
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("def2.destination")}</p>
+                <label className={`flex items-center gap-2 mt-1.5 ${canManageDestination && !isTerminal ? "cursor-pointer" : "cursor-default"}`}>
+                  <input
+                    type="checkbox"
+                    checked={toNextDrydock}
+                    disabled={!canManageDestination || isTerminal || savingDestination}
+                    onChange={e => { void onToggleDrydock(e.target.checked); }}
+                    className="accent-accent disabled:opacity-50"
+                  />
+                  <span className="text-sm text-fg">{t("def2.toNextDrydockLabel")}</span>
+                  {savingDestination && <Loader2 className="w-3 h-3 animate-spin text-text-industrial/50" />}
+                </label>
+                {toNextDrydock && (
+                  <div className="mt-2 pl-6">
+                    {deferral.drydockSpec ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/drydock-specs?autoCode=${deferral.drydockSpec!.specCode}`)}
+                        className="inline-flex items-center gap-1.5 text-[11px] text-fg hover:text-accent transition-colors"
+                      >
+                        {t("def2.includedInSpec")}
+                        <span className="font-mono font-bold">{deferral.drydockSpec.specCode}</span>
+                        <StatusBadge status={deferral.drydockSpec.itemStatus} />
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ) : canManageDestination && !isTerminal ? (
+                      <button
+                        type="button"
+                        onClick={() => { void onAttachDrydock(); }}
+                        disabled={attaching}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-accent/80 hover:text-accent disabled:opacity-50 transition-colors"
+                      >
+                        {attaching ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitBranch className="w-3 h-3" />}
+                        {t("def2.attachToSpec")}
+                      </button>
+                    ) : (
+                      // Sin permiso para engancharlo: se dice el hecho (no está en
+                      // ninguna spec), no una causa que no se conoce acá.
+                      <p className="text-[11px] text-text-industrial/50">{t("def2.notInSpec")}</p>
+                    )}
+                  </div>
+                )}
+              </div>
               {deferral.justification && (
                 <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 sm:col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("def2.justification")}</p>
@@ -686,7 +783,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
                   {loadingCompensatory && <span className="ml-1 normal-case font-normal">analizando...</span>}
                 </button>
                 {!isTerminal ? (
-                  <textarea
+                  <AutoTextArea
                     rows={3}
                     value={compensatoryMeasures}
                     onChange={e => setCompensatoryMeasures(e.target.value)}
@@ -851,6 +948,7 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
           onSuccess={() => { setShowReview(false); onClose(); onSuccess(); }}
         />
       )}
+      {drydockNotice && <AlertDialog message={drydockNotice} onClose={() => setDrydockNotice(null)} />}
       {showApprove && (
         <ApproveModal
           deferralId={deferral.id}
@@ -941,6 +1039,10 @@ export const DeferralsPage: React.FC = () => {
   }, [sourceTypeFilter, statusFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx):
+  // la planilla muestra exactamente los registros que contó esa tarjeta.
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
 
   // Compat: `?autoCode=` → redirige a la ruta deep-link `/deferrals/:code`.
   const autoCode = (searchParams.get("autoCode") ?? "").trim();
@@ -1026,6 +1128,26 @@ export const DeferralsPage: React.FC = () => {
       render: row => <StatusBadge status={row.status} />,
     },
     {
+      key: "toNextDrydock",
+      header: t("def2.toNextDrydock"),
+      render: row => {
+        if (!row.toNextDrydock) return <span className="text-text-industrial/30 text-xs">—</span>;
+        // Marcado a varada pero sin línea en ninguna especificación: es trabajo
+        // postergado sin destino, exactamente lo que mira el auditor.
+        return row.drydockSpec
+          ? (
+            <button
+              onClick={e => { e.stopPropagation(); navigate(`/drydock-specs?autoCode=${encodeURIComponent(row.drydockSpec!.specCode)}`); }}
+              className="flex items-center gap-1 font-mono text-xs text-accent hover:text-fg bg-fg/5 hover:bg-accent/10 border border-fg/10 hover:border-accent/30 rounded px-1.5 py-0.5 transition-all"
+            >
+              {row.drydockSpec.specCode}
+              <ExternalLink className="w-2.5 h-2.5 opacity-60 shrink-0" />
+            </button>
+          )
+          : <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">{t("def2.notInSpec")}</span>;
+      },
+    },
+    {
       key: "requestedAt",
       header: t("col.requested"),
       render: row => fmtDate(row.requestedAt),
@@ -1035,7 +1157,7 @@ export const DeferralsPage: React.FC = () => {
       header: t("def2.targetDate"),
       render: row => fmtDate(row.targetDate),
     },
-  ], [t]);
+  ], [t, navigate]);
 
   return (
     <div className="space-y-5">
@@ -1046,7 +1168,8 @@ export const DeferralsPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del diferimiento...</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{detailError}</p>}
 
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => openLink(row.deferralCode)} />
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+      <DataTable columns={columns} data={tmsaItems} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.deferrals")} onRowClick={row => openLink(row.deferralCode)} />
 
       {editing && (
         <DeferralModal

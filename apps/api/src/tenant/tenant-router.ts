@@ -52,6 +52,9 @@ import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
 import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa/tmsa-service";
 import { suggestTmsaAssessment } from "./tmsa/tmsa-ai-suggestions";
 import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
+import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism/ism-service";
+import { suggestIsmAssessment } from "./ism/ism-ai-suggestions";
+import { buildIsmChapter10Pdf } from "./ism/ism-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import {
   listMyNotifications,
@@ -650,6 +653,37 @@ export async function handleTenantRoutes(
       vesselCode: url.searchParams.get("vesselCode"),
     });
     sendJson(response, 200, summary);
+    return true;
+  }
+
+  // Tareas pendientes hasta el domingo de la semana que viene (planes + OT).
+  if (method === "GET" && url.pathname === "/app/dashboard/upcoming-tasks") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const { getUpcomingTasks } = await import("./dashboard/upcoming-tasks-service");
+    const tasks = await getUpcomingTasks(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+    });
+    sendJson(response, 200, tasks);
+    return true;
+  }
+
+  // La misma lista, imprimible.
+  if (method === "GET" && url.pathname === "/app/dashboard/upcoming-tasks.pdf") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode")?.trim() || null;
+    const { buildUpcomingTasksPdf } = await import("./dashboard/upcoming-tasks-pdf-service");
+    const buffer = await buildUpcomingTasksPdf(session, { vesselCode });
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `Tareas-Pendientes-${vesselCode}-${today}.pdf`
+      : `Tareas-Pendientes-${today}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 
@@ -2301,6 +2335,47 @@ export async function handleTenantRoutes(
     const filename = vesselCode
       ? `tmsa-elemento4-${vesselCode}-${dateStr}.pdf`
       : `tmsa-elemento4-flota-${dateStr}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  // ── Código ISM · Capítulo 10 (Mantenimiento del buque y el equipo) ────────
+  // Misma forma que /app/tmsa/maintenance: lente read-only sobre la evidencia
+  // que ya existe, agrupada por cláusula del Código.
+  if (method === "GET" && url.pathname === "/app/ism/chapter10") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode");
+    sendJson(response, 200, await getIsmChapter10Evidence(session, vesselCode));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/ism/chapter10/detail") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const metric = url.searchParams.get("metric") ?? "";
+    sendJson(response, 200, await getIsmMetricDetail(session, vesselCode, metric));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/ism/chapter10/assessment") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-ism:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestIsmAssessment>[1];
+    sendJson(response, 200, await suggestIsmAssessment(session, body));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/ism/chapter10/pdf") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode");
+    const buffer = await buildIsmChapter10Pdf(session, vesselCode);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `ism-cap10-${vesselCode}-${dateStr}.pdf`
+      : `ism-cap10-flota-${dateStr}.pdf`;
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,

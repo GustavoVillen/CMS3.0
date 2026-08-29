@@ -15,7 +15,9 @@ import {
   ensureCanManageDrydock,
   ensureEditable,
   loadScopedSpec,
+  FROZEN_STATUSES,
 } from "./drydock-specs-service";
+import type { DrydockSpecStatus } from "./drydock-specs-service";
 
 const ITEM_CATEGORIES = [
   "HULL_STRUCTURE", "MACHINERY", "ELECTRICAL", "PIPING_VALVES", "TANKS",
@@ -216,6 +218,7 @@ export async function listImportCandidates(session: TenantAccessSession, specId:
       select: {
         id: true, deferralCode: true, assetId: true, justification: true,
         targetDate: true, targetPort: true, riskLevel: true, status: true,
+        toNextDrydock: true,
       },
     }),
     prisma.defect.findMany({
@@ -266,6 +269,7 @@ export async function listImportCandidates(session: TenantAccessSession, specId:
         priority: d.riskLevel ?? null,
         status: d.status,
         date: d.targetDate,
+        toNextDrydock: d.toNextDrydock === true,
       })),
     defects: defects
       .filter(d => !taken.has(`DEFECT:${d.id}`))
@@ -376,6 +380,73 @@ export async function importItemsFromSources(
     orderBy: { itemNo: "asc" },
     include: { comments: { orderBy: { createdAt: "asc" } } },
   });
+}
+
+// ─── Enganche del diferimiento marcado "a próxima varada" ────────────────────
+// Cuando tierra aprueba un diferimiento con toNextDrydock, el trabajo tiene que
+// aterrizar en el documento del astillero sin que nadie se acuerde de importarlo.
+// Sólo se engancha si el buque tiene UNA sola especificación editable: con cero
+// no hay dónde ponerlo y con varias la elección es del usuario, no del sistema.
+
+export interface AttachDeferralResult {
+  specId: string;
+  specCode: string;
+}
+
+/** La única spec editable del buque, o null si no hay ninguna o hay más de una. */
+export async function findOpenSpecForVessel(tenantId: string, vesselCode: string) {
+  const prisma = requirePrisma();
+  const specs = await prisma.drydockSpec.findMany({
+    where: { tenantId, vesselCode, deletedAt: null, status: { notIn: FROZEN_STATUSES as DrydockSpecStatus[] } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, specCode: true },
+  });
+  return specs.length === 1 ? specs[0]! : null;
+}
+
+export async function attachDeferralToOpenSpec(
+  session: TenantAccessSession,
+  tenantId: string,
+  deferralId: string,
+): Promise<AttachDeferralResult | null> {
+  const prisma = requirePrisma();
+  const deferral = await prisma.deferral.findFirst({
+    where: { id: deferralId, tenantId, deletedAt: null },
+    select: { id: true, vesselCode: true },
+  });
+  if (!deferral) return null;
+
+  const spec = await findOpenSpecForVessel(tenantId, deferral.vesselCode);
+  if (!spec) return null;
+
+  // importItemsFromSources hace todo lo demás: permiso, scope, spec editable,
+  // título y descripción idénticos a la importación manual, numeración, PROPOSED
+  // y auditoría. Y es idempotente: si el diferimiento ya está, lo ignora.
+  await importItemsFromSources(session, spec.id, [{ type: "DEFERRAL", id: deferral.id }]);
+
+  // El importador ignora en silencio lo que no está entre sus candidatos (un
+  // diferimiento todavía en REQUESTED, por ejemplo). Confirmar que la línea
+  // existe de verdad antes de decir que quedó enganchado.
+  const landed = await findSpecItemForDeferral(tenantId, deferral.id);
+  if (!landed || landed.specId !== spec.id) return null;
+  return { specId: spec.id, specCode: spec.specCode };
+}
+
+/** La línea de varada que salió de este diferimiento, si alguien ya la importó. */
+export async function findSpecItemForDeferral(tenantId: string, deferralId: string) {
+  const prisma = requirePrisma();
+  const item = await prisma.drydockSpecItem.findFirst({
+    where: { tenantId, sourceType: "DEFERRAL", sourceId: deferralId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, itemStatus: true, specId: true, spec: { select: { specCode: true } } },
+  });
+  if (!item) return null;
+  return {
+    itemId: item.id,
+    itemStatus: item.itemStatus,
+    specId: item.specId,
+    specCode: item.spec.specCode,
+  };
 }
 
 // ─── Decisión por línea (tierra acepta o descarta) ───────────────────────────

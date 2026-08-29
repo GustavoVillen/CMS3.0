@@ -8,6 +8,7 @@
 
 import React from "react";
 import { Check } from "lucide-react";
+import { AutoTextArea } from "../AutoTextArea";
 import { fmtDate } from "../../lib/utils";
 
 /** Azul marino del documento controlado (mismo que MaintenancePlans). */
@@ -73,8 +74,11 @@ export function PaperTextArea({ value, onChange, disabled, placeholder, rows = 3
   placeholder?: string;
   rows?: number;
 }) {
+  // `rows` es sólo el piso: un recuadro vacío no se ve como una raya. El alto
+  // real lo pone AutoTextArea, que abre el campo estirado hasta su última línea
+  // (con alto fijo la hoja escondía media TAREA detrás de un scroll interno).
   return (
-    <textarea
+    <AutoTextArea
       className={`${paperFieldCls} block px-2 py-1.5 resize-y border-b border-fg/25`}
       style={{ minHeight: `${rows * 20 + 12}px` }}
       value={value}

@@ -16,6 +16,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -566,7 +567,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mr.summary")}</label>
-                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={5} className={inputCls} placeholder={t("mr.summaryPh")} />
+                <AutoTextArea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={5} className={inputCls} placeholder={t("mr.summaryPh")} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -582,7 +583,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mr.notes")}</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder={t("mr.notesPh")} />
+                <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={3} className={inputCls} placeholder={t("mr.notesPh")} />
               </div>
 
               {saveError && <p className="text-xs text-red-700 dark:text-red-400">{saveError}</p>}

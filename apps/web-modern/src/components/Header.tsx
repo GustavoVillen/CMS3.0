@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { User, LogOut, ChevronDown, Ship, Sun, Moon, BookOpen } from "lucide-react";
+import { User, LogOut, ChevronDown, Ship, Sun, Moon, BookOpen, LayoutDashboard, ArrowLeft } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ver campana oculta abajo
@@ -29,6 +29,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
   const { user, tenant, logout } = useAuth();
   const { vessels, selectedVesselCode, setSelectedVesselCode } = useVesselContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const { theme, toggleTheme } = useTheme();
   // Logo del tenant según el tema: light → logo oscuro (logoUrl), dark → claro (logoUrlLight).
@@ -45,21 +46,40 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
     navigate("/login", { replace: true });
   };
 
+  // "Volver": una pantalla atrás. En el tablero no se muestra (ya es el punto de
+  // partida). Si se entró directo por URL (link pegado, favorito) no hay pantalla
+  // anterior dentro del sistema, así que el botón lleva al Dashboard en vez de
+  // sacar al usuario de la aplicación.
+  const isDashboard = location.pathname === "/";
+  const handleBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1); else navigate("/");
+  };
+
   return (
     <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-surface dark:bg-[#0B132B]/30 dark:backdrop-blur-md shrink-0 relative z-50">
       <div className="flex items-center gap-4">
-        {tenant && (
-          <span className="flex items-center gap-2 text-sm font-semibold text-fg/80 border border-border rounded-full px-3 py-1.5">
-            {tenantLogo && (
-              <img
-                src={tenantLogo}
-                alt=""
-                className="w-5 h-5 object-contain shrink-0"
-              />
-            )}
-            {tenant.name}
-          </span>
+        {!isDashboard && (
+          <button
+            onClick={handleBack}
+            title={t("common.back")}
+            className="flex items-center gap-2 text-sm font-semibold text-fg/80 border border-border rounded-full px-3 py-1.5 hover:bg-fg/[0.07] hover:text-fg hover:border-accent/40 transition-colors uppercase tracking-wide"
+          >
+            <ArrowLeft className="w-4 h-4 text-accent shrink-0" />
+            {t("common.back")}
+          </button>
         )}
+        {/* Atajo al Dashboard. Ocupa el lugar donde antes iba el nombre del
+            tenant: desde cualquier pantalla se vuelve al tablero con un clic,
+            sin tener que buscarlo en el menú lateral. */}
+        <button
+          onClick={() => navigate("/")}
+          title={t("nav.dashboard")}
+          className="flex items-center gap-2 text-sm font-semibold text-fg/80 border border-border rounded-full px-3 py-1.5 hover:bg-fg/[0.07] hover:text-fg hover:border-accent/40 transition-colors uppercase tracking-wide"
+        >
+          <LayoutDashboard className="w-4 h-4 text-accent shrink-0" />
+          {t("nav.dashboard")}
+        </button>
       </div>
 
       <div className="flex items-center gap-4">

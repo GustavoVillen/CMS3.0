@@ -15,6 +15,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // "Conditional" o "Fail" habilitan el registro de findings (case-insensitive,
 // tolera datos legados en texto libre).
@@ -255,7 +256,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
               <input value={reportUrl} onChange={e => setReportUrl(e.target.value)} placeholder="https://..." className={inputCls} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Resumen</label>
-              <textarea rows={3} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={3} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-y"} />
             </div>
           </div>
 
@@ -541,7 +542,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
           <label className="flex items-center gap-2 text-xs text-fg"><input type="checkbox" checked={detentionRelated} onChange={e => setDetention(e.target.checked)} /> Detention-related</label>
         </div>
       </div>
-      <div><label className={labelCls}>Descripción *</label><textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} /></div>
+      <div><label className={labelCls}>Descripción *</label><AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} /></div>
       {err && <p className="text-[11px] text-red-700 dark:text-red-400">{err}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial">Cancelar</button>
@@ -594,7 +595,7 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
         </div>
       </div>
       <div><label className={labelCls}>Notas de evidencia</label>
-        <textarea rows={2} value={evidenceNotes} onChange={e => setEvidenceNotes(e.target.value)} className={inputCls + " text-xs resize-y"} />
+        <AutoTextArea rows={2} value={evidenceNotes} onChange={e => setEvidenceNotes(e.target.value)} className={inputCls + " text-xs resize-y"} />
       </div>
       <div><label className={labelCls}>URL evidencia</label>
         <input value={evidenceDocUrl} onChange={e => setEvidenceDocUrl(e.target.value)} className={inputCls + " text-xs"} />

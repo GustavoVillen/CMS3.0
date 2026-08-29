@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface DrillRequirement { title: string; solasRegulation: string | null; intervalLabel: string | null; }
 interface Drill {
@@ -122,7 +123,7 @@ export const MobileDrills: React.FC<MobileDrillsProps> = ({ initialFilter, onBac
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Observaciones (opcional)</label>
-            <textarea
+            <AutoTextArea
               value={observations}
               onChange={e => setObs(e.target.value)}
               rows={3}
@@ -132,7 +133,7 @@ export const MobileDrills: React.FC<MobileDrillsProps> = ({ initialFilter, onBac
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Lecciones aprendidas (opcional)</label>
-            <textarea
+            <AutoTextArea
               value={lessons}
               onChange={e => setLessons(e.target.value)}
               rows={3}

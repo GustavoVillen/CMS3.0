@@ -80,7 +80,7 @@ const DEFAULT_LABELS: Record<string, string> = {
   tipoMant: "TIPO DE MANTENIMIENTO",
   sistema: "SISTEMA",
   permits: "AUTORIZACION DE TRABAJO",
-  request: "SOLICITUD / FALLA",
+  request: "TRABAJO SOLICITADO",
   task: "TAREA",
   taskDetail: "Detalle:",
   spares: "REPUESTOS",
@@ -110,7 +110,7 @@ export interface WoPaperValues {
   maintenanceKind: string;
   type: string;
   systemArea: string;
-  /** SOLICITUD / FALLA */
+  /** TRABAJO SOLICITADO */
   description: string;
   /** TAREA + su detalle (criterios de aceptación). */
   title: string;
@@ -139,7 +139,7 @@ export interface WoPaperHeader {
 export function WoPaperForm({
   meta, config, logoUrl, tenantName,
   header, values, onChange, editable, resultEditable, autosave,
-  tecnico, proveedor, permits, spares, materials, schedule, resultExtras, riskMatrix,
+  fecha, tecnico, proveedor, permits, spares, materials, schedule, resultExtras, riskMatrix,
   signatures,
 }: {
   meta: PaperDocMeta;
@@ -154,6 +154,8 @@ export function WoPaperForm({
   resultEditable: boolean;
   /** Estado del auto-guardado de la hoja: es la única señal de que se guardó. */
   autosave?: { saving?: boolean; saved?: boolean; error?: string | null };
+  /** FECHA del encabezado: editable (es la fecha de apertura de la OT). */
+  fecha?: React.ReactNode;
   /** TECNICO del recuadro ASIGNADO A (el selector de tripulación que ya existía). */
   tecnico: React.ReactNode;
   /** PROVEEDOR: sólo cuando el trabajo se terceriza. */
@@ -213,7 +215,7 @@ export function WoPaperForm({
             onChange={e => onChange({ location: e.target.value })}
             placeholder="Ciudad / Km…"
           />,
-          label("fecha"), header.openDate,
+          label("fecha"), fecha ?? header.openDate,
         )}
         {kvRow(
           label("itemPdm"), header.planItemCode || "",
@@ -484,7 +486,10 @@ export function WoPaperForm({
   const anexo = order.includes("riskAnnex");
 
   return (
-    <div className="space-y-4">
+    // Ancho de hoja A4 (210 mm) y centrada: en pantalla ancha (o con el modal
+    // maximizado) el formulario se estiraba hasta el borde de la ventana y no
+    // se parecía al papel que firma la tripulación.
+    <div className="space-y-4 w-full max-w-[210mm] mx-auto">
       {/* La hoja se guarda sola mientras se completa: sin este aviso, nadie
           sabría que lo cargado ya quedó. */}
       <div className="flex justify-end h-4" aria-live="polite">

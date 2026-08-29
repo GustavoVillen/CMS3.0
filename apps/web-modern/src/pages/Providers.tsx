@@ -9,6 +9,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // Mismos roles que exige el backend en providers-service.ts (canManage). Si esto
 // se desincroniza, el usuario ve botones que despues terminan en un 403.
@@ -196,7 +197,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, onClose, onSaved }) => 
 
           <div>
             <label className={labelCls}>Comentarios</label>
-            <textarea
+            <AutoTextArea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}

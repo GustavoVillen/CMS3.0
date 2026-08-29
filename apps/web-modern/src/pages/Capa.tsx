@@ -48,6 +48,7 @@ interface ListResponse {
 }
 
 import type { TranslationKey } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 const SOURCE_TYPE_TKEY: Record<string, TranslationKey> = {
   DEFECT:     "capa.src.defect",
   WORK_ORDER: "capa.src.workOrder",
@@ -115,7 +116,7 @@ const CompleteCapaModal: React.FC<CompleteCapaModalProps> = ({ capaId, onClose, 
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.actionsTaken")}</label>
-            <textarea
+            <AutoTextArea
               rows={6}
               value={actionsTaken}
               onChange={e => setActionsTaken(e.target.value)}
@@ -190,7 +191,7 @@ const CloseCapaModal: React.FC<CloseCapaModalProps> = ({ capaId, actionsTaken, o
           )}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.verification")}</label>
-            <textarea
+            <AutoTextArea
               rows={4}
               value={verificationNote}
               onChange={e => setVerificationNote(e.target.value)}
@@ -256,7 +257,7 @@ const CancelCapaModal: React.FC<CancelCapaModalProps> = ({ capaId, onClose, onSu
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("capa.cancelReason")}</label>
-            <textarea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <AutoTextArea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
@@ -436,7 +437,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.description")}</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+              <AutoTextArea rows={3} value={description} onChange={e => setDescription(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">

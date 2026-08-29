@@ -15,6 +15,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { ExternalLink, Folder, Loader2, RefreshCw } from "lucide-react";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { api, ApiError } from "../lib/api";
+import { AutoTextArea } from "./AutoTextArea";
 
 /** Lo mínimo que la ventanita necesita saber del certificado. */
 export interface RenewableCertificate {
@@ -223,7 +224,7 @@ export const CertificateRenewalDialog: React.FC<{
 
           <div className="space-y-1.5">
             <label className={labelCls}>Notas de la renovación</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
+            <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
           </div>
 
           <p className="text-[11px] text-text-industrial/40">

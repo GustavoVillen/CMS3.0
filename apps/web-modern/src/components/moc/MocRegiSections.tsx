@@ -6,6 +6,7 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2, Lock } from "lucide-react";
+import { AutoTextArea } from "../AutoTextArea";
 import {
   EVAL_GROUPS, EVAL_QUESTIONS, EFFECTIVENESS_QUESTIONS,
   EVALUATOR_AREAS, CHANGE_TYPES, LOCATION_TYPES,
@@ -166,7 +167,7 @@ const Text: React.FC<{ value: string; onChange: (v: string) => void; disabled?: 
   <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} className={inputCls} />
 );
 const Area: React.FC<{ value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string; rows?: number }> = ({ value, onChange, disabled, placeholder, rows = 2 }) => (
-  <textarea value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} rows={rows} className={inputCls + " resize-y"} />
+  <AutoTextArea value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} rows={rows} className={inputCls + " resize-y"} />
 );
 
 // Selector Sí / No / (No sabe) compacto.

@@ -7,6 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface TaskMaster {
   id: string;
@@ -206,7 +207,7 @@ const TaskDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
           <div className="space-y-1.5">
             <label className={labelCls}>Procedimiento</label>
-            <textarea value={procedure} onChange={e => setProcedure(e.target.value)} rows={3} placeholder="Pasos del procedimiento..." className={inputCls} />
+            <AutoTextArea value={procedure} onChange={e => setProcedure(e.target.value)} rows={3} placeholder="Pasos del procedimiento..." className={inputCls} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

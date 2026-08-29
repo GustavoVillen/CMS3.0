@@ -15,6 +15,8 @@ import { useAuth, useCan } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface CertificateRenewal {
   id: string;
@@ -447,7 +449,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Notas</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+            <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
           </div>
           {/* Historial de vigencias: lo que antes se perdía al pisar el registro. */}
           {isEdit && (initial?.renewals?.length ?? 0) > 0 && (
@@ -586,6 +588,10 @@ export const CertificatesPage: React.FC = () => {
   }, [statusFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx):
+  // la planilla muestra exactamente los registros que contó esa tarjeta.
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
 
   const openEdit = useCallback(async (row: Certificate) => {
     try {
@@ -673,9 +679,10 @@ export const CertificatesPage: React.FC = () => {
         </button>
       </PageHeader>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
       <DataTable
         columns={columns}
-        data={data?.items ?? null}
+        data={tmsaItems}
         loading={loading}
         error={error}
         keyFn={r => r.id}

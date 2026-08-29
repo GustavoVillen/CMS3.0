@@ -77,6 +77,7 @@ import {
   suggestAsset,
   suggestPlanLinks,
 } from "../work-orders/work-orders-ai-suggestions";
+import { auditWorkOrderClose } from "../work-orders/work-order-close-audit";
 import { extractWorkOrderScan } from "../work-orders/work-orders-ai-extractor";
 import { saveWorkOrderScanFile } from "../work-orders/work-order-scan-uploads-service";
 import {
@@ -479,6 +480,17 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof closeWorkOrder>[2];
     sendJson(response, 200, await closeWorkOrder(session, id, body));
+    return true;
+  }
+
+  // Auditoría de IA previa al cierre. Corre ANTES de /close porque su informe
+  // puede terminar pegado en Observaciones, que viaja en el cuerpo del cierre.
+  // No cambia nada en la base: sólo lee y devuelve el análisis.
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/close-audit$/.test(url.pathname)) {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof auditWorkOrderClose>[2];
+    sendJson(response, 200, await auditWorkOrderClose(session, id, body ?? {}));
     return true;
   }
 

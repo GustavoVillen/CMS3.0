@@ -12,6 +12,7 @@ import { PageHeader } from "../components/PageHeader";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -466,7 +467,7 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
                 </div>
                 <div className="space-y-1.5">
                   <label className={labelCls}>Observaciones</label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={2} className={inputCls} />
+                  <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} disabled={isClosed} rows={2} className={inputCls} />
                 </div>
               </section>
             </>

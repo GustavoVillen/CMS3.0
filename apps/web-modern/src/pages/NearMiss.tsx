@@ -13,6 +13,7 @@ import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 const CATEGORY_LABEL: Record<string, string> = {
   NEAR_MISS: "Near miss",
@@ -162,19 +163,19 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
               <input value={reportedByName} onChange={e => setRBN(e.target.value)} placeholder="Nombre o cargo" className={inputCls} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Descripción *</label>
-              <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Qué pasó y qué pudo haber pasado…" className={inputCls + " resize-y"} />
+              <AutoTextArea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Qué pasó y qué pudo haber pasado…" className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Acción inmediata</label>
-              <textarea rows={2} value={immediateAction} onChange={e => setIA(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={immediateAction} onChange={e => setIA(e.target.value)} className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Causa raíz</label>
-              <textarea rows={2} value={rootCause} onChange={e => setRoot(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={rootCause} onChange={e => setRoot(e.target.value)} className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Acciones preventivas</label>
-              <textarea rows={2} value={preventiveActions} onChange={e => setPA(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={preventiveActions} onChange={e => setPA(e.target.value)} className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>Lecciones aprendidas</label>
-              <textarea rows={2} value={lessonsLearned} onChange={e => setLL(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={lessonsLearned} onChange={e => setLL(e.target.value)} className={inputCls + " resize-y"} />
             </div>
           </div>
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}

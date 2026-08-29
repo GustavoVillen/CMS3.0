@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // Niveles de requirement según matriz CEOP:
 //   OBRIGATORIO — el rango debe tener este entrenamiento sí o sí
@@ -178,7 +179,7 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
           </div>
           <div>
             <label className={labelCls}>{t("common.notesObs")}</label>
-            <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-y"} placeholder={t("cm.notesPh")} />
+            <AutoTextArea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-y"} placeholder={t("cm.notesPh")} />
           </div>
           {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         </div>

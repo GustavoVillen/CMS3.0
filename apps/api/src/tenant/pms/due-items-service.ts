@@ -23,6 +23,11 @@ interface MaintenancePlanRecord {
   tenantId: string;
   vesselCode: string;
   assetId: string;
+  // El findMany no usa select, así que la fila trae el plan completo. Código y
+  // título se declaran acá porque los consume el listado de tareas de la semana
+  // (dashboard/upcoming-tasks-service.ts) para mostrar la tarea, no un id.
+  taskCode: string;
+  title: string;
   triggerType: string;
   status?: string | null;
   executionStatus?: string | null;

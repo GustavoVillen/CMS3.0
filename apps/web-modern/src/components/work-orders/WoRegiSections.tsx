@@ -14,6 +14,7 @@ import {
   WO_PRIORITY_OPTIONS, type FormOption,
 } from "../../lib/wo-form-catalog";
 import type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
+import { AutoTextArea } from "../AutoTextArea";
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
@@ -368,7 +369,7 @@ export function WoRegiClosure({ form, onChange, disabled }: {
 
       <div>
         <label className={labelCls}>Detalle de pendientes (materiales/tareas)</label>
-        <textarea
+        <AutoTextArea
           className={inputCls + " min-h-[64px] resize-y"}
           value={form.pendingDetail}
           disabled={disabled}

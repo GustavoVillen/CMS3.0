@@ -746,7 +746,7 @@ export async function executeExtendedCopilotTool(
         select: {
           deferralCode: true, vesselCode: true, assetId: true, status: true,
           deferralType: true, sourceType: true,
-          requestedAt: true, targetDate: true, targetPort: true,
+          requestedAt: true, targetDate: true, targetPort: true, toNextDrydock: true,
           justification: true, compensatoryMeasures: true,
           riskLevel: true, riskProbability: true, riskConsequence: true, riskAnalysisResult: true,
           reviewNotes: true, decisionAt: true, approverName: true, rejectorName: true,

@@ -9,6 +9,7 @@ import {
   SearchCheck,
   Timer,
   Anchor,
+  LifeBuoy,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -47,6 +48,10 @@ export const NAV: NavSection[] = [
     items: [
       { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
       { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
+        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
+      // Hermano del panel TMSA: misma evidencia de mantenimiento, leída contra
+      // el Capítulo 10 del Código ISM en vez del Elemento 4 de OCIMF.
+      { icon: LifeBuoy,        labelKey: "nav.ism",              path: "/ism",
         roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
       { icon: CalendarRange,   labelKey: "nav.maintenanceGantt", path: "/maintenance-gantt" },

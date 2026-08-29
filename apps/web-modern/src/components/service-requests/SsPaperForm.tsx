@@ -13,6 +13,7 @@
 import React from "react";
 import { Check } from "lucide-react";
 import { fmtDate } from "../../lib/utils";
+import { AutoTextArea } from "../AutoTextArea";
 
 // Azul marino del documento controlado — el mismo que ya usan las barras de
 // seccion del formulario de OT (WoRegiSections) y MaintenancePlans.
@@ -160,7 +161,7 @@ function PaperTextArea({ value, onChange, disabled, placeholder, rows = 3 }: {
   rows?: number;
 }) {
   return (
-    <textarea
+    <AutoTextArea
       className={`${fieldCls} block px-2 py-1.5 resize-y border-b border-fg/25`}
       style={{ minHeight: `${rows * 20 + 12}px` }}
       value={value}

@@ -27,6 +27,8 @@ import { PageLoader } from "./components/PageLoader";
 const MobileLayout = React.lazy(() => import("./components/MobileLayout").then(m => ({ default: m.MobileLayout })));
 // Página móvil standalone SOLO de Reportes Diarios (link directo /m-daily-reports).
 const MobileDailyReportsPage = React.lazy(() => import("./mobile/MobileDailyReportsPage").then(m => ({ default: m.MobileDailyReportsPage })));
+// Bandeja de firmas del celular (link directo /m-approvals) para el que aprueba/autoriza.
+const MobileApprovals = React.lazy(() => import("./mobile/MobileApprovals").then(m => ({ default: m.MobileApprovals })));
 
 // Tenant
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -82,6 +84,7 @@ const CrewMatrixPage = React.lazy(() => import("./pages/CrewMatrix").then(m => (
 const RequirementsMatrixPage = React.lazy(() => import("./pages/RequirementsMatrix").then(m => ({ default: m.RequirementsMatrixPage })));
 const MocPage = React.lazy(() => import("./pages/Moc").then(m => ({ default: m.MocPage })));
 const TmsaPage = React.lazy(() => import("./pages/Tmsa").then(m => ({ default: m.TmsaPage })));
+const IsmPage = React.lazy(() => import("./pages/Ism").then(m => ({ default: m.IsmPage })));
 
 // Platform (sólo SUPERADMIN — un tenant normal nunca descarga estos chunks)
 const PlatformLogin = React.lazy(() => import("./pages/platform/PlatformLogin").then(m => ({ default: m.PlatformLogin })));
@@ -214,6 +217,8 @@ export default function App() {
             <Route path="/m" element={<RequireAuth><TenantI18nWrapper><MobileLayout /></TenantI18nWrapper></RequireAuth>} />
             {/* Link directo solo de Reportes Diarios (Capitán / Jefe de Máquinas). */}
             <Route path="/m-daily-reports" element={<RequireAuth><TenantI18nWrapper><MobileDailyReportsPage /></TenantI18nWrapper></RequireAuth>} />
+            {/* Bandeja de firmas: OT/SS para aprobar y para autorizar (Capitán / Jefe de Máquinas / Superintendente / DPA). */}
+            <Route path="/m-approvals" element={<RequireAuth><TenantI18nWrapper><MobileApprovals /></TenantI18nWrapper></RequireAuth>} />
 
             {/* ── Tenant ── */}
             <Route path="/login" element={<TenantLoginRedirect />} />
@@ -256,6 +261,7 @@ export default function App() {
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
               <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><TmsaPage /></RequireRole>} />
+              <Route path="/ism"               element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><IsmPage /></RequireRole>} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

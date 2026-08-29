@@ -16,6 +16,7 @@ import { handleTriggersRoutes } from "./triggers-router";
 import { handleQualityRoutes } from "./quality-router";
 import { handleCatalogsRoutes } from "./catalogs-router";
 import { handleDrydockRoutes } from "./drydock-router";
+import { listPendingApprovals } from "../approvals/approvals-service";
 
 /**
  * PMS (Preventive Maintenance System) router - Etapa 2+
@@ -42,6 +43,19 @@ export async function handlePmsRoutes(
     const id = url.pathname.split("/")[4]!;
     await deleteTenantMaintenancePlan(session, id);
     sendJson(response, 200, { ok: true });
+    return true;
+  }
+
+  // GET /app/pms/approvals/pending — bandeja de firmas del usuario (pantalla
+  // móvil /m-approvals). Un solo endpoint de lectura: se cablea acá directo, en
+  // lugar de abrir un router propio para una única ruta.
+  if (method === "GET" && url.pathname === "/app/pms/approvals/pending") {
+    const slug = resolveTenantSlugFromRequest(request, env);
+    if (!slug) throw new RouteError(400, "TENANT_UNRESOLVED", "Unable to resolve tenant.");
+    const session = requireTenantAccessSession(request, slug);
+    sendJson(response, 200, await listPendingApprovals(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+    }));
     return true;
   }
 

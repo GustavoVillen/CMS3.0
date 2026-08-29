@@ -347,6 +347,7 @@ const MODULE_COLUMNS: Record<ExcelModule, ColumnDef[]> = {
     { key: "requestedAt",          header: "requestedAt",          required: false, width: 16 },
     { key: "targetDate",           header: "targetDate",           required: false, width: 14 },
     { key: "targetPort",           header: "targetPort",           required: false, width: 16 },
+    { key: "toNextDrydock",        header: "toNextDrydock",        required: false, width: 14 },
     { key: "justification",        header: "justification",        required: false, width: 40 },
     { key: "compensatoryMeasures", header: "compensatoryMeasures", required: false, width: 40 },
     { key: "decisionAt",           header: "decisionAt",           required: false, width: 16 },

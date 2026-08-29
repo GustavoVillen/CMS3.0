@@ -14,7 +14,7 @@ import { LOGO_PATH, resolveTenantLogo } from "../pms/pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
 
-const GROUP_TITLE: Record<string, string> = {
+export const GROUP_TITLE: Record<string, string> = {
   pmsCoverage:        "Cobertura del PMS",
   criticalEquipment:  "Equipo crítico",
   plannedMaintenance: "Mantenimiento planificado",
@@ -32,7 +32,7 @@ const GROUP_TITLE: Record<string, string> = {
   engineeringAudit:   "Auditoría de ingeniería",
 };
 
-const METRIC_LABEL: Record<string, string> = {
+export const METRIC_LABEL: Record<string, string> = {
   assetsTotal: "Activos totales",
   assetsWithPlan: "Con plan activo",
   assetsWithoutPlan: "Sin plan",

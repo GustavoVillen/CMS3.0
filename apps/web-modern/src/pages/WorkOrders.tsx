@@ -23,6 +23,8 @@ import { PlannedItemsEditor } from "../components/work-orders/PlannedItemsEditor
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
+import { paperFieldCls } from "../components/paper/PaperKit";
+import { WoCloseAuditModal } from "../components/work-orders/WoCloseAuditModal";
 import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
@@ -36,6 +38,8 @@ import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
 import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // Mini reference data for showing linked permits inside WO modal
 const PTW_STATUS_LABEL: Record<string, string> = {
@@ -263,7 +267,7 @@ function CategoryBadge({ type }: { type: string }) {
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
 
-function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; dueDate: string | null; deferralStatus?: string | null }) {
+function WoStatusBadge({ status, dueDate, deferralStatus, toNextDrydock }: { status: string; dueDate: string | null; deferralStatus?: string | null; toNextDrydock?: boolean }) {
   const t = useT();
   const isClosed = status === "CLOSED" || status === "CANCELLED";
   const isOpen   = !isClosed;
@@ -271,6 +275,9 @@ function WoStatusBadge({ status, dueDate, deferralStatus }: { status: string; du
   if (isClosed)          return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("wo.status.closed")}</span>;
   if (status === "ON_HOLD") {
     if (deferralStatus === "REJECTED") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.postponedRejected")}</span>;
+    // Diferida a varada no es lo mismo que diferida un par de semanas: el
+    // trabajo salió del alcance de a bordo.
+    if (toNextDrydock) return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">{t("wo.status.postponedDrydock")}</span>;
     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
   }
   if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
@@ -287,10 +294,25 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
   const [holdReason,            setHoldReason]            = useState("");
   const [targetDate,            setTargetDate]            = useState("");
   const [compensatoryMeasures,  setCompensatoryMeasures]  = useState("");
+  const [toNextDrydock,         setToNextDrydock]         = useState(false);
+  const [openSpecs,             setOpenSpecs]             = useState<{ specCode: string }[] | null>(null);
   const [loadingAI,             setLoadingAI]             = useState(false);
   const [saving,                setSaving]                = useState(false);
   const [submitting,            setSubmitting]            = useState(false);
   const [err,                   setErr]                   = useState<string | null>(null);
+
+  // Especificaciones de varada editables del buque: sirven para decirle al
+  // usuario, antes de tildar, dónde va a aterrizar el trabajo.
+  useEffect(() => {
+    let cancelled = false;
+    api.get<{ items: { specCode: string; status: string }[] }>(`/app/pms/drydock-specs?vesselCode=${encodeURIComponent(workOrder.vesselCode)}`)
+      .then(res => {
+        if (cancelled) return;
+        setOpenSpecs((res.items ?? []).filter(s => s.status !== "APPROVED" && s.status !== "CANCELLED"));
+      })
+      .catch(() => { if (!cancelled) setOpenSpecs([]); });
+    return () => { cancelled = true; };
+  }, [workOrder.vesselCode]);
 
   const doHold = useCallback(async (): Promise<string | null> => {
     if (!holdReason.trim()) { setErr(t("wo.holdReason")); return null; }
@@ -298,9 +320,10 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
       holdReason: holdReason.trim(),
       targetDate: targetDate || null,
       compensatoryMeasures: compensatoryMeasures.trim() || null,
+      toNextDrydock,
     });
     return res.deferralId ?? null;
-  }, [holdReason, targetDate, compensatoryMeasures, workOrder.id, t]);
+  }, [holdReason, targetDate, compensatoryMeasures, toNextDrydock, workOrder.id, t]);
 
   const onSave = useCallback(async () => {
     setSaving(true); setErr(null);
@@ -354,11 +377,34 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
         <div className="p-6 space-y-4">
           <div>
             <label className={labelCls}>{t("wo.holdReason")}</label>
-            <textarea rows={3} value={holdReason} onChange={e => setHoldReason(e.target.value)} className={`${inputCls} mt-1`} />
+            <AutoTextArea rows={3} value={holdReason} onChange={e => setHoldReason(e.target.value)} className={`${inputCls} mt-1`} />
           </div>
           <div>
             <label className={labelCls}>{t("wo.holdTargetDate")}</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className={`${inputCls} mt-1`} />
+          </div>
+          <div className="rounded-xl border border-fg/10 bg-fg/5 px-3 py-2.5">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={toNextDrydock}
+                onChange={e => setToNextDrydock(e.target.checked)}
+                className="mt-0.5 accent-accent"
+              />
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-fg">{t("wo.holdToDrydock")}</span>
+                <span className="block text-[10px] text-text-industrial/50 mt-0.5">{t("wo.holdToDrydockHint")}</span>
+              </span>
+            </label>
+            {toNextDrydock && openSpecs && (
+              <p className="text-[10px] text-text-industrial/60 mt-2 pl-6">
+                {openSpecs.length === 1
+                  ? <>{t("wo.holdToDrydockSpec")} <span className="font-mono font-bold text-fg">{openSpecs[0]!.specCode}</span>.</>
+                  : openSpecs.length === 0
+                    ? t("wo.holdToDrydockNoSpec")
+                    : t("wo.holdToDrydockMulti")}
+              </p>
+            )}
           </div>
           <div>
             <button
@@ -371,7 +417,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
               Medidas compensatorias
               <span className="text-[10px] normal-case font-normal text-text-industrial/40 ml-1">{loadingAI ? "Generando con IA…" : "click para sugerir con IA"}</span>
             </button>
-            <textarea
+            <AutoTextArea
               rows={5}
               value={compensatoryMeasures}
               onChange={e => setCompensatoryMeasures(e.target.value)}
@@ -380,7 +426,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
               className={`${inputCls} disabled:opacity-50`}
             />
           </div>
-          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
         </div>
         <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} disabled={isBusy} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg disabled:opacity-50">{t("common.cancel")}</button>
@@ -425,7 +471,7 @@ const CancelModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
         </div>
         <div className="p-6 space-y-3">
           <label className={labelCls}>{t("wo.cancelReason")}</label>
-          <textarea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls} />
+          <AutoTextArea rows={4} value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls} />
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
@@ -477,7 +523,7 @@ const ReopenModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSucce
             {t("wo.reopenWarning")}
           </p>
           <label className={labelCls}>{t("wo.reopenReason")}</label>
-          <textarea rows={4} value={reason} onChange={e => setReason(e.target.value)} className={inputCls} placeholder={t("wo.reopenReasonPlaceholder")} />
+          <AutoTextArea rows={4} value={reason} onChange={e => setReason(e.target.value)} className={inputCls} placeholder={t("wo.reopenReasonPlaceholder")} />
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
@@ -624,7 +670,7 @@ const ProgressNoteRow: React.FC<{
 
           {editing ? (
             <div className="flex-1 min-w-0 space-y-1.5">
-              <textarea
+              <AutoTextArea
                 rows={autoRows(draft, 3, 10)}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
@@ -880,7 +926,7 @@ const NewServiceRequestModal: React.FC<{
     >
       <div>
         <label className={labelCls}>¿Qué servicio se solicita al taller externo?</label>
-        <textarea className={inputCls + " min-h-[72px] resize-y"} value={servicio} autoFocus
+        <AutoTextArea className={inputCls + " min-h-[72px] resize-y"} value={servicio} autoFocus
           onChange={e => setServicio(e.target.value)}
           placeholder="Ej. Reparación del servo timón de babor" />
       </div>
@@ -955,8 +1001,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [tramita, setTramita] = useState<"ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
 
   // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
-  interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null }
+  interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null; toNextDrydock?: boolean }
   const [deferralStatus, setDeferralStatus] = useState<string | null>(null);
+  const [deferralToDrydock, setDeferralToDrydock] = useState(false);
   const [deferralTargetDate, setDeferralTargetDate] = useState<string | null>(null);
   const [deferralHistory, setDeferralHistory] = useState<DeferralLite[]>([]);
   const [deferralReloadKey, setDeferralReloadKey] = useState(0);
@@ -970,11 +1017,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         const TERMINAL = new Set(["REJECTED", "EXPIRED", "CLOSED"]);
         const active = items.find(d => !TERMINAL.has(d.status)) ?? items[0] ?? null;
         setDeferralStatus(active?.status ?? null);
+        setDeferralToDrydock(active?.toNextDrydock === true);
         setDeferralTargetDate(active?.targetDate ?? null);
         // Historial: el resto (excluye el activo)
         setDeferralHistory(active ? items.filter(d => d.id !== active.id) : []);
       })
-      .catch(() => { if (!cancelled) { setDeferralStatus(null); setDeferralTargetDate(null); setDeferralHistory([]); } });
+      .catch(() => { if (!cancelled) { setDeferralStatus(null); setDeferralToDrydock(false); setDeferralTargetDate(null); setDeferralHistory([]); } });
     return () => { cancelled = true; };
   }, [workOrder.id, workOrder.status, deferralReloadKey]);
 
@@ -1044,9 +1092,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return () => { cancelled = true; };
   }, [needsProvider, providers.length]);
 
-  function toggleArr(arr: string[], set: (v: string[]) => void, val: string) {
-    set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
-  }
 
   // ── Plan fields ──
   const [title, setTitle]                   = useState(workOrder.title ?? "");
@@ -1069,6 +1114,25 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // ── Result fields ──
   const [woResult, setWoResult]             = useState(workOrder.woResult ?? "");
   const [executedByName, setExecutedByName] = useState(workOrder.executedByName ?? "");
+  // RESPONSABLE del cierre: arranca con el TECNICO de la hoja. Es el mismo dato
+  // en el 99% de los casos y hacía escribir a mano un nombre que el sistema ya
+  // tenía. Se resuelve el id contra el directorio (lo mismo que lee
+  // AssigneeSelect); si el técnico no está en la lista, vale el nombre que traiga
+  // la OT. Sólo se completa mientras el campo está vacío: un nombre escrito a
+  // mano nunca se pisa.
+  const { data: directoryData } = useFetch<Array<{ userId: string; name: string }>>("/app/team/directory");
+  const tecnicoName = useMemo(() => {
+    const people = Array.isArray(directoryData) ? directoryData : [];
+    const known = people.find(p => p.userId === assignedTo);
+    if (known) return known.name;
+    // Directorio todavía cargando: no arriesgar a poner un id como nombre.
+    if (people.length === 0) return workOrder.assignedToUserName ?? "";
+    // Valor que no está en el directorio: es un nombre viejo tipeado a mano.
+    return workOrder.assignedToUserName ?? assignedTo;
+  }, [directoryData, assignedTo, workOrder.assignedToUserName]);
+  useEffect(() => {
+    if (!executedByName.trim() && tecnicoName) setExecutedByName(tecnicoName);
+  }, [tecnicoName, executedByName]);
   const [executionDate, setExecutionDate]   = useState(toDateInputValue(workOrder.completedDate));
   // FECHA INICIO del recuadro de Programación de trabajo. El sistema la carga
   // sola al pasar la OT a ejecución, pero también se escribe a mano: las OT
@@ -1114,6 +1178,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [usageSearch,    setUsageSearch]    = useState("");
   const [usageDropdown,  setUsageDropdown]  = useState(false);
   const [closingWarning, setClosingWarning] = useState<string | null>(null);
+  // Auditoría de IA previa al cierre. Guarda las opciones del diálogo de cierre
+  // (quién cierra, con qué fecha) mientras la auditoría corre: la OT se cierra
+  // recién cuando el usuario decide desde el informe.
+  const [closeAuditOpts, setCloseAuditOpts] = useState<{ completedDate?: string; closedByUserId?: string } | null>(null);
   // "Guardar" no cierra la ventana: feedback + reset del dirty-tracker.
   const [justSaved, setJustSaved] = useState(false);
   const [saveResetKey, setSaveResetKey] = useState(0);
@@ -1468,6 +1536,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     [workOrder.id],
   );
   const linkedServiceRequests = linkedSrData?.items ?? [];
+
+  // PROVEEDOR del recuadro ASIGNADO A: se lee de las Solicitudes de Servicio de
+  // la OT, que es donde realmente se elige el taller. Antes la hoja tenía su
+  // propio selector y podía decir una cosa distinta de la SS; y con más de un
+  // taller sólo mostraba uno. Acá se listan todos, sin repetir.
+  const ssProviderNames = useMemo(
+    () => [...new Set(linkedServiceRequests.map(sr => sr.providerName).filter(Boolean) as string[])],
+    [linkedServiceRequests],
+  );
   // Muestra de análisis generada por esta OT. Si existe, la OT es de muestreo y
   // el código FA se muestra junto a sus SS: es el número que después se busca en
   // "Muestreos y Análisis". La SS no tiene vínculo propio con la muestra — el
@@ -1860,7 +1937,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [onSaved, woResult, isCorrective, defectDetail, navigate, workOrder]);
 
   // opts (solo admin): completedDate = fecha de cierre elegida; closedByUserId = quién cierra (firma CIERRA).
-  const onClose_WO = useCallback(async (opts?: { completedDate?: string; closedByUserId?: string }) => {
+  // observationsOverride: el informe de la auditoría de cierre, ya concatenado.
+  // Va por parámetro y no por estado porque el cierre se dispara en el mismo
+  // click que lo agrega, y el estado todavía no se actualizó.
+  const onClose_WO = useCallback(async (opts?: { completedDate?: string; closedByUserId?: string; observationsOverride?: string }) => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
     setClosing(true); setErr(null);
     try {
@@ -1875,7 +1955,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         woResult,
         executedByName: normalizeOptionalText(executedByName),
         completedDate: opts?.completedDate || executionDate || null,
-        observations: normalizeOptionalText(observations),
+        observations: normalizeOptionalText(opts?.observationsOverride ?? observations),
         supportingDocUrl: supUrl,
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
         actualHours: actualHours ? Number(actualHours) : null,
@@ -1930,7 +2010,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 )}
               </div>
             </div>
-            <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />
+            <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} toNextDrydock={deferralToDrydock} />
           </div>
           <div className="flex items-center gap-1.5">
             <CopyLinkButton />
@@ -2124,7 +2204,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
                   título es una línea "CÓDIGO · tarea" por ítem. Con un solo ítem
                   se ve igual que antes (una fila). */}
-              <textarea
+              <AutoTextArea
                 rows={Math.min(6, Math.max(1, title.split("\n").length))}
                 value={title}
                 onChange={e => setTitle(e.target.value)}
@@ -2145,7 +2225,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 {t("wo.modal.task")}
                 {loadingTask && <span className="text-[10px] normal-case font-normal">{t("common.analyzing")}</span>}
               </label>
-              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable || loadingTask} className={`${inputCls} resize-y`} />
+              <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)} onBlur={() => { void analyzeForDeficiency(description, "task"); }} disabled={!isEditable || loadingTask} className={`${inputCls} resize-y`} />
             </div>
               </>
             )}
@@ -2166,7 +2246,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.acceptanceCriteria")}{loadingCriteria && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
                   </label>
-                  <textarea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
+                  <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
                 </div>
                 <div className="space-y-1.5">
                   <label
@@ -2177,7 +2257,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {t("wo.modal.loto")}{loadingLoto && <span className="ml-1 text-[9px] normal-case font-normal">{t("common.analyzing")}</span>}
                   </label>
-                  <textarea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
+                  <AutoTextArea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)} disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
                 </div>
                 <div className="space-y-1.5">
                   <label
@@ -2207,7 +2287,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 </div>
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
-                  <textarea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
+                  <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)} disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
                 </div>
                   </>
                 )}
@@ -2407,6 +2487,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 if (patch.riskAnalysisResult !== undefined) setRiskAnalysisResult(patch.riskAnalysisResult);
                 if (patch.loto !== undefined)               setLoto(patch.loto);
               }}
+              /* FECHA del encabezado: la de apertura de la OT. Es el mismo dato
+                 y el mismo estado que el campo de la sección de datos. */
+              fecha={
+                <input
+                  type="date"
+                  className={paperFieldCls}
+                  value={openDate}
+                  disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)}
+                  onChange={e => setOpenDate(e.target.value)}
+                />
+              }
               tecnico={
                 <AssigneeSelect
                   value={assignedTo}
@@ -2415,42 +2506,92 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   className="w-full bg-transparent text-[13px] text-fg outline-none"
                 />
               }
+              /* Sin selector propio: el taller se elige en la Solicitud de
+                 Servicio y la hoja lo refleja. Si hay varias SS con talleres
+                 distintos, van todos. */
               proveedor={needsProvider ? (
-                <div className="w-full space-y-1">
-                  <select
-                    value={providerId}
-                    onChange={e => { touchRegi(); setProviderId(e.target.value); }}
-                    disabled={!isEditable}
-                    className="w-full bg-transparent text-[13px] text-fg outline-none"
-                  >
-                    <option value="">Seleccionar taller / proveedor…</option>
-                    {providers.map(pr => (
-                      <option key={pr.id} value={pr.id}>{pr.name}{pr.providerCode ? ` (${pr.providerCode})` : ""}</option>
-                    ))}
-                  </select>
-                  {!providerId && (
-                    <input
-                      className="w-full bg-transparent text-[13px] text-fg placeholder-text-industrial/30 outline-none"
-                      value={providerOther}
-                      disabled={!isEditable}
-                      onChange={e => { touchRegi(); setProviderOther(e.target.value); }}
-                      placeholder="…o escribí la empresa si no está en la lista"
-                    />
-                  )}
-                </div>
+                ssProviderNames.length > 0 ? (
+                  <span className="text-[13px] text-fg">{ssProviderNames.join(" · ")}</span>
+                ) : (
+                  <span className="text-[11px] italic text-text-industrial/40">
+                    Se toma de las Solicitudes de Servicio de esta {woTerms.abbr}.
+                  </span>
+                )
               ) : undefined}
+              /* Los permisos se crean, se sugieren y se abren desde acá mismo:
+                 el recuadro del papel ES la sección de permisos (igual que
+                 REPUESTOS con PlannedItemsEditor). Sólo se pueden cargar con la
+                 OT aprobada, como antes. */
               permits={
-                linkedPermits.length === 0
-                  ? <span className="text-[11px] italic text-text-industrial/40">Sin permisos vinculados. Se cargan abajo, en Permisos de trabajo.</span>
-                  : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {linkedPermits.map(pm => (
-                        <span key={pm.id} className="px-2 py-0.5 border border-fg/30 text-[11px] font-bold text-fg">
-                          {PERMIT_TYPE_LABEL[pm.type] ?? pm.type} · <span className="font-mono">{pm.permitCode}</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">
+                      Permisos vinculados
+                    </p>
+                    {isApproved && isEditable && (
+                      <button
+                        type="button"
+                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
+                      >
+                        <Plus className="w-3 h-3" /> Nuevo permiso
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sugerencia por el contenido del trabajo (mismas keywords). */}
+                  {isApproved && isEditable && advisoryMatches.length > 0 && linkedPermits.length === 0 && (
+                    <div className="border border-yellow-500/30 bg-yellow-500/5 p-2 space-y-1.5">
+                      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-yellow-800 dark:text-yellow-200">
+                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        <span>
+                          Esta {woTerms.abbr} podría requerir permiso de trabajo:{" "}
+                          {advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}.
                         </span>
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {advisoryMatches.map(m => (
+                          <button
+                            key={m.type}
+                            type="button"
+                            onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
+                            className="px-2 py-0.5 border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
+                          >
+                            Crear {PERMIT_TYPE_LABEL[m.type]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {linkedPermits.length === 0 ? (
+                    <p className="text-[11px] italic text-text-industrial/40">
+                      {isApproved ? "Sin permisos vinculados." : "Se cargan con la OT ya aprobada."}
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {linkedPermits.map(pm => (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => setPermitModalState({ kind: "edit", permit: pm })}
+                          className="w-full flex items-center gap-2 px-2 py-1 border border-fg/25 hover:border-accent/40 text-left transition-colors"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
+                          <span className="shrink-0 font-mono text-[10px] text-text-industrial/60">{pm.permitCode}</span>
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[9px] font-bold ${PTW_STATUS_COLOR[pm.status]}`}>
+                            {PTW_STATUS_LABEL[pm.status]}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-text-industrial/70">
+                            {PERMIT_TYPE_LABEL[pm.type as PermitType] ?? pm.type}
+                          </span>
+                          <span className="flex-1 min-w-0 truncate text-[11px] text-fg/80">{pm.description}</span>
+                          <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
+                        </button>
                       ))}
                     </div>
-                  )
+                  )}
+                </div>
               }
               spares={
                 <PlannedItemsEditor
@@ -2527,38 +2668,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             />
           )}
 
-          {/* ── 1. INFORMACIÓN ── */}
+          {/* ── 1. INFORMACIÓN ──
+              Con el formulario controlado la sección entera se saca (pedido del
+              usuario, 2026-08-29): estado, criticidad y fecha de apertura ya son
+              recuadros de la hoja. Sólo queda, si corresponde, el aviso de
+              diferimiento, que no tiene lugar en el papel. */}
           <section>
-            <PhaseHeader n={isMercurio ? 4 : 1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
+            {!isMercurio && (
+              <PhaseHeader n={1} label={t("wo.modal.section.info")} dotCls="bg-fg/10 text-fg/60" borderCls="border-fg/10" />
+            )}
             <div className="mt-3">
-            {/* Con el formulario controlado, buque / equipo / tipo / prioridad
-                son recuadros de la hoja: acá quedan sólo los datos de gestión
-                que el papel no lleva. Repetirlos daba dos controles para el
-                mismo dato. */}
-            {isMercurio ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {([
-                  [t("wo.col.status"), null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
-                  [t("wo.modal.criticality"), workOrder.criticality, "text-fg"],
-                  [t("wo.modal.openDate"), fmtDate(workOrder.openDate), "text-fg",
-                    (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
-                      ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
-                          className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
-                      : undefined],
-                  [t("wo.modal.dueDate"), fmtDate(workOrder.dueDate),
-                    workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
-                    tramitaPhase === "SOLICITADA" && isEditable
-                      ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                          className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
-                      : undefined],
-                ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
-                  <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
-                    {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
-                  </div>
-                ))}
-              </div>
-            ) : (
+            {!isMercurio && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {([
                 [t("wo.modal.vessel"),     workOrder.vesselCode,            "font-mono text-accent"],
@@ -2572,7 +2692,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         <option value="INSPECTION">{t("wo.type.inspection")}</option>
                       </select>
                     : <CategoryBadge key="cat" type={type} />],
-                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} />],
+                [t("wo.col.status"),       null, null, <WoStatusBadge key="st" status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} toNextDrydock={deferralToDrydock} />],
                 // Lee del estado (no de workOrder) para reflejar en el acto el
                 // cambio hecho en el recuadro PRIORIDAD del formulario.
                 [t("wo.modal.priority"),   priority,                        "text-fg"],
@@ -2701,11 +2821,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </section>
 
           {/* ── 4. PERMISOS DE TRABAJO — oculta (no sólo deshabilitada) hasta
-              que la OT esté aprobada, igual que 6-10. */}
-          {isApproved && (
+              que la OT esté aprobada, igual que 6-10.
+              Con el formulario controlado esto vive en el recuadro
+              AUTORIZACION DE TRABAJO de la hoja, así que acá no se repite. */}
+          {!isMercurio && isApproved && (
           <section className="space-y-3">
             <PhaseHeader
-              n={isMercurio ? 5 : 4}
+              n={4}
               label="Permisos de trabajo"
               dotCls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
               borderCls="border-yellow-500/25"
@@ -2787,10 +2909,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {isApproved && (
           <div className="space-y-6">
 
-          {/* ── 5. AVANCES ── */}
+          {/* ── AVANCES — OCULTA por pedido del usuario (2026-08-29): "al menos
+              por ahora sacarlo, quizás luego la recuperemos". Se deja el
+              montaje comentado y TODO lo demás intacto (ProgressNotesPanel, el
+              modal ProgressNoteSheet, el análisis de deficiencias del avance):
+              volver a activarla es descomentar este bloque. Mismo patrón que
+              los módulos dormantes del Sidebar. */}
+          {/*
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
-              <PhaseHeader n={6} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
+              <PhaseHeader n={isMercurio ? 4 : 6} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
                 canAdd={isResultEditable}
@@ -2802,6 +2930,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               />
             </section>
           )}
+          */}
 
           {/* Programación de trabajo, repuestos/materiales y tarea concluida son
               recuadros de la hoja de arriba (ver WoPaperForm). */}
@@ -2810,7 +2939,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                  "Programación de trabajo", "Repuestos y materiales" y
                  "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 4 : 6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}
@@ -2848,7 +2977,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     {t("wo.modal.rewriteAI")}
                   </button>
                 </div>
-                <textarea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable || loadingRewrite} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder={t("wo.modal.deficienciesPlaceholder")} />
+                <AutoTextArea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable || loadingRewrite} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder={t("wo.modal.deficienciesPlaceholder")} />
               </div>
             )}
 
@@ -2901,12 +3030,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.observations")}</label>
-              <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
+              <AutoTextArea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
             </div>
             {isCorrective && !isClosed && (
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.defectDetail")}</label>
-                <textarea rows={2} value={defectDetail} onChange={e => setDefectDetail(e.target.value)} disabled={!isEditable}
+                <AutoTextArea rows={2} value={defectDetail} onChange={e => setDefectDetail(e.target.value)} disabled={!isEditable}
                   className={`${inputCls} resize-none`} placeholder={t("wo.modal.defectDetailPlaceholder")} />
                 <p className="text-[10px] text-text-industrial/40">{t("wo.modal.defectDetailHint")}</p>
               </div>
@@ -3109,43 +3238,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
           )}
 
-          {/* ── Medio de comunicación + Distribución (solo Mercurio) ── */}
-          {isMercurio && (
-            <>
-              <section className="space-y-3 border-t border-fg/10 pt-4">
-                <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">{t("wo.modal.commMethodSection")}</p>
-                <div className="flex gap-3 flex-wrap">
-                  {(["IMPRESO", "EMAIL", "WHAPP", "OTRO"] as const).map(opt => (
-                    <button key={opt} type="button" disabled={!isEditable}
-                      onClick={() => toggleArr(commMethod, setCommMethod, opt)}
-                      className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
-                        commMethod.includes(opt)
-                          ? "bg-accent text-accent-fg border-accent"
-                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                      }`}
-                    >{opt}</button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="space-y-3 border-t border-fg/10 pt-4">
-                <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">{t("wo.modal.distribution")}</p>
-                <div className="flex gap-2 flex-wrap">
-                  {([["ORIGINAL", "Original: Recursos Humanos"], ["COPIA", "Copia: Destinatarios"]] as const).map(([code, label]) => (
-                    <button key={code} type="button" disabled={!isEditable}
-                      onClick={() => toggleArr(distribution, setDistribution, code)}
-                      className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
-                        distribution.includes(code)
-                          ? "bg-accent text-accent-fg border-accent"
-                          : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                      }`}
-                    >{label}</button>
-                  ))}
-                </div>
-              </section>
-            </>
-          )}
-
           {closingWarning && (
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
               <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
@@ -3237,7 +3329,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 autoFocus
                 value={executedByName}
                 onChange={e => setExecutedByName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { setShowCloseDialog(false); void onClose_WO({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); } }}
+                onKeyDown={e => { if (e.key === "Enter") { setShowCloseDialog(false); setCloseAuditOpts({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); } }}
                 className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
                 placeholder="Nombre y apellido"
               />
@@ -3255,7 +3347,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowCloseDialog(false)} disabled={closing} className="px-3 py-1.5 rounded-lg text-sm text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">Cancelar</button>
             <button
-              onClick={() => { setShowCloseDialog(false); void onClose_WO({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); }}
+              onClick={() => { setShowCloseDialog(false); setCloseAuditOpts({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); }}
               disabled={closing}
               className="px-4 py-1.5 rounded-lg text-sm font-bold bg-success-sea text-white hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
               {closing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -3264,6 +3356,40 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
         </div>
       </div>
+    )}
+
+    {/* Auditoría de IA antes de cerrar. Se abre después del diálogo de cierre
+        (ya sabemos quién cierra y con qué fecha) y antes del cierre real: su
+        informe puede terminar pegado en Observaciones, que viaja en el cierre.
+        No frena nada: desde acá se cierra con el informe, sin él, o se vuelve
+        a la OT a corregir. */}
+    {closeAuditOpts && (
+      <WoCloseAuditModal
+        workOrderId={workOrder.id}
+        workOrderCode={workOrder.workOrderCode}
+        draft={{
+          woResult,
+          executedByName,
+          completedDate: closeAuditOpts.completedDate || executionDate || null,
+          runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
+          actualHours: actualHours ? Number(actualHours) : null,
+          observations,
+          deficiencias: deficienciasText,
+          pendingDetail: regiForm.pendingDetail,
+          taskCompleted: regiForm.taskCompleted,
+          spareUsages: spareUsages.map(u => ({ name: u.spareName ?? null, qty: u.qty, unit: u.unit })),
+        }}
+        onCancel={() => setCloseAuditOpts(null)}
+        onConfirmClose={append => {
+          const opts = closeAuditOpts;
+          setCloseAuditOpts(null);
+          const merged = append?.trim()
+            ? [observations.trim(), append.trim()].filter(Boolean).join("\n\n")
+            : undefined;
+          if (merged) setObservations(merged);
+          void onClose_WO({ ...opts, observationsOverride: merged });
+        }}
+      />
     )}
 
     {/* Modal registrar avance */}
@@ -3399,7 +3525,7 @@ function SrChips({ items }: { items: SrLite[] }) {
 
 function KanbanCardContent({ wo, deferralMap, srs }: {
   wo: WorkOrder;
-  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srs: SrLite[];
 }) {
   const now = new Date();
@@ -3431,7 +3557,7 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
 
 function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDragStart }: {
   wo: WorkOrder;
-  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srs: SrLite[];
   isLoading: boolean;
   draggingId: string | null;
@@ -3488,7 +3614,7 @@ function groupWosByAsset(items: WorkOrder[]): { key: string; label: string; item
 
 function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload }: {
   items: WorkOrder[];
-  deferralMap: Map<string, { id: string; deferralCode: string; status: string }>;
+  deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srMap: Map<string, SrLite[]>;
   loadingId: string | null;
   loading: boolean;
@@ -3799,7 +3925,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         {isReject && (
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
-            <textarea
+            <AutoTextArea
               rows={3}
               value={reason}
               onChange={e => setReason(e.target.value)}
@@ -3902,19 +4028,21 @@ export const WorkOrdersPage: React.FC = () => {
   }, [priorityFilter, statusFilter, typeFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
 
   // Map of workOrderId → {id, deferralCode, status} for ON_HOLD WOs
-  const [deferralMap, setDeferralMap] = useState<Map<string, { id: string; deferralCode: string; status: string }>>(new Map());
+  const [deferralMap, setDeferralMap] = useState<Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>>(new Map());
   useEffect(() => {
     const onHoldIds = (data?.items ?? []).filter(w => w.status === "ON_HOLD").map(w => w.id);
     if (onHoldIds.length === 0) { setDeferralMap(new Map()); return; }
     let cancelled = false;
-    api.get<{ items: { id: string; deferralCode: string; sourceId: string; status: string }[] }>("/app/pms/deferrals")
+    api.get<{ items: { id: string; deferralCode: string; sourceId: string; status: string; toNextDrydock?: boolean }[] }>("/app/pms/deferrals")
       .then(r => {
         if (cancelled) return;
-        const map = new Map<string, { id: string; deferralCode: string; status: string }>();
+        const map = new Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>();
         for (const d of r.items ?? []) {
-          if (onHoldIds.includes(d.sourceId)) map.set(d.sourceId, { id: d.id, deferralCode: d.deferralCode, status: d.status });
+          if (onHoldIds.includes(d.sourceId)) map.set(d.sourceId, { id: d.id, deferralCode: d.deferralCode, status: d.status, toNextDrydock: d.toNextDrydock === true });
         }
         setDeferralMap(map);
       })
@@ -3986,6 +4114,13 @@ export const WorkOrdersPage: React.FC = () => {
       (w.vesselCode ?? "").toLowerCase().includes(q),
     );
   }, [search, visibleItems, data]);
+
+  // Al llegar desde el panel TMSA, sólo las OT que contó esa tarjeta. Se aplica
+  // al final para que conviva con la vista (vencidas, a aprobar…) y el buscador.
+  const tmsaDisplayItems = useMemo(
+    () => applyTmsaFilter(displayItems, tmsaFilter, r => r.id),
+    [displayItems, tmsaFilter],
+  );
 
   // Guard contra clicks rápidos entre dos OT: si mientras cargaba el detalle de
   // A se pidió B, la respuesta de A llega tarde y se descarta (mismo patrón
@@ -4073,7 +4208,7 @@ export const WorkOrdersPage: React.FC = () => {
         const deferral = r.status === "ON_HOLD" ? deferralMap.get(r.id) : undefined;
         return (
           <div className="flex flex-col items-start gap-1">
-            <WoStatusBadge status={r.status} dueDate={r.dueDate} deferralStatus={deferral?.status} />
+            <WoStatusBadge status={r.status} dueDate={r.dueDate} deferralStatus={deferral?.status} toNextDrydock={deferral?.toNextDrydock} />
             {deferral && (
               <button
                 type="button"
@@ -4195,10 +4330,12 @@ export const WorkOrdersPage: React.FC = () => {
         </div>
       </div>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaDisplayItems?.length ?? 0} total={data?.items?.length ?? 0} />
+
       {viewMode === "list" ? (
-        <DataTable columns={columns} data={displayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => openLink(row.workOrderCode)} />
+        <DataTable columns={columns} data={tmsaDisplayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => openLink(row.workOrderCode)} />
       ) : (
-        <KanbanBoard items={displayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
+        <KanbanBoard items={tmsaDisplayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
       )}
 
       {showNewWoWizard && (

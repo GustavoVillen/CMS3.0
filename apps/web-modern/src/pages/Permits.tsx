@@ -17,6 +17,8 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -480,7 +482,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("pm.workDesc")}</label>
-                  <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
+                  <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>{t("pm.plannedStart")}</label>
@@ -512,7 +514,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     Peligros identificados
                     {loadingHazards && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
+                  <AutoTextArea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label
@@ -524,7 +526,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     Medidas de control
                     {loadingControls && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
+                  <AutoTextArea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label
@@ -536,7 +538,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     EPP requerido
                     {loadingPpe && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
                   </label>
-                  <textarea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
+                  <AutoTextArea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
                 </div>
 
                 {/* Override / bypass de alarma crítica — al guardar el sistema sugiere abrir MOC TEMPORARY. */}
@@ -960,7 +962,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Notas</label>
-              <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+              <AutoTextArea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
@@ -1035,6 +1037,9 @@ export const PermitsPage: React.FC = () => {
   }, [statusFilter, typeFilter]);
 
   const { data, loading, reload } = useFetch<{ items: Permit[]; total: number }>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, p => p.id), [data, tmsaFilter]);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing]       = useState<Permit | null>(null);
   const mocTrigger = useMocTrigger();
@@ -1061,13 +1066,15 @@ export const PermitsPage: React.FC = () => {
         </select>
       </div>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
-      ) : !data?.items?.length ? (
+      ) : !tmsaItems?.length ? (
         <div className="text-center py-10 text-text-industrial/30 text-sm">Sin permisos</div>
       ) : (
         <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
-          {data.items.map(p => {
+          {tmsaItems.map(p => {
             const Icon = TYPE_ICON[p.type];
             return (
               <button key={p.id} onClick={() => setEditing(p)}

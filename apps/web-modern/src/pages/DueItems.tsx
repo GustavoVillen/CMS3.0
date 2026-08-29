@@ -11,6 +11,7 @@ import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface DueItem {
   id: string;
@@ -108,7 +109,7 @@ const QuickCloseModal: React.FC<QuickCloseModalProps> = ({ planId, userId, onClo
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Notes</label>
-            <textarea
+            <AutoTextArea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={4}

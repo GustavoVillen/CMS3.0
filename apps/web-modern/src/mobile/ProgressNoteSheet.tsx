@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Type, Camera, Video as VideoIcon, Mic, Square, Loader2, Trash2, FileText } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 type Kind = "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
 
@@ -410,7 +411,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
           {kind === "TEXT" && (
             <div className="space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/40">Descripción del avance</p>
-              <textarea
+              <AutoTextArea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={6}
@@ -443,7 +444,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
                 </label>
               )}
-              <textarea
+              <AutoTextArea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={2}
@@ -497,7 +498,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   <span className="text-[10px] text-text-industrial/40 normal-case font-normal">Baja resolución (640×480, 500 kbps)</span>
                 </button>
               )}
-              <textarea
+              <AutoTextArea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={2}
@@ -563,7 +564,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   )}
                 </button>
               )}
-              <textarea
+              <AutoTextArea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={3}
@@ -610,7 +611,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   />
                 </label>
               )}
-              <textarea
+              <AutoTextArea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={2}

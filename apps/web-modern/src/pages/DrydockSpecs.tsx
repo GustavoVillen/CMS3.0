@@ -25,6 +25,8 @@ import { useDeepLink } from "../lib/deep-link";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +94,8 @@ interface Candidate {
   priority?: string | null;
   status: string;
   date?: string | null;
+  /** Sólo diferimientos: el buque declaró que el trabajo va a la varada. */
+  toNextDrydock?: boolean;
 }
 
 interface CandidatesResponse {
@@ -167,7 +171,13 @@ const ImportModal: React.FC<{
   useEffect(() => {
     void (async () => {
       try {
-        setData(await api.get<CandidatesResponse>(`/app/pms/drydock-specs/${specId}/candidates`));
+        const res = await api.get<CandidatesResponse>(`/app/pms/drydock-specs/${specId}/candidates`);
+        setData(res);
+        // Lo que el buque ya declaró "a varada" viene pretildado: el trabajo de
+        // acá es revisarlo, no volver a buscarlo uno por uno.
+        setSelected(new Set(
+          (res.deferrals ?? []).filter(c => c.toNextDrydock).map(c => `${c.sourceType}:${c.id}`),
+        ));
       } catch (e) {
         setError(e instanceof ApiError ? e.message : t("dds.loadError"));
       }
@@ -175,10 +185,14 @@ const ImportModal: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specId]);
 
-  const all: Candidate[] = useMemo(
-    () => data ? [...data.deferrals, ...data.defects, ...data.workOrders] : [],
-    [data],
-  );
+  const all: Candidate[] = useMemo(() => {
+    if (!data) return [];
+    // Los marcados a varada van arriba dentro de su grupo.
+    const deferrals = data.deferrals.slice().sort(
+      (a, b) => Number(b.toNextDrydock ?? false) - Number(a.toNextDrydock ?? false),
+    );
+    return [...deferrals, ...data.defects, ...data.workOrders];
+  }, [data]);
 
   const toggle = (key: string) =>
     setSelected(prev => {
@@ -249,6 +263,11 @@ const ImportModal: React.FC<{
                             <span className="font-mono text-[11px] font-bold text-fg">{c.code}</span>
                             <span className="text-xs text-fg truncate">{c.title}</span>
                             <StatusBadge status={c.status} />
+                            {c.toNextDrydock && (
+                              <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">
+                                {t("dds.markedForDrydock")}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[10px] text-text-industrial/50 mt-0.5">
                             {[c.assetName, c.date ? fmtDate(c.date) : null].filter(Boolean).join(" · ")}
@@ -541,7 +560,7 @@ const DrydockSpecDrawer: React.FC<{
             </div>
             <div className="space-y-1.5 md:col-span-3">
               <label className={labelCls}>{t("dds.scopeSummary")}</label>
-              <textarea value={scopeSummary} onChange={e => setScopeSummary(e.target.value)} disabled={frozen} rows={2} className={inputCls} />
+              <AutoTextArea value={scopeSummary} onChange={e => setScopeSummary(e.target.value)} disabled={frozen} rows={2} className={inputCls} />
             </div>
           </section>
 
@@ -731,7 +750,7 @@ const DrydockSpecDrawer: React.FC<{
                         ))}
                       </div>
                       <div className="flex items-end gap-2">
-                        <textarea
+                        <AutoTextArea
                           value={commentDraft}
                           onChange={e => setCommentDraft(e.target.value)}
                           rows={2}
@@ -844,7 +863,7 @@ const DrydockSpecDrawer: React.FC<{
               <ModalCloseButton onClose={() => setRejectOpen(false)} />
             </div>
             <label className={labelCls}>{t("dds.rejectReason")} *</label>
-            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} className={inputCls} />
+            <AutoTextArea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} className={inputCls} />
             <div className="flex justify-end gap-2">
               <button onClick={() => setRejectOpen(false)} className={`${btnCls} border border-fg/10 text-fg hover:bg-fg/5`}>
                 {t("common.cancel")}
@@ -883,6 +902,9 @@ export const DrydockSpecsPage: React.FC = () => {
   const path = `/app/pms/drydock-specs${params.size ? `?${params}` : ""}`;
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [vesselFilter]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
   const [detail, setDetail] = useState<DrydockSpec | null | "new">(null);
 
   // El deep-link manda: /drydock-specs/VAR-XXX abre ese documento.
@@ -935,9 +957,11 @@ export const DrydockSpecsPage: React.FC = () => {
         )}
       </PageHeader>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+
       <DataTable
         columns={COLUMNS}
-        data={data?.items ?? null}
+        data={tmsaItems}
         loading={loading}
         error={error}
         keyFn={r => r.id}

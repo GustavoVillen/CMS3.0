@@ -11,6 +11,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
 // Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
@@ -318,7 +319,7 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("crew.field.notes")}</label>
-                  <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls} />
+                  <AutoTextArea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls} />
                 </div>
               </div>
               {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
@@ -456,7 +457,7 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("crew.field.notes")}</label>
-              <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+              <AutoTextArea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}

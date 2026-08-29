@@ -2010,6 +2010,10 @@ model Deferral {
   requestedByUserId    String
   targetDate           DateTime?
   targetPort           String?
+  // Destino declarado: el trabajo se hace en la próxima varada. No es derivable
+  // de targetDate (una fecha no es un destino) ni del DrydockSpecItem, que sólo
+  // existe DESPUÉS de importarlo: el punto es registrar la intención antes.
+  toNextDrydock        Boolean            @default(false)
   justification        String?
   compensatoryMeasures String?
   riskLevel            String?   // LOW | MEDIUM | HIGH | CRITICAL

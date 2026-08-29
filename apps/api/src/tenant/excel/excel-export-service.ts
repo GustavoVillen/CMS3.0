@@ -178,7 +178,7 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
   deferrals: [
     "assetId", "sourceType", "sourceId", "deferralType",
     "status", "requestedAt", "requestedByUserId",
-    "targetDate", "targetPort",
+    "targetDate", "targetPort", "toNextDrydock",
     "justification", "compensatoryMeasures", "reviewNotes",
     "decisionAt", "decidedByUserId",
     "approverName", "rejectorName",

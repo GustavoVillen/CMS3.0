@@ -5,12 +5,17 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { log } from "../../common/logger";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
+import {
+  attachDeferralToOpenSpec,
+  findSpecItemForDeferral,
+} from "./drydock-spec-items-service";
 
 export interface DeferralListFilters {
   vesselCode?: string | null;
   status?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
+  toNextDrydock?: boolean | null;
 }
 
 export interface CreateDeferralInput {
@@ -20,6 +25,7 @@ export interface CreateDeferralInput {
   sourceId: string;
   requestedAt?: string | Date | null;
   targetDate?: string | Date | null;
+  toNextDrydock?: boolean | null;
   justification?: string | null;
   compensatoryMeasures?: string | null;
   riskLevel?: string | null;
@@ -41,6 +47,7 @@ interface DeferralRecord {
   requestedAt: Date;
   requestedByUserId: string;
   targetDate: Date | null;
+  toNextDrydock: boolean;
   justification: string | null;
   compensatoryMeasures: string | null;
   riskLevel: string | null;
@@ -178,6 +185,9 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
   if (filters.sourceId) where.sourceId = filters.sourceId;
+  if (filters.toNextDrydock !== undefined && filters.toNextDrydock !== null) {
+    where.toNextDrydock = filters.toNextDrydock;
+  }
 
   const records = await deferral.findMany({ where, orderBy: { requestedAt: "desc" } });
   if (records.length === 0) return [];
@@ -224,10 +234,26 @@ export async function listDeferrals(session: TenantAccessSession, filters: Defer
     return [u.id, full || u.email];
   }));
 
+  // Destino de varada, en un solo lote: en qué especificación entró cada
+  // diferimiento. Sirve para el badge de la grilla y para el detalle.
+  const drydockMap = new Map<string, { itemId: string; itemStatus: string; specId: string; specCode: string }>();
+  try {
+    const items = await (prismaRaw as unknown as {
+      drydockSpecItem: { findMany(a: unknown): Promise<{ id: string; itemStatus: string; specId: string; sourceId: string | null; spec: { specCode: string } }[]> };
+    }).drydockSpecItem.findMany({
+      where: { tenantId, sourceType: "DEFERRAL", sourceId: { in: records.map(r => r.id) } },
+      select: { id: true, itemStatus: true, specId: true, sourceId: true, spec: { select: { specCode: true } } },
+    });
+    for (const i of items) {
+      if (i.sourceId) drydockMap.set(i.sourceId, { itemId: i.id, itemStatus: i.itemStatus, specId: i.specId, specCode: i.spec.specCode });
+    }
+  } catch { /* non-blocking */ }
+
   return records.map(r => ({
     ...r,
     assetName:       assetNameMap.get(r.assetId) ?? null,
     sourceCode:      codeMap.get(r.sourceId) ?? null,
+    drydockSpec:     drydockMap.get(r.id) ?? null,
     requestedByName: r.requestedByUserId ? userNameMap.get(r.requestedByUserId) ?? null : null,
     decidedByName:   r.decidedByUserId   ? userNameMap.get(r.decidedByUserId)   ?? null : null,
   }));
@@ -264,9 +290,17 @@ export async function getDeferral(session: TenantAccessSession, id: string) {
     } catch { /* non-blocking */ }
   }
 
+  // Destino de varada: la línea de la especificación que salió de este
+  // diferimiento, si ya fue importada. Alimenta el "Incluido en VAR-…".
+  let drydockSpec: Awaited<ReturnType<typeof findSpecItemForDeferral>> = null;
+  try {
+    drydockSpec = await findSpecItemForDeferral(tenantId, record.id);
+  } catch { /* non-blocking */ }
+
   return {
     ...record,
     assetName,
+    drydockSpec,
     requestedByName: record.requestedByUserId ? userMap.get(record.requestedByUserId) ?? null : null,
     decidedByName:   record.decidedByUserId   ? userMap.get(record.decidedByUserId)   ?? null : null,
   };
@@ -324,6 +358,7 @@ async function createDeferralCore(session: TenantAccessSession, payload: CreateD
         requestedAt: parseOptionalDate(payload.requestedAt, "requestedAt") ?? new Date(),
         requestedByUserId: session.user.id,
         targetDate: parseOptionalDate(payload.targetDate, "targetDate"),
+        toNextDrydock: payload.toNextDrydock === true,
         justification: normalizeOptionalText(payload.justification),
         compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
         riskLevel: normalizeOptionalText(payload.riskLevel),
@@ -386,7 +421,7 @@ export async function reviewDeferral(
 export async function approveDeferral(
   session: TenantAccessSession,
   id: string,
-  payload: { targetDate?: string | Date | null; compensatoryMeasures?: string | null; approverName: string },
+  payload: { targetDate?: string | Date | null; compensatoryMeasures?: string | null; approverName: string; toNextDrydock?: boolean | null },
 ) {
   ensureTenantAdmin(session);
 
@@ -399,12 +434,18 @@ export async function approveDeferral(
 
   const approverName = normalizeRequiredText(payload.approverName, "approverName");
 
+  // El buque declara el destino al pedirlo; tierra lo puede corregir acá mismo.
+  const toNextDrydock = payload.toNextDrydock === undefined || payload.toNextDrydock === null
+    ? current.toNextDrydock
+    : payload.toNextDrydock === true;
+
   const approved = await deferral.update({
     where: { id: current.id },
     data: {
       status: "APPROVED",
       targetDate: parseOptionalDate(payload.targetDate, "targetDate"),
       compensatoryMeasures: normalizeOptionalText(payload.compensatoryMeasures),
+      toNextDrydock,
       decisionAt: new Date(),
       decidedByUserId: session.user.id,
       approverName,
@@ -417,9 +458,21 @@ export async function approveDeferral(
     action: "Deferral.approved",
     entityType: "Deferral",
     entityId: approved.id,
-    metadata: { deferralCode: approved.deferralCode, vesselCode: approved.vesselCode, sourceType: approved.sourceType },
+    metadata: { deferralCode: approved.deferralCode, vesselCode: approved.vesselCode, sourceType: approved.sourceType, toNextDrydock },
   });
-  return approved;
+
+  // Enganche con la especificación de varada. Non-blocking a propósito: un
+  // problema con la spec no puede tumbar una aprobación ya otorgada.
+  let drydock: { specId: string; specCode: string } | null = null;
+  if (toNextDrydock) {
+    try {
+      drydock = await attachDeferralToOpenSpec(session, approved.tenantId, approved.id);
+    } catch (err) {
+      log.error("[approveDeferral] auto-attach to drydock spec failed:", err);
+    }
+  }
+
+  return { ...approved, drydockSpecId: drydock?.specId ?? null, drydockSpecCode: drydock?.specCode ?? null };
 }
 
 export async function rejectDeferral(
@@ -483,7 +536,7 @@ export async function activateDeferral(session: TenantAccessSession, id: string)
 export async function updateDeferral(
   session: TenantAccessSession,
   id: string,
-  payload: { justification?: string | null; compensatoryMeasures?: string | null; targetDate?: string | Date | null; riskLevel?: string | null; riskProbability?: string | null; riskConsequence?: string | null; riskAnalysisResult?: string | null },
+  payload: { justification?: string | null; compensatoryMeasures?: string | null; targetDate?: string | Date | null; toNextDrydock?: boolean | null; riskLevel?: string | null; riskProbability?: string | null; riskConsequence?: string | null; riskAnalysisResult?: string | null },
 ) {
   ensureCanManageDeferrals(session);
 
@@ -504,6 +557,7 @@ export async function updateDeferral(
   if (payload.justification        !== undefined) data.justification        = normalizeOptionalText(payload.justification);
   if (payload.compensatoryMeasures !== undefined) data.compensatoryMeasures = normalizeOptionalText(payload.compensatoryMeasures);
   if (payload.targetDate           !== undefined) data.targetDate           = parseOptionalDate(payload.targetDate, "targetDate");
+  if (payload.toNextDrydock        !== undefined) data.toNextDrydock        = payload.toNextDrydock === true;
   if (payload.riskLevel            !== undefined) data.riskLevel            = normalizeOptionalText(payload.riskLevel);
   if (payload.riskProbability      !== undefined) data.riskProbability      = normalizeOptionalText(payload.riskProbability);
   if (payload.riskConsequence      !== undefined) data.riskConsequence      = normalizeOptionalText(payload.riskConsequence);
@@ -652,4 +706,37 @@ export async function reopenDeferral(
   });
 
   return reopened;
+}
+
+/**
+ * Engancha a mano un diferimiento con la especificación de varada abierta del
+ * buque. Existe porque el caso más común es que la especificación se cree
+ * DESPUÉS del diferimiento: cuando aparece, este endpoint lo arrastra.
+ * Devuelve null si el buque no tiene exactamente una spec editable.
+ */
+export async function attachDeferralDrydock(session: TenantAccessSession, id: string) {
+  ensureCanManageDeferrals(session);
+
+  const current = await getDeferral(session, id);
+  const TERMINAL = ["REJECTED", "CLOSED"];
+  if (TERMINAL.includes(current.status)) {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `No se puede llevar a varada un aplazamiento en estado ${current.status}.`);
+  }
+
+  const attached = await attachDeferralToOpenSpec(session, current.tenantId, current.id);
+  if (!attached) return { specId: null, specCode: null };
+
+  // Si se engancha a mano, el destino queda declarado: si no, el registro diría
+  // una cosa y la especificación otra.
+  if (!current.toNextDrydock) {
+    const prismaRaw = getPrismaClient();
+    if (prismaRaw) {
+      await deferralDelegate(prismaRaw).update({
+        where: { id: current.id },
+        data: { toNextDrydock: true, updatedByUserId: session.user.id },
+      });
+    }
+  }
+
+  return attached;
 }

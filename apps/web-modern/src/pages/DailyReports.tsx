@@ -15,6 +15,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useCopilotEmitter } from "../lib/copilot-context";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Base Types ───────────────────────────────────────────────────────────────
 
@@ -1346,7 +1347,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
 
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("dr.summary")}</label>
-                <textarea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={3} className={inputCls} />
+                <AutoTextArea value={summary} onChange={e => setSummary(e.target.value)} disabled={isClosed} rows={3} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

@@ -7,6 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface WO {
   id: string;
@@ -800,7 +801,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
           <div className="space-y-1.5">
             <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Observaciones</p>
-            <textarea
+            <AutoTextArea
               value={observations}
               onChange={e => setObs(e.target.value)}
               rows={4}
@@ -925,12 +926,12 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <div className="space-y-3 pt-1">
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">Criterios de aceptación</label>
-                  <textarea rows={2} value={edCriteria} onChange={e => setEdCriteria(e.target.value)}
+                  <AutoTextArea rows={2} value={edCriteria} onChange={e => setEdCriteria(e.target.value)}
                     className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">LOTO</label>
-                  <textarea rows={2} value={edLoto} onChange={e => setEdLoto(e.target.value)}
+                  <AutoTextArea rows={2} value={edLoto} onChange={e => setEdLoto(e.target.value)}
                     className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
                 </div>
                 <div className="space-y-1.5">
@@ -948,7 +949,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-wider text-text-industrial/40">Resultado análisis de riesgo</label>
-                  <textarea rows={2} value={edRiskResult} onChange={e => setEdRiskResult(e.target.value)}
+                  <AutoTextArea rows={2} value={edRiskResult} onChange={e => setEdRiskResult(e.target.value)}
                     className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
                 </div>
                 <div className="space-y-1.5">
@@ -958,7 +959,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                     <option value="">Sin clasificar</option>
                     {CONSEQUENCE_OPTS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
                   </select>
-                  <textarea rows={2} value={edConseqRat} onChange={e => setEdConseqRat(e.target.value)} placeholder="Justificación"
+                  <AutoTextArea rows={2} value={edConseqRat} onChange={e => setEdConseqRat(e.target.value)} placeholder="Justificación"
                     className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y" />
                 </div>
                 <p className="text-[10px] text-text-industrial/40">Los cambios se guardan al aprobar / autorizar.</p>
@@ -1004,7 +1005,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               {approvalStep === "RECHAZA" && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
-                  <textarea
+                  <AutoTextArea
                     rows={3}
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}

@@ -18,6 +18,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AuthedDocLink } from "../lib/authed-media";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import {
   FLUID_TYPES, FLUID_LABELS, VERDICTS, VERDICT_STYLES, SAMPLE_STATUSES, SAMPLE_KIND_LABELS,
   VerdictBadge, assetLabel, ConfidenceBadge, ModalShell,
@@ -26,6 +27,7 @@ import {
   type FluidSample, type AssetItem,
 } from "../components/fluid-analyses/shared";
 import { ScanFluidSampleWizard } from "../components/fluid-analyses/ScanFluidSampleWizard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,6 +112,10 @@ export const FluidAnalysesPage: React.FC = () => {
   const path = `/app/fluid-analyses${params.toString() ? "?" + params.toString() : ""}`;
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  // Acá el emparejamiento va por CÓDIGO: la métrica cuenta resultados de
+  // análisis y esta planilla lista muestras; lo que comparten es el sampleCode.
+  const tmsaFilter = useTmsaFilter();
 
   // ?code=FA-M01-0037 — para links que sólo conocen el CÓDIGO y no el id
   // interno (típicamente el copiloto, que cita códigos en su respuesta). Se
@@ -128,7 +134,8 @@ export const FluidAnalysesPage: React.FC = () => {
   const assets = useMemo(() => assetsData?.items ?? [], [assetsData?.items]);
 
   const samples = useMemo(() => {
-    const items = (statusParam ? (data?.items ?? []).filter(s => s.status === statusParam) : [...(data?.items ?? [])]);
+    const scoped = applyTmsaFilter(data?.items ?? [], tmsaFilter, s => s.sampleCode) ?? [];
+    const items = (statusParam ? scoped.filter(s => s.status === statusParam) : [...scoped]);
     items.sort((a, b) => {
       let av: string | number | null = null;
       let bv: string | number | null = null;
@@ -146,7 +153,7 @@ export const FluidAnalysesPage: React.FC = () => {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return items;
-  }, [data?.items, sortKey, sortDir, assets, statusParam]);
+  }, [data?.items, sortKey, sortDir, assets, statusParam, tmsaFilter]);
 
   return (
     <div className="space-y-5">
@@ -215,6 +222,7 @@ export const FluidAnalysesPage: React.FC = () => {
             <p className="text-sm">{t("fa.emptyState")}</p>
           </div>
         )}
+        <TmsaFilterBanner filter={tmsaFilter} shown={samples.length} total={data?.items?.length ?? 0} />
         {!loading && !error && samples.length > 0 && (
           <table className="w-full text-xs">
             <thead>
@@ -411,7 +419,7 @@ function SampleFormModal({
         </div>
         <div>
           <label className={labelCls}>{t("fa.notes")}</label>
-          <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-none"} />
+          <AutoTextArea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls + " resize-none"} />
         </div>
         {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
@@ -1215,7 +1223,7 @@ function ResultFormModal({
           </div>
           <div>
             <label className={labelCls}>Resumen / recomendación del lab</label>
-            <textarea rows={3} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-y"} />
+            <AutoTextArea rows={3} value={summary} onChange={e => setSummary(e.target.value)} className={inputCls + " resize-y"} />
           </div>
 
           {/* Parameters */}

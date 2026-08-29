@@ -22,6 +22,8 @@ import { useAuth } from "../lib/auth";
 import { RichTextArea } from "../components/RichTextArea";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -605,7 +607,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
                 <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />
               </div>
             </div>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder={t("def.descPh")} />
+            <AutoTextArea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder={t("def.descPh")} />
           </div>
 
           {/* ── Sugerencia IA ─────────────────────────────────────────────── */}
@@ -671,7 +673,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
               Acción inmediata
               {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
             </label>
-            <textarea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
+            <AutoTextArea value={immediateAction} onChange={e => setImmediateAction(e.target.value)} rows={3} disabled={loadingImmediate} className={inputCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
           </div>
 
           {/* ── Fotos del defecto ─────────────────────────────────────────── */}
@@ -1221,7 +1223,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                 <label className={fldLabel}>{t("form.briefDesc")}</label>
                 {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
               </div>
-              <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
+              <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
             </div>
 
             {/* Clasificación + selects */}
@@ -1289,7 +1291,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                 {t("def.immediateAction")}
                 {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
               </label>
-              <textarea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
+              <AutoTextArea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
             </div>
 
             {/* Fotos del defecto */}
@@ -1605,6 +1607,8 @@ export const DefectsPage: React.FC = () => {
   // openLink conserva la query, así que el `defectId` sobrevivía y se terminaba
   // en `/defects/:code?defectId=…`, con el efecto volviendo a dispararse.
   const autoDefectId = searchParams.get("defectId");
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
   useEffect(() => {
     if (!autoDefectId) return;
     api.get<Defect>(`/app/pms/defects/${autoDefectId}`)
@@ -1644,6 +1648,7 @@ export const DefectsPage: React.FC = () => {
   }, [severityFilter, statusFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
 
   const openDetail = useCallback(async (row: Defect) => {
     setDetailLoadingId(row.id);
@@ -1754,7 +1759,8 @@ export const DefectsPage: React.FC = () => {
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
 
-      <DataTable columns={columns} data={data?.items ?? null} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => openLink(row.defectCode)} />
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+      <DataTable columns={columns} data={tmsaItems} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => openLink(row.defectCode)} />
 
       {creating && (
         <CreateDefectModal

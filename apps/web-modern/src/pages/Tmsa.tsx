@@ -15,6 +15,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useVesselContext } from "../lib/vessel-context";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { moduleListLink } from "../lib/tmsa-filter";
 
 // ─── Types (espejo de tmsa-service.ts) ──────────────────────────────────────────
 type TmsaStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
@@ -225,6 +226,7 @@ const TmsaDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => voi
   const path = `/app/tmsa/maintenance/detail?vesselCode=${encodeURIComponent(target.vesselCode)}&metric=${encodeURIComponent(target.metricKey)}`;
   const { data, loading, error } = useFetch<{ items: TmsaDetailItem[] }>(path, [path]);
   const items = data?.items ?? [];
+  const listLink = moduleListLink(target.metricKey, target.vesselCode);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -237,6 +239,19 @@ const TmsaDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => voi
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 truncate">{target.groupLabel}</p>
             <h2 className="text-sm font-bold text-fg truncate">{target.metricLabel}</h2>
           </div>
+          {/* Mismo destino que el número de la pestaña Checklist: la planilla del
+              módulo filtrada por estos registros. Acá va como botón y no en vez
+              de la lista para no perder el análisis con IA de arriba. */}
+          {listLink && (
+            <button
+              type="button"
+              onClick={() => { onClose(); navigate(listLink); }}
+              className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-[11px] font-medium text-fg/70 shrink-0"
+            >
+              {t("tmsa.detail.openList")}
+              <ChevronRight className="w-3 h-3 opacity-50" />
+            </button>
+          )}
           <ModalCloseButton onClose={onClose} />
         </div>
 
@@ -367,6 +382,9 @@ const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEviden
   const capMeta = STATUS_META[RATING_STATUS[item.rating]];
   const CapIcon = capMeta.icon;
   const group = findLiveGroup(items, item.liveGroupKey);
+  // findLiveGroup ya exige que haya UN solo buque seleccionado: ese es el buque
+  // al que pertenecen los números, y el que viaja en el link a la planilla.
+  const vesselCode = items.length === 1 ? items[0].vesselCode : "";
   const usageMeta = group ? STATUS_META[group.status] : null;
   const UsageIcon = usageMeta?.icon;
 
@@ -404,13 +422,40 @@ const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEviden
       </div>
 
       {group && group.metrics.length > 0 && (
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
-          {group.metrics.map(m => (
-            <div key={m.key} className="flex items-center gap-1 text-[10px]">
-              <dt className="text-text-industrial/50">{t(`tmsa.metric.${m.key}` as TranslationKey)}:</dt>
-              <dd className="font-bold text-fg/80">{metricValue(m)}</dd>
-            </div>
-          ))}
+        <dl className="flex flex-wrap gap-1.5 mt-2">
+          {group.metrics.map(m => {
+            // El badge ENTERO abre la planilla del módulo con esos mismos
+            // registros: apuntarle sólo al número era un blanco muy chico.
+            // Los porcentajes y las métricas sin planilla propia quedan como
+            // badge apagado, sin cursor ni hover, para que se vea que no llevan
+            // a ningún lado.
+            const link = m.kind === "count" && vesselCode ? moduleListLink(m.key, vesselCode) : null;
+            const label = t(`tmsa.metric.${m.key}` as TranslationKey);
+            const content = (
+              <>
+                <dt className="text-text-industrial/60">{label}:</dt>
+                <dd className="font-bold">{metricValue(m)}</dd>
+              </>
+            );
+            return link ? (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => navigate(link)}
+                title={t("tmsa.detail.openList")}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] bg-fg/5 border border-fg/10 text-accent hover:bg-accent/10 hover:border-accent/40 transition-all"
+              >
+                {content}
+              </button>
+            ) : (
+              <span
+                key={m.key}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] bg-fg/[0.03] border border-fg/5 text-fg/70"
+              >
+                {content}
+              </span>
+            );
+          })}
         </dl>
       )}
 

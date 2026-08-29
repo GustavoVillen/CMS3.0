@@ -16,9 +16,18 @@ const MODEL = AI_MODEL.fast;
 // Barrera anti-invención: la IA debe ceñirse a los datos del informe.
 const NO_INVENT = `IMPORTANTE: Basate ÚNICAMENTE en los datos del informe provistos abajo. NO inventes ni asumas plazos, fechas, cantidades ni hechos que no estén explícitos; en particular, NO estimes la duración del aplazamiento — usá EXACTAMENTE la duración y las fechas indicadas en el contexto.`;
 
+// Regla de Clase y Bandera. Va en los dos prompts: diferir un ítem amparado por un
+// certificado no es sólo un riesgo técnico, es una condición de cumplimiento que
+// necesita el permiso previo del emisor. La IA sugiere; la decisión sigue siendo
+// del que aprueba (no se bloquea nada).
+const CLASS_FLAG_RULE = `CLASE Y BANDERA — regla obligatoria: en el contexto recibís el listado de certificados del buque con su emisor. Si la tarea o condición diferida afecta un equipo, sistema o estructura amparado por alguno de esos certificados —sea de Sociedad de Clasificación o estatutario / de la Autoridad Marítima de Bandera—, tenés que señalar que hay que solicitar autorización formal previa al emisor que corresponda ANTES de seguir operando, nombrando el certificado y el emisor EXACTAMENTE como figuran en el listado. Si el aplazamiento no afecta ningún certificado del listado, NO menciones el tema y NO nombres certificados que no estén en el listado.`;
+
 const PROMPT_COMPENSATORY = `Sos experto en gestión de mantenimiento naval. Proponé directamente medidas compensatorias concretas, verificables y específicas al activo y al tipo de tarea aplazada, para mitigar el riesgo operacional mientras dure el aplazamiento. Las medidas deben ser prácticas, ejecutables por la tripulación, y enfocadas en monitoreo, controles operativos y planes de contingencia.
 
 ${NO_INVENT}
+
+${CLASS_FLAG_RULE}
+Cuando aplique, esa solicitud de autorización va como PRIMERA medida de la lista, e incluye registrar la referencia del permiso otorgado (número, fecha y condiciones impuestas por el emisor).
 
 NO hagas preguntas: con la información provista alcanza para proponer medidas razonables. Respondé ÚNICAMENTE con las medidas compensatorias en formato de lista numerada, en texto plano, sin introducción ni explicación adicional.`;
 
@@ -56,6 +65,32 @@ function durationLabel(from: string | Date | null | undefined, to: string | Date
   return `${days} días (~${months} mes${months === 1 ? "" : "es"})`;
 }
 
+// Certificados del buque para el contexto de la IA. Es el único universo que
+// puede nombrar: hoy el modelo no marca cuál es de Clase y cuál estatutario
+// (no hay campo), así que el emisor + el nombre son la evidencia real y la
+// interpretación queda del lado de la IA, que es lo que se le pidió.
+async function loadVesselCertificates(prismaRaw: any, tenantId: string, vesselCode: string): Promise<string[]> {
+  try {
+    const rows = await prismaRaw.certificate.findMany({
+      where: { tenantId, vesselCode, deletedAt: null, status: { not: "CLOSED" } },
+      select: { name: true, issuingAuthority: true, expiryDate: true, status: true, assetId: true },
+      orderBy: { expiryDate: "asc" },
+      take: 120,
+    });
+    return rows.map((c: any) => {
+      // 2099-12-31 es el centinela de "sin vencimiento / a confirmar" de las
+      // cargas históricas: mostrarlo como fecha haría razonar mal a la IA.
+      const year = c.expiryDate ? new Date(c.expiryDate).getUTCFullYear() : null;
+      const expiry = year && year >= 2099 ? "sin vencimiento registrado" : fmtDateEs(c.expiryDate);
+      const parts = [`${c.name} · emisor: ${c.issuingAuthority} · vence: ${expiry}`];
+      if (c.status && c.status !== "ACTIVE") parts.push(`estado: ${c.status}`);
+      return `- ${parts.join(" · ")}`;
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function resolveDeferralSource(prismaRaw: any, tenantId: string, sourceType: string, sourceId: string): Promise<{ code: string | null; title: string | null; task: string | null }> {
   try {
     if (sourceType === "WORK_ORDER") {
@@ -88,10 +123,12 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
   let targetDate:  string | Date | null = input.targetDate ?? null;
   let justification     = input.justification ?? null;
   let vesselName: string | null = null;
+  let tenantId: string | null = null;
 
   if (input.deferralId) {
     try {
       const d: any = await getDeferral(session, input.deferralId);
+      tenantId     = d.tenantId ?? null;
       deferralCode = d.deferralCode ?? deferralCode;
       vesselCode   = d.vesselCode ?? vesselCode;
       assetLabel   = d.assetName ?? d.assetId ?? assetLabel;
@@ -124,6 +161,26 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
   lines.push(`- Fecha objetivo (fin del aplazamiento): ${fmtDateEs(targetDate)}`);
   lines.push(`- Duración del aplazamiento: ${durationLabel(requestedAt, targetDate)}`);
   lines.push(`- Justificación del solicitante: ${justification ?? "No especificada"}`);
+
+  // Certificados del buque. Sin esto la IA no puede decir a QUIÉN pedirle la
+  // autorización: el buque no tiene bandera ni sociedad de clasificación
+  // cargadas, el emisor del certificado es el único dato real que hay.
+  const prismaRaw = getPrismaClient();
+  if (prismaRaw && vesselCode) {
+    if (!tenantId) {
+      const tenant = await getCachedTenantBySlug(session.tenantSlug);
+      tenantId = tenant?.id ?? null;
+    }
+    if (tenantId) {
+      const certs = await loadVesselCertificates(prismaRaw, tenantId, vesselCode);
+      if (certs.length > 0) {
+        lines.push("");
+        lines.push("Certificados del buque (LISTADO AUTORITATIVO — es el único universo de certificados que podés mencionar; NO inventes ni supongas otros):");
+        lines.push(...certs);
+      }
+    }
+  }
+
   return { context: lines.join("\n"), vesselCode };
 }
 
@@ -191,6 +248,9 @@ export async function suggestCompensatoryMeasures(
 const PROMPT_DEFERRAL_RISK = `Sos experto en gestión de riesgo operacional naval (SOLAS/ISM). Vas a evaluar el riesgo de POSTERGAR (diferir) la tarea/condición indicada, es decir el riesgo de SEGUIR OPERANDO el buque con esa condición sin resolver hasta la fecha objetivo. NO evalúes el riesgo de ejecutar la tarea: evaluá la consecuencia y probabilidad de que la condición diferida derive en una falla/incidente mientras el aplazamiento esté activo, considerando el activo afectado, el tipo de tarea y el horizonte temporal.
 
 ${NO_INVENT}
+
+${CLASS_FLAG_RULE}
+Cuando aplique, uno de los bullets tiene que ser el riesgo de cumplimiento de seguir operando sin esa autorización.
 
 Usá una matriz de probabilidad × consecuencia:
 - PROBABILIDAD: LIKELY (muy probable) | PROBABLE | UNLIKELY (improbable) | RARE (altamente improbable)

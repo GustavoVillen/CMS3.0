@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface InspectionTemplateSummary {
   id: string;
@@ -206,7 +207,7 @@ function ChecklistItemRow({ item, state, onChange }: ChecklistItemRowProps) {
       )}
 
       {item.itemType === "TECHNICAL_NOTES" && (
-        <textarea
+        <AutoTextArea
           rows={2}
           value={state.resultValue}
           onChange={e => onChange(item.id, { resultValue: e.target.value })}
@@ -300,7 +301,7 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
           )}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.generalObservations")}</label>
-            <textarea rows={3} value={generalObservations} onChange={e => setGeneralObservations(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+            <AutoTextArea rows={3} value={generalObservations} onChange={e => setGeneralObservations(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.nextScheduledDate")}</label>

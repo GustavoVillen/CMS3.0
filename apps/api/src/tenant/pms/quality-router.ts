@@ -21,6 +21,7 @@ import { buildDeferralPdf } from "./deferral-pdf-service";
 import {
   activateDeferral,
   approveDeferral,
+  attachDeferralDrydock,
   cancelDeferral,
   closeDeferral,
   createDeferral,
@@ -241,6 +242,9 @@ export async function handleQualityRoutes(
       status: url.searchParams.get("status"),
       sourceType: url.searchParams.get("sourceType"),
       sourceId: url.searchParams.get("sourceId"),
+      toNextDrydock: url.searchParams.has("toNextDrydock")
+        ? url.searchParams.get("toNextDrydock") === "true"
+        : null,
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
@@ -301,6 +305,11 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof closeDeferral>[2];
     sendJson(response, 200, await closeDeferral(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/deferrals\/[^/]+\/attach-drydock$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, await attachDeferralDrydock(session, id));
     return true;
   }
   if (method === "POST" && /^\/app\/pms\/deferrals\/[^/]+\/reopen$/.test(url.pathname)) {

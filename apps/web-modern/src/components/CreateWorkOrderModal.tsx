@@ -10,6 +10,7 @@ import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
+import { AutoTextArea } from "./AutoTextArea";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1342,7 +1343,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
                   título es una línea por ítem y en un input se vería sólo la
                   primera. Con un solo ítem se ve igual que antes (una fila). */}
-              <textarea
+              <AutoTextArea
                 rows={Math.min(6, Math.max(1, title.split("\n").length))}
                 value={title}
                 onChange={e => setTitle(e.target.value)}
@@ -1385,7 +1386,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {loadingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.task")}
               </label>
-              <textarea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
+              <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
                 disabled={loadingTask}
                 className={`${inputCls} resize-y`} />
             </div>
@@ -1501,7 +1502,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.acceptanceCriteria")}
               </label>
-              <textarea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
+              <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
                 disabled={loadingCriteria}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
             </div>
@@ -1514,7 +1515,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {t("wo.modal.loto")}
               </label>
-              <textarea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
+              <AutoTextArea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
                 disabled={loadingLoto}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
             </div>
@@ -1541,7 +1542,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
-              <textarea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
+              <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
                 disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
             </div>
@@ -1568,7 +1569,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             {consequenceCategory && (
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
-                <textarea rows={autoRows(consequenceRationale, 2)} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
+                <AutoTextArea rows={autoRows(consequenceRationale, 2)} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
                   disabled={loadingConsequence}
                   className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
               </div>

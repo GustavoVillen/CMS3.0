@@ -343,7 +343,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
       },
 
       request: () => {
-        sectionHeader(label("request", "SOLICITUD / FALLA"), 18, 44);
+        sectionHeader(label("request", "TRABAJO SOLICITADO"), 18, 44);
         ensureSpace(44);
         canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(w.description ?? ""), 44);
       },

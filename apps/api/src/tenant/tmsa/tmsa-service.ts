@@ -51,6 +51,10 @@ const PMS_COVERAGE_ATTENTION = 0.98;  // por debajo → ATTENTION
 const WO_COMPLIANCE_GAP = 0.75;       // % OT en plazo por debajo → GAP
 const WO_COMPLIANCE_ATTENTION = 0.85; // por debajo → ATTENTION
 const CRITICAL_OVERDUE_DAYS = 30;     // OT crítica vencida hace +N días
+// Tope del detalle por métrica (/app/tmsa/maintenance/detail). Lo consume el
+// filtro de las planillas (web: lib/tmsa-filter.tsx): si se corta, la planilla
+// mostraría menos filas de las que dice la tarjeta, así que el cartel lo avisa.
+const DETAIL_CAP = 1000;
 
 // Diferimientos ya otorgados: el mismo conjunto que ofrece el importador de la
 // Especificación de Varada (drydock-spec-items-service). Tienen que coincidir,
@@ -645,7 +649,7 @@ export async function getTmsaMetricDetail(
     case "woOpen": {
       const rows = await p.workOrder.findMany({
         where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] } },
-        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" }, take: 200,
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" }, take: DETAIL_CAP,
       });
       return { items: rows.map(asWorkOrder) };
     }
@@ -813,7 +817,7 @@ export async function getTmsaMetricDetail(
           maintenancePlanId: { in: auditPlans.map((pl: any) => pl.id) },
           ...(metric === "auditsAtSea" ? { operatingCondition: "NAVEGACION" } : {}),
         },
-        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { completedDate: "desc" }, take: 200,
+        select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { completedDate: "desc" }, take: DETAIL_CAP,
       });
       return { items: rows.map(asWorkOrder) };
     }

@@ -8,6 +8,7 @@ import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Vocabulario RCM (alineado con el backend / enums Prisma) ───────────────────
 
@@ -214,11 +215,11 @@ const FailureModeDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved })
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className={labelCls}>Causa de la falla</label>
-              <textarea value={failureCause} onChange={e => setFailureCause(e.target.value)} rows={2} placeholder="Desgaste, cavitación…" className={inputCls} />
+              <AutoTextArea value={failureCause} onChange={e => setFailureCause(e.target.value)} rows={2} placeholder="Desgaste, cavitación…" className={inputCls} />
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Efecto en el equipo</label>
-              <textarea value={failureEffect} onChange={e => setFailureEffect(e.target.value)} rows={2} placeholder="Pérdida de caudal, sobrecalentamiento…" className={inputCls} />
+              <AutoTextArea value={failureEffect} onChange={e => setFailureEffect(e.target.value)} rows={2} placeholder="Pérdida de caudal, sobrecalentamiento…" className={inputCls} />
             </div>
           </div>
 
@@ -240,7 +241,7 @@ const FailureModeDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved })
 
           <div className="space-y-1.5">
             <label className={labelCls}>Justificación de la consecuencia</label>
-            <textarea value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)} rows={2} placeholder="Si esta falla ocurre, ¿qué pasa? (personas / ambiente / operación / costo)" className={inputCls} />
+            <AutoTextArea value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)} rows={2} placeholder="Si esta falla ocurre, ¿qué pasa? (personas / ambiente / operación / costo)" className={inputCls} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -61,6 +61,8 @@ import {
   type RiskLevel, type RiskProbability, type RiskConsequence,
 } from "../lib/risk";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -683,7 +685,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
           {/* Notes */}
           <div className="space-y-1.5">
             <label className={labelCls}>{t("wo.modal.observations")}</label>
-            <textarea
+            <AutoTextArea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
@@ -696,7 +698,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
           {result === "CON_DEFICIENCIAS" && (
             <div className="space-y-1.5">
               <label className={labelCls + " text-yellow-700 dark:text-yellow-400"}>{t("mp.exec.deficienciesLabel")}</label>
-              <textarea
+              <AutoTextArea
                 value={deficienciesNotes}
                 onChange={e => setDeficienciesNotes(e.target.value)}
                 rows={4}
@@ -923,7 +925,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
           {/* Justification */}
           <div className="space-y-1.5">
             <label className={labelCls}>{t("mp.postpone.justification")}</label>
-            <textarea
+            <AutoTextArea
               value={justification}
               onChange={e => setJustification(e.target.value)}
               rows={3}
@@ -935,7 +937,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
           {/* Compensatory measures */}
           <div className="space-y-1.5">
             <label className={labelCls}>{t("mp.postpone.compensatoryMeasures")}</label>
-            <textarea
+            <AutoTextArea
               value={compensatoryMeasures}
               onChange={e => setCompensatoryMeasures(e.target.value)}
               rows={2}
@@ -1008,7 +1010,6 @@ export interface MaintenancePlanModalProps {
   userId: string | null;
   userName: string;
   isAdmin: boolean;
-  canDelete: boolean;
   /** Fijar el próximo vencimiento a mano: reservado al rol TENANT_ADMIN literal
    *  (no alcanza con el permiso plan.manage que habilita `isAdmin`). */
   canEditNextDue: boolean;
@@ -1031,7 +1032,7 @@ export interface MaintenancePlanModalProps {
   deepLinked?: boolean;
 }
 
-export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canDelete, canEditNextDue, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canEditNextDue, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1147,10 +1148,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
-  // Borrar un plan pide DOS confirmaciones: 0 = cerrado, 1 = "¿estás seguro?",
-  // 2 = el aviso de que es un plan registrado, no una OT. Recién ahí se borra.
-  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
-  const [deleting,    setDeleting]    = useState(false);
   const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showMoc, setShowMoc] = useState(false);
@@ -1626,7 +1623,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
   const requestClose = useEscapeGuard({
-    enabled: !readOnly && !showExecution && !showPostpone && deleteStep === 0 && !confirmDuplicateWO,
+    enabled: !readOnly && !showExecution && !showPostpone && !confirmDuplicateWO,
     isDirty: planDirty,
     onSave,
     onClose,
@@ -1872,12 +1869,40 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setTimeout(() => win.print(), 500);
   }
 
+  // El nombre del activo se repite arriba, grande: al abrir un plan lo primero
+  // que hay que ver es sobre que equipo es. Sigue al selector del formulario y
+  // nunca cae al id (un uuid en el header no le dice nada a nadie).
+  const headerAssetName = useMemo(() => {
+    const found = assetId ? assets.find(a => a.id === assetId) : null;
+    if (found) return found.name ?? found.assetCode;
+    if (assetId && plan?.assetId === assetId) return plan.assetName ?? null;
+    return null;
+  }, [assetId, assets, plan]);
+
+  // GRUPO SFI comparte fila con ACTIVO (misma fila, 2da columna) tanto en alta
+  // como en edicion: el campo es identico, solo cambia el bloque que lo aloja.
+  const sfiGroupField = (
+    <div className="space-y-1.5">
+      <label className={labelCls}>{t("mp.sfiGroup")}</label>
+      <select value={sfiGroupNumber === null ? "" : String(sfiGroupNumber)}
+        onChange={e => setSfiGroupNumber(e.target.value ? Number(e.target.value) : null)}
+        className={selectCls}>
+        <option value="">{t("mp.selectSfiGroup")}</option>
+        {SFI_GROUP_NUMBERS.map(g => <option key={g} value={g}>{g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}</option>)}
+      </select>
+    </div>
+  );
+
   return (
     <>
       <div className={`fixed inset-0 ${overlayZClass ?? "z-50"} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
         <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
+          {/* Header en 3 partes: volver a la izquierda, acciones a la derecha y el
+              titulo al medio. Los dos laterales son flex-1 con la misma base, asi
+              el bloque del medio queda centrado en la ventana y no corrido por la
+              cantidad de botones de cada lado. */}
+          <div className="flex items-center gap-2 px-6 py-4 border-b border-fg/10 shrink-0">
+            <div className="flex-1 flex items-center">
               <button
                 type="button"
                 onClick={requestClose}
@@ -1887,10 +1912,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="min-w-0">
-              <h2 className="text-base font-bold text-fg">
+            </div>
+            <div className="min-w-0 flex flex-col items-center text-center">
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">
                 {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
               </h2>
+              {headerAssetName && (
+                <p className="max-w-full text-xl font-black text-accent leading-tight truncate" title={headerAssetName}>
+                  {headerAssetName}
+                </p>
+              )}
               {/* Ir a la OT NO cierra antes el plan: cerrar ahora significa
                   "volver atrás", y hacerlo justo antes de navegar dejaba dos
                   navegaciones peleando. Basta con navegar — el cambio de ruta
@@ -1908,9 +1939,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   <FileText className="w-3 h-3" /> Renueva {linkedCert.certificateCode}
                 </button>
               )}
-              </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex-1 flex items-center justify-end gap-1.5">
               {!isNew && <CopyLinkButton />}
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -2017,19 +2047,22 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 </div>
                   );
                 })()}
-                <div className="space-y-1.5">
-                  {assetId
-                    ? <button
-                        type="button"
-                        onClick={() => { onClose(); navigate(`/assets?open=${encodeURIComponent(assetId)}`); }}
-                        className={`${labelCls} hover:text-accent transition-colors cursor-pointer`}
-                        title={t("mp.modal.openAsset")}
-                      >{t("mp.asset")}</button>
-                    : <label className={labelCls}>{t("mp.asset")}</label>}
-                  {loadingAssets
-                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
-                    : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
-                  }
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    {assetId
+                      ? <button
+                          type="button"
+                          onClick={() => { onClose(); navigate(`/assets?open=${encodeURIComponent(assetId)}`); }}
+                          className={`${labelCls} hover:text-accent transition-colors cursor-pointer`}
+                          title={t("mp.modal.openAsset")}
+                        >{t("mp.asset")}</button>
+                      : <label className={labelCls}>{t("mp.asset")}</label>}
+                    {loadingAssets
+                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
+                      : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
+                    }
+                  </div>
+                  {sfiGroupField}
                 </div>
               </>
             )}
@@ -2068,18 +2101,21 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     </div>
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("mp.asset")}</label>
-                  {loadingAssets
-                    ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
-                    : <AssetSearchDropdown
-                        assets={assets}
-                        value={assetId}
-                        onChange={setAssetId}
-                        disabled={lockAsset || !vesselCode || assets.length === 0}
-                        placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
-                      />
-                  }
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>{t("mp.asset")}</label>
+                    {loadingAssets
+                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
+                      : <AssetSearchDropdown
+                          assets={assets}
+                          value={assetId}
+                          onChange={setAssetId}
+                          disabled={lockAsset || !vesselCode || assets.length === 0}
+                          placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
+                        />
+                    }
+                  </div>
+                  {sfiGroupField}
                 </div>
               </>
             )}
@@ -2101,19 +2137,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               </div>
             </div>
 
-            {/* SFI */}
-            <div className="grid grid-cols-1 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.sfiGroup")}</label>
-                <select value={sfiGroupNumber === null ? "" : String(sfiGroupNumber)}
-                  onChange={e => setSfiGroupNumber(e.target.value ? Number(e.target.value) : null)}
-                  className={selectCls}>
-                  <option value="">{t("mp.selectSfiGroup")}</option>
-                  {SFI_GROUP_NUMBERS.map(g => <option key={g} value={g}>{g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}</option>)}
-                </select>
-              </div>
-            </div>
-
             {/* Title */}
             <div className="space-y-1.5">
               <label className={labelCls}>{t("col.title")}</label>
@@ -2129,8 +2152,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
             </div>
 
-            {/* Trigger + Frequency + Mode */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Trigger + Frequency + Mode + Horas estimadas (una sola fila de 4) */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mp.triggerType")}</label>
                 <select value={triggerType} onChange={e => setTriggerType(e.target.value as TriggerType)} className={selectCls}>
@@ -2152,10 +2175,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   {TRIGGER_RESULT_MODES.map(m => <option key={m} value={m}>{t(`mp.trm.${m}` as any)}</option>)}
                 </select>
               </div>
-            </div>
-
-            {/* Horas estimadas para ejecutar la tarea */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("mp.estimatedHours")}</label>
                 <input
@@ -2492,15 +2511,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           {/* Footer — always shows Reportar Ejecución + Postergar for active plans */}
           <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A] shrink-0">
             <div className="flex gap-2">
-              {/* Delete button — only ADMIN or FLEET_SUPERINTENDENT, existing plans only */}
-              {!isNew && canDelete && (
-                <button
-                  onClick={() => setDeleteStep(1)}
-                  className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> {t("mp.modal.delete")}
-                </button>
-              )}
+              {/* Borrar el plan NO vive acá: está en la última columna de la
+                  planilla de planes, igual que en Equipos. */}
               {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
                 <button
                   onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
@@ -2786,82 +2798,98 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         );
       })()}
 
-      {deleteStep > 0 && !isNew && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
-                {deleteStep === 1
-                  ? <Trash2 className="w-4 h-4 text-red-700 dark:text-red-400" />
-                  : <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400" />}
-              </div>
-              <div>
-                <p className="text-sm font-bold text-fg">
-                  {deleteStep === 1
-                    ? t("mp.modal.deleteTitle")
-                    : t("mp.modal.deleteTitle2").replace("{wo}", woTerms.abbr)}
-                </p>
-                <p className="text-xs text-text-industrial/70 mt-1">
-                  {deleteStep === 1 ? (
-                    <>
-                      {t("mp.modal.deleteText1")}{" "}
-                      <span className="font-mono font-bold text-fg">{plan.taskCode}</span> {t("mp.modal.deleteText2")}
-                    </>
-                  ) : (
-                    t("mp.modal.deleteText3")
-                  )}
-                </p>
-              </div>
-            </div>
-            {actionError && <p className="text-xs text-red-700 dark:text-red-400">{actionError}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => { setDeleteStep(0); setActionError(null); }}
-                className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors"
-              >
-                {t("common.cancel")}
-              </button>
-              {deleteStep === 1 ? (
-                <button
-                  onClick={() => setDeleteStep(2)}
-                  className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 transition-all"
-                >
-                  {t("mp.modal.deleteStep1Confirm")}
-                </button>
-              ) : (
-                <button
-                  disabled={deleting}
-                  onClick={async () => {
-                    setDeleting(true);
-                    setActionError(null);
-                    try {
-                      await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
-                      setDeleteStep(0);
-                      await onSaved();
-                      onClose();
-                    } catch (err) {
-                      setActionError(err instanceof Error ? err.message : t("mp.modal.deleteError"));
-                      setDeleting(false);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
-                >
-                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  {t("mp.modal.deleteConfirm")}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Avisos del formulario (validaciones, errores al guardar o al abrir la
-          OT) en una ventanita con OK. Durante el borrado NO: ese diálogo ya
-          muestra su propio mensaje adentro y se duplicaría. */}
-      {actionError && deleteStep === 0 && (
+          OT) en una ventanita con OK. */}
+      {actionError && (
         <AlertDialog message={actionError} onClose={() => setActionError(null)} />
       )}
     </>
+  );
+};
+
+// ─── Borrar plan (desde la planilla) ──────────────────────────────────────────
+
+/**
+ * Borrar un plan pide DOS confirmaciones: 1 = "¿estás seguro?", 2 = el aviso de
+ * que es un plan registrado, no una OT suelta. Vive en la lista (última columna),
+ * no en la ficha del plan.
+ */
+const DeletePlanDialog: React.FC<{
+  plan: MaintenancePlan;
+  onClose: () => void;
+  onDeleted: () => void;
+}> = ({ plan, onClose, onDeleted }) => {
+  const t = useT();
+  const woTerms = useWoTerms();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [deleting, setDeleting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-red-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+            {step === 1
+              ? <Trash2 className="w-4 h-4 text-red-700 dark:text-red-400" />
+              : <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400" />}
+          </div>
+          <div>
+            <p className="text-sm font-bold text-fg">
+              {step === 1
+                ? t("mp.modal.deleteTitle")
+                : t("mp.modal.deleteTitle2").replace("{wo}", woTerms.abbr)}
+            </p>
+            <p className="text-xs text-text-industrial/70 mt-1">
+              {step === 1 ? (
+                <>
+                  {t("mp.modal.deleteText1")}{" "}
+                  <span className="font-mono font-bold text-fg">{plan.taskCode}</span> {t("mp.modal.deleteText2")}
+                </>
+              ) : (
+                t("mp.modal.deleteText3")
+              )}
+            </p>
+          </div>
+        </div>
+        {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors"
+          >
+            {t("common.cancel")}
+          </button>
+          {step === 1 ? (
+            <button
+              onClick={() => setStep(2)}
+              className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 transition-all"
+            >
+              {t("mp.modal.deleteStep1Confirm")}
+            </button>
+          ) : (
+            <button
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true);
+                setErr(null);
+                try {
+                  await api.delete(`/app/pms/maintenance-plans/${plan.id}`);
+                  onDeleted();
+                } catch (e) {
+                  setErr(e instanceof ApiError ? e.message : t("mp.modal.deleteError"));
+                  setDeleting(false);
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-red-600 text-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            >
+              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {t("mp.modal.deleteConfirm")}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -2980,6 +3008,8 @@ export const MaintenancePlansPage: React.FC = () => {
   }, [statusFilter, vesselFilter, assetFilter]);
 
   const { data: rawData, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
 
   // Equipos fuera de servicio, para marcarlos en la lista: un plan sobre una
   // máquina parada se lee distinto (no es lo mismo "vencida" en un equipo en
@@ -3002,6 +3032,9 @@ export const MaintenancePlansPage: React.FC = () => {
   const data = useMemo(() => {
     if (!rawData) return null;
     let items = baseItems;
+
+    // Al llegar desde el panel TMSA, sólo los planes que contó esa tarjeta.
+    items = applyTmsaFilter(items, tmsaFilter, p => p.id) ?? items;
 
     if (sfiTab !== "ALL") {
       items = items.filter(p => sfiTabOf(p.sfiGroupNumber) === sfiTab);
@@ -3029,7 +3062,7 @@ export const MaintenancePlansPage: React.FC = () => {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
     return { items, total: items.length };
-  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds]);
+  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -3135,6 +3168,11 @@ export const MaintenancePlansPage: React.FC = () => {
   const userName = user?.name ?? user?.email ?? "";
   const isAdmin = can("plan.manage");
   const woTerms = useWoTerms(); // abreviatura de OT del tenant, para el botón Express
+
+  // Borrar el plan se hace desde la última columna de la planilla (igual que en
+  // Equipos), no desde la ficha.
+  const canDeletePlan = user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT";
+  const [deleteTarget, setDeleteTarget] = useState<MaintenancePlan | null>(null);
 
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
   const statusValue = useCallback((row: MaintenancePlan) => computeStatus(row), []);
@@ -3397,8 +3435,24 @@ export const MaintenancePlansPage: React.FC = () => {
       sortable: false,
       render: row => renderActions(row),
     },
+    // ── Col 9: BORRAR (extremo derecho, igual que la planilla de Equipos) ───
+    ...(canDeletePlan ? [{
+      key: "delete",
+      header: "",
+      width: "44px",
+      sortable: false,
+      render: (row: MaintenancePlan) => (
+        <button
+          onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}
+          className="p-1.5 rounded-lg text-text-industrial/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          title={t("mp.modal.delete")}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      ),
+    }] : []),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, vesselNameMap, renderStatus, renderActions, groupByEquipment, oosAssetIds, bundleIds, bundleVessel, toggleBundle]);
+  ], [t, vesselNameMap, renderStatus, renderActions, groupByEquipment, oosAssetIds, bundleIds, bundleVessel, toggleBundle, canDeletePlan]);
 
   // ── Agrupación por equipo (lista default) ─────────────────────────────────
   const allGroupKeys = useMemo(
@@ -3627,6 +3681,8 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       )}
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={data?.items?.length ?? 0} total={rawData?.items?.length ?? 0} />
+
       {showMatrix ? (
         loading && !data ? (
           <div className="flex items-center gap-2 text-xs text-text-industrial/60 px-1 py-6">
@@ -3680,6 +3736,14 @@ export const MaintenancePlansPage: React.FC = () => {
         />
       )}
 
+      {deleteTarget && (
+        <DeletePlanDialog
+          plan={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); void reload(); }}
+        />
+      )}
+
       {showExcel && <ExcelPanel module="maintenance_plans" onClose={() => { setShowExcel(false); void reload(); }} />}
 
       {executing && (
@@ -3727,7 +3791,6 @@ export const MaintenancePlansPage: React.FC = () => {
           userId={user?.id ?? null}
           userName={userName}
           isAdmin={can("plan.manage")}
-          canDelete={user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT"}
           canEditNextDue={user?.role === "TENANT_ADMIN"}
           setRequestMessage={setRequestMessageFromContext}
           deepLinked={!!linkCode}

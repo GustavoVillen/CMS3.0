@@ -32,6 +32,8 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 const CATEGORY_LABEL: Record<string, string> = {
   EQUIPMENT_CHANGE: "Cambio de equipo",
@@ -492,10 +494,10 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               <input value={title} onChange={e => setTitle(e.target.value)} disabled={isLocked} placeholder={t("moc.titlePh")} className={inputCls} />
             </div>
             <div className="col-span-2"><label className={labelCls}>{t("moc.reasonReq")}</label>
-              <textarea rows={2} value={reasonForChange} onChange={e => setReason(e.target.value)} disabled={isLocked} placeholder={template?.reasonPlaceholder} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={reasonForChange} onChange={e => setReason(e.target.value)} disabled={isLocked} placeholder={template?.reasonPlaceholder} className={inputCls + " resize-y"} />
             </div>
             <div className="col-span-2"><label className={labelCls}>{t("moc.proposedReq")}</label>
-              <textarea rows={2} value={proposedChange} onChange={e => setProposed(e.target.value)} disabled={isLocked} placeholder={template?.proposedPlaceholder} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={proposedChange} onChange={e => setProposed(e.target.value)} disabled={isLocked} placeholder={template?.proposedPlaceholder} className={inputCls + " resize-y"} />
             </div>
             <div><label className={labelCls}>{t("moc.risk")}</label>
               <select value={riskLevel} onChange={e => setRiskLevel(e.target.value)} disabled={isLocked} className={inputCls}>
@@ -533,11 +535,11 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
                   {aiLoadingRisk ? "Generando…" : "Asistir con IA"}
                 </button>
               </div>
-              <textarea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
+              <AutoTextArea rows={6} value={riskAssessmentNotes} onChange={e => setRAN(e.target.value)} disabled={isLocked} placeholder={template?.riskAssessmentPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("moc.mitigationMeasures")}</label>
-              <textarea rows={6} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
+              <AutoTextArea rows={6} value={mitigationActions} onChange={e => setMA(e.target.value)} disabled={isLocked} placeholder={template?.mitigationPlaceholder} className={inputCls + " resize-y font-mono text-[12px]"} />
             </div>
           </div>
 
@@ -689,7 +691,9 @@ export const MocPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const statusParam = (searchParams.get("status") ?? "").trim();
 
-  const items = (data?.items ?? []).filter(m =>
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
+  const tmsaFilter = useTmsaFilter();
+  const items = (applyTmsaFilter(data?.items ?? [], tmsaFilter, m => m.id) ?? []).filter(m =>
     statusParam ? m.status === statusParam
     : filterStatus === "open" ? !["REVIEWED", "CANCELLED", "REJECTED"].includes(m.status)
     : true,
@@ -720,6 +724,8 @@ export const MocPage: React.FC = () => {
             }`}>{l}</button>
         ))}
       </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={items.length} total={data?.items?.length ?? 0} />
 
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>

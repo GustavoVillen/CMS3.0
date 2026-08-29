@@ -14,6 +14,8 @@ import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useT, type TranslationKey } from "../lib/i18n";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 const TYPE_TKEY: Record<string, TranslationKey> = {
   PRE_ARRIVAL: "cl.type.preArrival",
@@ -322,7 +324,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
                   <input value={exec.signedAt ? new Date(exec.signedAt).toLocaleString("es-AR") : ""} disabled className={inputCls} />
                 </div>
                 <div className="col-span-2"><label className={labelCls}>Notas</label>
-                  <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls + " resize-y"} />
+                  <AutoTextArea rows={2} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls + " resize-y"} />
                 </div>
               </div>
             </div>
@@ -619,7 +621,7 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
               <input value={name} onChange={e => setName(e.target.value)} placeholder={t("cl.templateNamePh")} className={inputCls} />
             </div>
             <div className="col-span-2"><label className={labelCls}>{t("cl.templateDesc")}</label>
-              <textarea rows={2} value={description} onChange={e => setDesc(e.target.value)} className={inputCls + " resize-y"} />
+              <AutoTextArea rows={2} value={description} onChange={e => setDesc(e.target.value)} className={inputCls + " resize-y"} />
             </div>
           </div>
 
@@ -655,7 +657,11 @@ const TemplateEditor: React.FC<{ template: Template | null; onClose: () => void;
 
 export const ChecklistsPage: React.FC = () => {
   const t = useT();
-  const [filterStatus, setFilterStatus] = useState<"all" | "open">("open");
+  // Filtro que llega desde una métrica del panel ISM (lib/tmsa-filter.tsx). La
+  // métrica cuenta checklists COMPLETADOS, así que al llegar filtrado se arranca
+  // en "Todos": con el default "En ejecución" la planilla se vería vacía.
+  const tmsaFilter = useTmsaFilter();
+  const [filterStatus, setFilterStatus] = useState<"all" | "open">(tmsaFilter ? "all" : "open");
   const { data, loading, reload } = useFetch<{ items: Execution[] }>("/app/checklist-executions");
   const [showCreate, setShowCreate] = useState(false);
   const [openId, setOpenId]         = useState<string | null>(null);
@@ -663,9 +669,9 @@ export const ChecklistsPage: React.FC = () => {
   const mocTrigger = useMocTrigger();
 
   const items = useMemo(() => {
-    const all = data?.items ?? [];
+    const all = applyTmsaFilter(data?.items ?? [], tmsaFilter, e => e.id) ?? [];
     return filterStatus === "open" ? all.filter(e => e.status === "IN_PROGRESS") : all;
-  }, [data, filterStatus]);
+  }, [data, filterStatus, tmsaFilter]);
 
   return (
     <div className="p-6 space-y-4">
@@ -686,6 +692,8 @@ export const ChecklistsPage: React.FC = () => {
             }`}>{l}</button>
         ))}
       </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={items.length} total={data?.items?.length ?? 0} />
 
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>

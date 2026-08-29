@@ -7,6 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { useT } from "../lib/i18n";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface EquipmentClass {
   id: string;
@@ -176,7 +177,7 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Descripción</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className={inputCls} />
+            <AutoTextArea value={description} onChange={e => setDescription(e.target.value)} rows={2} className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

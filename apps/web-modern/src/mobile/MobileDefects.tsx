@@ -7,6 +7,7 @@ import { useEscapeGuard } from "../lib/escape-guard";
 import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
 import { VoiceReportSheet } from "../components/VoiceReportSheet";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 export interface VoiceReportFields {
   assetId?: string | null;
@@ -341,7 +342,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               <p className={labelCls}>Descripción *</p>
               <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
             </div>
-            <textarea
+            <AutoTextArea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={5}
@@ -463,7 +464,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               <p className={labelCls}>Descripción *</p>
               <MicButton onAppend={chunk => setNmDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
             </div>
-            <textarea
+            <AutoTextArea
               value={nmDescription}
               onChange={e => setNmDescription(e.target.value)}
               rows={5}
@@ -473,7 +474,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
           </div>
           <div className="space-y-1.5">
             <p className={labelCls}>Acción inmediata</p>
-            <textarea
+            <AutoTextArea
               value={nmImmediateAction}
               onChange={e => setNmImmediateAction(e.target.value)}
               rows={3}

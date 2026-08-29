@@ -7,6 +7,7 @@ import { workOrderPrefix } from "../../common/wo-code";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { createDeferralInternal } from "../pms/deferrals-service";
+import { addItemComment, findSpecItemForDeferral } from "../pms/drydock-spec-items-service";
 import { closeLinkedAuditFinding } from "../pms/defects-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 import { log } from "../../common/logger";
@@ -142,6 +143,8 @@ export interface HoldWorkOrderInput {
   holdReason: string;
   targetDate?: string | Date | null;
   compensatoryMeasures?: string | null;
+  /** El trabajo se hace en la próxima varada, no cuando se pueda. */
+  toNextDrydock?: boolean | null;
 }
 
 export interface CloseWorkOrderInput {
@@ -997,6 +1000,7 @@ export async function holdWorkOrder(session: TenantAccessSession, id: string, pa
       justification: payload.holdReason,
       targetDate: payload.targetDate ?? null,
       compensatoryMeasures: payload.compensatoryMeasures ?? null,
+      toNextDrydock: payload.toNextDrydock === true,
     });
     deferralId = created.id;
   } catch (err) {
@@ -1032,12 +1036,13 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
   try {
     const deferralDelegate = (prismaRaw as unknown as {
       deferral: {
-        findFirst(a: unknown): Promise<{ id: string; status: string } | null>;
+        findFirst(a: unknown): Promise<{ id: string; status: string; deferralCode: string } | null>;
         update(a: unknown): Promise<unknown>;
       };
     }).deferral;
     const linked = await deferralDelegate.findFirst({
       where: {
+        tenantId: current.tenantId,
         sourceType: "WORK_ORDER",
         sourceId: current.id,
         deletedAt: null,
@@ -1063,6 +1068,21 @@ export async function resumeWorkOrder(session: TenantAccessSession, id: string) 
             updatedByUserId: session.user.id,
           },
         });
+      }
+      // Si ese diferimiento ya había entrado a una especificación de varada, la
+      // línea NO se borra: el astillero y el auditor tienen que poder ver que se
+      // propuso. Se avisa en el hilo de la línea para que tierra decida.
+      try {
+        const specItem = await findSpecItemForDeferral(current.tenantId, linked.id);
+        if (specItem) {
+          await addItemComment(
+            session,
+            specItem.itemId,
+            `El diferimiento ${linked.deferralCode} se cerró al reanudar la ${current.workOrderCode}: el trabajo volvió a ejecución a bordo.`,
+          );
+        }
+      } catch (err) {
+        log.error("[resumeWorkOrder] failed to annotate drydock spec item:", err);
       }
     }
   } catch (err) {

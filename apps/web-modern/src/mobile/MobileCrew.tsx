@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface CrewCert { id: string; type: string; expiryDate: string | null; status: string; }
 interface Crew {
@@ -115,7 +116,7 @@ export const MobileCrew: React.FC<MobileCrewProps> = ({ onBack }) => {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Notas (opcional)</label>
-            <textarea
+            <AutoTextArea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}

@@ -14,7 +14,9 @@ import { useAuth, useCan } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { MaintenancePlanModal, type MaintenancePlan } from "./MaintenancePlans";
+import { AutoTextArea } from "../components/AutoTextArea";
 
 interface Asset {
   id: string;
@@ -600,7 +602,6 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
   const can = useCan();
   const role = user?.role;
   const canManage = can("asset.manage");
-  const canDelete = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT";
 
   const { data, loading, error, reload } = useFetch<{ items: MaintenancePlan[] }>(
     `/app/pms/maintenance-plans?assetId=${encodeURIComponent(asset.id)}`,
@@ -703,7 +704,6 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
           userId={user?.id ?? null}
           userName={user?.name ?? user?.email ?? ""}
           isAdmin={canManage}
-          canDelete={canDelete}
           canEditNextDue={role === "TENANT_ADMIN"}
           overlayZClass="z-[60]"
           defaultVesselCode={asset.vesselCode}
@@ -1194,7 +1194,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
             <div className="space-y-1.5 col-span-2">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.critRationale")}</label>
-              <textarea
+              <AutoTextArea
                 value={criticalityRationale}
                 onChange={e => setCriticalityRationale(e.target.value)}
                 rows={3}
@@ -1386,6 +1386,7 @@ export const AssetsPage: React.FC = () => {
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
   const openAssetId = (searchParams.get("open") ?? "").trim();
+  const tmsaFilter = useTmsaFilter();
   const [searchText, setSearchText] = useState("");
 
   const updateFilters = useCallback((next: { status?: string; criticality?: string; vesselCode?: string }) => {
@@ -1451,6 +1452,10 @@ export const AssetsPage: React.FC = () => {
   const filteredAssets = useMemo(() => {
     let items = data?.items ?? null;
     if (!items) return items;
+    // Cuando se llega desde una métrica del panel TMSA, la planilla muestra
+    // exactamente los activos que contó esa tarjeta.
+    items = applyTmsaFilter(items, tmsaFilter, a => a.id);
+    if (!items) return items;
     if (sfiTab === "ISM") items = items.filter(a => a.isSafetyCritical);
     else if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
     if (searchText.trim()) {
@@ -1467,7 +1472,7 @@ export const AssetsPage: React.FC = () => {
       );
     }
     return items;
-  }, [data, sfiTab, searchText]);
+  }, [data, sfiTab, searchText, tmsaFilter]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1642,6 +1647,7 @@ export const AssetsPage: React.FC = () => {
         })()}
       </div>
 
+      <TmsaFilterBanner filter={tmsaFilter} shown={filteredAssets?.length ?? 0} total={data?.items?.length ?? 0} />
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
       {viewMode === "list"
         ? <DataTable columns={columns} data={filteredAssets} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
